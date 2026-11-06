@@ -15,6 +15,8 @@ the version in the corner).
 
 ### Changed
 
+- Blocking jungle plants, by Deivid Smarzaro: low wooden bases help distinguish them from
+  passable foliage.
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
