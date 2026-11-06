@@ -439,19 +439,28 @@ const HIDING_REACH = 24;
 // this much: more is a step, not a slope
 const MAX_ROAD_BEND = 5;
 
-function getCornerHeight(grid: TileGrid, x: number, y: number): number {
+function getCornerHeight(grid: TileGrid, x: number, y: number, level = 0): number {
     const { sizeX, sizeY } = grid;
     const cx = Math.min(Math.max(x, 0), sizeX - 0.001);
     const cy = Math.min(Math.max(y, 0), sizeY - 0.001);
     const tx = Math.floor(cx);
     const ty = Math.floor(cy);
     const corners = sizeX + 1;
-    const heights = grid.levels[0].heights;
+    const heights = grid.levels[level].heights;
     const at = tx + ty * corners;
     const south = heights[at] + (heights[at + 1] - heights[at]) * (cx - tx);
     const north =
         heights[at + corners] + (heights[at + corners + 1] - heights[at + corners]) * (cx - tx);
     return south + (north - south) * (cy - ty);
+}
+
+// The height that's walked on: a bridge's deck over the ground under it (a level's heights are
+// from the one under it)
+function getWalkedHeight(grid: TileGrid, x: number, y: number): number {
+    const tx = Math.min(Math.max(Math.floor(x), 0), grid.sizeX - 1);
+    const ty = Math.min(Math.max(Math.floor(y), 0), grid.sizeY - 1);
+    const bridge = (grid.levels[1].flags[tx + ty * grid.sizeX] & TILE_BRIDGE) !== 0;
+    return getCornerHeight(grid, x, y) + (bridge ? getCornerHeight(grid, x, y, 1) : 0);
 }
 
 // Collision from height, and the same collision in the game and the generator. A designed tile's
@@ -1155,7 +1164,8 @@ function countHiddenTiles(
             if (game.isSolid(origin.x + x, origin.y + y)) {
                 continue;
             }
-            const height = getCornerHeight(grid, x + 0.5, y + 0.5);
+            // On a bridge, the deck (what's in front of it is the ground's, as before)
+            const height = getWalkedHeight(grid, x + 0.5, y + 0.5);
             for (let reach = 1; reach <= HIDING_REACH; reach++) {
                 if (
                     getCornerHeight(grid, x + 0.5, y + 0.5 - reach) >

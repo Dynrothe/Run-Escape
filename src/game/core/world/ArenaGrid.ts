@@ -12,6 +12,9 @@ import { Steps, canStep } from "./FlowField";
 export const SOLID_FLAGS =
     CollisionFlag.OBJECT | CollisionFlag.FLOOR | CollisionFlag.FLOOR_DECORATION;
 
+// A floor's pillar (dropTile): an object, which shots would stop at too
+const PILLAR_FLAGS = CollisionFlag.OBJECT | CollisionFlag.OBJECT_PROJECTILE_BLOCKER;
+
 // Everything outside the arena counts as solid.
 const OUTSIDE_FLAGS = CollisionFlag.OBJECT;
 
@@ -56,6 +59,14 @@ export class ArenaGrid {
     private readonly boxes: Float32Array;
     // Which steps out of each tile are allowed, for finding the way
     readonly steps: Steps;
+    // Floor that's fallen away during a run (dropTile), by tile, so it can be put back
+    private readonly dropped: Uint8Array;
+    private droppedCount = 0;
+    // A floor's ledges (addLedge): the tile, and the wall flags set on it
+    private ledges: number[] = [];
+    // Goes up whenever a tile drops or comes back, so what's worked out from the grid (a flow
+    // field) knows to work it out again
+    version = 0;
 
     constructor(readonly data: RegionData) {
         this.baseX = data.baseX;
@@ -100,6 +111,97 @@ export class ArenaGrid {
             }
         }
         this.steps = new Steps(this, this.baseX, this.baseY, this.sizeX, this.sizeY);
+        this.dropped = new Uint8Array(this.sizeX * this.sizeY);
+    }
+
+    // An open tile's floor falls away (MapDef.floor): it's blocked floor, as water is, until it's
+    // put back. Grids are kept between runs, so a run with a floor puts them all back first. A
+    // floor's pillar (pillar) blocks the same way, as an object would.
+    dropTile(tileX: number, tileY: number, pillar = false): void {
+        const i = this.indexOf(tileX, tileY);
+        if (i < 0 || this.dropped[i] || this.isSolid(tileX, tileY)) {
+            return;
+        }
+        this.dropped[i] = pillar ? 2 : 1;
+        this.droppedCount++;
+        this.flags[i] |= pillar ? PILLAR_FLAGS : CollisionFlag.FLOOR;
+        this.boxes[i * 4] = this.boxes[i * 4 + 1] = 0;
+        this.boxes[i * 4 + 2] = this.boxes[i * 4 + 3] = 1;
+        this.changed(tileX, tileY);
+    }
+
+    restoreTile(tileX: number, tileY: number): void {
+        const i = this.indexOf(tileX, tileY);
+        if (i < 0 || !this.dropped[i]) {
+            return;
+        }
+        this.flags[i] &= ~(this.dropped[i] === 2 ? PILLAR_FLAGS : CollisionFlag.FLOOR);
+        this.dropped[i] = 0;
+        this.droppedCount--;
+        this.boxes.fill(0, i * 4, i * 4 + 4);
+        this.changed(tileX, tileY);
+    }
+
+    // A ledge along a tile's east or north edge (a floor's raised or sunken tiles): a wall both
+    // sides of it, as a fence would be, so nobody walks up or down it. Gone with restoreAllTiles.
+    addLedge(tileX: number, tileY: number, side: "east" | "north"): void {
+        const east = side === "east";
+        const i = this.indexOf(tileX, tileY);
+        const j = this.indexOf(tileX + (east ? 1 : 0), tileY + (east ? 0 : 1));
+        if (i < 0 || j < 0) {
+            return;
+        }
+        const a = east ? CollisionFlag.WALL_EAST : CollisionFlag.WALL_NORTH;
+        const b = east ? CollisionFlag.WALL_WEST : CollisionFlag.WALL_SOUTH;
+        for (const [k, flag] of [
+            [i, a],
+            [j, b],
+        ]) {
+            if ((this.flags[k] & flag) === 0) {
+                this.flags[k] |= flag;
+                this.ledges.push(k, flag);
+            }
+        }
+        this.changed(tileX, tileY);
+    }
+
+    restoreAllTiles(): void {
+        for (let k = 0; k < this.ledges.length; k += 2) {
+            const i = this.ledges[k];
+            this.flags[i] &= ~this.ledges[k + 1];
+            this.changed(this.baseX + (i % this.sizeX), this.baseY + Math.floor(i / this.sizeX));
+        }
+        this.ledges = [];
+        for (let i = 0; i < this.dropped.length && this.droppedCount > 0; i++) {
+            if (this.dropped[i]) {
+                this.restoreTile(
+                    this.baseX + (i % this.sizeX),
+                    this.baseY + Math.floor(i / this.sizeX),
+                );
+            }
+        }
+    }
+
+    isDropped(tileX: number, tileY: number): boolean {
+        const i = this.indexOf(tileX, tileY);
+        return i >= 0 && this.dropped[i] === 1;
+    }
+
+    // Whether a floor's pillar stands on a tile (dropTile)
+    isPillar(tileX: number, tileY: number): boolean {
+        const i = this.indexOf(tileX, tileY);
+        return i >= 0 && this.dropped[i] === 2;
+    }
+
+    private indexOf(tileX: number, tileY: number): number {
+        const x = tileX - this.baseX;
+        const y = tileY - this.baseY;
+        return this.contains(tileX, tileY) ? x + y * this.sizeX : -1;
+    }
+
+    private changed(tileX: number, tileY: number): void {
+        this.steps.refresh(tileX, tileY);
+        this.version++;
     }
 
     // The whole tile, but for objects a little less on each side that has open

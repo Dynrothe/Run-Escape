@@ -8,6 +8,7 @@ import { WebGLMapViewerRenderer } from "../../mapviewer/webgl/WebGLMapViewerRend
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import actorSilhouetteFragShader from "../../mapviewer/webgl/actor/actor-silhouette.frag.glsl";
 import actorVertShader from "../../mapviewer/webgl/actor/actor.vert.glsl";
+import { prependDefines } from "../../mapviewer/webgl/shaders/ShaderUtil";
 import { createProgram } from "../../mapviewer/webgl/shaders/Shaders";
 import mainFragShader from "../../mapviewer/webgl/shaders/main.frag.glsl";
 
@@ -151,7 +152,12 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
     override async initShaders(): Promise<Program[]> {
         const programs = await super.initShaders();
         const [actorProgram, actorSilhouetteProgram] = await this.app.createPrograms(
-            createProgram(actorVertShader, mainFragShader, this.hasMultiDraw, true),
+            createProgram(
+                actorVertShader,
+                prependDefines(mainFragShader, ["ACTOR_EDGE"]),
+                this.hasMultiDraw,
+                true,
+            ),
             createProgram(actorVertShader, actorSilhouetteFragShader, this.hasMultiDraw, false),
         );
         this.actorProgram = actorProgram;
@@ -212,6 +218,7 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
             return;
         }
         actors.renderOutlines();
+        actors.renderEarly();
         actors.renderSilhouettes();
         actors.renderOpaque();
     }

@@ -105,6 +105,7 @@ import {
     EnemySpawnsDef,
     EnemyTag,
     FightAbilityDef,
+    FloorActionDef,
     GearSlot,
     GroundPatternDef,
     ImpactDef,
@@ -126,6 +127,7 @@ import {
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
 import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
+import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
     CASKET_DROP_CHANCE,
@@ -140,7 +142,7 @@ import {
     rollCasketItem,
     rollCasketTier,
 } from "./Loot";
-import { movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
+import { MovementRules, movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
 import { Rng } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
@@ -213,6 +215,14 @@ import {
     projectileSource,
     quarterOf,
 } from "./entities";
+import {
+    EFFECT_BURN,
+    EFFECT_HASTE,
+    EFFECT_HEAL,
+    EFFECT_ICE,
+    EFFECT_SLOW,
+    TYPE_FRAGILE,
+} from "./floorLayout";
 import { fm } from "./fmath";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
@@ -494,6 +504,23 @@ const SPLIT_RANGE = 6;
 const FLEE_TURNS = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4];
 const FLEE_LOOKAHEAD = 1;
 
+// What a hit from the floor (MapDef.floor) is from, where an enemy's id would be
+export const FLOOR_SOURCE = "floor";
+// What a floor's tiles do (FloorEffect), unless the floor says otherwise (FloorDef.tileEffects):
+// burn's share of the player's hitpoints and how often (seconds), and its hit on an enemy; heal's
+// share and how often; haste's and slow's change to speed; ice's grip
+const FLOOR_BURN_DAMAGE = 0.04;
+const FLOOR_BURN_EVERY = 0.5;
+const FLOOR_BURN_ENEMY = 3;
+const FLOOR_HEAL_AMOUNT = 0.03;
+const FLOOR_HEAL_EVERY = 0.5;
+const FLOOR_HASTE = 0.4;
+const FLOOR_SLOW = 0.45;
+const FLOOR_ICE_GRIP = 0.06;
+// Tiles from a player that a slab coming up, or a tile going, shakes the camera (FloorDef.shake)
+const FLOOR_SLAM_SHAKE_REACH = 1.5;
+const FLOOR_DROP_SHAKE_REACH = 2.5;
+
 // The events that are one hero's own, which co-op tags with who: what they
 // did, what happened to them, what they picked up
 const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
@@ -725,6 +752,13 @@ export type Hero = {
     // Bullets pass through them until this tick, so a mistake costs one of
     // them rather than the whole of a volley
     bulletGraceEnd: number;
+    // The floor (MapDef.floor) can't hit them again until this tick
+    floorGraceEnd: number;
+    // A floor tile's burn or heal (FloorEffect) next acts on them from this tick; and how far they
+    // went last tick, kept on ice
+    floorEffectNext: number;
+    glideX: number;
+    glideY: number;
     // What they're pressing, for the next tick
     moveX: number;
     moveY: number;
@@ -764,6 +798,8 @@ export class Sim {
     readonly grid: ArenaGrid;
     readonly map: MapDef;
     readonly rng: Rng;
+    // A floor that rises and falls away (MapDef.floor)
+    readonly floor: ArenaFloor | undefined;
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
@@ -1167,6 +1203,9 @@ export class Sim {
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
         this.rng = new Rng(options.seed);
+        this.floor = this.map.floor
+            ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
+            : undefined;
         // Building it takes a while, so it's done here, with the map, rather
         // than on the tick the first flier turns up (getFlight still can)
         if (hasFliers(this.map)) {
@@ -1327,6 +1366,10 @@ export class Sim {
             drowsyEndTick: 0,
             drowsyInterval: 1,
             bulletGraceEnd: 0,
+            floorGraceEnd: 0,
+            floorEffectNext: 0,
+            glideX: 0,
+            glideY: 0,
             moveX: 0,
             moveY: 0,
             down: false,
@@ -1508,7 +1551,11 @@ export class Sim {
                 }
             }
         }
-        if (tileX !== this.flowField.targetX || tileY !== this.flowField.targetY) {
+        if (
+            tileX !== this.flowField.targetX ||
+            tileY !== this.flowField.targetY ||
+            this.grid.version !== this.flowField.gridVersion
+        ) {
             this.flowField.update(this.grid, tileX, tileY);
             if (this.flightGrid) {
                 this.hero.flightField?.update(this.flightGrid, tileX, tileY);
@@ -2414,6 +2461,7 @@ export class Sim {
         this.stepPools();
         this.stepEnemyProjectiles();
         this.stepBossFight();
+        this.stepFloor();
         this.stepPickups();
         this.stepRandomEvents();
         this.cleanUp();
@@ -2474,7 +2522,12 @@ export class Sim {
             curse: this.curse,
             arena: this.confinedToArena ? this.bossArena : undefined,
             faces: this.introFacing,
+            floor: this.floor?.hasEffects && !frozen ? this.floorMovement() : undefined,
         });
+        if (this.floor?.hasEffects) {
+            this.hero.glideX = player.x - player.prevX;
+            this.hero.glideY = player.y - player.prevY;
+        }
         if (moving !== player.moving) {
             player.moving = moving;
             player.moveStart = this.tick;
@@ -3376,8 +3429,10 @@ export class Sim {
                     (!touching || healTarget) &&
                     !(fighting && dirX === 0 && dirY === 0)
                 ) {
-                    moveX += dirX * enemy.speed;
-                    moveY += dirY * enemy.speed;
+                    // Faster or slower on a floor's plates (FloorEffect haste, slow)
+                    const pace = this.floor?.hasEffects ? this.floorPace(enemy.x, enemy.y) : 1;
+                    moveX += dirX * enemy.speed * pace;
+                    moveY += dirY * enemy.speed * pace;
                 }
                 moveX += sepX * 0.25;
                 moveY += sepY * 0.25;
@@ -3414,7 +3469,11 @@ export class Sim {
                     !bossState &&
                     !lapping &&
                     enemy.attackCooldown === 0 &&
-                    distance <= enemy.def.shot.range
+                    distance <= enemy.def.shot.range &&
+                    !(
+                        this.floor?.hasPillars &&
+                        this.floor.blocksSight(enemy.x, enemy.y, player.x, player.y)
+                    )
                 ) {
                     this.enemyShoot(enemy, enemy.def.shot);
                 }
@@ -3651,6 +3710,8 @@ export class Sim {
         elite: boolean,
         sound?: number,
         ignoreArmor = false,
+        // A hit that leaves them as open to the next as they were (a floor's burn, every so often)
+        grace = true,
     ): number {
         const armorCap = ENEMY_BY_ID.get(enemyId)?.boss?.armorCap;
         const player = this.player;
@@ -3668,7 +3729,9 @@ export class Sim {
         player.hp -= amount;
         this.damageTaken += amount;
         player.flash = 6;
-        player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+        if (grace) {
+            player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+        }
         this.emit({ type: "playerHit", amount, enemyId, elite, sound });
         if (player.hp <= 0) {
             this.playerDied();
@@ -6173,6 +6236,259 @@ export class Sim {
         this.stepParasite();
     }
 
+    // The floor (MapDef.floor): its patterns, a slab that's up hitting whoever's on it, and a
+    // tile that's fallen putting whoever was on it on the nearest tile that isn't going, hurt.
+    // What's drawn is what's hit: a slab hurts only while it's up, and only the tile it's on, by
+    // where the player's middle is.
+    private stepFloor(): void {
+        const floor = this.floor;
+        if (!floor) {
+            return;
+        }
+        const def = floor.def;
+        const origin = () => this.floorTarget().player;
+        const { rose, fell, back, messages } = floor.step(this.tick, origin);
+        for (const message of messages) {
+            this.emit({ type: "notice", message });
+        }
+        // A sound where the tiles going this tick are, in the middle of them: the floor's, or each
+        // skin's own (FloorSkinDef.material), and a fragile tile's crack as it rises
+        const skins = def.skins;
+        const material = (tiles: number[], k: number) =>
+            skins?.[floor.layout.skin[floor.index(tiles[k], tiles[k + 1])]]?.material;
+        for (const [tiles, fallback, kind] of [
+            [rose, def.slam.sound, "rise"],
+            [fell, def.drop.sound, "fall"],
+        ] as const) {
+            const groups = new Map<number, number[]>();
+            for (let k = 0; k < tiles.length; k += 2) {
+                const sound = material(tiles, k)?.[kind]?.sound ?? fallback;
+                const group = groups.get(sound) ?? [];
+                group.push(tiles[k], tiles[k + 1]);
+                groups.set(sound, group);
+                const crack = material(tiles, k)?.crack?.sound;
+                if (kind === "rise" && crack !== undefined && this.isCracking(tiles, k)) {
+                    this.emit({
+                        type: "impact",
+                        sound: crack,
+                        x: tiles[k] + 0.5,
+                        y: tiles[k + 1] + 0.5,
+                    });
+                }
+            }
+            for (const [sound, group] of groups) {
+                let x = 0;
+                let y = 0;
+                for (let i = 0; i < group.length; i += 2) {
+                    x += group[i] + 0.5;
+                    y += group[i + 1] + 0.5;
+                }
+                const count = group.length / 2;
+                this.emit({ type: "impact", sound, x: x / count, y: y / count });
+            }
+        }
+        // The camera shakes when it happens close by: a slab coming up beside a player, a tile
+        // going near one. The client leaves it out if Settings say so.
+        if (def.shake) {
+            this.shakeNear(rose, FLOOR_SLAM_SHAKE_REACH, def.shake.slam);
+            this.shakeNear(fell, FLOOR_DROP_SHAKE_REACH, def.shake.drop);
+        }
+        if (fell.length > 0 || back.length > 0) {
+            // Enemies on a tile that's gone go to the nearest that isn't
+            for (const enemy of this.enemies) {
+                if (!enemy.dead && this.grid.isDropped(Math.floor(enemy.x), Math.floor(enemy.y))) {
+                    const to = this.findFloorSpot(enemy.x, enemy.y, enemy.radius);
+                    enemy.x = to.x;
+                    enemy.y = to.y;
+                }
+            }
+            // and the way round is worked out again, for what's gone and what's back
+            const current = this.hero;
+            for (const hero of this.heroes) {
+                if (this.isUp(hero)) {
+                    this.use(hero);
+                    this.updateFlowField();
+                }
+            }
+            this.use(current);
+        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const tileX = Math.floor(player.x);
+            const tileY = Math.floor(player.y);
+            const shoved = this.hero.drag !== undefined && this.tick < this.hero.drag.endTick;
+            if (this.grid.isDropped(tileX, tileY) && !shoved) {
+                const to = this.findFloorSpot(player.x, player.y, player.radius);
+                const ticks = Math.max(1, secondsToTicks(def.drop.shove));
+                this.hero.drag = {
+                    fromX: player.x,
+                    fromY: player.y,
+                    toX: to.x,
+                    toY: to.y,
+                    startTick: this.tick,
+                    endTick: this.tick + ticks,
+                    holdEnd: this.tick + ticks,
+                };
+                player.frozen = Math.max(player.frozen, ticks);
+                this.hitByFloor(def.drop.damage, def.drop.sound, true);
+            } else if (!shoved && floor.isHurting(tileX, tileY, this.tick)) {
+                this.hitByFloor(def.slam.damage, def.slam.sound, false);
+            }
+        });
+        // Pressure plates (FloorDef.triggers): what players have stepped onto
+        if (floor.layout.triggerNames.length > 0) {
+            const tiles: number[] = [];
+            for (const hero of this.heroes) {
+                if (this.isUp(hero)) {
+                    tiles.push(Math.floor(hero.player.x), Math.floor(hero.player.y));
+                }
+            }
+            for (const message of floor.press(tiles, this.tick, origin)) {
+                this.emit({ type: "notice", message });
+            }
+        }
+        if (floor.hasEffects) {
+            this.stepFloorEffects(floor);
+        }
+    }
+
+    // Who the floor's aimed at (a ripple "at the player", a dropUnder): the hero, or in co-op the
+    // one nearest its middle
+    private floorTarget(): Hero {
+        const floor = this.floor!;
+        return this.heroes.length > 1
+            ? this.nearestHero(floor.x0 + floor.sizeX / 2, floor.y0 + floor.sizeY / 2)
+            : this.hero;
+    }
+
+    // Whether a fragile tile rising (tiles' k-th) is nearer giving way, but not gone yet
+    private isCracking(tiles: number[], k: number): boolean {
+        const floor = this.floor!;
+        const i = floor.index(tiles[k], tiles[k + 1]);
+        return floor.layout.type[i] === TYPE_FRAGILE && floor.dropWarnAt[i] === -1;
+    }
+
+    // Something done to the floor (FloorActionDef), from a boss's attack (BossAttackDef.floor) or
+    // anything else: dropping the tile under someone, starting a pattern, a phase. at is who it's
+    // aimed at (the floor's target when unset). Nothing on a map with no floor.
+    floorAct(action: FloorActionDef, at?: { x: number; y: number }): void {
+        const floor = this.floor;
+        if (!floor) {
+            return;
+        }
+        floor.act(action, this.tick, () => at ?? this.floorTarget().player);
+    }
+
+    // The floor's tiles that do something to whoever's on them (FloorEffect): burning and healing
+    // players every so often, and burning enemies
+    private stepFloorEffects(floor: ArenaFloor): void {
+        const tuning = floor.def.tileEffects;
+        const burn = tuning?.burn;
+        const heal = tuning?.heal;
+        const burnEvery = Math.max(1, secondsToTicks(burn?.every ?? FLOOR_BURN_EVERY));
+        const healEvery = Math.max(1, secondsToTicks(heal?.every ?? FLOOR_HEAL_EVERY));
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            const effect = floor.effectAt(Math.floor(player.x), Math.floor(player.y), this.tick);
+            if (
+                (effect !== EFFECT_BURN && effect !== EFFECT_HEAL) ||
+                this.tick < this.hero.floorEffectNext
+            ) {
+                return;
+            }
+            if (effect === EFFECT_BURN) {
+                this.hero.floorEffectNext = this.tick + burnEvery;
+                const share = burn?.damage ?? FLOOR_BURN_DAMAGE;
+                const damage = Math.max(1, Math.round(player.maxHp * share));
+                this.damagePlayer(damage, FLOOR_SOURCE, false, -1, true, false);
+            } else if (player.hp < player.maxHp) {
+                this.hero.floorEffectNext = this.tick + healEvery;
+                this.heal(
+                    Math.max(1, Math.round(player.maxHp * (heal?.amount ?? FLOOR_HEAL_AMOUNT))),
+                );
+            }
+        });
+        // Enemies burn on the floor's own beat
+        if (this.tick % burnEvery === 0) {
+            const damage = burn?.enemyDamage ?? FLOOR_BURN_ENEMY;
+            for (const enemy of this.enemies) {
+                if (
+                    !enemy.dead &&
+                    !enemy.def.flies &&
+                    floor.effectAt(Math.floor(enemy.x), Math.floor(enemy.y), this.tick) ===
+                        EFFECT_BURN
+                ) {
+                    this.damageSource = "other";
+                    this.damageEnemy(enemy, damage, 0, enemy.x, enemy.y, 0);
+                }
+            }
+        }
+    }
+
+    // How a floor's tile moves the player on it (FloorEffect haste, slow and ice), or nothing
+    private floorMovement(): MovementRules["floor"] {
+        const floor = this.floor!;
+        const player = this.player;
+        const effect = floor.effectAt(Math.floor(player.x), Math.floor(player.y), this.tick);
+        if (effect === EFFECT_ICE) {
+            const grip = floor.def.tileEffects?.ice?.grip ?? FLOOR_ICE_GRIP;
+            return { pace: 1, glide: { x: this.hero.glideX, y: this.hero.glideY, grip } };
+        }
+        const pace = this.floorPace(player.x, player.y);
+        return pace !== 1 ? { pace } : undefined;
+    }
+
+    // Faster or slower on a floor's tile (FloorEffect haste, slow), 1 elsewhere
+    private floorPace(x: number, y: number): number {
+        const floor = this.floor!;
+        const effect = floor.effectAt(Math.floor(x), Math.floor(y), this.tick);
+        const tuning = floor.def.tileEffects;
+        return effect === EFFECT_HASTE
+            ? 1 + (tuning?.haste ?? FLOOR_HASTE)
+            : effect === EFFECT_SLOW
+              ? 1 - (tuning?.slow ?? FLOOR_SLOW)
+              : 1;
+    }
+
+    // One shake for the first of these tiles (x then y) within reach of a hero who's up
+    private shakeNear(tiles: number[], reach: number, shake: number): void {
+        for (let i = 0; i < tiles.length; i += 2) {
+            const x = tiles[i] + 0.5;
+            const y = tiles[i + 1] + 0.5;
+            for (const hero of this.heroes) {
+                const { player } = hero;
+                if (this.isUp(hero) && fm.hypot(player.x - x, player.y - y) <= reach) {
+                    this.emit({ type: "bossImpact", x, y, shake });
+                    return;
+                }
+            }
+        }
+    }
+
+    // A share of the player's hitpoints, armour or not; a fall always lands, a slab not again
+    // until the grace is up
+    private hitByFloor(share: number, sound: number, fall: boolean): void {
+        const hero = this.hero;
+        if (!fall && this.tick < hero.floorGraceEnd) {
+            return;
+        }
+        hero.floorGraceEnd = this.tick + secondsToTicks(this.map.floor!.slam.grace);
+        const damage = Math.max(1, Math.round(hero.player.maxHp * share));
+        this.damagePlayer(damage, FLOOR_SOURCE, false, sound, true);
+    }
+
+    // The nearest tile middle a circle can stand on with the floor whole under it and not going
+    private findFloorSpot(x: number, y: number, radius: number): { x: number; y: number } {
+        const floor = this.floor!;
+        return findFreeSpot(
+            this.grid,
+            x,
+            y,
+            radius,
+            (tileX, tileY) => !floor.isFalling(tileX, tileY, this.tick),
+        );
+    }
+
     private stepHold(): void {
         this.forEachHeroInReach(() => {
             const hold = this.hold;
@@ -6964,6 +7280,10 @@ export class Sim {
             windup.targets = [{ x: player.x, y: player.y }];
         }
         state.windup = windup;
+        // What it does to the floor as it starts, at the player it's after
+        if (attack.floor) {
+            this.floorAct(attack.floor, player);
+        }
         this.animateStatues(attack, windup.from, attack.statues?.windupSeq);
         // Somewhere safe from it, there from the start (GroundPatternDef.safe)
         if (attack.ground?.safe) {
@@ -8188,6 +8508,13 @@ export class Sim {
             }
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
+            if (
+                this.floor?.hasPillars &&
+                this.floor.isPillarTile(Math.floor(projectile.x), Math.floor(projectile.y))
+            ) {
+                projectile.life = 0;
+                continue;
+            }
             if (projectile.attack.blockable && this.hitsGlyph(projectile)) {
                 projectile.life = 0;
                 continue;
@@ -9490,6 +9817,8 @@ export class Sim {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
         const styled = style !== undefined && this.expert;
+        // Not behind a floor's pillar, which blocks the way and the view
+        const pillars = this.floor?.hasPillars ? this.floor : undefined;
         for (const enemy of this.enemies) {
             if (
                 enemy.dead ||
@@ -9501,7 +9830,7 @@ export class Sim {
             const dx = enemy.x - x;
             const dy = enemy.y - y;
             const distSq = dx * dx + dy * dy;
-            if (distSq <= rangeSq) {
+            if (distSq <= rangeSq && !pillars?.blocksSight(x, y, enemy.x, enemy.y)) {
                 found.push({ enemy, distSq });
             }
         }
@@ -10135,6 +10464,14 @@ export class Sim {
             }
             projectile.x += projectile.vx;
             projectile.y += projectile.vy;
+            // A floor's pillar stops it (FloorTileType "pillar")
+            if (
+                this.floor?.hasPillars &&
+                this.floor.isPillarTile(Math.floor(projectile.x), Math.floor(projectile.y))
+            ) {
+                projectile.life = 0;
+                continue;
+            }
 
             // An axe that has bounced is on its way to the next one
             let bounced = false;

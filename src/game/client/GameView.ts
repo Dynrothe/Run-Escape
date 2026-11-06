@@ -37,6 +37,7 @@ import {
 } from "../core/entities";
 import { formatCompact } from "../ui/formatCompact";
 import { BossFightView } from "./BossFightView";
+import { FloorView } from "./FloorView";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -242,11 +243,13 @@ export class GameView {
     pickupTimers = true;
 
     private readonly fight: BossFightView;
+    private readonly floor: FloorView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
 
     constructor(readonly assets: GameAssets) {
         this.fight = new BossFightView(assets);
+        this.floor = new FloorView(assets);
     }
 
     reset(): void {
@@ -391,8 +394,10 @@ export class GameView {
         return Math.random() * 60;
     }
 
+    // On a floor's raised tiles and ramps (FloorTileRuleDef.height), on them
     private ground(sim: Sim, x: number, y: number): number {
-        return sim.grid.getHeight(x, y) / 128;
+        const lift = sim.floor ? sim.floor.liftAt(x, y) : 0;
+        return sim.grid.getHeight(x, y) / 128 - lift;
     }
 
     // The ground for something big on a ScapeRune map, whose slopes are too steep to stand it by its
@@ -585,6 +590,7 @@ export class GameView {
         }
 
         this.fight.submitActors(actors, sim, alpha);
+        this.floor.submitActors(actors, sim, alpha);
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);

@@ -81,6 +81,7 @@ export type MapRecipe = {
             | "finalBossWarning"
             | "victoryText"
             | "fun"
+            | "floor"
         >
     >;
 };
