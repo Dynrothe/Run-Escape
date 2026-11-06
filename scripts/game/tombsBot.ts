@@ -1567,6 +1567,21 @@ function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
         Math.hypot(to.x - sim.player.x, to.y - sim.player.y) < 1
             ? nudge(sim, to.x, to.y)
             : walkAvoiding(sim, to.x, to.y, avoid, 0);
+    // Marked for Detonate: off any teammate's row or column close by (two tiles off does it)
+    if (fight.detonate) {
+        const self = sim.player;
+        const near = sim.heroes
+            .filter((h) => h.player !== self && !h.down && !h.left)
+            .map((h) => h.player)
+            .filter((p) => Math.abs(p.x - self.x) < 2.2 && Math.abs(p.y - self.y) < 2.2)[0];
+        if (near) {
+            const away = Math.hypot(self.x - near.x, self.y - near.y) || 1;
+            return go({
+                x: self.x + ((self.x - near.x) / away) * 3,
+                y: self.y + ((self.y - near.y) / away) * 3,
+            });
+        }
+    }
     const memory = fight.memory;
     if (memory && memory.step < memory.order.length) {
         // The whole order's shown before the bursts come, so stand in the safe quadrant right by

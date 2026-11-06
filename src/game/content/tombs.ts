@@ -869,6 +869,13 @@ export const AKKHA: AkkhaDef = {
         damage: 0.45,
         message: "Sections of the room start to glow... Remember the order!",
     },
+    detonate: {
+        seconds: 3,
+        damage: 0.35,
+        // The volatile baboon's burst
+        spotAnim: 157,
+        message: "You have been marked for detonation! Keep out of each other's rows and columns.",
+    },
     orbs: {
         seconds: 9,
         arm: 0.6,

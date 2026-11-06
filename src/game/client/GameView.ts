@@ -1639,6 +1639,11 @@ export class GameView {
         if (player.invulnerable > 30 && Math.floor(tick / 5) % 2 === 0) {
             flash = 0.5;
         }
+        // Marked by Akkha's Detonate: white, as OSRS's, brighter as it comes
+        const detonate = sim.tombsAkkha?.detonate;
+        if (detonate && sim.isUp(sim.heroes[hero])) {
+            flash = Math.max(flash, 0.35 + 0.25 * Math.sin(tick * 0.4));
+        }
         actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
             silhouette: true,
             tint,

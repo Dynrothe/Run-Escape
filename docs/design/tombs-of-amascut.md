@@ -366,7 +366,11 @@ raid's ranges.
       his hitpoints there, or after a while.
     - **Invocations**: Double Trouble (both specials at once), Keep Back (beside him, his ranged and
       magic bring an unseen melee hit), Stay Vigilant, Feeling Special.
-    - Not in yet: Detonate (a party's crosses).
+    - **Detonate**, in a party only (a third of his specials there, not with Double Trouble):
+      everyone's marked (white, flashing), and 3 seconds later each goes off in a plus round their
+      tile (an X instead, half the time, with Feeling Special), a third of the hitpoints of whoever
+      else is on those tiles. Off each other's rows and columns, or all on one tile, nobody's hurt.
+      The bot steps away from a teammate within two tiles.
 - **The Scabaras room** (`SCABARAS` in `content/tombs.ts`, `Sim.stepScabaras`): square 55,82 whole,
   turned a quarter clockwise so it's walked up the screen as the rest of the raid is: in from the
   south behind a barrier across the way in (the sim holds it: `gate.y`), out to Kephri at the north,

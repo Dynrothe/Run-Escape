@@ -975,6 +975,8 @@ export type AkkhaFight = {
         step: number;
     };
     orbsUntil: number;
+    // Detonate: when the marked go off, and whether each's an X (Feeling Special) or a plus
+    detonate?: { tick: number; cross: boolean[] };
     orbs: { x: number; y: number; quadrant: number; armTick: number }[];
     lastTiles: (number | undefined)[];
     shadowsDone: number;
@@ -5587,12 +5589,14 @@ export class Sim {
         this.stepAkkhaShadows(boss, fight, def);
         this.stepAkkhaMemory(boss, fight, def);
         this.stepAkkhaOrbs(boss, fight, def);
+        this.stepAkkhaDetonate(boss, fight, def);
         // A special once he's made his attacks, when he's not in the middle of anything
         const every = def.specialEvery - (this.invoked("stay_vigilant") ? 1 : 0);
         if (
             fight.attacks >= every &&
             !boss.bossState!.windup &&
             !fight.memory &&
+            !fight.detonate &&
             this.tick >= fight.orbsUntil
         ) {
             fight.attacks = 0;
@@ -5600,9 +5604,22 @@ export class Sim {
         }
     }
 
-    // Memory Blast or his trailing orbs (both with Double Trouble), and another style after
+    // Memory Blast or his trailing orbs (both with Double Trouble), or in a party Detonate, and
+    // another style after
     private startAkkhaSpecial(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
         const both = this.invoked("double_trouble");
+        const party = this.heroes.filter((hero) => this.isUp(hero)).length > 1;
+        if (!both && party && this.rng.int(3) === 0) {
+            const special = this.invoked("feeling_special");
+            fight.detonate = {
+                tick: this.tick + secondsToTicks(def.detonate.seconds),
+                cross: this.heroes.map(() => special && this.rng.chance(0.5)),
+            };
+            this.emit({ type: "notice", message: def.detonate.message });
+            const others = def.forms.filter((id) => id !== boss.def.id);
+            this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
+            return;
+        }
         const memory = both || this.rng.int(2) === 0;
         if (memory) {
             this.startAkkhaMemory(boss, fight, def);
@@ -5614,6 +5631,54 @@ export class Sim {
         }
         const others = def.forms.filter((id) => id !== boss.def.id);
         this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
+    }
+
+    // Detonate going off: each marked hero's plus (or X) round their tile hurts whoever else is on
+    // it, but not on their own tile
+    private stepAkkhaDetonate(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
+        const detonate = fight.detonate;
+        if (!detonate || this.tick < detonate.tick) {
+            return;
+        }
+        fight.detonate = undefined;
+        const up = this.heroes.filter((hero) => this.isUp(hero));
+        const hit = new Set<number>();
+        for (const hero of up) {
+            const tx = Math.floor(hero.player.x);
+            const ty = Math.floor(hero.player.y);
+            const shape = detonate.cross[hero.index]
+                ? [
+                      [1, 1],
+                      [1, -1],
+                      [-1, 1],
+                      [-1, -1],
+                  ]
+                : [
+                      [1, 0],
+                      [-1, 0],
+                      [0, 1],
+                      [0, -1],
+                  ];
+            this.addEffect(def.detonate.spotAnim, tx + 0.5, ty + 0.5, 0, 40);
+            for (const [dx, dy] of shape) {
+                this.addEffect(def.detonate.spotAnim, tx + dx + 0.5, ty + dy + 0.5, 0, 40);
+                for (const other of up) {
+                    if (
+                        other !== hero &&
+                        Math.floor(other.player.x) === tx + dx &&
+                        Math.floor(other.player.y) === ty + dy
+                    ) {
+                        hit.add(other.index);
+                    }
+                }
+            }
+        }
+        const current = this.hero;
+        for (const index of hit) {
+            this.use(this.heroes[index]);
+            this.akkhaHurt(boss, def, def.detonate.damage, true);
+        }
+        this.use(current);
     }
 
     private akkhaTile(at: { x: number; y: number }): number {
