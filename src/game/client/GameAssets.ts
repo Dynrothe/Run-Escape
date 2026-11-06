@@ -813,9 +813,13 @@ export class GameAssets {
             for (const id of WARDENS.charge.platforms) {
                 locIds.add(id);
             }
-            // The Het room's mirrors, clean and dirty
+            // The Het room's mirrors (clean, dirty, fixed), their spots and its barriers
             locIds.add(HET.mirrorLoc);
             locIds.add(HET.dirtyLoc);
+            locIds.add(HET.fixedLoc);
+            locIds.add(HET.spotLoc);
+            locIds.add(HET.barrierLoc);
+            locIds.add(HET.wornLoc);
         }
         for (const objId of objIds) {
             requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });

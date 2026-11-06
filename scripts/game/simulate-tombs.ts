@@ -344,6 +344,9 @@ class PuzzleWatch {
     missedIssues = 0;
     private turns = new Map<number, string>();
     mirrorTurns = 0;
+    mirrorsSet = 0;
+    barriersMined = 0;
+    worn?: number;
     private beamTick = -1;
     pulses = 0;
     pulsesHit = 0;
@@ -381,12 +384,23 @@ class PuzzleWatch {
         const het = room.het;
         if (het) {
             het.mirrors.forEach((mirror, i) => {
-                const key = `${mirror.turn}${mirror.dirty}`;
-                if (this.turns.has(i) && this.turns.get(i) !== key) {
-                    this.mirrorTurns++;
+                // Turned or cleaned where it's set (not set down or lifted)
+                const key = `${mirror.spot ?? "-"}${mirror.turn}${mirror.dirty}`;
+                const was = this.turns.get(i);
+                if (was !== undefined && was !== key) {
+                    if (was[0] === key[0] && mirror.spot !== undefined) {
+                        this.mirrorTurns++;
+                    } else if (mirror.spot !== undefined) {
+                        this.mirrorsSet++;
+                    }
                 }
                 this.turns.set(i, key);
             });
+            const worn = het.barriers.filter((b) => b.worn).length;
+            if (this.worn !== undefined && worn < this.worn) {
+                this.barriersMined += this.worn - worn;
+            }
+            this.worn = worn;
             if (het.beam && het.beam.tick !== this.beamTick) {
                 this.beamTick = het.beam.tick;
                 this.pulses++;
@@ -439,7 +453,8 @@ class PuzzleWatch {
         }
         if (this.pulses > 0) {
             notes.push(
-                `mirrors turned ${this.mirrorTurns}, beam ${this.pulsesHit}/${this.pulses} pulses through, ` +
+                `mirrors set ${this.mirrorsSet}, turned ${this.mirrorTurns}, barriers mined ${this.barriersMined}, ` +
+                    `beam ${this.pulsesHit}/${this.pulses} pulses through, ` +
                     `seal opened ${this.openings}`,
             );
         }

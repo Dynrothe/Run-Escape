@@ -599,7 +599,7 @@ export const HET_ENEMIES: EnemyDef[] = [
         sounds: { attack: -1, hit: -1, death: -1 },
     },
     // The room's goal: shielded (11706) until the beam reaches the Shielded statue, then weakened
-    // (11707) for a while, when weapons can hurt it (Sim.stepHet)
+    // (11707) for a while, when it's mined (Sim.stepHetMining): weapons never touch it
     {
         id: "hets_seal",
         name: "Het's Seal",
@@ -615,6 +615,7 @@ export const HET_ENEMIES: EnemyDef[] = [
         xp: 200,
         knockbackResist: 1,
         stationary: true,
+        unhittable: true,
         healthBar: true,
         shield: { seconds: 0, look: { npcId: 11706, idleSeq: -1 } },
         sounds: { attack: -1, hit: -1, death: -1 },
@@ -639,7 +640,7 @@ export const HET_ENEMIES: EnemyDef[] = [
 TOMBS_ENEMIES.push(...HET_ENEMIES);
 
 // The Het room's waves: one as it starts, and one each time the beam opens the seal, with a
-// casket each time (so the room always gives at least sealSteps of them)
+// casket each time (one to three of them, by how hard the party mines: HET.mine)
 export const HET_WAVES: string[][] = [
     [
         "scarab_swarm",
@@ -706,18 +707,50 @@ export function getHetTrickle(wave: number): WaveDef {
 // The Het room's numbers (OSRS's where it has them). The beam pulses every beamEvery seconds
 // (9 ticks), shown for beamShow, burning whoever stands in it for beamDamage and enemies for
 // beamEnemyDamage; reaching the Shielded statue opens the seal for `open` seconds (15 ticks),
-// each opening taking at most a sealSteps'th of its hitpoints, so it always takes that many.
-// Orbs of Darkness cross the floor every orbEvery seconds at orbSpeed tiles a second, hitting
-// for orbDamage, more and quicker with the path level; one that crosses a mirror dirties it.
-// Mirrors: 4 on the beam's way round the seal, and decoys more. Everything a room's enemies
-// are scaled by (tombsRoomScale) scales the hurt too.
+// when it's mined, nothing else hurting it. Orbs of Darkness cross the floor every orbEvery
+// seconds at orbSpeed tiles a second, hitting for orbDamage, more and quicker with the path
+// level; one that crosses a mirror dirties it. Everything a room's enemies are scaled by
+// (tombsRoomScale) scales the hurt too.
+//  - The way round the seal turns four times: some turns have a fixed mirror, the rest
+//    (placedLeast to placedMost, one more from path level 2) a spot for a loose mirror. There are
+//    movable loose mirrors (OSRS's three), spareSpots more spots, decoys more fixed mirrors, and
+//    walls whole barriers, each more with the path level; wornLeast or one more worn barriers
+//    stand on the way, barrierHp to mine through.
+//  - Walk into a loose mirror to pick it up (one at a time), stop on an empty spot (placeReach
+//    of it) to set it down (facing "/"), into one set down to turn it ("\"), and into it again to
+//    lift it back off.
+//  - Mining: a swing every mine.every seconds against a worn barrier or the open seal, within
+//    mine.reach, for a hit in mine.hits by the hero's Mining (the shop's ranks): OSRS's damage by
+//    level and pickaxe, so the seal (sealHp, more for each of the party) takes three openings
+//    with none, one with the best (eight swings an opening).
 export const HET = {
     beamEvery: 5.4,
     beamShow: 0.8,
     beamDamage: 3,
     beamEnemyDamage: 30,
     open: 9,
-    sealSteps: 3,
+    sealHp: 119,
+    placedLeast: 1,
+    placedMost: 3,
+    movable: 3,
+    spareSpots: 2,
+    wornLeast: 1,
+    walls: 3,
+    barrierHp: 20,
+    placeReach: 0.6,
+    mine: {
+        every: 1.1,
+        // Past the seal's edge (it's solid, and keeps you a step off it)
+        reach: 1.2,
+        hits: [
+            [5, 7],
+            [8, 10],
+            [10, 12],
+            [12, 15],
+            [15, 17],
+            [17, 19],
+        ] as [number, number][],
+    },
     orbEvery: 3.6,
     orbEveryLeast: 1.1,
     orbQuicker: 0.35,
@@ -728,6 +761,12 @@ export const HET = {
     decoys: 3,
     // Tiles from a mirror's middle that count as walking into it (once, till you step off)
     touchReach: 1,
+    // A set-down spot's mark, a fixed mirror (the loose ones are mirrorLoc), and the barriers:
+    // whole, and worn
+    spotLoc: 45340,
+    fixedLoc: 45455,
+    barrierLoc: 45458,
+    wornLoc: 45462,
     // The beam's spot animations: each tile it crosses, and where it stops (2120)
     beamSpotAnims: { across: 2114, along: 2064, impact: 2120 },
     mirrorLoc: 45456,

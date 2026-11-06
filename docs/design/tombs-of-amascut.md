@@ -61,10 +61,20 @@ The waves no longer run on a clock, but they're still where experience and caske
   sees which pillar or vent is failing, and fixes it by standing on it. Shamans summon more
   baboons unless killed first, volatiles explode into their own pack, venom baboons leave poison
   lanes. In co-op, corrupted teammates gather to be cleansed.
-- **Het.** The caster statue's beam, routed onto the seal by pushing mirrors (walk into one). The
-  beam burns enemies as well as you, so it's a weapon you aim through the room. Orbs of Darkness
-  cross in straight lines and dirty the mirrors; some mirrors turn on their own. When the beam
-  lands the seal is down for 9 seconds, and every weapon hits it.
+- **Het** (`HET` in `content/tombs.ts`, `Sim.stepHet`), as OSRS's: the caster statue's beam, to be
+  brought round the seal onto the Shielded statue. Its way turns four times: some turns have a
+  fixed mirror (45455), the rest (1 to 3, one more from path level 2) a marked spot (45340) for
+  one of the loose mirrors (45456, three of them, OSRS's). Walk into a loose mirror to pick it up
+  (one at a time, held over your head), stop on an empty spot to set it down, walk into one set
+  down to turn it, stand still against it to pick it back up. Fixed mirrors stay as they are. Whole
+  barriers (45458) stand about and block the beam; a worn one or two (45462) stand on its way and
+  are mined through by standing against them. More fixed mirrors, spots and barriers with path
+  levels. The beam burns enemies as well as you; Orbs of Darkness cross in straight lines and
+  dirty the mirrors they cross (walk into one to clean it). The beam on the statue opens the seal
+  for 9 seconds, and it's mined, never hit: standing beside it, a swing a second, for OSRS's
+  damage by Mining level and pickaxe, here the shop's Mining (5 to 7 with none, 17 to 19 at its
+  last rank), so the seal (119, more for each of the party) takes three openings with none and
+  one with the best. The HUD counts what's mined of it.
 - **Scabaras.** Three of four puzzles in a random order, then the number tablet, with scarab
   swarms chasing throughout: memory tiles (walk the sequence), Lights Out plates (enemies can knock
   you onto the wrong one), obelisk order (your weapons hit the nearest), and the tablet (walk over
@@ -266,7 +276,7 @@ raid's ranges.
   corruptor 27285, the jewel of the sun 27289 and the jewel of Amascut 30893. The Helpful Spirit's
   supplies are 27315 to 27347 (`TOMBS_SUPPLIES`).
 - **The Wardens' last floor**: its slabs and rubble 45585 to 45645 (`LocOverrides.ts`).
-- **Locs**: the path doors 46155 to 46166 and the entry 46167; Het's mirrors 45455/45457; Zebak's
+- **Locs**: the path doors 46155 to 46166 and the entry 46167; Het's mirrors 45455 to 45457, its barriers 45458 to 45464; Zebak's
   waterfall 45398/45399; pillars 45530/45531; pressure plates 45340/45344 and tiles 45356 to 45364;
   Ba-Ba's throne 45756 and sarcophagi 45752/46044; the invocation board 46073.
 - **Spot animations** about 2114 to 2271: the puzzle rooms 2114 to 2140, Kephri 2141 to 2171,
@@ -561,8 +571,11 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
 - **The Nexus**: each path's door in turn (the open tile nearest a door set in a wall), then the way
   to the Wardens. **A room**: through its barrier, then its puzzle; **a boss**: past its line.
 - **Apmeken**: stands at each issue till it's fixed, and fights round the room's middle.
-- **Het**: finds the mirrors' turns with the sim's own tracer, walks into each wrong one once
-  (round the others, which it'd turn brushing past), and fights by the seal.
+- **Het**: carries the loose mirrors to the spots the beam's way wants (the room's own answer)
+  and turns them there, cleans whatever dirty mirror stops the beam and mines through a worn
+  barrier it stops at, then mines the seal from beside it while it's open; out of an Orb of
+  Darkness's line whatever it's doing. It steps off anything solid it's against before finding
+  its way round (the tiles round each are walls to its way, its own tile walled in with them).
 - **Scabaras**: the Sequence in order once shown, the fewest Lights out presses, the Addition's
   exact plates, then Matching, every plate reached round the others.
 - **Crondis**: water fetched empty-handed (a band only spills what you carry), filled once a band's

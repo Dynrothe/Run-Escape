@@ -13,10 +13,12 @@ import {
     toggleInvocation,
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
+import { SHOP_UPGRADES } from "../content/shop";
 import {
     APMEKEN,
     APMEKEN_WAVES,
     CRONDIS,
+    HET,
     SCABARAS,
     TOMBS_BOSSES,
     TOMBS_BOSS_FOOD,
@@ -1138,81 +1140,178 @@ describe("the Het room", () => {
     const trace = (sim: Sim) => sim["traceHetBeam"](room(sim), HET_DEF);
     const seal = (sim: Sim) => sim.enemies.find((e) => e.def.id === "hets_seal" && !e.dead);
 
-    it("lays the mirrors out with a way round the seal, turned wrong as it starts", () => {
+    // The room set as its answer says: the loose mirrors on the spots the way wants, turned, and
+    // the worn barriers on the way gone
+    function solve(sim: Sim): void {
+        const het = room(sim);
+        const loose = het.mirrors.filter((m) => !m.fixed);
+        het.solution.forEach((want, i) => {
+            const mirror = loose[i];
+            mirror.spot = want.spot;
+            mirror.turn = want.turn;
+            mirror.x = het.spots[want.spot].x;
+            mirror.y = het.spots[want.spot].y;
+        });
+        het.barriers = het.barriers.filter((b) => !b.worn);
+    }
+    const stand = (sim: Sim, x: number, y: number) => {
+        sim.player.x = sim.player.prevX = x;
+        sim.player.y = sim.player.prevY = y;
+    };
+
+    it("lays out a way round the seal: fixed mirrors, spots for the loose ones, barriers", () => {
         const ways = new Set<string>();
         for (let seed = 1; seed <= 6; seed++) {
             const sim = het([], seed);
-            ways.add(
-                JSON.stringify(
-                    room(sim)
-                        .mirrors.slice(0, 4)
-                        .map((m) => [m.x, m.y]),
-                ),
+            const het_ = room(sim);
+            ways.add(JSON.stringify(het_.solution.map((w) => het_.spots[w.spot])));
+            // 1 to 3 spots on the way, three loose mirrors at least, a worn barrier on the way
+            expect(het_.solution.length).toBeGreaterThanOrEqual(HET.placedLeast);
+            expect(het_.solution.length).toBeLessThanOrEqual(HET.placedMost);
+            expect(het_.mirrors.filter((m) => !m.fixed).length).toBeGreaterThanOrEqual(
+                Math.max(HET.movable, het_.solution.length),
             );
+            expect(het_.barriers.some((b) => b.worn)).toBe(true);
+            expect(het_.barriers.some((b) => !b.worn)).toBe(true);
+            expect(het_.spots.length).toBeGreaterThan(het_.solution.length);
+            // Not done as it starts; done once the answer's set and the barriers mined
             expect(trace(sim).hit).toBe(false);
-            // Some way of turning the four on its route gets it to the statue
-            const route = room(sim).mirrors.slice(0, 4);
-            let solved = false;
-            for (let turns = 0; turns < 16 && !solved; turns++) {
-                route.forEach((m, i) => (m.turn = ((turns >> i) & 1) as 0 | 1));
-                solved = trace(sim).hit;
-            }
-            expect(solved).toBe(true);
-            expect(room(sim).mirrors.length).toBeGreaterThan(4);
+            solve(sim);
+            expect(trace(sim).hit).toBe(true);
         }
         // and it's not the same way each time
         expect(ways.size).toBeGreaterThan(1);
     });
 
-    it("turns a mirror you walk into, once, and cleans a dirty one instead", () => {
+    it("picks a loose mirror up, sets it on a spot, turns it, and lifts it back off", () => {
         const sim = het();
-        const mirror = room(sim).mirrors[0];
-        const turn = mirror.turn;
-        sim.player.x = sim.player.prevX = mirror.x + 0.9;
-        sim.player.y = sim.player.prevY = mirror.y;
+        const het_ = room(sim);
+        const mirror = het_.mirrors.find((m) => !m.fixed)!;
+        // Walked into: carried
+        stand(sim, mirror.x + 0.9, mirror.y);
         sim.step();
-        expect(mirror.turn).toBe(1 - turn);
+        expect(mirror.carrier).toBe(0);
+        // A second one isn't
+        const other = het_.mirrors.find((m) => !m.fixed && m !== mirror)!;
+        stand(sim, other.x + 0.9, other.y);
         sim.step();
-        expect(mirror.turn).toBe(1 - turn);
-        sim.player.x = sim.player.prevX = mirror.x + 4;
+        expect(other.carrier).toBeUndefined();
+        // Walked over a spot, it's carried on; stopped on it, set there
+        const spot = het_.spots[0];
+        sim.player.x = spot.x;
+        sim.player.y = spot.y;
+        sim.player.prevX = spot.x - 0.2;
+        sim.player.prevY = spot.y;
+        sim["stepHetMirrors"](het_);
+        expect(mirror.carrier).toBe(0);
+        stand(sim, spot.x, spot.y);
         sim.step();
-        mirror.dirty = true;
-        sim.player.x = sim.player.prevX = mirror.x + 0.9;
-        sim.step();
-        expect(mirror.dirty).toBe(false);
-        expect(mirror.turn).toBe(1 - turn);
+        expect(mirror.carrier).toBeUndefined();
+        expect(mirror.spot).toBe(0);
+        expect(mirror.turn).toBe(0);
+        // Stood still beside it, it stays
+        for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+            stand(sim, spot.x + 0.9, spot.y);
+            sim.step();
+        }
+        expect(mirror.spot).toBe(0);
+        // Into it again (after stepping off): turned; and again: lifted back off
+        const bump = () => {
+            stand(sim, spot.x + 4, spot.y);
+            sim.step();
+            stand(sim, spot.x + 0.9, spot.y);
+            sim.step();
+        };
+        bump();
+        expect(mirror.turn).toBe(1);
+        expect(mirror.spot).toBe(0);
+        bump();
+        expect(mirror.spot).toBeUndefined();
+        expect(mirror.carrier).toBe(0);
+        // Its carrier down: dropped where they fell
+        sim.player.hp = 0;
+        sim.heroes[0].down = true;
+        sim["stepHetMirrors"](het_);
+        expect(mirror.carrier).toBeUndefined();
     });
 
-    it("opens the seal when the beam reaches the statue: a casket, the next wave, its share of hitpoints", () => {
+    it("leaves a fixed mirror be, but cleans a dirty one walked into", () => {
         const sim = het();
-        const route = room(sim).mirrors.slice(0, 4);
-        for (let turns = 0; turns < 16 && !trace(sim).hit; turns++) {
-            route.forEach((m, i) => (m.turn = ((turns >> i) & 1) as 0 | 1));
+        const mirror = room(sim).mirrors.find((m) => m.fixed)!;
+        const turn = mirror.turn;
+        stand(sim, mirror.x + 0.9, mirror.y);
+        sim.step();
+        expect(mirror.turn).toBe(turn);
+        expect(mirror.carrier).toBeUndefined();
+        stand(sim, mirror.x + 4, mirror.y);
+        sim.step();
+        mirror.dirty = true;
+        stand(sim, mirror.x + 0.9, mirror.y);
+        sim.step();
+        expect(mirror.dirty).toBe(false);
+        expect(mirror.turn).toBe(turn);
+    });
+
+    it("mines through a worn barrier stood against, not a whole one", () => {
+        const sim = het();
+        const het_ = room(sim);
+        const worn = het_.barriers.find((b) => b.worn)!;
+        for (let i = 0; i < 20 * TICKS_PER_SECOND && het_.barriers.includes(worn); i++) {
+            stand(sim, worn.x + 1, worn.y);
+            sim.step();
         }
-        expect(trace(sim).hit).toBe(true);
-        // Nothing to turn them back on the way
-        sim.player.x = sim.player.prevX = 1046.5;
-        sim.player.y = sim.player.prevY = 1033.5;
+        expect(het_.barriers.includes(worn)).toBe(false);
+        const whole = het_.barriers.find((b) => !b.worn)!;
+        for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) {
+            stand(sim, whole.x + 1, whole.y);
+            sim.step();
+        }
+        expect(het_.barriers.includes(whole)).toBe(true);
+    });
+
+    it("opens the seal when the beam reaches the statue, to be mined: weapons never touch it", () => {
+        const sim = het();
+        solve(sim);
+        stand(sim, 1046.5, 1033.5);
         const wave = sim.tombsRoom!.wave;
         const caskets = sim.pickups.filter((p) => p.kind === "casket").length;
         room(sim).nextBeamTick = sim.tick;
         room(sim).nextOrbTick = sim.tick + 10_000;
         sim.step();
         const target = seal(sim)!;
+        expect(target.maxHp).toBe(HET.sealHp);
         expect(target.shieldEnd).toBe(0);
+        expect(room(sim).openUntil).toBeGreaterThan(sim.tick);
         expect(sim.tombsRoom!.wave).toBe(wave + 1);
         expect(sim.pickups.filter((p) => p.kind === "casket").length).toBe(caskets + 1);
-        // A big hit takes only its share before it shuts again
         sim["damageSource"] = "weapon:scythe_of_vitur";
-        sim.damageEnemy(target, target.maxHp * 0.6, 0, target.x, target.y);
+        expect(sim.damageEnemy(target, 500, 0, target.x, target.y)).toBe(0);
+        // Beside it: mined, a swing at a time, by the hero's Mining (none: the least)
+        const [least, most] = HET.mine.hits[0];
+        const hp = target.hp;
+        stand(sim, target.x, target.y - 2);
         sim.step();
+        expect(hp - target.hp).toBeGreaterThanOrEqual(least);
+        expect(hp - target.hp).toBeLessThanOrEqual(most);
+        // Shut once its time's up
+        for (let i = 0; i < (HET.open + 1) * TICKS_PER_SECOND; i++) {
+            stand(sim, 1046.5, 1033.5);
+            sim.step();
+        }
+        expect(room(sim).openUntil).toBe(-1);
         expect(target.shieldEnd).toBeGreaterThan(sim.tick);
-        expect(sim.damageEnemy(target, 50, 0, target.x, target.y)).toBe(0);
+    });
+
+    it("mines the seal harder with the shop's Mining", () => {
+        const sim = het();
+        const mining = SHOP_UPGRADES.find((u) => u.id === "mining")!;
+        sim.heroes[0].metaStats[mining.stat] = mining.perRank * mining.maxRank;
+        expect(sim["hetMineHit"](sim.heroes[0])).toEqual(HET.mine.hits[mining.maxRank]);
     });
 
     it("sends Orbs of Darkness across that hurt and dirty the mirrors they cross", () => {
         const sim = het(["pathfinder"]);
-        const mirror = room(sim).mirrors[0];
+        const mirror = room(sim).mirrors.find((m) => m.fixed)!;
         room(sim).orbs.push({ x: mirror.x - 3, y: mirror.y, vx: 0.2, vy: 0 });
         room(sim).nextOrbTick = sim.tick + 10_000;
         for (let i = 0; i < 20; i++) {

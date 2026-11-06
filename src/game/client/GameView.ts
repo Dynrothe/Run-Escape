@@ -770,20 +770,31 @@ export class GameView {
         }
         const clean = this.assets.get("loc:" + HET.mirrorLoc);
         const dirty = this.assets.get("loc:" + HET.dirtyLoc);
-        for (const mirror of het.mirrors) {
-            const model = mirror.dirty ? (dirty ?? clean) : clean;
+        const fixed = this.assets.get("loc:" + HET.fixedLoc);
+        const spot = this.assets.get("loc:" + HET.spotLoc);
+        const put = (model: typeof clean, x: number, y: number, yaw = 0, lift = 0, scale = 1) => {
             if (model) {
-                const height = this.ground(sim, mirror.x, mirror.y);
-                actors.draw(
-                    model,
-                    model.anims[0],
-                    0,
-                    mirror.x,
-                    height,
-                    mirror.y,
-                    mirror.turn * 512,
-                );
+                actors.draw(model, model.anims[0], 0, x, this.ground(sim, x, y) + lift, y, yaw, {
+                    scale,
+                });
             }
+        };
+        for (const p of het.spots) {
+            put(spot, p.x, p.y);
+        }
+        for (const mirror of het.mirrors) {
+            const model = mirror.dirty ? (dirty ?? clean) : mirror.fixed ? (fixed ?? clean) : clean;
+            if (mirror.carrier !== undefined) {
+                // Held up over whoever carries it
+                put(model, mirror.x, mirror.y, 0, 1.6, 0.6);
+            } else {
+                put(model, mirror.x, mirror.y, mirror.turn * 512);
+            }
+        }
+        const barrier = this.assets.get("loc:" + HET.barrierLoc);
+        const worn = this.assets.get("loc:" + HET.wornLoc);
+        for (const b of het.barriers) {
+            put(b.worn ? (worn ?? barrier) : barrier, b.x, b.y);
         }
         const beam = het.beam;
         if (beam && sim.tick - beam.tick < Math.round(HET.beamShow * TICKS_PER_SECOND)) {

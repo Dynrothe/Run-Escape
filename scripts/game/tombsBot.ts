@@ -3,7 +3,7 @@
 // their own), reading the sim as it likes. Nothing here touches the DOM or Node, so the game's
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
 import { getItem } from "../../src/game/content/items";
-import { BA_BA, CRONDIS, WARDENS, ZEBAK } from "../../src/game/content/tombs";
+import { BA_BA, CRONDIS, HET, WARDENS, ZEBAK } from "../../src/game/content/tombs";
 import { getWeaponStyle } from "../../src/game/content/weapons";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim, wardenFrontRow } from "../../src/game/core/Sim";
@@ -426,59 +426,144 @@ function apmekenMove(sim: Sim, def: PathRoom): Point {
     return dodging(sim, kite(sim, middle));
 }
 
-// Het: each of the route's four mirrors turned its way and clean (walked into once each, stepping
-// back between), then beside the seal while the beam holds it open
+// Het: the loose mirrors carried to the spots the beam's way wants (the room's own answer, as a
+// person works it out) and turned there, whatever stops the beam on the way cleaned or mined
+// through, then beside the seal, mining it while the beam holds it open
 function hetMove(sim: Sim, def: PathRoom): Point {
     const het = sim.tombsRoom!.het!;
     const hero = sim["hero"].index;
-    const route = het.mirrors.slice(0, 4);
-    const turns = hetTurns(sim, def);
     const player = sim.player;
-    const wrong = route
-        .map((mirror, i) => ({ mirror, i }))
-        .filter(({ mirror, i }) => mirror.dirty || mirror.turn !== turns[i])
-        .sort(
-            (a, b) =>
-                Math.hypot(a.mirror.x - player.x, a.mirror.y - player.y) -
-                Math.hypot(b.mirror.x - player.x, b.mirror.y - player.y),
+    const lying = het.mirrors.filter((m) => m.carrier === undefined);
+    const solids = (but?: { x: number; y: number }) =>
+        [...lying, ...het.barriers].filter((thing) => thing !== but);
+    // Round what's solid, but first off anything it's against that it isn't going for: the
+    // tiles round each are walls to its way, its own tile walled in with them
+    const walkHet = (x: number, y: number, avoid: Point[]): Point => {
+        const against = avoid.find(
+            (thing) =>
+                Math.hypot(thing.x - player.x, thing.y - player.y) < 1.5 &&
+                Math.hypot(thing.x - x, thing.y - y) > 0.5,
         );
-    if (wrong.length > 0) {
-        const { mirror } = wrong[0];
-        const away = Math.hypot(mirror.x - player.x, mirror.y - player.y);
-        if (mirror.touching[hero]) {
-            // Touched it: back off past its reach before going in again
-            const len = away || 1;
-            return walkAvoiding(
-                sim,
-                mirror.x + ((player.x - mirror.x) / len) * 2.2,
-                mirror.y + ((player.y - mirror.y) / len) * 2.2,
-                het.mirrors.filter((m) => m !== mirror),
+        if (against && Math.hypot(x - player.x, y - player.y) > 1.5) {
+            const away = Math.hypot(player.x - against.x, player.y - against.y) || 1;
+            return { x: (player.x - against.x) / away, y: (player.y - against.y) / away };
+        }
+        return walkAvoiding(sim, x, y, avoid);
+    };
+    // An Orb of Darkness coming at it: out of its line, whatever it was doing
+    for (const orb of het.orbs) {
+        const speed = Math.hypot(orb.vx, orb.vy) || 1;
+        const ux = orb.vx / speed;
+        const uy = orb.vy / speed;
+        const ahead = (player.x - orb.x) * ux + (player.y - orb.y) * uy;
+        const side = (player.x - orb.x) * -uy + (player.y - orb.y) * ux;
+        if (ahead > -0.3 && ahead < 3 && Math.abs(side) < 1) {
+            const sign = side >= 0 ? 1 : -1;
+            return { x: -uy * sign, y: ux * sign };
+        }
+    }
+    const carried = het.mirrors.find((m) => m.carrier === hero);
+    const wanted = het.solution.filter((want) => !het.mirrors.some((m) => m.spot === want.spot));
+    if (carried) {
+        // Onto a spot the way wants, or any empty one to be rid of it
+        const spot =
+            wanted.length > 0
+                ? het.spots[wanted[0].spot]
+                : het.spots.find((_, i) => !het.mirrors.some((m) => m.spot === i));
+        if (spot) {
+            // Stopped on it, it's set down
+            if (Math.hypot(spot.x - player.x, spot.y - player.y) < 0.3) {
+                return { x: 0, y: 0 };
+            }
+            return walkHet(spot.x, spot.y, solids());
+        }
+    }
+    // Into a mirror on the way that's turned wrong or dirty: once, stepping back between
+    const traced = sim["traceHetBeam"](het, def.het!);
+    const end = traced.points[traced.points.length - 1];
+    const stopping = het.mirrors.find(
+        (m) =>
+            m.carrier === undefined &&
+            m.dirty &&
+            Math.floor(m.x) === Math.floor(end.x) &&
+            Math.floor(m.y) === Math.floor(end.y),
+    );
+    const wrong = het.solution
+        .map((want) => ({ want, mirror: het.mirrors.find((m) => m.spot === want.spot) }))
+        .filter(({ want, mirror }) => mirror && (mirror.dirty || mirror.turn !== want.turn))
+        .map(({ mirror }) => mirror!);
+    const fix = stopping ?? wrong[0];
+    if (fix) {
+        const away = Math.hypot(fix.x - player.x, fix.y - player.y) || 1;
+        if (fix.touching[hero]) {
+            return walkHet(
+                fix.x + ((player.x - fix.x) / away) * 2.2,
+                fix.y + ((player.y - fix.y) / away) * 2.2,
+                solids(fix),
             );
         }
-        // Round the others, which it would turn brushing past
-        const others = het.mirrors.filter((m) => m !== mirror);
-        return walkAvoiding(sim, mirror.x, mirror.y, others);
+        return walkHet(fix.x, fix.y, solids(fix));
     }
-    // The way's right: fight beside the seal
+    // A loose mirror for a spot that wants one
+    if (wanted.length > 0) {
+        const loose = lying
+            .filter((m) => !m.fixed && m.spot === undefined)
+            .sort(
+                (a, b) =>
+                    Math.hypot(a.x - player.x, a.y - player.y) -
+                    Math.hypot(b.x - player.x, b.y - player.y),
+            )[0];
+        if (loose) {
+            return walkHet(loose.x, loose.y, solids(loose));
+        }
+        // None loose: one set on a spot the way doesn't want, walked into till it lifts ("/",
+        // then "\", then off), stepping back between
+        const spare = lying.find(
+            (m) =>
+                !m.fixed &&
+                m.spot !== undefined &&
+                !het.solution.some((want) => want.spot === m.spot),
+        );
+        if (spare) {
+            const away = Math.hypot(spare.x - player.x, spare.y - player.y) || 1;
+            if (spare.touching[hero]) {
+                return walkHet(
+                    spare.x + ((player.x - spare.x) / away) * 2.2,
+                    spare.y + ((player.y - spare.y) / away) * 2.2,
+                    solids(spare),
+                );
+            }
+            return walkHet(spare.x, spare.y, solids(spare));
+        }
+    }
+    // A worn barrier the beam stops at: stood against, mining
+    const barrier = het.barriers.find(
+        (b) =>
+            b.worn &&
+            Math.floor(b.x) === Math.floor(end.x) &&
+            Math.floor(b.y) === Math.floor(end.y),
+    );
+    if (barrier) {
+        const away = Math.hypot(barrier.x - player.x, barrier.y - player.y) || 1;
+        if (away <= 1.2) {
+            return dodging(sim, { x: 0, y: 0 });
+        }
+        return walkHet(
+            barrier.x + ((player.x - barrier.x) / away) * 0.9,
+            barrier.y + ((player.y - barrier.y) / away) * 0.9,
+            solids(barrier),
+        );
+    }
+    // The way's right: beside the seal, mining it whenever it's open
     const seal = def.het!.seal;
-    return dodging(sim, kite(sim, { x: seal.x, y: seal.y - 2 }, 2));
-}
-
-// The route's mirrors' turns that get the beam to the statue: each way tried on a clean copy of
-// the room through the sim's own tracer (the route's four are the first mirrors)
-function hetTurns(sim: Sim, def: PathRoom): number[] {
-    const het = sim.tombsRoom!.het!;
-    const mirrors = het.mirrors.map((m, i) => ({ ...m, dirty: i < 4 ? false : m.dirty }));
-    const trial = { ...het, mirrors };
-    for (let turns = 0; turns < 16; turns++) {
-        for (let i = 0; i < 4; i++) {
-            mirrors[i].turn = ((turns >> i) & 1) as 0 | 1;
-        }
-        if (sim["traceHetBeam"](trial, def.het!).hit) {
-            return mirrors.slice(0, 4).map((m) => m.turn);
-        }
+    const spot = { x: seal.x, y: seal.y - 2 };
+    if (het.openUntil !== -1) {
+        // Still while it's mined, but out of an orb's or a shot's way
+        return Math.hypot(spot.x - player.x, spot.y - player.y) < 0.5
+            ? dodging(sim, { x: 0, y: 0 })
+            : walkHet(spot.x, spot.y, solids());
     }
-    return het.mirrors.slice(0, 4).map((m) => m.turn);
+    return dodging(sim, kite(sim, spot, 2));
 }
 
 // Scabaras: a plate stepped on round every other plate on the boards, so none's pressed on the way

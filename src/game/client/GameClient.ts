@@ -32,7 +32,7 @@ import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
-import { APMEKEN_WAVES, HET } from "../content/tombs";
+import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -2880,10 +2880,10 @@ export class GameClient implements GameFrameHandler {
                 sim.tombsRoom && !sim.tombsRoom.boss
                     ? sim.tombsRoom.het
                         ? {
-                              // The Het room counts the seal's openings, not waves
-                              label: "Seal opened",
-                              wave: Math.max(0, sim.tombsRoom.wave),
-                              of: HET.sealSteps,
+                              // The Het room counts what's mined of the seal, not waves
+                              label: "Seal mined",
+                              wave: sim.hetSealMined.mined,
+                              of: sim.hetSealMined.of,
                               waiting: false,
                               done: sim.tombsRoom.doneTick !== undefined,
                           }
