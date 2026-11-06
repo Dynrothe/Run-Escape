@@ -651,7 +651,9 @@ src/game/
                       map when anything on it flies (`hasFliers` in content/maps.ts), since
                       making it takes a while
     SpatialHash.ts    enemies (and piles of bones) by cell, for what's near: flat arrays over
-                      the arena, kept from tick to tick
+                      the arena, kept from tick to tick. It goes by middles, so an attack
+                      that hits what it touches uses Sim's queryTouching, which also looks
+                      at the few big enemies (radius over 1) out of the cells it searched
     lockstep.ts       co-op's frame events, applying them, and the check that copies agree
     fmath.ts          trigonometry that every browser works out the same, for co-op
     Upgrades.ts       level up choices

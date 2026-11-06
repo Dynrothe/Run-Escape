@@ -46,6 +46,9 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   and the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
   a slash or sweep, and `special.aoe` hits all round.
+- An attack that hits what it touches (its range plus the enemy's `radius`) finds enemies with
+  `queryTouching`, not `enemyHash.query`: the hash goes by middles, so its search alone misses a
+  big enemy whose edge is in range.
 - Every other level of a slash or sweep adds knockback automatically, from the loop after
   `WEAPONS`. Don't add those steps by hand.
 - `burns.locId` is scenery for the flames on burning ground. `getBaseRequests` bakes it with the
@@ -147,6 +150,8 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
 
 - `ghost` goes through everything, and is only for what's really a spirit. Anything with wings gets
   `flies`: over fences, walls, trees and water, and round terrain (`world/FlightGrid.ts`).
+- A `radius` over 1 (more than two tiles across) makes a big enemy: melee weapons go by its edge
+  for when to swing and where to aim, and attacks find it by its edge too (`Sim.bigEnemies`).
 - A `blinks.surface` seq is baked like `blinks.seq`, and needs to be one the NPC's model can play.
 - `holds` has an enemy pin the player where they stand once it reaches them (Phosani's husks), and
   a boss's `summon.scatter` brings its summons on wherever a wave's enemy would, so there's time to
