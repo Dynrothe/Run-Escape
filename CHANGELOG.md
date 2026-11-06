@@ -38,6 +38,11 @@ the version in the corner).
 - The Armadyl crossbow shows each shot while you run, not only when you stand still: your
   adventurer aims it for a moment as the legs keep running. Fixed by trippy22.
 
+### Fixed
+
+- Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
+  it: they waited for its middle to come into reach. Fixed by Okaeri.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

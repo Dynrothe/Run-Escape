@@ -898,6 +898,10 @@ export class Sim {
     // Enemy id -> the tick the next of its kind can go (EnemyBlinksDef.gap)
     private readonly blinkGapEnd = new Map<string, number>();
     private readonly enemyHash: SpatialHash<Enemy>;
+    // The enemies in enemyHash more than two tiles across (radius over 1), which a melee swing's
+    // search by reach can miss, their middles further off than their edges. Rebuilt with the hash,
+    // so one that grows mid-tick (a boss rising into a bigger form) joins it the next tick.
+    private bigEnemies: Enemy[] = [];
     private readonly pileHash: SpatialHash<Pickup>;
     private nextUid = 1;
     // Enemies that have died or vanished so far, for Enemy.deathSeq
@@ -3100,9 +3104,13 @@ export class Sim {
 
     private rebuildEnemyHash(): void {
         this.enemyHash.clear();
+        this.bigEnemies = [];
         for (const enemy of this.enemies) {
             if (!enemy.dead && !enemy.leaving) {
                 this.enemyHash.insert(enemy);
+                if (enemy.radius > 1) {
+                    this.bigEnemies.push(enemy);
+                }
             }
         }
     }
@@ -9033,7 +9041,8 @@ export class Sim {
         const reach = level.area * (1 + this.stats.area);
         const player = this.player;
         return (
-            this.nearestEnemies(player.x, player.y, reach + 0.5, 1, getWeaponStyle(def)).length > 0
+            this.nearestEnemies(player.x, player.y, reach + 0.5, 1, getWeaponStyle(def), true)
+                .length > 0
         );
     }
 
@@ -9077,6 +9086,7 @@ export class Sim {
             reach + 1.5,
             1,
             getWeaponStyle(def),
+            true,
         )[0];
         if (nearest) {
             const dx = nearest.x - player.x;
@@ -9120,7 +9130,7 @@ export class Sim {
                 arc: SLASH_ARC,
                 weaponId: def.id,
             });
-            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
+            const inSlash = (enemy: Enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const along = ox * dirX + oy * dirY;
@@ -9128,11 +9138,19 @@ export class Sim {
                 if (
                     along >= -0.3 &&
                     along <= reach + enemy.radius &&
-                    across <= width / 2 + enemy.radius
+                    across <= width / 2 + enemy.radius &&
+                    !hit.includes(enemy)
                 ) {
                     hit.push(enemy);
                 }
-            });
+            };
+            this.enemyHash.query(player.x, player.y, reach + 1, inSlash);
+            // A big one the search by reach may not have come to (bigEnemies)
+            for (const enemy of this.bigEnemies) {
+                if (!enemy.dead) {
+                    inSlash(enemy);
+                }
+            }
         }
         this.meleeHits(def, level, hit, special);
     }
@@ -9169,7 +9187,7 @@ export class Sim {
                 arc,
                 weaponId: def.id,
             });
-            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
+            const inSweep = (enemy: Enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const dist = fm.hypot(ox, oy);
@@ -9184,7 +9202,12 @@ export class Sim {
                     return;
                 }
                 hit.add(enemy);
-            });
+            };
+            this.enemyHash.query(player.x, player.y, reach + 1, inSweep);
+            // A big one the search by reach may not have come to (bigEnemies)
+            for (const enemy of this.bigEnemies) {
+                inSweep(enemy);
+            }
         }
         this.meleeHits(def, level, hit, special);
     }
@@ -9491,12 +9514,16 @@ export class Sim {
     // blocked, so aiming at them would waste shots while pests close in.
     // style: a weapon's, which leaves out what it can't hurt (an expert Nylocas of another
     // style). What isn't a weapon (thralls, the cannon, power-ups) hurts any, and passes none.
+    // edge: an enemy more than two tiles across (radius over 1) counts as nearer by its radius past
+    // a tile, as a melee weapon's reach is (fireSlash hits whatever its reach touches, so a big boss
+    // is in reach from beside it). Nothing smaller changes.
     private nearestEnemies(
         x: number,
         y: number,
         range: number,
         count: number,
         style?: CombatStyle,
+        edge = false,
     ): Enemy[] {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
@@ -9511,7 +9538,12 @@ export class Sim {
             }
             const dx = enemy.x - x;
             const dy = enemy.y - y;
-            const distSq = dx * dx + dy * dy;
+            let distSq = dx * dx + dy * dy;
+            // Over two tiles across: what's past a tile of its radius counts as in reach
+            if (edge && enemy.radius > 1) {
+                const gap = Math.max(0, Math.sqrt(distSq) - (enemy.radius - 1));
+                distSq = gap * gap;
+            }
             if (distSq <= rangeSq) {
                 found.push({ enemy, distSq });
             }

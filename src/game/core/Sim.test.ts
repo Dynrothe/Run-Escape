@@ -346,6 +346,23 @@ describe("melee", () => {
         expect(scimitar.cooldown).toBeGreaterThan(10);
     });
 
+    test("a slash goes for a big enemy beside you, whose middle is out of reach", () => {
+        const sim = armed("scimitar");
+        // Its edge a tile off, its middle four: in reach, as the slash's hit counts its size
+        const big = dummy(sim, 4, 0, "boss");
+        big.radius = 3;
+        const events = attackOnce(sim, 1);
+        expect(events.some((e) => e.type === "slash")).toBe(true);
+        expect(hitsOn(events, big).length).toBeGreaterThan(0);
+    });
+
+    test("a sweep reaches a big enemy beside you too", () => {
+        const sim = armed("two_handed_sword");
+        const big = dummy(sim, 4, 0, "boss");
+        big.radius = 3;
+        expect(hitsOn(attackOnce(sim, 1), big).length).toBeGreaterThan(0);
+    });
+
     test("the Thunder khopesh's Thunderclap hits everything around you", () => {
         const sim = createSim();
         sim.enemies = [];
