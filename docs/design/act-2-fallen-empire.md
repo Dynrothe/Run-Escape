@@ -774,32 +774,32 @@ a row of four slots. About a week for the two systems, with invocations' card sw
 
 ## 10. Build order
 
-Lighting first, at Dynny's word, then one map per pull request, Stranglewood first. Each map's pull request has its
-sims (`MAP=x`), its phone numbers and its cache additions listed. Pull requests 1 to 4 are **the first build**, what
-players get first: the lighting under it, the act's screen, the Stranglewood, invocations, relics and the first remix.
+Everything lands on one branch, `act-2`, in one pull request (#159), at Dynny's word. Lighting came first, then the
+Stranglewood. Then, Dynny leaving the order to me (2026-11-06): Awakened Vardorvis next, so its playtest rounds
+(Zachariah took ten, and these are to be harder) run while the rest is built; then invocations, relics and the first
+remix; then each map with its remix and its Awakened fight, so every map lands whole; the gauntlet and the extras
+last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additions in #159.
 
-| #   | Pull request                                                                                                                                                                                   | Needs | Rough size |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ---------- |
-| 1   | **Lighting**. Its first step is the one-day spike (the fog the shaders already have, on a dev map, screenshots from the play camera), then the real thing (6.8) on a dev map, `scaperune_dark` | -     | 2 weeks    |
-| 2   | **Stranglewood**, with the act's screen, `act.requires`, Act II's steps, `RunRuleDef`, roots, the Forester                                                                                     | -     | 3 weeks    |
-| 3   | **Invocations and relics** (tier 1 opens with the Stranglewood)                                                                                                                                | 2     | 1.5 weeks  |
-| 4   | The Overgrown remix, with the remix switches, sets and records                                                                                                                                 | 2     | 4 days     |
-| 5   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter                                                                             | 2     | 2.5 weeks  |
-| 6   | The Shadow remix                                                                                                                                                                               | 4, 5  | 3 days     |
-| 7   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger                                                                                                       | 2     | 3 weeks    |
-| 8   | The Frozen remix                                                                                                                                                                               | 4, 7  | 3 days     |
-| 9   | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer                                                                                                              | 1, 2  | 1.5 weeks  |
-| 10  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist)                                                      | 9     | 1.5 weeks  |
-| 11  | Awakened Vardorvis, with fighting pets (Butch first), and its design doc                                                                                                                       | 2     | 2 weeks    |
-| 12  | Awakened Whisperer, Wisp                                                                                                                                                                       | 5, 11 | 2 weeks    |
-| 13  | Awakened Duke Sucellus, Baron                                                                                                                                                                  | 7, 11 | 2 weeks    |
-| 14  | Awakened Leviathan, Lil'viathan, the act's ending                                                                                                                                              | 9, 11 | 2 weeks    |
-| 15  | **The Forgotten Four** gauntlet                                                                                                                                                                | 11-14 | 1.5 weeks  |
-| 16  | Awakened invasions, Awakener's orbs, the weekly Vault                                                                                                                                          | 14    | 1.5 weeks  |
+| #   | Step                                                                                                                                      | Needs        | Rough size |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------- |
+| 1   | **Lighting**, as an engine feature: lights from any source, a changeable darkness, `litTargetsOnly` (6.8). Done                           | -            | done       |
+| 2   | **Stranglewood**, with the act's screen, `act.requires`, Act II's steps, `RunRuleDef`, roots, the Forester. Done                          | -            | done       |
+| 3   | **Awakened Vardorvis**, with fighting pets (Butch first), and its design doc. Early, so its playtest rounds run beside the next steps     | 2            | 2 weeks    |
+| 4   | **Invocations and relics** (tier 1 opens with the Stranglewood)                                                                           | 2            | 1.5 weeks  |
+| 5   | The Overgrown remix, with the remix switches, sets and records                                                                            | 2            | 4 days     |
+| 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter                        | 2            | 2.5 weeks  |
+| 7   | The Shadow remix                                                                                                                          | 5, 6         | 3 days     |
+| 8   | Awakened Whisperer, Wisp                                                                                                                  | 3, 6         | 2 weeks    |
+| 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger                                                  | 2            | 3 weeks    |
+| 10  | The Frozen remix                                                                                                                          | 5, 9         | 3 days     |
+| 11  | Awakened Duke Sucellus, Baron                                                                                                             | 3, 9         | 2 weeks    |
+| 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer                                                         | 1, 2         | 1.5 weeks  |
+| 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
+| 14  | Awakened Leviathan, Lil'viathan, the act's ending                                                                                         | 3, 12        | 2 weeks    |
+| 15  | **The Forgotten Four** gauntlet                                                                                                           | 3, 8, 11, 14 | 1.5 weeks  |
+| 16  | Awakened invasions, Awakener's orbs, the weekly Vault                                                                                     | 14           | 1.5 weeks  |
 
-The lighting coming first makes the Scar itself short (9). The Awakened fights can go any time after their map, so
-fight 11 could follow the first build if Dynny would rather play a boss early. The sizes are reasoned from the code,
-not prototyped, and leave out playtest rounds: Zachariah took ten, and these are to be harder.
+The sizes are reasoned from the code, not prototyped, and leave out playtest rounds.
 
 ## 11. Engine work in one place
 
