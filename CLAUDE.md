@@ -45,6 +45,7 @@ go stale. Add anything that cost you time to work out.
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
+| Dark maps: lights, aiming at what's lit, lanterns      | `docs/DEVELOPMENT.md`, The dark; `includes/lights.glsl`, `Sim.ts`      |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |

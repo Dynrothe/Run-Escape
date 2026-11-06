@@ -39,8 +39,10 @@ flat out uint v_texId;
 flat out float v_alphaCutOff;
 out float v_fogAmount;
 flat out vec4 v_interactId;
+#ifdef LIGHTS
 // World tiles x and z, and how much it's drawn as if it were lit (lights.glsl)
 out vec3 v_lightPos;
+#endif
 // Edge light (ActorDrawOptions.edge): where in the model this is, -1 to 1 across a tile, and the
 // light's colour and strength, and how far in it reaches
 out vec2 v_edgePos;
@@ -130,8 +132,10 @@ void main() {
 
     v_interactId = vec4(0.0);
 
+#ifdef LIGHTS
     // A flash shows in the dark too, so a hit on something out of the light can be seen
     v_lightPos = vec3(worldPos.xz, max(data2.w, abs(flash)));
+#endif
 
     gl_Position = u_viewMatrix * worldPos;
     gl_Position.z += (float(vertex.priority) + 20.0) * 0.0007;

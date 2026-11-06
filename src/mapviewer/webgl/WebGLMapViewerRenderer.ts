@@ -189,9 +189,9 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     playArea: vec4 = vec4.fromValues(-1e6, -1e6, 1e6, 1e6);
     // Multiplied over what main.frag draws (a raid hall's colour wash): white changes nothing
     wash: vec4 = vec4.fromValues(1, 1, 1, 1);
-    // The dark (scene-uniforms.glsl): how many lights are on, how bright the dark is, and 1 if
-    // the map's dark at all (0 leaves every colour as it is); then each light, x, z, one over its
-    // radius squared, and warmth. A dark map's game sets them (GameWebGLRenderer.setLights).
+    // The dark (scene-uniforms.glsl): how many lights are on and how bright the dark is; then
+    // each light, x, z, one over its radius squared, and warmth. Only a dark map's programs read
+    // them (GameWebGLRenderer.setDarkness).
     lightInfo: vec4 = vec4.fromValues(0, 1, 0, 0);
     lights: Float32Array = new Float32Array(MAX_LIGHTS * 4);
     // World tiles (x0, y0, x1, y1) of the world that map squares keep, see

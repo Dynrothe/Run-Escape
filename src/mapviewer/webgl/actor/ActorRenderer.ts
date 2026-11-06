@@ -282,7 +282,8 @@ export class ActorSegment {
 
     constructor(
         readonly vertexArray: VertexArray,
-        readonly drawCall: DrawCall,
+        // Made again with the other program as a map goes dark or light (ActorRenderer.setProgram)
+        public drawCall: DrawCall,
         readonly drawCallSilhouette: DrawCall,
         readonly drawCallOutline: DrawCall,
     ) {}
@@ -353,7 +354,7 @@ export class ActorRenderer {
     constructor(
         readonly app: PicoApp,
         readonly hasMultiDraw: boolean,
-        readonly program: Program,
+        public program: Program,
         readonly silhouetteProgram: Program,
         readonly textureArray: Texture,
         readonly textureMaterials: Texture,
@@ -384,12 +385,7 @@ export class ActorRenderer {
         );
 
         const createDrawCall = (program: Program, vertexArray: VertexArray) =>
-            app
-                .createDrawCall(program, vertexArray)
-                .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
-                .texture("u_textures", this.textureArray)
-                .texture("u_textureMaterials", this.textureMaterials)
-                .texture("u_actorData", this.dataTexture);
+            this.createDrawCall(program, vertexArray);
 
         const segments = Array.from(bake.segmentStarts, (start) => {
             const vertexArray = app
@@ -436,6 +432,28 @@ export class ActorRenderer {
             );
         }
         return models;
+    }
+
+    private createDrawCall(program: Program, vertexArray: VertexArray): DrawCall {
+        return this.app
+            .createDrawCall(program, vertexArray)
+            .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
+            .texture("u_textures", this.textureArray)
+            .texture("u_textureMaterials", this.textureMaterials)
+            .texture("u_actorData", this.dataTexture);
+    }
+
+    // Draws the actors with another program from now on (a dark map's, with its lights, or back)
+    setProgram(program: Program): void {
+        if (program === this.program) {
+            return;
+        }
+        this.program = program;
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                segment.drawCall = this.createDrawCall(program, segment.vertexArray);
+            }
+        }
     }
 
     removePage(page: ActorPage): void {

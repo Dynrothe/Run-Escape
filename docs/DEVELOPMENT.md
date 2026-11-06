@@ -1085,6 +1085,45 @@ the item reaches as it turns, not over its top. The Power-up timers setting
 `window.frameProbe` (dev only) counts what a frame sends to the GPU, at the GL calls:
 `await frameProbe.sample(60)` gives triangles, draws and CPU time, split into world and actors.
 
+### The dark
+
+A map with `darkness` (`MapDef.darkness`, the Scar's rule) is drawn dark but for its lights, and
+weapons only aim at what's lit. Every other map has none of it: its programs are built without the
+lights (`LIGHTS` in the shaders) and its sim never makes any.
+
+- **The sim** makes the lights again each tick, after the enemies move and before the weapons fire
+  (`Sim.stepLights`): each player's (`playerLight`, and a lantern's bonus on top while it lasts,
+  shrinking back over its last seconds), the map's `fires`, what enemies carry
+  (`EnemyDef.light`) and what they left where they died. `Sim.isLit` is within half a tile of a
+  light's edge (`LIGHT_GRACE`). `nearestEnemies`, which every weapon, thrall, cannon and power-up
+  aims with (toughest, unvenomed and split shots go through it too), leaves out what isn't lit;
+  projectiles and swings carry on and hit whatever they meet, lit or not. The balance bot only
+  walks at what's lit. It's all squared distances, so it's the same on every co-op player's copy.
+- **The renderer**: `GameWebGLRenderer.setDarkness` changes the map's programs over to a set built
+  with `LIGHTS` (made the first time a dark map wants them; changing over loads the map squares
+  again and remakes the actors' draw calls). Those take up to `MAX_LIGHTS` (8) lights from the
+  scene uniforms, each a circle on the ground by world x and z, and multiply every pixel by
+  `getLight` in `lights.glsl`: full strength out to under half the radius, a smooth fade to its edge,
+  warm by its warmth, and `ambient` (a little blue) outside every light. `GameClient.updateLights`
+  sends the shown player's light first and then the nearest, each where what carries it is drawn
+  that frame.
+- **What's drawn as if lit** (`ActorDrawOptions.unlit`): projectiles, spot animations, power-ups
+  and caskets on the ground, power-ups' effects, bosses' hazards, and everything the boss fight's
+  view draws (`ActorRenderer.unlitAtLeast`). A hit's flash shows too (the shader takes a flash as
+  unlit), so a shot landing in the dark can be seen. The overlay (hitsplats, health bars, windups,
+  loot beams) is over it all anyway. Map scenery has no unlit: a fire is lit by its own light.
+- **The minimap** leaves out enemies that aren't lit, and `GameView.drawDarkArrows` puts a faint
+  arrow just past the player's light for the nearest unlit enemy coming at them each way round.
+- **A lantern** (`LANTERN_ID`, weight 0 everywhere but a dark map's `lanternWeight`, and last in
+  `POWER_UPS` so every other map's rolls come out as they did) is drawn carried at the player's left
+  hand (`GameView.drawLantern`) rather than baked into their look, which would bake every player
+  again on every map.
+- **Cost**: the lights are per pixel, and only a dark map pays for them. In the headless renderer
+  at 844×390, `scaperune_dark` with five lights drew a frame in about a fifth longer than without
+  them, and with eight about a third; Lumbridge took as long as it did before the lights. A real
+  phone hasn't been measured. Nothing past the lights is culled: the dark has to read as shapes, so
+  a dark map draws as many triangles as a lit one.
+
 Combat sounds are picked by the server, not the cache, so the ids in `content/` come from the OSRS
 Wiki's [list of in-game sound IDs](https://oldschool.runescape.wiki/w/List_of_in-game_sound_IDs).
 A sound's samples are let go once it's first played and its `AudioBuffer` holds them

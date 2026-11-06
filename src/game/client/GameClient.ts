@@ -2149,8 +2149,9 @@ export class GameClient implements GameFrameHandler {
     // shown player's first, then the nearest to them, as many as the shaders take (MAX_LIGHTS).
     // The sim aims by all of them; one too far off to be drawn is off the screen anyway.
     private updateLights(sim: Sim, alpha: number, px: number, py: number): void {
-        const shown = this.shownLights;
-        shown.length = 0;
+        // Reused frame to frame, to keep a phone's garbage collector quiet
+        const pool = this.shownLights;
+        let count = 0;
         for (const light of sim.lights) {
             let { x, y } = light;
             if (light.hero !== undefined) {
@@ -2162,10 +2163,14 @@ export class GameClient implements GameFrameHandler {
                 y = light.enemy.prevY + (light.enemy.y - light.enemy.prevY) * alpha;
             }
             const own = light.hero === this.viewHero;
-            const away = own ? -1 : Math.hypot(x - px, y - py) - light.radius;
-            shown.push({ x, y, radius: light.radius, warmth: light.warmth, away });
+            const shown = (pool[count++] ??= { x: 0, y: 0, radius: 0, warmth: 0, away: 0 });
+            shown.x = x;
+            shown.y = y;
+            shown.radius = light.radius;
+            shown.warmth = light.warmth;
+            shown.away = own ? -1 : Math.hypot(x - px, y - py) - light.radius;
         }
-        shown.sort((a, b) => a.away - b.away);
+        const shown = pool.slice(0, count).sort((a, b) => a.away - b.away);
         this.renderer.clearLights();
         for (const light of shown) {
             this.renderer.addLight(light.x, light.y, light.radius, light.warmth);

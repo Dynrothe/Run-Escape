@@ -18,9 +18,8 @@ uniform SceneUniforms {
     vec4 u_playArea;
     // Multiplied over what main.frag draws (a raid hall's colour wash): white changes nothing
     vec4 u_wash;
-    // The dark (MapDef.darkness, includes/lights.glsl): x, how many of u_lights are on; y, how
-    // bright what's out of them is (0 to 1); z, 1 on a dark map and 0 everywhere else, where
-    // nothing's lit or darkened at all
+    // The dark (MapDef.darkness, includes/lights.glsl), read only by a dark map's programs (their
+    // LIGHTS): x, how many of u_lights are on; y, how bright what's out of them is (0 to 1)
     vec4 u_lightInfo;
     // World tiles x and z, one over the radius squared (tiles), warmth (0 to 1)
     vec4 u_lights[MAX_LIGHTS];

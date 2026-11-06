@@ -2257,7 +2257,7 @@ const UNLIT: ActorDrawOptions = { unlit: 1 };
 const LANTERN_SIDE = 0.38;
 const LANTERN_AHEAD = 0.12;
 const LANTERN_HEIGHT = 0.55;
-const LANTERN_OPTIONS: ActorDrawOptions = { scale: 0.7, unlit: 1 };
+const LANTERN_OPTIONS: ActorDrawOptions = { scale: 1, unlit: 1 };
 
 // getEnemyModelKey, made once rather than for every enemy every frame
 const enemyModelKeys = new Map<EnemyDef, string[]>();

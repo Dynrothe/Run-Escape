@@ -9,8 +9,15 @@ import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import actorSilhouetteFragShader from "../../mapviewer/webgl/actor/actor-silhouette.frag.glsl";
 import actorVertShader from "../../mapviewer/webgl/actor/actor.vert.glsl";
 import { prependDefines } from "../../mapviewer/webgl/shaders/ShaderUtil";
-import { createProgram } from "../../mapviewer/webgl/shaders/Shaders";
+import {
+    createMainProgram,
+    createNpcProgram,
+    createProgram,
+} from "../../mapviewer/webgl/shaders/Shaders";
 import mainFragShader from "../../mapviewer/webgl/shaders/main.frag.glsl";
+
+// The programs a map's drawn with: every map's, or a dark map's with its lights (setDarkness)
+type ProgramSet = { main: Program; mainAlpha: Program; npc: Program; actor: Program };
 
 // What the renderer calls into each frame, in this order.
 export interface GameFrameHandler {
@@ -129,11 +136,61 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
     }
 
     // A dark map (MapDef.darkness): what's out of every light is drawn this bright (0 to 1). Unset
-    // turns the dark off, and every colour's drawn as it always is.
+    // turns the dark off, and every colour's drawn as it always is. A dark map draws with programs
+    // of its own (LIGHTS in the shaders), made the first time one's wanted, so every other map's
+    // pay nothing for the lights; changing over loads the map squares again.
     setDarkness(ambient: number | undefined): void {
         this.lightInfo[0] = 0;
         this.lightInfo[1] = ambient ?? 1;
-        this.lightInfo[2] = ambient === undefined ? 0 : 1;
+        const dark = ambient !== undefined;
+        if (dark === this.wantsLights) {
+            return;
+        }
+        this.wantsLights = dark;
+        if (dark) {
+            this.litPrograms ??= this.createProgramSet(true);
+            this.litPrograms.then((programs) => this.useProgramSet(programs, true));
+        } else if (this.unlitPrograms) {
+            this.useProgramSet(this.unlitPrograms, false);
+        }
+    }
+
+    // Whether a dark map's programs are wanted, and are what's drawing
+    private wantsLights = false;
+    private drawsLights = false;
+    private unlitPrograms?: ProgramSet;
+    private litPrograms?: Promise<ProgramSet>;
+
+    private async createProgramSet(lights: boolean): Promise<ProgramSet> {
+        const multiDraw = this.hasMultiDraw;
+        const [main, mainAlpha, npc, actor] = await this.app.createPrograms(
+            createMainProgram(multiDraw, false, lights),
+            createMainProgram(multiDraw, true, lights),
+            createNpcProgram(multiDraw, true, lights),
+            createProgram(
+                actorVertShader,
+                prependDefines(mainFragShader, ["ACTOR_EDGE"]),
+                multiDraw,
+                true,
+                lights,
+            ),
+        );
+        return { main, mainAlpha, npc, actor };
+    }
+
+    // Draws with these from now on, unless it's been changed back meanwhile
+    private useProgramSet(programs: ProgramSet, lights: boolean): void {
+        if (lights !== this.wantsLights || lights === this.drawsLights) {
+            return;
+        }
+        this.drawsLights = lights;
+        this.mainProgram = programs.main;
+        this.mainAlphaProgram = programs.mainAlpha;
+        this.npcProgram = programs.npc;
+        this.actorProgram = programs.actor;
+        this.actorRenderer?.setProgram(programs.actor);
+        // Map squares keep the programs they were loaded with
+        this.clearMaps();
     }
 
     // This frame's lights on a dark map, MAX_LIGHTS at most (any past that aren't drawn): world
@@ -200,6 +257,18 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
             this.textureMaterials!,
             this.sceneUniformBuffer!,
         );
+        this.unlitPrograms = {
+            main: this.mainProgram!,
+            mainAlpha: this.mainAlphaProgram!,
+            npc: this.npcProgram!,
+            actor: actorProgram,
+        };
+        // A dark map asked for its programs before these were made: they go in over these
+        if (this.wantsLights) {
+            this.drawsLights = false;
+            this.litPrograms ??= this.createProgramSet(true);
+            this.litPrograms.then((lit) => this.useProgramSet(lit, true));
+        }
         this.resolveActorRenderer(this.actorRenderer);
         return [...programs, actorProgram, actorSilhouetteProgram];
     }
