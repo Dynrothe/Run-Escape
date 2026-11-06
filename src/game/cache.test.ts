@@ -1,6 +1,11 @@
 import readme from "../../README.md?raw";
 import { CacheInfo } from "../rs/cache/CacheInfo";
-import { GAME_CACHE_NAME, getCacheMismatch, shouldReloadForCache } from "./cache";
+import {
+    GAME_CACHE_NAME,
+    deleteOtherGameCaches,
+    getCacheMismatch,
+    shouldReloadForCache,
+} from "./cache";
 
 describe("the game's cache", () => {
     test("is the one the README's Cache version section names", () => {
@@ -26,8 +31,8 @@ describe("a slim cache made for another build", () => {
         name: GAME_CACHE_NAME + "-slim-12345678",
         game: "oldschool",
         environment: "live",
-        revision: 241,
-        timestamp: "2026-09-30T12:30:05Z",
+        revision: 242,
+        timestamp: "2026-11-03T10:00:06Z",
         size: 1,
         slimOf: GAME_CACHE_NAME,
         build,
@@ -57,6 +62,28 @@ describe("a slim cache made for another build", () => {
             // Loading fine clears it, for the next time
             expect(shouldReloadForCache(undefined)).toBe(false);
             expect(shouldReloadForCache("older cache")).toBe(true);
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+});
+
+describe("the browser's copies of the game's cache", () => {
+    test("keep only the one in use, dropping an older full cache", async () => {
+        const names = new Set([
+            GAME_CACHE_NAME,
+            "osrs-240_2026-08-05",
+            "osrs-241_2026-09-30-slim-0123abcd",
+            "cache-chunks",
+            "map-images",
+        ]);
+        vi.stubGlobal("caches", {
+            keys: async () => [...names],
+            delete: async (name: string) => names.delete(name),
+        });
+        try {
+            await deleteOtherGameCaches(GAME_CACHE_NAME);
+            expect([...names]).toEqual([GAME_CACHE_NAME, "cache-chunks", "map-images"]);
         } finally {
             vi.unstubAllGlobals();
         }

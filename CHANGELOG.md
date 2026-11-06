@@ -30,6 +30,9 @@ the version in the corner).
   the long list of the game's files.
 - Theatre of Blood, by Okaeri: the Nylocas are slower, and half as many come in their hall before
   Nylocas Vasilias: there were too many to fight through.
+- The game's on the newest Old School RuneScape cache, from 3 November 2026: Lumbridge has an oak
+  and a yew by its castle, there are market stalls north-west of the Grand Exchange, and Karil's
+  leather has its new colours.
 
 ### Fixed
 
