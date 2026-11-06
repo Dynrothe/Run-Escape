@@ -15,6 +15,7 @@ import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { LOCK_SPRITE } from "../content/shop";
 import { emptyStats } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
@@ -502,6 +503,10 @@ describe("sprites", () => {
         ]);
         expect(GAME_VIEW_SPRITES).toContain(HINT_ARROW_SPRITE);
         expect(getGameSpriteIds()).toEqual(expect.arrayContaining(asked[0].spriteIds));
+    });
+
+    test("the slim cache keeps the padlock", () => {
+        expect(getGameSpriteIds()).toContain(LOCK_SPRITE);
     });
 
     test("the slim cache keeps every passive's icon", () => {

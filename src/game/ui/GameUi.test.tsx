@@ -381,3 +381,13 @@ describe("the title's export reminder", () => {
         expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
     });
 });
+
+test("Sailing's Set sail can be bought from the start", () => {
+    const actions = renderShop({}, 100000);
+    const sailing = screen.getByRole("button", { name: /^Sailing\b/ });
+    expect(sailing).not.toBeDisabled();
+    expect(sailing.textContent).toContain("Set sail");
+
+    fireEvent.click(sailing);
+    expect(actions.buyUpgrade).toHaveBeenCalledWith("sailing", "melee");
+});

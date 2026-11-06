@@ -45,7 +45,7 @@ import {
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
-import { SHOP_UPGRADES } from "../content/shop";
+import { LOCK_SPRITE, SHOP_UPGRADES } from "../content/shop";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
@@ -78,6 +78,7 @@ import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
 import { ItemIcon } from "./ItemIcon";
+import { LockButton } from "./LockButton";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
@@ -2208,6 +2209,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
     const banishes = ui.hud?.banishes ?? 0;
+    const locks = ui.hud?.locks ?? 0;
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-levelup">
@@ -2229,15 +2231,20 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                     {ui.choices.map((choice, i) => (
                         <div
                             key={i}
-                            className={"ui-choice-row" + (banishes > 0 ? " ui-has-banish" : "")}
+                            className={
+                                "ui-choice-row" +
+                                (banishes > 0 ? " ui-has-banish" : "") +
+                                (locks > 0 ? " ui-has-lock" : "")
+                            }
                         >
                             <button
                                 className={
                                     "ui-card ui-choice" +
                                     (choice.isEvolution ? " ui-choice-evolve" : "") +
-                                    (choice.banished ? " ui-choice-banished" : "")
+                                    (choice.banished ? " ui-choice-banished" : "") +
+                                    (choice.locked ? " ui-choice-locked" : "")
                                 }
-                                disabled={choice.banished}
+                                disabled={choice.banished || choice.locked}
                                 style={
                                     choice.rarity ? { borderColor: choice.rarity.color } : undefined
                                 }
@@ -2254,6 +2261,24 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                         {choice.title}
                                         {choice.banished ? (
                                             <span className="ui-tag ui-tag-banished">Banished</span>
+                                        ) : choice.locked ? (
+                                            <span className="ui-tag ui-tag-locked">
+                                                <ItemIcon
+                                                    objId={-1}
+                                                    spriteId={LOCK_SPRITE}
+                                                    size={14}
+                                                />{" "}
+                                                Locked
+                                            </span>
+                                        ) : choice.carried ? (
+                                            <span className="ui-tag ui-tag-locked">
+                                                <ItemIcon
+                                                    objId={-1}
+                                                    spriteId={LOCK_SPRITE}
+                                                    size={14}
+                                                />{" "}
+                                                Set sail
+                                            </span>
                                         ) : (
                                             choice.isNew && <span className="ui-tag">New!</span>
                                         )}
@@ -2267,6 +2292,20 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                         )}
                                     </div>
                                     <div className="ui-card-text">{choice.text}</div>
+                                    {choice.locked && (
+                                        <div className="ui-card-locked-note">
+                                            <ItemIcon objId={-1} spriteId={LOCK_SPRITE} size={16} />
+                                            <span>is locked and will show up next level up</span>
+                                        </div>
+                                    )}
+                                    {choice.carried && (
+                                        <div className="ui-card-locked-note">
+                                            <ItemIcon objId={-1} spriteId={LOCK_SPRITE} size={16} />
+                                            <span>
+                                                shows up first because you locked it last level up
+                                            </span>
+                                        </div>
+                                    )}
                                     {choice.evolves && (
                                         <div
                                             className={
@@ -2294,11 +2333,21 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                 )}
                             </button>
                             {/* Over the card's corner, under its rarity: a button can't go in a button */}
-                            {choice.banishable && (
-                                <BanishButton
-                                    title={`Never offered ${choice.title} again this run`}
-                                    onBanish={() => client.banish(i)}
-                                />
+                            {(choice.lockable || choice.banishable) && (
+                                <div className="ui-choice-actions">
+                                    {choice.lockable && (
+                                        <LockButton
+                                            title={`Lock ${choice.title}: it can't be picked now, and comes first at your next level up`}
+                                            onLock={() => client.lock(i)}
+                                        />
+                                    )}
+                                    {choice.banishable && (
+                                        <BanishButton
+                                            title={`Never offered ${choice.title} again this run`}
+                                            onBanish={() => client.banish(i)}
+                                        />
+                                    )}
+                                </div>
                             )}
                         </div>
                     ))}
@@ -2306,6 +2355,11 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                 {banishes > 0 && (
                     <div className="ui-subtle ui-banishes">
                         {banishes} {banishes === 1 ? "banish" : "banishes"} left
+                    </div>
+                )}
+                {locks > 0 && (
+                    <div className="ui-subtle ui-locks">
+                        {locks} {locks === 1 ? "lock" : "locks"} left
                     </div>
                 )}
                 {!hilt && (
