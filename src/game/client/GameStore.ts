@@ -61,12 +61,16 @@ export type BuffView = {
     id: string;
     name: string;
     objId: number;
-    secondsLeft: number;
-    // Time left, 1 when just drunk
-    fraction: number;
     // A boss attack's drain rather than a potion or power-up
     harmful: boolean;
-};
+} & (
+    | {
+          secondsLeft: number;
+          // Time left, 1 when just drunk
+          fraction: number;
+      }
+    | { secondsLeft?: never; fraction?: never }
+);
 
 // An opened reward casket, for the opening animation and the decision after
 export type ChestView = {

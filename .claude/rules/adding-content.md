@@ -267,7 +267,8 @@ in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't.
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`
-and usually an `unlock` task.
+and usually an `unlock` task. A `revival` bonus needs a `reviveLook`, the icon the HUD shows for
+it (a test checks).
 
 ## Quest
 

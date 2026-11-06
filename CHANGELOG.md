@@ -10,6 +10,8 @@ the version in the corner).
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.
+- Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
+  it saves you, and the Pyromancer's own revive shows as a phoenix.
 
 ### Changed
 

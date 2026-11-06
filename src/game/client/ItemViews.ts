@@ -1,3 +1,4 @@
+import { getCharacter } from "../content/characters";
 import { EXTRA_REVIVE_ITEM } from "../content/coop";
 import { getGearStats, upgradedName } from "../content/endless";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
@@ -5,10 +6,11 @@ import { getPowerUp } from "../content/powerups";
 import { getRaidSupply } from "../content/raids";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
+import { SHOP_UPGRADE_BY_ID } from "../content/shop";
 import { diffStats } from "../content/stats";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
-import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import {
     BuffView,
     ChestView,
@@ -258,5 +260,36 @@ export function getBuffViews(sim: Sim): BuffView[] {
             harmful: true,
         });
     }
+    // One for each kind of revive left, with no timer
+    for (const revive of new Set(getRevivesLeft(sim.heroes[sim.focus]))) {
+        buffs.push({ ...revive, harmful: false });
+    }
     return buffs;
+}
+
+export type ReviveLook = { id: string; name: string; objId: number };
+
+// A hero's revives left, in the order they'll be used: their adventurer's own
+// (the Pyromancer's phoenix) first, then the shop's Ring of life. The sim
+// counts them as one, so this is only for showing them
+export function getRevivesLeft(hero: Hero, left = hero.revivesLeft): ReviveLook[] {
+    const character = getCharacter(hero.characterId);
+    const ring = SHOP_UPGRADE_BY_ID.get("ring_of_life")!;
+    const ringLook = { id: ring.id, name: ring.name, objId: ring.objId! };
+    if (!character.reviveLook) {
+        return Array<ReviveLook>(Math.max(0, left)).fill(ringLook);
+    }
+    const own = character.bonus.revival ?? 0;
+    const rings = hero.stats.revival - own;
+    const ownLeft = Math.max(0, Math.min(own, left - rings));
+    const ownLook = { id: "revive:" + character.id, ...character.reviveLook };
+    return [
+        ...Array<ReviveLook>(ownLeft).fill(ownLook),
+        ...Array<ReviveLook>(Math.max(0, left - ownLeft)).fill(ringLook),
+    ];
+}
+
+// The revive that just saved a hero, once the sim's counted it
+export function getUsedRevive(hero: Hero): ReviveLook {
+    return getRevivesLeft(hero, hero.revivesLeft + 1)[0];
 }
