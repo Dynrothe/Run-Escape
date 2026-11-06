@@ -65,18 +65,21 @@ nothing bought, so a fresh account clearing Entry isn't a target.
   lightning (step beside or behind her), her shadow (11462) shooting from afar, and a storm of
   lightning in her last phase. Each is in phases (two or three), a pause between.
 - **The kit's ours**: everyone plays the Sands Delver (`characters.ts`, the desert robes, the
-  Crystal bow at level 4, faster and with more hitpoints), so a fight lasts as long as its
-  hitpoints make it, about 29 damage a second kiting: Coenus 6000, the mages 3500 and 4000, the
-  Champion 8000, the Akh 9000, three to five minutes each.
+  Crystal bow at level 4, faster, with more hitpoints and 10 a minute back), so a fight lasts as
+  long as its hitpoints make it, about 29 damage a second kiting: Coenus 6000, the mages 2800 and
+  3200, the Champion 8000, the Akh 9000, three to six minutes each, every phase seen. Their
+  mechanics hit for a little under Phosani's: what wears you down is the next one, not one big
+  hit, and the windups (a second for a melee swing) and slow bolts are there to be read.
 - **Where**: the raid's own squares under its own id (the recipe's the same), fought in Akkha's
   arena (`bossArena`), a tomb beneath the sands.
 - **Dev only, for now**: it's in `MAPS` on the dev server alone (`SCAPERUNE_DEV_FIGHTS` in
   `devMaps.ts`, empty in a build), so a win's kept and opens the raid there, and a build has
   neither.
-- **The bot** (`FLAT=1 MAP=beneath_cursed_sands DODGE=1 STAGE=0..3`, sands_delver) lasts about
-  1:15 against Coenus and the mages, 25 seconds against the Champion and 19 against the Akh, where
-  it lasts 25 to 34 against Phosani's Nightmare: hard, the last the hardest, and it doesn't kite a
-  melee boss as a ranged player does. Playtest it.
+- **The bot** (`FLAT=1 MAP=beneath_cursed_sands DODGE=1 STAGE=0..3`, sands_delver), which on
+  these fights steps out of a swing or blast as it winds up and circles a melee boss back
+  towards the square's middle rather than backing into a corner: Coenus won 3/3 in about 3:30,
+  the mages 1/3 in 4:30 to 5:00, the Champion 3/3 in about 4:55, and the Akh lasts 4:45 to 6:00,
+  into her last phase and its storm, before she wins. The last the hardest; playtest it.
 
 ## 4. Level-ups and gear without timed waves
 

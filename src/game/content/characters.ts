@@ -591,7 +591,8 @@ export const CHARACTERS: CharacterDef[] = [
         name: "Sands Delver",
         description:
             "Made for Beneath Cursed Sands, and everyone plays them there, and nowhere else: " +
-            "starts with the Crystal bow, moves 20% faster and has 30% more hitpoints.",
+            "starts with the Crystal bow, moves 20% faster, has 30% more hitpoints and heals 10 " +
+            "hitpoints a minute.",
         style: "ranged",
         startingWeapon: "crystal_bow",
         // The desert's own robes: the shirt, robe and boots
@@ -603,7 +604,7 @@ export const CHARACTERS: CharacterDef[] = [
         // Four long fights in a row, each its own run: feet to dodge, and hitpoints to learn them
         // on. The damage is the bow's alone, at the level the map says, so the fights are as
         // long as their hitpoints.
-        bonus: { moveSpeed: 0.2, maxHp: 0.3 },
+        bonus: { moveSpeed: 0.2, maxHp: 0.3, regen: 10 },
         only: "beneath_cursed_sands",
     },
 ];
