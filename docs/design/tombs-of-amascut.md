@@ -111,7 +111,7 @@ The waves no longer run on a clock, but they're still where experience and caske
 - **Zebak**: rocks and splitting pots as bullets; Great Roar (hide behind a boulder); the tidal
   wave with a gap that shrinks; poison pools that a pushed jug washes away; an enrage below 25%.
 - **The Wardens**, three phases:
-    1. The obelisk, with orbs down troughs (blocking one picks which Warden comes next) and the
+    1. The obelisk, with orbs down troughs (soaking a side's picks which Warden comes next) and the
        floating pyramids.
     2. The Warden, with the obelisk's converging, windmill and lightning-skull patterns, style
        changes, the freezing projectile, and its core thrown out for five times the damage.
@@ -436,18 +436,24 @@ raid's ranges.
     - The obelisk (11751, the boss bar) is what's fought, tougher with the path level as a path's
       boss is, and with enough hitpoints that the Wardens get their attacks in. Elidinis' starts 50 of
       125 charged and Tumeken's 0, so the first attack comes about 9 s in and the two never
-      discharge together unless blocking brings them level (both sets of pyramids at once would
+      discharge together unless soaking brings them level (both sets of pyramids at once would
       leave no cell clear, and both shots at once are half a bar).
     - Orbs (11769) leave it each side every 1.2 s, a tile every 0.6 s for 8, down one of three
-      troughs in a side's own order, each one there charging its Warden 4 (Ancient Haste 6). A
-      player on a side's gap or spawn tile stops that side, for a little damage each orb.
+      troughs in a side's own order, each one there charging its Warden 4 (Ancient Haste 6). An
+      orb a player walks into along its trough (anywhere but its spawn tile) is soaked: its Warden
+      gets nothing, and the player carries its energy, each worth 20% more against the obelisk,
+      one fading every 4 s, five held at most; a sixth while full overcharges them for 10% of
+      their hitpoints (`WARDENS.orbs.soak`). So starving a side picks the Warden that wakes, and
+      catching orbs is the quick way through the phase, with no standing still (the old block, a
+      player stood on the gap tile taking damage each orb, is gone: at Expert it was 140 a
+      minute, and the game's not meant to be played taking hits).
     - The Wardens (11748, 11749, nothing hurts them) charge 2 a tick besides; full at 125, the
       platform under them filling (45606 to 45626, drawn by the game), they discharge (9667, the
       seal 2214/2215) and take turns: pyramids (45750/45751) on every other 3 by 3 cell of the floor,
       Elidinis' the odd ones, hurting whoever's under one as they glow; then a shot (2238/2237)
       that arcs after each player for 8 s and lands for a share of their hitpoints.
     - The obelisk broken, the Warden that's charged the more over the whole phase (what it's spent
-      on attacks and what it holds) wakes, Tumeken's on a tie, so the side a player kept blocked
+      on attacks and what it holds) wakes, Tumeken's on a tie, so the side a player kept soaking
       loses however recently it attacked. The other blows up (2216) and is left a wreck (11759,
       11760).
 - **The Wardens, phase two** (`WARDENS.two`, `Sim.stepWardensTwo`): the same room.
@@ -477,18 +483,24 @@ raid's ranges.
   script. Amascut (11767) watches from behind.
     - Slams: half the floor rises in a wave away from it, east, then west, then both but the middle
       three columns, every 4.2 s (3.6 below half; Overclocked 3, Overclocked 2 2.4, Insanity 1.8).
-    - At 80, 60, 40 and 20% (no hit takes it past one), it charges (11763/11764): 4, 5, 6, then 7
-      siphons (11772) land over the floor, beamed (2227), each stopped by a player stepping on it
+    - Lightning walks the floor the whole phase: a walk of 6 bolts every 7.2 s (5.4 below half),
+      each bolt's shadow (1446) 1.8 s before it strikes (2197), siphons or not.
+    - At 80, 60, 40 and 20% (no hit takes it past one), it charges (11763/11764): 3, 4, 4, then 5
+      siphons (11772) for one player, one more each for every other (seven for one, four tiles
+      apart, couldn't be reached in time: every fourth charge was a ripple nobody could help),
+      land over the floor, beamed (2227), each stopped by a player stepping on it
       (reversed, 11773) within 10.8 s (Insanity 4.8). All stopped, it staggers for 5% of its
       hitpoints; any left, the floor erupts out from the middle. The slams start again from east
       (Insanity: where they left off).
-    - The second charge brings a path boss's phantom east of it, the third another west: Zebak's
-      (fans of his magic or ranged) and Ba-Ba's (a rock on where you stand) with Tumeken's;
-      Akkha's (three of his ranged or magic) and Kephri's (a fireball lobbed onto you, wider with
-      Aerial Assault) with Elidinis'. They can't be hit, and quicken once it's enraged.
-    - At 5% it enrages: heals 20%, Amascut opens her mouth (11768), a row of the floor tears away
-      from the back every 10.8 s, and lightning walks the floor, each bolt's shadow (1446) 1.8 s
-      before it strikes (2197). Its death ends the raid, and the chest's opened (below).
+    - The first charge brings a path boss's phantom east of it, the second another west, and the
+      third quickens them both: Zebak's (fans of his magic or ranged, and a jug lobbed onto you
+      that leaves his acid where it breaks for 10 s, the room's loc and poison) and Ba-Ba's (a
+      rock on where you stand) with Tumeken's; Akkha's (three of his ranged or magic) and Kephri's
+      (a fireball lobbed onto you, wider with Aerial Assault) with Elidinis'. They can't be hit.
+    - At 5% it enrages, and everything comes at once, quicker: it heals 20%, Amascut opens her
+      mouth (11768), a row of the floor tears away from the back every 7.2 s, the slams go on
+      every 3 s, the lightning's walks are 12 bolts every 2.4 s, and the phantoms are quickened.
+      Stay calm or die. Its death ends the raid, and the chest's opened (below).
     - Invocations: Ancient Haste, Acceleration (the Warden attacks and the obelisk opens sooner),
       Penetration (the obelisk's specials hit harder), Overclocked, Overclocked 2 and Insanity.
     - Not in: Divine Projectile (it's about prayer, which the run hasn't got).
@@ -539,14 +551,20 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   and die following), and, with every spot in reach acid, rolling a jug at rest to break by the
   pool; and it sidesteps bullets, boss blasts and swings, and the Wardens' red skulls as they
   turn (a sidestep at the last beats their turning circle).
-- **The Wardens**: phase one blocking Tumeken's side by the obelisk only where a minute of it costs
-  less than half a bar (Entry; from Normal up the orbs run, and the Warden that wakes is the
-  orbs' choice), off a pyramid as its hits come (one side's cells while the other's are hitting);
-  phase two by the Warden or its core (a thrower keeps Tumeken's at its weapons' reach all round
-  rather than backing to the floor's end into its slash), off the obelisk's marks; phase three at
-  the floor's north end in the column the next slam leaves alone, on its siphons, off its
-  lightning and the phantoms' fans, fireballs and rocks. It waits by the Wardens' door for its
-  hitpoints to come back before stepping in, while they do.
+- **The Wardens**: phase one soaking the orbs of the side whose Warden its own style can't hurt
+  first (a magic hero takes Tumeken's, so Elidinis' wakes open to magic; ranged the other way),
+  walking to each orb's next tile along its trough till it holds the most, then a step off every
+  orb; off a pyramid as its hits come (one side's cells while the other's are hitting); phase two
+  by the Warden or its core (a thrower keeps Tumeken's at its weapons' reach all round rather than
+  backing to the floor's end into its slash), off the obelisk's marks; phase three at the floor's
+  north end in the middle column, which no slam reaches (so there's no reading which is next,
+  enraged or not), on its siphons, off its lightning, the phantoms' fans, fireballs and rocks,
+  and the acid their jugs leave. It waits by the Wardens' door for its hitpoints to come back
+  before stepping in, while they do (not with Dehydration, and not for ever).
+- **Crondis at higher path levels**: hungry crocodiles at the palm eat what's poured faster than
+  the trips bring it, so with nothing in hand a melee hero goes for them (and for any crocodile
+  loose in the palm room, which would bite the next trip's water out of it) before the next trip;
+  a thrower fights them from across the palm.
 - **Level-ups** (the Tombs sim's): a new weapon of a style it lacks of ranged and magic comes
   before anything, as a player who's read "Only ranged hurts it" picks: the Wardens' second phase
   takes nothing else from a hero with only one of them.
@@ -564,8 +582,10 @@ Without the max kit, a boss (or a room with paths before it) is reached by playi
 it from the Nexus (`PATHS=` for the order), so the run has the levels and gear it would really
 have; the bot loots as a person does (caskets, the better gear, food when hurt). `INVOCATIONS=level:300`
 makes up a raid level as people tend to (the bosses' own first; never Attempts or a time limit).
-`scripts/game/sweep-tombs.sh` runs every room, or the raid, by raid level and kit (`zero`, `shop`
-for `META=max`, `all` with `ARMOURY=max`, `dev`), a line each.
+`scripts/game/sweep-tombs.sh` runs every room, or the raid, by raid level and kit, a line each: the
+account's state, caskets dropping as they always do (`zero`, nothing bought; `mid`, half the shop's
+ranks and half of each Armoury line, `META=mid ARMOURY=mid`; `all`, everything, `META=max
+ARMOURY=max`; `shop` and `dev` on request).
 
 What it showed (November 2026, full raids, warrior, wizard and ranger, 3 seeds each). A loss is a
 run that hit the sim's 90 minutes still trying: no Attempts invocation was on, so a wipe only starts
@@ -579,8 +599,16 @@ after a wipe). How far each lost run got: paths cleared, then the Wardens' phase
 | Expert (300) | 0 of 9 (none)                     | 2 of 9 (4 paths phase 3, 4 paths phase 2, 3 paths x2, 2 paths x3) | 8 of 9 (4 paths phase 2)                  |
 | 500          | 0 of 9 (none)                     | 0 of 9 (their first path, one the second)                         | 0 of 9 (their first path, one the second) |
 
-That's the curve asked for: Entry with nothing, Normal with the shop and better gear, Expert with
-the best of everything, and 500 past all three (with everything bought they stall in the Apmeken
+That table is from before the Wardens' second pass (orb soaking, the busier third phase: section
+11). After it, with everything bought at Expert, 3 seeds each: the wizard 3 of 3 (the Wardens
+room alone 3 of 3 with no wipes), the ranger 1 of 3 (both losses at Kephri, its second path, 35
+wipes each: not the Wardens), the warrior 0 of 3 (two in the third phase, one stuck in Crondis).
+The third phase is harder by design now, and a melee hero's spot at the Warden's feet is where
+Zebak's phantom's acid lands: the bot stands in it or stands off and can't hit, and the floor's
+hits come on top. That's the bot's next pass, not a reason to soften the phase.
+
+The curve asked for: Entry with nothing, Normal with the shop and better gear, Expert with the
+best of everything, and 500 past all three (with everything bought they stall in the Apmeken
 room or on Ba-Ba). Before this pass Expert with everything bought was 1 of 9: Akkha's Memory Blast
 was the first wall (the bot now hops across the quadrants' lines as a person does, and Expert
 Akkha alone went from 0 of 9 to 8 of 9), then Zebak's acid for melee, and the Wardens. What the

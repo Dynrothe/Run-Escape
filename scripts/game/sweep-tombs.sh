@@ -5,12 +5,14 @@
 #   scripts/game/sweep-tombs.sh > sweep.txt
 #   ROOMS="baba akkha" LEVELS="0 150" KITS="zero" CHARACTERS="wizard" SEEDS=2 scripts/game/sweep-tombs.sh
 #
-#   KITS: zero (nothing bought), shop (META=max), all (META=max ARMOURY=max), dev (KIT=max)
+#   KITS, the account's state, caskets dropping as they always do: zero (nothing bought), mid (half
+#   the shop's ranks and half of each Armoury line: META=mid ARMOURY=mid), all (everything:
+#   META=max ARMOURY=max); shop (META=max alone) and dev (KIT=max, the dev kit) on request
 #   JOBS=3 runs that many at once (with bash's `wait -n`: bash 4.3 or later, as Git Bash is;
 #   macOS's own bash 3.2 isn't)
 ROOMS=${ROOMS:-"apmeken het scabaras crondis baba akkha kephri zebak wardens"}
 LEVELS=${LEVELS:-"0 150 300 400 500"}
-KITS=${KITS:-"zero shop all"}
+KITS=${KITS:-"zero mid all"}
 CHARACTERS=${CHARACTERS:-"warrior wizard ranger"}
 SEEDS=${SEEDS:-2}
 JOBS=${JOBS:-3}
@@ -21,6 +23,7 @@ one() {
     local env=(DEV_MAPS=1 ROOM="$room" INVOCATIONS="level:$level")
     case $kit in
         shop) env+=(META=max) ;;
+        mid) env+=(META=mid ARMOURY=mid) ;;
         all) env+=(META=max ARMOURY=max) ;;
         dev) env+=(KIT=max) ;;
     esac

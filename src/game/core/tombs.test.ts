@@ -2723,21 +2723,45 @@ describe("the Wardens' first phase", () => {
         }
     });
 
-    it("sends orbs down the troughs that charge their Warden, unless a player blocks the side", () => {
+    it("sends orbs down the troughs that charge their Warden, unless a player soaks them", () => {
         const sim = atWardens();
         const fight = sim.tombsWardens!;
-        const tumekenGap = sim.map.tombs!.wardens!.sides.tumeken.gap;
+        const places = sim.map.tombs!.wardens!;
+        // A step along Tumeken's trough from its spawn tile (the spawn tile itself soaks nothing):
+        // the orbs go from it towards his end, crossing to their rows as they go
+        const spawn = places.sides.tumeken.spawn;
+        const spot = { x: spawn.x + Math.sign(places.sides.tumeken.end - spawn.x), y: spawn.y };
         const hp = sim.player.hp;
         // From empty, short of either filling
         fight.charge.elidinis = fight.charge.tumeken = 0;
-        step(sim, 18, () => stand(sim, tumekenGap));
-        // Elidinis' orbs got there, Tumeken's never left
+        // On the spot till it holds the most it can (a sixth would hurt), then out of the way
+        const hero = sim.heroes[0];
+        step(sim, 14, () =>
+            stand(sim, hero.wardenEnergy >= WARDENS.orbs.soak.max ? places.arrive : spot),
+        );
+        // Elidinis' orbs got there, Tumeken's were soaked on the way, at no cost
         expect(fight.charge.elidinis).toBeGreaterThan(
             fight.charge.tumeken + WARDENS.charge.perOrb * 3,
         );
-        expect(fight.orbs.every((orb) => orb.side === "elidinis")).toBe(true);
-        // and blocking cost hitpoints
+        expect(sim.player.hp).toBe(hp);
+        // Holding their energy, up to the most, which hits the obelisk harder
+        expect(hero.wardenEnergy).toBe(WARDENS.orbs.soak.max);
+        const obelisk = sim.enemies.find((e) => e.uid === fight.obeliskUid)!;
+        obelisk.hp = obelisk.maxHp;
+        sim["damageEnemy"](obelisk, 100, 0, obelisk.x, obelisk.y, 0);
+        const soaked = obelisk.maxHp - obelisk.hp;
+        hero.wardenEnergy = 0;
+        obelisk.hp = obelisk.maxHp;
+        sim["damageEnemy"](obelisk, 100, 0, obelisk.x, obelisk.y, 0);
+        expect(soaked).toBeGreaterThan((obelisk.maxHp - obelisk.hp) * 1.5);
+        // One more while full hurts
+        hero.wardenEnergy = WARDENS.orbs.soak.max;
+        step(sim, 3, () => stand(sim, spot));
         expect(sim.player.hp).toBeLessThan(hp);
+        // and what's held fades
+        stand(sim, places.arrive);
+        step(sim, WARDENS.orbs.soak.fade * WARDENS.orbs.soak.max + 1);
+        expect(hero.wardenEnergy).toBe(0);
     });
 
     it("discharges a full Warden: its pyramids over every other cell, then a shot that finds you", () => {
@@ -3001,16 +3025,20 @@ describe("the Wardens' second and last phases", () => {
         expect(warden.def.id).toBe("tumeken_warden_last");
     });
 
-    it("brings its phantoms with the second and third charges, and enrages at its last hitpoints", () => {
+    it("brings its phantoms with the first two charges, and enrages at its last hitpoints", () => {
         const sim = atPhaseTwo();
         const fight = sim.tombsWardens!;
         find(sim, fight.two!.wardenUid).hp = 0;
         step(sim, WARDENS.two.toLast + 0.2);
         const three = fight.three!;
         const warden = find(sim, three.wardenUid);
+        // Lightning walks the floor from the start
+        step(sim, WARDENS.three.lightning.every + 1);
+        expect(fight.marks.some((m) => m.hurts > 0)).toBe(true);
         for (let i = 0; i < 4; i++) {
             hit(sim, warden, "dark_bow", warden.maxHp);
             step(sim, 0.1);
+            expect(three.phantoms).toHaveLength(Math.min(2, i + 1));
             // Left to go off
             step(sim, WARDENS.three.window + 0.2);
             expect(three.siphons).toBeUndefined();
@@ -3019,14 +3047,18 @@ describe("the Wardens' second and last phases", () => {
             "zebaks_phantom",
             "babas_phantom",
         ]);
+        // Both quickened by the third charge
+        expect(three.phantoms.every((uid) => find(sim, uid).bossState?.enraged)).toBe(true);
         hit(sim, warden, "dark_bow", warden.maxHp);
         expect(warden.hp).toBeCloseTo(warden.maxHp * WARDENS.three.enrage.at, 0);
         step(sim, 0.1);
         expect(three.enraged).toBe(true);
         expect(warden.hp).toBeGreaterThan(warden.maxHp * 0.2);
-        // Rows torn away, from the back
+        // Rows torn away, from the back, and its slams go on
+        const slams = three.slam;
         step(sim, WARDENS.three.enrage.firstRow + 3);
         expect(sim.floor!.rowsDropped).toBeGreaterThan(0);
+        expect(three.slam).toBeGreaterThan(slams);
         // And it can be beaten
         sim.devGod = true;
         for (let i = 0; i < 20 && !warden.dead; i++) {

@@ -19,7 +19,8 @@
 //             or a time limit, so the sim's tries are endless)
 //   PARTY=2   a co-op party, each played by the bot
 //   KIT=max   the dev kit (every weapon style, the best gear) rather than the adventurer's start
-//   META=max ARMOURY=max   as simulate-run.ts
+//   META=max ARMOURY=max   as simulate-run.ts; META=mid ARMOURY=mid half way there (the kits
+//                          sweep-tombs.sh runs: nothing bought, mid, everything)
 //   MINUTES=15   how long a room gets before it counts as failed (the raid gets 90)
 //   VERBOSE=1    the run's log as it goes (tombsBot's TombsLog)
 import { getUpgradeLine } from "../../src/game/content/armoury";
@@ -145,16 +146,25 @@ if (!CHARACTERS.some((c) => c.id === characterId)) {
     throw new Error(`No adventurer ${characterId}`);
 }
 
+// The account's state: META=max buys every shop upgrade, META=mid half its ranks (rounded down,
+// so a 3-rank skill has one); ARMOURY=max upgrades every piece to the end of its line, ARMOURY=mid
+// half way (rounded down). Caskets drop as they always do: the pieces come out as upgraded.
 const metaStats = emptyStats();
-if (process.env.META === "max") {
-    for (const upgrade of SHOP_UPGRADES) {
-        metaStats[upgrade.stat] += upgrade.perRank * upgrade.maxRank;
-    }
+const metaShare = process.env.META === "max" ? 1 : process.env.META === "mid" ? 0.5 : 0;
+for (const upgrade of SHOP_UPGRADES) {
+    metaStats[upgrade.stat] += upgrade.perRank * Math.floor(upgrade.maxRank * metaShare);
 }
+const armouryShare =
+    process.env.ARMOURY === "max" ? 1 : process.env.ARMOURY === "mid" ? 0.5 : undefined;
 const armoury =
-    process.env.ARMOURY === "max"
-        ? Object.fromEntries(CASKET_GEAR.map((g) => [g.id, getUpgradeLine(g.id).length - 1]))
-        : undefined;
+    armouryShare === undefined
+        ? undefined
+        : Object.fromEntries(
+              CASKET_GEAR.map((g) => [
+                  g.id,
+                  Math.floor((getUpgradeLine(g.id).length - 1) * armouryShare),
+              ]),
+          );
 
 const map = getMap("tombs_of_amascut");
 if (!map.tombs) {

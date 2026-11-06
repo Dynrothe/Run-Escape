@@ -4,6 +4,7 @@
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
 import { getItem } from "../../src/game/content/items";
 import { BA_BA, CRONDIS, WARDENS, ZEBAK } from "../../src/game/content/tombs";
+import { getWeaponStyle } from "../../src/game/content/weapons";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim } from "../../src/game/core/Sim";
 import { FlowField, canStep } from "../../src/game/core/world/FlowField";
@@ -418,7 +419,8 @@ function apmekenMove(sim: Sim, def: PathRoom): Point {
                   y: spots.reduce((sum, s) => sum + s.y, 0) / spots.length,
               }
             : def.arrive;
-    return kite(sim, middle);
+    // Round the room's middle, out of the baboons' shots
+    return dodging(sim, kite(sim, middle));
 }
 
 // Het: each of the route's four mirrors turned its way and clean (walked into once each, stepping
@@ -456,7 +458,7 @@ function hetMove(sim: Sim, def: PathRoom): Point {
     }
     // The way's right: fight beside the seal
     const seal = def.het!.seal;
-    return kite(sim, { x: seal.x, y: seal.y - 2 }, 2);
+    return dodging(sim, kite(sim, { x: seal.x, y: seal.y - 2 }, 2));
 }
 
 // The route's mirrors' turns that get the beam to the statue: each way tried on a clean copy of
@@ -606,7 +608,6 @@ export function additionPick(values: number[], stepped: boolean[], left: number)
 const CLOUD_SPEED = 3.5;
 const CLOUD_BEHIND = 1.1;
 const CLOUD_LENGTH = 3;
-const CLOUD_EVERY = 9;
 const FILL_SECONDS = 1;
 
 function crondisMove(sim: Sim, def: PathRoom): Point {
@@ -641,13 +642,41 @@ function crondisMove(sim: Sim, def: PathRoom): Point {
     );
     const melee = heroReach(sim) < 4;
     const carrying = crondis.water[hero] > 0;
-    const move = biting
-        ? melee && !carrying
-            ? { x: 0, y: 0 }
-            : kite(sim, places.palm, CROC_NEAR)
-        : Math.hypot(to.x - player.x, to.y - player.y) < 1.2
-          ? nudge(sim, to.x, to.y)
-          : walkTo(sim, to.x, to.y);
+    // Hungry crocodiles at the palm eat what's been poured: with more of them than the trips
+    // outrun (higher path levels), they're seen to first, a melee hero up to them and a thrower
+    // from across the palm, before another trip's made
+    // (and a crocodile loose in the palm room bites the next trip's water out of you, so a melee
+    // hero with nothing in hand sees to one of those too)
+    const hungry = sim.enemies
+        .filter(
+            (e) =>
+                !e.dead &&
+                ((e.def.id === "crondis_crocodile_hungry" &&
+                    Math.hypot(e.x - places.palm.x, e.y - places.palm.y) < 5) ||
+                    (e.def.id === "crondis_crocodile" &&
+                        melee &&
+                        Math.hypot(e.x - player.x, e.y - player.y) < 7)),
+        )
+        .sort(
+            (a, b) =>
+                Math.hypot(a.x - player.x, a.y - player.y) -
+                Math.hypot(b.x - player.x, b.y - player.y),
+        );
+    const move =
+        hungry.length > 0 && !carrying
+            ? melee
+                ? Math.hypot(hungry[0].x - player.x, hungry[0].y - player.y) <
+                  hungry[0].radius + heroReach(sim) - 0.3
+                    ? { x: 0, y: 0 }
+                    : walkTo(sim, hungry[0].x, hungry[0].y)
+                : kite(sim, places.palm, CROC_NEAR)
+            : biting
+              ? melee && !carrying
+                  ? { x: 0, y: 0 }
+                  : kite(sim, places.palm, CROC_NEAR)
+              : Math.hypot(to.x - player.x, to.y - player.y) < 1.2
+                ? nudge(sim, to.x, to.y)
+                : walkTo(sim, to.x, to.y);
     return clearOfSpears(sim, places, move);
 }
 
@@ -1737,24 +1766,53 @@ function jugPush(
     return undefined;
 }
 
-// The Wardens. The first phase from a side's gap (beside the obelisk, so every weapon reaches it,
-// and blocking that side, so the other Warden wakes); the second near the Warden, by its core when
-// it's out, off the obelisk's marks; the last at the floor's north end, off rising slabs, stepping
-// on its siphons, off its lightning
+// The Wardens. The first phase soaking one side's orbs along their troughs beside the obelisk
+// (the side whose Warden the hero's own style can't hurt first, starved, so the other wakes),
+// each one more against the obelisk, and off them once it holds the most; the second near the
+// Warden, by its core when it's out, off the obelisk's marks; the last at the floor's north end,
+// off rising slabs, stepping on its siphons, off its lightning
 function wardensMove(sim: Sim): Point | undefined {
     const fight = sim.tombsWardens!;
     const places = sim.map.tombs!.wardens!;
     const player = sim.player;
     if (fight.phase === 1) {
-        // Blocking Tumeken's side while it's hitpoints to spare (each orb blocked hurts a little),
-        // and a step back out of the orbs' way, still by the obelisk, while it gets them back
-        const gap = places.sides.tumeken.gap;
-        // Each orb blocked costs blockDamage times the hazard scale: worth it at Entry, where a
-        // minute of it is a few hitpoints, and ruinous from Normal up (a minute's more than the
-        // bar), where the Warden that wakes is left to the orbs
-        const orbCost = WARDENS.orbs.blockDamage * sim["tombsHazardScale"]();
-        const minuteOfBlocking = orbCost * (60 / WARDENS.orbs.every);
-        const blocking = player.hp > player.maxHp * 0.5 && minuteOfBlocking < player.maxHp * 0.5;
+        const soak = WARDENS.orbs.soak;
+        const energy = sim.heroes[sim["hero"].index].wardenEnergy;
+        // The side to starve: a magic hero wants Elidinis' (magic first) awake, so takes Tumeken's
+        // orbs; a ranged one the other way round; melee, Tumeken's (the nearer trough to the way in)
+        const style = sim.weapons[0] ? getWeaponStyle(sim.weapons[0].def) : "melee";
+        const starve: "elidinis" | "tumeken" = style === "ranged" ? "elidinis" : "tumeken";
+        const stepTicks = WARDENS.orbs.stepSeconds * 50;
+        // Where each orb's heading next, and where it is
+        const orbAt = (orb: (typeof fight.orbs)[number]) => {
+            const t = Math.min(1, (sim.tick - orb.stepTick) / stepTicks);
+            return {
+                x: orb.fromX + (orb.x - orb.fromX) * t,
+                y: orb.fromY + (orb.y - orb.fromY) * t,
+            };
+        };
+        const full = energy >= soak.max;
+        // The orb to take: the starved side's nearest to the hero that's left its spawn tile
+        const prey = full
+            ? undefined
+            : fight.orbs
+                  .filter((orb) => orb.side === starve && orb.step >= 1)
+                  .sort((a, b) => {
+                      const pa = orbAt(a);
+                      const pb = orbAt(b);
+                      return (
+                          Math.hypot(pa.x - player.x, pa.y - player.y) -
+                          Math.hypot(pb.x - player.x, pb.y - player.y)
+                      );
+                  })[0];
+        // Full: every orb's a hurt, kept a step off
+        const nearAnOrb = (x: number, y: number) =>
+            full &&
+            fight.orbs.some((orb) => {
+                const at = orbAt(orb);
+                return Math.hypot(at.x - x, at.y - y) < soak.reach + player.radius + 0.4;
+            });
+        const gap = places.sides[starve].gap;
         // Off a pyramid that's hitting or about to (they're a checkerboard, so the next square
         // along is clear): one side's cells while the other's are still hitting is the place to
         // be, till its own hits are a step or two off
@@ -1769,15 +1827,18 @@ function wardensMove(sim: Sim): Point | undefined {
                     y >= p.y - 0.4 &&
                     y < p.y + cell + 0.4,
             );
-        let to = blocking ? gap : { x: gap.x, y: gap.y - 2.5 };
-        if (glowing(to.x, to.y)) {
+        // To the orb's next tile (it's there within a step), else a spot by the starved side's
+        // trough mouth, a tile or two off the troughs
+        let to = prey ? { x: prey.x, y: prey.y } : { x: gap.x, y: gap.y - 2.5 };
+        const danger = (x: number, y: number) => glowing(x, y) || nearAnOrb(x, y);
+        if (!prey && danger(to.x, to.y)) {
             const clear = [
                 { x: to.x, y: to.y - cell },
                 { x: to.x - cell, y: to.y },
                 { x: to.x + cell, y: to.y },
                 { x: to.x, y: to.y + cell },
             ].filter(
-                (p) => !glowing(p.x, p.y) && !sim.grid.isSolid(Math.floor(p.x), Math.floor(p.y)),
+                (p) => !danger(p.x, p.y) && !sim.grid.isSolid(Math.floor(p.x), Math.floor(p.y)),
             );
             to = clear[0] ?? to;
         }
@@ -1786,7 +1847,7 @@ function wardensMove(sim: Sim): Point | undefined {
             Math.hypot(to.x - player.x, to.y - player.y) < 1
                 ? nudge(sim, to.x, to.y)
                 : walkTo(sim, to.x, to.y),
-            glowing,
+            danger,
         );
     }
     // The marks about to land (hurts > 0 within the next second or so), tile by tile
@@ -1890,24 +1951,20 @@ function wardensMove(sim: Sim): Point | undefined {
             rising ||
             floor.isHurting(x, y, sim.tick) ||
             floor.isFalling(x, y, sim.tick + 40) ||
-            marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y)
+            marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y) ||
+            // Zebak's phantom's acid, where its jugs broke
+            sim.pools.some(
+                (pool) =>
+                    pool.endTick > sim.tick &&
+                    Math.hypot(x + 0.5 - pool.x, y + 0.5 - pool.y) <= pool.radius + 0.6,
+            )
         );
     };
-    // The floor's middle columns, which its slams leave alone (or a step from it), at its north
-    // end, near the Warden
-    // Where the next slam won't reach: east, west, then both but the middle three columns, in turn
-    // (a column west of the middle for the east one, east of it for the west)
+    // The floor's middle column, which no slam reaches (east and west leave the other half and
+    // it, both leaves the middle three), at its north end, near the Warden: there's no reading
+    // which slam is next, enraged or not
     const middle = floor.x0 + Math.floor(floor.sizeX / 2);
-    // The count goes up as a slam starts: that one's safe column is kept till it's down (its
-    // warning, a row a tenth of a second from the north, and its hurt)
-    let seen = slamSeen.get(sim);
-    if (!seen || seen.slam !== three.slam) {
-        seen = { slam: three.slam, tick: sim.tick };
-        slamSeen.set(sim, seen);
-    }
-    const landing = three.slam > 0 && sim.tick - seen.tick < 50 * (1 + floor.sizeY * 0.1 + 0.4);
-    const next = (["east", "west", "both"] as const)[(three.slam - (landing ? 1 : 0)) % 3];
-    const column = next === "east" ? middle - 1 : next === "west" ? middle + 1 : middle;
+    const column = middle;
     // As near the Warden (north, past the floor's end) as the weapons need: a melee hero on the
     // floor's last row, anything that reaches further a step or two back
     const warden = sim.enemies.find((e) => e.uid === three.wardenUid);
@@ -1932,12 +1989,31 @@ function wardensMove(sim: Sim): Point | undefined {
             to = left[0];
         }
     }
+    // The spot itself a danger (a pool of the phantom's acid, a bolt's shadow): the nearest tile
+    // by it that isn't, the Warden's way first
+    if (danger(Math.floor(to.x), Math.floor(to.y))) {
+        let best: Point | undefined;
+        let bestAway = Infinity;
+        for (let dy = -3; dy <= 3; dy++) {
+            for (let dx = -3; dx <= 3; dx++) {
+                const tx = Math.floor(to.x) + dx;
+                const ty = Math.floor(to.y) + dy;
+                if (danger(tx, ty) || sim.grid.isSolid(tx, ty)) {
+                    continue;
+                }
+                const away = Math.hypot(dx, dy) + (ty > Math.floor(to.y) ? 0.5 : 0);
+                if (away < bestAway) {
+                    bestAway = away;
+                    best = { x: tx + 0.5, y: ty + 0.5 };
+                }
+            }
+        }
+        to = best ?? to;
+    }
     // Off the floor's dangers tile by tile, and out of the phantoms' way (Zebak's fans, Kephri's
     // fireball and Ba-Ba's rock, aimed where you stand) as it goes
     return dodging(sim, safeStep(sim, to, danger), (x, y) => danger(Math.floor(x), Math.floor(y)));
 }
-
-const slamSeen = new WeakMap<Sim, { slam: number; tick: number }>();
 
 function clampTo(to: Point, floor: { x0: number; y0: number; x1: number; y1: number }): Point {
     return {

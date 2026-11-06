@@ -717,6 +717,9 @@ export type Hero = {
     staredUntil?: number;
     // What came out of a raid's chest at the end, for the result screen
     raidChest?: RaidChest;
+    // The Wardens' orbs soaked and held (WARDENS.orbs.soak), and when the next fades
+    wardenEnergy: number;
+    wardenEnergyTick: number;
     // The Tombs of Amascut's points (TOMBS_POINTS), and times they went down there; and every
     // boss point earned, deaths or not, which the Helpful Spirit's are counted out of
     tombsPoints: number;
@@ -1784,6 +1787,8 @@ export class Sim {
             raidPointsEarned: 0,
             tombsPoints: 0,
             tombsGross: 0,
+            wardenEnergy: 0,
+            wardenEnergyTick: 0,
             tombsDowns: 0,
             healed: 0,
             highestHit: 0,
@@ -6067,28 +6072,11 @@ export class Sim {
         const sides: WardenSide[] = ["elidinis", "tumeken"];
         const haste = this.invoked("ancient_haste");
         const step = secondsToTicks(WARDENS.orbs.stepSeconds);
-        // The next orbs, a side at a time: none from a side someone's blocking, who pays for it
+        // The next orbs, a side at a time
         if (this.tick >= fight.nextOrbTick) {
             fight.nextOrbTick = this.tick + secondsToTicks(WARDENS.orbs.every);
             for (const side of sides) {
-                const { spawn, gap } = places.sides[side];
-                let blocked = false;
-                this.forEachHeroInReach(() => {
-                    const player = this.player;
-                    const near = (at: { x: number; y: number }) =>
-                        fm.hypot(player.x - at.x, player.y - at.y) <= WARDENS.orbs.reach;
-                    if (this.isUp(this.hero) && (near(spawn) || near(gap))) {
-                        blocked = true;
-                        this.damagePlayer(
-                            WARDENS.orbs.blockDamage * this.tombsHazardScale(),
-                            WARDENS.obeliskId,
-                            false,
-                        );
-                    }
-                });
-                if (blocked) {
-                    continue;
-                }
+                const { spawn } = places.sides[side];
                 obelisk.anim = "attack";
                 obelisk.attackSeq = obelisk.def.attackSeq;
                 obelisk.animStart = this.tick;
@@ -6103,6 +6091,52 @@ export class Sim {
                     x: spawn.x,
                     y: spawn.y,
                 });
+            }
+        }
+        // Orbs soaked: walked into along the trough (not on the spawn tile), one's gone before
+        // its Warden has it, and its energy goes to whoever took it, for power against the
+        // obelisk, one too many hurting
+        const soak = WARDENS.orbs.soak;
+        const current = this.hero;
+        fight.orbs = fight.orbs.filter((orb) => {
+            if (orb.step === 0) {
+                return true;
+            }
+            const t = Math.min(1, (this.tick - orb.stepTick) / step);
+            const x = orb.fromX + (orb.x - orb.fromX) * t;
+            const y = orb.fromY + (orb.y - orb.fromY) * t;
+            for (const hero of this.heroes) {
+                const player = hero.player;
+                if (
+                    !this.isUp(hero) ||
+                    fm.hypot(player.x - x, player.y - y) > soak.reach + player.radius
+                ) {
+                    continue;
+                }
+                this.use(hero);
+                this.addEffect(WARDENS.shot.impactSpotAnim, player.x, player.y, 0, 30);
+                if (hero.wardenEnergy >= soak.max) {
+                    this.damagePlayer(
+                        player.maxHp * this.tombsShare(soak.overShare),
+                        WARDENS.obeliskId,
+                        false,
+                        undefined,
+                        true,
+                    );
+                } else {
+                    hero.wardenEnergy++;
+                }
+                hero.wardenEnergyTick = this.tick + secondsToTicks(soak.fade);
+                this.use(current);
+                return false;
+            }
+            return true;
+        });
+        // Held energy fades, one at a time
+        for (const hero of this.heroes) {
+            if (hero.wardenEnergy > 0 && this.tick >= hero.wardenEnergyTick) {
+                hero.wardenEnergy--;
+                hero.wardenEnergyTick = this.tick + secondsToTicks(soak.fade);
             }
         }
         // The orbs a step on, each down its trough: across to its row, then along it
@@ -6242,7 +6276,7 @@ export class Sim {
     }
 
     // The obelisk broken: the Warden that's charged the more over the phase wakes (Tumeken's on a
-    // tie), so the side a player kept blocked loses whenever its last attack was; the other blows
+    // tie), so the side a player kept soaking loses whenever its last attack was; the other blows
     // up, and what's in the air from it is gone
     private endWardensPhaseOne(fight: WardensFight): void {
         const total = (side: WardenSide) => fight.charge[side] + fight.spent[side];
@@ -6250,6 +6284,9 @@ export class Sim {
         const loser: WardenSide = winner === "elidinis" ? "tumeken" : "elidinis";
         fight.winner = winner;
         fight.phase = 2;
+        for (const hero of this.heroes) {
+            hero.wardenEnergy = 0;
+        }
         this.wardensFood();
         fight.orbs = [];
         fight.pyramids = [];
@@ -6292,7 +6329,13 @@ export class Sim {
         }
         const left = Math.max(0, enemy.hp) / enemy.maxHp;
         if (fight.phase === 1 && enemy.uid === fight.obeliskUid) {
-            return { phase: 1, stage: "hp", fraction: left, status: "Break the obelisk!" };
+            const energy = this.hero.wardenEnergy;
+            return {
+                phase: 1,
+                stage: "hp",
+                fraction: left,
+                status: energy > 0 ? `Break the obelisk! Soaked ${energy}` : "Break the obelisk!",
+            };
         }
         const two = fight.two;
         if (fight.phase === 2 && two && enemy.uid === two.wardenUid) {
@@ -6831,7 +6874,8 @@ export class Sim {
             pausedUntil: 0,
             enraged: false,
             nextRow: 0,
-            nextLightning: 0,
+            // Its first walk of lightning a little after it's up
+            nextLightning: this.tick + secondsToTicks(WARDENS.three.lightning.every),
             over: false,
         };
         this.emit({ type: "notice", message: `${WARDENS.wardens[side].name} ${def.message}` });
@@ -6871,15 +6915,20 @@ export class Sim {
         if (!three.enraged && warden.hp <= warden.maxHp * def.enrage.at) {
             this.enrageWardenThree(three, warden);
         }
+        // Lightning walks the floor the whole phase, siphons or not; enraged, the rows go too
         if (three.enraged) {
-            this.stepWardenEnrage(fight, three, warden);
-            return;
+            this.stepWardenEnrage(three, warden);
         }
+        this.stepWardenLightning(fight, three, warden);
         if (three.siphons) {
             this.stepWardenSiphons(three, warden, forms.form);
             return;
         }
-        if (three.batch < def.at.length && warden.hp <= warden.maxHp * def.at[three.batch]) {
+        if (
+            !three.enraged &&
+            three.batch < def.at.length &&
+            warden.hp <= warden.maxHp * def.at[three.batch]
+        ) {
             this.startWardenSiphons(three, warden);
             return;
         }
@@ -6904,14 +6953,18 @@ export class Sim {
                 : warden.hp < warden.maxHp / 2
                   ? def.quicker
                   : def.every;
-        three.nextSlam = this.tick + secondsToTicks(every);
+        three.nextSlam =
+            this.tick +
+            secondsToTicks(three.enraged ? Math.min(every, def.enrage.slamEvery) : every);
     }
 
-    // It charges: siphons land over the floor, and with the second and third a phantom joins
+    // It charges: siphons land over the floor, and with the first and second a phantom joins; the
+    // third quickens them both
     private startWardenSiphons(three: WardensThree, warden: Enemy): void {
         const def = WARDENS.three;
         const floor = this.floor;
-        const count = def.count[three.batch];
+        // One more for every player past the first: there's a siphon each and more
+        const count = def.count[three.batch] + this.heroes.filter((hero) => !hero.left).length - 1;
         three.batch++;
         this.reform(warden, def.forms[three.side].charging);
         this.animate(warden, def.chargeSeq);
@@ -6944,8 +6997,16 @@ export class Sim {
             nextBeam: this.tick,
         };
         this.emit({ type: "notice", message: def.siphonMessage });
-        // A phantom with the second charge (east of it) and the third (west)
-        const which = three.batch - 2;
+        // A phantom with the first charge (east of it) and the second (west); the third quickens both
+        const which = three.batch - 1;
+        if (which === 2) {
+            for (const uid of three.phantoms) {
+                const phantom = this.enemies.find((e) => e.uid === uid);
+                if (phantom?.bossState) {
+                    phantom.bossState.enraged = true;
+                }
+            }
+        }
         if (which === 0 || which === 1) {
             const id = def.forms[three.side].phantoms[which];
             const at = { x: warden.x + (which === 0 ? 9 : -9), y: warden.y - 1 };
@@ -7064,30 +7125,43 @@ export class Sim {
             this.reform(amascut, def.amascut.enragedId);
         }
         three.nextRow = this.tick + secondsToTicks(def.enrage.firstRow);
-        three.nextLightning = this.tick + secondsToTicks(3);
+        three.nextLightning = Math.min(three.nextLightning, this.tick + secondsToTicks(1.2));
+        three.nextSlam = Math.min(three.nextSlam, this.tick + secondsToTicks(1.8));
+        three.pausedUntil = Math.min(three.pausedUntil, this.tick);
         this.emit({ type: "notice", message: def.enrage.message });
     }
 
-    // Enraged: a row of the floor torn away from the back every so often, and lightning walking
-    // the floor, each bolt's shadow first
-    private stepWardenEnrage(fight: WardensFight, three: WardensThree, warden: Enemy): void {
+    // Enraged: a row of the floor torn away from the back every so often (its slams and the
+    // lightning go on, quicker: stepWardensThree, stepWardenLightning)
+    private stepWardenEnrage(three: WardensThree, warden: Enemy): void {
         const def = WARDENS.three.enrage;
         const floor = this.floor;
-        if (!floor) {
+        if (!floor || this.tick < three.nextRow) {
             return;
         }
-        if (this.tick >= three.nextRow) {
-            three.nextRow = this.tick + secondsToTicks(def.rowEvery);
-            floor.start({ kind: "dropRows", rows: 1, rowSeconds: 0.4 }, this.tick, () => ({
-                x: warden.x,
-                y: warden.y,
-            }));
-        }
-        if (this.tick < three.nextLightning) {
+        three.nextRow = this.tick + secondsToTicks(def.rowEvery);
+        floor.start({ kind: "dropRows", rows: 1, rowSeconds: 0.4 }, this.tick, () => ({
+            x: warden.x,
+            y: warden.y,
+        }));
+    }
+
+    // Lightning walking the floor, each bolt's shadow first: a walk every so often, more often
+    // under half its hitpoints, and most of all enraged
+    private stepWardenLightning(fight: WardensFight, three: WardensThree, warden: Enemy): void {
+        const def = WARDENS.three;
+        const floor = this.floor;
+        if (!floor || this.tick < three.nextLightning) {
             return;
         }
         const lightning = def.lightning;
-        three.nextLightning = this.tick + secondsToTicks(lightning.every);
+        const every = three.enraged
+            ? def.enrage.lightningEvery
+            : warden.hp < warden.maxHp / 2
+              ? lightning.quicker
+              : lightning.every;
+        const count = three.enraged ? def.enrage.lightningCount : lightning.count;
+        three.nextLightning = this.tick + secondsToTicks(every);
         const warn = secondsToTicks(lightning.warn);
         // Each bolt a step or two on from the last
         let x = floor.x0 + this.rng.int(floor.sizeX);
@@ -7095,7 +7169,7 @@ export class Sim {
             floor.y0 +
             floor.rowsDropped +
             this.rng.int(Math.max(1, floor.sizeY - floor.rowsDropped));
-        for (let i = 0; i < lightning.count; i++) {
+        for (let i = 0; i < count; i++) {
             const angle = this.rng.int(8) * (Math.PI / 4);
             const step = this.rng.int(4) === 0 ? 2 : 1;
             x = Math.min(
@@ -7106,7 +7180,7 @@ export class Sim {
                 Math.max(y + Math.round(fm.sin(angle) * step), floor.y0 + floor.rowsDropped),
                 floor.y0 + floor.sizeY - 1,
             );
-            const at = this.tick + Math.floor((i * warn) / lightning.count);
+            const at = this.tick + Math.floor((i * warn) / count);
             fight.marks.push({
                 x: x + 0.5,
                 y: y + 0.5,
@@ -14338,6 +14412,12 @@ export class Sim {
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too
         const bossMight = enemy.boss && mightScale > 0 ? this.stats.bossMight : 0;
+        // The Wardens' orbs soaked: each more against their obelisk (WARDENS.orbs.soak)
+        const wardensFight = this.tombsWardens;
+        const soaked =
+            wardensFight?.phase === 1 && enemy.uid === wardensFight.obeliskUid
+                ? 1 + WARDENS.orbs.soak.bonus * this.hero.wardenEnergy
+                : 1;
         const damage = Math.max(
             1,
             Math.round(
@@ -14345,6 +14425,7 @@ export class Sim {
                     weaponScale *
                     (1 + this.stats.might * mightScale) *
                     (1 + bossMight) *
+                    soaked *
                     (1 + drain) *
                     prayed *
                     this.rng.range(0.85, 1.15),

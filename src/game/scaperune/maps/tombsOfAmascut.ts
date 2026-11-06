@@ -373,7 +373,7 @@ const WARDENS: RoomCut = {
     turns: 2,
 };
 // (turned) The obelisk's middle; each Warden's middle; each side's orb spawn tile (next to the
-// obelisk) and gap tile, which a player stands on to block that side, and the column the troughs
+// obelisk) and gap tile (the first a soaked orb can be taken on), and the column the troughs
 // end at, by the Warden; the three troughs' rows (the middle, and two tiles either side); the floor
 const WARDENS_OBELISK = [21.5, 13.5];
 const WARDENS_ELIDINIS = [35.5, 13.5];

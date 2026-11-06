@@ -2040,13 +2040,12 @@ export const WARDENS: WardensDef = {
         every: 1.2,
         stepSeconds: 0.6,
         steps: 8,
-        reach: 0.9,
-        blockDamage: 2,
+        soak: { reach: 0.9, max: 5, bonus: 0.2, fade: 4, overShare: 0.1 },
     },
     charge: {
         // Each starts this far charged, so the first attacks come early: Elidinis' ahead, so the
         // two never discharge together (both sets of pyramids at once leave no cell clear, and
-        // both shots at once are half a bar), unless a player's blocking brings them level
+        // both shots at once are half a bar), unless a player's soaking brings them level
         start: { elidinis: 50, tumeken: 0 },
         full: 125,
         perSecond: 2 / 0.6,
@@ -2069,7 +2068,7 @@ export const WARDENS: WardensDef = {
     },
     shot: { flight: 8, impactSpotAnim: 1605 },
     startDelay: 3,
-    message: "The obelisk ignites! Block a Warden's trough, and break the obelisk.",
+    message: "The obelisk ignites! Soak a Warden's orbs for power against it, and break it.",
     endMessage: "The obelisk shatters!",
     two: {
         wake: 4,
@@ -2174,7 +2173,10 @@ export const WARDENS: WardensDef = {
         rowSeconds: 0.1,
         slamSeqs: { east: 9674, west: 9676, both: 9678 },
         at: [0.8, 0.6, 0.4, 0.2],
-        count: [4, 5, 6, 7],
+        // Siphons for one player (one more each for every other): seven for one, four tiles
+        // apart on a floor this size, couldn't be reached in the window, so every fourth charge
+        // was a ripple nobody could help
+        count: [3, 4, 4, 5],
         window: 10.8,
         insanityWindow: 4.8,
         siphon: {
@@ -2191,21 +2193,26 @@ export const WARDENS: WardensDef = {
         stagger: 0.05,
         restart: 5.4,
         phantomSpotAnim: 2219,
+        // Enraged: everything at once, quicker, on a floor that's going: stay calm or die
         enrage: {
             at: 0.05,
             heal: 0.2,
             seq: 9684,
-            rowEvery: 10.8,
+            rowEvery: 7.2,
             firstRow: 3.6,
-            lightning: {
-                every: 3.6,
-                warn: 1.8,
-                count: 9,
-                shadowSpotAnim: 1446,
-                spotAnim: 2197,
-                damage: 0.12,
-            },
+            slamEvery: 3,
+            lightningEvery: 2.4,
+            lightningCount: 12,
             message: "The Warden is enraged! Amascut tears the floor away!",
+        },
+        lightning: {
+            every: 7.2,
+            quicker: 5.4,
+            warn: 1.8,
+            count: 6,
+            shadowSpotAnim: 1446,
+            spotAnim: 2197,
+            damage: 0.12,
         },
         message: "rises again! Keep off the half of the floor it slams.",
         siphonMessage: "The Warden is charging! Step on the energy siphons to stop them!",
@@ -2608,7 +2615,8 @@ const WARDENS_PHASE_THREE: EnemyDef[] = [
         unhittable: true,
         sounds: { attack: -1, hit: -1, death: -1 },
     },
-    // Zebak's: a fan of his magic, or of his ranged
+    // Zebak's: a fan of his magic, or of his ranged, or a jug lobbed onto you that leaves his acid
+    // where it breaks, for a while (ZEBAK.acid: the same loc, the same poison)
     phantom(
         "zebaks_phantom",
         "Zebak's Phantom",
@@ -2617,6 +2625,19 @@ const WARDENS_PHASE_THREE: EnemyDef[] = [
         [
             phantomShot("Phantom magic", 9626, 2176),
             phantomShot("Phantom ranged", 9626, 2178, { damage: 5 }),
+            phantomDrop("Phantom jug", 9624, 1.6, 2176, ZEBAK.jugs.splashSpotAnim, {
+                damage: 5,
+                radius: 1.2,
+                // Long enough to cost a melee hero its spot at the Warden's feet, not to own it
+                pool: {
+                    seconds: 10,
+                    radius: 1.2,
+                    damage: ZEBAK.acid.damage,
+                    interval: 0.6,
+                    effect: ZEBAK.acid.poison,
+                    locId: ZEBAK.acid.loc,
+                },
+            }),
         ],
         0.8,
     ),

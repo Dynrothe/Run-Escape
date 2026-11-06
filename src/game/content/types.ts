@@ -1843,8 +1843,11 @@ export type WardensDef = {
         every: number;
         stepSeconds: number;
         steps: number;
-        reach: number;
-        blockDamage: number;
+        // Walked into anywhere along its trough (within reach of it), an orb's soaked: its Warden
+        // gets nothing from it, and whoever soaked it carries its energy, each worth bonus more
+        // against the obelisk, one fading every fade seconds, up to max; soaking one more while
+        // full overcharges them for overShare of their hitpoints. On its spawn tile it can't be.
+        soak: { reach: number; max: number; bonus: number; fade: number; overShare: number };
     };
     charge: {
         // Each side's charge as the fight opens
@@ -2010,15 +2013,22 @@ export type WardensPhaseThreeDef = {
         seq: number;
         rowEvery: number;
         firstRow: number;
-        lightning: {
-            every: number;
-            warn: number;
-            count: number;
-            shadowSpotAnim: number;
-            spotAnim: number;
-            damage: number;
-        };
+        // Enraged, its slams come this often and the lightning's walks this often, this long
+        slamEvery: number;
+        lightningEvery: number;
+        lightningCount: number;
         message: string;
+    };
+    // Lightning walking the floor the whole phase: a walk of count bolts every every seconds
+    // (quicker under half its hitpoints), each bolt's shadow warn seconds before it strikes
+    lightning: {
+        every: number;
+        quicker: number;
+        warn: number;
+        count: number;
+        shadowSpotAnim: number;
+        spotAnim: number;
+        damage: number;
     };
     message: string;
     siphonMessage: string;
