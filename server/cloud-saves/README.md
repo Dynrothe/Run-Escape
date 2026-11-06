@@ -119,8 +119,8 @@ the maps with a victory, and `gameVersion`.
   when; for each code, its uploads today and the last day it was used. No names, emails or IP
   addresses; the address is only used for rate limiting.
 - **Codes nobody uses go.** A code with no save after a week goes, and one unused for
-  `INACTIVE_DAYS` (365) goes with its saves. Using a code (any request with it) is noted at most
-  once a day.
+  `INACTIVE_DAYS` (25) goes with its saves, though each device keeps its own save. Using a code
+  (any request with it, such as the game's check when it starts) is noted at most once a day.
 - **Lost codes can't be recovered**, as there's nothing else to know a player by. The game keeps
   its file export, and shows the code again in Settings on any device that has it.
 - **Rate limits:** every request per address (60 a minute); new codes and new codes for old ones

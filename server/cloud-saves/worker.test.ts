@@ -360,12 +360,12 @@ describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration
         expect(count("accounts")).toBe(2);
         expect((await request("GET", "save/meta", empty)).status).toBe(401);
         // Reading counts as using, once a day at most
-        clock = now + 300 * DAY;
+        clock = now + 20 * DAY;
         expect((await request("GET", "save/meta", used)).status).toBe(200);
-        await prune(env, now + 366 * DAY);
+        await prune(env, now + 26 * DAY);
         expect((await request("GET", "save/meta", idle)).status).toBe(401);
         expect(count("saves")).toBe(1);
-        clock = now + 366 * DAY;
+        clock = now + 26 * DAY;
         expect((await request("GET", "save/meta", used)).status).toBe(200);
     });
 

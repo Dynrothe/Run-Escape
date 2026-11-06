@@ -33,7 +33,7 @@ const DEFAULT_MAX_ACCOUNTS_PER_DAY = 2000;
 // Each code's own uploads a day, so no one code uses up MAX_SAVES_PER_DAY
 const DEFAULT_MAX_UPLOADS_PER_CODE_PER_DAY = 300;
 // A code nobody's used for this long goes, with its saves
-const DEFAULT_INACTIVE_DAYS = 365;
+const DEFAULT_INACTIVE_DAYS = 25;
 // A code that never got a save goes after this long
 const UNUSED_CODE_MS = 7 * DAY_MS;
 const dayOf = (time) => Math.floor(time / DAY_MS);
@@ -448,7 +448,7 @@ export async function prune(env, now = Date.now()) {
         ),
     ]);
     // Codes nobody's used for INACTIVE_DAYS, with their saves, and codes that never got a save
-    const idle = dayOf(now) - setting(env.INACTIVE_DAYS, DEFAULT_INACTIVE_DAYS, 30, 3650);
+    const idle = dayOf(now) - setting(env.INACTIVE_DAYS, DEFAULT_INACTIVE_DAYS, 7, 3650);
     const lastUsed = `COALESCE(used_day, created_at / ${DAY_MS})`;
     await env.DB.batch([
         env.DB.prepare(

@@ -19,8 +19,9 @@ MAX_ACCOUNTS_PER_DAY = "2000"
 MAX_UPLOADS_PER_CODE_PER_DAY = "300"
 # A deleted code's saves are kept this long (1 to 90), for the code to restore (README)
 DELETED_RETENTION_DAYS = "7"
-# A code nobody's used for this long goes, with its saves (30 to 3650)
-INACTIVE_DAYS = "365"
+# A code nobody's used for this long goes, with its saves (7 to 3650). The device keeps its own
+# save; a player back after longer turns cloud save on again.
+INACTIVE_DAYS = "25"
 
 # No database_id: the first `wrangler deploy` creates the database by this name, and the d1
 # commands find it by name.
