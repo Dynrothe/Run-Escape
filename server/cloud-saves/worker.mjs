@@ -4,6 +4,9 @@
 
 // A save's text, as the game exports it. A full one is about 22 KB.
 export const MAX_SAVE_BYTES = 65_536;
+// And gzipped, as it's stored. A full save is about 5 KB; junk that won't compress is turned
+// away, so the database can't be filled, or used to keep anything but saves.
+export const MAX_STORED_BYTES = 16_384;
 // The request around it: the save as a JSON string, escaped, plus a few fields
 const MAX_BODY_BYTES = 196_608;
 export const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
@@ -26,7 +29,14 @@ const DEFAULT_KEEP_DAYS = 7;
 // Caps on what's stored a day, whoever sends it, so a flood can't run through D1's daily write
 // allowance, which the run collector shares if it's on the same account (README, Budget)
 const DEFAULT_MAX_SAVES_PER_DAY = 5000;
-const DEFAULT_MAX_ACCOUNTS_PER_DAY = 500;
+const DEFAULT_MAX_ACCOUNTS_PER_DAY = 2000;
+// Each code's own uploads a day, so no one code uses up MAX_SAVES_PER_DAY
+const DEFAULT_MAX_UPLOADS_PER_CODE_PER_DAY = 300;
+// A code nobody's used for this long goes, with its saves
+const DEFAULT_INACTIVE_DAYS = 365;
+// A code that never got a save goes after this long
+const UNUSED_CODE_MS = 7 * DAY_MS;
+const dayOf = (time) => Math.floor(time / DAY_MS);
 // A deleted code's saves are kept this long, for the code to restore
 const DEFAULT_DELETED_RETENTION_DAYS = 7;
 const retention = (env) =>
@@ -91,7 +101,10 @@ export function readSave(text) {
     const { version, gameVersion } = save;
     if (!Number.isInteger(version) || version < 1 || version > 10_000) return undefined;
     if (typeof gameVersion !== "string" || !VERSION.test(gameVersion)) return undefined;
-    const count = (n) => (Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0);
+    // Fields every save has had, so it's a save and not something else kept here
+    const isCount = (n) => typeof n === "number" && Number.isFinite(n) && n >= 0;
+    if (!isCount(save.runs) || !isCount(save.coins)) return undefined;
+    const count = (n) => (isCount(n) ? Math.floor(n) : 0);
     const victories =
         save.mapVictories && typeof save.mapVictories === "object" ? save.mapVictories : {};
     return {
@@ -167,13 +180,13 @@ async function readBody(request) {
     return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-// The account a request's sync code belongs to: { id, deleted_at }
+// The account a request's sync code belongs to: { id, deleted_at, created_at, used_day }
 async function account(request, env) {
     const header = request.headers.get("Authorization") ?? "";
     const code = header.startsWith("Bearer ") ? normalizeCode(header.slice(7)) : undefined;
     if (!code) return undefined;
     const { results } = await env.DB.prepare(
-        "SELECT id, deleted_at FROM accounts WHERE code_hash = ?",
+        "SELECT id, deleted_at, created_at, used_day FROM accounts WHERE code_hash = ?",
     )
         .bind(await sha256(code))
         .all();
@@ -209,6 +222,16 @@ async function createAccount(env, now, respond) {
     return respond({ code: formatCode(code) });
 }
 
+// A new code for the same saves, and the old one stops working: what to do when a code's
+// leaked. Deleting wouldn't do, as whoever has the code could restore it.
+async function rotateCode(env, accountId, respond) {
+    const code = newCode();
+    await env.DB.prepare("UPDATE accounts SET code_hash = ? WHERE id = ?")
+        .bind(await sha256(code), accountId)
+        .run();
+    return respond({ code: formatCode(code) });
+}
+
 async function putSave(request, env, accountId, now, respond) {
     if (request.headers.get("Content-Type")?.split(";")[0].trim() !== "application/json") {
         return respond({ error: "Expected application/json" }, 415);
@@ -237,6 +260,15 @@ async function putSave(request, env, accountId, now, respond) {
     ) {
         return respond({ reason: "newer", ...meta(latest) }, 409);
     }
+    const body = await gzip(value.save);
+    if (body.byteLength > MAX_STORED_BYTES) return respond({ error: "Save too large" }, 413);
+    const today = dayOf(now);
+    const perCode = setting(
+        env.MAX_UPLOADS_PER_CODE_PER_DAY,
+        DEFAULT_MAX_UPLOADS_PER_CODE_PER_DAY,
+        1,
+        100_000,
+    );
     const keep = setting(env.KEEP_VERSIONS, DEFAULT_KEEP_VERSIONS, 1, 50);
     // The first UTC day (in days since 1970) whose last version is kept
     const firstDay =
@@ -250,11 +282,13 @@ async function putSave(request, env, accountId, now, respond) {
             (account_id, revision, body, save_version, game_version, summary, created_at)
             SELECT ?, ?, ?, ?, ?, ?, ?
             WHERE COALESCE((SELECT MAX(revision) FROM saves WHERE account_id = ?), 0) = ?
-            AND COALESCE((SELECT saves FROM daily_intake WHERE day = ?), 0) < ?`,
+            AND COALESCE((SELECT saves FROM daily_intake WHERE day = ?), 0) < ?
+            AND (SELECT CASE WHEN uploads_day = ? THEN uploads ELSE 0 END
+                FROM accounts WHERE id = ?) < ?`,
         ).bind(
             accountId,
             base + 1,
-            await gzip(value.save),
+            body,
             save.version,
             save.gameVersion,
             JSON.stringify(save.summary),
@@ -263,6 +297,9 @@ async function putSave(request, env, accountId, now, respond) {
             base,
             utcDay(now),
             cap,
+            today,
+            accountId,
+            perCode,
         ),
         env.DB.prepare(
             `DELETE FROM saves WHERE account_id = ?
@@ -277,6 +314,15 @@ async function putSave(request, env, accountId, now, respond) {
         if ((after?.revision ?? 0) !== base) {
             return respond({ reason: "stale", ...meta(after) }, 409);
         }
+        const { results } = await env.DB.prepare(
+            "SELECT uploads_day, uploads FROM accounts WHERE id = ?",
+        )
+            .bind(accountId)
+            .all();
+        const usage = results[0];
+        if (usage && usage.uploads_day === today && usage.uploads >= perCode) {
+            return respond({ error: "No more uploads for this code today" }, 429);
+        }
         return respond({ error: "No more cloud saves today" }, 503);
     }
     return respond({ revision: base + 1, updatedAt: now });
@@ -288,6 +334,7 @@ export async function handle(request, env, now = Date.now()) {
         "/v1/health": ["GET"],
         "/v1/account": ["POST", "DELETE"],
         "/v1/account/restore": ["POST"],
+        "/v1/account/code": ["POST"],
         "/v1/save/meta": ["GET"],
         "/v1/save": ["GET", "PUT"],
     };
@@ -325,6 +372,9 @@ export async function handle(request, env, now = Date.now()) {
         return respond({ error: "Too many requests" }, 429);
     }
     if (pathname === "/v1/account" && request.method === "POST") {
+        // Keeps other websites' pages from making codes in a visitor's browser. It isn't a lock:
+        // anything but a browser can send any Origin, and Android's is every app's that uses
+        // WebViewAssetLoader. The rate limits and caps are what bound a stranger.
         if (!origin) return respond({ error: "Origin required" }, 403);
         if (!(await limit(env.ACCOUNT_LIMITER, ip))) {
             return respond({ error: "Too many requests" }, 429);
@@ -349,6 +399,20 @@ export async function handle(request, env, now = Date.now()) {
         );
     }
     if (pathname === "/v1/account/restore") return respond({ restored: false });
+    // The last day a code was used, for INACTIVE_DAYS: written at most once a day (an upload's
+    // trigger writes it too)
+    const lastUsed = found.used_day ?? dayOf(found.created_at);
+    if (lastUsed < dayOf(now) && request.method !== "PUT") {
+        await env.DB.prepare("UPDATE accounts SET used_day = ? WHERE id = ?")
+            .bind(dayOf(now), accountId)
+            .run();
+    }
+    if (pathname === "/v1/account/code") {
+        if (!(await limit(env.ACCOUNT_LIMITER, ip))) {
+            return respond({ error: "Too many requests" }, 429);
+        }
+        return rotateCode(env, accountId, respond);
+    }
     if (pathname === "/v1/account") {
         await env.DB.prepare("UPDATE accounts SET deleted_at = ? WHERE id = ?")
             .bind(now, accountId)
@@ -360,7 +424,11 @@ export async function handle(request, env, now = Date.now()) {
         const latest = await latestSave(env, accountId);
         return respond(latest ? { ...meta(latest), save: await gunzip(latest.body) } : meta());
     }
-    if (!(await limit(env.UPLOAD_LIMITER, accountId))) {
+    // Per code, and per address whatever the code, so one address can't use up the day's saves
+    if (
+        !(await limit(env.UPLOAD_LIMITER, accountId)) ||
+        !(await limit(env.UPLOAD_IP_LIMITER, ip))
+    ) {
         return respond({ error: "Too many requests" }, 429);
     }
     return putSave(request, env, accountId, now, respond);
@@ -378,6 +446,20 @@ export async function prune(env, now = Date.now()) {
         env.DB.prepare("DELETE FROM accounts WHERE deleted_at IS NOT NULL AND deleted_at < ?").bind(
             gone,
         ),
+    ]);
+    // Codes nobody's used for INACTIVE_DAYS, with their saves, and codes that never got a save
+    const idle = dayOf(now) - setting(env.INACTIVE_DAYS, DEFAULT_INACTIVE_DAYS, 30, 3650);
+    const lastUsed = `COALESCE(used_day, created_at / ${DAY_MS})`;
+    await env.DB.batch([
+        env.DB.prepare(
+            `DELETE FROM saves WHERE account_id IN
+            (SELECT id FROM accounts WHERE ${lastUsed} < ?)`,
+        ).bind(idle),
+        env.DB.prepare(`DELETE FROM accounts WHERE ${lastUsed} < ?`).bind(idle),
+        env.DB.prepare(
+            `DELETE FROM accounts WHERE created_at < ?
+            AND NOT EXISTS (SELECT 1 FROM saves WHERE saves.account_id = accounts.id)`,
+        ).bind(now - UNUSED_CODE_MS),
     ]);
     await env.DB.prepare("DELETE FROM daily_intake WHERE day < ?")
         .bind(utcDay(now - 2 * DAY_MS))

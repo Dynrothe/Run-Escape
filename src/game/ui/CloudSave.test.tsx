@@ -22,6 +22,7 @@ function mockClient() {
         keepLocal: vi.fn(),
         later: vi.fn(),
         restore: vi.fn(),
+        newCode: vi.fn(),
     };
     return { cloud, client: { cloud } as unknown as GameClient };
 }
@@ -157,4 +158,17 @@ test("has a panel of its own, with Settings' rows, that Back closes", () => {
     expect(screen.getByText(CODE)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(close).toHaveBeenCalledTimes(1);
+});
+
+test("gets a new code only once the player's said so", () => {
+    const cloud = settings({ code: CODE, working: false });
+    const confirm = vi
+        .spyOn(window, "confirm")
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole("button", { name: "New code" }));
+    expect(cloud.newCode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "New code" }));
+    expect(cloud.newCode).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
 });

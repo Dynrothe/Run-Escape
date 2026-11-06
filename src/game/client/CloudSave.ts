@@ -115,6 +115,37 @@ export function fingerprint(save: SaveData): string {
     return (h2 & 0x1fffff).toString(16) + (h1 >>> 0).toString(16).padStart(8, "0");
 }
 
+// What the Worker says about the cloud's save, checked field by field, as anything that answers
+// the request could have sent it. Undefined when it isn't that.
+export function readMeta(answer: unknown): CloudMeta | undefined {
+    const raw = answer as { revision?: unknown; summary?: unknown; updatedAt?: unknown } | null;
+    if (!raw || typeof raw !== "object") {
+        return undefined;
+    }
+    const { revision, summary, updatedAt } = raw;
+    if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 0) {
+        return undefined;
+    }
+    const count = (n: unknown) =>
+        typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+    const s = summary as Partial<Record<keyof CloudSummary, unknown>> | undefined;
+    return {
+        revision,
+        summary:
+            s && typeof s === "object" && typeof s.gameVersion === "string"
+                ? {
+                      gameVersion: s.gameVersion.slice(0, 20),
+                      runs: count(s.runs),
+                      victories: count(s.victories),
+                      totalCoins: count(s.totalCoins),
+                      mapsBeaten: count(s.mapsBeaten),
+                  }
+                : undefined,
+        updatedAt:
+            typeof updatedAt === "number" && Number.isFinite(updatedAt) ? updatedAt : undefined,
+    };
+}
+
 function readState(storage: Store | undefined): CloudState | undefined {
     try {
         const raw = JSON.parse(storage?.getItem(CLOUD_STATE_KEY) ?? "null");
@@ -343,6 +374,29 @@ export class CloudSync {
         });
     }
 
+    // A new code for the same saves. The old one stops working everywhere, which shuts out
+    // anyone it was leaked to (deleting wouldn't: whoever has a code can restore it). The
+    // player's other devices need the new one typed in.
+    newCode(): Promise<void> {
+        return this.run(async () => {
+            if (!this.state) {
+                return;
+            }
+            const response = await this.call("POST", "account/code", this.state.code);
+            const code =
+                response.status === 200 && typeof response.data?.code === "string"
+                    ? normalizeCode(response.data.code)
+                    : undefined;
+            if (!code) {
+                this.noteProblem(response, this.state.code);
+                return;
+            }
+            this.state.code = code;
+            this.problem = undefined;
+            this.write();
+        });
+    }
+
     // Brings a deleted code's saves back, and links this device to it again
     restore(): Promise<void> {
         return this.run(async () => {
@@ -397,7 +451,11 @@ export class CloudSync {
     }
 
     // What to do once the cloud's revision is known
-    private async settle(meta: CloudMeta, now = false): Promise<void> {
+    private async settle(answer: unknown, now = false): Promise<void> {
+        const meta = this.readAnswer(answer);
+        if (!meta) {
+            return;
+        }
         const state = this.state!;
         if (meta.revision === state.revision || meta.revision === 0) {
             // In step (or the cloud has nothing), so only this device's changes are news
@@ -426,7 +484,8 @@ export class CloudSync {
     // ifSame: only if it's the same as this device's, and if not, ask which to keep
     private async download(ifSame = false): Promise<void> {
         const state = this.state!;
-        const got = await this.request("GET", "save");
+        const answer = await this.request("GET", "save");
+        const got = answer && this.readAnswer(answer);
         if (!got) {
             return;
         }
@@ -438,7 +497,10 @@ export class CloudSync {
         }
         let save: SaveData;
         try {
-            save = importSave(got.save, this.host.gameVersion);
+            if (typeof answer.save !== "string") {
+                throw new Error("Not a save");
+            }
+            save = importSave(answer.save, this.host.gameVersion);
         } catch (e) {
             if (e instanceof NewerSaveError) {
                 this.choice = { cloud: got, newer: true, closed: false };
@@ -450,8 +512,7 @@ export class CloudSync {
         }
         const hash = fingerprint(save);
         if (ifSame && hash !== fingerprint(this.host.save())) {
-            const { revision, summary, updatedAt } = got;
-            this.choice = { cloud: { revision, summary, updatedAt }, newer: false, closed: false };
+            this.choice = { cloud: got, newer: false, closed: false };
             return;
         }
         // In step before it goes in, so going in isn't a change to upload
@@ -477,27 +538,50 @@ export class CloudSync {
         });
         const { status, data } = response;
         if (status === 200) {
+            if (!Number.isInteger(data?.revision)) {
+                this.problem = "offline";
+                return;
+            }
             Object.assign(state, { revision: data.revision, hash, syncedAt: Date.now() });
             this.write();
             this.choice = undefined;
             this.problem = undefined;
         } else if (status === 409) {
+            const cloud = this.readAnswer(data);
+            if (!cloud) {
+                return;
+            }
             const newer =
-                data?.reason === "newer" ||
-                (data?.summary !== undefined &&
-                    compareGameVersions(data.summary.gameVersion, this.host.gameVersion) > 0);
-            this.choice = { cloud: data, newer, closed: false };
+                data.reason === "newer" ||
+                (cloud.summary !== undefined &&
+                    compareGameVersions(cloud.summary.gameVersion, this.host.gameVersion) > 0);
+            this.choice = { cloud, newer, closed: false };
         } else {
             this.noteProblem(response, state.code);
         }
     }
 
+    // The cloud's save as an answer describes it, checked; one that isn't (a proxy's page, say) is
+    // a problem, not something to show or act on
+    private readAnswer(answer: unknown): CloudMeta | undefined {
+        const meta = readMeta(answer);
+        if (!meta) {
+            this.problem = "offline";
+        }
+        return meta;
+    }
+
     // A request whose answer's only wanted when it worked: otherwise it's noted as a problem
     private async request(method: string, path: string): Promise<any> {
         const response = await this.call(method, path, this.state?.code);
-        if (response.status === 200) {
+        // A 200 that isn't JSON is something else answering (a captive portal's page)
+        if (response.status === 200 && response.data !== undefined) {
             this.problem = undefined;
             return response.data;
+        }
+        if (response.status === 200) {
+            this.problem = "offline";
+            return undefined;
         }
         this.noteProblem(response, this.state?.code);
         return undefined;

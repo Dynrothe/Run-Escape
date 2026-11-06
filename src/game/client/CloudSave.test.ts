@@ -7,11 +7,13 @@ import {
     UPLOAD_COOLDOWN_MS,
     fingerprint,
     normalizeCode,
+    readMeta,
 } from "./CloudSave";
 
 const URL = "https://saves.example";
 const CODE = "K7Q2-M9XD-4TPA-W3RN-H8BE-6FZC";
 const RESTORABLE_UNTIL = Date.parse("2026-11-13T12:00:00Z");
+const NEW_CODE = "P2Q3-R4S5-T6V7-W8X9-YZ01-2345";
 
 // The Worker's rules (server/cloud-saves/worker.mjs), kept in memory
 class FakeWorker {
@@ -20,12 +22,19 @@ class FakeWorker {
     deleted = new Set<string>();
     requests: { method: string; path: string; body?: any }[] = [];
     down = false;
+    // Something else answering these requests with a page (a captive portal, a proxy)
+    garbage?: { method: string; status: number };
 
     fetch = async (url: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
         if (this.down) {
             throw new TypeError("Failed to fetch");
         }
         const path = String(url).slice(`${URL}/v1/`.length);
+        if (this.garbage && this.garbage.method === (init.method ?? "GET")) {
+            return new Response("<html>Sign in to the wifi</html>", {
+                status: this.garbage.status,
+            });
+        }
         const method = init.method ?? "GET";
         const body = init.body ? JSON.parse(String(init.body)) : undefined;
         this.requests.push({ method, path, body });
@@ -54,6 +63,11 @@ class FakeWorker {
         if (path === "account" && method === "DELETE") {
             this.deleted.add(code!);
             return reply({ deleted: true, restorableUntil: RESTORABLE_UNTIL });
+        }
+        if (path === "account/code") {
+            this.accounts.set(NEW_CODE, saves);
+            this.accounts.delete(code!);
+            return reply({ code: NEW_CODE });
         }
         if (path === "save/meta") return reply(meta);
         if (method === "GET") return reply(latest ? { ...meta, save: latest.text } : meta);
@@ -378,4 +392,53 @@ it("restores a deleted code typed in on another device, and its saves with it", 
     expect(view()).toMatchObject({ code: CODE, problem: "deleted" });
     await sync.restore();
     expect(view()?.problem).toBeUndefined();
+});
+
+it("gets a new code for the same save, and the old one stops working", async () => {
+    await start(withRuns(3)).turnOn();
+    await sync.newCode();
+    expect(view()).toMatchObject({ code: NEW_CODE, problem: undefined });
+    expect(state()).toMatchObject({ code: NEW_CODE, revision: 1 });
+    expect(worker.accounts.has(CODE)).toBe(false);
+    current = withRuns(4);
+    await sync.check(true);
+    expect(JSON.parse(worker.accounts.get(NEW_CODE)!.at(-1)!.text).runs).toBe(4);
+    expect(view()?.problem).toBeUndefined();
+});
+
+it("doesn't act on an answer that isn't the Worker's", async () => {
+    link(1, withRuns(1));
+    worker.put(withRuns(1));
+    worker.put(withRuns(9));
+    start(withRuns(1));
+    // A page where the cloud's save should be: not taken, nothing to choose between
+    worker.garbage = { method: "GET", status: 200 };
+    await sync.check();
+    expect(current.runs).toBe(1);
+    expect(view()).toMatchObject({ problem: "offline", choice: undefined });
+    // A page with a 409 for an upload: not taken as another device's save
+    worker.garbage = { method: "PUT", status: 409 };
+    link(2, withRuns(9));
+    start(withRuns(10));
+    await sync.check(true);
+    expect(view()).toMatchObject({ problem: "offline", choice: undefined });
+    worker.garbage = undefined;
+    await sync.check(true);
+    expect(worker.latest?.runs).toBe(10);
+});
+
+it("reads the Worker's answers field by field", () => {
+    expect(readMeta({ revision: 3, summary: { gameVersion: "0.28.0", runs: 5 } })).toEqual({
+        revision: 3,
+        summary: { gameVersion: "0.28.0", runs: 5, victories: 0, totalCoins: 0, mapsBeaten: 0 },
+        updatedAt: undefined,
+    });
+    expect(readMeta({ revision: 2, summary: { runs: "lots" } })).toEqual({
+        revision: 2,
+        summary: undefined,
+        updatedAt: undefined,
+    });
+    for (const bad of [undefined, null, "page", {}, { revision: -1 }, { revision: 1.5 }]) {
+        expect(readMeta(bad), JSON.stringify(bad)).toBeUndefined();
+    }
 });

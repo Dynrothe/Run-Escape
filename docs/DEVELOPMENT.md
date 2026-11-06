@@ -1697,6 +1697,12 @@ waiting and a "no" sign while it can't sync. It opens the choice, or cloud save'
   marks the code, and answers it with a 410 and `restorableUntil` until its saves are removed.
   The game shows that as the `deleted` problem, with the date and a Restore button
   (`CloudSync.restore`), on the device that deleted it and on any the code's typed into.
+- **New code** (`CloudSync.newCode`) is what shuts out a leaked code: the same saves get a new
+  one, and the old one stops working everywhere. Deleting can't, as whoever has a code can
+  restore it.
+- **The Worker's answers are untrusted too.** Anything can answer these requests (a captive
+  portal, a proxy), so `readMeta` checks each field before the game shows or acts on it, a 200
+  that isn't JSON is a problem, and a downloaded save goes through `importSave` like a file.
 
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or

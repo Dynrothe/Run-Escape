@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { SAVE_VERSION, createSave, exportSave } from "../../src/game/core/save";
 import worker, {
     MAX_SAVE_BYTES,
+    MAX_STORED_BYTES,
     handle,
     newCode,
     normalizeCode,
@@ -34,6 +35,9 @@ it("reads a save's shape and summary, not the game's rules", () => {
         JSON.stringify({ gameVersion: "0.28.0" }),
         saveText({ version: "11" }),
         saveText({ version: 0 }),
+        saveText({ runs: "3" }),
+        saveText({ coins: undefined }),
+        saveText({ runs: -1 }),
         saveText({ gameVersion: "latest" }),
         saveText({ gameVersion: undefined }),
         saveText({ padding: "x".repeat(MAX_SAVE_BYTES) }),
@@ -83,6 +87,7 @@ describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration
             REQUEST_LIMITER: allow,
             ACCOUNT_LIMITER: allow,
             UPLOAD_LIMITER: allow,
+            UPLOAD_IP_LIMITER: allow,
             DB: {
                 prepare(sql: string) {
                     const stmt = db.prepare(sql);
@@ -307,5 +312,80 @@ describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration
         expect((await request("GET", "save", code)).status).toBe(401);
         expect((await request("POST", "account/restore", code)).status).toBe(401);
         expect((await request("GET", "save", other)).status).toBe(200);
+    });
+
+    it("keeps any one code or address from using up the day's saves for everyone", async () => {
+        const code = await newAccount();
+        env.MAX_UPLOADS_PER_CODE_PER_DAY = "2";
+        expect((await put(code, 0)).status).toBe(200);
+        expect((await put(code, 1)).status).toBe(200);
+        const capped = await put(code, 2);
+        expect(capped.status).toBe(429);
+        expect(await capped.json()).toEqual({ error: "No more uploads for this code today" });
+        // Another code still uploads, and this one does again tomorrow
+        expect((await put(await newAccount(), 0)).status).toBe(200);
+        clock = now + DAY;
+        expect((await put(code, 2)).status).toBe(200);
+        // An address over its upload limit, whatever the code
+        env.UPLOAD_IP_LIMITER = { limit: async () => ({ success: false }) };
+        expect((await put(await newAccount(), 0)).status).toBe(429);
+    });
+
+    it("stores only what compresses like a save", async () => {
+        const code = await newAccount();
+        // Random text barely compresses: under the text limit, over the stored one
+        const junk = Buffer.from(crypto.getRandomValues(new Uint8Array(30_000))).toString("base64");
+        expect(junk.length).toBeLessThan(MAX_SAVE_BYTES);
+        const refused = await put(code, 0, saveText({ junk }));
+        expect(refused.status).toBe(413);
+        expect(count("saves")).toBe(0);
+        // A save that big that's like a real one compresses well under it
+        const big = saveText({
+            enemyKills: Object.fromEntries(
+                Array.from({ length: 1500 }, (_, i) => [`enemy_${i}`, i]),
+            ),
+        });
+        expect(big.length).toBeGreaterThan(MAX_STORED_BYTES);
+        expect((await put(code, 0, big)).status).toBe(200);
+    });
+
+    it("lets codes nobody uses go, and those that never got a save", async () => {
+        const used = await newAccount();
+        const idle = await newAccount();
+        const empty = await newAccount();
+        await put(used, 0);
+        await put(idle, 0);
+        // A week on: the code that never got a save goes
+        await prune(env, now + 8 * DAY);
+        expect(count("accounts")).toBe(2);
+        expect((await request("GET", "save/meta", empty)).status).toBe(401);
+        // Reading counts as using, once a day at most
+        clock = now + 300 * DAY;
+        expect((await request("GET", "save/meta", used)).status).toBe(200);
+        await prune(env, now + 366 * DAY);
+        expect((await request("GET", "save/meta", idle)).status).toBe(401);
+        expect(count("saves")).toBe(1);
+        clock = now + 366 * DAY;
+        expect((await request("GET", "save/meta", used)).status).toBe(200);
+    });
+
+    it("gives a code a new one, for the same saves, and the old one stops working", async () => {
+        const old = await newAccount();
+        await put(old, 0, saveText({ runs: 9 }));
+        const rotated = await request("POST", "account/code", old);
+        const { code } = await rotated.json();
+        expect(code).toMatch(/^(\w{4}-){5}\w{4}$/);
+        expect(code).not.toBe(old);
+        expect((await request("GET", "save", old)).status).toBe(401);
+        expect(await (await request("GET", "save/meta", code)).json()).toMatchObject({
+            revision: 1,
+            summary: { runs: 9 },
+        });
+        env.ACCOUNT_LIMITER = { limit: async () => ({ success: false }) };
+        expect((await request("POST", "account/code", code)).status).toBe(429);
+        // A deleted code can't get a new one
+        env.ACCOUNT_LIMITER = { limit: async () => ({ success: true }) };
+        await request("DELETE", "account", code);
+        expect((await request("POST", "account/code", code)).status).toBe(410);
     });
 });

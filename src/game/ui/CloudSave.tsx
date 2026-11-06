@@ -210,7 +210,8 @@ export function CloudSaveSettings({
                         <span className="ui-cloud-code">{code}</span>
                         <br />
                         Type it on another device to bring this save there. Anyone with it can load
-                        or replace your save, and it can't be recovered, so keep it safe.
+                        or replace your save, and it can't be recovered, so keep it safe. If it gets
+                        out, New code shuts the old one out.
                     </>
                 }
             >
@@ -225,6 +226,23 @@ export function CloudSaveSettings({
                     }}
                 >
                     {copied ? "Copied" : "Copy"}
+                </button>
+                <button
+                    className="ui-button ui-button-small"
+                    disabled={busy}
+                    onClick={(e) => {
+                        blur(e);
+                        if (
+                            window.confirm(
+                                "Get a new code for this save? The old one stops working everywhere, so your other devices will need the new one typed in.",
+                            )
+                        ) {
+                            setCopied(false);
+                            sync.newCode();
+                        }
+                    }}
+                >
+                    New code
                 </button>
             </CloudRow>
             <CloudRow
