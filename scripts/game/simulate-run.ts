@@ -24,6 +24,8 @@
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
 //                    # half the chances to use the fight's button
+//   PLATES=0 ...     # never steps on a fight's crane plates (FloorTriggerDef.load); by default
+//                    # it does when one's near and the boss is winding up
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
@@ -75,6 +77,8 @@ const fresh = process.env.FRESH === "1";
 const dodges = process.env.DODGE === "1";
 const smites = process.env.SMITE !== "0";
 const sloppy = process.env.SLOPPY === "1";
+// Steps on a fight's crane plates while the boss winds up (FloorTriggerDef.load); PLATES=0 never
+const plateBot = process.env.PLATES !== "0";
 // A sloppy bot's lapses: these seconds in every SLOPPY_EVERY it backs off from the boss
 const SLOPPY_EVERY = 10;
 const SLOPPY_LAPSE = 3;
@@ -94,10 +98,25 @@ if (finalBoss) {
         };
     }
 }
+// Nothing in it; on a map with a floor (MapDef.floor), only the floor's box is open, as its map
+// keeps everyone on the floor (its shelves, which the floor itself picks out)
+function flatRows(): string[] {
+    const rect = map.floor?.rect;
+    return Array.from({ length: ARENA.sizeY }, (_, row) => {
+        const y = ARENA.baseY + ARENA.sizeY - 1 - row;
+        let line = "";
+        for (let i = 0; i < ARENA.sizeX; i++) {
+            const x = ARENA.baseX + i;
+            const open = !rect || (x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1);
+            line += open ? "." : "#";
+        }
+        return line;
+    });
+}
 console.time(`${map.name} arena`);
 const grid =
     process.env.FLAT === "1"
-        ? makeGrid(new Array(ARENA.sizeY).fill(".".repeat(ARENA.sizeX)), ARENA.baseX, ARENA.baseY)
+        ? makeGrid(flatRows(), ARENA.baseX, ARENA.baseY)
         : new ArenaGrid(loadRegionData(map));
 console.timeEnd(`${map.name} arena`);
 
@@ -346,6 +365,11 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         if (sidestep) {
             return sidestep;
         }
+        // Off the floor's tiles about to rise or fall (MapDef.floor), to the nearest that isn't
+        const floorStep = offFloorMarks(sim);
+        if (floorStep) {
+            return floorStep;
+        }
         // Off a lunge's strip, out of a square blast, off a wave's or a thrown sword's line, as a
         // person reads them (BossAttackDef.line, square, wave, boomerang)
         const windup = state.windup;
@@ -366,6 +390,28 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             );
             if (step) {
                 return step;
+            }
+        }
+        // Out of a swing round the boss (a stamp), as he winds it up: a step back's enough
+        if (windup?.attack.kind === "swing" && !windup.attack.line && !windup.attack.cone) {
+            const radius = (windup.attack.radius ?? 2) + player.radius + 0.3;
+            const dx = player.x - boss.x;
+            const dy = player.y - boss.y;
+            const away = Math.hypot(dx, dy);
+            if (away < radius && radius < 6) {
+                return away > 0.001 ? { x: dx / away, y: dy / away } : { x: 1, y: 0 };
+            }
+        }
+        // Out from under a boulder's landing (a blast's circles)
+        if (windup?.attack.kind === "blast" && !windup.attack.square) {
+            const radius = (windup.attack.radius ?? 2) + player.radius + 0.4;
+            for (const spot of windup.targets) {
+                const dx = player.x - spot.x;
+                const dy = player.y - spot.y;
+                const away = Math.hypot(dx, dy);
+                if (away < radius) {
+                    return away > 0.001 ? { x: dx / away, y: dy / away } : { x: 1, y: 0 };
+                }
             }
         }
         if (windup?.attack.square) {
@@ -474,6 +520,11 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             }
         }
     }
+    // A crane's plate (FloorTriggerDef.load) close by while he stands winding up: onto it
+    const plate = nearPlate(sim);
+    if (plate && state.windup && state.windup.landTick - sim.tick > 0.8 * TICKS_PER_SECOND) {
+        return towards(plate.x, plate.y);
+    }
     // A less careful person: now and then backs off and loses reach
     if (sloppy && (sim.tick / TICKS_PER_SECOND) % SLOPPY_EVERY < SLOPPY_LAPSE) {
         const away = towards(boss.x, boss.y);
@@ -517,6 +568,74 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     if (target) {
         // Close enough for short weapons, then it just stays there
         return nearest < 2 ? { x: 0, y: 0 } : towards(target.x, target.y);
+    }
+    return undefined;
+}
+
+// The floor's tiles about to rise or fall under the player: the way to the nearest that isn't
+// marked, as a person reads the floor's cue (FloorDef.cue), once it's under a second off
+function offFloorMarks(sim: Sim): { x: number; y: number } | undefined {
+    const floor = sim.floor;
+    const player = sim.player;
+    if (!floor) {
+        return undefined;
+    }
+    const soon = sim.tick + TICKS_PER_SECOND;
+    const threatened = (x: number, y: number) => {
+        const i = floor.index(x, y);
+        if (i < 0) {
+            return false;
+        }
+        const rise = floor.riseAt[i];
+        const drop = floor.dropAt[i];
+        return (
+            (rise !== -1 && rise <= soon) ||
+            (drop !== -1 && drop >= sim.tick && floor.dropWarnAt[i] <= soon) ||
+            floor.isHurting(x, y, sim.tick)
+        );
+    };
+    const tx = Math.floor(player.x);
+    const ty = Math.floor(player.y);
+    if (!threatened(tx, ty)) {
+        return undefined;
+    }
+    let best: { x: number; y: number } | undefined;
+    let bestDistance = Infinity;
+    for (let dy = -5; dy <= 5; dy++) {
+        for (let dx = -5; dx <= 5; dx++) {
+            const x = tx + dx;
+            const y = ty + dy;
+            const distance = Math.hypot(dx, dy);
+            if (distance < bestDistance && !sim.grid.isSolid(x, y) && !threatened(x, y)) {
+                best = { x: x + 0.5, y: y + 0.5 };
+                bestDistance = distance;
+            }
+        }
+    }
+    if (!best) {
+        return undefined;
+    }
+    const length = Math.max(0.001, Math.hypot(best.x - player.x, best.y - player.y));
+    return { x: (best.x - player.x) / length, y: (best.y - player.y) / length };
+}
+
+// A crane's plate that's ready, within a few tiles of the player (FloorTriggerDef.load)
+function nearPlate(sim: Sim): { x: number; y: number } | undefined {
+    const floor = sim.floor;
+    if (!floor || floor.layout.triggerNames.length === 0 || !plateBot) {
+        return undefined;
+    }
+    const player = sim.player;
+    for (let i = 0; i < floor.layout.trigger.length; i++) {
+        const t = floor.layout.trigger[i];
+        if (t < 0 || !floor.armed[t] || floor.readyAt[t] > sim.tick || floor.isGone(i, sim.tick)) {
+            continue;
+        }
+        const x = floor.x0 + (i % floor.sizeX) + 0.5;
+        const y = floor.y0 + Math.floor(i / floor.sizeX) + 0.5;
+        if (Math.hypot(x - player.x, y - player.y) < 5) {
+            return { x, y };
+        }
     }
     return undefined;
 }
@@ -699,6 +818,8 @@ function runOnce(characterId: string, seed: number) {
         if (process.env.GOD === "1") {
             // Untouchable, as a late endless round's hits are bigger than any health bar
             sim.player.invulnerable = 1e9;
+            // and what gets through that (a floor's slabs and lava, MapDef.floor) is healed
+            sim.player.hp = sim.player.maxHp;
         }
         useAbility(sim);
         const pressed = uncursed(sim, move);
