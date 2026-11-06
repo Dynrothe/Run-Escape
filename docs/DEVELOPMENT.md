@@ -968,6 +968,58 @@ clears, not the bot's: it often dies to the Maiden.
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
 up's pick at its max; `?raidtest=short` does only the first.
 
+### A floor that fights back (prototype)
+
+`MapDef.floor` (`FloorDef`) makes a rectangle of the floor move: slabs rise under the player in
+waves, and tiles fall away. It's a prototype of the Wardens' third phase in the Tombs of Amascut, on
+one dev map, `scaperune_wardens_floor` (Dev maps on the dev server: the real room, cut from the
+cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.ts`).
+
+- `core/ArenaFloor.ts` runs the script: each pattern works out every tile's warning and rise (or
+  fall) when it starts, into per-tile arrays the client draws from. `Sim.stepFloor` hurts whoever's
+  middle is on a tile while its slab's up, and a tile that's fallen puts whoever was on it on the
+  nearest tile that isn't going (`Hero.drag`, frozen meanwhile), hurt.
+- A fallen tile is blocked floor on the grid (`ArenaGrid.dropTile`): `Steps` is worked out again
+  round it and `ArenaGrid.version` goes up, so each hero's flow field is worked out again too.
+  Flying enemies cross holes. Grids are kept between runs, so `ArenaFloor` puts every tile back as
+  a run starts.
+- `client/FloorView.ts` draws every tile as the rising slab's model (spotanim 2220) at rest, over the
+  hidden floor, so each can move on its own and a fallen one opens onto the pit under it. The
+  warnings are the tiles' own movement and the light under them: a tremor (rattling up off its
+  bed and twisting) before a rise, the same tremor with a sag and a darkening before a fall, and
+  under each such tile the floor's gold light (`FloorDef.glow`), which shows only through the
+  seams the tremor opens and grows as the moment nears. It's the slab again just under the tile,
+  drawn with a negative `flash`, which `actor.vert.glsl` takes as a glow in the tint's colour.
+  The cache's rising slabs (2220 to 2223, seqs 9697 to 9700) are the rise itself, tipped three
+  ways (2223 moves as 2221 does), and there's no tremor among them, so it's in code. Hits are a share of the player's hitpoints, so any
+  adventurer can try it.
+- What it throws up (`FloorDef.effects`) is drawn from the floor's arrays and the clock alone, with
+  no state: dust as slabs rise, grit falling off a tile about to go, and chips and dust with a
+  falling tile. Each is on a share of the tiles, to keep a phone's triangles down. A tile beside a
+  hole has its thickness drawn under it (the slab again, lower and darker each time), so every
+  hole, one tile or most of the floor, has the same cut edge going down into the dark. Under the
+  floor (`FloorDef.under`) is one structure on a grid symmetric about the floor's middle: the
+  Tombs' gold-banded pillars every six tiles both ways, beams between them, the engraved wall
+  going down round the floor's edge, and a dim amber glow far below. Only what's within a few
+  tiles of a hole is drawn.
+  `FloorDef.shake` has the sim shake the camera (`bossImpact`) for a slab beside a player or a
+  tile going near one, which Settings can turn off.
+- The pit is terrain, so it moves under the floor as the camera does: the floor's tiles are a
+  bridge (`TILE_BRIDGE` on level 1) nine tiles over a pit with no floor and nothing of the map's in it, and the
+  player walks the deck (`ArenaGrid.getHeight`'s bridge heights).
+- What else a floor can do is all optional on `FloorDef` (the map-making guide, "Floors that fight
+  back"): tile effects (`Sim.stepFloorEffects`, and `PlayerMovement`'s `floor` rule for haste, slow
+  and ice), tiles that rebuild, pressure plates and actions (`ArenaFloor.act`, `Sim.floorAct`,
+  `BossAttackDef.floor`), phases, raised tiles and ramps (`ArenaGrid.addLedge`, `ArenaFloor.liftAt`,
+  which `GameView` stands actors on), and pillars that stop shots and sight (`ArenaFloor.blocksSight`).
+- Two renderer pieces are the floor's. `ActorDrawOptions.early` draws an actor before the
+  silhouettes (`ActorRenderer.renderEarly`), so the player shows through a floor's pillars and
+  raised tiles as through walls. `ModelBakeRequest.topOnly` bakes a model's upward faces near its top
+  alone: a tile at rest among others is drawn as that. `window.floorWholeTiles = true` (dev) draws
+  them whole, to compare.
+- The floor preview, `?floorpreview` on the dev server (`ui/FloorPreview.tsx`, checks in
+  `core/floorLint.ts`), draws a floor flat and plays its script on a timeline.
+
 ### Pets
 
 A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
