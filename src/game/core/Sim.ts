@@ -43,6 +43,7 @@ import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import {
+    LANTERN_ID,
     POWER_UPS,
     POWER_UP_CHANCE,
     POWER_UP_LIFETIME,
@@ -111,6 +112,8 @@ import {
     GroundPatternDef,
     ImpactDef,
     ImpactSpotDef,
+    LightLook,
+    LightingDef,
     MapDef,
     PlayerEffectDef,
     PowerUpDef,
@@ -197,6 +200,8 @@ import {
     GroundFire,
     GroundHazard,
     GroundPool,
+    LeftLight,
+    Light,
     PassiveState,
     PendingHit,
     Pickup,
@@ -287,6 +292,12 @@ const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
+// Lights (MapDef.lighting): tiles past a light's edge that weapons can still aim
+// (litTargetsOnly), seconds over which a light an enemy left goes out, and over which a boss's
+// phase changes the scene's ambient (and back as it falls)
+const LIGHT_GRACE = 0.5;
+const LEFT_LIGHT_FADE = 3;
+const PHASE_LIGHT_SECONDS = 2;
 // Ticks a fallen rock lies there before it's gone
 const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
 const SPAWN_MIN_DISTANCE = 19;
@@ -827,6 +838,15 @@ export class Sim {
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
+    // A map's lights (MapDef.lighting), and whether weapons only aim at what's lit
+    readonly lighting: LightingDef | undefined;
+    readonly litTargetsOnly: boolean;
+    // On a map with lighting, this tick's sim lights (stepLights): each player's, the map's, and
+    // what enemies carry and leave. Empty on any other map.
+    lights: Light[] = [];
+    private leftLights: LeftLight[] = [];
+    // The scene's ambient as it changes over time (dimTo): from, to, over these ticks
+    private dim = { from: 1, to: 1, startTick: 0, endTick: 0 };
 
     tick = 0;
     // Tick the run ended, -1 while it's going
@@ -1226,6 +1246,9 @@ export class Sim {
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
+        this.lighting = this.map.lighting;
+        this.litTargetsOnly = this.lighting?.litTargetsOnly === true;
+        this.dim.from = this.dim.to = this.lighting?.ambient ?? 1;
         this.rng = new Rng(options.seed);
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
@@ -1304,6 +1327,13 @@ export class Sim {
             this.updateFlowField();
         }
         this.use(this.heroes[this.focus]);
+        if (this.lighting) {
+            for (const at of this.lighting.lanterns ?? []) {
+                const spot = this.walkableSpot(at.x, at.y);
+                this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: LANTERN_ID });
+            }
+            this.stepLights();
+        }
     }
 
     // A hero at the spawn, or for a party's others, around it
@@ -2481,6 +2511,9 @@ export class Sim {
         this.rebuildEnemyHash();
         this.stepEnemies();
         this.stepGlyphs();
+        if (this.lighting) {
+            this.stepLights();
+        }
         for (const hero of this.heroes) {
             // On your own, weapons still fire in the tick the player falls in
             if (this.isUp(hero) || this.heroes.length === 1) {
@@ -5082,9 +5115,17 @@ export class Sim {
         });
     }
 
+    // A phase that changes the scene's light (BossPhasesDef light), on a map with lighting
+    private phaseLight(phase: { light?: number }): void {
+        if (this.lighting && phase.light !== undefined) {
+            this.dimTo(phase.light, PHASE_LIGHT_SECONDS);
+        }
+    }
+
     // Its first shield, and its totems standing idle in the corners; or with no
     // totems, its hitpoints to get through, a phase at a time
     private startPhases(boss: Enemy, phases: BossPhasesDef): void {
+        this.phaseLight(phases.phases[0]);
         const totemsDef = phases.totems;
         if (!totemsDef) {
             boss.speed *= phases.phases[0].speed ?? 1;
@@ -5230,6 +5271,7 @@ export class Sim {
         // Quicker on its feet with each phase (BossPhasesDef speed)
         boss.speed *= (next.speed ?? 1) / (phases.phases[phase.index].speed ?? 1);
         phase.index++;
+        this.phaseLight(next);
         phase.stage = "shield";
         // The new phase's dream from its first tick (the old one's bullets fly on)
         phase.ambientNext = this.tick;
@@ -5270,6 +5312,7 @@ export class Sim {
         const next = phases.phases[index + 1];
         boss.speed *= (next.speed ?? 1) / (phases.phases[index].speed ?? 1);
         phase.index++;
+        this.phaseLight(next);
         phase.startTick = this.tick;
         phase.ambientNext = this.tick;
         phase.ambientsNext = undefined;
@@ -5361,6 +5404,10 @@ export class Sim {
             }
         }
         this.clearBossAttacks();
+        // Its phases' light goes back to the map's
+        if (this.lighting && boss.def.boss?.phases?.phases.some((p) => p.light !== undefined)) {
+            this.dimTo(this.baseAmbient, PHASE_LIGHT_SECONDS);
+        }
     }
 
     // Everything a boss had in the air and on the ground, and on the players
@@ -9097,6 +9144,18 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
+        // A light it carried stays where it fell for a while (EnemyDef.light)
+        const leaves = this.lighting && enemy.def.light?.left;
+        if (leaves) {
+            this.leftLights.push({
+                id: enemy.uid,
+                x: enemy.x,
+                y: enemy.y,
+                look: leaves,
+                startTick: this.tick,
+                endTick: this.tick + Math.round(leaves.seconds * TICKS_PER_SECOND),
+            });
+        }
         const byEnemy = cause === "enemy";
         // Co-op: a boss's copies are one boss, killed when the last one falls
         const lastCopy = !this.encounterLeft(enemy);
@@ -10045,6 +10104,137 @@ export class Sim {
         this.stealLife(def, dealt);
     }
 
+    // ---- Lights (MapDef.lighting) ----
+
+    // This tick's sim lights, from where everything that carries one is now: the players' first,
+    // in the party's order, then the map's, then enemies' and what they left. All in the same
+    // order on every co-op player's copy. Squared distances only, nothing from Math.
+    private stepLights(): void {
+        const lighting = this.lighting!;
+        const lights: Light[] = [];
+        for (const hero of this.heroes) {
+            if (hero.left) {
+                continue;
+            }
+            const own = this.heroLight(hero.index, lighting);
+            if (own) {
+                const { x, y } = hero.player;
+                lights.push({ kind: "player", id: hero.index, x, y, ...own, hero: hero.index });
+            }
+        }
+        (lighting.lights ?? []).forEach((look, id) => {
+            lights.push({ kind: "map", id, x: look.x, y: look.y, radius: look.radius, look });
+        });
+        for (const enemy of this.enemies) {
+            const look = enemy.def.light;
+            if (look && !enemy.dead) {
+                const { x, y } = enemy;
+                lights.push({
+                    kind: "enemy",
+                    id: enemy.uid,
+                    x,
+                    y,
+                    radius: look.radius,
+                    look,
+                    enemy,
+                });
+            }
+        }
+        this.leftLights = this.leftLights.filter((left) => left.endTick > this.tick);
+        for (const left of this.leftLights) {
+            // Going out over its last LEFT_LIGHT_FADE seconds
+            const fade = Math.min(
+                1,
+                (left.endTick - this.tick) / (LEFT_LIGHT_FADE * TICKS_PER_SECOND),
+            );
+            lights.push({
+                kind: "left",
+                id: left.id,
+                x: left.x,
+                y: left.y,
+                radius: left.look.radius * fade,
+                look: left.look,
+            });
+        }
+        this.lights = lights;
+    }
+
+    // A hero's light: the map's round each player, and a light power-up's (the lantern) on top
+    // while it lasts, shrinking back over its last seconds. None if they have neither.
+    private heroLight(
+        heroIndex: number,
+        lighting: LightingDef,
+    ): { radius: number; look: LightLook } | undefined {
+        let bonus = 0;
+        let look = lighting.player;
+        for (const active of this.powerUps) {
+            if (active.hero !== heroIndex) {
+                continue;
+            }
+            const effect = getPowerUp(active.id).effect;
+            if (effect.kind === "light") {
+                const fade = Math.min(
+                    1,
+                    (active.endTick - this.tick) / (effect.fade * TICKS_PER_SECOND),
+                );
+                bonus = Math.max(bonus, effect.bonus * fade);
+                look ??= effect.look ?? { radius: effect.bonus };
+            }
+        }
+        const radius = (lighting.player?.radius ?? 0) + bonus;
+        return look && radius > 0 ? { radius, look } : undefined;
+    }
+
+    // Whether a spot's in a sim light, or near enough to its edge (LIGHT_GRACE): always, on a map
+    // without the rule (LightingDef.litTargetsOnly)
+    isLit(x: number, y: number): boolean {
+        if (!this.litTargetsOnly) {
+            return true;
+        }
+        for (const light of this.lights) {
+            const reach = light.radius + LIGHT_GRACE;
+            const dx = x - light.x;
+            const dy = y - light.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // What weapons can aim at under the rule, by where it stands
+    isEnemyLit(enemy: Enemy): boolean {
+        return this.isLit(enemy.x, enemy.y);
+    }
+
+    // How bright the scene is (LightingDef.ambient) at a tick, fractions too, as it changes over
+    // time (dimTo). 1 on a map without lighting.
+    ambientAt(tick: number): number {
+        const dim = this.dim;
+        if (tick >= dim.endTick) {
+            return dim.to;
+        }
+        const t = Math.max(0, (tick - dim.startTick) / Math.max(1, dim.endTick - dim.startTick));
+        return dim.from + (dim.to - dim.from) * t;
+    }
+
+    // The scene's ambient to this, over seconds (a boss's phase, an event): from wherever it is
+    // now. Drawn only, and only on a map with lighting.
+    dimTo(ambient: number, seconds: number): void {
+        const from = this.ambientAt(this.tick);
+        this.dim = {
+            from,
+            to: ambient,
+            startTick: this.tick,
+            endTick: this.tick + Math.round(seconds * TICKS_PER_SECOND),
+        };
+    }
+
+    // The map's own ambient, when nothing's changed it
+    get baseAmbient(): number {
+        return this.lighting?.ambient ?? 1;
+    }
+
     // What the player's weapons go for. Shielded enemies (Pest Control's
     // portals, Verzik's first form) are left out: every hit on them is
     // blocked, so aiming at them would waste shots while pests close in.
@@ -10062,11 +10252,14 @@ export class Sim {
         const styled = style !== undefined && this.expert;
         // Not behind a floor's pillar, which blocks the way and the view
         const pillars = this.floor?.hasPillars ? this.floor : undefined;
+        // Under the rule (LightingDef.litTargetsOnly), only what's lit
+        const dark = this.litTargetsOnly;
         for (const enemy of this.enemies) {
             if (
                 enemy.dead ||
                 enemy.shieldEnd > this.tick ||
-                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style)
+                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style) ||
+                (dark && !this.isEnemyLit(enemy))
             ) {
                 continue;
             }
@@ -11565,8 +11758,12 @@ export class Sim {
     }
 
     private rollPowerUpId(): string {
+        // A lantern is the one power-up a map's own weight brings in (LightingDef)
+        const lantern = this.lighting?.lanternWeight ?? 0;
         const index = this.rng.weightedIndex(
-            POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
+            POWER_UPS.map((p) =>
+                p.id === this.lastPowerUpId ? 0 : p.id === LANTERN_ID ? lantern : p.weight,
+            ),
         );
         return POWER_UPS[index].id;
     }
@@ -11676,6 +11873,10 @@ export class Sim {
                 break;
             case "pumpkin":
                 message = this.openPumpkin();
+                break;
+            case "light":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                message = `Your ${def.name.toLowerCase()} lights up the dark!`;
                 break;
             case "laps":
                 endTick = this.tick + this.powerUpTicks(effect.seconds);
