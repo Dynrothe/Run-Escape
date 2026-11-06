@@ -204,8 +204,9 @@ version and how to run it.
 - **The Battle for Varrock** (on the Fun tab, its own row: a map to explore): Varrock as it is in
   OSRS, every house, shop, street, church and the palace where they stand, burnt to ruins. Walls
   charred, some fallen, some broken down (the Wilderness's ruined walls) and some still burning;
-  roofs, doors and upstairs gone; breaches in the city wall with its stone in the gaps; trees
-  burnt, every bush and plant gone, the grass gone to ash. Where the square's fountain stood is a
+  roofs, doors and upstairs gone; breaches in the city wall, broken like Falador's crumbling
+  wall; trees burnt, every bush and plant gone, the grass gone to ash; Gypsy Aris's tent and the
+  market's stalls burning. Where the square's fountain stood is a
   crater, burning at its heart. Fires still burn, with burnt skeletons and the dead raiders of
   Phosani's Sanctuary and the Theatre of Blood where they fell. The palace's floor is the floor
   system's tiles in an ashen skin, up its burnt front steps from its court, with Yama on his

@@ -1342,13 +1342,20 @@ by tile and loc by loc:
   Warriors' Fortress), dark stone that sits with Varrock's grey burnt. A fallen straight wall can leave its stones on
   the ground (`fallenStones`, floor decorations turned as it was, blocking nothing). A tenth of the fallen straight ones
   can be a wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is what makes the place
-  read as itself. What rested on the walls (`tops`: a gateway's deck, a lintel) goes where a wall beside it fell or
-  broke, as it would float.
+  read as itself. What rested on or hung from the walls (`tops`: a gateway's deck, a lintel, a shelf) goes where a
+  wall beside it fell or broke, as it would float.
+- **Nothing floats** (`unfloat`): a shown upper tile (a walkway's deck) stays only over a wall standing whole on the
+  level under it, a city wall's solid middle (level 0 blocked) or another shown tile, and anything upstairs only on a
+  tile that's still shown; a bridge's deck holds itself up. A deck over a gate's passage goes with that rule, though
+  the walls either side stand.
 - **City walls** (level 0 under a `TILE_SHOWN` walkway) stand, charred, but for `breaches` (the same noise): the band's
-  tiles are down and open there, both faces, walkway and rails gone, and the wall's stone is in the gap
-  (`breachRubble`): a pile at each end against what still stands, and loose rubble that blocks nothing across the
-  rest (`LOOSE_RUBBLE`), so it's still a way through. `wallTopsKept` is the share of the walkway and its rails still
-  up. A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its heaviest
+  tiles are down and open there, both faces, walkway and rails gone. Its ends are broken the way Falador's west wall
+  is at its Crumbling wall shortcut (`breachEnds`, `BROKEN_CITY_WALL` and `BREACH_BRICKS`: its jagged end and fallen
+  bricks, its pale stone burnt with `charLight` to the dark of a burnt grey wall): along each face that came down, the
+  first and last wall of the run are the jagged end, with bricks (which block nothing) in front, if the run's 4 or
+  longer, so there's always a way through between them; a shorter run gets the bricks alone. `wallTopsKept` is the
+  share of the walkway and its rails still up, and a walkway's paving is `walkways` (pale paving up there read as a
+  white path). A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its heaviest
   phone view from 74k to under 60k. Anything with a shown level 1 counts as one, a square's fountain too (its water's
   plane): Varrock's crater clears its own.
 - **Roofs, wall decorations, floor decoration and upstairs** go, but for a city wall's walkway and a bridge's deck
@@ -1356,7 +1363,10 @@ by tile and loc by loc:
   `steps` (floor decorations the ground climbs under: a palace's front steps), which stay burnt.
 - **Objects** by name: trees become burnt trees of their size (`burntTrees`, `treesKept` of them), plants and what went
   with the fire (doors, curtains, banners, torches: `plant`, `gone`; nameless plants by id, `plants`) go, `landmark`
-  names stay (a square's fountain, the market's stalls), and of the rest `furnitureKept` stay, charred. A loc that
+  names stay (a square's fountain, a church's altar), and of the rest `furnitureKept` stay, charred. What was cloth
+  is the map's to burn before the rules see it (a tent's walls are walls, and would break into stone): Varrock's
+  `takeFabric` and `burnFabric` make Gypsy Aris's tent a great fire, its stalls bare burnt counters with a fire, its
+  tents fires and its covered wagon burning timber. A loc that
   changes with a var (a farming patch, a STASH's bush, a seasonal one) goes by the name of what it shows
   (`LocInfo.shows`, as the game draws it with its vars at 0): most are null-named, and kept as furniture they were
   bushes with scorched leaves.
@@ -1368,7 +1378,7 @@ swapped for dark planks (5) or dark cobbled rock (119), as a textured face is li
 leaves turn scorched brown (33), and other see-through ones (bars, shingles) keep theirs, as a swap would fill their
 holes. They're read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and
 the slim cache keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in
-`LOC_OVERRIDES` with a `base` (`LOOSE_RUBBLE`: the cache's rubble, charred and `walkable`). Keep every id under 2^21:
+`LOC_OVERRIDES` with a `base` (the breach's Falador pieces, charred to `charLight`, the bricks `walkable`). Keep every id under 2^21:
 the model caches key a loc by its id << 10.
 
 **A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
