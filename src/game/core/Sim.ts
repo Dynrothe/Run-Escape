@@ -5106,6 +5106,10 @@ export class Sim {
         this.gatherHall();
         this.moveParty(arrive);
         this.emit({ type: "notice", message: `The ${midSentence(path.name)}` });
+        // The Het room's dark, lit by its beam (HET.ambient), till its seal breaks
+        if (path.room?.puzzle === "het" && this.lighting) {
+            this.dimTo(HET.ambient, 1.5);
+        }
         if (path.room?.puzzle) {
             this.tombsRoom = {
                 wave: -1,
@@ -9486,6 +9490,7 @@ export class Sim {
                 mirror.carrier = undefined;
             }
             this.emit({ type: "notice", message: "Het's Seal breaks! The way on is open." });
+            this.dimTo(this.baseAmbient, 2);
             return;
         }
         // Shut again once its time's up (before anyone's swing this tick), and the room laid out
@@ -10144,6 +10149,7 @@ export class Sim {
         }
         this.tombsPath = undefined;
         this.tombsRoom = undefined;
+        this.dimTo(this.baseAmbient, 0.5);
         for (const enemy of this.enemies) {
             if (!enemy.dead) {
                 this.vanish(enemy);

@@ -1,4 +1,4 @@
-import { APMEKEN_BARRIER_LOC } from "../../content/tombs";
+import { APMEKEN_BARRIER_LOC, TOMBS_LIGHTING } from "../../content/tombs";
 import {
     WARDENS_CRATER_WARDEN,
     createWardensFloor,
@@ -1111,6 +1111,7 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
     build,
     mapDef: {
         name: "Tombs of Amascut",
+        lighting: TOMBS_LIGHTING,
         description:
             "In development. The Nexus, with a door to each of the four paths, and the " +
             "invocations' raid level in place of hard mode.",

@@ -5,6 +5,8 @@ import {
     EnemyDef,
     EnemyShotDef,
     KephriDef,
+    LightLook,
+    LightingDef,
     PlayerEffectDef,
     RaidSupplyDef,
     RandomEventDef,
@@ -13,6 +15,38 @@ import {
     WaveDef,
     ZebakDef,
 } from "./types";
+
+// The raid's light (MapDef.lighting; docs/DEVELOPMENT.md, Lights): a tomb lit by its fires, a
+// little dim and warm, with a lantern's glow round each player, its braziers and fires and the
+// paths' teleport crystals lighting themselves. Not the Scar's rule: weapons aim at everything.
+const TORCHLIGHT = 0xffb060;
+export const TOMBS_LIGHTING: LightingDef = {
+    ambient: 0.72,
+    ambientColor: 0xffe6c4,
+    player: { radius: 5, color: 0xffd8a8, intensity: 0.45 },
+    locs: {
+        // The Nexus's braziers and the fires either side of the Wardens' steps
+        ...Object.fromEntries(
+            [45244, 45245, 45246, 45247, 45248].map((id) => [
+                id,
+                { radius: 4, color: TORCHLIGHT, intensity: 0.8, flicker: 0.25 },
+            ]),
+        ),
+        45334: { radius: 4.5, color: TORCHLIGHT, intensity: 0.9, flicker: 0.3 },
+        // Each path's teleport crystal, a cool glow
+        ...Object.fromEntries(
+            [45505, 45506, 45579, 45754, 45866].map((id) => [
+                id,
+                {
+                    radius: 3.5,
+                    color: 0x9fd8ff,
+                    intensity: 0.6,
+                    pulse: { amount: 0.2, seconds: 3 },
+                },
+            ]),
+        ),
+    },
+};
 
 // The Tombs of Amascut (in development: docs/design/tombs-of-amascut.md): its enemies, and what
 // each path's room does. The map, with where things stand, is the dev map's
@@ -763,6 +797,9 @@ export const HET = {
     // and worn), and the glowing circle (Verzik's, round the safe spot from her Doom ball) to stand
     // in, under a loose mirror too
     circleSpotAnim: 1581,
+    // How bright the room is while it's on (TOMBS_LIGHTING's ambient elsewhere): dark, so the
+    // beam, the caster's charge and the circles are what light it
+    ambient: 0.4,
     spotLoc: 45340,
     fixedLoc: 45455,
     barrierLoc: 45458,
@@ -1141,7 +1178,17 @@ const AKKHA_ENRAGED: EnemyDef = {
 };
 
 // Never spawned: what his orbs are drawn as
+// Each element's light, for his orbs and what's lit by them
+const AKKHA_LIGHTS: Record<string, LightLook> = {
+    akkha_orb_darkness: { radius: 2, color: 0xa070ff, intensity: 0.7 },
+    akkha_orb_lightning: { radius: 2, color: 0xa8dcff, intensity: 0.8, flicker: 0.3 },
+    akkha_orb_frozen: { radius: 2, color: 0xc8f4ff, intensity: 0.6 },
+    akkha_orb_burning: { radius: 2, color: 0xff7a2a, intensity: 0.8, flicker: 0.25 },
+    akkha_unstable_orb: { radius: 2, color: 0xffffff, intensity: 0.7 },
+};
+
 const akkhaLook = (id: string, name: string, npcId: number): EnemyDef => ({
+    light: AKKHA_LIGHTS[id],
     id,
     name,
     npcId,
