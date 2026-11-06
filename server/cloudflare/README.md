@@ -193,6 +193,15 @@ Cloudflare's docs don't say whether that also leaves out each WebSocket message 
 would be a log event apiece and far past what the plan includes. After turning it on, watch the
 Worker's log events in the dashboard for a while before leaving it on.
 
+**The room's log**: one line when a room closes after `IDLE_MS` with nothing happening, and
+nothing else, for telling afterwards why it closed. It's an object with `event: "coop_room"` and
+`kind: "idle"`: the room's code, whether its run had started, its map, endless and hard, how long
+the run and the quiet had lasted, and how many messages came from connections the room was done
+with (`strays`). For each player (by the start of their id, never a name or address): whether
+they were connected, how long since the room last heard from them and since Cloudflare last
+answered their ping, and how many of their messages it threw away, by reason (`discarded`).
+Search it in the dashboard by `event`, or watch with `bun run wrangler tail`.
+
 **Taking it down**: `bun run wrangler delete run-escape-coop`.
 
 ## Cost

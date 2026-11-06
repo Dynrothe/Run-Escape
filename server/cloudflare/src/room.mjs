@@ -113,6 +113,9 @@ export class Room extends DurableObject {
         this.serial = 0;
         // The room's lastActive as last saved (the heartbeat saves it again)
         this.savedActive = undefined;
+        // Messages from a connection that isn't a player's current one,
+        // counted for the idle log (logIdle)
+        this.strays = 0;
         // The game's keep-alive, answered without waking the room, so
         // outside its RateLimit (see Cost from strangers in PR-REVIEW.md)
         ctx.setWebSocketAutoResponse(
@@ -161,6 +164,10 @@ export class Room extends DurableObject {
         const member = this.sockets.get(ws);
         if (member?.socket === ws) {
             this.receive(member, data);
+        } else {
+            // A connection the room's done with can still have a few on the
+            // way: only counted
+            this.strays++;
         }
     }
 
@@ -216,16 +223,59 @@ export class Room extends DurableObject {
         this.remember(member);
     }
 
-    // When the room last heard from a player: a message it handled, or a
-    // ping answered without waking it (which only Cloudflare knows)
-    lastHeard(member) {
-        let pinged = 0;
+    // When Cloudflare last answered a player's ping without waking the room
+    // (0 for never, or not known)
+    pingedAt(member) {
         try {
-            pinged = this.ctx.getWebSocketAutoResponseTimestamp(member.socket)?.getTime() ?? 0;
+            return this.ctx.getWebSocketAutoResponseTimestamp(member.socket)?.getTime() ?? 0;
         } catch {
-            // Closed
+            // Closed, or not known
+            return 0;
         }
-        return Math.max(member.heardAt ?? 0, pinged);
+    }
+
+    // When the room last heard from a player: a message it handled, or a
+    // ping answered without waking it
+    lastHeard(member) {
+        return Math.max(member.heardAt ?? 0, this.pingedAt(member));
+    }
+
+    // The one line the room logs, when it closes as idle, for telling
+    // afterwards why (README, The room's log): an object, which Workers Logs
+    // keeps field by field. Players by the start of their id, never their
+    // name or address.
+    logIdle() {
+        const room = this.room;
+        const now = Date.now();
+        const ago = (at) => (at ? now - at : null);
+        console.warn({
+            event: "coop_room",
+            kind: "idle",
+            room: this.code,
+            started: room?.started === true,
+            endless: room?.endless === true,
+            hard: room?.hard === true,
+            mapId: room?.mapId ?? null,
+            runFor: ago(room?.runStartedAt),
+            quietFor: ago(room?.lastActive),
+            strays: this.strays,
+            players: (room?.members ?? []).map((member) => ({
+                id: member.id.slice(0, 8),
+                host: member.id === room.hostId,
+                connected: member.socket !== undefined,
+                heardAgo: ago(member.heardAt),
+                pingedAgo: ago(this.pingedAt(member)),
+                awayFor: ago(member.awayAt),
+                discarded: member.discarded ?? null,
+            })),
+        });
+    }
+
+    // A player's message the room threw away without a word, counted by
+    // reason for the idle log
+    discarded(member, reason) {
+        member.discarded ??= {};
+        member.discarded[reason] = (member.discarded[reason] ?? 0) + 1;
     }
 
     // Players whose connection has gone quiet for good (SILENT_MS) are let go
@@ -550,6 +600,7 @@ export class Room extends DurableObject {
         }
         const message = parseMessage(data);
         if (!message) {
+            this.discarded(member, "unreadable");
             return;
         }
         try {
@@ -790,6 +841,7 @@ export class Room extends DurableObject {
         }
         const room = this.room;
         if (!room || !room.members.includes(client)) {
+            this.discarded(client, room ? "not in the room" : "no room");
             return;
         }
         if (message.t !== "me") {
@@ -1035,6 +1087,7 @@ export class Room extends DurableObject {
                 return;
             }
             if (Date.now() - room.lastActive > IDLE_MS) {
+                this.logIdle();
                 this.disband("idle");
                 return;
             }

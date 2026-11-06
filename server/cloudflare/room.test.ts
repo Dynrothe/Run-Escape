@@ -498,6 +498,65 @@ describe("Cloudflare co-op room", () => {
         expect(guestSocket.closes).toEqual([1001]);
     });
 
+    describe("its log", () => {
+        // What the room's logged, in order
+        function logged() {
+            return vi
+                .mocked(console.warn)
+                .mock.calls.map(([entry]) => entry)
+                .filter((entry: any) => entry?.event === "coop_room");
+        }
+        beforeEach(() => {
+            vi.spyOn(console, "warn").mockImplementation(() => {});
+        });
+
+        it("logs one line when it closes a room as idle, with what it knew", async () => {
+            const { room, host, guest } = await party();
+            say(room, host, { t: "start", game: {} });
+            room.room.endless = true;
+            // Thrown away: unreadable, and from a connection it's done with
+            await room.webSocketMessage(host.socket, "not json");
+            await room.webSocketMessage(host.socket, "not json either");
+            const old = guest.socket;
+            const back = new Socket("guest");
+            resume(room, guest.token, back);
+            await room.webSocketMessage(old, JSON.stringify({ t: "up", i: 1 }));
+            // Everyone's games ping, and nothing else
+            await pinging(room, 31 * 60_000, [host, guest]);
+            const entries = logged();
+            expect(entries).toHaveLength(1);
+            const [entry] = entries;
+            expect(entry).toMatchObject({
+                kind: "idle",
+                room: "ABCDEFGH",
+                started: true,
+                endless: true,
+                strays: 1,
+            });
+            expect(entry.quietFor).toBeGreaterThan(30 * 60_000);
+            expect(entry.players).toEqual([
+                expect.objectContaining({
+                    id: "host",
+                    host: true,
+                    connected: true,
+                    discarded: { unreadable: 2 },
+                }),
+                expect.objectContaining({ id: "guest", host: false, discarded: null }),
+            ]);
+            expect(entry.players[0].pingedAgo).toBeLessThanOrEqual(30_000);
+            expect(entry.players[0].heardAgo).toBeGreaterThan(30 * 60_000);
+            expect(back.sent.at(-1)).toMatchObject({ t: "gone", reason: "idle" });
+        });
+
+        it("logs nothing for a player let go for silence, nor a busy run", async () => {
+            const { room, host } = await party();
+            say(room, host, { t: "start", game: {} });
+            await pinging(room, 7 * 60_000, [host]);
+            expect(room.room.members).toHaveLength(1);
+            expect(logged()).toEqual([]);
+        });
+    });
+
     it("doesn't take a connection it's closed for its player's, once it's made again", async () => {
         const { room, guest } = await party();
         // Their game comes back while the old connection's open but dead
