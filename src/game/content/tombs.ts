@@ -418,11 +418,11 @@ export const TOMBS_BOSSES = { levelHp: 0.12, levelDamage: 0.05 };
 // The levels a puzzle room's worth as it's done, on top of its waves' experience (Sim.enterTombsBoss)
 export const TOMBS_PUZZLE_LEVELS = 2;
 
-// A boss's adds drop food this often at raid level 0, less the higher it goes, none from untilLevel
-// (Sim.tombsBossFood): Entry's for a run that's bought nothing to heal with. The Wardens have no
-// adds to speak of, so as each of their phases ends this much food spills round the party
-// (Sim.wardensFood), as few at the same rate.
-export const TOMBS_BOSS_FOOD = { chance: 0.06, untilLevel: 300, phase: 3 };
+// A boss's adds drop food this often at raid level 0, less the higher it goes (a third of that
+// at Expert, where a boss's unavoidable hits alone outrun a run's hitpoints without it), none from
+// untilLevel (Sim.tombsBossFood). The Wardens have no adds to speak of, so as each of their
+// phases ends this much food spills round the party (Sim.wardensFood), as few at the same rate.
+export const TOMBS_BOSS_FOOD = { chance: 0.06, untilLevel: 450, phase: 3 };
 
 // Jungle Japes: each of Ba-Ba's baboons drops a banana peel as it dies, there for `seconds`.
 // Stepping within `radius` of one roots you for `stun` seconds. Drawn as the Banana (1963).
@@ -1333,8 +1333,12 @@ export const KEPHRI: KephriDef = {
         // knock tiles, stunned stun seconds, for damage, with dung dropped every gap tiles along
         // the way: solid, radius across, for seconds
         warn: 1.8,
-        knock: 6,
-        stun: 2,
+        // Her arena's small: six tiles put you against a wall nearly every time, where the throw
+        // moved you nowhere and her next Fireball landed on you still stunned
+        knock: 3,
+        // Shorter than a Fireball's windup, so one begun while you're down can still be stepped
+        // out of (two seconds made the pair a hit nobody could help)
+        stun: 0.8,
         damage: 6,
         gap: 1.4,
         radius: 0.65,
@@ -2040,8 +2044,10 @@ export const WARDENS: WardensDef = {
         blockDamage: 2,
     },
     charge: {
-        // Each starts this far charged, so the first attacks come early
-        start: 50,
+        // Each starts this far charged, so the first attacks come early: Elidinis' ahead, so the
+        // two never discharge together (both sets of pyramids at once leave no cell clear, and
+        // both shots at once are half a bar), unless a player's blocking brings them level
+        start: { elidinis: 50, tumeken: 0 },
         full: 125,
         perSecond: 2 / 0.6,
         perOrb: 4,

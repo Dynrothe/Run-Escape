@@ -1847,7 +1847,8 @@ export type WardensDef = {
         blockDamage: number;
     };
     charge: {
-        start: number;
+        // Each side's charge as the fight opens
+        start: Record<"elidinis" | "tumeken", number>;
         full: number;
         perSecond: number;
         perOrb: number;

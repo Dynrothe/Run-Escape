@@ -4224,7 +4224,8 @@ export class Sim {
             this.tombsOpenUntil.set(this.hero.index, this.tick + secondsToTicks(1));
         }
         player.hp -= amount;
-        this.damageTaken += amount;
+        // What was there to take: a fall into Ba-Ba's gap asks for a hundred bars
+        this.damageTaken += Math.min(amount, Math.max(0, player.hp + amount));
         // A blood cloud's touch heals Zebak
         if (enemyId === "zebak_blood_cloud") {
             this.zebakCloudHit(amount);
@@ -6025,7 +6026,7 @@ export class Sim {
             startTick: this.tick,
             obeliskUid: obelisk.uid,
             wardens: { elidinis: elidinis.uid, tumeken: tumeken.uid },
-            charge: { elidinis: WARDENS.charge.start, tumeken: WARDENS.charge.start },
+            charge: { ...WARDENS.charge.start },
             spent: { elidinis: 0, tumeken: 0 },
             pausedUntil: { elidinis: 0, tumeken: 0 },
             next: { elidinis: "pyramids", tumeken: "pyramids" },

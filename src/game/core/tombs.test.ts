@@ -498,6 +498,8 @@ describe("the Tombs' invocations", () => {
         const hit = (invocations: string[], twice: boolean) => {
             const sim = tombs(invocations);
             sim.stats.armor = 4;
+            // Hitpoints to take both from (what's taken is capped at what was there)
+            sim.player.maxHp = sim.player.hp = 100;
             const taken = sim.damageTaken;
             sim["damagePlayer"](20, "test", false);
             if (twice) {
@@ -659,7 +661,7 @@ describe("Ba-Ba", () => {
     }
     const baba = (sim: Sim) => sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
 
-    it("has her adds drop food at Entry, less higher up, and none from Expert", () => {
+    it("has her adds drop food at Entry, a third of that at Expert, none past 450", () => {
         withEntryScale();
         expect(atBaba()["tombsBossFood"]()).toBeCloseTo(TOMBS_BOSS_FOOD.chance);
         const expert = [
@@ -673,8 +675,9 @@ describe("Ba-Ba", () => {
             "double_trouble",
             "feeling_special",
         ];
-        expect(getRaidLevel(expert)).toBeGreaterThanOrEqual(TOMBS_BOSS_FOOD.untilLevel);
-        expect(atBaba(expert)["tombsBossFood"]()).toBe(0);
+        expect(getRaidLevel(expert)).toBeGreaterThanOrEqual(300);
+        expect(atBaba(expert)["tombsBossFood"]()).toBeLessThan(TOMBS_BOSS_FOOD.chance * 0.4);
+        expect(atBaba(expert)["tombsBossFood"]()).toBeGreaterThan(0);
     });
 
     it("is skipped to from her room on the dev server, rising once someone walks in", () => {
@@ -2016,7 +2019,7 @@ describe("Kephri", () => {
             sim.step();
         }
         expect(fight.dung).toBeUndefined();
-        expect(sim.player.y).toBeLessThan(1038.5 - 4);
+        expect(sim.player.y).toBeLessThan(1038.5 - (DEF.dung.knock - 1));
         expect(sim.player.frozen).toBeGreaterThan(0);
         expect(sim.tombsCover.some((pile) => pile.look === "loc:" + DEF.dung.pileLoc)).toBe(true);
     });

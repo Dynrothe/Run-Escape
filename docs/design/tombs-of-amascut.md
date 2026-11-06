@@ -434,8 +434,10 @@ raid's ranges.
   floor, and its tall pieces under the raised border, sunk to it (`LocOverrides`). On the dev server
   the Nexus has a button straight to it with the best of everything (`Sim.devToWardens`).
     - The obelisk (11751, the boss bar) is what's fought, tougher with the path level as a path's
-      boss is, and with enough hitpoints that the Wardens get their attacks in. They start 50 of 125
-      charged, so the first attack comes about 9 s in.
+      boss is, and with enough hitpoints that the Wardens get their attacks in. Elidinis' starts 50 of
+      125 charged and Tumeken's 0, so the first attack comes about 9 s in and the two never
+      discharge together unless blocking brings them level (both sets of pyramids at once would
+      leave no cell clear, and both shots at once are half a bar).
     - Orbs (11769) leave it each side every 1.2 s, a tile every 0.6 s for 8, down one of three
       troughs in a side's own order, each one there charging its Warden 4 (Ancient Haste 6). A
       player on a side's gap or spawn tile stops that side, for a little damage each orb.
@@ -530,11 +532,24 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
 - **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover; Akkha's spared quadrant (by
   the line it shares with the next, a hop across as each burst lands: Feeling Special's bursts
   come quicker than a walk between corners), round his body (the flow field only knows the walls)
-  and his dead shadows' quadrants; Kephri near enough; Zebak's island near him, behind a boulder for
-  the roar and in a wave's gap; and it sidesteps bullets, boss blasts and swings.
-- **The Wardens**: phase one blocking Tumeken's side by the obelisk; phase two by the Warden or
-  its core, off the obelisk's marks; phase three at the floor's north end in the column the next
-  slam leaves alone, on its siphons, off its lightning.
+  and his dead shadows' quadrants; Kephri near enough; Zebak's island near him (melee on the row
+  along its north edge, a thrower at any dry spot in reach), straight out of a pool it's in or
+  brushing (each step in is a dose of poison), behind a boulder for the roar at a spot off the
+  acid, in a wave's gap at a dry tile in its column, away from his blood clouds (they're slower,
+  and die following), and, with every spot in reach acid, rolling a jug at rest to break by the
+  pool; and it sidesteps bullets, boss blasts and swings, and the Wardens' red skulls as they
+  turn (a sidestep at the last beats their turning circle).
+- **The Wardens**: phase one blocking Tumeken's side by the obelisk only where a minute of it costs
+  less than half a bar (Entry; from Normal up the orbs run, and the Warden that wakes is the
+  orbs' choice), off a pyramid as its hits come (one side's cells while the other's are hitting);
+  phase two by the Warden or its core (a thrower keeps Tumeken's at its weapons' reach all round
+  rather than backing to the floor's end into its slash), off the obelisk's marks; phase three at
+  the floor's north end in the column the next slam leaves alone, on its siphons, off its
+  lightning and the phantoms' fans, fireballs and rocks. It waits by the Wardens' door for its
+  hitpoints to come back before stepping in, while they do.
+- **Level-ups** (the Tombs sim's): a new weapon of a style it lacks of ranged and magic comes
+  before anything, as a player who's read "Only ranged hurts it" picks: the Wardens' second phase
+  takes nothing else from a hero with only one of them.
 - **Co-op**: one player works a puzzle two would undo between them (mirrors, plates) and the rest
   fight beside them, clear of it; each carries their own water.
 
@@ -557,26 +572,41 @@ run that hit the sim's 90 minutes still trying: no Attempts invocation was on, s
 the room or boss again, and the only revive is the shop's Ring of life (one a raid, not given back
 after a wipe). How far each lost run got: paths cleared, then the Wardens' phase reached.
 
-| Raid level   | Nothing bought                       | Shop                                                | Shop and Armoury                                             |
-| ------------ | ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ |
-| Entry (0)    | 6 of 9 (4 paths phase 2 x2, 2 paths) | 9 of 9                                              | 9 of 9                                                       |
-| Normal (160) | 0 of 9 (all in their first path)     | 5 of 9 (4 paths phase 2 x2, phase 3, 3 paths)       | 9 of 9                                                       |
-| Expert (300) | 0 of 9 (all in their first path)     | 0 of 9 (4 paths phase 2 x2, 3 paths x2, 2 paths x5) | 1 of 9 (4 paths phase 2 x2, phase 3, 3 paths x2, 2 paths x3) |
-| 500          | 0 of 9 (all in their first path)     | 0 of 9 (all in their first or second)               | 0 of 9 (all in their first)                                  |
+| Raid level   | Nothing bought                    | Shop                                                              | Shop and Armoury                          |
+| ------------ | --------------------------------- | ----------------------------------------------------------------- | ----------------------------------------- |
+| Entry (0)    | 8 of 9 (2 paths)                  | 7 of 9 (4 paths phase 2 x2)                                       | 9 of 9                                    |
+| Normal (160) | 0 of 9 (their first path or none) | 6 of 9 (4 paths phase 2 x3)                                       | 9 of 9                                    |
+| Expert (300) | 0 of 9 (none)                     | 2 of 9 (4 paths phase 3, 4 paths phase 2, 3 paths x2, 2 paths x3) | 8 of 9 (4 paths phase 2)                  |
+| 500          | 0 of 9 (none)                     | 0 of 9 (their first path, one the second)                         | 0 of 9 (their first path, one the second) |
 
-With nothing bought, all eight adventurers clear most rooms on their own at Entry, and 10 of 24
-whole raids. At Expert, Akkha's Memory Blast with Feeling Special was the wall until the bot
-learnt to hop across the quadrants' lines as a person does (below): now most runs get to their
-third path or the Wardens, and lose there or to Akkha's bullets. At 500, even with everything
-bought, they stall in the Apmeken room or on Ba-Ba. The bot dodges, it doesn't plan, so Expert and past it are set by the curve and want
-playtesting more than the bot's numbers.
+That's the curve asked for: Entry with nothing, Normal with the shop and better gear, Expert with
+the best of everything, and 500 past all three (with everything bought they stall in the Apmeken
+room or on Ba-Ba). Before this pass Expert with everything bought was 1 of 9: Akkha's Memory Blast
+was the first wall (the bot now hops across the quadrants' lines as a person does, and Expert
+Akkha alone went from 0 of 9 to 8 of 9), then Zebak's acid for melee, and the Wardens. What the
+Wardens needed, found by tracing each wipe: no blocking of a side from Normal up (each orb blocked
+is 2 hitpoints times the hazard scale, 140 a minute at Expert, which was most of what killed the
+bot in phase one), the two Wardens staggered so their pyramids and shots never land together (a
+content change: `WARDENS.charge.start`), a weapon of each of ranged and magic picked up at
+level-ups for phase two (the sim's bot ranked level-ups blind, so a wizard could arrive with
+nothing that hurt Tumeken's ranged form and fill its shield at a percent every ten seconds), the
+thrower kept out of Tumeken's slash, its skulls dodged while it was off the obelisk's marks, and
+the red skulls' turning modelled. The one Expert loss left, and Normal's with the shop alone, are
+the second phase for a hero whose off-style weapon is weak: the shield fills slowly and the
+phantoms and skulls win the race. Balance changes in the same pass, flagged in the pull request:
+Kephri's Dung Strike knocks 3 tiles (6) and stuns 0.8 s (2), and a boss's adds drop a third of
+Entry's food at Expert (none before). The bot dodges, it doesn't plan, so Expert and past it are
+set by the curve and want playtesting more than the bot's numbers.
 
 What the bot still does worse than a person, measured at Expert Akkha with the best of everything
 and God mode on: about 25 damage a minute from his bullets, most of it Red sand's tracking
 triplets, Sandstorm's spirals and Stamp's rings. It sidesteps what's in flight; it doesn't strafe
 round him or read a volley before it fires, and standing further out made it worse, since it then
 retreats along his bullets' lines as he comes. A planner that read the emitters' volleys and
-searched a path over 1.6 s was tried and measured no better, so it isn't in.
+searched a path over 1.6 s was tried and measured no better, so it isn't in. At Zebak a melee hero
+still takes his acid's poison when every spot in reach is a pool and no jug's placed to roll (about
+a third of Expert melee runs on him wipe once or twice there), and a Wardens run with a weak
+off-style weapon can sit in phase two for ten minutes.
 
 **For trying a boss** (the dev server only, solo): God mode, on any map, and in the Nexus a button
 to each boss (the path bosses as the run is, with the dev skip's bow; the Wardens with the best of

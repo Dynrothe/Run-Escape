@@ -6,7 +6,7 @@ import { getItem } from "../../src/game/content/items";
 import { CRONDIS, WARDENS } from "../../src/game/content/tombs";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim } from "../../src/game/core/Sim";
-import { FlowField } from "../../src/game/core/world/FlowField";
+import { FlowField, canStep } from "../../src/game/core/world/FlowField";
 
 type Point = { x: number; y: number };
 
@@ -82,14 +82,20 @@ export function walkAvoiding(
     }
     const tx = Math.floor(x);
     const ty = Math.floor(y);
+    const px = Math.floor(player.x);
+    const py = Math.floor(player.y);
     const blocked = new Set<number>();
     for (const spot of avoid) {
         const sx = Math.floor(spot.x);
         const sy = Math.floor(spot.y);
         for (let ox = -around; ox <= around; ox++) {
             for (let oy = -around; oy <= around; oy++) {
-                if (sx + ox !== tx || sy + oy !== ty) {
-                    blocked.add((sx + ox) * 100000 + sy + oy);
+                const bx = sx + ox;
+                const by = sy + oy;
+                // Never the target's tile, nor the one the bot's on (brushing an edge of what
+                // it's keeping clear of mustn't have it give up and walk straight through)
+                if ((bx !== tx || by !== ty) && (bx !== px || by !== py)) {
+                    blocked.add(bx * 100000 + by);
                 }
             }
         }
@@ -108,8 +114,6 @@ export function walkAvoiding(
         avoidFields.set(sim, cached);
     }
     const step = { x: 0, y: 0 };
-    const px = Math.floor(player.x);
-    const py = Math.floor(player.y);
     if (!cached.field.getStep(walls, px, py, step)) {
         // Boxed in by what it's keeping clear of (standing in it): the plain way
         return fallBack ? walkTo(sim, x, y) : { x: 0, y: 0 };
@@ -223,6 +227,15 @@ function nexusMove(sim: Sim): Point {
         (path) => path?.room && !sim.tombsPathsDone.includes(path.id),
     );
     const to = openNear(sim, next?.door ?? tombs.wardensDoor ?? tombs.nexus, 2.5, tombs.nexus);
+    // Every path done: the Wardens' first phase opens with their shots, each a share of your
+    // hitpoints, so a hero that's low waits by their door for its hitpoints to come back (while
+    // they do: Dehydration stops that), as a player would before stepping in
+    if (!next && sim.player.hp < sim.player.maxHp * 0.9 && sim.stats.regen > 0) {
+        const player = sim.player;
+        if (Math.hypot(to.x - player.x, to.y - player.y) < 4) {
+            return { x: 0, y: 0 };
+        }
+    }
     return walkTo(sim, to.x, to.y);
 }
 
@@ -826,14 +839,16 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
             continue;
         }
         const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
-        for (const spot of windup.targets) {
-            const dx = player.x - spot.x;
-            const dy = player.y - spot.y;
-            const away = Math.hypot(dx, dy);
-            if (away < reach) {
-                awayX += away > 0.01 ? (dx / away) * 4 : 4;
-                awayY += away > 0.01 ? (dy / away) * 4 : 0;
-            }
+        const under = windup.targets.filter(
+            (spot) => Math.hypot(player.x - spot.x, player.y - spot.y) < reach,
+        );
+        if (under.length > 0) {
+            // The way out that's soonest clear of every mark it's under, and open ground all the
+            // way: a blast's aimed at where you stand, so "away from it" is no direction at all,
+            // and against a wall it was a push into the wall for the whole windup
+            const out = blastEscape(sim, under, reach);
+            awayX += out.x * 4;
+            awayY += out.y * 4;
         }
     }
     // And out from under what's about to land (a ground mark), straight away from its middle
@@ -852,6 +867,42 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
     }
     const length = Math.hypot(awayX, awayY);
     return length > 0 ? { x: awayX / length, y: awayY / length } : undefined;
+}
+
+// The heading (of sixteen) out from under a blast's marks: the one that's clear of them all
+// soonest, over ground that can be walked, the player's radius kept off the walls
+function blastEscape(sim: Sim, marks: Point[], reach: number): Point {
+    const player = sim.player;
+    let best: Point = { x: 1, y: 0 };
+    let bestSteps = Infinity;
+    for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+        let steps = Infinity;
+        let tx = Math.floor(player.x);
+        let ty = Math.floor(player.y);
+        for (let d = 0.5; d <= reach * 2 + 1; d += 0.5) {
+            const x = player.x + dir.x * d + dir.x * player.radius;
+            const y = player.y + dir.y * d + dir.y * player.radius;
+            // Tile by tile, as the player's held by walls on tiles' edges, not only solid tiles
+            const nx = Math.floor(x);
+            const ny = Math.floor(y);
+            if ((nx !== tx || ny !== ty) && !canStep(sim.grid, tx, ty, nx - tx, ny - ty)) {
+                break;
+            }
+            tx = nx;
+            ty = ny;
+            if (marks.every((spot) => Math.hypot(x - spot.x, y - spot.y) >= reach)) {
+                steps = d;
+                break;
+            }
+        }
+        if (steps < bestSteps) {
+            bestSteps = steps;
+            best = dir;
+        }
+    }
+    return best;
 }
 
 // A move with a sidestep from what's coming mixed in, if anything is: out from under a boss's
@@ -873,6 +924,7 @@ function dodging(sim: Sim, move: Point, avoid?: (x: number, y: number) => boolea
 const LOOK_TICKS = 30;
 const LOOK_STEP = 3;
 const LOOK_NEAR = 7;
+const AVOID_COST = 2.5;
 
 // The move (the one wanted if nothing it'd walk into is coming, or the nearest way to it that's
 // clear: sixteen headings and standing still) that the bullets about now miss, played forward:
@@ -881,7 +933,8 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
     const player = sim.player;
     const { bullets } = sim;
     // What's coming: the bullets, and a boss's projectiles (the Wardens' skulls, played forward
-    // on their line: they turn after you, but too slowly to matter in a look this short)
+    // turning after the bot as far as they can each tick, as the Wardens' red skulls do, which a
+    // sidestep at the last beats: they can't turn that sharply)
     const near: {
         x: number;
         y: number;
@@ -891,6 +944,7 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
         sin: number;
         radius: number;
         life: number;
+        homing: number;
     }[] = [];
     const close = (x: number, y: number) =>
         Math.abs(x - player.x) < LOOK_NEAR && Math.abs(y - player.y) < LOOK_NEAR;
@@ -906,6 +960,7 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
                 sin: bullets.turnSin[slot],
                 radius: bullets.radius[slot],
                 life: bullets.life[slot],
+                homing: 0,
             });
         }
     }
@@ -914,7 +969,23 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
             near.push({ ...shot, cos: 1, sin: 0 });
         }
     }
-    if (near.length === 0 && !avoid) {
+    // A blast's marks still winding up: where it'd still be under one at the end of the look
+    // costs too, or a heading that stands still among a blast's shards (the dodge wanted) is
+    // taken as the one that misses them, right under the next blast
+    const marks: { x: number; y: number; reach: number }[] = [];
+    for (const enemy of sim.enemies) {
+        const windup = enemy.bossState?.windup;
+        if (enemy.dead || !windup || windup.attack.takeCover || windup.attack.kind !== "blast") {
+            continue;
+        }
+        const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
+        for (const spot of windup.targets) {
+            if (close(spot.x, spot.y)) {
+                marks.push({ x: spot.x, y: spot.y, reach });
+            }
+        }
+    }
+    if (near.length === 0 && marks.length === 0 && !avoid) {
         return want;
     }
     const speed = PLAYER_SPEED * (1 + (sim.stats.moveSpeed ?? 0));
@@ -932,11 +1003,20 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
             }
             positions.push({ x: px, y: py });
         }
-        // Ground to keep off (Zebak's acid): a step on it costs as a bullet would
+        // Still under a blast's mark at the end of the look: the deeper in, the worse
+        const last = positions[positions.length - 1];
+        for (const mark of marks) {
+            const away = Math.hypot(last.x - mark.x, last.y - mark.y);
+            if (away < mark.reach) {
+                total += 1 + (mark.reach - away) / mark.reach;
+            }
+        }
+        // Ground to keep off (Zebak's acid, the Wardens' floor as it slams): a step on it costs
+        // more than a bullet's hit, as it does (acid poisons, a slam's a share of your hitpoints)
         if (avoid) {
             for (const at of positions) {
                 if (avoid(at.x, at.y)) {
-                    total += 1;
+                    total += AVOID_COST;
                     break;
                 }
             }
@@ -946,7 +1026,8 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
             let by = shot.y;
             let vx = shot.vx;
             let vy = shot.vy;
-            const { cos, sin, life } = shot;
+            const { cos, sin, life, homing } = shot;
+            const speed = Math.hypot(vx, vy);
             const reach = shot.radius + player.radius + 0.15;
             for (let step = 0; step < positions.length; step++) {
                 const t = (step + 1) * LOOK_STEP;
@@ -958,6 +1039,15 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
                         const nvx = vx * cos - vy * sin;
                         vy = vx * sin + vy * cos;
                         vx = nvx;
+                    }
+                    if (homing > 0 && speed > 0) {
+                        const heading = Math.atan2(vy, vx);
+                        let turn =
+                            Math.atan2(positions[step].y - by, positions[step].x - bx) - heading;
+                        turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+                        const angle = heading + Math.max(-homing, Math.min(homing, turn));
+                        vx = Math.cos(angle) * speed;
+                        vy = Math.sin(angle) * speed;
                     }
                     bx += vx;
                     by += vy;
@@ -1008,9 +1098,11 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
         const roaring = sim.tombsZebak.roar !== undefined;
         const move = zebakMove(sim, def, boss);
         const fight = sim.tombsZebak;
+        // A pool's edge is where the hero's middle counts as in it, so keep the body off it too
+        const margin = 0.5 + sim.player.radius + 0.1;
         const inAcid = (x: number, y: number) =>
             fight.acid.some(
-                (a) => Math.abs(a.x - x) <= a.half + 0.5 && Math.abs(a.y - y) <= a.half + 0.5,
+                (a) => Math.abs(a.x - x) <= a.half + margin && Math.abs(a.y - y) <= a.half + margin,
             );
         return roaring ? move : dodging(sim, foodMove(sim) ?? move, inAcid);
     }
@@ -1099,13 +1191,19 @@ function kephriMove(sim: Sim, boss: Sim["enemies"][number]): Point {
 // Ba-Ba: up to her altar while her stones roll (round the edges, where the gap isn't), beside a
 // boulder's rocks whenever there are some (her avalanche hits everyone not beside one), and never
 // into the pit
+// How far one of Ba-Ba's rolling boulders knocks you (BA_BA's pattern knockback)
+const BOULDER_KNOCK = 4;
+
 function babaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point {
     const player = sim.player;
     const boulders = def.boulders!;
     const pit = boulders.pit;
     const avoid: Point[] = [];
     if (sim.tombsPit) {
-        for (let y = Math.floor(pit.y0) - 1; y <= pit.y1 + 1; y++) {
+        // The gap, and while her boulders roll, the strip north of it a boulder's knock back (four
+        // tiles) would carry you into: a walk across it to the cracked lane ended in the gap
+        const strip = boss.bossState?.ordeal ? BOULDER_KNOCK + 1 : 1;
+        for (let y = Math.floor(pit.y0) - 1; y <= pit.y1 + strip; y++) {
             for (let x = Math.floor(pit.x0) - 1; x <= pit.x1 + 1; x++) {
                 avoid.push({ x: x + 0.5, y: y + 0.5 });
             }
@@ -1327,51 +1425,278 @@ function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
         Math.hypot(to.x - player.x, to.y - player.y) < 1
             ? nudge(sim, to.x, to.y)
             : walkAvoiding(sim, to.x, to.y, [...acid, ...boulders], 0);
+    const inAcid = (x: number, y: number, margin = 0.5 + player.radius) =>
+        fight.acid.some(
+            (a) => Math.abs(a.x - x) <= a.half + margin && Math.abs(a.y - y) <= a.half + margin,
+        );
+    // His roar coming: behind a boulder on the line from him (within its shelter), a spot off the
+    // acid if there is one, before anything (the roar's a share of your hitpoints, acid or not)
     if (fight.roar) {
-        const shelter = sim.tombsCover
-            .filter((c) => c.look === "zebak_boulder" && c.endTick > sim.tick)
-            .map((c) => {
-                const dx = c.x - boss.x;
-                const dy = c.y - boss.y;
-                const len = Math.hypot(dx, dy) || 1;
-                return {
-                    x: c.x + (dx / len) * (c.radius + 1.2),
-                    y: c.y + (dy / len) * (c.radius + 1.2),
-                };
-            })
+        const spots: (Point & { dry: boolean })[] = [];
+        for (const c of sim.tombsCover) {
+            if (c.look !== "zebak_boulder" || c.endTick <= sim.tick) {
+                continue;
+            }
+            const dx = c.x - boss.x;
+            const dy = c.y - boss.y;
+            const len = Math.hypot(dx, dy) || 1;
+            for (const behind of [1.2, 1.9, 2.6]) {
+                const x = c.x + (dx / len) * (c.radius + behind);
+                const y = c.y + (dy / len) * (c.radius + behind);
+                spots.push({ x, y, dry: !inAcid(x, y) });
+            }
+        }
+        const shelter = spots
+            .filter(
+                (p) =>
+                    sim.grid.contains(p.x, p.y) &&
+                    !sim.grid.isSolid(Math.floor(p.x), Math.floor(p.y)),
+            )
             .sort(
                 (a, b) =>
+                    Number(b.dry) - Number(a.dry) ||
                     Math.hypot(a.x - player.x, a.y - player.y) -
-                    Math.hypot(b.x - player.x, b.y - player.y),
+                        Math.hypot(b.x - player.x, b.y - player.y),
             )[0];
         if (shelter) {
             return go(shelter);
         }
     }
+    // His blood clouds (Not Just a Head) after you: a hit heals him, so a near one is walked away
+    // from, dry ground and boulders in mind; they're slower than you and lose hitpoints a tile
+    // they follow, so they die on the way
+    const CLOUD_NEAR = 3;
+    const cloud = fight.clouds
+        .map((c) => sim.enemies.find((e) => e.uid === c.uid))
+        .filter((e): e is NonNullable<typeof e> => !!e && !e.dead)
+        .sort(
+            (a, b) =>
+                Math.hypot(a.x - player.x, a.y - player.y) -
+                Math.hypot(b.x - player.x, b.y - player.y),
+        )[0];
+    if (cloud && Math.hypot(cloud.x - player.x, cloud.y - player.y) < CLOUD_NEAR + cloud.radius) {
+        const dx = player.x - cloud.x;
+        const dy = player.y - cloud.y;
+        // The spot a few tiles further off, on the island, off the acid if it can be
+        let best: Point | undefined;
+        let bestScore = Infinity;
+        for (let i = 0; i < 12; i++) {
+            const angle =
+                Math.atan2(dy, dx) + ((i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * Math.PI) / 6;
+            const spot = {
+                x: player.x + Math.cos(angle) * 3.5,
+                y: player.y + Math.sin(angle) * 3.5,
+            };
+            if (
+                spot.x < island.x0 + 0.5 ||
+                spot.x > island.x1 + 0.5 ||
+                spot.y < island.y0 + 0.5 ||
+                spot.y > island.y1 + 0.5 ||
+                sim.grid.isSolid(Math.floor(spot.x), Math.floor(spot.y)) ||
+                boulders.some(
+                    (b) => Math.hypot(b.x - spot.x, b.y - spot.y) < b.radius + player.radius + 0.4,
+                )
+            ) {
+                continue;
+            }
+            const score = i + (inAcid(spot.x, spot.y) ? 20 : 0);
+            if (score < bestScore) {
+                bestScore = score;
+                best = spot;
+            }
+        }
+        if (best) {
+            return go(best);
+        }
+    }
+    // A wave coming: into its gap, at a dry spot in that column ahead of it if there's one near
+    // (a wave hurts and shoves, and a pool and its gap pursuit mustn't have the bot bounce
+    // between them)
     for (const wave of fight.waves) {
         const coming = (player.y - wave.y) * wave.dir;
         if (coming > -0.6 && coming < 4) {
-            return go({ x: (wave.gapX0 + wave.gapX1) / 2 + 0.5, y: player.y });
+            const x = (wave.gapX0 + wave.gapX1) / 2 + 0.5;
+            const rows = [0, 1, 2, 3].map((k) => player.y + k * wave.dir);
+            const dry = rows.find(
+                (y) =>
+                    sim.grid.contains(x, y) &&
+                    !sim.grid.isSolid(Math.floor(x), Math.floor(y)) &&
+                    !inAcid(x, y),
+            );
+            return go({ x, y: dry ?? player.y });
         }
     }
-    // As near him as the weapons need, as far as the island goes, and along its edge to a spot no
-    // boulder's on
+    // In a pool (spat onto you, or shoved in), or brushing its edge: straight out the nearest
+    // side, before anything, till the body's clear of it (it hurts the moment you're back in)
+    const inPool = fight.acid.find(
+        (a) =>
+            Math.abs(a.x - player.x) <= a.half + 0.5 + player.radius &&
+            Math.abs(a.y - player.y) <= a.half + 0.5 + player.radius,
+    );
+    if (inPool) {
+        const out = inPool.half + 0.5 + player.radius + 0.3;
+        const exits = [
+            { x: inPool.x - out, y: player.y },
+            { x: inPool.x + out, y: player.y },
+            { x: player.x, y: inPool.y - out },
+            { x: player.x, y: inPool.y + out },
+        ]
+            .filter(
+                (e) =>
+                    sim.grid.contains(e.x, e.y) &&
+                    !sim.grid.isSolid(Math.floor(e.x), Math.floor(e.y)) &&
+                    !inAcid(e.x, e.y),
+            )
+            .sort(
+                (a, b) =>
+                    Math.hypot(a.x - player.x, a.y - player.y) -
+                    Math.hypot(b.x - player.x, b.y - player.y),
+            );
+        const exit = exits[0];
+        if (exit) {
+            const dx = exit.x - player.x;
+            const dy = exit.y - player.y;
+            const length = Math.hypot(dx, dy) || 1;
+            return { x: dx / length, y: dy / length };
+        }
+    }
+    // As near him as the weapons need, as far as the island goes: melee has the row along its
+    // north edge, and a thrower any dry spot within reach (the nearest, so it isn't forever
+    // crossing the island), none a boulder's on
+    const melee = heroReach(sim) < 4;
     const reach = Math.max(1, Math.min(3, heroReach(sim) - 0.6));
     const y = Math.min(island.y1 - 3, boss.y - boss.radius - reach);
-    const clear = (x: number) =>
+    const clear = (x: number, y: number) =>
+        sim.grid.contains(x, y) &&
         !sim.grid.isSolid(Math.floor(x), Math.floor(y)) &&
         !boulders.some((b) => Math.hypot(b.x - x, b.y - y) < b.radius + player.radius + 0.4) &&
-        !fight.acid.some(
-            (a) => Math.abs(a.x - x) <= a.half + 0.7 && Math.abs(a.y - y) <= a.half + 0.7,
-        );
+        !inAcid(x, y, 0.5 + player.radius + 0.2);
     const within = boss.radius + heroReach(sim) - 0.3;
-    for (const dx of [0, -1, 1, -2, 2, -3, 3, -4, 4]) {
-        const x = boss.x + dx;
-        if (Math.hypot(dx, boss.y - y) <= Math.max(within, boss.y - y) && clear(x)) {
-            return go({ x, y });
+    if (melee) {
+        for (const dx of [0, -1, 1, -2, 2, -3, 3, -4, 4]) {
+            const x = boss.x + dx;
+            if (Math.hypot(dx, boss.y - y) <= Math.max(within, boss.y - y) && clear(x, y)) {
+                return go({ x, y });
+            }
+        }
+    } else {
+        let best: Point | undefined;
+        let bestAway = Infinity;
+        for (let sy = y; sy >= island.y0 + 1 && boss.y - sy <= within; sy -= 1) {
+            for (let dx = -6; dx <= 6; dx++) {
+                const x = boss.x + dx;
+                if (Math.hypot(dx, boss.y - sy) > within || !clear(x, sy)) {
+                    continue;
+                }
+                // Where it stands, if that's still dry, before anywhere else
+                const off = Math.hypot(x - player.x, sy - player.y);
+                const away = off - (off < 1 ? 2 : 0);
+                if (away < bestAway) {
+                    bestAway = away;
+                    best = { x, y: sy };
+                }
+            }
+        }
+        if (best) {
+            return go(best);
         }
     }
+    // Every spot in reach is acid: a jug at rest, rolled north to break at the island's edge by
+    // the pool, clears it (its water takes any pool near where it breaks). Behind the jug, then
+    // into it.
+    const push = jugPush(sim, fight, island, { x: boss.x, y });
+    if (push) {
+        return push;
+    }
     return go({ x: boss.x, y });
+}
+
+// How a resting jug of Zebak's is rolled (ZEBAK.jugs): this far, breaking at a boulder or the
+// island's edge, its water clearing acid this far each way from the break (less with Upset
+// Stomach, when the pools are bigger)
+const JUG_REACH = 6;
+const JUG_WATER = 2;
+
+// The move that rolls a jug to break by the acid on a spot: behind the jug on the line from the
+// break, and a step into it; nothing if no resting jug can get there
+function jugPush(
+    sim: Sim,
+    fight: NonNullable<Sim["tombsZebak"]>,
+    island: { x0: number; y0: number; x1: number; y1: number },
+    spot: Point,
+): Point | undefined {
+    const player = sim.player;
+    const pool = fight.acid
+        .filter(
+            (a) => Math.abs(a.x - spot.x) <= a.half + 0.7 && Math.abs(a.y - spot.y) <= a.half + 0.7,
+        )
+        .sort(
+            (a, b) =>
+                Math.hypot(a.x - spot.x, a.y - spot.y) - Math.hypot(b.x - spot.x, b.y - spot.y),
+        )[0];
+    if (!pool) {
+        return undefined;
+    }
+    const water = sim.invocations.includes("upset_stomach") ? 1 : JUG_WATER;
+    const boulders = sim.tombsCover.filter((c) => c.endTick > sim.tick);
+    for (const jug of fight.jugs) {
+        if (jug.left > 0) {
+            continue;
+        }
+        const enemy = sim.enemies.find((e) => e.uid === jug.uid);
+        if (!enemy || enemy.dead) {
+            continue;
+        }
+        // One sitting in acid is pushed from inside it: leave it
+        if (
+            fight.acid.some(
+                (a) =>
+                    Math.abs(a.x - enemy.x) <= a.half + 0.5 + player.radius + enemy.radius &&
+                    Math.abs(a.y - enemy.y) <= a.half + 0.5 + player.radius + enemy.radius,
+            )
+        ) {
+            continue;
+        }
+        // Rolled at the island's north edge above the pool: where it'd break
+        const aim = { x: pool.x, y: island.y1 + 1.2 };
+        const dx = aim.x - enemy.x;
+        const dy = aim.y - enemy.y;
+        const length = Math.hypot(dx, dy);
+        if (length < 0.5 || dy <= 0) {
+            continue;
+        }
+        const d = { x: dx / length, y: dy / length };
+        let breakAt: Point | undefined;
+        for (let t = 0.25; t <= JUG_REACH; t += 0.25) {
+            const x = enemy.x + d.x * t;
+            const y = enemy.y + d.y * t;
+            const off = x < island.x0 || x > island.x1 + 1 || y < island.y0 || y > island.y1 + 1;
+            if (
+                off ||
+                boulders.some((b) => Math.hypot(b.x - x, b.y - y) <= b.radius + enemy.radius)
+            ) {
+                breakAt = { x, y };
+                break;
+            }
+            breakAt = { x, y };
+        }
+        if (
+            !breakAt ||
+            Math.abs(pool.x - breakAt.x) > water + pool.half ||
+            Math.abs(pool.y - breakAt.y) > water + pool.half
+        ) {
+            continue;
+        }
+        const behind = {
+            x: enemy.x - d.x * (enemy.radius + player.radius + 0.4),
+            y: enemy.y - d.y * (enemy.radius + player.radius + 0.4),
+        };
+        if (Math.hypot(behind.x - player.x, behind.y - player.y) < 0.5) {
+            return d;
+        }
+        return walkAvoiding(sim, behind.x, behind.y, [], 0);
+    }
+    return undefined;
 }
 
 // The Wardens. The first phase from a side's gap (beside the obelisk, so every weapon reaches it,
@@ -1386,13 +1711,23 @@ function wardensMove(sim: Sim): Point | undefined {
         // Blocking Tumeken's side while it's hitpoints to spare (each orb blocked hurts a little),
         // and a step back out of the orbs' way, still by the obelisk, while it gets them back
         const gap = places.sides.tumeken.gap;
-        const blocking = player.hp > player.maxHp * 0.5;
-        // Off a glowing pyramid (they're a checkerboard, so the next square along is clear)
+        // Each orb blocked costs blockDamage times the hazard scale: worth it at Entry, where a
+        // minute of it is a few hitpoints, and ruinous from Normal up (a minute's more than the
+        // bar), where the Warden that wakes is left to the orbs
+        const orbCost =
+            WARDENS.orbs.blockDamage *
+            (sim as unknown as { tombsHazardScale(): number }).tombsHazardScale();
+        const minuteOfBlocking = orbCost * (60 / WARDENS.orbs.every);
+        const blocking = player.hp > player.maxHp * 0.5 && minuteOfBlocking < player.maxHp * 0.5;
+        // Off a pyramid that's hitting or about to (they're a checkerboard, so the next square
+        // along is clear): one side's cells while the other's are still hitting is the place to
+        // be, till its own hits are a step or two off
         const cell = WARDENS.pyramids.cell;
         const glowing = (x: number, y: number) =>
             fight.pyramids.some(
                 (p) =>
-                    sim.tick - p.startTick < WARDENS.pyramids.lastHit * 50 &&
+                    p.startTick + WARDENS.pyramids.firstHit * 50 - sim.tick < 75 &&
+                    sim.tick - p.startTick <= WARDENS.pyramids.lastHit * 50 &&
                     x >= p.x - 0.4 &&
                     x < p.x + cell + 0.4 &&
                     y >= p.y - 0.4 &&
@@ -1434,17 +1769,56 @@ function wardensMove(sim: Sim): Point | undefined {
                 : undefined;
         const warden = sim.enemies.find((e) => e.uid === two.wardenUid);
         const target = core && !core.dead ? core : warden;
-        // As near as the weapons need (a melee hero right up to it), no nearer than that
-        const keep = Math.max(1, Math.min(2.5, heroReach(sim) - 0.6));
+        // As near as the weapons need, no nearer: a melee hero right up to it, a thrower as far
+        // off as its weapons reach, which Tumeken's walks up and slashes anyone nearer than (the
+        // core, thrown out, doesn't fight: right up to it)
+        const keep =
+            target === core
+                ? Math.max(1, Math.min(2.5, heroReach(sim) - 0.6))
+                : Math.max(1, Math.min(6, heroReach(sim) - 1));
         let to = target ? { x: target.x, y: target.y - (target.radius + keep) } : places.arrive;
+        // A thrower keeps the Warden at that distance all round, rather than backing to the
+        // floor's end (it walks slower than you, so there's always a spot to go to)
+        if (target && target === warden && heroReach(sim) >= 4) {
+            const floor = places.floor;
+            to = ringSpot(sim, target, target.radius + keep, {
+                middle: { x: (floor.x0 + floor.x1 + 1) / 2, y: (floor.y0 + floor.y1 + 1) / 2 },
+                half: Math.min(floor.x1 + 1 - floor.x0, floor.y1 + 1 - floor.y0) / 2,
+            });
+        }
         to = clampTo(to, places.floor);
         const onAMark = (x: number, y: number) =>
             marks.some(
                 (m) => Math.floor(m.x) === Math.floor(x) && Math.floor(m.y) === Math.floor(y),
             );
+        // The spot itself about to be struck: the nearest tile by it that isn't
+        if (onAMark(to.x, to.y)) {
+            let best: Point | undefined;
+            let bestAway = Infinity;
+            for (let dy = -3; dy <= 3; dy++) {
+                for (let dx = -3; dx <= 3; dx++) {
+                    const x = Math.floor(to.x) + dx + 0.5;
+                    const y = Math.floor(to.y) + dy + 0.5;
+                    if (onAMark(x, y) || sim.grid.isSolid(Math.floor(x), Math.floor(y))) {
+                        continue;
+                    }
+                    const away = Math.hypot(dx, dy) + Math.hypot(x - player.x, y - player.y) * 0.3;
+                    if (away < bestAway) {
+                        bestAway = away;
+                        best = { x, y };
+                    }
+                }
+            }
+            to = best ?? to;
+        }
         if (onMark || marks.length > 0) {
-            return safeStep(sim, to, (x, y) =>
-                marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y),
+            // Still dodging its skulls on the way off them
+            return dodging(
+                sim,
+                safeStep(sim, to, (x, y) =>
+                    marks.some((m) => Math.floor(m.x) === x && Math.floor(m.y) === y),
+                ),
+                onAMark,
             );
         }
         // Its skulls and their storms dodged, off the obelisk's marks as it goes
@@ -1514,7 +1888,9 @@ function wardensMove(sim: Sim): Point | undefined {
             to = left[0];
         }
     }
-    return safeStep(sim, to, danger);
+    // Off the floor's dangers tile by tile, and out of the phantoms' way (Zebak's fans, Kephri's
+    // fireball and Ba-Ba's rock, aimed where you stand) as it goes
+    return dodging(sim, safeStep(sim, to, danger), (x, y) => danger(Math.floor(x), Math.floor(y)));
 }
 
 const slamSeen = new WeakMap<Sim, { slam: number; tick: number }>();

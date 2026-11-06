@@ -28,7 +28,8 @@ import { INVOCATIONS, cleanInvocations, getRaidLevel } from "../../src/game/cont
 import { CASKET_GEAR } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
-import { emptyStats } from "../../src/game/content/types";
+import { CombatStyle, emptyStats } from "../../src/game/content/types";
+import { getWeapon, getWeaponStyle } from "../../src/game/content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
@@ -171,6 +172,22 @@ const CHOICE_ORDER: UpgradeChoice["kind"][] = [
     "food",
     "coins",
 ];
+
+// The styles the Wardens' second phase takes, one at a time (WARDENS.two.forms): a hero without a
+// weapon of each gets nowhere on the other's form, so a new weapon of a style it lacks comes first,
+// as a player who's read "Only ranged hurts it" picks
+const WARDENS_STYLES: CombatStyle[] = ["ranged", "magic"];
+
+function coversWardensStyle(sim: Sim, choice: UpgradeChoice): boolean {
+    if (choice.kind !== "newWeapon") {
+        return false;
+    }
+    const style = getWeaponStyle(getWeapon(choice.weaponId));
+    return (
+        WARDENS_STYLES.includes(style) &&
+        !sim.weapons.some((weapon) => getWeaponStyle(weapon.def) === style)
+    );
+}
 
 // What one run came to
 type Outcome = {
@@ -478,8 +495,10 @@ function runOnce(seed: number): Outcome {
                             .map((choice, index) => ({ choice, index }))
                             .sort(
                                 (a, b) =>
+                                    Number(coversWardensStyle(sim, b.choice)) -
+                                        Number(coversWardensStyle(sim, a.choice)) ||
                                     CHOICE_ORDER.indexOf(a.choice.kind) -
-                                    CHOICE_ORDER.indexOf(b.choice.kind),
+                                        CHOICE_ORDER.indexOf(b.choice.kind),
                             );
                         sim.choose(ranked[0].index);
                     } else if (sim.state === "chest") {

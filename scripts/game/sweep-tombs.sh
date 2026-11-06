@@ -24,8 +24,13 @@ one() {
         all) env+=(META=max ARMOURY=max) ;;
         dev) env+=(KIT=max) ;;
     esac
-    # A room gets 25 minutes, the Wardens (after the raid up to them) 30
-    [ "$room" = wardens ] && env+=(MINUTES=30) || env+=(MINUTES=25)
+    # A room gets 25 minutes, the Wardens (after the raid up to them) 30, and the whole raid the
+    # sim's 90 (a won Expert raid takes 20 or 30)
+    case $room in
+        wardens) env+=(MINUTES=30) ;;
+        raid) env+=(MINUTES=90) ;;
+        *) env+=(MINUTES=25) ;;
+    esac
     local out
     out=$(env "${env[@]}" node node_modules/tsx/dist/cli.mjs scripts/game/simulate-tombs.ts \
         "$character" "$SEEDS" 2>&1)
