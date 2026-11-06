@@ -1316,13 +1316,22 @@ describe("the Het room", () => {
         sim.step();
         expect(hp - target.hp).toBeGreaterThanOrEqual(least);
         expect(hp - target.hp).toBeLessThanOrEqual(most);
-        // Shut once its time's up
+        // Shut once its time's up, and the room laid out afresh: the loose mirrors off their
+        // spots, so the beam's to be brought round again
+        const mirrors = room(sim).mirrors;
         for (let i = 0; i < (HET.open + 1) * TICKS_PER_SECOND; i++) {
             stand(sim, 1046.5, 1033.5);
             sim.step();
         }
         expect(room(sim).openUntil).toBe(-1);
         expect(target.shieldEnd).toBeGreaterThan(sim.tick);
+        expect(room(sim).mirrors).not.toBe(mirrors);
+        expect(
+            room(sim)
+                .mirrors.filter((m) => !m.fixed)
+                .every((m) => m.spot === undefined),
+        ).toBe(true);
+        expect(trace(sim).hit).toBe(false);
     });
 
     it("mines the seal harder with the shop's Mining", () => {
@@ -1629,7 +1638,37 @@ describe("Akkha", () => {
             expect(boss.hp).toBeLessThan(hp);
         });
 
-        it("floods its quadrant if it's left up, and they're done when all four are dead", () => {
+        it("only lets one be dispelled: the rest are shielded once one's struck", () => {
+            const sim = shadows();
+            const first = shadowOf(sim, 0);
+            const other = shadowOf(sim, 1);
+            expect(sim.damageEnemy(first, 10, 0, first.x, first.y)).toBeGreaterThan(0);
+            const hp = other.hp;
+            expect(sim.damageEnemy(other, 500, 0, other.x, other.y)).toBe(0);
+            expect(other.hp).toBe(hp);
+            sim.damageEnemy(first, 1e9, 0, first.x, first.y);
+            seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+            expect(other.shieldEnd).toBeGreaterThan(sim.tick);
+            expect(sim.damageEnemy(other, 500, 0, other.x, other.y)).toBe(0);
+        });
+
+        it("keeps him shielded straddling a quarter's lines, even the dead shadow's", () => {
+            const sim = shadows();
+            const shadow = shadowOf(sim, 3);
+            sim.damageEnemy(shadow, 1e9, 0, shadow.x, shadow.y);
+            const middle = sim.tombsPathRoom!.boss!.quadrants!.middle;
+            // In the dead one's quarter by a hair
+            for (let i = 0; i < 3; i++) {
+                placeBoss(sim, { x: IN[3].x, y: middle.y - 0.4 });
+                seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
+            }
+            const boss = placeBoss(sim, { x: IN[3].x, y: middle.y - 0.4 });
+            const hp = boss.hp;
+            sim.damageEnemy(boss, 500, 0, boss.x, boss.y);
+            expect(boss.hp).toBe(hp);
+        });
+
+        it("floods its quadrant if it's left up", () => {
             const sim = shadows();
             const at = IN[sim.tombsAkkha!.shadows[0].quadrant];
             const flooded = () => sim.tombsAkkha!.bursts.some((b) => b.kind === "flood");
@@ -1643,17 +1682,26 @@ describe("Akkha", () => {
             expect(sim.player.maxHp - sim.player.hp).toBeGreaterThanOrEqual(
                 Math.floor(sim.player.maxHp * DEF.shadows.damage) - 1,
             );
-            for (let quadrant = 0; quadrant < 4; quadrant++) {
-                const shadow = shadowOf(sim, quadrant);
-                sim.damageEnemy(shadow, 1e9, 0, shadow.x, shadow.y);
-            }
-            seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
-            expect(sim.tombsAkkha!.shadows).toHaveLength(0);
-            seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+        });
+
+        it("stops a hit at his next share, so the shadows always come", () => {
+            const sim = atAkkha();
             const boss = akkha(sim);
+            boss.hp = Math.floor(boss.maxHp * 0.85);
+            sim.damageEnemy(boss, boss.maxHp, 0, boss.x, boss.y);
+            expect(boss.hp).toBeCloseTo(boss.maxHp * 0.8, 5);
+            seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
+            expect(sim.tombsAkkha!.shadows).toHaveLength(4);
+        });
+
+        it("takes nothing from the style he prays against", () => {
+            const sim = atAkkha();
+            const boss = akkha(sim);
+            const style = boss.def.protects!.styles[0];
             const hp = boss.hp;
-            sim.damageEnemy(boss, 300, 0, boss.x, boss.y);
-            expect(boss.hp).toBeLessThan(hp);
+            Object.defineProperty(sim, "sourceStyle", { get: () => style, configurable: true });
+            expect(sim.damageEnemy(boss, 500, 0, boss.x, boss.y)).toBe(0);
+            expect(boss.hp).toBe(hp);
         });
         it("floods every quadrant whose shadow is up when the timer runs out, sparing a dead one's", () => {
             const sim = shadows();

@@ -979,6 +979,8 @@ export type AkkhaFight = {
     lastTiles: (number | undefined)[];
     shadowsDone: number;
     shadows: { uid: number; quadrant: number }[];
+    // The shadow struck first since they were last restored: the only one that can be hurt
+    shadowStruck?: number;
     // When the shadows still up flood their quadrants
     floodTick: number;
     bursts: { quadrants: number[]; tick: number; kind: "blast" | "flood" }[];
@@ -5819,11 +5821,25 @@ export class Sim {
             this.emit({ type: "notice", message: shadows.endMessage });
             return;
         }
-        // Drawn into a quadrant whose shadow's dead, he can be hurt
+        // Drawn into a quadrant whose shadow's dead, he can be hurt: well inside it, not
+        // straddling its lines
         const quadrant = this.akkhaQuadrant(boss.x, boss.y);
-        const open = fight.shadows.some((s) => s.quadrant === quadrant && !alive(s.uid));
+        const middle = this.tombsPathRoom!.boss!.quadrants!.middle;
+        const inside =
+            Math.abs(boss.x - middle.x) >= shadows.inside &&
+            Math.abs(boss.y - middle.y) >= shadows.inside;
+        const open = inside && fight.shadows.some((s) => s.quadrant === quadrant && !alive(s.uid));
         if (!open) {
             boss.shieldEnd = Math.max(boss.shieldEnd, this.tick + 2);
+        }
+        // Once one's struck, the rest are out of reach till they're restored
+        if (fight.shadowStruck !== undefined) {
+            for (const shadow of fight.shadows) {
+                const enemy = this.enemies.find((e) => e.uid === shadow.uid && !e.dead);
+                if (enemy && shadow.uid !== fight.shadowStruck) {
+                    enemy.shieldEnd = Math.max(enemy.shieldEnd, this.tick + 2);
+                }
+            }
         }
         // One timer for them all (the hourglass on the wall), waiting while he shows his order:
         // when it runs out, every quadrant whose shadow's still up floods, and it starts again
@@ -5859,10 +5875,16 @@ export class Sim {
         const look = getEnemy(def.shadows.enemyId);
         fight.floodTick = this.tick + secondsToTicks(def.shadows.flood);
         fight.shadows = [];
+        fight.shadowStruck = undefined;
+        const boss = this.enemies.find((e) => e.uid === fight.uid);
         for (let quadrant = 0; quadrant < 4; quadrant++) {
             const at = this.akkhaCorner(quadrant, def.shadows.corner);
             const enemy = this.spawnEnemy(look, "normal", at);
             if (enemy) {
+                // A share of his hitpoints, raid level, party and all
+                if (boss) {
+                    enemy.hp = enemy.maxHp = Math.round(boss.maxHp * def.shadows.hpShare);
+                }
                 fight.shadows.push({ uid: enemy.uid, quadrant });
             }
         }
@@ -8567,18 +8589,6 @@ export class Sim {
             shards: [],
         };
         this.nextScabarasWave(room);
-        this.emit({
-            type: "notice",
-            message:
-                "Four puzzles: push the Ancient button and follow the plates' order (east, by " +
-                "the way in), light the ring (west, by the way in), make the tablet's number " +
-                "(further on), then match the symbols (at the far end).",
-        });
-        this.emit({
-            type: "notice",
-            message:
-                "The slates by the way in say what each symbol's worth: stand by one to read them.",
-        });
     }
 
     private scabarasDarkenEvery(): number {
@@ -8755,7 +8765,7 @@ export class Sim {
                 scabaras.lights[lit[this.rng.int(lit.length)]] = false;
                 this.emit({
                     type: "notice",
-                    message: "A scarab scuttles over the ring: a light goes out!",
+                    message: "A light on the ring goes out.",
                 });
             }
         }
@@ -8848,16 +8858,13 @@ export class Sim {
                 return;
             }
             scabaras.sequence = this.newScabarasSequence(def, SCABARAS.showAfter);
-            this.emit(
-                { type: "notice", message: "You push the button. Watch the plates..." },
-                true,
-            );
+            this.emit({ type: "notice", message: "You push the button." }, true);
             return;
         }
         if (board === "s" && !solved("sequence")) {
             const sequence = scabaras.sequence;
             if (sequence.order.length === 0) {
-                this.scabarasHint("Nothing happens. Push the Ancient button to see the order.");
+                this.scabarasHint("Nothing happens. Push the button first.");
                 return;
             }
             // Nothing while it's being shown, or on a plate already done (one not in the order
@@ -8867,9 +8874,7 @@ export class Sim {
                 return;
             }
             if (sequence.order[sequence.step] !== plate) {
-                this.scabarasWrong(
-                    "The plate gives way: the roof comes down on you! Push the button again.",
-                );
+                this.scabarasWrong("Wrong plate! Rocks fall from the ceiling.");
                 scabaras.sequence = { order: [], showFrom: -1, step: 0 };
                 return;
             }
@@ -8889,31 +8894,20 @@ export class Sim {
         if (board === "a" && !solved("addition")) {
             const addition = scabaras.addition;
             if (!this.scabarasTabletReadable(scabaras)) {
-                this.scabarasHint(
-                    "The symbols are dull: solve the plates' order and the ring first.",
-                );
+                this.scabarasHint("The symbols are dull. Solve the other puzzles first.");
                 return;
             }
             if (addition.stepped[plate]) {
                 return;
             }
             addition.stepped[plate] = true;
-            const value = addition.values[plate];
-            const name = SCABARAS.symbolNames[value - 1];
-            addition.sum += value;
+            addition.sum += addition.values[plate];
             if (addition.sum > addition.target) {
-                this.scabarasWrong(
-                    `${name} (${value}) makes ${addition.sum}, past ${addition.target}: ` +
-                        "the roof comes down on you!",
-                );
+                this.scabarasWrong("Too much! Rocks fall from the ceiling.");
                 addition.stepped.fill(false);
                 addition.sum = 0;
                 return;
             }
-            this.emit({
-                type: "notice",
-                message: `${name} (${value}): ${addition.sum} of ${addition.target}.`,
-            });
             if (addition.sum === addition.target) {
                 this.solveScabaras(room, scabaras, "addition");
             }
@@ -8921,11 +8915,7 @@ export class Sim {
         }
         if ((board === "n" || board === "m") && !solved("matching")) {
             if (scabaras.solved.length < 3) {
-                this.emit({
-                    type: "notice",
-                    message:
-                        "The tiles won't turn yet: solve the room's other three puzzles first.",
-                });
+                this.scabarasHint("The tiles won't turn yet.");
                 return;
             }
             const matching = scabaras.matching;
@@ -8947,7 +8937,7 @@ export class Sim {
                 return;
             }
             matching.hideTick = this.tick + secondsToTicks(SCABARAS.reveal);
-            this.scabarasWrong("They don't match: the roof comes down on you!");
+            this.scabarasWrong("They don't match! Rocks fall from the ceiling.");
         }
     }
 
@@ -8993,15 +8983,14 @@ export class Sim {
             room.doneTick = this.tick;
             scabaras.rocks = [];
             scabaras.shards = [];
-            this.emit({ type: "notice", message: "The last pair's matched! The way on opens." });
+            this.emit({ type: "notice", message: "The way on opens." });
         } else {
-            const left = 3 - scabaras.solved.length;
             this.emit({
                 type: "notice",
                 message:
-                    left > 0
-                        ? `Solved! ${left} more before the symbols to the west will turn.`
-                        : "Solved! The symbols to the west stir: match them.",
+                    scabaras.solved.length < 3
+                        ? "Puzzle solved."
+                        : "Puzzle solved. The symbols in the far room stir.",
             });
         }
         if (!this.tombsReplaying) {
@@ -9314,10 +9303,26 @@ export class Sim {
         const floor = def.floor;
         const close = (m: { x: number; y: number }, x: number, y: number) =>
             Math.abs(m.x - 0.5 - x) <= 1 && Math.abs(m.y - 0.5 - y) <= 1;
+        // Clear of the way in (its barrier's tiles), and of anyone in the room as it's laid out
+        // afresh, so nothing's put down in someone's path or on them
+        const gateTiles = this.tombsPathRoom?.gate?.tiles ?? [];
+        const kept = (x: number, y: number, round: boolean) =>
+            gateTiles.some((t) => Math.abs(t.x - 0.5 - x) <= 2 && Math.abs(t.y - 0.5 - y) <= 2) ||
+            (round &&
+                this.heroes.some(
+                    (hero) =>
+                        Math.abs(hero.player.x - 0.5 - x) <= 1.5 &&
+                        Math.abs(hero.player.y - 0.5 - y) <= 1.5,
+                ));
         const free = (count: number, put: (x: number, y: number) => void) => {
-            for (let attempt = 0, n = 0; attempt < 300 && n < count; attempt++) {
+            // Round the heroes first, then anywhere but the way in, should that leave too little
+            let n = 0;
+            for (let attempt = 0; attempt < 600 && n < count; attempt++) {
                 const x = Math.floor(this.rng.range(floor.x0, floor.x1));
                 const y = Math.floor(this.rng.range(floor.y0, floor.y1));
+                if (kept(x, y, attempt < 300)) {
+                    continue;
+                }
                 const near =
                     mirrors.some((m) => close(m, x, y)) ||
                     spots.some((m) => close(m, x, y)) ||
@@ -9407,7 +9412,17 @@ export class Sim {
             this.emit({ type: "notice", message: "Het's Seal breaks! The way on is open." });
             return;
         }
-        // Shut again once its time's up (before anyone's swing this tick)
+        // Shut again once its time's up (before anyone's swing this tick), and the room laid out
+        // afresh, as OSRS's is: new spots, the loose mirrors back on the floor, new barriers, so
+        // every opening's earned again
+        if (het.openUntil !== -1 && this.tick >= het.openUntil) {
+            Object.assign(het, this.layOutHet(def));
+            het.beam = undefined;
+            this.emit({
+                type: "notice",
+                message: "The seal closes, and the mirrors are scattered across the room again.",
+            });
+        }
         if (this.tick >= het.openUntil) {
             het.openUntil = -1;
             seal.shieldEnd = Math.max(seal.shieldEnd, this.tick + 2);
@@ -15123,6 +15138,27 @@ export class Sim {
             this.showBlocked(enemy);
             return 0;
         }
+        // A prayer that blocks a style whole (Akkha's overheads)
+        if (!poison && this.prayedAgainst(enemy) === 0) {
+            this.showBlocked(enemy);
+            return 0;
+        }
+        // Akkha's shadows: the first struck is the one, the rest out of reach (the same tick's
+        // other hits too, before their shields go up)
+        const akkha = this.tombsAkkha;
+        if (!poison && akkha && akkha.shadows.some((s) => s.uid === enemy.uid)) {
+            if (akkha.shadowStruck === undefined) {
+                akkha.shadowStruck = enemy.uid;
+                const message = this.enemies.find((e) => e.uid === akkha.uid)?.def.boss?.akkha
+                    ?.shadows.struckMessage;
+                if (message) {
+                    this.emit({ type: "notice", message });
+                }
+            } else if (akkha.shadowStruck !== enemy.uid) {
+                this.showBlocked(enemy);
+                return 0;
+            }
+        }
         // On normal, a colour's other styles do only a share (BossDef.colours.offStyle); on expert,
         // a Nylocas that isn't a boss takes more from its own (EnemyDef.expertOwnStyle)
         const offColour = poison ? 1 : this.offColour(enemy) * this.ownStyle(enemy);
@@ -15197,6 +15233,16 @@ export class Sim {
             // Off her shield: what it took is what's shown, and what the points go by (her three
             // shields come to her hitpoints, so they're worth what those were)
             shown = this.kephriTakes(enemy, kephri, damage);
+        } else if (
+            akkha &&
+            enemy.uid === akkha.uid &&
+            akkha.shadowsDone < (enemy.def.boss?.akkha?.shadows.at.length ?? 0)
+        ) {
+            // Down to his next share and no further: the shadows come there, whatever the hit
+            const floor = enemy.maxHp * enemy.def.boss!.akkha!.shadows.at[akkha.shadowsDone];
+            const before = enemy.hp;
+            enemy.hp = Math.max(Math.min(enemy.hp, floor), enemy.hp - damage);
+            shown = Math.max(0, Math.round(before - enemy.hp));
         } else {
             enemy.hp -= damage;
         }

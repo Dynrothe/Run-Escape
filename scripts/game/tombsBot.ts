@@ -462,16 +462,29 @@ function hetMove(sim: Sim, def: PathRoom): Point {
     // Round what's solid, but first off anything it's against that it isn't going for: the
     // tiles round each are walls to its way, its own tile walled in with them
     const walkHet = (x: number, y: number, avoid: Point[]): Point => {
+        // Its way round what's solid, unless there's none from here (walled in its own tile by
+        // what's beside it): then a step off whatever it's against first
+        const way = walkAvoiding(sim, x, y, avoid);
+        if (Math.hypot(way.x, way.y) > 0.05 || Math.hypot(x - player.x, y - player.y) <= 1.5) {
+            return way;
+        }
         const against = avoid.find(
             (thing) =>
                 Math.hypot(thing.x - player.x, thing.y - player.y) < 1.5 &&
                 Math.hypot(thing.x - x, thing.y - y) > 0.5,
         );
-        if (against && Math.hypot(x - player.x, y - player.y) > 1.5) {
+        if (against) {
             const away = Math.hypot(player.x - against.x, player.y - against.y) || 1;
-            return { x: (player.x - against.x) / away, y: (player.y - against.y) / away };
+            const step = { x: (player.x - against.x) / away, y: (player.y - against.y) / away };
+            // Only onto open floor, and not back over the way in's barrier
+            const to = { x: player.x + step.x, y: player.y + step.y };
+            const gate = sim.tombsPathRoom?.gate;
+            const back = gate?.y !== undefined && player.y >= gate.y && to.y < gate.y + 0.5;
+            if (!back && !sim.grid.isSolid(Math.floor(to.x), Math.floor(to.y))) {
+                return step;
+            }
         }
-        return walkAvoiding(sim, x, y, avoid);
+        return way;
     };
     // Onto a spot or into a circle, and still there
     const standOn = (at: Point, avoid: Point[]): Point =>
@@ -1587,10 +1600,12 @@ function akkhaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
         if (dead.length > 0) {
             return go(corner(dead[0].quadrant));
         }
-        // None down yet: beside the nearest, out of its quadrant's flood when one's due
+        // None down yet: beside the one struck (the rest are shielded once it is), or else the
+        // nearest
         const live = fight.shadows
             .map((s) => sim.enemies.find((x) => x.uid === s.uid))
             .filter((e): e is NonNullable<typeof e> => !!e && !e.dead)
+            .filter((e) => fight.shadowStruck === undefined || e.uid === fight.shadowStruck)
             .sort(
                 (a, b) =>
                     Math.hypot(a.x - sim.player.x, a.y - sim.player.y) -

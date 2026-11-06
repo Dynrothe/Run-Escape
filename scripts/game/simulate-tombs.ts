@@ -72,6 +72,8 @@ const roomArg = process.env.ROOM ?? "raid";
 const level = parseInt(process.env.LEVEL ?? "0");
 const partySize = parseInt(process.env.PARTY ?? "1");
 const kit = process.env.KIT === "max";
+// A weapon added to the kit as the room starts (a casket's lucky drop), e.g. WEAPON=twisted_bow
+const extraWeapon = process.env.WEAPON;
 const verbose = process.env.VERBOSE === "1";
 const minutes = parseFloat(process.env.MINUTES ?? (roomArg === "raid" ? "90" : "15"));
 // The order a raid level's made up in for INVOCATIONS=level:N
@@ -239,6 +241,12 @@ function newSim(seed: number): Sim {
 function setUp(sim: Sim): void {
     if (kit) {
         sim.devWardensKit();
+    }
+    // Found early: carried from the raid's start, by every hero
+    if (extraWeapon) {
+        for (const hero of sim.heroes) {
+            sim.as(hero.index, () => sim.addWeapon(extraWeapon));
+        }
     }
     setPathOrder(PATH_ORDER);
     if (roomArg === "raid") {

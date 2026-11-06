@@ -2474,14 +2474,10 @@ function TombsScabarasReading({ client }: { client: GameClient }): JSX.Element |
                 {info.readable ? (
                     <>
                         <div className="ui-scabaras-number">{info.target}</div>
-                        <div>
-                            Walk over symbols that add up to it, each once. Made so far: {info.sum}
-                        </div>
+                        <div>So far: {info.sum}</div>
                     </>
                 ) : (
-                    <div>
-                        Its markings are dark. Solve the plates&apos; order and the ring first.
-                    </div>
+                    <div>Its markings are dark.</div>
                 )}
             </div>
         );

@@ -778,8 +778,12 @@ export const HET = {
 // The Guardian of Het (NPCs 11789 to 11796, size 3: idle 9760, walk 9764, his spear's animations).
 // He fights one style at a time and prays against it (a form for each: melee, ranged, magic), and
 // every few attacks does a special instead and changes style: Memory Blast, Simon says, or his
-// trailing orbs. At 80, 60, 40 and 20% his shadows come and he can't be hurt; at 0 he makes his
-// final stand in a corner, out of reach of everything but melee, sending Unstable Orbs across.
+// trailing orbs. His prayer blocks his style's hits whole, as OSRS's overheads do (the wiki: "Akkha
+// makes use of overhead protection prayers, protecting him from attacks of that style"), so one
+// weapon can't do it all. At 80, 60, 40 and 20% his shadows come (hits stop there, none carried
+// past) and he can't be hurt till one's dispelled and he's drawn into its quarter: only one at a
+// time, the rest shielded once one's struck; at 0 he makes his final stand in a corner, out of
+// reach of everything but melee, sending Unstable Orbs across.
 
 const AKKHA_IDLE = 9760;
 const AKKHA_WALK = 9764;
@@ -876,14 +880,21 @@ export const AKKHA: AkkhaDef = {
     shadows: {
         at: [0.8, 0.6, 0.4, 0.2],
         enemyId: "akkha_shadow",
+        // Tiles his middle must be from the lines between the quarters to be in one
+        inside: 1,
+        // Each shadow's hitpoints, of his: OSRS's 70 to his 400
+        hpShare: 70 / 400,
         corner: 5.5,
         flood: 20,
         warn: 3,
         damage: 0.5,
-        message: "Shadows appear throughout the room! Kill one and draw Akkha into its quarter.",
+        message:
+            "Shadows appear throughout the room! Kill one, the others are shielded once it's " +
+            "struck, and draw Akkha into its quarter.",
         warnMessage: "The shadows raise their spears! Get to a quarter whose shadow is dead!",
         floodMessage: "The shadows slam their spears, flooding their quarters!",
         endMessage: "Akkha's shadows are gone. He can be hurt anywhere again!",
+        struckMessage: "The other shadows shimmer, out of reach: finish this one.",
     },
 };
 
@@ -908,7 +919,8 @@ const akkhaForm = (
     xp: 1200,
     knockbackResist: 1,
     solid: true,
-    protects: { styles: [style], damage: 0.25 },
+    // His overhead: that style's hits do nothing
+    protects: { styles: [style], damage: 0 },
     sounds: AKKHA_SOUNDS,
     spawnMessage: "Akkha rises to guard the path of Het!",
     boss: {
@@ -1106,6 +1118,8 @@ const AKKHA_FORMS: EnemyDef[] = [
 const enragedForm = akkhaForm("akkha_enraged", 11795, "magic", 9774, [UNSTABLE_ORBS]);
 const AKKHA_ENRAGED: EnemyDef = {
     ...enragedForm,
+    // Mostly, not whole as OSRS's: a hero here keeps to one style, and a wizard with no melee
+    // weapon would never finish him (his forms' prayers block whole: they change)
     protects: { styles: ["ranged", "magic"], damage: 0.15 },
     stationary: true,
     speed: 0,
@@ -1155,6 +1169,7 @@ TOMBS_ENEMIES.push(
         walkSeq: AKKHA_WALK,
         attackSeq: 9788,
         deathSeq: AKKHA_DEATH,
+        // Set as it comes, a share of his (AkkhaDef.shadows.hpShare)
         hp: 150,
         damage: 0,
         speed: 0,

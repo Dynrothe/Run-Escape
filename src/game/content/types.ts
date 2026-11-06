@@ -686,12 +686,16 @@ export type AkkhaDef = {
     };
     // His shadows: at each of these shares of his hitpoints, enemyId comes in each quadrant's
     // corner (corner tiles out from the middle each way), and he can't be hurt but in a quadrant
-    // whose shadow is dead, until they all are. One timer runs for them all: every flood seconds
+    // whose shadow is dead (his middle inside tiles clear of the lines between them). Only one's
+    // to be dispelled: once one's struck the rest are shielded (struckMessage) till they're
+    // restored at the next share. One timer runs for them all: every flood seconds
     // (warned warn seconds ahead) each quadrant whose shadow's still up floods, for damage (a
     // share of your hitpoints) and its element.
     shadows: {
         at: number[];
         enemyId: string;
+        inside: number;
+        hpShare: number;
         corner: number;
         flood: number;
         warn: number;
@@ -700,6 +704,7 @@ export type AkkhaDef = {
         warnMessage: string;
         floodMessage: string;
         endMessage: string;
+        struckMessage: string;
     };
     // His final stand (the form he rises as, BossDef.rises): in a corner, out of reach, he sends
     // Unstable Orbs straight across the floor every `every` seconds (quicker with the path level),

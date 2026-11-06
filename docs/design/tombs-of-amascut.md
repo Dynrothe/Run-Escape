@@ -77,7 +77,9 @@ The waves no longer run on a clock, but they're still where experience and caske
   lights up round it: it's mined, never hit, only by those standing in the ring, a swing a
   second, for OSRS's damage by Mining level and pickaxe, here the shop's Mining (5 to 7 with none,
   17 to 19 at its last rank), so the seal (119, more for each of the party) takes three openings
-  with none and one with the best. The HUD counts what's mined of it. The circles are Verzik's
+  with none and one with the best. The HUD counts what's mined of it. When the seal shuts the
+  room's laid out afresh (new spots, the loose mirrors back on the floor, new barriers, no loose
+  mirror or whole barrier by the way in, nor on anyone if there's room), so each opening's earned again. The circles are Verzik's
   safe circle (spot animation 1581).
 - **Scabaras.** Three of four puzzles in a random order, then the number tablet, with scarab
   swarms chasing throughout: memory tiles (walk the sequence), Lights Out plates (enemies can knock
@@ -336,7 +338,9 @@ raid's ranges.
   its four symbols are the real thing. The quadrants' elements follow the floor's symbols as they
   lie once it's turned: darkness north-west, lightning north-east, ice south-east, fire south-west.
     - **Styles**: a form for each (`akkha`, `akkha_ranged`, `akkha_magic`), each praying against
-      its own. Every seven attacks (six with Stay Vigilant) he does a special and turns to another.
+      its own, and blocking it whole, as OSRS's overheads do: a hero with one style waits out that
+      form (a twisted bow found early took a fresh ranger's Akkha from 4 minutes to 1:23 when the
+      prayer let a quarter through; it's 3 now). Every seven attacks (six with Stay Vigilant) he does a special and turns to another.
       Melee swings and stamps out a ring; ranged fires fans and a spiral of sand; magic rings and
       streams red sand, which brings the element of the quadrant it hits you in.
     - **Memory Blast**, Simon says: he vanishes to the middle and can't be hurt, the symbols light up
@@ -347,13 +351,17 @@ raid's ranges.
     - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
       leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
       Feeling Special drops one three tiles ahead too.
-    - **His shadows**, at 80, 60, 40 and 20%: an Akkha's Shadow in each corner, and he can't be hurt
-      except standing in a quadrant whose shadow is dead, so you kill one and draw him into its
-      quarter. One timer (the HUD counts it down) runs for them all: when it's out, every quadrant
-      whose shadow's still up floods for half your hitpoints and its element, and it starts again.
-      They're done when all four are dead, and back at the next threshold.
+    - **His shadows**, at 80, 60, 40 and 20%: no hit carries him past one, so they always come. An
+      Akkha's Shadow in each corner, each 70/400 of his hitpoints as OSRS's are, and he can't be
+      hurt except well inside a quadrant whose shadow is dead (his middle a tile clear of the lines
+      between them), so you kill one and draw him into its quarter. Only one: once a shadow's
+      struck the rest are shielded, as the wiki says to focus one, till they're restored at the
+      next threshold. One timer (the HUD counts it down) runs for them all: when it's out, every
+      quadrant whose shadow's still up floods for half your hitpoints and its element, and it
+      starts again.
     - **Final stand**: at 0 he rises (`rises`) as `akkha_enraged` with a fifth of his hitpoints, in
-      a corner, praying against ranged and magic, and sends Unstable Orbs (11804, their arrows the
+      a corner, praying against ranged and magic (mostly, not whole as OSRS's: a hero here keeps to
+      one style, and a wizard with no melee would never finish him), and sends Unstable Orbs (11804, their arrows the
       way they go) straight or slanting across the floor. He moves corner once he's lost a share of
       his hitpoints there, or after a while.
     - **Invocations**: Double Trouble (both specials at once), Keep Back (beside him, his ranged and
