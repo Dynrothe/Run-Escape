@@ -1422,6 +1422,19 @@ joining or leaving, and the run starting or ending, at once and before telling a
 changes at most once a second. The Node relay sends no token, so with it a dropped connection
 still ends a guest's run.
 
+A room's connection can also die without closing (a laptop asleep, a network that went away). During
+a run `GameClient` calls `CoopLobby.keepAlive()` on each step, which pings a room that's been quiet
+for `RUN_QUIET_MS` and takes one that hasn't answered within `PONG_WAIT_MS` as dropped, coming back
+as above while the host still has the frames. It doesn't judge after a gap in its own calls (a
+frozen page), whose replies may be unread. The ping every `PING_INTERVAL_MS` checks the same outside
+a run. The Cloudflare room lets go of a player it's heard nothing from, not even a ping, for
+`SILENT_MS`, as if their connection had closed (the Node relay finds those with its own pings). A
+guest whose missing frames haven't come for `GIVE_UP_GAP_MS` while the host's others do ends its run
+(the host no longer has them), and so does a frame that fails to step `MAX_FAILED_STEPS` times in a
+row (an error in the game; the host leaving ends it for everyone). The host's frames go out even
+when something after a step throws. Only the Cloudflare relay gives a room its own connection to
+check; the rest is the game's, so it holds on either relay.
+
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it
 again to everyone looking at it when it changes (within a second, and only if their page did), and

@@ -29,9 +29,11 @@ const LOAD_WAIT_MS = 20_000;
 const MOVE_INTERVAL_MS = 66;
 // The host keeps what it's sent for this many frames (20 seconds), to send
 // again to a guest that missed some. A gap only comes from a dropped
-// connection, and the relay gives up on one after 15 seconds
-// (RESUME_GRACE_MS in server/cloudflare/src/room.mjs), so this outlasts any
-// gap while keeping a resend well inside the relay's limits.
+// connection: the relay gives up on a closed one after RESUME_GRACE_MS
+// (server/cloudflare/src/room.mjs), and the game finds one that died without
+// closing within RUN_QUIET_MS and PONG_WAIT_MS (keepAlive in CoopLobby.ts).
+// This outlasts either gap while keeping a resend well inside the relay's
+// limits; a longer one ends the guest's run (GIVE_UP_GAP_MS).
 const RESEND_FRAMES = 1000;
 // A guest asks for missing frames this often at most, and the host resends
 // this often at most whoever asks: one resend covers every guest behind
@@ -43,6 +45,15 @@ const RESEND_EVENTS = 1000;
 // Someone the run's waited on this long (a hidden tab, gone to make tea) has
 // it decided for them: the first reward, taking the casket, or walking away
 export const DECIDE_AFTER_MS = 20_000;
+// A guest that's still missing frames this long after it first saw them
+// missing, with the host's frames coming all the while, can't be caught up:
+// the host no longer has them (a connection that was dead for longer than
+// RESEND_FRAMES before anyone noticed). A resend that can be had comes within
+// a second or two.
+export const GIVE_UP_GAP_MS = 20_000;
+// A frame that's failed to step this many times in a row (an error in the
+// game) never will, and the run stops rather than leaving everyone waiting
+export const MAX_FAILED_STEPS = 50;
 // The most a hero's actions can queue for one frame. It's more than a player
 // can do, and with moves kept to the latest it keeps what the host sends small
 // however much a guest sends while it waits.
@@ -113,6 +124,11 @@ export class CoopRun {
     private readonly waitingSince = new Map<number, number>();
     // The copies have gone apart (it's said once)
     desynced = false;
+    // A guest's: since when it's seen frames missing, and when it last did
+    private gapSince?: number;
+    private gapSeenAt = 0;
+    // How many times in a row the next frame has failed to step
+    private failedSteps = 0;
     // The host's: the guests whose map is still loading, and since when
     private readonly loading: Set<string>;
     private readonly loadStart: number;
@@ -353,6 +369,8 @@ export class CoopRun {
         if (Number.isSafeInteger(message.from) && message.from! > this.upTo) {
             // Some went missing: these come again with them
             const now = this.now();
+            this.gapSince ??= now;
+            this.gapSeenAt = now;
             if (now - this.askedAt >= RESEND_ASK_MS) {
                 this.askedAt = now;
                 this.link.sendUp({ resend: this.upTo });
@@ -376,6 +394,18 @@ export class CoopRun {
             this.hashes.set(hash[0], hash[1]);
         }
         this.upTo = Math.max(this.upTo, message.upTo);
+        this.gapSince = undefined;
+    }
+
+    // A guest's: frames missing that the host can't send again, so its run
+    // can't go on
+    get cantCatchUp(): boolean {
+        return this.gapSince !== undefined && this.gapSeenAt - this.gapSince > GIVE_UP_GAP_MS;
+    }
+
+    // The next frame keeps failing to step (MAX_FAILED_STEPS)
+    get stuck(): boolean {
+        return this.failedSteps >= MAX_FAILED_STEPS;
     }
 
     // Whether the next frame can be stepped: always for the host, and for a
@@ -393,6 +423,8 @@ export class CoopRun {
     // applied, for the client to follow up the local player's.
     stepFrame(): FrameEvent[] {
         const frame = this.frame + 1;
+        // Back to 0 once it's stepped
+        this.failedSteps++;
         let events: FrameEvent[];
         if (this.isHost) {
             this.decideForTheSlow();
@@ -412,6 +444,7 @@ export class CoopRun {
         this.sim.step();
         this.prediction?.confirm(events);
         this.frame = frame;
+        this.failedSteps = 0;
         if (this.isHost) {
             this.upTo = frame;
             if (frame % HASH_FRAMES === 0) {

@@ -30,6 +30,10 @@ the version in the corner).
 ### Fixed
 
 - Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.
+- Co-op could freeze for half an hour when a connection died without closing (a laptop asleep,
+  a network that dropped). It's now found within seconds and reconnected. Fixed by trippy22.
+- A co-op run that can't go on (a guest too far behind to catch up, or an error in the game) ends
+  with a message instead of freezing everyone. Fixed by trippy22.
 
 ## 0.27.0 - 2026-11-05
 

@@ -25,8 +25,9 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   through its one alarm, with `later()`. After 10 seconds with nothing to do (a room sitting on
   its menu, never mid-run), Cloudflare can take it out of memory and keep its connections open.
   The next message or alarm makes it again, from its storage and what each socket carries
-  (`remember()`): who it's for, the room's code, and when the next heartbeat's due, so being made
-  again neither puts the heartbeat off nor sends an extra one. A dropped player's time away is
+  (`remember()`): who it's for, the room's code, when the next heartbeat's due, and when the room
+  last heard from them, so being made again neither puts the heartbeat off nor sends an extra one,
+  nor starts a quiet player's time over. A dropped player's time away is
   saved, so it doesn't start again each time the room's made. The heartbeat saves when the room
   was last used, which a run's messages don't, or a room made again after a restart would look
   idle since its run started. A connection the room closes is forgotten first, since Cloudflare
@@ -147,6 +148,18 @@ what it had in memory, often more than once an hour. So:
   kept for 20 seconds in `CoopRun`, and answered once a second at most). An item a guest used
   just before the drop is sent again, and the host takes it once.
 - The lobby's connection dropping doesn't touch a room: the game makes it again after.
+- A connection can die without closing (a laptop asleep, a network that went away), and a
+  Durable Object can't ping to find out, as the Node relay does. So the game checks: mid-run, a
+  room that's been quiet for `RUN_QUIET_MS` is pinged (`keepAlive` in `CoopLobby.ts`), and one
+  that hasn't answered within `PONG_WAIT_MS` is taken as dropped and come back to as above, in
+  time for the host's resendable frames (`RESEND_FRAMES`). It's mostly a host whose guests are
+  standing still that sends these, as a guest hears the host's frames all the time. Outside a run
+  the regular ping does the same, more slowly. And the room lets go of a player it's heard
+  nothing from, not even a ping, for `SILENT_MS` (checked on the heartbeat, with Cloudflare's time
+  for the last ping it answered), as if their connection had closed, so a host who's gone ends
+  the run rather than holding everyone until the room's idle. When it last heard from each player
+  is kept on their socket within `HEARD_SAVE_MS`, for the room made again after being out of
+  memory. Without Cloudflare's ping times it lets go of nobody this way.
 
 `bun run check` tests coming back, against a running relay. `room.test.ts` runs a room under
 Node, with `test/durable-object.mjs` in place of `cloudflare:workers` (see `vite.config.ts`). To see a restart for yourself under `wrangler dev`, save any
@@ -180,6 +193,15 @@ Cloudflare's docs don't say whether that also leaves out each WebSocket message 
 would be a log event apiece and far past what the plan includes. After turning it on, watch the
 Worker's log events in the dashboard for a while before leaving it on.
 
+**The room's log**: one line when a room closes after `IDLE_MS` with nothing happening, and
+nothing else, for telling afterwards why it closed. It's an object with `event: "coop_room"` and
+`kind: "idle"`: the room's code, whether its run had started, its map, endless and hard, how long
+the run and the quiet had lasted, and how many messages came from connections the room was done
+with (`strays`). For each player (by the start of their id, never a name or address): whether
+they were connected, how long since the room last heard from them and since Cloudflare last
+answered their ping, and how many of their messages it threw away, by reason (`discarded`).
+Search it in the dashboard by `event`, or watch with `bun run wrangler tail`.
+
 **Taking it down**: `bun run wrangler delete run-escape-coop`.
 
 ## Cost
@@ -201,7 +223,8 @@ message for each page of rooms someone looks at. A game from before the lists we
 its page every few seconds until it's closed.
 
 Measured on a deployed relay, a two-player run sends a room about 29 messages a second (the host's
-frames, about 25, and the guest's inputs). Each guest more adds only their own inputs, so a room of
+frames, about 25, and the guest's inputs). A host whose guests stand still also pings once each
+`RUN_QUIET_MS`, a small fraction of that. Each guest more adds only their own inputs, so a room of
 four is around 37 a second. That's about 5,300 requests for each hour a two-player room is open,
 and 6,700 for four. Before rooms hibernated, they were also billed 450 GB-s an hour (every second
 at 128 MB), which was most of the bill. By Cloudflare's pricing, an idle object that can hibernate

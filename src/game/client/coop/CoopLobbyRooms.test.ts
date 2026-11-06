@@ -12,9 +12,11 @@ class FakeSocket {
 
     readyState = FakeSocket.CONNECTING;
     sent: { t: string; [key: string]: unknown }[] = [];
+    // As every relay does; false for a connection that's died without closing
+    answersPings = true;
     onopen?: () => void;
-    onmessage?: (event: { data: string }) => void;
-    onclose?: () => void;
+    onmessage?: ((event: { data: string }) => void) | null;
+    onclose?: (() => void) | null;
 
     constructor(readonly url: string) {
         FakeSocket.all.push(this);
@@ -25,7 +27,11 @@ class FakeSocket {
     }
 
     send(data: string): void {
-        this.sent.push(JSON.parse(data));
+        const message = JSON.parse(data);
+        this.sent.push(message);
+        if (message.t === "ping" && this.answersPings) {
+            queueMicrotask(() => this.receive({ t: "pong" }));
+        }
     }
 
     close(): void {
@@ -250,6 +256,81 @@ describe("a relay that keeps each room on its own connection", () => {
         expect(FakeSocket.all).toHaveLength(3);
     });
 
+    // A run going: the game calls keepAlive on each step, here every 20 ms
+    // for ms, with the host's frames coming every 40 ms when frames is set
+    async function playFor(lobby: CoopLobby, room: FakeSocket, ms: number, frames = false) {
+        for (let t = 0; t < ms; t += 20) {
+            await vi.advanceTimersByTimeAsync(20);
+            if (frames && t % 40 === 0 && room.readyState === FakeSocket.OPEN) {
+                room.receive({ t: "down", d: { upTo: t, events: [] } });
+            }
+            lobby.keepAlive();
+        }
+    }
+    const pings = (socket: FakeSocket) => socket.sent.filter((m) => m.t === "ping").length;
+
+    // Steps the run until the room's connection is made again, or for 30 seconds
+    async function playUntilResumed(lobby: CoopLobby, room: FakeSocket): Promise<number> {
+        let ms = 0;
+        while (FakeSocket.all.length === 2 && ms < 30_000) {
+            await playFor(lobby, room, 100);
+            ms += 100;
+        }
+        return ms;
+    }
+
+    it("finds a room connection that's died without closing, mid-run, and comes back", async () => {
+        const { lobby, room, onClosed, onResumed } = await inRoom();
+        room.answersPings = false;
+        const ms = await playUntilResumed(lobby, room);
+        // Within the 20 seconds the host keeps its frames for, with time to come back
+        expect(ms).toBeGreaterThan(5000);
+        expect(ms).toBeLessThan(15_000);
+        expect(pings(room)).toBe(1);
+        expect(room.readyState).toBe(FakeSocket.CLOSED);
+        const again = FakeSocket.all[2];
+        expect(again.url).toBe("wss://example.com/game/coop/room/ABCDEFGH?resume=secret");
+        again.receive({ t: "room", room: { ...ROOM, started: true }, you: "p1", token: "secret" });
+        expect(onResumed).toHaveBeenCalledOnce();
+        expect(onClosed).not.toHaveBeenCalled();
+        expect(lobby.room?.code).toBe("ABCDEFGH");
+        // And checks the new one from here
+        await playFor(lobby, again, 30_000);
+        expect(FakeSocket.all).toHaveLength(3);
+    });
+
+    it("doesn't ping a room that's sending frames, however long", async () => {
+        const { lobby, room } = await inRoom();
+        room.answersPings = false;
+        await playFor(lobby, room, 60_000, true);
+        expect(pings(room)).toBe(0);
+        expect(FakeSocket.all).toHaveLength(2);
+    });
+
+    it("pings a quiet room every few seconds, and keeps it while it answers", async () => {
+        const { lobby, room } = await inRoom();
+        await playFor(lobby, room, 60_000);
+        expect(pings(room)).toBeGreaterThanOrEqual(10);
+        expect(pings(room)).toBeLessThanOrEqual(12);
+        expect(FakeSocket.all).toHaveLength(2);
+    });
+
+    it("doesn't take the connection for dead straight after the page was frozen", async () => {
+        const { lobby, room } = await inRoom();
+        room.answersPings = false;
+        await playFor(lobby, room, 6000);
+        expect(pings(room)).toBe(1);
+        // Frozen (asleep, or a hidden phone) with the ping unanswered
+        await vi.advanceTimersByTimeAsync(60_000);
+        lobby.keepAlive();
+        expect(FakeSocket.all).toHaveLength(2);
+        // Back, and what came meanwhile is read
+        room.answersPings = true;
+        room.receive({ t: "pong" });
+        await playFor(lobby, room, 30_000);
+        expect(FakeSocket.all).toHaveLength(2);
+    });
+
     // A relay that sends the list as it changes stops on a create or join,
     // until it's asked again
     const lists = (relay: FakeSocket) => relay.sent.filter((m) => m.t === "list").length;
@@ -355,6 +436,24 @@ describe("the lobby's timers", () => {
         expect(again.relay.readyState).toBe(FakeSocket.OPEN);
         // Pinged all the while
         expect(again.relay.sent.filter((m) => m.t === "ping").length).toBeGreaterThan(40);
+    });
+
+    it("finds a room's connection that's died, outside a run too, from its 30-second pings", async () => {
+        const { lobby, relay } = await welcomed({ listUpdates: true });
+        lobby.create(true, "lumbridge", false, false);
+        relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });
+        await vi.advanceTimersByTimeAsync(0);
+        const room = FakeSocket.all[1];
+        room.receive({ t: "room", room: ROOM, you: "p1", token: "secret" });
+        // Answering, it's kept
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        expect(FakeSocket.all).toHaveLength(2);
+        // Not, and it's made again within a couple of pings
+        room.answersPings = false;
+        await vi.advanceTimersByTimeAsync(90_000);
+        expect(FakeSocket.all[2]?.url).toBe(
+            "wss://example.com/game/coop/room/ABCDEFGH?resume=secret",
+        );
     });
 
     it("still lets go after a join the relay turned down", async () => {

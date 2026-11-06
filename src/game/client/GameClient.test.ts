@@ -914,6 +914,98 @@ describe("auto equip", () => {
     });
 });
 
+describe("a co-op run that breaks", () => {
+    // The client mid-run with a stand-in for the run, as updateCoop drives it
+    function coopClient(run: Partial<Record<string, unknown>>) {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const coop = { keepAlive: vi.fn(), leave: vi.fn() };
+        const finishRun = vi.fn();
+        const flush = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const fake = {
+            isHost: true,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            flush,
+            stepFrame,
+            ...run,
+        };
+        Object.assign(client, {
+            coop,
+            coopRun: fake,
+            coopStopped: false,
+            accumulator: 0,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+            finishRun,
+            updateHud() {},
+        });
+        const update = () =>
+            (
+                client as unknown as {
+                    updateCoop(ms: number, sim: Sim, run: unknown): void;
+                }
+            ).updateCoop(TICK_MS * 2, sim, fake);
+        return { client, store, coop, finishRun, flush, stepFrame, update };
+    }
+
+    it("sends the host's frames even when something after a step throws", () => {
+        const { client, flush, stepFrame, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        expect(update).toThrow("a bug in what's drawn");
+        expect(stepFrame).toHaveBeenCalledOnce();
+        expect(flush).toHaveBeenCalledOnce();
+    });
+
+    it("checks the room's connection on every update", () => {
+        const { coop, update } = coopClient({ canStep: () => false });
+        update();
+        update();
+        expect(coop.keepAlive).toHaveBeenCalledTimes(2);
+    });
+
+    it("ends a run whose frame won't step, and leaves the room, which ends it for everyone", () => {
+        const { client, coop, finishRun, stepFrame, update } = coopClient({ stuck: true });
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect(finishRun).toHaveBeenCalledWith("Something went wrong in the run, so it ended.");
+        expect(stepFrame).not.toHaveBeenCalled();
+        // And it's over: nothing more's stepped, and it doesn't leave again
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect((client as unknown as { coopStopped: boolean }).coopStopped).toBe(true);
+    });
+
+    it("tells a guest that can't catch up why, on its results or, if they're up, a toast", () => {
+        const behind = coopClient({ isHost: false, cantCatchUp: true });
+        behind.update();
+        expect(behind.coop.leave).toHaveBeenCalledOnce();
+        expect(behind.finishRun).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+        );
+
+        // Their hero's run was over already, so its results are showing
+        const spectating = coopClient({ isHost: false, cantCatchUp: true });
+        Object.assign(spectating.client, { runRecorded: true });
+        const toast = vi.spyOn(spectating.store, "toast");
+        spectating.update();
+        expect(spectating.coop.leave).toHaveBeenCalledOnce();
+        expect(toast).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+            6000,
+        );
+    });
+});
+
 describe("auto alch", () => {
     test("is off unless it's been turned on, and is remembered", () => {
         const stored = new Map<string, string>();
