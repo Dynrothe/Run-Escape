@@ -132,6 +132,8 @@ export type BossState = {
     enraged: boolean;
     // How many of BossDef.summonsAt have been called in
     summonsDone: number;
+    // Its root heart's been planted (BossAttackDef.rule heart): one a boss
+    ruleHeart?: boolean;
     phase?: BossPhase;
     surge?: BossSurge;
     walkers?: BossWalkers;
@@ -977,6 +979,18 @@ type SimEventBody =
           // Half the angle the swoosh covers, radians
           arc: number;
           weaponId: string;
+      }
+    // A tree felled along a strip (CharacterTraitDef timber): from x, y the way dir goes, length
+    // tiles, drawn as locId falling over
+    | {
+          type: "treeFall";
+          x: number;
+          y: number;
+          dirX: number;
+          dirY: number;
+          length: number;
+          locId: number;
+          sound?: number;
       }
     | { type: "aura"; x: number; y: number; radius: number }
     | { type: "pickup"; kind: PickupKind; value: number }
