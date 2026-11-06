@@ -3,6 +3,95 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+## 0.27.0 - 2026-11-05
+
+### Added
+
+- Power-up timers, by Deivid Smarzaro: a circle over each power-up on the ground drains from green
+  to orange to red as its 30 seconds run out. Settings and the pause menu can turn them off.
+- An Android app, by Duplicity: the APK on the release page. The whole game's in it, so
+  solo play works offline, even on the first launch, and co-op works online. It doesn't update
+  itself: install a new version's APK over the old one. Export and Import in Settings carry a save
+  between it and a browser.
+- Export reminder, by Okaeri: your progress is kept only on your device, so once you've played a
+  run, the title screen offers to export a copy on any day you haven't yet. Not today hides it
+  until tomorrow, and an exported save now says when it was made.
+
+### Changed
+
+- Smaller game updates, by trippy22: the game's files from the cache come in parts, and an update
+  downloads only the parts that changed, on the website and in the desktop app. The first download
+  is smaller too.
+- Co-op rooms cost much less to keep running, by trippy22: they sleep between messages on the
+  relay, which changes nothing in play.
+- The Skills page, by trippy22: every skill fits on the screen at once, without a scroll bar,
+  on most computers and tablets.
+- Skill prices, by trippy22: the same skills cost the same whatever order you buy them in. Most
+  pages of several skills cost less, a whole page about a quarter less, but a cheap skill costs
+  more once dearer ones are bought.
+- Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
+- The Toxic blowpipe, by Deivid Smarzaro: its darts visibly upgrade from bronze to dragon as it
+  levels.
+- Co-op caskets, by Okaeri: everyone who's up gets an item of their own from a casket, not just
+  whoever picks it up, and the run waits for each of them. Its coins still go to the party once.
+  Ordinary kills drop fewer caskets the bigger the party, so each player gets about as many items
+  as on their own, and the party about as many casket coins. A player who's down when one's picked
+  up misses out.
+
+### Fixed
+
+- From this version on, when the website's updated, a copy of the page the browser kept from
+  before reloads itself, rather than stopping partway through loading on a "missing from the
+  cache" error. Fixed by trippy22.
+- In Phosani's Nightmare, the yellow arrow over her Parasitic eggs now shows on the website and in
+  the desktop app. It was missing from their copy of the game's files.
+- Any class page can refund single skill ranks, including the ones that needed Refund all first.
+  Fixed by trippy22.
+- In co-op, the boss health bar shows the boss closest to you, even over the final boss, rather
+  than sticking to one copy of it. Fixed by Deivid Smarzaro.
+
+## 0.26.1 - 2026-11-05
+
+### Added
+
+- Overhead prayers, by Okaeri: bosses that pray show OSRS's overhead prayer for it, as the Theatre
+  of Blood's do, Protect from Missiles and Magic. Nylocas Vasilias's shows the two styles its colour
+  holds back, and changes with it.
+- Boss prayer warnings, by Okaeri: in the Theatre of Blood, a ranged or magic weapon's level up
+  card says in red how much less damage it does to the bosses, as they pray against it.
+
+### Changed
+
+- Theatre of Blood, by Okaeri: the Maiden was killing nearly every party. She has less than half
+  the hitpoints, her blood hits softer and a second apart, her pools are smaller, tick slower and
+  fade sooner, and her Blood burst comes half as often, so melee can stay in on her.
+- Theatre of Blood, by Okaeri: the bosses after the Maiden hit a third softer, losing the extra
+  half 0.25.0 gave their hits, on every mode (expert's own attacks keep theirs).
+- Theatre of Blood expert mode, by Okaeri: the small and big Nylocas take three times the damage
+  from their own colour's style, so the right weapon brings them down quickly. Nylocas Vasilias is
+  unchanged.
+- Theatre of Blood, by Okaeri: the Pestilent Bloat goes down only once his flies are out, rather
+  than in the middle of his swarm, so there's the whole of his nap to reach him.
+- Theatre of Blood, by Okaeri: in a boss room the camera stays on you, as in the halls, moving up
+  only as far as keeps the boss below its health bar, rather than leaning towards the boss.
+
+### Fixed
+
+- The Collection log has a tab for each place with finds of its own: the Theatre of Blood's has
+  its chest's finds, Lil' Zik and the weapons it brings in, Justiciar Zachariah's has the Dark
+  squirrel, and Phosani's Nightmare's has her staff, rather than them all sitting under the
+  Hallowed Night or missing. Fixed by Okaeri.
+- Theatre of Blood expert mode: the blue Nylocas come in to a couple of tiles to shoot, rather
+  than hanging back out of reach of auras like Ice Barrage, which left a mage nothing to hit them
+  with. Fixed by Okaeri.
+- Theatre of Blood on Safari: the first hall drew as a flat dark red over everything, with
+  nothing of the world showing. Fixed by Okaeri.
+- Hard and expert mode: a boss's fan of shots (the Maiden's Blood throw) shows a line for every
+  shot, rather than fewer lines than shots, which left shots between them. Fixed by Okaeri.
+- Justiciar Zachariah: the great owls' plinths no longer flicker against the floor.
+
 ## 0.26.0 - 2026-11-05
 
 ### Added

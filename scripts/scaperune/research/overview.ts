@@ -3,8 +3,8 @@
 // hidden floor (0xFF00FF overlays, which draw nothing) hatched black and grey. For finding places
 // and reading a layout, not for looks.
 //
-//   npx tsx scripts/scaperune/research/overview.ts out.png x y sizeX sizeY [pixelsPerTile]
-//   DEV_MAPS=1 npx tsx scripts/scaperune/research/overview.ts out.png map=scaperune_ysmar [ppt]
+//   bun run tsx scripts/scaperune/research/overview.ts out.png x y sizeX sizeY [pixelsPerTile]
+//   DEV_MAPS=1 bun run tsx scripts/scaperune/research/overview.ts out.png map=scaperune_ysmar [ppt]
 import fs from "node:fs";
 
 import { cacheFloorId } from "../../../src/game/scaperune/format";

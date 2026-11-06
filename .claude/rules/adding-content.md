@@ -10,13 +10,14 @@ Content is plain data in `src/game/content/`, typed in `types.ts`, and the comme
 each field. Find a similar entry, copy its shape, and look up real ids in the cache:
 
 ```sh
-npx tsx scripts/cache/find-objs.ts "dinh's bulwark"      # items
-npx tsx scripts/cache/find-npcs.ts "^count draynor$"     # NPCs and their idle and walk animations
-npx tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's model can play
-npx tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183 # tell attack and death animations apart
-npx tsx scripts/cache/find-locs.ts multicannon           # scenery
-npx tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
-npx tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through
+bun run tsx scripts/cache/find-objs.ts "dinh's bulwark"      # items
+bun run tsx scripts/cache/find-npcs.ts "^count draynor$"  # NPCs and their idle and walk animations
+bun run tsx scripts/cache/find-npc-seqs.ts 655               # animations an NPC's model can play
+# tell attack and death animations apart
+bun run tsx scripts/cache/classify-npc-seqs.ts 655 6182 6183
+bun run tsx scripts/cache/find-locs.ts multicannon           # scenery
+bun run tsx scripts/cache/sounds.ts seqs 390                 # sounds an animation plays
+bun run tsx scripts/cache/sprites.ts png out 1400-1430       # interface sprites, to look through
 ```
 
 Attack sounds aren't in the cache: the ids come from the OSRS Wiki's list of in-game sound IDs.
@@ -53,6 +54,8 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A strike's `impactFit` scales its impact spot animation to the strike's radius and plays it out
   in full (the Nightmare staff's hands), instead of a moment of it as it is.
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
+- To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
+  projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
@@ -64,8 +67,12 @@ Add it to `PASSIVES` in `passives.ts`. `perLevel` is what a Common pick adds, an
 the same amount on more stats. `iconSpriteId` shows an interface sprite instead of the item
 (a prayer's icon), and the item if the cache hasn't got it. Sprites have no names, so find one
 with `sprites.ts png` over a range of ids and look: a prayer's lit icon sits beside its greyed-out
-one. `sprites.ts check` (and a test, when there's a cache) makes sure every passive's sprite is
-there, and `slim-cache.ts` keeps them.
+one. `sprites.ts check` (and a test, when there's a cache) makes sure every sprite the game shows
+is there, the overhead prayers' frames too, and `slim-cache.ts` keeps them.
+
+Any other interface sprite the game shows goes in `getGameSpriteIds` in `client/GameAssets.ts`
+(one the game view draws, in `GAME_VIEW_SPRITES`, or in `loadSprites` for a frame past the first,
+as the overhead prayers are), or the slim cache won't have it.
 
 ## Stat
 
@@ -77,10 +84,10 @@ starting weapon).
 ## Shop upgrade
 
 Add it to `SHOP_UPGRADES` in `shop.ts`, themed as an OSRS skill, with its `stat`. Costs and
-refunds come from `getUpgradeCost` and the save code, independently for each combat style's
-`skillPages` allocation. New ones don't need a save migration.
-A single rank's refund reprices the page's later ranks from its saved purchase order, at today's
-prices, and never gives back more than the page spent, so changing a cost needs no migration either.
+refunds come from `getPageCost` (what a page's ranks cost in all, in any order) and the save code,
+independently for each combat style's `skillPages` allocation. New ones don't need a save migration.
+A single rank's refund gives back its share of what the page spent, by what it adds at today's
+prices, so changing a cost needs no migration either.
 
 ## Gear and utility items
 
@@ -224,12 +231,13 @@ which exports where everything is. `waves` and `events` on the `MapDef` are ever
 bakes and checks a map's enemies; the sim goes by the rooms. Its bosses go in a file of their own
 (`theatre.ts`); one that's also on a campaign map is a copy with a raid id, so the campaign stays as
 it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, `colours`, `stare`,
-`expert` on an attack) and do nothing off a raid's expert mode, but `colours.offStyle` brings a
-boss's colours to normal too. A boss's own mechanic can be a while it can't be hurt: `shadowRealm`
-or `yellows` (for so many seconds) or `exhumes` (until so many of its smother ground marks are stood
-on, or its time's up), each at shares of its hitpoints, doing only the attacks they name meanwhile
-(`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used only then. The balance bot has to know
-how to play a new one (`fightMove` in `simulate-run.ts`), or its sims can't win the fight.
+`expert` on an attack, `shot.expertKeep`, `expertOwnStyle`) and do nothing off a raid's expert mode,
+but `colours.offStyle` brings a boss's colours to normal too. A boss's own mechanic can be a while
+it can't be hurt: `shadowRealm` or `yellows` (for so many seconds) or `exhumes` (until so many of
+its smother ground marks are stood on, or its time's up), each at shares of its hitpoints, doing
+only the attacks they name meanwhile (`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used
+only then. The balance bot has to know how to play a new one (`fightMove` in `simulate-run.ts`), or
+its sims can't win the fight.
 
 ## Pet
 
@@ -239,6 +247,11 @@ animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: u
 script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
 offered once found, with nothing else to add. Pets never go in the sim: see Pets in
 `docs/DEVELOPMENT.md`.
+
+A trophy (`trophies.ts`) shows in the Collection log under the map its `from` names (a pumpkin's
+under the Hallowed Night), with a tab of its own for a new map, and so do weapons whose `unlock`
+names that map (`content/collectionLog.ts`). A boss fight map (`MapDef.fight`) whose boss brings
+in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't.
 
 ## Adventurer
 

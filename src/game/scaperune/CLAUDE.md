@@ -246,8 +246,8 @@ includes the margin, and in `GeneratorSettings` it doesn't.
 Work on shapes with `relief.ts`, which takes seconds and no cache:
 
 ```sh
-npx tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
-npx tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
+bun run tsx scripts/scaperune/relief.ts out.png seed=7 mountains=0.6 peakHeight=240
+bun run tsx scripts/scaperune/relief.ts out.png preset=Alpine seed=3
 ```
 
 | To get                   | Reach for                                                                                                |
@@ -512,19 +512,24 @@ gate, goes in `designed`, as rectangles of tiles, which is the only way out of a
 
 ## Checking a map
 
-**A round.** Each of these is cheap, so go round often. On a small machine run anything that loads the cache one at a
-time (the team's VM has a job wrapper for that outside the repository; plain `npx tsx` is fine anywhere else).
+**A round.** Run these checks often. On a small machine, run one cache task at a time. The team's
+VM has a job wrapper for this outside the repository. Elsewhere, use `bun run tsx` directly.
 
 ```sh
-npx tsx scripts/scaperune/preview.ts out.png map=scaperune_oasis          # from above, and reachability
-ONLY='scaperune_oasis$' npx tsx scripts/scaperune/check-maps.ts           # every rule, on one map
-npx tsx scripts/scaperune/research/measure.ts out.json scaperune_oasis    # everything else
-npx tsx scripts/scaperune/world-index.ts world.json                       # once, for the next line
-npx tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaperune_oasis
-npx tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2   # scenery from above, which preview can't show
-npx tsx scripts/scaperune/view-weight.ts scaperune_oasis                       # triangles per camera view (PHONE=1 for a phone's)
-npx tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off   # will a cut hold waves?
-DEV_MAPS=1 MAP=scaperune_oasis npx tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
+bun run tsx scripts/scaperune/preview.ts out.png map=scaperune_oasis  # from above, and reachability
+ONLY='scaperune_oasis$' bun run tsx scripts/scaperune/check-maps.ts  # every rule, on one map
+bun run tsx scripts/scaperune/research/measure.ts out.json scaperune_oasis    # everything else
+bun run tsx scripts/scaperune/world-index.ts world.json  # once, for the next line
+bun run tsx scripts/scaperune/research/trap-scan.ts world.json traps.json scaperune_oasis
+# scenery from above, which preview can't show
+bun run tsx scripts/scaperune/research/overview.ts out.png map=scaperune_oasis 2
+# triangles per camera view (PHONE=1 for a phone's)
+bun run tsx scripts/scaperune/view-weight.ts scaperune_oasis
+# faces in one plane, which z-fight
+bun run tsx scripts/scaperune/check-coplanar.ts scaperune_oasis
+# will a cut hold waves?
+bun run tsx scripts/scaperune/find-prefabs.ts rect=3572,3230,100,120 pieces=1 doors=off
+DEV_MAPS=1 MAP=scaperune_oasis bun run tsx scripts/game/simulate-run.ts wizard 1   # it plays at all
 ```
 
 **Will a cut hold together?** `find-prefabs.ts rect=x,y,w,h collision=1` draws the game's collision (`.` open, `#` blocked,
@@ -534,8 +539,9 @@ out in 190 pieces, the biggest 1,356 tiles; with doors and props off it's 4,116.
 a town that falls into pieces has nowhere for waves to come at you. In a recipe,
 `findPieces(getCollisionFlags(grid, locs), sizeX, sizeY, rect)` (`collision.ts`) gives the same list, biggest first, to throw on if the biggest is too small.
 
-Before you finish: `npx vitest run src/game/scaperune`, which runs `check-maps.ts` over every dev map, about 60 settings at
-their extremes, the presets and 12 random rolls. That takes a few minutes.
+Before you finish, run `bun run vitest run src/game/scaperune`. It runs `check-maps.ts` over every
+dev map, about 60 settings at their extremes, the presets and 12 random rolls. That takes a few
+minutes.
 
 ### The look line
 
@@ -656,6 +662,14 @@ hand-made map with no `detail`, and only checks a road's grade or a landmark's g
   `0xFF00FF`, which draws nothing) or has no floor at all. In the world that ground is under something else, so a cut brought
   in a hole. Tiles drawn from level 1, under a bridge, or covered by floor decoration aren't counted. `overview.ts` hatches the
   hidden overlay black and grey.
+- `N open tiles are floor decoration over a hidden floor`: the tiles are drawn, but the hairline seams between two of them
+  show what's under them, which is the renderer's black, and they glitter as the camera moves. The Owl's Court's walkways
+  did. Put a plain overlay of the decoration's own colour under them (theirs is 141); the decoration draws over it. The
+  Theatre's Bloat and Verzik rooms have 704 such tiles, as cut.
+- `X and Y have faces in one plane, which z-fight` (`coplanar.ts`), ours first, then `as cut from the real place` for what a
+  stamp brought as the real world has it. It doesn't fail a map, since some dev maps had a few before it was checked
+  (Vardhelm's city towers on their walls, Ysmar's big props, overlapping falls and floes), but a new map should have none:
+  `CHECK=1 check-coplanar.ts <map>` fails on any of ours. See [Traps](#traps).
 - `N warnings from the catalogue:`, on a shipped map: the ban list minus its `allowLocs`, kit pieces, blood and foam. A
   shipped map went out looked at in the game, so each is a question, not a bug.
 - `N tiles have two solid locs on them`, on a shipped map (`findSolidOverlaps` in `placer.ts`): usually a placement helper
@@ -698,7 +712,7 @@ Tests don't cover how things look, and this is where most maps fall down. From a
 a preview is the arena and the red dot is the spawn, and the minimap renderer doesn't draw trees or rocks.
 
 ```sh
-npm start        # the dev server, then in another shell, the screenshot helper (see below):
+bun run start        # the dev server, then in another shell, the screenshot helper (see below):
 PROFILE=<profile dir> PORT=5173 MAP=scaperune_town node rs-height.mjs out square:6152:11674:18 side:6152:11674:18:-250
 ```
 
@@ -714,11 +728,16 @@ Vite reloads the page and kills the job.
 ### Trying a new loc
 
 ```sh
-npx tsx scripts/scaperune/research/model-bounds.ts 3709 60440    # contour, triangles, how far it really reaches
-npx tsx scripts/scaperune/research/where.ts 44,56 3709           # how the world uses it: the ground, and what's round it
-npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22      # draw it, about as the play camera sees it
-TRUE_SCALE=1 npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 37646   # every loc at the same scale, on its footprint
-npx tsx scripts/scaperune/research/kit-scan.ts kits.json          # suggests kit pieces from the whole cache
+# contour, triangles, how far it really reaches
+bun run tsx scripts/scaperune/research/model-bounds.ts 3709 60440
+# how the world uses it: the ground, and what's round it
+bun run tsx scripts/scaperune/research/where.ts 44,56 3709
+# draw it, about as the play camera sees it
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22
+# every loc at the same scale, on its footprint
+TRUE_SCALE=1 bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 37646
+# suggests kit pieces from the whole cache
+bun run tsx scripts/scaperune/research/kit-scan.ts kits.json
 ```
 
 Read `model-bounds.ts` like this: `contour` 0 or more follows the ground, and -1 stands level, so it wants flat ground.
@@ -1248,20 +1267,32 @@ cuts off is only looked at, and a river would cut the land in two for good, so `
 **Finding what a place is made of**, all without a browser:
 
 ```sh
-npx tsx scripts/scaperune/world-index.ts world.json         # every square's locs and floors, once
-npx tsx scripts/scaperune/find-place.ts world.json colour=red surface=0                  # places whose ground is mostly red
-npx tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10 plane=1    # by locs, upstairs
-npx tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1      # a cut, upstairs, as the game walks it
-npx tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22 # draws locs, about as the play camera sees them
-npx tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5 # draws a rectangle of the world from above
-npx tsx scripts/scaperune/find-buildings.ts 50 50 51 50     # whole buildings in a block of squares
-npx tsx scripts/scaperune/research/cross-section.ts 2820 3628 25 12  # a real cliff as text: heights, floors, what's on it
-npx tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2  # a real place from above
-npx tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map    # a place's walls: ranked by level, as a text map
-npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795 # one id's longest run, and what's across it
-npx tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump     # every loc and floor, tile by tile, on each level
-npx tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90          # a place's streets, blocks and gaps, as numbers
-npx tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1    # the same inside a made wall
+bun run tsx scripts/scaperune/world-index.ts world.json  # every square's locs and floors, once
+# places whose ground is mostly red
+bun run tsx scripts/scaperune/find-place.ts world.json colour=red surface=0
+# by locs, upstairs
+bun run tsx scripts/scaperune/find-place.ts world.json name=bloodsplatter locs=10 plane=1
+# a cut, upstairs, as the game walks it
+bun run tsx scripts/scaperune/find-prefabs.ts rect=3161,4373,19,29 plane=1 collision=1
+# draws locs, about as the play camera sees them
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 1276 1241:22
+# draws a rectangle of the world from above
+bun run tsx scripts/scaperune/loc-sheet.ts out.png 3243,3244,6,5
+bun run tsx scripts/scaperune/find-buildings.ts 50 50 51 50  # whole buildings in a block of squares
+# a real cliff as text: heights, floors, what's on it
+bun run tsx scripts/scaperune/research/cross-section.ts 2820 3628 25 12
+# a real place from above
+bun run tsx scripts/scaperune/research/overview.ts out.png 3200 3200 96 80 2
+# a place's walls: ranked by level, as a text map
+bun run tsx scripts/scaperune/research/wall-survey.ts 3160 3370 140 150 0 map
+# one id's longest run, and what's across it
+bun run tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 runs 23795
+# every loc and floor, tile by tile, on each level
+bun run tsx scripts/scaperune/research/wall-survey.ts x y sizeX sizeY 0 dump
+# a place's streets, blocks and gaps, as numbers
+bun run tsx scripts/scaperune/research/street-survey.ts 3176 3383 56 90
+# the same inside a made wall
+bun run tsx scripts/scaperune/research/street-survey.ts preset="Walled city" seed=3 sideStreets=1
 ```
 
 `find-place.ts` searches the index: floor colour by name (`red`, `brown`, `yellow`, `green`, `blue`, `purple`, `grey`,
@@ -1559,16 +1590,16 @@ There's no building entity in the cache. A building is its locs and floor tiles,
 rectangle of the real world.
 
 1. **Find one.** `find-buildings.ts` finds whole buildings in a block of squares, and `loc-sheet.ts` draws what it finds.
-   `npx tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with world coordinates down the
-   side; `rect=x,y,w,h` draws any rectangle instead, across squares, and `plane=N` another level. Pick a rectangle
-   that holds the whole building and nothing else.
+   `bun run tsx scripts/scaperune/find-prefabs.ts 50 50` draws map square 50,50 as text with world
+   coordinates down the side. Use `rect=x,y,w,h` for a rectangle across squares and `plane=N` for
+   another level. Pick a rectangle that holds the whole building and nothing else.
 2. **Name it** in `PREFABS` (`prefabs.ts`): its south-west corner and size, in world tiles, and give it a kind in
    `BUILDING_KINDS`. The rectangle must take in every wall of the building, with nothing else in it. A rectangle a row short
    loses that wall, and the floor behind it with it. The start of its name is its family, so a new prefab for an existing
    family goes in that family's towns.
-3. **Check it**: `npx tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every prefab in every
-   rotation and fails if a wall's cut off, floor is lost indoors, or there's no way out. Then look at it:
-   `scaperune_prefabs` is a dev map with all of them in all 4 rotations.
+3. **Check it** with `bun run tsx scripts/scaperune/check-prefabs.ts`. It walks the walls of every
+   prefab in every rotation and fails if a wall is cut off, floor is lost indoors, or there's no way
+   out. The dev map `scaperune_prefabs` shows them all in all four rotations.
 4. **Stamp it**: `kit.stamp(ground, name, turns, x, y)` on a `PrefabKit` stands it on flat ground with its doors off,
    and `kit.stampRuin` leaves most of it gone. `new PrefabKit(context, MY_PREFABS)` lets a map bring its own, which
    the generator won't pick and `check-prefabs.ts` won't check. For anything else,
@@ -1730,6 +1761,12 @@ expect(placer.describeShortfalls()).toEqual([]); // or read placer.report() per 
   instead of someone counting by eye.
 - **A loc off a whole tile throws** (`Ground.place`, `Placer.dress` and `writeLocs`), rather than the map file quietly moving
   it: `x / 2` of an odd width is the usual cause. Use `Math.floor`.
+- **What a boss fight animates is a stand-in** (`placer.standIn(id, x, y, { rotation, walkThrough, kind })`). A map square
+  bakes each loc with its own animation only, so a placed statue can't be told to aim or throw on cue; the fight draws it
+  instead (`BossAttackDef.statues`). A stand-in's tiles are taken and blocked (open if `walkThrough`) as though it stood
+  there, but it's left out of the map and listed in `placer.standIns`. Hand them on as the map's `standIns`, so
+  `view-weight.ts` counts their triangles: the Owl's Court's 24 (crossbowmen, knights, fire jets) take its heaviest phone
+  view from 38k to 60k, which a count without them never showed.
 
 The Sanctuary and Hallowed Night still use their own copies: moving them onto `Placer` would re-roll their dressing.
 
@@ -1760,11 +1797,12 @@ region that isn't a rectangle of open ground: the court, a bridge and a terrace 
 rims and dais in it blocked first, so `maxSealed: 0` says nothing open was cut off.
 
 **Walkways over a void, as the Hallowed Sepulchre is built** (`owlsCourt.ts`, Justiciar Zachariah's arena): every walkway
-tile is the hidden overlay (359) under a type 22 stone tile, and the void has no floor at all, so it draws the renderer's
-black. Each walkway's edges get the Sepulchre's lips on the void tile beside them (a corner piece where an edge turns, a post
+tile is a type 22 stone tile over a plain overlay of the stones' own dark blue-grey (141), and the void has no floor at all,
+so it draws the renderer's black. The Sepulchre's own floor under its tiles is the hidden overlay (359), which showed the
+black through the seams between the tiles: `check-maps.ts` warns of that now. Each walkway's edges get the Sepulchre's lips on the void tile beside them (a corner piece where an edge turns, a post
 where only a corner touches), and its tall wall 38924 under every edge the camera can see. The cache stands that wall on the
-level below, rising to the walkway; a map draws one level, so `LocOverrides.ts` lowers it 4 tiles and it hangs from the
-edge. A second walkway 4 tiles lower is ground of its own, blocked, and kept 4 tiles from the upper one so the void round
+level below, rising to the walkway; a map draws one level, so `LocOverrides.ts` lowers it 4 tiles and 4 units (its cap
+would be in the floor's plane otherwise) and it hangs from the edge. A second walkway 4 tiles lower is ground of its own, blocked, and kept 4 tiles from the upper one so the void round
 each is flat at its height and the lips stand level. The camera's always over the court, so west faces west of it and east
 faces east of it are left out for the phone's sake. Every statue the Sepulchre has looks south unturned, west at rotation
 1 and east at 3.
@@ -1777,6 +1815,26 @@ on its own. Nothing at the slabs' height is drawn, so there's nothing for them t
 on it; what's seen under the floor is drawn by the client on a regular grid, so a hole looks the same at every size. A level-0 loc under a bridge
 doesn't block what's walked or what's seen across it, so `check-maps.ts`'s sight lines leave it out, and its hidden-tile
 check stands a bridge's tiles at the deck.
+
+#### A boss fight's arena
+
+What the Owl's Court (`owlsCourt.ts`, `docs/design/justiciar-zachariah.md`) learnt, for the next arena:
+
+- **The fight reads the arena off the map.** Export everything it reads in arena tiles (`OWLS_COURT`: the boss's square, his
+  rise, the start, pillars, crossbow lanes, knights, fire rows, the dais), and have the content turn that into the `MapDef`'s
+  `features`. The fight never hard-codes a tile. Each of them is a `points` entry too, so a lane's end in a wall throws in
+  `assertReachable`, not in a playtest.
+- **He comes in where the player isn't running past him.** He descends in the court's middle and the player starts by its
+  south edge, 11 tiles off, inside his 16-tile leash. The intro holds the camera on him and pans back to the player
+  (`BossIntroDef.pan`), and the player faces him while held (`faces`). The first layout started the player on the terrace
+  with him at the bridge's head, and they ran past him to reach the court.
+- **Don't paint a mechanic on the floor.** The court first laid its lightning's 3 by 3 checker as rugs, and it read as a board
+  game. The floor's plain stone with one runner up the aisle; the strike's own glow marks the cells it's about to hit.
+- **What it animates is a stand-in** (`Placer.standIn`, above), and counts on the phone like anything else. A crossbowman
+  statue is 1,434 triangles, so three lanes a side; the lightning is his own cast, not a pair of priest statues, which would
+  have been about 1,500 triangles more on the heaviest view. Run `PHONE=1 view-weight.ts` with the stand-ins in.
+- **What the cache can't do is the fight's to draw.** Nothing in the cache casts a pillar's shadow, so the gaze's safe ground
+  is a colour overlay the fight draws (the design doc's section 9). Keep that for what has to be read exactly.
 
 ### How big a map can be
 
@@ -1827,6 +1885,14 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   need the sea sunk first, or a river's lowest point isn't known.
 - **`spawn` must be open**, and it has to be known without building the map, because the game needs it
   first. The generator clears water and scenery round it, wherever `spawnX` and `spawnY` put it.
+- **Faces in one plane z-fight.** Two up-facing faces at the same height that overlap flicker as the camera moves, whatever
+  their priorities: the renderer's depth bias (`main.vert.glsl`, 0.0007 of a tile a priority step) doesn't keep them apart.
+  The Owl's Court had three: its hanging wall's cap at the floor's height, a wizard statue's plate flat on the floor, and the
+  great owls' plinth, whose steps every 2 units met the raised edge of a stone tile 6 up. `check-coplanar.ts` (and
+  `check-maps.ts`) finds them from the scene as the renderer builds it. Lift the loc a unit or a few in `LocOverrides.ts`
+  (`height`), an odd number for steps that go up in 2s, or sink a cap that a lip hides.
+- **Floor decoration over the hidden overlay shows the void.** Tiled type 22 floors leave hairline seams, and with nothing
+  under them the seams are black and glitter. Give them a plain overlay of their own colour underneath.
 - **`Math.random` breaks everything.** A recipe runs again on every load and in every script. Use
   `createRng` and `createNoise`. If you add a call to `rng()` early on, every later roll changes, and
   so does the map. Anything new goes on a seed of its own.
@@ -1913,9 +1979,10 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 - Shipped maps aren't held to the look rules, and get the catalogue (ban list minus `allowLocs`, kit pieces, blood and
   foam) as warnings, not failures. They must stay byte for byte: Hallowed Night imports `Ground`, `collision`, `format`,
   `mapBuild`, `noise`, `prefabs` and `recipe`. Each shipped map's hash is pinned in `scripts/scaperune/grid-hash.ts`
-  (`SHIPPED_HASHES`), and `CHECK=1 npx tsx scripts/scaperune/grid-hash.ts` builds every shipped map and fails if one moved;
-  `generator.test.ts` runs it when the cache is there. A change meant to change a shipped map updates its hash on purpose,
-  and says why in the pull request. A new shipped map adds its hash: the check fails on a shipped map with none.
+  (`SHIPPED_HASHES`). Run `CHECK=1 bun run tsx scripts/scaperune/grid-hash.ts` to build every
+  shipped map and compare its hash. `generator.test.ts` runs this check when the cache is present.
+  If you change a shipped map, update its hash and explain why in the pull request. Add a hash for
+  each new shipped map too. A missing hash fails the check.
 - A recipe whose test builds without the cache keeps a table of its locs' sizes and which are walked through (the
   Sanctuary's and the Owl's Court's `SOLID_LOCS` and `WALK_THROUGH`). `scripts/scaperune/check-solid-locs.ts` holds those
   tables to the cache, and a cache-gated test in each map's test runs it, so a cache update that changes a size or a clip
@@ -1929,7 +1996,7 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 ### The slim cache
 
 The hosted game's cache only holds what the game reads, found by loading every map in `ALL_MAPS`
-(`scripts/cache/slim-cache.ts`). Don't run `npm run slim-cache` as part of a change: it's done when
+(`scripts/cache/slim-cache.ts`). Don't run `bun run slim-cache` as part of a change: it's done when
 deploying. To ship a map:
 
 - **A fixed map or a fixed seed:** make it a real entry in `ALL_MAPS`, and say so in the pull request.
@@ -1937,8 +2004,9 @@ deploying. To ship a map:
 - **A different seed each run:** seeds read different things, so a sample map isn't enough. Put
   `PALETTE_RECIPE` in `ALL_MAPS` too, as it holds all the generator can use, and hide it from the map list.
   Run-time seeds also need a way to pass the seed in (recipes are a fixed list today).
-- **If you add to `BIOMES` or `PREFABS`,** run `npx tsx scripts/scaperune/check-palette.ts`. It fails if a
-  generated map reads something the palette doesn't. `palette.ts` picks new entries up by itself.
+- **If you add to `BIOMES` or `PREFABS`,** run `bun run tsx scripts/scaperune/check-palette.ts`.
+  It fails if a generated map reads something the palette doesn't. `palette.ts` picks up new
+  entries by itself.
 
 Terrain and locs live in our code, so they add nothing to the slim cache. Only what they point at does.
 

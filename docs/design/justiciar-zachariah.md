@@ -412,7 +412,7 @@ or so; a lightning colour's 40 strikes add nothing to what they were.
 - **The gaze is cast from the court's middle** (he leaps there first, `toMiddle`), not the dais:
   with the pillars round the middle, every spot in the court is within about eight tiles of a
   pillar's shadow from there. From the dais, the south pillars' shadows run off the court.
-- **The camera leans towards him** (`BossLookDef.lean`), as in a raid's boss room, so he isn't
+- **The camera leans towards him** (`BossLookDef.lean`), so he isn't
   under the boss bar when he's north of you.
 - **Strike reach 8.5 tiles**, centre to centre. Further off the strike holds its cast (nothing to
   hit), the boss bar says "Out of reach!" and a faint ring round you shows how far it reaches.
@@ -437,10 +437,10 @@ a power-up's.
 
 ## 10. Numbers from the bot
 
-`FLAT=1 MAP=zachariah DODGE=1 npx tsx scripts/game/simulate-run.ts saradominist 3` is a density
-meter, not a player: it stays in reach, steps off strips, lines and squares, hides from the gaze
-and steps off checker cells, smites whenever his guard's down (`SMITE=0` never does), and still
-takes what it reads late. It prints each phase's time and how much of it the boss was in reach.
+`FLAT=1 MAP=zachariah DODGE=1 bun run tsx scripts/game/simulate-run.ts saradominist 3` is a
+density meter, not a player: it stays in reach, steps off strips, lines and squares, hides from the
+gaze and steps off checker cells, smites whenever his guard's down (`SMITE=0` never does), and
+still takes what it reads late. It prints each phase's time and how much of it the boss was in reach.
 Seeds 1 to 3, on 2026-11-04:
 
 | Round | Bot      | Lasted (seeds 1, 2, 3)        | Got to         |

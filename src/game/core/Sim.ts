@@ -49,6 +49,7 @@ import {
     THRALLS,
     getPowerUp,
 } from "../content/powerups";
+import { isPrayerIgnored } from "../content/raidBosses";
 import {
     EXPERT_RAID_COINS,
     HARD_RAID_COINS,
@@ -3321,9 +3322,16 @@ export class Sim {
                         // ground if you come at them)
                         dirX = dirY = 0;
                     }
-                } else if (enemy.def.shot && distance < enemy.def.shot.range * SHOOTER_KEEP) {
+                } else if (
+                    enemy.def.shot &&
+                    distance <
+                        (this.expert && enemy.def.shot.expertKeep !== undefined
+                            ? enemy.def.shot.expertKeep
+                            : enemy.def.shot.range * SHOOTER_KEEP)
+                ) {
                     // Rangers and mages hang back to shoot, and close in when
-                    // they're out of reach
+                    // they're out of reach. Some come in closer on expert
+                    // (EnemyShotDef.expertKeep).
                     dirX = dirY = 0;
                 }
                 // Running off with the flag: away from the player when they're
@@ -4566,6 +4574,15 @@ export class Sim {
         return style === only ? 1 : share;
     }
 
+    // Expert mode: what a Nylocas in the waves takes from its own style (EnemyDef.expertOwnStyle)
+    private ownStyle(enemy: Enemy): number {
+        const only = enemy.def.onlyStyle;
+        if (!this.expert || enemy.def.boss || !only || this.sourceStyle !== only) {
+            return 1;
+        }
+        return enemy.def.expertOwnStyle ?? 1;
+    }
+
     // A weapon's hit an expert raid's Nylocas won't take (EnemyDef.onlyStyle)
     private wrongStyle(enemy: Enemy): boolean {
         const only = enemy.def.onlyStyle;
@@ -4609,7 +4626,7 @@ export class Sim {
         // On expert, a Nylocas takes its own style in full (EnemyDef.onlyStyle). A boss's colour
         // (BossDef.colours) goes on to the rule below as on normal: its own style through its
         // prayer's ownStyle, and expert never lets another style this far (wrongStyle)
-        if (this.expert && enemy.def.onlyStyle && !enemy.def.boss?.colours) {
+        if (isPrayerIgnored(enemy.def, this.expert)) {
             return 1;
         }
         const style = this.sourceStyle;
@@ -5963,6 +5980,29 @@ export class Sim {
         }
     }
 
+    // How many bullets a volley of a pattern fires, and a spread's arc, for the warning to match.
+    // More bullets on hard (bulletScale), the space between them as wide: a ring's gap is an
+    // angle, so it stays as wide; a spread fans out wider to keep its bullets as far apart; a
+    // ring or spiral with no gap has nothing to keep open, so it stays as it is (more would
+    // only close it up)
+    volleyShape(pattern: BulletPatternDef): { count: number; arc: number } {
+        const closed =
+            (pattern.shape === "ring" || pattern.shape === "spiral") && pattern.gap === undefined;
+        const count = closed ? pattern.count : Math.round(pattern.count * this.bulletScale);
+        const arc = Math.min(
+            Math.PI * 2,
+            ((pattern.arc ?? 1) * Math.max(1, count - 1)) / Math.max(1, pattern.count - 1),
+        );
+        return { count, arc };
+    }
+
+    // A spread's ith bullet's heading, of a volley this shape (volleyShape) aimed at aim, so its
+    // warning lines (BossFightView.drawAim) are where they go
+    volleyHeading(shape: { count: number; arc: number }, aim: number, i: number): number {
+        // The step first, then times i, as it always was: seeded fights stay as they were
+        return aim - shape.arc / 2 + i * (shape.arc / Math.max(1, shape.count - 1));
+    }
+
     private fireVolley(emitter: BulletEmitter, boss: Enemy): void {
         const pattern = emitter.attack.pattern!;
         // Each volley after the first can be quicker than the last (speedUp)
@@ -5970,13 +6010,8 @@ export class Sim {
         const speed = (pattern.speed + (pattern.speedUp ?? 0) * volley) / TICKS_PER_SECOND;
         const life = Math.ceil(pattern.range / speed);
         const turn = (pattern.curve ?? 0) / TICKS_PER_SECOND;
-        // More bullets on hard (bulletScale), the space between them as wide: a ring's gap is an
-        // angle, so it stays as wide; a spread fans out wider to keep its bullets as far apart; a
-        // ring or spiral with no gap has nothing to keep open, so it stays as it is (more would
-        // only close it up)
-        const closed =
-            (pattern.shape === "ring" || pattern.shape === "spiral") && pattern.gap === undefined;
-        const count = closed ? pattern.count : Math.round(pattern.count * this.bulletScale);
+        const shape = this.volleyShape(pattern);
+        const { count } = shape;
         if (pattern.shape === "wall" || pattern.shape === "closing") {
             this.fireGappedVolley(emitter, boss, speed, life, turn, count);
             return;
@@ -5986,10 +6021,6 @@ export class Sim {
             return;
         }
         const spread = pattern.shape === "spread";
-        const arc = Math.min(
-            Math.PI * 2,
-            ((pattern.arc ?? 1) * Math.max(1, count - 1)) / Math.max(1, pattern.count - 1),
-        );
         // Whoever's nearest now: a tracking spread's aim, a closing ring's middle
         const target = this.nearestHero(boss.x, boss.y).player;
         if (spread && pattern.track) {
@@ -6024,14 +6055,15 @@ export class Sim {
                 this.tick,
             );
         };
-        const step = spread ? arc / Math.max(1, count - 1) : (Math.PI * 2) / count;
-        const first = spread ? emitter.angle - arc / 2 : emitter.angle;
+        const step = (Math.PI * 2) / count;
         for (let i = 0; i < count; i++) {
             // The way through a ring, at its own angle
             if (!spread && pattern.gap !== undefined && i * step < pattern.gap) {
                 continue;
             }
-            const angle = first + i * step;
+            const angle = spread
+                ? this.volleyHeading(shape, emitter.angle, i)
+                : emitter.angle + i * step;
             fire(angle);
             if (pattern.mirror) {
                 // The same the other side of the aim, so it turns the other way
@@ -6905,6 +6937,11 @@ export class Sim {
         }
         if (this.tick < state.nextNap) {
             return false;
+        }
+        // Not while his volleys are still coming (a swarm's three rings): he goes down once
+        // they're out, starting nothing new meanwhile, so the whole nap is there to reach him
+        if (this.emitters.some((emitter) => emitter.enemyUid === enemy.uid && !emitter.ambient)) {
+            return true;
         }
         state.napEnd = this.tick + secondsToTicks(naps.seconds);
         enemy.vx = enemy.vy = 0;
@@ -8806,8 +8843,9 @@ export class Sim {
             this.showBlocked(enemy);
             return 0;
         }
-        // On normal, a colour's other styles do only a share (BossDef.colours.offStyle)
-        const offColour = poison ? 1 : this.offColour(enemy);
+        // On normal, a colour's other styles do only a share (BossDef.colours.offStyle); on expert,
+        // a Nylocas that isn't a boss takes more from its own (EnemyDef.expertOwnStyle)
+        const offColour = poison ? 1 : this.offColour(enemy) * this.ownStyle(enemy);
         // And a staring boss turns a hit from in front back on whoever made it
         if (!poison && this.staredAt(enemy)) {
             this.showBlocked(enemy);
@@ -12023,8 +12061,10 @@ export class Sim {
         this.checkLevelUp();
     }
 
-    // A casket always has some coins and one item; the run waits while the
-    // player decides what to do with the item
+    // A casket picked up: its coins and one item. The coins are the party's, so they're paid
+    // once, and it's one casket for the run's quests and the picker's on the results screen. In
+    // co-op every player who's up gets an item of their own, the picker first; a player who's down
+    // misses out.
     openCasket(tier: CasketTier): void {
         const [min, max] = CASKETS[tier].coins;
         const coins = Math.round(
@@ -12033,6 +12073,20 @@ export class Sim {
         this.gainCoins(coins);
         this.casketsOpened++;
         this.hero.casketsOpened++;
+        const picker = this.hero;
+        this.offerCasketItem(tier, coins);
+        for (const hero of this.heroes) {
+            if (hero !== picker && this.isUp(hero)) {
+                this.use(hero);
+                this.offerCasketItem(tier, coins);
+            }
+        }
+        this.use(picker);
+    }
+
+    // The current player's item from a casket, rolled on their luck, gear and banishes, with the
+    // casket's coins to show; the run waits while they decide what to do with it
+    private offerCasketItem(tier: CasketTier, coins: number): void {
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
         this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });

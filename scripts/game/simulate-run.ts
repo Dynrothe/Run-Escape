@@ -1,20 +1,20 @@
 // Plays runs with a simple bot on the real arena (collision from a snapshot of
 // the cache, see collision-snapshot.ts) and prints how they go, for balancing waves, weapons and the XP curve.
 //
-//   npx tsx scripts/game/simulate-run.ts                 # every character once
-//   npx tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
-//   npx tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
-//   MAP=barrows npx tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
-//   UNLOCKS=none npx tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
-//   META=max npx tsx scripts/game/simulate-run.ts        # every shop upgrade bought (none by default)
-//   ARMOURY=max npx tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
-//   ENDLESS=1 npx tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
-//   HARD=1 npx tsx scripts/game/simulate-run.ts          # on hard mode
+//   bun run tsx scripts/game/simulate-run.ts                 # every character once
+//   bun run tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
+//   bun run tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
+//   MAP=barrows bun run tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
+//   UNLOCKS=none bun run tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
+//   META=max bun run tsx scripts/game/simulate-run.ts        # every shop upgrade bought (none by default)
+//   ARMOURY=max bun run tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
+//   ENDLESS=1 bun run tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
+//   HARD=1 bun run tsx scripts/game/simulate-run.ts          # on hard mode
 //   EXPERT=1 MAP=theatre_of_blood ...  # a raid's expert mode (hard, and the Nylocas's colours)
-//   WEAPON=crystal_bow npx tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
-//   FINAL_BOSS=the_nightmare BOSS_ARENA=48 npx tsx ...   # another final boss, on a square of the map
+//   WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
+//   FINAL_BOSS=the_nightmare BOSS_ARENA=48 bun run tsx ...   # another final boss, on a square of the map
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
-//   DODGE=1 ...     # also keeps off what a phased boss marks on the ground, and sidesteps bullets
+//   DODGE=1 ...     # also keeps off what any boss marks on the ground, and sidesteps its bullets
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
 //   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 //   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
@@ -238,7 +238,36 @@ function botMove(sim: Sim): { x: number; y: number } {
     return { x: ax / len, y: ay / len };
 }
 
-// A phased boss's fight, as a careful person plays it, or undefined outside one.
+// Sidesteps what's about to reach it, the nearer the more. A person reads
+// the arms of a spiral far sooner than this does.
+function sidestepBullets(sim: Sim): { x: number; y: number } | undefined {
+    const player = sim.player;
+    let awayX = 0;
+    let awayY = 0;
+    const { bullets } = sim;
+    for (let i = 0; i < bullets.count; i++) {
+        const slot = bullets.order[i];
+        const dx = player.x - bullets.x[slot];
+        const dy = player.y - bullets.y[slot];
+        const distSq = dx * dx + dy * dy;
+        // Only those coming this way
+        if (distSq < 9 && dx * bullets.vx[slot] + dy * bullets.vy[slot] > 0) {
+            const weight = 1 / Math.max(distSq, 0.1);
+            // Across its path, to whichever side it's already nearer
+            const side = dx * bullets.vy[slot] - dy * bullets.vx[slot] >= 0 ? 1 : -1;
+            awayX += bullets.vy[slot] * side * weight;
+            awayY += -bullets.vx[slot] * side * weight;
+        }
+    }
+    if (awayX === 0 && awayY === 0) {
+        return undefined;
+    }
+    const length = Math.hypot(awayX, awayY);
+    return { x: awayX / length, y: awayY / length };
+}
+
+// A phased boss's fight, as a careful person plays it, or undefined outside one. With DODGE it
+// also keeps out of any boss's ground marks that hurt, phased or not.
 // Without DODGE it only goes where the fight needs it to: the totems and the
 // sleepwalkers, without which it can't be won at all.
 function fightMove(sim: Sim): { x: number; y: number } | undefined {
@@ -262,6 +291,30 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         return markAway < 0.5
             ? { x: 0, y: 0 }
             : { x: (mark.x - player.x) / markAway, y: (mark.y - player.y) / markAway };
+    }
+    // Out of the marks that hurt of a boss that isn't phased (the Maiden's blood, a slam about to
+    // land), as a person steps out of them: a phased boss's are read below, lanes and all
+    if (dodges && !phase) {
+        for (const hazard of sim.hazards) {
+            const ground = hazard.attack.ground;
+            if (!ground || ground.safe || ground.smother) {
+                continue;
+            }
+            const lingering = hazard.lingerEnd > sim.tick;
+            const landing = hazard.landTick >= sim.tick;
+            const dx = player.x - hazard.x;
+            const dy = player.y - hazard.y;
+            const away = Math.hypot(dx, dy);
+            if ((lingering || landing) && away < hazard.radius + player.radius + 0.3) {
+                return away > 0.001 ? { x: dx / away, y: dy / away } : { x: 1, y: 0 };
+            }
+        }
+    }
+    if (dodges && boss && !boss.dead && !phase) {
+        const sidestep = sidestepBullets(sim);
+        if (sidestep) {
+            return sidestep;
+        }
     }
     if (!boss || !state || !phase || boss.dead) {
         return undefined;
@@ -289,28 +342,9 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 quarters.y + (quarters.safe & 2 ? 3 : -3),
             );
         }
-        // Sidesteps what's about to reach it, the nearer the more. A person reads
-        // the arms of a spiral far sooner than this does.
-        let awayX = 0;
-        let awayY = 0;
-        const { bullets } = sim;
-        for (let i = 0; i < bullets.count; i++) {
-            const slot = bullets.order[i];
-            const dx = player.x - bullets.x[slot];
-            const dy = player.y - bullets.y[slot];
-            const distSq = dx * dx + dy * dy;
-            // Only those coming this way
-            if (distSq < 9 && dx * bullets.vx[slot] + dy * bullets.vy[slot] > 0) {
-                const weight = 1 / Math.max(distSq, 0.1);
-                // Across its path, to whichever side it's already nearer
-                const side = dx * bullets.vy[slot] - dy * bullets.vx[slot] >= 0 ? 1 : -1;
-                awayX += bullets.vy[slot] * side * weight;
-                awayY += -bullets.vx[slot] * side * weight;
-            }
-        }
-        if (awayX !== 0 || awayY !== 0) {
-            const length = Math.hypot(awayX, awayY);
-            return { x: awayX / length, y: awayY / length };
+        const sidestep = sidestepBullets(sim);
+        if (sidestep) {
+            return sidestep;
         }
         // Off a lunge's strip, out of a square blast, off a wave's or a thrown sword's line, as a
         // person reads them (BossAttackDef.line, square, wave, boomerang)

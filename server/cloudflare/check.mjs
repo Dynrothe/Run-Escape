@@ -3,8 +3,8 @@
 // the run starts, frames and inputs go both ways, the guest leaves and the host
 // disbands. Then it times round trips.
 //
-//   npm run check -- ws://127.0.0.1:8787/coop                          # wrangler dev
-//   npm run check -- wss://run-escape-coop.<subdomain>.workers.dev/coop # deployed
+//   bun run check ws://127.0.0.1:8787/coop                          # wrangler dev
+//   bun run check wss://run-escape-coop.<subdomain>.workers.dev/coop # deployed
 //
 // It uses Node's own WebSocket (Node 22, or Node 21 with
 // NODE_OPTIONS=--experimental-websocket).

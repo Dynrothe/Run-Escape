@@ -243,6 +243,34 @@ describe("Placer", () => {
         expect(() => placer.solid(1, 2.5, 3)).toThrow(/whole tile/);
         expect(() => placer.dress(8, 2, 3.5, { type: 10 })).toThrow(/whole tile/);
         expect(() => ground.place(loc(1, 10, 1, 0.5), 1, 1)).toThrow(/whole tile/);
+        expect(() => placer.standIn(1, 2, 0.5)).toThrow(/whole tile/);
+    });
+
+    // The Owl's Court's crossbowmen and fire jets, which the fight draws and animates
+    it("takes a stand-in's tiles and blocks them, but leaves it out of the map", () => {
+        const { ground, placer } = create();
+        const blocked = (x: number, y: number) => ground.level0.flags[ground.tile(x, y)] & 1;
+        // A table turned a quarter: 1 across, 2 deep
+        expect(placer.standIn(3, 4, 4, { rotation: 1, kind: "statues" })).toBe(true);
+        expect(ground.grid.locs).toEqual([]);
+        expect(placer.standIns).toEqual([loc(3, 10, 4, 4, { rotation: 1 })]);
+        expect([blocked(4, 4), blocked(4, 5), blocked(5, 4)]).toEqual([1, 1, 0]);
+        expect(ground.occupied[ground.tile(4, 5)]).toBe(1);
+        // Nothing solid goes on it after, and walked through it's taken but open
+        expect(placer.solid(1, 4, 5)).toBe(false);
+        expect(placer.standIn(8, 6, 6, { walkThrough: true, kind: "fire" })).toBe(true);
+        expect(blocked(6, 6)).toBe(0);
+        expect(placer.dress(8, 6, 6, { type: 10 })).toBe(false);
+        // Not on something solid, nor ground that's already blocked
+        placer.solid(1, 8, 8);
+        expect(placer.standIn(1, 8, 8, { kind: "statues" })).toBe(false);
+        ground.level0.flags[ground.tile(9, 9)] |= 1;
+        expect(placer.standIn(1, 9, 9, { kind: "statues" })).toBe(false);
+        expect(placer.describeShortfalls()).toEqual([
+            "statues: 1 of 3 (1 occupied, 1 blocked)",
+            "1: 1 of 2 (1 occupied)",
+            "8: 0 of 1 (1 occupied)",
+        ]);
     });
 });
 

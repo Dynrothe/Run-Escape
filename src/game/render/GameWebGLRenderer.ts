@@ -119,6 +119,15 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         this.brightness = 1 / amount;
     }
 
+    // A colour multiplied over the world ("#rrggbb"), or none. In the shader rather than a
+    // CSS mix-blend-mode over the canvas, which Safari drew as a flat colour over everything.
+    setWash(colour: string | undefined): void {
+        const hex = colour ? parseInt(colour.slice(1), 16) : 0xffffff;
+        this.wash[0] = ((hex >> 16) & 0xff) / 255;
+        this.wash[1] = ((hex >> 8) & 0xff) / 255;
+        this.wash[2] = (hex & 0xff) / 255;
+    }
+
     getActorRenderer(): Promise<ActorRenderer> {
         return this.actorRendererReady;
     }

@@ -1,11 +1,13 @@
 import { REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS, getPartyScale } from "../content/coop";
 import { getEnemy } from "../content/enemies";
 import { HARD_XP, getHardScale } from "../content/hard";
+import { CASKET_GEAR, UTILITY } from "../content/items";
 import { getMap } from "../content/maps";
 import { getPowerUp } from "../content/powerups";
 import { OLD_MAN_OFFERS, getRandomEvent } from "../content/randomEvents";
 import { emptyStats } from "../content/types";
 import { getWeapon } from "../content/weapons";
+import { CASKET_DROP_CHANCE } from "./Loot";
 import { Hero, HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { Enemy } from "./entities";
 import { fm, usePortableMath } from "./fmath";
@@ -232,6 +234,55 @@ describe("co-op", () => {
         expect(sim.pickups).toHaveLength(0);
         expect(b.player.hp).toBeGreaterThan(hp);
         expect(b.chests).toHaveLength(1);
+    });
+
+    it("gives every player who's up a casket's item of their own, as one casket opened", () => {
+        const sim = createParty(["warrior", "wizard", "ranger"]);
+        const [a, b, c] = sim.heroes;
+        down(sim, c);
+        const coins = sim.coins;
+        sim.dropPickup("casket", a.player.x + 0.2, a.player.y, 1, { tier: "easy" });
+        for (let i = 0; i < 5; i++) {
+            sim.step();
+        }
+        expect(sim.pickups.filter((p) => p.kind === "casket")).toHaveLength(0);
+        expect(a.chests).toHaveLength(1);
+        expect(b.chests).toHaveLength(1);
+        // Down, they miss out
+        expect(c.chests).toHaveLength(0);
+        // Its coins are the party's, paid once
+        const paid = a.chests[0].coins;
+        expect(paid).toBeGreaterThan(0);
+        expect(b.chests[0].coins).toBe(paid);
+        expect(sim.coins).toBe(coins + paid);
+        expect(sim.state).toBe("chest");
+        // The run waits for both
+        sim.as(a.index, () => sim.resolveChest("take"));
+        expect(sim.state).toBe("chest");
+        sim.as(b.index, () => sim.resolveChest("take"));
+        expect(sim.state).toBe("playing");
+        expect(sim.casketsOpened).toBe(1);
+        // The results screen credits whoever picked it up
+        expect([a.casketsOpened, b.casketsOpened, c.casketsOpened]).toEqual([1, 0, 0]);
+    });
+
+    it("rolls a teammate's item from a casket on their own banishes", () => {
+        const sim = createParty(["warrior", "wizard"]);
+        const [a, b] = sim.heroes;
+        // a picks it up; b has banished everything a casket holds but a shark
+        b.player.x = b.player.prevX = a.player.x + 5;
+        for (const item of [...CASKET_GEAR, ...UTILITY]) {
+            if (item.id !== "shark") {
+                b.banishedItems.add(item.id);
+            }
+        }
+        sim.dropPickup("casket", a.player.x + 0.2, a.player.y, 1, { tier: "easy" });
+        for (let i = 0; i < 5; i++) {
+            sim.step();
+        }
+        expect(a.chests).toHaveLength(1);
+        expect(b.chests.map((chest) => chest.itemId)).toEqual(["shark"]);
+        expect(a.chests[0].uid).toBeLessThan(b.chests[0].uid);
     });
 
     it("starts a revive over when the teammate steps away", () => {
@@ -686,6 +737,33 @@ describe("co-op", () => {
         expect(together.damageScale).toBeGreaterThan(alone.damageScale);
         // A bigger crowd's bones are worth a little less each
         expect(together.xp).toBeLessThan(alone.xp);
+    });
+
+    it("drops fewer caskets from ordinary kills for a bigger party, as each opens for all", () => {
+        // About as many items each as solo: a bigger party's crowd brings more kills
+        expect(getPartyScale(2).caskets).toBeCloseTo(0.69, 2);
+        expect(getPartyScale(3).caskets).toBeCloseTo(0.53, 2);
+        expect(getPartyScale(4).caskets).toBeCloseTo(0.43, 2);
+        // The chances a goblin's death rolls, none of them coming up
+        const chancesOnKill = (sim: Sim, type: "normal" | "elite"): number[] => {
+            const chance = vi.spyOn(sim.rng, "chance").mockReturnValue(false);
+            sim["killEnemy"](sim.spawnEnemy(getEnemy("goblin"), type)!);
+            const asked = chance.mock.calls.map(([probability]) => probability);
+            chance.mockRestore();
+            return asked;
+        };
+        const casketChance = (sim: Sim): number =>
+            CASKET_DROP_CHANCE * (1 + sim.stats.luck) * getPartyScale(sim.heroes.length).caskets;
+        const solo = createParty(["warrior"]);
+        expect(chancesOnKill(solo, "normal")).toContain(casketChance(solo));
+        const trio = createParty(["warrior", "wizard", "ranger"]);
+        const asked = chancesOnKill(trio, "normal");
+        expect(asked).toContain(casketChance(trio));
+        expect(asked).not.toContain(casketChance(solo));
+        // An elite's casket is left as solo's
+        const before = trio.pickups.filter((p) => p.kind === "casket").length;
+        chancesOnKill(trio, "elite");
+        expect(trio.pickups.filter((p) => p.kind === "casket").length).toBe(before + 1);
     });
 
     it("has a boss's pools and bullets land on each of the party, and curse just one", () => {

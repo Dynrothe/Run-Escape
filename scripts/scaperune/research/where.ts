@@ -1,7 +1,7 @@
 // Where a loc really stands: every place in the given map squares, with the ground under it
 // and what's round it.
 //
-//   npx tsx scripts/scaperune/research/where.ts mapX,mapY id id id ...
+//   bun run tsx scripts/scaperune/research/where.ts mapX,mapY id id id ...
 import { bump, locLabel, openWorld, top } from "./lib";
 
 const [square, ...ids] = process.argv.slice(2);

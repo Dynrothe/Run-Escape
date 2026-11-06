@@ -144,6 +144,9 @@ const LOOT_BEAM_HEIGHT = 4;
 const POWER_UP_SCALE = 1.3;
 const POWER_UP_LOC_SCALE = 0.45;
 const POWER_UP_BOB = 0.15;
+// The countdown pie over a power-up, in pixels at scale 1, and its gap over the item
+const TIMER_RADIUS = 11;
+const TIMER_GAP = 4;
 // A power-up's flash over the screen fades out over this long
 const FLASH_MS = 700;
 // Of a full flash, a boss's impact's (ImpactDef.flash)
@@ -235,6 +238,9 @@ export class GameView {
     // The hero the camera's on: the focus, or in co-op while they're down, a
     // teammate (GameClient sets it)
     viewHero = 0;
+    // Countdown pies over power-ups on the ground (DisplaySettings.pickupTimers,
+    // which GameClient sets)
+    pickupTimers = true;
 
     private readonly fight: BossFightView;
     private readonly floor: FloorView;
@@ -548,8 +554,8 @@ export class GameView {
                 if (age > POWER_UP_LIFETIME - POWER_UP_BLINK && Math.floor(tick / 6) % 2 === 0) {
                     continue;
                 }
-                scale = model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
-                height -= POWER_UP_BOB * (1 + Math.sin((tick + pickup.uid * 13) / 8));
+                scale = getPowerUpScale(model);
+                height -= getPowerUpBob(pickup, tick);
             }
             actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale });
         }
@@ -1004,7 +1010,7 @@ export class GameView {
     drawOverlay(overlay: Overlay, sim: Sim, alpha: number): void {
         const ctx = overlay.ctx;
         const now = performance.now();
-        const scale = Math.max(overlay.height / 900, 0.75);
+        const scale = overlay.uiScale;
 
         this.enemiesByUid.clear();
         for (const enemy of sim.enemies) {
@@ -1021,6 +1027,7 @@ export class GameView {
         this.drawSwings(overlay, sim, now, scale);
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
+        this.drawPickupTimers(overlay, sim, alpha, scale);
 
         // Health bars over hurt elites, and over whatever asks for one from the
         // start (Phosani's eggs, against their time); with hundreds of enemies
@@ -1059,6 +1066,67 @@ export class GameView {
         this.drawShouts(overlay, sim, alpha, now, scale);
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
+    }
+
+    // A RuneLite-style pie over each power-up on the ground, draining clockwise as
+    // its time runs out. Attracted ones no longer expire (ordinary loot never
+    // does), and once the run's over nothing on the ground does.
+    private drawPickupTimers(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        if (!this.pickupTimers || sim.runOver) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const radius = TIMER_RADIUS * scale;
+        const lifetime = POWER_UP_LIFETIME * TICKS_PER_SECOND;
+        const tick = sim.tick - 1 + alpha;
+        for (const pickup of sim.pickups) {
+            if (pickup.kind !== "powerUp" || pickup.attracted) {
+                continue;
+            }
+            const remaining = Math.min(1, Math.max(0, 1 - (tick - pickup.spawnTick) / lifetime));
+            // (one whose model isn't drawn yet has nothing to time)
+            const model = this.assets.get(getPickupModelKey(pickup));
+            if (remaining === 0 || !model) {
+                continue;
+            }
+            const modelScale = getPowerUpScale(model);
+            const x = lerp(pickup.prevX, pickup.x, alpha);
+            const y = lerp(pickup.prevY, pickup.y, alpha);
+            const top =
+                this.ground(sim, x, y) -
+                getPowerUpBob(pickup, sim.tick) -
+                (model.height * modelScale) / 128;
+            const p = overlay.project(x, top, y, this.screen);
+            if (!p.visible) {
+                continue;
+            }
+            // From the play camera, high over the ground, a flat item reaches further
+            // up the screen than its height does: the pie goes over the furthest it
+            // reaches as it turns
+            const edge = overlay.project(
+                x + (model.radius * modelScale) / 128,
+                top,
+                y,
+                this.screen2,
+            );
+            const reach = edge.behind ? 0 : Math.hypot(edge.x - p.x, edge.y - p.y);
+            const cx = Math.round(p.x);
+            const cy = Math.round(p.y - reach - radius - TIMER_GAP * scale);
+            const color = remaining <= 0.25 ? "#ff0000" : remaining <= 0.5 ? "#ffc800" : "#00ff00";
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = scale;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, -Math.PI / 2 + (1 - remaining) * Math.PI * 2, Math.PI * 1.5);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
     }
 
     // A power-up's flash: the whole screen, fading out
@@ -2062,6 +2130,17 @@ function casketHop(t: number): number {
         return CASKET_HOP_HEIGHT * Math.sin(Math.PI * t);
     }
     return CASKET_HOP_HEIGHT * 0.22 * Math.sin(Math.PI * (t - 1) * 2);
+}
+
+// How much bigger a power-up's drawn than the cache has it, for its model and
+// its timer alike: a loc (the cannon) is big there already
+function getPowerUpScale(model: ActorModel): number {
+    return model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+}
+
+// How far over the ground a power-up floats (tiles), bobbing up and down
+function getPowerUpBob(pickup: Pickup, tick: number): number {
+    return POWER_UP_BOB * (1 + Math.sin((tick + pickup.uid * 13) / 8));
 }
 
 // "#rrggbb" with an alpha, for canvas gradients

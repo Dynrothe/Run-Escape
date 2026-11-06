@@ -11,10 +11,12 @@
 // just past the screen's edge counts, as it does in the game. A loc wider than a cell gets a
 // box of its own.
 // Only drawn locs count: the ground floor, and upper levels where their tiles are shown
-// (TILE_SHOWN) or a bridge's. The floor's own triangles, two a tile, are left out.
+// (TILE_SHOWN) or a bridge's. The floor's own triangles, two a tile, are left out. What the game
+// draws in the map's place (GeneratedMap.standIns: the Owl's Court's statues, which the fight
+// animates) counts as though it stood there.
 //
-//   npx tsx scripts/scaperune/view-weight.ts phosani [theatre_of_blood ...]
-//   PHONE=1 TOP=10 STEP=2 WIDTH=96 npx tsx scripts/scaperune/view-weight.ts phosani
+//   bun run tsx scripts/scaperune/view-weight.ts phosani [theatre_of_blood ...]
+//   PHONE=1 TOP=10 STEP=2 WIDTH=96 bun run tsx scripts/scaperune/view-weight.ts phosani
 import { TILE_BRIDGE, TILE_SHOWN, TileGrid } from "../../src/game/scaperune/format";
 import { getRecipeWorldTile } from "../../src/game/scaperune/recipe";
 import { createBuildContext, getRecipe } from "../../src/game/scaperune/squares";
@@ -69,7 +71,10 @@ for (const id of ids) {
     if (!recipe) {
         throw new Error(`No recipe called ${id}`);
     }
-    const grid = recipe.build(context);
+    // The detail says what the game draws in the map's place
+    const detail = recipe.detail?.(context);
+    const grid = detail?.grid ?? recipe.build(context);
+    const standIns = detail?.standIns ?? [];
     const { sizeX, sizeY } = grid;
     const cellsX = Math.ceil(sizeX / CELL);
     const cellsY = Math.ceil(sizeY / CELL);
@@ -78,7 +83,7 @@ for (const id of ids) {
     const cells: (Box | undefined)[] = [];
     let drawn = 0;
     let total = 0;
-    for (const loc of grid.locs) {
+    for (const loc of [...grid.locs, ...standIns]) {
         if (!isDrawn(grid, loc.level, loc.x, loc.y)) {
             continue;
         }
@@ -163,7 +168,9 @@ for (const id of ids) {
     const inArena = (x: number, y: number) => x >= m && y >= m && x < sizeX - m && y < sizeY - m;
     const peaks = pickPeaks(sums, sizeX, TOP, APART_X, APART_Y, inArena);
     console.log(
-        `${id}${PHONE ? " (phone)" : ""}: ${drawn} locs drawn of ${grid.locs.length}, ` +
+        `${id}${PHONE ? " (phone)" : ""}: ${drawn} locs drawn of ${grid.locs.length}` +
+            (standIns.length ? ` and ${standIns.length} the game draws in their place` : "") +
+            ", " +
             `${round(total / 1000, 1)}k triangles; a view from the arena: median ` +
             `${round(median / 1000, 1)}k, heaviest ${round(max / 1000, 1)}k ` +
             `(${round(max / Math.max(1, median), 1)} times the median)`,

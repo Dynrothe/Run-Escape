@@ -1,6 +1,6 @@
 // Lists loc (scenery) types whose name matches, with their size and animation.
 //
-//   npx tsx scripts/cache/find-locs.ts "multicannon"
+//   bun run tsx scripts/cache/find-locs.ts "multicannon"
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";

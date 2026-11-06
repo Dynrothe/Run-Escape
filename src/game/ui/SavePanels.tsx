@@ -1,7 +1,15 @@
+import { useState } from "react";
+
 import { GameClient } from "../client/GameClient";
 import { SaveBlock } from "../client/GameStore";
+import { SaveData } from "../core/save";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
+import {
+    dismissExportReminder,
+    loadExportReminderDismissed,
+    shouldRemindToExport,
+} from "./exportReminder";
 
 // What the panel says about why nothing's saved, and the way out it offers
 // (besides playing on without saving)
@@ -154,6 +162,42 @@ export function UnreadableSavePanel({
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// A slim line under the title's menu, until the save's exported or put off for
+// the day: players who cleared their browser's data had no copy to import
+export function ExportReminder({
+    save,
+    client,
+}: {
+    save: SaveData;
+    client: GameClient;
+}): JSX.Element | null {
+    const [dismissed, setDismissed] = useState(loadExportReminderDismissed);
+    if (!shouldRemindToExport(save, Date.now(), dismissed)) {
+        return null;
+    }
+    const last = save.lastExported;
+    return (
+        <div className="ui-panel rs-border rs-background ui-export-reminder">
+            <span className="ui-export-reminder-text">
+                {last === undefined
+                    ? "Your progress is kept only on this device. Export a copy to keep it safe."
+                    : `Last exported ${new Date(last).toLocaleDateString()}. Export a fresh copy to keep it safe.`}
+            </span>
+            <span className="ui-export-reminder-buttons">
+                <button className="ui-button ui-button-small" onClick={() => client.exportSave()}>
+                    Export save
+                </button>
+                <button
+                    className="ui-button ui-button-small"
+                    onClick={() => setDismissed(dismissExportReminder(Date.now()))}
+                >
+                    Not today
+                </button>
+            </span>
         </div>
     );
 }

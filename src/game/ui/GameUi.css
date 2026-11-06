@@ -348,6 +348,30 @@
     box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.5);
 }
 
+/* A reminder to export the save, as wide as the menu above it and much
+   slimmer, so it's seen without being in the way */
+.ui-export-reminder {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px 8px;
+    width: min(500px, calc(92vw / var(--ui-scale)));
+    padding: 4px 8px;
+    box-sizing: border-box;
+}
+
+.ui-export-reminder-text {
+    flex: 1 1 200px;
+    font-size: 14px;
+    color: var(--ui-text);
+}
+
+.ui-export-reminder-buttons {
+    display: flex;
+    gap: 6px;
+}
+
 .ui-title button:focus-visible,
 .ui-title a:focus-visible {
     outline: 2px solid var(--ui-yellow);
@@ -543,6 +567,10 @@
     .ui-hint {
         max-width: calc(100vw - 340px);
         text-align: center;
+    }
+
+    .ui-export-reminder {
+        max-width: calc(100vw - 340px);
     }
 }
 
@@ -956,15 +984,30 @@
 
 /* Skills */
 
+/* As wide as the window allows, so every skill fits in a few rows and the
+   page needs no scrolling. On a window too small for that only the skills
+   scroll, and the tabs and buttons stay in view; the whole panel scrolls only
+   when even they don't fit (a very short window, or the browser zoomed right
+   in). dvh, as a tablet's browser bars take some of 100vh. */
 .ui-shop {
-    width: min(760px, calc(94vw / var(--ui-scale)));
-    max-height: calc(90vh / var(--ui-scale));
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: min(1180px, calc(94vw / var(--ui-scale)));
+    max-height: calc((100vh - 24px) / var(--ui-scale));
+    max-height: calc((100dvh - 24px) / var(--ui-scale));
     overflow-y: auto;
 }
 
+.ui-shop > :not(.ui-shop-grid) {
+    flex-shrink: 0;
+}
+
+/* 4px, as a flex column's margins don't collapse into the 10px above */
 .ui-shop-tabs {
     justify-content: flex-start;
     gap: 8px;
+    margin-top: 4px;
     margin-bottom: 8px;
 }
 
@@ -983,10 +1026,17 @@
     transform: translateY(1px);
 }
 
+/* It scrolls, so it clips what's outside it: the padding is room for a
+   controller's highlight around the cards at its edges (3px out, 3px wide),
+   and the margin keeps the cards where they'd be without it */
 .ui-shop-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 8px;
+    padding: 6px;
+    margin: -6px;
+    scroll-padding: 6px;
+    overflow-y: auto;
 }
 
 .ui-shop-entry {
@@ -998,6 +1048,7 @@
 .ui-shop-card {
     flex-direction: column;
     align-items: flex-start;
+    gap: 3px;
     width: 100%;
     min-width: 0;
 }
@@ -1038,7 +1089,7 @@
     height: 100%;
 }
 
-.ui-shop-refund:hover:not(:disabled) .ui-shop-refund-icon {
+.ui-shop-refund:hover .ui-shop-refund-icon {
     filter: brightness(1.2);
 }
 
@@ -1047,28 +1098,24 @@
     outline-offset: 2px;
 }
 
-.ui-shop-refund:active:not(:disabled) {
+.ui-shop-refund:active {
     transform: scale(0.96);
 }
 
-/* Greyed like a locked card's icon, until Refund all starts the page's order */
-.ui-shop-refund:disabled {
-    cursor: default;
-}
-
-.ui-shop-refund:disabled .ui-shop-refund-icon {
-    filter: grayscale(1) brightness(0.6);
-}
-
+/* A finger-sized button, reaching up beside the pips rather than making the
+   cost's row taller, so a page of skills still fits a tablet */
 @media (pointer: coarse) {
     .ui-shop-card .ui-card-cost {
-        min-height: 44px;
-        padding-right: 52px;
+        padding-right: 40px;
     }
 
     .ui-shop-refund {
+        right: 2px;
+        bottom: 2px;
+        box-sizing: border-box;
         width: 44px;
         height: 44px;
+        padding: 4px;
     }
 }
 
@@ -1118,14 +1165,6 @@
     top: 0;
     line-height: 18px;
     color: var(--ui-white);
-}
-
-/* A raid hall's colour over the world (RaidRoomDef.hall), under the HUD */
-.ui-hall-wash {
-    position: fixed;
-    inset: 0;
-    mix-blend-mode: multiply;
-    pointer-events: none;
 }
 
 .ui-hud-top {
@@ -1973,6 +2012,11 @@
 }
 
 .ui-choice-stat-down {
+    color: #ff5a5a;
+}
+
+/* A weapon whose style a raid's bosses pray against: what it loses against them */
+.ui-card-penalty {
     color: #ff5a5a;
 }
 
