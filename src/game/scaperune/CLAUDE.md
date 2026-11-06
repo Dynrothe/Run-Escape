@@ -1458,6 +1458,14 @@ view, so at the default zoom it sees about 27 by 16 tiles. So:
   the bottom of the screen to 48° at the top, so a tall ridge can hide a tile or two near the top until you get closer.
 - **It doesn't clip** over any slope within that limit. It'd lurch at creases on tall ground, so on dev maps it eases after
   the ground (`CAMERA_GROUND_EASE`).
+- **It rides with the player**, so whatever level they're on looks the same, and other levels are nearer or further. Ground
+  h tiles higher to the north shows 0.36h further up the screen (0.9h near its top), so it pushes what's on it off the top:
+  past a rise of 65 a phone sees about 4 tiles onto it, and past 125 under one. A level 65 down is drawn at 0.8 of the size,
+  125 down at 0.7. Depth doesn't fog or darken.
+- **How much it takes**, from `scaperune_depth` (`maps/depthTest.ts`: slopes, cliffs, platforms and pits of 30, 60, 65, 125
+  and 128, desktop and phone): up to 65 (a Sepulchre level, 4 tiles) reads well up or down. Past that, keep it for what's
+  only looked at, as the Owl's Court's lower walkway is. A bare face of terrain is one tile stretched over its height: a
+  plain overlay reads as a flat band, and a textured one streaks, so hang walls on a tall one, as the court does.
 
 **Walkable.** A tile steeper than `walkSlope` is blocked with the same floor flag as water, going by the rounded heights in the
 grid, so `getCollisionFlags` and the game's scene agree. To the flow field a cliff's a wall, and enemies only turn up where they
