@@ -1692,6 +1692,10 @@ waiting and a "no" sign while it can't sync. It opens the choice, or Settings at
 - **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
   Worker refuses an older game's upload over it, so the choice says why, and only Keep this
   device's (losing what's new) or Later.
+- **Deleting is undoable for a week**, so a leaked code can't wipe every version. The Worker only
+  marks the code, and answers it with a 410 and `restorableUntil` until its saves are removed.
+  The game shows that as the `deleted` problem, with the date and a Restore button
+  (`CloudSync.restore`), on the device that deleted it and on any the code's typed into.
 
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or

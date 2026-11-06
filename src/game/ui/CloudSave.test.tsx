@@ -21,6 +21,7 @@ function mockClient() {
         useCloud: vi.fn(),
         keepLocal: vi.fn(),
         later: vi.fn(),
+        restore: vi.fn(),
     };
     return { cloud, client: { cloud } as unknown as GameClient };
 }
@@ -129,4 +130,14 @@ test("has a button on the title that says how it's doing and opens the way in", 
     fireEvent.click(screen.getByRole("button", { name: "Cloud save: pick which save to keep" }));
     expect(cloud.reopenChoice).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledTimes(1);
+});
+
+test("says until when a deleted code's kept, and restores it", () => {
+    const until = Date.parse("2026-11-13T12:00:00Z");
+    const cloud = settings({ working: false, problem: "deleted", deletedUntil: until });
+    expect(
+        screen.getByText(new RegExp(`kept until ${new Date(until).toLocaleDateString()}`)),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    expect(cloud.restore).toHaveBeenCalledTimes(1);
 });

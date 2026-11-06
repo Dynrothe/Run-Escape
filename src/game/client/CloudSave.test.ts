@@ -11,10 +11,13 @@ import {
 
 const URL = "https://saves.example";
 const CODE = "K7Q2-M9XD-4TPA-W3RN-H8BE-6FZC";
+const RESTORABLE_UNTIL = Date.parse("2026-11-13T12:00:00Z");
 
 // The Worker's rules (server/cloud-saves/worker.mjs), kept in memory
 class FakeWorker {
     accounts = new Map<string, { revision: number; text: string; at: number }[]>();
+    // Codes deleted, whose saves are kept for restoring
+    deleted = new Set<string>();
     requests: { method: string; path: string; body?: any }[] = [];
     down = false;
 
@@ -36,13 +39,21 @@ class FakeWorker {
         }
         const saves = code ? this.accounts.get(code) : undefined;
         if (!saves) return reply({ error: "Unknown sync code" }, 401);
+        // Deleted: kept, and only restoring works
+        if (this.deleted.has(code!)) {
+            if (path === "account/restore") {
+                this.deleted.delete(code!);
+                return reply({ restored: true });
+            }
+            return reply({ error: "Deleted", restorableUntil: RESTORABLE_UNTIL }, 410);
+        }
         const latest = saves.at(-1);
         const meta = latest
             ? { revision: latest.revision, summary: summaryOf(latest.text), updatedAt: latest.at }
             : { revision: 0 };
         if (path === "account" && method === "DELETE") {
-            this.accounts.delete(code!);
-            return reply({ deleted: true });
+            this.deleted.add(code!);
+            return reply({ deleted: true, restorableUntil: RESTORABLE_UNTIL });
         }
         if (path === "save/meta") return reply(meta);
         if (method === "GET") return reply(latest ? { ...meta, save: latest.text } : meta);
@@ -332,8 +343,39 @@ it("turns off, or deletes the cloud's copy", async () => {
     await sync.useCode(CODE);
     expect(view()?.code).toBe(CODE);
     await sync.deleteCloud();
-    expect(worker.accounts.has(CODE)).toBe(false);
+    expect(worker.deleted.has(CODE)).toBe(true);
     expect(storage.has(CLOUD_STATE_KEY)).toBe(false);
+    // Undoable straight away
+    expect(view()).toMatchObject({
+        code: undefined,
+        problem: "deleted",
+        deletedUntil: RESTORABLE_UNTIL,
+    });
+    await sync.restore();
+    expect(worker.deleted.has(CODE)).toBe(false);
+    expect(view()).toMatchObject({ code: CODE, problem: undefined });
+    expect(state()).toMatchObject({ code: CODE, revision: 1 });
+
+    await sync.deleteCloud();
+    await sync.useCode("nope");
+    expect(view()?.problem).toBe("unknownCode");
+});
+
+it("restores a deleted code typed in on another device, and its saves with it", async () => {
+    worker.put(withRuns(30));
+    worker.deleted.add(CODE);
+    await start(createSave()).start();
     await sync.useCode(CODE);
-    expect(view()).toMatchObject({ code: undefined, problem: "unknownCode" });
+    expect(view()).toMatchObject({ code: undefined, problem: "deleted" });
+    expect(current.runs).toBe(0);
+    await sync.restore();
+    expect(current.runs).toBe(30);
+    expect(view()).toMatchObject({ code: CODE, problem: undefined });
+
+    // A linked device finding its code deleted elsewhere can restore it too
+    worker.deleted.add(CODE);
+    await sync.check();
+    expect(view()).toMatchObject({ code: CODE, problem: "deleted" });
+    await sync.restore();
+    expect(view()?.problem).toBeUndefined();
 });

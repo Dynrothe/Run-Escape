@@ -44,8 +44,9 @@ type CloudState = {
 };
 
 // offline: the Worker can't be reached or is busy, and it'll try again; unknownCode: the code
-// isn't one (or its save was deleted); refused: the Worker wouldn't take the save
-export type CloudProblem = "offline" | "unknownCode" | "refused";
+// isn't one; deleted: the code was deleted, and its saves are kept a while for it to restore;
+// refused: the Worker wouldn't take the save
+export type CloudProblem = "offline" | "unknownCode" | "deleted" | "refused";
 
 // The cloud has a different save from this device's, and the player picks which to keep. newer:
 // it's from a newer game, which this one can't load.
@@ -57,6 +58,8 @@ export type CloudView = {
     syncedAt?: number;
     working: boolean;
     problem?: CloudProblem;
+    // With "deleted": until when restore() can bring it back (Date.now())
+    deletedUntil?: number;
     choice?: CloudChoice;
 };
 
@@ -153,6 +156,8 @@ export class CloudSync {
     private uploadTimer?: ReturnType<typeof setTimeout>;
     private lastUpload = -Infinity;
     private lastCheck = -Infinity;
+    // The last code found deleted, for restore()
+    private deleted?: { code: string; until: number };
 
     constructor(
         readonly url: string,
@@ -265,12 +270,8 @@ export class CloudSync {
                 return;
             }
             const response = await this.call("GET", "save/meta", code);
-            if (response.status === 401) {
-                this.problem = "unknownCode";
-                return;
-            }
             if (response.status !== 200) {
-                this.problem = "offline";
+                this.noteProblem(response, code);
                 return;
             }
             this.state = { code, revision: 0 };
@@ -322,17 +323,44 @@ export class CloudSync {
         return this.run(async () => this.forget());
     }
 
-    // Deletes the cloud's copy, every version of it, and the code with it
+    // Deletes the code. The Worker keeps its saves a while, so restore() can undo it, here or on
+    // any device the code's typed into.
     deleteCloud(): Promise<void> {
         return this.run(async () => {
             if (!this.state) {
                 return;
             }
-            const response = await this.call("DELETE", "account", this.state.code);
-            if (response.status === 200 || response.status === 401) {
+            const { code } = this.state;
+            const response = await this.call("DELETE", "account", code);
+            if (response.status === 200) {
+                this.forget();
+                this.noteProblem({ status: 410, data: response.data }, code);
+            } else if (response.status === 401) {
                 this.forget();
             } else {
-                this.problem = "offline";
+                this.noteProblem(response, code);
+            }
+        });
+    }
+
+    // Brings a deleted code's saves back, and links this device to it again
+    restore(): Promise<void> {
+        return this.run(async () => {
+            const code = this.state?.code ?? this.deleted?.code;
+            if (!code || !this.host.canWrite()) {
+                return;
+            }
+            const restored = await this.call("POST", "account/restore", code);
+            if (restored.status !== 200) {
+                this.noteProblem(restored, code);
+                return;
+            }
+            this.deleted = undefined;
+            this.state ??= { code, revision: 0 };
+            this.write();
+            const meta = await this.request("GET", "save/meta");
+            if (meta) {
+                await this.settle(meta);
             }
         });
     }
@@ -460,23 +488,35 @@ export class CloudSync {
                     compareGameVersions(data.summary.gameVersion, this.host.gameVersion) > 0);
             this.choice = { cloud: data, newer, closed: false };
         } else {
-            this.problem = this.problemOf(status);
+            this.noteProblem(response, state.code);
         }
     }
 
     // A request whose answer's only wanted when it worked: otherwise it's noted as a problem
     private async request(method: string, path: string): Promise<any> {
-        const { status, data } = await this.call(method, path, this.state?.code);
-        if (status === 200) {
+        const response = await this.call(method, path, this.state?.code);
+        if (response.status === 200) {
             this.problem = undefined;
-            return data;
+            return response.data;
         }
-        this.problem = this.problemOf(status);
+        this.noteProblem(response, this.state?.code);
         return undefined;
     }
 
-    private problemOf(status: number): CloudProblem {
-        return status === 401 ? "unknownCode" : [400, 413].includes(status) ? "refused" : "offline";
+    // What an answer that didn't work means for the player. A deleted code's is kept, with until
+    // when it can be restored.
+    private noteProblem({ status, data }: { status: number; data: any }, code?: string): void {
+        this.problem =
+            status === 401
+                ? "unknownCode"
+                : status === 410
+                  ? "deleted"
+                  : [400, 413].includes(status)
+                    ? "refused"
+                    : "offline";
+        if (status === 410 && code) {
+            this.deleted = { code, until: Number(data?.restorableUntil) || 0 };
+        }
     }
 
     private async call(
@@ -542,6 +582,7 @@ export class CloudSync {
             syncedAt: this.state?.syncedAt,
             working: this.working,
             problem: this.problem,
+            deletedUntil: this.problem === "deleted" ? this.deleted?.until : undefined,
             choice: this.choice,
         });
     }

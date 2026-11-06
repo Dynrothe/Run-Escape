@@ -10,9 +10,19 @@ import { GAME_VERSION } from "./changelog";
 
 const PROBLEMS: Record<CloudProblem, string> = {
     offline: "Can't reach cloud save right now. Your progress is still kept here.",
-    unknownCode: "That code isn't one cloud save knows, or its save was deleted.",
+    unknownCode: "That code isn't one cloud save knows.",
+    deleted: "That code's cloud save was deleted. Restore brings it back.",
     refused: "Cloud save wouldn't take this save. Export it to keep a copy.",
 };
+
+// What's wrong, for Settings and the title's button: a deleted code says until when it's kept
+function describeProblem(cloud: CloudView): string | undefined {
+    if (cloud.problem === "deleted" && cloud.deletedUntil) {
+        const until = new Date(cloud.deletedUntil).toLocaleDateString();
+        return `That code's cloud save was deleted. It's kept until ${until}, and Restore brings it back.`;
+    }
+    return cloud.problem && PROBLEMS[cloud.problem];
+}
 
 function describe(summary: CloudSummary | undefined): string {
     if (!summary) {
@@ -73,7 +83,20 @@ export function CloudSaveSettings({
     }
     const busy = cloud.working || !saving;
     const blur = (e: React.MouseEvent<HTMLElement>) => e.currentTarget.blur();
-    const problem = cloud.problem && PROBLEMS[cloud.problem];
+    const problem = describeProblem(cloud);
+    // A deleted code's saves can come back
+    const restore = cloud.problem === "deleted" && (
+        <button
+            className="ui-button ui-button-small"
+            disabled={busy}
+            onClick={(e) => {
+                blur(e);
+                sync.restore();
+            }}
+        >
+            Restore
+        </button>
+    );
     if (!cloud.code) {
         return (
             <>
@@ -85,6 +108,7 @@ export function CloudSaveSettings({
                         "Keep a copy online, and take it to another device with a code. No account, name or email."
                     }
                 >
+                    {restore}
                     <button
                         className="ui-button ui-button-small"
                         disabled={busy}
@@ -140,6 +164,7 @@ export function CloudSaveSettings({
     return (
         <>
             <CloudRow name="Cloud save" text={status} id={CLOUD_SETTING_ID}>
+                {restore}
                 <button
                     className="ui-button ui-button-small"
                     disabled={busy}
@@ -204,7 +229,10 @@ export function CloudSaveSettings({
                     {copied ? "Copied" : "Copy"}
                 </button>
             </CloudRow>
-            <CloudRow name="Delete the cloud copy" text="Every version of it, and the code">
+            <CloudRow
+                name="Delete the cloud copy"
+                text="And the code. It's kept for a week in case you change your mind."
+            >
                 <button
                     className="ui-button ui-button-small"
                     disabled={cloud.working}
@@ -212,7 +240,7 @@ export function CloudSaveSettings({
                         blur(e);
                         if (
                             window.confirm(
-                                "Delete the cloud copy of your save for good? The save on this device stays, and the code stops working everywhere.",
+                                "Delete the cloud copy of your save? The save on this device stays, and the code stops working everywhere. For a week, Restore in Settings brings it back, here or on any device you type the code into.",
                             )
                         ) {
                             sync.deleteCloud();
@@ -308,17 +336,21 @@ export function CloudSaveButton({
     if (!cloud || !client.cloud) {
         return null;
     }
+    // While it's off, only a code just deleted is worth a mark (a mistyped one isn't)
+    const problem = cloud.code || cloud.problem === "deleted" ? cloud.problem : undefined;
     const badge = cloud.choice
         ? CLOUD_SAVE_SPRITES.choose
-        : cloud.problem
+        : problem
           ? CLOUD_SAVE_SPRITES.problem
           : undefined;
     const status = !cloud.code
-        ? "off"
+        ? problem
+            ? describeProblem(cloud)
+            : "off"
         : cloud.choice
           ? "pick which save to keep"
           : cloud.problem
-            ? PROBLEMS[cloud.problem]
+            ? describeProblem(cloud)
             : cloud.syncedAt
               ? `on, last synced ${new Date(cloud.syncedAt).toLocaleString()}`
               : "on";
