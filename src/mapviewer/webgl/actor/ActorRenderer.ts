@@ -116,6 +116,9 @@ export type ActorDrawOptions = {
     // Drawn before the silhouettes (renderEarly), so what's behind it gets one as it would behind
     // the world: a floor's pillars and raised tiles, which hide the player as walls would
     early?: boolean;
+    // On a dark map (MapDef.darkness), how much it's drawn as if it were in a light, 0 to 1:
+    // warnings and spells, which have to be seen in the dark. Off a dark map it does nothing.
+    unlit?: number;
 };
 
 class InstanceList {
@@ -153,6 +156,7 @@ class InstanceList {
         stretchZ: number,
         pitch: number,
         roll: number,
+        unlit: number,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -178,7 +182,7 @@ class InstanceList {
         data[o + 8] = edge;
         data[o + 9] = edgeWidth;
         data[o + 10] = edgeColor;
-        data[o + 11] = 0;
+        data[o + 11] = unlit;
         data[o + 12] = stretchX;
         data[o + 13] = stretchZ;
         data[o + 14] = pitch;
@@ -338,6 +342,10 @@ export class ActorRenderer {
     dataArray: Float32Array;
 
     private frustum?: Frustum;
+
+    // Every draw's unlit (ActorDrawOptions.unlit) is at least this, while a caller's drawing only
+    // warnings (a boss fight's view)
+    unlitAtLeast = 0;
 
     silhouetteColor = new Float32Array([0.85, 0.85, 1.0, 0.45]);
     outlineColor = new Float32Array([1.0, 0.55, 0.1, 1.0]);
@@ -500,6 +508,7 @@ export class ActorRenderer {
             stretchZ,
             options?.pitch ?? 0,
             options?.roll ?? 0,
+            Math.max(options?.unlit ?? 0, this.unlitAtLeast),
         );
         if (options?.silhouette) {
             segment.silhouettes.push(
@@ -518,6 +527,7 @@ export class ActorRenderer {
                 0,
                 1,
                 1,
+                0,
                 0,
                 0,
             );
@@ -540,6 +550,7 @@ export class ActorRenderer {
                 0,
                 1,
                 1,
+                0,
                 0,
                 0,
             );

@@ -17,6 +17,8 @@ export const POWER_UP_LIFETIME = 30;
 export const POWER_UP_BLINK = 5;
 // Their loot beams and minimap dots (caskets' are their tier's colour)
 export const POWER_UP_COLOR = "#46f0dc";
+// A dark map's lantern (MapDef.darkness)
+export const LANTERN_ID = "lantern";
 
 export const POWER_UPS: PowerUpDef[] = [
     {
@@ -197,6 +199,19 @@ export const POWER_UPS: PowerUpDef[] = [
             speed: 1.5,
             shout: "Run laps, maggots!",
         },
+    },
+    {
+        // Never rolled with the rest (weight 0): only a dark map drops it, at its
+        // DarknessDef.lanternWeight
+        id: LANTERN_ID,
+        name: "Abyssal lantern",
+        description: "Your light reaches 4 tiles further for 30 seconds.",
+        objId: 26822,
+        weight: 0,
+        price: 0,
+        color: "#ffc061",
+        sound: -1,
+        effect: { kind: "lantern", bonus: 4, seconds: 30, fade: 5 },
     },
 ];
 

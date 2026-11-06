@@ -42,6 +42,7 @@ import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import {
+    LANTERN_ID,
     POWER_UPS,
     POWER_UP_CHANCE,
     POWER_UP_LIFETIME,
@@ -97,6 +98,7 @@ import {
     BulletPatternDef,
     CasketTier,
     CombatStyle,
+    DarknessDef,
     EnemyBlinksDef,
     EnemyDef,
     EnemyHealsDef,
@@ -195,6 +197,8 @@ import {
     GroundFire,
     GroundHazard,
     GroundPool,
+    LeftLight,
+    Light,
     PassiveState,
     PendingHit,
     Pickup,
@@ -284,6 +288,10 @@ const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
+// A dark map's (MapDef.darkness): tiles past a light's edge that weapons can still aim, and seconds
+// over which a light an enemy left goes out
+const LIGHT_GRACE = 0.5;
+const LEFT_LIGHT_FADE = 3;
 // Ticks a fallen rock lies there before it's gone
 const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
 const SPAWN_MIN_DISTANCE = 19;
@@ -803,6 +811,12 @@ export class Sim {
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
+    // A dark map's (MapDef.darkness): weapons only aim at what's lit
+    readonly darkness: DarknessDef | undefined;
+    // On a dark map, this tick's lights (stepLights): each player's, the fires', and what enemies
+    // carry and leave. Empty on any other map.
+    lights: Light[] = [];
+    private leftLights: LeftLight[] = [];
 
     tick = 0;
     // Tick the run ended, -1 while it's going
@@ -1202,6 +1216,7 @@ export class Sim {
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
+        this.darkness = this.map.darkness;
         this.rng = new Rng(options.seed);
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
@@ -1274,6 +1289,13 @@ export class Sim {
             this.updateFlowField();
         }
         this.use(this.heroes[this.focus]);
+        if (this.darkness) {
+            for (const at of this.darkness.lanterns ?? []) {
+                const spot = this.walkableSpot(at.x, at.y);
+                this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: LANTERN_ID });
+            }
+            this.stepLights();
+        }
     }
 
     // A hero at the spawn, or for a party's others, around it
@@ -2443,6 +2465,9 @@ export class Sim {
         this.rebuildEnemyHash();
         this.stepEnemies();
         this.stepGlyphs();
+        if (this.darkness) {
+            this.stepLights();
+        }
         for (const hero of this.heroes) {
             // On your own, weapons still fire in the tick the player falls in
             if (this.isUp(hero) || this.heroes.length === 1) {
@@ -8943,6 +8968,17 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
+        // A light it carried stays where it fell for a while (EnemyDef.light)
+        const leaves = this.darkness && enemy.def.light?.left;
+        if (leaves) {
+            this.leftLights.push({
+                x: enemy.x,
+                y: enemy.y,
+                radius: leaves.radius,
+                startTick: this.tick,
+                endTick: this.tick + Math.round(leaves.seconds * TICKS_PER_SECOND),
+            });
+        }
         const byEnemy = cause === "enemy";
         // Co-op: a boss's copies are one boss, killed when the last one falls
         const lastCopy = !this.encounterLeft(enemy);
@@ -9802,6 +9838,91 @@ export class Sim {
         this.stealLife(def, dealt);
     }
 
+    // ---- The dark (MapDef.darkness) ----
+
+    // This tick's lights, from where everything that carries one is now: the players' first, in
+    // the party's order, then the fires', then enemies' and what they left. All in the same order
+    // on every co-op player's copy.
+    private stepLights(): void {
+        const darkness = this.darkness!;
+        const lights: Light[] = [];
+        for (const hero of this.heroes) {
+            if (hero.left) {
+                continue;
+            }
+            const { x, y } = hero.player;
+            const radius = this.heroLightRadius(hero.index, darkness);
+            lights.push({ kind: "player", x, y, radius, warmth: 1, hero: hero.index });
+        }
+        for (const fire of darkness.fires ?? []) {
+            lights.push({ kind: "fire", x: fire.x, y: fire.y, radius: fire.radius, warmth: 1 });
+        }
+        for (const enemy of this.enemies) {
+            const light = enemy.def.light;
+            if (light && !enemy.dead) {
+                const { x, y } = enemy;
+                lights.push({ kind: "enemy", x, y, radius: light.radius, warmth: 0.25, enemy });
+            }
+        }
+        this.leftLights = this.leftLights.filter((left) => left.endTick > this.tick);
+        for (const left of this.leftLights) {
+            // Going out over its last LEFT_LIGHT_FADE seconds
+            const fade = Math.min(
+                1,
+                (left.endTick - this.tick) / (LEFT_LIGHT_FADE * TICKS_PER_SECOND),
+            );
+            lights.push({
+                kind: "left",
+                x: left.x,
+                y: left.y,
+                radius: left.radius * fade,
+                warmth: 0.25,
+            });
+        }
+        this.lights = lights;
+    }
+
+    // How far a hero's light reaches: the map's, and a lantern's on top while it lasts, shrinking
+    // back over its last seconds
+    private heroLightRadius(heroIndex: number, darkness: DarknessDef): number {
+        let bonus = 0;
+        for (const active of this.powerUps) {
+            if (active.hero !== heroIndex || active.id !== LANTERN_ID) {
+                continue;
+            }
+            const effect = getPowerUp(LANTERN_ID).effect;
+            if (effect.kind === "lantern") {
+                const fade = Math.min(
+                    1,
+                    (active.endTick - this.tick) / (effect.fade * TICKS_PER_SECOND),
+                );
+                bonus = Math.max(bonus, effect.bonus * fade);
+            }
+        }
+        return darkness.playerLight + bonus;
+    }
+
+    // Whether a spot's in a light, or near enough to its edge (LIGHT_GRACE): always, off a dark map
+    isLit(x: number, y: number): boolean {
+        if (!this.darkness) {
+            return true;
+        }
+        for (const light of this.lights) {
+            const reach = light.radius + LIGHT_GRACE;
+            const dx = x - light.x;
+            const dy = y - light.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // What weapons can aim at on a dark map, by where it stands
+    isEnemyLit(enemy: Enemy): boolean {
+        return this.isLit(enemy.x, enemy.y);
+    }
+
     // What the player's weapons go for. Shielded enemies (Pest Control's
     // portals, Verzik's first form) are left out: every hit on them is
     // blocked, so aiming at them would waste shots while pests close in.
@@ -9819,11 +9940,14 @@ export class Sim {
         const styled = style !== undefined && this.expert;
         // Not behind a floor's pillar, which blocks the way and the view
         const pillars = this.floor?.hasPillars ? this.floor : undefined;
+        // On a dark map, only what's lit
+        const dark = this.darkness !== undefined;
         for (const enemy of this.enemies) {
             if (
                 enemy.dead ||
                 enemy.shieldEnd > this.tick ||
-                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style)
+                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style) ||
+                (dark && !this.isEnemyLit(enemy))
             ) {
                 continue;
             }
@@ -11322,8 +11446,12 @@ export class Sim {
     }
 
     private rollPowerUpId(): string {
+        // A dark map's lantern is the one power-up a map's own weight brings in
+        const lantern = this.darkness?.lanternWeight ?? 0;
         const index = this.rng.weightedIndex(
-            POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
+            POWER_UPS.map((p) =>
+                p.id === this.lastPowerUpId ? 0 : p.id === LANTERN_ID ? lantern : p.weight,
+            ),
         );
         return POWER_UPS[index].id;
     }
@@ -11433,6 +11561,10 @@ export class Sim {
                 break;
             case "pumpkin":
                 message = this.openPumpkin();
+                break;
+            case "lantern":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                message = "Your lantern lights up the dark!";
                 break;
             case "laps":
                 endTick = this.tick + this.powerUpTicks(effect.seconds);

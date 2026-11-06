@@ -506,6 +506,14 @@ export class GameClient implements GameFrameHandler {
     private shownBrightness = 1;
     // The raid hall's colour wash as last set (RaidRoomDef.hall)
     private shownWash: string | undefined;
+    // A dark map's lights as they're drawn this frame (updateLights)
+    private readonly shownLights: {
+        x: number;
+        y: number;
+        radius: number;
+        warmth: number;
+        away: number;
+    }[] = [];
     private shownDpsTick = 0;
     private readonly damageMeter = new DamageMeter();
     // Each hero's look, as last baked
@@ -1434,6 +1442,7 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = map.brightness ?? 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
+        this.renderer.setDarkness(map.darkness?.ambient);
         this.minimap.setMap(map);
         const music = map.music && musicFor(map.music);
         if (music) {
@@ -1808,6 +1817,7 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
+        this.renderer.setDarkness(undefined);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -2110,6 +2120,9 @@ export class GameClient implements GameFrameHandler {
             py + this.cameraLean.y + pan.y + shake.y,
         );
         this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
+        if (sim.darkness) {
+            this.updateLights(sim, alpha, px, py);
+        }
         // A raid hall can be drawn darker than the map, and washed with a colour
         // (RaidRoomDef.hall)
         const hall =
@@ -2129,6 +2142,33 @@ export class GameClient implements GameFrameHandler {
         if (brightness !== this.shownBrightness) {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
+        }
+    }
+
+    // A dark map's lights (MapDef.darkness), where what carries them is drawn this frame: the
+    // shown player's first, then the nearest to them, as many as the shaders take (MAX_LIGHTS).
+    // The sim aims by all of them; one too far off to be drawn is off the screen anyway.
+    private updateLights(sim: Sim, alpha: number, px: number, py: number): void {
+        const shown = this.shownLights;
+        shown.length = 0;
+        for (const light of sim.lights) {
+            let { x, y } = light;
+            if (light.hero !== undefined) {
+                const pose = getPlayerPose(sim, light.hero, alpha, this.view.localPlayerPose);
+                x = pose.x;
+                y = pose.y;
+            } else if (light.enemy) {
+                x = light.enemy.prevX + (light.enemy.x - light.enemy.prevX) * alpha;
+                y = light.enemy.prevY + (light.enemy.y - light.enemy.prevY) * alpha;
+            }
+            const own = light.hero === this.viewHero;
+            const away = own ? -1 : Math.hypot(x - px, y - py) - light.radius;
+            shown.push({ x, y, radius: light.radius, warmth: light.warmth, away });
+        }
+        shown.sort((a, b) => a.away - b.away);
+        this.renderer.clearLights();
+        for (const light of shown) {
+            this.renderer.addLight(light.x, light.y, light.radius, light.warmth);
         }
     }
 

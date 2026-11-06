@@ -4,7 +4,7 @@ import { Program, Texture } from "picogl";
 import { Camera } from "../../mapviewer/Camera";
 import { MapViewer } from "../../mapviewer/MapViewer";
 import { Interactions } from "../../mapviewer/webgl/Interactions";
-import { WebGLMapViewerRenderer } from "../../mapviewer/webgl/WebGLMapViewerRenderer";
+import { MAX_LIGHTS, WebGLMapViewerRenderer } from "../../mapviewer/webgl/WebGLMapViewerRenderer";
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import actorSilhouetteFragShader from "../../mapviewer/webgl/actor/actor-silhouette.frag.glsl";
 import actorVertShader from "../../mapviewer/webgl/actor/actor.vert.glsl";
@@ -126,6 +126,35 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         this.wash[0] = ((hex >> 16) & 0xff) / 255;
         this.wash[1] = ((hex >> 8) & 0xff) / 255;
         this.wash[2] = (hex & 0xff) / 255;
+    }
+
+    // A dark map (MapDef.darkness): what's out of every light is drawn this bright (0 to 1). Unset
+    // turns the dark off, and every colour's drawn as it always is.
+    setDarkness(ambient: number | undefined): void {
+        this.lightInfo[0] = 0;
+        this.lightInfo[1] = ambient ?? 1;
+        this.lightInfo[2] = ambient === undefined ? 0 : 1;
+    }
+
+    // This frame's lights on a dark map, MAX_LIGHTS at most (any past that aren't drawn): world
+    // tiles, radius in tiles, warmth 0 to 1
+    clearLights(): void {
+        this.lightInfo[0] = 0;
+    }
+
+    addLight(x: number, z: number, radius: number, warmth: number): boolean {
+        const i = this.lightInfo[0];
+        if (i >= MAX_LIGHTS || radius <= 0) {
+            return false;
+        }
+        const lights = this.lights;
+        lights[i * 4] = x;
+        lights[i * 4 + 1] = z;
+        // The shader wants one over the radius squared (lights.glsl)
+        lights[i * 4 + 2] = 1 / (radius * radius);
+        lights[i * 4 + 3] = warmth;
+        this.lightInfo[0] = i + 1;
+        return true;
     }
 
     getActorRenderer(): Promise<ActorRenderer> {

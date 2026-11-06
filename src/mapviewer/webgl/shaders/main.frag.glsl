@@ -5,6 +5,7 @@ precision highp float;
 layout(std140, column_major) uniform;
 
 #include "./includes/scene-uniforms.glsl";
+#include "./includes/lights.glsl";
 
 uniform highp sampler2DArray u_textures;
 
@@ -14,6 +15,8 @@ flat in uint v_texId;
 flat in float v_alphaCutOff;
 in float v_fogAmount;
 flat in vec4 v_interactId;
+// World tiles x and z, and how much it's drawn as if it were lit (lights.glsl)
+in vec3 v_lightPos;
 #ifdef ACTOR_EDGE
 in vec2 v_edgePos;
 flat in vec4 v_edge;
@@ -33,6 +36,10 @@ void main() {
         discard;
     }
 #endif
+    // Only a dark map is lit (MapDef.darkness); everywhere else this is skipped
+    if (u_lightInfo.z > 0.5) {
+        fragColor.rgb *= getLight(v_lightPos.xy, v_lightPos.z);
+    }
 #ifdef ACTOR_EDGE
     // Light along a tile-sized actor's edges, strongest at the edge and fading in towards the
     // middle (the Wardens' floor's light from under its tiles)

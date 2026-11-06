@@ -498,6 +498,10 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     let target: { x: number; y: number } | undefined;
     let nearest = Infinity;
     const consider = (enemy: { x: number; y: number }) => {
+        // On a dark map, only what it can see (MapDef.darkness); everywhere else, everything
+        if (!sim.isLit(enemy.x, enemy.y)) {
+            return;
+        }
         const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
         if (distance < nearest) {
             nearest = distance;

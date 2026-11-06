@@ -27,7 +27,7 @@ uniform int u_instanceOffset;
 //  1: scale, flash (0-1, or -1-0 to glow in the tint's colour), tint (0xRRGGBB, 0xFFFFFF = none),
 //     alpha
 //  2: edge light (0-1), how far in it reaches (0-1 of the way to the middle), its colour
-//     (0xRRGGBB), unused
+//     (0xRRGGBB), and how much it's drawn as if lit on a dark map (0-1, lights.glsl)
 //  3: stretch along x and z, tip about x and z (0-2047), before the yaw
 uniform highp sampler2D u_actorData;
 
@@ -39,6 +39,8 @@ flat out uint v_texId;
 flat out float v_alphaCutOff;
 out float v_fogAmount;
 flat out vec4 v_interactId;
+// World tiles x and z, and how much it's drawn as if it were lit (lights.glsl)
+out vec3 v_lightPos;
 // Edge light (ActorDrawOptions.edge): where in the model this is, -1 to 1 across a tile, and the
 // light's colour and strength, and how far in it reaches
 out vec2 v_edgePos;
@@ -127,6 +129,9 @@ void main() {
     v_fogAmount = max(fogFactorLinear(dist, 0.0, fogDepth), playAreaFog(worldPos.xz));
 
     v_interactId = vec4(0.0);
+
+    // A flash shows in the dark too, so a hit on something out of the light can be seen
+    v_lightPos = vec3(worldPos.xz, max(data2.w, abs(flash)));
 
     gl_Position = u_viewMatrix * worldPos;
     gl_Position.z += (float(vertex.priority) + 20.0) * 0.0007;

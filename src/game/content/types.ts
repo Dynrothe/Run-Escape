@@ -200,6 +200,10 @@ export type EnemyDef = {
     // Wars Dungeon's armies), while still coming for the player; each
     // faction's come from their own side, so the armies meet
     faction?: string;
+    // A light of its own on a dark map (MapDef.darkness), radius tiles round it as it goes, and
+    // one it leaves where it dies, for seconds (the Scar's light leeches). Off a dark map it does
+    // nothing.
+    light?: { radius: number; left?: { radius: number; seconds: number } };
     // What it is, for the weapons that hit some things harder
     tags?: EnemyTag[];
     // Runs from the player when they're within range tiles instead of coming
@@ -1513,6 +1517,30 @@ export type MapDef = {
     // A floor that fights back (FloorDef): slabs of it rise under the player in waves, and rows of
     // it fall away. A prototype, on a dev map only.
     floor?: FloorDef;
+    // Dark but for the lights (DarknessDef): weapons only aim at what's lit. Unset on every map
+    // that's lit as it always was.
+    darkness?: DarknessDef;
+};
+
+// A dark map (the Scar's rule, docs/design act 2, 6.1). Each player carries a light, fires are lights
+// that stay put, lanterns make a player's bigger for a while and some enemies carry one
+// (EnemyDef.light). What's in none of them is drawn dark (lights.glsl), weapons don't pick it as a
+// target (only what's within half a tile of a light's edge), and the minimap leaves it out. Shots
+// carry on into the dark and hit what they meet.
+export type DarknessDef = {
+    // How bright what's out of every light is drawn, 0 to 1 of how it would be (about 0.12:
+    // shapes, not detail)
+    ambient: number;
+    // Tiles of light round each player
+    playerLight: number;
+    // Lights that stay put, world tiles; radius in tiles. The fire itself is the map's own
+    // scenery (scaperune/maps/darkTest.ts places both).
+    fires?: { x: number; y: number; radius: number }[];
+    // A lantern's (powerups.ts, LANTERN_ID) weight among the power-ups that drop here; it's 0
+    // everywhere else
+    lanternWeight?: number;
+    // Lanterns lying on the ground as the run starts, world tiles
+    lanterns?: { x: number; y: number }[];
 };
 
 // A floor that rises and falls away, after the Wardens' third phase in the Tombs of Amascut
@@ -2087,7 +2115,10 @@ export type PowerUpEffect =
           radius: number;
           speed: number;
           shout: string;
-      };
+      }
+    // A dark map's lantern (MapDef.darkness): bonus tiles on the player's light for seconds (Effect
+    // duration stretches it), shrinking back over the last fade seconds
+    | { kind: "lantern"; bonus: number; seconds: number; fade: number };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
 // with the player (GameAssets.getPowerUpLookRequests), so it's on at once.

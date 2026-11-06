@@ -569,6 +569,29 @@ export type EnemyProjectile = {
 
 export type PickupKind = "bones" | "coins" | "food" | "casket" | "powerUp";
 
+// A light on a dark map (MapDef.darkness), in the sim's tiles: what weapons can aim at, and what
+// the renderer lights. Made again each tick (Sim.lights), from what carries them.
+export type Light = {
+    kind: "player" | "fire" | "enemy" | "left";
+    x: number;
+    y: number;
+    radius: number;
+    // 0 to 1, how warm its colour is (a lantern's and a fire's are)
+    warmth: number;
+    // What it moves with, so it can be drawn where that's drawn: a hero's index, an enemy
+    hero?: number;
+    enemy?: Enemy;
+};
+
+// Where a light-carrying enemy died (EnemyDef.light.left): its light stays a while
+export type LeftLight = {
+    x: number;
+    y: number;
+    radius: number;
+    startTick: number;
+    endTick: number;
+};
+
 export type Pickup = {
     uid: number;
     kind: PickupKind;
