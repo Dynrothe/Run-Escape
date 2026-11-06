@@ -1721,6 +1721,16 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// The result screen's button back into a boss fight: a fight in parts (MapDef.stages) goes on to
+// its next part once one's won ("Next fight"), or from the first again once the last has been;
+// anything else is tried again
+function nextFightLabel(map: MapDef, victory: boolean, stage: number | undefined): string {
+    if (!victory || !map.stages) {
+        return "Retry";
+    }
+    return (stage ?? 0) + 1 < map.stages.length ? "Next fight" : "Fight again";
+}
+
 // What a win says: the part's own words in a fight in parts (MapDef.stages), else the map's
 function stageVictoryText(map: MapDef, stage: number | undefined): string {
     return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
@@ -3494,7 +3504,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     {/* A boss fight on your own: straight into it again */}
                     {!ui.coop.room && getMap(ui.mapId).fight && (
                         <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                            Retry
+                            {nextFightLabel(getMap(ui.mapId), victory, result?.stage)}
                         </button>
                     )}
                     <button

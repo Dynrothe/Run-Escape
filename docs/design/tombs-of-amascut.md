@@ -58,16 +58,19 @@ nothing bought, so a fresh account clearing Entry isn't a target.
   Menaphite Akh (11493, her own animations). Each part's a run of its own, kept once it's won
   (`SaveData.fightStages`), so you can leave and come back to the next, as OSRS keeps a quest's
   progress; only the last beats the map, and that's what opens the Tombs.
-- **Its fights**, after the wiki's: Coenus cleaves, charges and from half his hitpoints stamps
-  round himself; the mages bolt, fan and call scarab swarms, the second quicker; the Champion's
+- **Its fights**, after the wiki's: Coenus cleaves, charges and throws his spear at range, from
+  two thirds calls his guards (11527) and stamps round himself, and from a third rolls out a
+  shockwave to be slipped through; the mages bolt, fan and call scarab swarms, the second quicker; the Champion's
   shadow bolts, Shadow Burst (four tiles round him), Shadow Rift (bursting where you stood) and
   Shadow Flames (a swarm), and a ring of shadow in his last phase; the Akh's spear, her cone of
   lightning (step beside or behind her), her shadow (11462) shooting from afar, and a storm of
   lightning in her last phase. Each is in phases (two or three), a pause between.
 - **The kit's ours**: everyone plays the Sands Delver (`characters.ts`, the desert robes, the
-  Crystal bow at level 4, faster, with more hitpoints and 10 a minute back), so a fight lasts as
-  long as its hitpoints make it, about 29 damage a second kiting: Coenus 6000, the mages 2800 and
-  3200, the Champion 8000, the Akh 9000, three to six minutes each, every phase seen. Their
+  Crystal bow at level 4, faster, with more hitpoints and 10 a minute back, and a ranger's gear
+  worn from the start: `MapDef.fight.gear`), so a fight lasts as long as its hitpoints make it.
+  Played, the kit does about 55 damage a second (the bot half that): Coenus 10000, the mages 4800
+  and 5400, the Champion 13500, the Akh 15000, three to four minutes each played, every phase
+  seen. After a part's won the result screen's button goes on to the next ("Next fight"). Their
   mechanics hit for a little under Phosani's: what wears you down is the next one, not one big
   hit, and the windups (a second for a melee swing) and slow bolts are there to be read.
 - **Where**: the raid's own squares under its own id (the recipe's the same), fought in Akkha's

@@ -39,8 +39,10 @@ const rise = (title: string, subtitle: string) => ({
     atMiddle: true,
 });
 
-// Coenus, the Head Menaphite Guard (11529): melee only, and he sees through prayers. A cleave in
-// front, a charge at you from range, and from half his hitpoints, a stamp all round him.
+// Coenus, the Head Menaphite Guard (11529): melee only up close, and he sees through prayers. A
+// cleave, a charge at you from range and a spear thrown if you keep away; from two thirds he calls
+// his guards (11527) and stamps the ground round him; from a third, quicker, a shockwave rolls out
+// from him to be slipped through its gap.
 const COENUS_ATTACKS: BossAttackDef[] = [
     {
         name: "Cleave",
@@ -70,6 +72,59 @@ const COENUS_ATTACKS: BossAttackDef[] = [
         shout: "Your false gods will not protect you!",
     },
     {
+        name: "Spear throw",
+        kind: "projectile",
+        seq: SLASH_SEQ,
+        sound: -1,
+        spotAnim: SCARAB_BOLT,
+        impactSpotAnim: SCARAB_SPLASH,
+        damage: 2,
+        windup: 0.9,
+        cooldown: 6,
+        range: 14,
+        minRange: 5,
+        weight: 2,
+        speed: 7,
+    },
+    {
+        name: "Guards!",
+        kind: "summon",
+        seq: SLASH_SEQ,
+        sound: -1,
+        damage: 0,
+        windup: 1,
+        cooldown: 16,
+        range: 30,
+        weight: 3,
+        summon: { enemyId: "menaphite_guard", count: 2, distance: 4 },
+        shout: "Guards! Seize the intruder!",
+        phases: [2, 3],
+    },
+    {
+        name: "Shockwave",
+        kind: "pattern",
+        seq: SLASH_SEQ,
+        sound: -1,
+        spotAnim: SHADOW_BURST,
+        damage: 2,
+        windup: 1.2,
+        cooldown: 6,
+        range: 30,
+        weight: 0,
+        pattern: {
+            shape: "ring",
+            count: 20,
+            volleys: 2,
+            interval: 1,
+            speed: 4.5,
+            range: 14,
+            radius: 0.45,
+            gap: 0.9,
+            gapAt: "player",
+        },
+        phases: [3],
+    },
+    {
         name: "Stamp",
         kind: "swing",
         seq: SLASH_SEQ,
@@ -80,7 +135,7 @@ const COENUS_ATTACKS: BossAttackDef[] = [
         range: 4,
         radius: 4,
         weight: 3,
-        phases: [2],
+        phases: [2, 3],
     },
 ];
 
@@ -326,12 +381,20 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
             attacks: COENUS_ATTACKS,
             phases: {
                 phases: [
-                    { until: 0.5, status: "He comes for you" },
+                    { until: 0.66, status: "He comes for you" },
                     {
+                        until: 0.33,
                         status: "Your false gods will not protect you",
-                        message: "Coenus roars, and stamps the ground!",
+                        message: "Coenus calls his guards, and stamps the ground!",
                         tempo: 0.85,
-                        speed: 1.15,
+                        speed: 1.1,
+                    },
+                    {
+                        status: "You will not leave this place",
+                        message: "Coenus is enraged!",
+                        tempo: 0.7,
+                        speed: 1.2,
+                        ambient: { attack: "Shockwave", interval: 6, delay: 1.5 },
                     },
                 ],
                 shieldMessage: "",
@@ -458,6 +521,22 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
                 threshold: pause("Amascut will not be denied!"),
             },
         },
+    },
+    {
+        // Coenus's guards (11527): swords, after you, a few hits each
+        id: "menaphite_guard",
+        name: "Menaphite Guard",
+        npcId: 11527,
+        idleSeq: HUMAN_IDLE,
+        walkSeq: HUMAN_WALK,
+        attackSeq: SLASH_SEQ,
+        deathSeq: HUMAN_DEATH,
+        hp: 350,
+        damage: 1,
+        speed: 2.2,
+        radius: 0.5,
+        xp: 20,
+        sounds: NO_SOUNDS,
     },
     {
         // Her shadow (11462): shoots from afar, as the wiki has it; a few hits put it down
