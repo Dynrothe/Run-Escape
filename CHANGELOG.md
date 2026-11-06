@@ -35,6 +35,8 @@ the version in the corner).
   who's gone silent is dropped after about five minutes. Fixed by trippy22.
 - A co-op run that can't go on (a guest too far behind to catch up, or an error in the game) ends
   with a message instead of freezing everyone. Fixed by trippy22.
+- The Armadyl crossbow shows each shot while you run, not only when you stand still: your
+  adventurer aims it for a moment as the legs keep running. Fixed by trippy22.
 
 ## 0.27.0 - 2026-11-05
 

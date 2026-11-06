@@ -40,4 +40,47 @@ export class SeqModelAnimator {
 
         return model;
     }
+
+    // An action's frame over a movement's, split by the groups the movement
+    // keeps (`movementGroups`, a seq's interleave order). Undefined when the
+    // two can't be put together: a skeletal one, or frames on other bases.
+    animateInterleaved(
+        model: Model,
+        seqType: SeqType,
+        frame: number,
+        movementType: SeqType,
+        movementFrame: number,
+        movementGroups: number[],
+    ): Model | undefined {
+        if (seqType.isSkeletalSeq() || movementType.isSkeletalSeq()) {
+            return undefined;
+        }
+        const frameId = seqType.frameIds?.[frame];
+        const movementFrameId = movementType.frameIds?.[movementFrame];
+        if (frameId === undefined || movementFrameId === undefined) {
+            return undefined;
+        }
+        const seqFrame = this.seqFrameLoader.load(frameId);
+        const moveFrame = this.seqFrameLoader.load(movementFrameId);
+        if (!seqFrame || !moveFrame) {
+            return undefined;
+        }
+        const base = seqFrame.base;
+        if (base !== moveFrame.base && (base.id === -1 || base.id !== moveFrame.base.id)) {
+            return undefined;
+        }
+        const groups = new Array<boolean>(seqFrame.base.types.length).fill(false);
+        for (const group of movementGroups) {
+            if (group < groups.length) {
+                groups[group] = true;
+            }
+        }
+        model = Model.copyAnimated(
+            model,
+            !seqFrame.hasAlphaTransform && !moveFrame.hasAlphaTransform,
+            !seqFrame.hasColorTransform && !moveFrame.hasColorTransform,
+        );
+        model.animateInterleaved(seqFrame, moveFrame, groups, seqType.op14);
+        return model;
+    }
 }

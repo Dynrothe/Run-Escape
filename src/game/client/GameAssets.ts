@@ -43,6 +43,12 @@ export const PLAYER_SEQS = {
     death: 836,
 };
 
+// Eating, whose interleave order is the cache's usual split of a player for
+// doing something while walking: the legs (and the body's root) from the
+// walk, the rest from what's being done. The game's attacks have none of
+// their own, so they're played over the run with this one's.
+export const PLAYER_INTERLEAVE_SEQ = 829;
+
 export const PICKUP_OBJS: Record<"food" | "casket", number> = {
     food: 2140,
     casket: 405,
@@ -276,6 +282,26 @@ export function getPlayerAttackSeqs(): number[] {
     return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ])];
 }
 
+// The run poses of the weapon in the player's hand (WeaponDef.runPose), of
+// the swings a look is baked with. Only its, since the sim records no other
+// weapon's swing while the player moves.
+export function getHeldRunPoses(
+    appearance: PlayerAppearance,
+    attackSeqs: number[],
+): { seqId: number; frame: number }[] {
+    const held = appearance.equipment[EquipSlot.WEAPON];
+    if (held === undefined || held < 0) {
+        return [];
+    }
+    return WEAPONS.flatMap((weapon) =>
+        weapon.runPose !== undefined &&
+        attackSeqs.includes(weapon.playerSeq) &&
+        weapon.levels.some((level) => level.objId === held)
+            ? [{ seqId: weapon.playerSeq, frame: weapon.runPose }]
+            : [],
+    );
+}
+
 // The attack animations a hero's bake needs: their weapons', and in co-op the
 // reviver's emote. A new weapon changes the hero's appearanceVersion, which
 // re-bakes them with its swing.
@@ -436,7 +462,8 @@ function getRequestBody(request: BakeRequest): string {
         case "npc":
             return `npc:${request.npcId}:${request.seqIds[0]}`;
         case "player":
-            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}`;
+            // A look with run poses is the player's own, never merged
+            return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}${request.runPoses ? ":" + JSON.stringify(request.runPoses) : ""}`;
         case "spotanim":
             return `spotanim:${request.spotAnimId}`;
         case "obj":
@@ -1038,7 +1065,19 @@ export class GameAssets {
                     ...attackSeqs,
                 ].filter((id, i, all) => all.indexOf(id) === i);
                 const bake = await this.bake([
-                    { kind: "player", key: "player", appearance, seqIds },
+                    {
+                        kind: "player",
+                        key: "player",
+                        appearance,
+                        seqIds,
+                        // The held weapon's aim over the run, for a moment
+                        // after each shot on the move
+                        runPoses: {
+                            poses: getHeldRunPoses(appearance, attackSeqs),
+                            runSeqId: stance.run,
+                            maskSeqId: PLAYER_INTERLEAVE_SEQ,
+                        },
+                    },
                     ...getPowerUpLookRequests(appearance),
                 ]);
                 this.renderer.updateTextureArray(bake.loadedTextures);

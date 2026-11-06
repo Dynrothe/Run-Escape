@@ -2059,6 +2059,8 @@ export const WEAPONS: WeaponDef[] = [
             "Fires bolts at the nearest enemy that pass through it. One in five is enchanted: a ruby's takes a fifth of what's left of its hitpoints, a diamond's goes on through more, a dragonstone's burns.",
         iconObjId: 11785,
         playerSeq: 4230,
+        // Aimed, the bolt loosed: the frame that reaches out furthest, and holds longest
+        runPose: 7,
         sound: 2707,
         hitSound: -1,
         rarity: "rare",
