@@ -17,7 +17,7 @@ import {
     createAppearance,
     getAppearanceKey,
 } from "../../rs/model/player/PlayerModelLoader";
-import { getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
@@ -36,6 +36,7 @@ import {
     FloorSkinDef,
     GearSlot,
     ImpactDef,
+    RootsRuleDef,
     WeaponDef,
 } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -226,6 +227,8 @@ function getSpotAnimIds(): number[] {
     }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
+        // What a cut through a map's roots throws up (MapDef.rule)
+        add(map.rule?.look.cutSpotAnim);
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -385,12 +388,18 @@ export function getPowerUpLookRequests(appearance: PlayerAppearance): BakeReques
 // The baked model for an enemy: its NPC, or the outfit it wears (the fun
 // maps' players, one model per outfit)
 export function getEnemyModelKey(def: EnemyDef, variant: number): string {
-    return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
+    // A look of its (EnemyDef.looks) past the first is its own model; the first is npcId's
+    return def.outfits || (def.looks && variant > 0) ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
 // A floor with no skins of its own draws the slam's slab (FloorView); this is it, for its top
 export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): FloorSkinDef {
     return { spotAnim: floor.slam.spotAnim };
+}
+
+// A map's roots' scenery (RootsRuleDef.look, client/RootsView.ts), with the look's colours swapped
+export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): string {
+    return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
 }
 
 // A piece of what's under a floor (FloorDef.under)
@@ -601,6 +610,17 @@ export class GameAssets {
                 ? { kind: "obj", key: "npc:" + enemy.id, objId: enemy.objId, count: 1 }
                 : { kind: "npc", key: "npc:" + enemy.id, npcId: enemy.npcId, seqIds },
         ];
+        // Its other looks, with the same animations
+        enemy.looks?.forEach((npcId, variant) => {
+            if (variant > 0) {
+                requests.push({
+                    kind: "npc",
+                    key: getEnemyModelKey(enemy, variant),
+                    npcId,
+                    seqIds,
+                });
+            }
+        });
         const shielded = enemy.shield?.look;
         if (shielded) {
             requests.push({
@@ -688,6 +708,28 @@ export class GameAssets {
         const requests: BakeRequest[] = [];
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
+        }
+        // A map's roots (MapDef.rule, client/RootsView.ts), their colours swapped
+        const rootLooks = new Set<string>();
+        for (const map of ALL_MAPS) {
+            const look = map.rule?.look;
+            for (const locId of [...(look?.runners ?? []), ...(look?.loops ?? [])]) {
+                const key = getRootLookKey(locId, look!);
+                if (!rootLooks.has(key)) {
+                    rootLooks.add(key);
+                    requests.push({ kind: "model", key, locId, recolor: look!.recolor });
+                }
+            }
+        }
+        // The tree an adventurer's trait fells (CharacterDef.trait)
+        const traitLocs = new Set<number>();
+        for (const character of CHARACTERS) {
+            if (character.trait) {
+                traitLocs.add(character.trait.locId);
+            }
+        }
+        for (const locId of traitLocs) {
+            requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
         // What's under a floor (a dev map's, as its slabs are)
         for (const map of ALL_MAPS) {

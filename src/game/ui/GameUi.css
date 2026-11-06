@@ -874,6 +874,58 @@
     white-space: nowrap;
 }
 
+/* An act's page: its four maps round the act's own card, two above it and two below */
+.ui-act {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+        "a b"
+        "m m"
+        "c d";
+    gap: 4px;
+}
+
+.ui-act-card,
+.ui-act-middle {
+    gap: 6px;
+    min-width: 0;
+    padding: 3px 8px 3px 4px;
+    font-size: 15px;
+    text-align: left;
+}
+
+.ui-act-card-text,
+.ui-act-middle {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ui-act-middle {
+    align-items: center;
+    padding: 4px 8px;
+    text-align: center;
+    cursor: default;
+}
+
+.ui-act-line {
+    overflow: hidden;
+    color: #b8aa8a;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-act-middle .ui-act-line {
+    white-space: normal;
+}
+
+/* Not open yet: the whole act faded */
+.ui-act-closed {
+    opacity: 0.6;
+}
+
 /* A tick for a map that's been beaten */
 .ui-beaten {
     flex-shrink: 0;

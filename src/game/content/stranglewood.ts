@@ -1,0 +1,577 @@
+import { STRANGLEWOOD_CLEARING } from "../scaperune/maps/stranglewood";
+import type { EnemyDef, RootsRuleDef, RunEventDef, WaveDef } from "./types";
+import { RUN_LENGTH, paced } from "./waves";
+
+// The Stranglewood, Act II's first map (docs/design/act-2-fallen-empire.md, section 3): the
+// wood's Strangled and its beasts, Kasonde, a great Strangled Bear and Vardorvis, and the roots
+// (MapDef.rule) that creep in from the wood. Every id is the cache's (scripts/cache/find-npcs.ts).
+
+// The Strangled's own sounds aren't on their animations: a zombie's stand in
+const STRANGLED_SOUNDS = { attack: 918, hit: 923, death: 922 };
+const BEAST_SOUNDS = { attack: 710, hit: 713, death: 711 };
+const BEAR_SOUNDS = { attack: 369, hit: 371, death: 370 };
+const HUMAN_SOUNDS = { attack: 2564, hit: 513, death: 512 };
+// Vardorvis's own, off his animations (scripts/cache/sounds.ts seqs)
+const VARDORVIS_SOUNDS = { attack: 7091, hit: 7119, death: 7052 };
+
+// The tendrils that burst out of the ground where roots erupt and his vines come up (spot
+// animations of the Tendril's model, 49294), and his head's shot
+const TENDRIL_BURST = 2512;
+const VINE_BURST = 2514;
+const HEAD_SHOT = 2520;
+// Dust and the forest's floor thrown up (the Sepulchre's dust, as the floors use)
+const DUST = 2699;
+const BLOWN_DUST = 2184;
+
+export const STRANGLED_ID = "strangled";
+export const ROOT_HEART_ID = "root_heart";
+
+export const STRANGLEWOOD_ENEMIES: EnemyDef[] = [
+    // The crowd: four looks of the level 138s, walking 5566
+    {
+        id: STRANGLED_ID,
+        name: "Strangled",
+        npcId: 12268,
+        looks: [12268, 12269, 12270, 12271],
+        idleSeq: 5565,
+        walkSeq: 5566,
+        attackSeq: 5568,
+        deathSeq: 5569,
+        hp: 6,
+        damage: 1,
+        speed: 2,
+        radius: 0.35,
+        xp: 6,
+        sounds: STRANGLED_SOUNDS,
+        knockbackResist: 0.15,
+    },
+    // The level 149s, two looks, slower and harder
+    {
+        id: "strangled_brute",
+        name: "Strangled",
+        npcId: 12272,
+        looks: [12272, 12273],
+        idleSeq: 5572,
+        walkSeq: 5570,
+        attackSeq: 5571,
+        deathSeq: 5575,
+        hp: 40,
+        damage: 4,
+        speed: 1.8,
+        radius: 0.4,
+        xp: 26,
+        sounds: STRANGLED_SOUNDS,
+        knockbackResist: 0.3,
+    },
+    // Fast chargers, from 2:00
+    {
+        id: "strangled_boar",
+        name: "Strangled Boar",
+        npcId: 12289,
+        idleSeq: 12490,
+        walkSeq: 9096,
+        attackSeq: 9097,
+        deathSeq: 9098,
+        hp: 12,
+        damage: 2,
+        speed: 3.1,
+        radius: 0.35,
+        xp: 10,
+        sounds: BEAST_SOUNDS,
+    },
+    // Pouncers, from 4:00: the last few tiles in a rush
+    {
+        id: "strangled_lynx",
+        name: "Strangled Lynx",
+        npcId: 12290,
+        idleSeq: 9091,
+        walkSeq: 9090,
+        attackSeq: 9092,
+        deathSeq: 9093,
+        hp: 26,
+        damage: 3,
+        speed: 2.2,
+        radius: 0.4,
+        xp: 18,
+        sounds: BEAST_SOUNDS,
+        // Two tiles across in OSRS
+        scale: 0.8,
+        pounce: { range: 3, speed: 2.4 },
+    },
+    // The elite: lays roots behind it as it walks
+    {
+        id: "strangled_bear",
+        name: "Strangled Bear",
+        npcId: 12288,
+        idleSeq: 5720,
+        walkSeq: 2308,
+        attackSeq: 4925,
+        deathSeq: 4929,
+        hp: 40,
+        damage: 4,
+        speed: 1.7,
+        radius: 0.45,
+        xp: 26,
+        sounds: BEAR_SOUNDS,
+        // Three tiles across in OSRS
+        scale: 0.6,
+        knockbackResist: 0.6,
+        plants: 1,
+    },
+    // The root heart (RootsRuleDef.hearts): a Large Tendril come up at a root front, roots
+    // reaching out from it. It doesn't move; killed, it sinks back into the ground, clearing a
+    // patch, and leaves an elite casket.
+    {
+        id: ROOT_HEART_ID,
+        name: "Large Tendril",
+        npcId: 12225,
+        idleSeq: 10363,
+        walkSeq: 10363,
+        attackSeq: 10365,
+        deathSeq: -1,
+        hp: 150,
+        damage: 3,
+        speed: 0,
+        radius: 1.2,
+        xp: 60,
+        sounds: { attack: 7101, hit: 7119, death: 7052 },
+        // Three tiles across in OSRS
+        scale: 0.8,
+        stationary: true,
+        solid: true,
+        healthBar: true,
+        caskets: ["elite"],
+        spawnMessage: "A root heart pushes up through the ground!",
+    },
+    // 5:00. He darts in and out with his blade, and where he first lands a root heart comes up.
+    {
+        id: "kasonde",
+        name: "Kasonde the Craven",
+        npcId: 12331,
+        idleSeq: 808,
+        walkSeq: 819,
+        attackSeq: 390,
+        deathSeq: 836,
+        hp: 4000,
+        damage: 0,
+        speed: 2.4,
+        radius: 0.45,
+        xp: 1500,
+        sounds: HUMAN_SOUNDS,
+        scale: 1.3,
+        knockbackResist: 1,
+        spawnMessage: "Kasonde the Craven comes for what you've found!",
+        boss: {
+            attackInterval: 2.8,
+            enrage: { message: "Kasonde is enraged!", shout: "It's mine, all of it!" },
+            attacks: [
+                {
+                    name: "Slash",
+                    kind: "swing",
+                    damage: 4,
+                    windup: 0.7,
+                    cooldown: 0,
+                    range: 3,
+                    radius: 2.4,
+                    cone: 2.2,
+                    weight: 4,
+                    seq: 390,
+                    sound: 2564,
+                },
+                {
+                    name: "Dart",
+                    kind: "blast",
+                    damage: 4,
+                    windup: 0.9,
+                    cooldown: 5,
+                    range: 12,
+                    minRange: 4,
+                    radius: 1.8,
+                    weight: 4,
+                    leap: true,
+                    seq: 376,
+                    sound: 2564,
+                    impactSpotAnim: DUST,
+                    impact: { spots: [{ spotAnim: DUST }], shake: 0.25 },
+                    rule: { heart: true },
+                },
+                {
+                    name: "Fall back",
+                    kind: "teleport",
+                    damage: 0,
+                    windup: 0.5,
+                    cooldown: 8,
+                    range: 3,
+                    radius: 7,
+                    weight: 2,
+                    castSpotAnim: BLOWN_DUST,
+                    impactSpotAnim: BLOWN_DUST,
+                    shout: "Not today!",
+                },
+            ],
+        },
+    },
+    // 10:00. A great Strangled Bear, charging down lines and rooting the strip it runs
+    {
+        id: "great_strangled_bear",
+        name: "Great Strangled Bear",
+        npcId: 12288,
+        idleSeq: 5720,
+        walkSeq: 2308,
+        attackSeq: 4925,
+        deathSeq: 4929,
+        hp: 7000,
+        damage: 0,
+        speed: 1.8,
+        radius: 0.45,
+        xp: 1800,
+        sounds: BEAR_SOUNDS,
+        scale: 0.6 * 1.6,
+        knockbackResist: 1,
+        spawnMessage: "A great Strangled Bear crashes out of the wood!",
+        plants: 1.5,
+        boss: {
+            attackInterval: 2.8,
+            enrage: { message: "The great Strangled Bear is enraged!" },
+            attacks: [
+                {
+                    name: "Maul",
+                    kind: "swing",
+                    damage: 5,
+                    windup: 0.8,
+                    cooldown: 0,
+                    range: 3,
+                    radius: 2.6,
+                    weight: 4,
+                    seq: 4925,
+                    sound: 369,
+                    impact: { spots: [{ spotAnim: DUST }], shake: 0.3 },
+                },
+                {
+                    name: "Charge",
+                    kind: "swing",
+                    damage: 6,
+                    windup: 1.1,
+                    cooldown: 4,
+                    range: 14,
+                    minRange: 3,
+                    weight: 5,
+                    seq: 4925,
+                    sound: 369,
+                    line: { width: 2.4, length: 12, dash: 12 },
+                    impact: {
+                        spots: [{ spotAnim: DUST }],
+                        trail: { spotAnim: BLOWN_DUST },
+                        shake: 0.35,
+                    },
+                    rule: { lane: 1.5 },
+                    message: "The bear charges!",
+                },
+                {
+                    name: "Call the wood",
+                    kind: "summon",
+                    damage: 0,
+                    windup: 1,
+                    cooldown: 18,
+                    range: 16,
+                    weight: 2,
+                    summon: { enemyId: "strangled_boar", count: 4 },
+                },
+            ],
+        },
+    },
+    // Never spawned: what his swinging axes are drawn as (BossAttackDef.lookId)
+    {
+        id: "vardorvis_axe",
+        name: "Vardorvis' axe",
+        npcId: 12227,
+        idleSeq: 10366,
+        walkSeq: 10366,
+        attackSeq: -1,
+        deathSeq: -1,
+        hp: 1,
+        damage: 0,
+        speed: 0,
+        radius: 0.45,
+        xp: 0,
+        sounds: VARDORVIS_SOUNDS,
+    },
+    // At a third of his hitpoints his head comes off, and gazes: it floats where it is and shoots
+    {
+        id: "vardorvis_head",
+        name: "Vardorvis' Head",
+        npcId: 12226,
+        idleSeq: 10348,
+        walkSeq: 10348,
+        attackSeq: 10348,
+        deathSeq: -1,
+        hp: 900,
+        damage: 3,
+        speed: 0,
+        radius: 0.45,
+        xp: 200,
+        sounds: VARDORVIS_SOUNDS,
+        stationary: true,
+        healthBar: true,
+        shot: { range: 16, interval: 2.2, speed: 9, spotAnim: HEAD_SHOT },
+    },
+    // 15:00. He rises in the clearing. His axes swing across the ground, his dart leaves cracks
+    // that burst into vines, and the roots you left uncut erupt round you.
+    {
+        id: "vardorvis",
+        name: "Vardorvis",
+        npcId: 12224,
+        idleSeq: 10337,
+        walkSeq: 10338,
+        attackSeq: 10341,
+        deathSeq: 10346,
+        hp: 24000,
+        damage: 0,
+        speed: 1.9,
+        radius: 0.45,
+        xp: 3000,
+        sounds: VARDORVIS_SOUNDS,
+        knockbackResist: 1,
+        spawnMessage: "Vardorvis rises in the clearing!",
+        boss: {
+            attackInterval: 2.2,
+            fallSeconds: 2.4,
+            enrage: { message: "Vardorvis is enraged!", shout: "The wood is mine!" },
+            intro: {
+                seconds: 4,
+                riseAt: 1.2,
+                title: "Vardorvis",
+                subtitle: "the Strangler",
+                distance: 6,
+                atMiddle: true,
+                pan: { from: 2.4, over: 1.2 },
+                land: { spots: [{ spotAnim: DUST, fit: 3 }], shake: 0.4 },
+                landAt: 0.2,
+            },
+            summonsAt: [
+                {
+                    hp: 0.33,
+                    enemyId: "vardorvis_head",
+                    count: 1,
+                    message: "Vardorvis's head tears free, and gazes!",
+                },
+            ],
+            attacks: [
+                {
+                    name: "Strike",
+                    kind: "swing",
+                    damage: 5,
+                    windup: 0.7,
+                    cooldown: 0,
+                    range: 3,
+                    radius: 3,
+                    cone: 2.4,
+                    underRadius: 1.2,
+                    weight: 5,
+                    seq: 10341,
+                    sound: 7091,
+                    impact: { spots: [{ spotAnim: DUST }], shake: 0.25 },
+                },
+                {
+                    name: "Swinging axes",
+                    kind: "projectile",
+                    damage: 4,
+                    windup: 1.2,
+                    cooldown: 6,
+                    range: 16,
+                    radius: 1.1,
+                    speed: 6,
+                    count: 3,
+                    spread: 0.7,
+                    weight: 4,
+                    seq: 10346,
+                    sound: 7065,
+                    lookId: "vardorvis_axe",
+                    wave: { reach: 16 },
+                    message: "Vardorvis's axes swing across the ground!",
+                },
+                {
+                    name: "Dart",
+                    kind: "blast",
+                    damage: 5,
+                    windup: 0.9,
+                    cooldown: 5,
+                    range: 14,
+                    minRange: 4,
+                    radius: 1.8,
+                    weight: 4,
+                    leap: true,
+                    seq: 10342,
+                    sound: 7133,
+                    impactSpotAnim: DUST,
+                    impact: { spots: [{ spotAnim: DUST, fit: 1.5 }], shake: 0.35 },
+                    follow: { attack: "Bleeding vines", delay: 0.2 },
+                },
+                {
+                    name: "Bleeding vines",
+                    kind: "ground",
+                    damage: 3,
+                    windup: 1.3,
+                    cooldown: 999,
+                    range: 0,
+                    weight: 0,
+                    sound: 7101,
+                    ground: {
+                        spots: [{ shape: "ring", count: 6, distance: 2.5 }],
+                        radius: 1,
+                        spotAnim: VINE_BURST,
+                        alpha: 0.35,
+                    },
+                },
+                {
+                    name: "The roots rise",
+                    kind: "ground",
+                    damage: 4,
+                    windup: 1.5,
+                    cooldown: 7,
+                    range: 20,
+                    weight: 4,
+                    seq: 10344,
+                    sound: 7101,
+                    ground: {
+                        spots: [{ shape: "rule", count: 8, within: 8 }],
+                        radius: 1.1,
+                        spotAnim: TENDRIL_BURST,
+                        alpha: 0.35,
+                    },
+                    message: "The roots round you stir...",
+                },
+            ],
+        },
+    },
+];
+
+// Lumbridge's pace, the wood's own: the Strangled throughout, boars from 2:00, lynxes from 4:00
+export const STRANGLEWOOD_WAVES: WaveDef[] = paced([
+    [{ id: STRANGLED_ID, weight: 1 }],
+    [{ id: STRANGLED_ID, weight: 1 }],
+    [
+        { id: STRANGLED_ID, weight: 3 },
+        { id: "strangled_boar", weight: 1 },
+    ],
+    [
+        { id: STRANGLED_ID, weight: 3 },
+        { id: "strangled_boar", weight: 2 },
+    ],
+    [
+        { id: STRANGLED_ID, weight: 3 },
+        { id: "strangled_lynx", weight: 1 },
+        { id: "strangled_boar", weight: 1 },
+    ],
+    [
+        { id: STRANGLED_ID, weight: 2 },
+        { id: "strangled_brute", weight: 1 },
+        { id: "strangled_lynx", weight: 1 },
+    ],
+    [
+        { id: "strangled_brute", weight: 2 },
+        { id: STRANGLED_ID, weight: 2 },
+        { id: "strangled_boar", weight: 2 },
+    ],
+    [
+        { id: "strangled_lynx", weight: 2 },
+        { id: "strangled_brute", weight: 2 },
+        { id: STRANGLED_ID, weight: 1 },
+    ],
+    [
+        { id: "strangled_brute", weight: 3 },
+        { id: "strangled_lynx", weight: 2 },
+        { id: "strangled_boar", weight: 1 },
+    ],
+    [
+        { id: "strangled_brute", weight: 2 },
+        { id: STRANGLED_ID, weight: 2 },
+        { id: "strangled_lynx", weight: 2 },
+    ],
+    [
+        { id: "strangled_brute", weight: 3 },
+        { id: "strangled_boar", weight: 2 },
+        { id: "strangled_lynx", weight: 2 },
+    ],
+    [
+        { id: "strangled_brute", weight: 3 },
+        { id: "strangled_lynx", weight: 3 },
+        { id: STRANGLED_ID, weight: 1 },
+    ],
+    [
+        { id: "strangled_brute", weight: 3 },
+        { id: "strangled_lynx", weight: 2 },
+        { id: "strangled_boar", weight: 2 },
+    ],
+    [
+        { id: "strangled_brute", weight: 3 },
+        { id: "strangled_lynx", weight: 3 },
+        { id: "strangled_boar", weight: 2 },
+    ],
+    [
+        { id: "strangled_brute", weight: 3 },
+        { id: "strangled_lynx", weight: 3 },
+        { id: "strangled_boar", weight: 2 },
+        { id: STRANGLED_ID, weight: 2 },
+    ],
+]);
+
+export const STRANGLEWOOD_EVENTS: RunEventDef[] = [
+    { at: 120, kind: "elite", enemyId: "strangled_boar" },
+    { at: 200, kind: "elite", enemyId: "strangled_bear" },
+    { at: 260, kind: "elite", enemyId: "strangled_lynx" },
+    { at: 300, kind: "boss", enemyId: "kasonde", hp: 4200 },
+    { at: 330, kind: "ring", enemyId: STRANGLED_ID, count: 30 },
+    { at: 400, kind: "elite", enemyId: "strangled_bear" },
+    { at: 480, kind: "elite", enemyId: "strangled_brute" },
+    { at: 540, kind: "elite", enemyId: "strangled_lynx" },
+    { at: 600, kind: "boss", enemyId: "great_strangled_bear", hp: 8000 },
+    { at: 630, kind: "ring", enemyId: "strangled_boar", count: 40 },
+    { at: 690, kind: "elite", enemyId: "strangled_bear" },
+    { at: 750, kind: "elite", enemyId: "strangled_brute" },
+    { at: 810, kind: "elite", enemyId: "strangled_bear" },
+    { at: 840, kind: "ring", enemyId: STRANGLED_ID, count: 60 },
+    { at: 870, kind: "elite", enemyId: "strangled_lynx" },
+    { at: RUN_LENGTH, kind: "finalBoss", enemyId: "vardorvis", hp: 28000 },
+];
+
+// The wood's roots (core/rules/RootRule.ts), drawn with the two lightest Tendrils of Vardorvis's
+// arena (their models are his tendrils' bursts' too), the smaller for the loops, tips and what
+// wraps round your legs; in the reds of the Large Tendril they come from, not the near-black
+// they are
+const TENDRILS = [47599, 47600];
+const TENDRIL_RED: [number, number][] = [
+    [61714, 536],
+    [63894, 796],
+];
+export const STRANGLEWOOD_ROOTS: RootsRuleDef = {
+    kind: "roots",
+    start: 30,
+    // The bot's runs left alone come to about a third by 8:00 and two thirds by 14:00, as the
+    // design asked
+    fronts: [3, 5],
+    every: [3, 1.8],
+    lateBy: 720,
+    sprout: 1.5,
+    // Within ten tiles of the clearing's middle, where the last fight is
+    safe: { ...STRANGLEWOOD_CLEARING, radius: 10 },
+    slow: 0.25,
+    hurt: { share: 0.01, every: 0.5, grace: 0.5 },
+    haste: 0.15,
+    cut: { hit: 1, kill: 1.5, regrow: 15 },
+    hearts: {
+        enemyId: ROOT_HEART_ID,
+        from: 120,
+        every: 75,
+        max: 3,
+        reach: 12,
+        clear: 7,
+        calm: 40,
+    },
+    look: {
+        runners: TENDRILS,
+        loops: [TENDRILS[0]],
+        recolor: TENDRIL_RED,
+        cutSpotAnim: BLOWN_DUST,
+    },
+};

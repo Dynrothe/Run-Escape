@@ -8,7 +8,13 @@ import {
 import { REVIVE_SECONDS, REVIVE_SEQ } from "../content/coop";
 import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
-import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
+import {
+    LANTERN_ID,
+    POWER_UP_BLINK,
+    POWER_UP_COLOR,
+    POWER_UP_LIFETIME,
+    getPowerUp,
+} from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
 import { EnemyDef } from "../content/types";
@@ -51,6 +57,7 @@ import {
 import { Overlay, ScreenPoint } from "./Overlay";
 import { PetFollower, PetFollowers } from "./PetFollowers";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
+import { RootsView } from "./RootsView";
 
 const FROZEN_TINT = 0xa8d8ff;
 // Co-op teammates' names and arrows, like a friend's name in the client, and
@@ -138,6 +145,14 @@ const SHOUT_MS = 3000;
 // A casket thrown out of an elite: up and down, then a little bounce
 const CASKET_HOP_TICKS = 28;
 const CASKET_HOP_HEIGHT = 1.6;
+// Arrows for what's coming out of the dark under litTargetsOnly (drawDarkArrows): from how far off (tiles),
+// how many ways round, how far past the light's edge, and how strong at most
+const DARK_ARROW_RANGE = 16;
+const DARK_ARROW_SECTORS = 16;
+const DARK_ARROW_GAP = 0.8;
+const DARK_ARROW_ALPHA = 0.55;
+const DARK_ARROW_COLOR = "#e8dcc8";
+
 // Loot beams on caskets lying on the ground (like RuneLite's), in tiles
 const LOOT_BEAM_HEIGHT = 4;
 // Power-ups are drawn bigger than other ground items and bob up and down
@@ -153,6 +168,11 @@ const FLASH_MS = 700;
 const IMPACT_FLASH = 0.3;
 // A rock's size, and how far up it starts (tiles)
 const ROCK_SCALE = 5;
+// A felled tree (CharacterTraitDef timber): ticks it takes to fall, to lie there and to fade
+const TREE_FALL_TICKS = 20;
+const TREE_LIE_TICKS = 25;
+const TREE_FADE_TICKS = 20;
+const TREE_TICKS = TREE_FALL_TICKS + TREE_LIE_TICKS + TREE_FADE_TICKS;
 const ROCK_FALL_HEIGHT = 14;
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
@@ -225,6 +245,16 @@ export class GameView {
     localPlayerPose?: PlayerPose;
     private hitsplats: Hitsplat[] = [];
     private slashes: SlashFx[] = [];
+    // Trees felled (CharacterTraitDef timber), falling along their strip
+    private trees: {
+        x: number;
+        y: number;
+        dirX: number;
+        dirY: number;
+        length: number;
+        locId: number;
+        start: number;
+    }[] = [];
     auras: AuraFx[] = [];
     private blasts: BlastFx[] = [];
     private swings: SwingFx[] = [];
@@ -244,12 +274,14 @@ export class GameView {
 
     private readonly fight: BossFightView;
     private readonly floor: FloorView;
+    private readonly roots: RootsView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
 
     constructor(readonly assets: GameAssets) {
         this.fight = new BossFightView(assets);
         this.floor = new FloorView(assets);
+        this.roots = new RootsView(assets);
     }
 
     reset(): void {
@@ -340,6 +372,17 @@ export class GameView {
                 case "visitorShout":
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== VISITOR_SHOUT);
                     this.shouts.push({ enemyUid: VISITOR_SHOUT, text: event.text, start: now });
+                    break;
+                case "treeFall":
+                    pushCapped(this.trees, {
+                        x: event.x,
+                        y: event.y,
+                        dirX: event.dirX,
+                        dirY: event.dirY,
+                        length: event.length,
+                        locId: event.locId,
+                        start: sim.tick,
+                    });
                     break;
                 case "slash":
                     pushCapped(this.slashes, {
@@ -492,6 +535,7 @@ export class GameView {
             actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
                 scale,
                 outline: 1 + PROJECTILE_OUTLINE / (model.radius * scale + 1),
+                unlit: 1,
             });
         }
 
@@ -510,8 +554,10 @@ export class GameView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(tick - projectile.startTick);
+            // Seen into the dark, where they carry on to what they hit
             actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
                 scale: projectile.kind === "rune" ? RUNE_SCALE : 1,
+                unlit: 1,
             });
         }
 
@@ -529,12 +575,15 @@ export class GameView {
             // piles of bones and coins show a little bigger
             const pile = getPileLook(pickup);
             let scale = 0.85;
+            // On a lit map caskets and power-ups show however dark it is; bones and coins don't
+            let unlit = 0;
             if (pile) {
                 scale = pile.scale;
             } else if (pickup.kind === "food") {
                 scale = 1.1;
             } else if (pickup.kind === "casket") {
                 scale = 1.3;
+                unlit = 1;
                 const t = (tick - pickup.spawnTick) / CASKET_HOP_TICKS;
                 height -= casketHop(t);
                 // Tumbling while it's in the air
@@ -556,8 +605,9 @@ export class GameView {
                 }
                 scale = getPowerUpScale(model);
                 height -= getPowerUpBob(pickup, tick);
+                unlit = 1;
             }
-            actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale });
+            actors.draw(model, model.anims[0], 0, x, height, y, yaw, { scale, unlit });
         }
 
         for (const rock of sim.rocks) {
@@ -589,8 +639,18 @@ export class GameView {
             this.drawGlyph(actors, sim, glyph, alpha);
         }
 
+        // A boss fight's own: its warnings, its shots and its statues coming to life, all seen in
+        // the dark
+        actors.unlitAtLeast = 1;
         this.fight.submitActors(actors, sim, alpha);
+        actors.unlitAtLeast = 0;
         this.floor.submitActors(actors, sim, alpha);
+        const focus = (sim.heroes[this.viewHero] ?? sim.heroes[sim.focus]).player;
+        this.roots.submitActors(actors, sim, focus.x, focus.y);
+        this.trees = this.trees.filter((tree) => sim.tick - tree.start < TREE_TICKS);
+        for (const tree of this.trees) {
+            this.drawTree(actors, sim, tree);
+        }
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);
@@ -613,9 +673,53 @@ export class GameView {
                 height,
                 effect.y,
                 effect.yaw ?? 0,
-                fit !== undefined ? { scale: (fit * 128) / Math.max(1, model.radius) } : undefined,
+                // Spells' impacts and bosses' warnings, seen in the dark
+                fit !== undefined
+                    ? { scale: (fit * 128) / Math.max(1, model.radius), unlit: 1 }
+                    : UNLIT,
             );
         }
+    }
+
+    // Timber! A tree stood at the strip's near end, tipping over along it faster and faster, then
+    // lying a moment and fading
+    private drawTree(
+        actors: ActorRenderer,
+        sim: Sim,
+        tree: {
+            x: number;
+            y: number;
+            dirX: number;
+            dirY: number;
+            length: number;
+            locId: number;
+            start: number;
+        },
+    ): void {
+        const model = this.assets.get("loc:" + tree.locId);
+        if (!model) {
+            return;
+        }
+        const ticks = sim.tick - tree.start;
+        const t = Math.min(1, ticks / TREE_FALL_TICKS);
+        const fade = Math.max(
+            0,
+            1 - Math.max(0, ticks - TREE_FALL_TICKS - TREE_LIE_TICKS) / TREE_FADE_TICKS,
+        );
+        // Its foot a little behind the player, so it lies along the strip; tall enough to reach
+        const x = tree.x - tree.dirX * 0.5;
+        const y = tree.y - tree.dirY * 0.5;
+        const scale = (tree.length * 128) / Math.max(1, model.height);
+        actors.draw(
+            model,
+            model.anims[0],
+            0,
+            x,
+            this.ground(sim, x, y),
+            y,
+            yawFromVector(tree.dirX, tree.dirY),
+            { scale, pitch: Math.round(t * t * 512), alpha: fade },
+        );
     }
 
     // Falling faster and faster, then fading away where it landed
@@ -630,6 +734,7 @@ export class GameView {
         actors.draw(model, model.anims[0], 0, rock.x, height, rock.y, (rock.uid * 331) & 2047, {
             scale: ROCK_SCALE,
             alpha: Math.max(0, fade),
+            unlit: 1,
         });
     }
 
@@ -659,6 +764,7 @@ export class GameView {
                 alpha: Math.max(0, 1 - faded),
                 silhouette: true,
                 flash: RAMPAGE_FLASH,
+                unlit: 1,
             },
         );
     }
@@ -674,6 +780,7 @@ export class GameView {
         const height = this.ground(sim, ring.x, ring.y);
         actors.draw(model, model.anims[0], 0, ring.x, height, ring.y, 0, {
             scale: ring.scale * Math.min(1, 0.4 + open / RING_OPEN_TICKS),
+            unlit: 1,
         });
     }
 
@@ -690,6 +797,7 @@ export class GameView {
             const frame = anim.getFrame(sim.tick + i * FLAME_STEP_TICKS);
             actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
                 scale: FLAME_SCALE,
+                unlit: 1,
             });
         });
     }
@@ -702,7 +810,7 @@ export class GameView {
         }
         const anim = model.anims[0];
         const height = this.ground(sim, at.x, at.y);
-        actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0);
+        actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, UNLIT);
     }
 
     // A boss's pool: the real thing on the ground, spreading as it lands and
@@ -718,6 +826,7 @@ export class GameView {
         actors.draw(model, model.anims[0], 0, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
             scale: pool.radius * POOL_SCALE * size,
             alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
+            unlit: 1,
         });
     }
 
@@ -753,7 +862,7 @@ export class GameView {
             this.ground(sim, x, y) - (attack.wave ? 0 : PROJECTILE_HEIGHT),
             y,
             (projectile.yaw + (attack.spotYaw ?? 0)) & 2047,
-            { scale },
+            { scale, unlit: 1 },
         );
     }
 
@@ -774,7 +883,7 @@ export class GameView {
             this.ground(sim, x, y),
             y,
             yawFromVector(-glyph.dirX, -glyph.dirY),
-            { scale: glyph.look.scale ?? 1, silhouette: true },
+            { scale: glyph.look.scale ?? 1, silhouette: true, unlit: 1 },
         );
     }
 
@@ -907,6 +1016,46 @@ export class GameView {
             tint,
             flash,
         });
+        if (sim.lighting) {
+            this.drawLantern(actors, sim, hero, x, y, pose.yaw);
+        }
+    }
+
+    // A lantern, while its power-up lasts (on a map with lighting): carried at the player's left hand, swinging
+    // a little as they go. Drawn beside them rather than baked into their look, which would bake
+    // every player again on every map for it.
+    private drawLantern(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        x: number,
+        y: number,
+        yaw: number,
+    ): void {
+        if (!sim.powerUps.some((p) => p.hero === hero && p.id === LANTERN_ID)) {
+            return;
+        }
+        const model = this.assets.get("obj:" + getPowerUp(LANTERN_ID).objId);
+        if (!model) {
+            return;
+        }
+        const angle = (yaw / 2048) * Math.PI * 2;
+        // Facing (0 is south, 512 west), and the left hand's side of that
+        const faceX = -Math.sin(angle);
+        const faceY = -Math.cos(angle);
+        const swing = Math.sin(sim.tick * 0.25) * 0.04;
+        const lx = x + faceY * -LANTERN_SIDE + faceX * (LANTERN_AHEAD + swing);
+        const ly = y + faceX * LANTERN_SIDE + faceY * (LANTERN_AHEAD + swing);
+        actors.draw(
+            model,
+            model.anims[0],
+            0,
+            lx,
+            this.ground(sim, x, y) - LANTERN_HEIGHT,
+            ly,
+            yaw,
+            LANTERN_OPTIONS,
+        );
     }
 
     private drawEnemy(actors: ActorRenderer, sim: Sim, enemy: Enemy, alpha: number): void {
@@ -1028,6 +1177,9 @@ export class GameView {
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
         this.drawPickupTimers(overlay, sim, alpha, scale);
+        if (sim.litTargetsOnly) {
+            this.drawDarkArrows(overlay, sim, alpha, scale);
+        }
 
         // Health bars over hurt elites, and over whatever asks for one from the
         // start (Phosani's eggs, against their time); with hundreds of enemies
@@ -1763,28 +1915,80 @@ export class GameView {
         const x = fromX + dirX * t;
         const y = fromY + dirY * t;
         const size = 16 * scale * (0.9 + 0.1 * pulse);
-        const angle = Math.atan2(dirY, dirX);
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle);
-        ctx.beginPath();
-        ctx.moveTo(size, 0);
-        ctx.lineTo(-size * 0.7, size * 0.75);
-        ctx.lineTo(-size * 0.35, 0);
-        ctx.lineTo(-size * 0.7, -size * 0.75);
-        ctx.closePath();
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 14 * scale * pulse;
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#000000";
-        ctx.stroke();
-        ctx.restore();
+        drawArrow(ctx, x, y, Math.atan2(dirY, dirX), size, color, 14 * scale * pulse);
         this.arrowLabel = { x: x - dirX * size * 1.9, y: y - dirY * size * 1.9 };
         return distance;
     }
+
+    // Under the rule (LightingDef.litTargetsOnly), a faint arrow just past the edge of the player's light for
+    // what's coming at them out of the dark: one a way round (DARK_ARROW_SECTORS), for the nearest
+    // that way, fainter the further off it is. Kept on the screen.
+    private drawDarkArrows(overlay: Overlay, sim: Sim, alpha: number, scale: number): void {
+        const own = sim.lights.find((light) => light.hero === this.viewHero);
+        if (!own) {
+            return;
+        }
+        const { x: px, y: py } = getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose);
+        const nearest = this.darkArrows;
+        nearest.fill(Infinity);
+        const angles = this.darkArrowAngles;
+        for (const enemy of sim.enemies) {
+            if (enemy.dead || sim.isEnemyLit(enemy)) {
+                continue;
+            }
+            const dx = enemy.x - px;
+            const dy = enemy.y - py;
+            const distance = Math.hypot(dx, dy);
+            // Coming closer
+            const before = Math.hypot(enemy.prevX - px, enemy.prevY - py);
+            if (distance > DARK_ARROW_RANGE || distance >= before) {
+                continue;
+            }
+            const angle = Math.atan2(dy, dx);
+            const sector =
+                Math.floor(((angle / (Math.PI * 2) + 1) % 1) * DARK_ARROW_SECTORS) %
+                DARK_ARROW_SECTORS;
+            if (distance < nearest[sector]) {
+                nearest[sector] = distance;
+                angles[sector] = angle;
+            }
+        }
+        const ctx = overlay.ctx;
+        const margin = 30 * scale;
+        for (let i = 0; i < DARK_ARROW_SECTORS; i++) {
+            const distance = nearest[i];
+            if (distance === Infinity) {
+                continue;
+            }
+            const dirX = Math.cos(angles[i]);
+            const dirY = Math.sin(angles[i]);
+            // Just past the light's edge, short of the enemy itself
+            const reach = Math.max(1, Math.min(own.radius + DARK_ARROW_GAP, distance - 1));
+            const ax = px + dirX * reach;
+            const ay = py + dirY * reach;
+            const at = overlay.project(ax, this.ground(sim, ax, ay), ay, this.screen);
+            const ahead = overlay.project(
+                ax + dirX,
+                this.ground(sim, ax + dirX, ay + dirY),
+                ay + dirY,
+                this.screen2,
+            );
+            if (!at.visible) {
+                continue;
+            }
+            const x = Math.min(Math.max(at.x, margin), overlay.width - margin);
+            const y = Math.min(Math.max(at.y, margin), overlay.height - margin);
+            const near = 1 - (distance - own.radius) / (DARK_ARROW_RANGE - own.radius);
+            ctx.globalAlpha = DARK_ARROW_ALPHA * (0.45 + 0.55 * Math.min(1, Math.max(0, near)));
+            const angle = Math.atan2(ahead.y - at.y, ahead.x - at.x);
+            drawArrow(ctx, x, y, angle, 11 * scale, DARK_ARROW_COLOR, 0);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Reused by drawDarkArrows: the nearest distance and its angle, a way round
+    private readonly darkArrows = new Float64Array(DARK_ARROW_SECTORS);
+    private readonly darkArrowAngles = new Float64Array(DARK_ARROW_SECTORS);
 
     // Where the last edge arrow wants its label, if it drew one
     private arrowLabel?: { x: number; y: number };
@@ -2090,6 +2294,46 @@ function drawHitsplatBlob(
 // One for every enemy drawn, as there can be hundreds a frame (the renderer
 // only reads it while it's drawing)
 const enemyDrawOptions: ActorDrawOptions = {};
+
+// An arrow pointing at angle (radians, on the screen), its tip size ahead of (x, y), with a glow
+// of its colour this wide
+function drawArrow(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    angle: number,
+    size: number,
+    color: string,
+    glow: number,
+): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size * 0.7, size * 0.75);
+    ctx.lineTo(-size * 0.35, 0);
+    ctx.lineTo(-size * 0.7, -size * 0.75);
+    ctx.closePath();
+    if (glow > 0) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = glow;
+    }
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#000000";
+    ctx.stroke();
+    ctx.restore();
+}
+// Drawn at full brightness on a lit map (ActorDrawOptions.unlit): warnings and effects
+const UNLIT: ActorDrawOptions = { unlit: 1 };
+// A lantern in hand (drawLantern): tiles out to the left, ahead, and up, and how big
+const LANTERN_SIDE = 0.38;
+const LANTERN_AHEAD = 0.12;
+const LANTERN_HEIGHT = 0.55;
+const LANTERN_OPTIONS: ActorDrawOptions = { scale: 1, unlit: 1 };
 
 // getEnemyModelKey, made once rather than for every enemy every frame
 const enemyModelKeys = new Map<EnemyDef, string[]>();

@@ -215,6 +215,10 @@ export function syncHash(sim: Sim): number {
         sim.rng.position,
         sim.eventRng.position,
     ];
+    // What the map's rule has laid (roots), on a map with one
+    if (sim.rule) {
+        values.push(sim.rule.hash());
+    }
     for (const hero of sim.heroes) {
         values.push(
             hero.player.x,

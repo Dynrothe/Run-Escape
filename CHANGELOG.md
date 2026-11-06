@@ -5,6 +5,18 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
+  maps to play in any order, each harder the more of the others you've beaten. The first is the
+  Stranglewood; the Lassar Undercity, Ghorrock and the Scar are coming.
+- The Stranglewood: the Strangled, their boars, lynxes and bears in the real wood round
+  Vardorvis's arena, with Kasonde, a great Strangled Bear and Vardorvis himself. Roots creep in
+  from the wood, slowing and hurting you: cut them back with your hits, and kill the root hearts
+  that make them grow. With its own music, Strangled and Blood Rush.
+- The Forester, for beating the Stranglewood: a bronze 2h sword, and Timber!, a tree felled along
+  the ground every 25 kills. Beating Vardorvis also finds the Executioner's axe head.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

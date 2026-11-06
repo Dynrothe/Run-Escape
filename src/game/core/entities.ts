@@ -3,6 +3,7 @@ import {
     BossAttackDef,
     CasketTier,
     EnemyDef,
+    LightLook,
     PlayerEffectDef,
     RandomEventDef,
     Stats,
@@ -132,6 +133,8 @@ export type BossState = {
     enraged: boolean;
     // How many of BossDef.summonsAt have been called in
     summonsDone: number;
+    // Its root heart's been planted (BossAttackDef.rule heart): one a boss
+    ruleHeart?: boolean;
     phase?: BossPhase;
     surge?: BossSurge;
     walkers?: BossWalkers;
@@ -569,6 +572,32 @@ export type EnemyProjectile = {
 
 export type PickupKind = "bones" | "coins" | "food" | "casket" | "powerUp";
 
+// A sim light (MapDef.lighting), in the sim's tiles: what weapons can aim by under
+// litTargetsOnly, and what's drawn for it. Made again each tick (Sim.lights). radius is what it
+// reaches now (a lantern's grows and shrinks); look is how it's drawn.
+export type Light = {
+    kind: "player" | "map" | "enemy" | "left";
+    // Which of its kind: a hero's index, the map's light's, the enemy's uid
+    id: number;
+    x: number;
+    y: number;
+    radius: number;
+    look: LightLook;
+    // What it moves with, so it can be drawn where that's drawn
+    hero?: number;
+    enemy?: Enemy;
+};
+
+// Where a light-carrying enemy died (EnemyDef.light.left): its light stays a while. id: its uid.
+export type LeftLight = {
+    id: number;
+    x: number;
+    y: number;
+    look: LightLook;
+    startTick: number;
+    endTick: number;
+};
+
 export type Pickup = {
     uid: number;
     kind: PickupKind;
@@ -977,6 +1006,18 @@ type SimEventBody =
           // Half the angle the swoosh covers, radians
           arc: number;
           weaponId: string;
+      }
+    // A tree felled along a strip (CharacterTraitDef timber): from x, y the way dir goes, length
+    // tiles, drawn as locId falling over
+    | {
+          type: "treeFall";
+          x: number;
+          y: number;
+          dirX: number;
+          dirY: number;
+          length: number;
+          locId: number;
+          sound?: number;
       }
     | { type: "aura"; x: number; y: number; radius: number }
     | { type: "pickup"; kind: PickupKind; value: number }

@@ -180,6 +180,15 @@ export type EnemyDef = {
     // Drawn as this item's model, never animated, instead of as the NPC
     // (Phosani's eggs are the Parasitic egg): npcId goes unused
     objId?: number;
+    // Drawn as one of these NPCs instead of npcId, picked as each turns up: looks of the same
+    // creature that share its animations (the Strangled's)
+    looks?: number[];
+    // Lays the map's rule's stuff (roots, MapDef.rule) this many tiles round it as it goes: a
+    // Strangled Bear's trail
+    plants?: number;
+    // Rushes the last range tiles to the player at speed times its pace (a Strangled Lynx's
+    // pounce)
+    pounce?: { range: number; speed: number };
     // Still alive this many seconds after it turns up, it's gone, and count of
     // into come out where it stood, dropping nothing (Phosani's eggs hatch
     // parasites unless they're broken first)
@@ -200,6 +209,10 @@ export type EnemyDef = {
     // Wars Dungeon's armies), while still coming for the player; each
     // faction's come from their own side, so the armies meet
     faction?: string;
+    // A light it carries (the Scar's light leeches, a fire elite), and one it leaves where it dies
+    // for seconds. A sim light: on a map with lighting.litTargetsOnly, weapons can aim by it. Off a
+    // map with lighting it does nothing.
+    light?: LightLook & { left?: LightLook & { seconds: number } };
     // What it is, for the weapons that hit some things harder
     tags?: EnemyTag[];
     // Runs from the player when they're within range tiles instead of coming
@@ -442,6 +455,8 @@ export type BulletPatternDef = {
 // Where a boss's "ground" attack marks the ground, each spot radius tiles
 // across. Everything's on the ground for the attack's windup before it lands.
 export type GroundPatternDef = {
+    // A glow on each mark while it's on the ground. Only drawn, on a map with lighting.
+    light?: LightLook;
     // under: on the boss; player: on the player; ring: around the boss (or
     // the player, with around), distance tiles out; grid: a lattice around
     // the player, spacing tiles apart; scatter: at random within spread tiles
@@ -452,6 +467,9 @@ export type GroundPatternDef = {
         | { shape: "grid"; size: number; spacing: number }
         // awayFrom: no closer to the boss than this, and on ground the player can get to
         | { shape: "scatter"; count: number; spread: number; awayFrom?: number }
+        // rule: on count of what the map's rule has laid within within tiles of the player (roots
+        // erupting), as many as there are; nothing on a map without a rule
+        | { shape: "rule"; count: number; within: number }
         // checker: every cell of one colour of the map's checker (ArenaFeatures.checker),
         // at random, square; then the other colour's cells, shown from when the first
         // land and landing then seconds after. With cross, only the cells within cross
@@ -531,6 +549,9 @@ export type QuartersDef = {
 
 export type BossAttackDef = {
     name: string;
+    // A glow under it as it winds up, on each spot it'll land (on the boss when it has none),
+    // growing as the hit comes. Only drawn, on a map with lighting.
+    light?: LightLook;
     // Only on a raid's expert mode
     expert?: boolean;
     // swing: hits around the boss once the windup is done (step away to dodge);
@@ -562,6 +583,10 @@ export type BossAttackDef = {
     // What it does to the map's floor (MapDef.floor) as it starts, aimed at the player it's after
     // (Sim.floorAct): drop the tile under them, start a pattern, change phase
     floor?: FloorActionDef;
+    // What it does with the map's rule (MapDef.rule), as it lands: heart, a root heart where the
+    // boss lands, the first time it's used; lane, roots laid along the way a surge or lunge went,
+    // radius tiles either side of it. Nothing on a map without a rule.
+    rule?: { heart?: boolean; lane?: number };
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -888,6 +913,9 @@ export type BossPhasesDef = {
         ambients?: BossAmbientDef[];
         tempo?: number;
         speed?: number;
+        // The scene's ambient through this phase (LightingDef), faded to over a couple of seconds
+        // and back as the boss falls: an enrage that darkens the arena
+        light?: number;
     }[];
     // After the last blast it stands for seconds more before it falls, using
     // only these attacks (by name) interval seconds apart, opener first, with
@@ -1090,6 +1118,9 @@ export type BossDef = {
 // lean: the camera leans towards it, so a boss north of the player stays on the
 // screen (a raid's boss rooms lean only as far as keeps theirs below the boss bar).
 export type BossLookDef = {
+    // A light on it while its guard's down (Sim.isExposed): a core lit up. Only drawn, on a map
+    // with lighting.
+    exposedLight?: LightLook;
     lean?: boolean;
     title?: string;
     subtitle?: string;
@@ -1405,6 +1436,27 @@ export type CharacterDef = {
     // nowhere else: never in the roster, never unlocked, never counted (the
     // Inquisitor, Phosani's)
     only?: string;
+    // A way to play rather than a bonus (CharacterTraitDef)
+    trait?: CharacterTraitDef;
+};
+
+// An adventurer's trait (CharacterDef.trait), which the sim plays out for their hero.
+// timber (the Forester's): every `every` kills, their next melee swing fells a tree instead, a
+// strip `length` tiles long and `width` across ahead of them, hitting everything in it for
+// `damage` times the swing's own, drawn as locId falling over; and their swings cut what a map's
+// rule lays (roots) cutReach tiles further out.
+export type CharacterTraitDef = {
+    kind: "timber";
+    name: string;
+    every: number;
+    length: number;
+    width: number;
+    damage: number;
+    cutReach: number;
+    locId: number;
+    sound?: number;
+    // What it throws up as it lands, along the strip (ImpactDef)
+    impact?: ImpactDef;
 };
 
 export type ShopUpgradeDef = {
@@ -1479,6 +1531,8 @@ export type MapDef = {
     // its recording goes in src/media/music, named as GameClient's musicFor
     // says, and until it's there the map plays nothing
     music?: string;
+    // The track that takes over as the final boss comes (its own), as music is named and found
+    bossMusic?: string;
     // Fun maps: endless from the start and outside the unlock chain (see
     // FunMapDef). Campaign maps leave it unset.
     fun?: FunMapDef;
@@ -1513,6 +1567,112 @@ export type MapDef = {
     // A floor that fights back (FloorDef): slabs of it rise under the player in waves, and rows of
     // it fall away. A prototype, on a dev map only.
     floor?: FloorDef;
+    // A map of an act after the first campaign (content/acts.ts): open once requires (a map id)
+    // has been beaten, in any order with the act's other maps, outside the campaign's chain. Its
+    // toughness is the act's step (ActDef.steps), set as a run starts by how many of the act's
+    // other maps have been beaten; difficulty is its first step's.
+    act?: { id: string; requires: string };
+    // The rule it's played by (RunRuleDef, core/rules): what makes it that map, run by the sim
+    // every tick
+    rule?: RunRuleDef;
+    // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
+    // always was: those pay nothing for lights.
+    lighting?: LightingDef;
+};
+
+// A rule a map is played by (MapDef.rule), which core/rules runs each tick. A rule only reads the
+// map's grid and what's here, never an Act II map's own data, so it works on any map (the remixes
+// put them on old ones). Shared things (roots) are the party's; what it does to a player is each
+// player's own.
+export type RunRuleDef = RootsRuleDef;
+
+// The Stranglewood's: roots creep in from the wood (the arena's blocked ground), slowing and
+// hurting whoever's on them and speeding enemies; hits cut them back, and root hearts make them
+// grow. They're cells of 2 by 2 tiles, drawn by client/RootsView.ts as they're hit: a cell hurts
+// where its roots stand, all of it.
+export type RootsRuleDef = {
+    kind: "roots";
+    // Seconds into the run they start creeping
+    start: number;
+    // How many creeping fronts there are, and the seconds between each one's spreads, from start to
+    // lateBy seconds, easing between
+    fronts: [from: number, to: number];
+    every: [from: number, to: number];
+    lateBy: number;
+    // Seconds a cell shows sprouts before it takes root: the warning
+    sprout: number;
+    // The circle roots never take (a final fight's clearing), in world tiles
+    safe?: { x: number; y: number; radius: number };
+    // On roots: a player's this much slower, and after grace seconds on them loses share of their
+    // hitpoints every `every` seconds; enemies are haste faster (not fliers)
+    slow: number;
+    hurt: { share: number; every: number; grace: number };
+    haste: number;
+    // Tiles round an enemy a player's hit cuts (one on roots), and a kill on roots; seconds before a
+    // cut cell can take root again from a rooted neighbour
+    cut: { hit: number; kill: number; regrow: number };
+    // Root hearts: enemyId turns up at a root front every `every` seconds from `from`, at most max
+    // at once; roots within reach tiles of one grow twice as fast; killed, it clears clear tiles
+    // round it, where nothing takes root for calm seconds
+    hearts: {
+        enemyId: string;
+        from: number;
+        every: number;
+        max: number;
+        reach: number;
+        clear: number;
+        calm: number;
+    };
+    // What they're drawn as (client/RootsView.ts), scenery all of it: runners laid along the
+    // ground from cell to cell, picked by cell; loops standing up out of it, which are also the tips
+    // pushing up where roots are coming and what wraps round the legs of a player on them; colours
+    // swapped on both, after the scenery's own; and the spot animation a cut throws up
+    look: {
+        runners: number[];
+        loops: number[];
+        recolor?: [from: number, to: number][];
+        cutSpotAnim: number;
+    };
+};
+
+// What a light looks like and how far it reaches (docs/DEVELOPMENT.md, Lights). Every kind of light
+// is one: a map's, a loc's, an enemy's, a spell's, a floor tile's, a boss's.
+export type LightLook = {
+    // Tiles. Full strength out to under half of it, then a soft fade to its edge.
+    radius: number;
+    // 0xRRGGBB (WARM_LIGHT, a lantern's, when unset)
+    color?: number;
+    // How much it adds to what it lights, at its middle (1 when unset). On a dark map 1 lights
+    // things about as they'd be anyway; on a lit one 0.5 is a strong glow.
+    intensity?: number;
+    // 0 to 1: a fire's unsteady light, up to this much of its strength. Only drawn.
+    flicker?: number;
+    // A slow throb, this much of its strength every seconds. Only drawn.
+    pulse?: { amount: number; seconds: number };
+};
+
+// A map with lights (lights.glsl). Each part's optional; a map with any of it draws with the lit
+// programs. See "Lights" in docs/DEVELOPMENT.md for every kind of light.
+export type LightingDef = {
+    // How bright what's out of every light is, 0 to 1 (1, as it always is, when unset; about 0.16
+    // is the dark: shapes, not detail), and its tint (0xRRGGBB, white when unset). A boss's phase
+    // can change it for a while (BossPhasesDef light, Sim.dimTo).
+    ambient?: number;
+    ambientColor?: number;
+    // Lights that stay put, world tiles. Sim lights: weapons aim by them (litTargetsOnly).
+    lights?: (LightLook & { x: number; y: number })[];
+    // A light round each player. A sim light.
+    player?: LightLook;
+    // Scenery that lights itself, by loc id: every one on the map. Only drawn: weapons don't aim
+    // by it, so a fire that should count is in lights too.
+    locs?: Record<number, LightLook>;
+    // The rule (the Scar's): weapons only pick targets within half a tile of a sim light's edge,
+    // and the minimap only shows those. Shots carry on into the dark and hit what they meet.
+    litTargetsOnly?: boolean;
+    // A lantern's (powerups.ts, LANTERN_ID) weight among the power-ups that drop here (0
+    // everywhere else), and lanterns lying on the ground as the run starts, world tiles
+    lanternWeight?: number;
+    lanterns?: { x: number; y: number }[];
 };
 
 // A floor that rises and falls away, after the Wardens' third phase in the Tombs of Amascut
@@ -2087,7 +2247,11 @@ export type PowerUpEffect =
           radius: number;
           speed: number;
           shout: string;
-      };
+      }
+    // A light: bonus tiles on the player's own light (LightingDef.player), or a light of its own
+    // that big, for seconds (Effect duration stretches it), shrinking back over the last fade
+    // seconds. Its look is the player's light's, or the lantern's. Only on a map with lighting.
+    | { kind: "light"; bonus: number; seconds: number; fade: number; look?: LightLook };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
 // with the player (GameAssets.getPowerUpLookRequests), so it's on at once.

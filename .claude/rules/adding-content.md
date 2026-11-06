@@ -216,8 +216,25 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   at once, one over another, so the list keeps the tallest's height and the details below never
   move. A tab taller than the Campaign's makes the list taller on every tab, and past about half
   the panel it scrolls.
+- An act's map (`act`, `content/acts.ts`) is outside the campaign's chain: it opens once
+  `act.requires` is beaten, its act's maps in any order, and it's on the act's own tab of the map
+  screen (`ActPage`), not the Campaign list. Its toughness is the act's step (`ActDef.steps`, set
+  by how many of the act's other maps were beaten, the host's in co-op): its `difficulty` is the
+  first step's, and the step scales its bosses' event hitpoints too. Sim it with `STEP=0` to `3`.
+- `rule` is what the map's played by (`RunRuleDef`, `core/rules/`): the sim runs it each tick on
+  its own Rng, so nothing else about a run changes. A rule only reads the grid and its def, never
+  a map's own data, so it can go on any map. A new kind needs a class implementing `RunRule`, a
+  case in `createRunRule`, a view in `client/` and the bot taught to play it (`botMove`).
 - `hard` is what hard mode multiplies its enemies' hitpoints and damage by (`hard.ts` has the rest of
   hard mode, and the numbers for a map that doesn't set its own). Sim it against normal with `HARD=1`.
+- Lights: a map opts in with `lighting` (`LightingDef`), and then anything can give off light: the
+  map's own `lights`, glowing scenery by loc id (`locs`), each player's (`player`), an enemy's
+  (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
+  spells by spot animation (`SPOT_LIGHTS` in `content/lights.ts`), a floor's tiles
+  (`FLOOR_LIGHTS`), a boss's windups and marks (`light` on the attack or its ground pattern), and
+  its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
+  for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
+  has an example of each. Off a map with `lighting`, none of it does anything.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
   `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.
@@ -256,7 +273,9 @@ in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't.
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`
-and usually an `unlock` task.
+and usually an `unlock` task. Act II's have a `trait` (`CharacterTraitDef`), a way to play rather
+than a bonus, which the sim plays out for their hero (the Forester's `timber`: `fellTree` and
+`cutReach` in `Sim.ts`); a new kind needs its case there. A description can use `**bold**`.
 
 ## Quest
 

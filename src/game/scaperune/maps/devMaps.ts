@@ -8,7 +8,9 @@ import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
 import { BACKDROP_TEST_RECIPE } from "./backdropTest";
 import { CLIFF_GALLERY } from "./cliffGallery";
+import { DARK_TEST } from "./darkTest";
 import { DEPTH_TEST_RECIPE } from "./depthTest";
+import { GLOW_TEST } from "./glowTest";
 import { KALUAS_WAKE } from "./kaluasWake";
 import { PREFAB_GALLERY } from "./prefabGallery";
 import { ROCK_SHEET } from "./rockSheet";
@@ -141,4 +143,6 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     SHATTERED_REALM,
     WARDENS_FLOOR,
     ...FLOOR_DEMOS,
+    DARK_TEST,
+    GLOW_TEST,
 ];
