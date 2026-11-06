@@ -22,6 +22,7 @@ import { FLOATS_PER_BOX } from "./buffer/CullGrid";
 import { SdMapData } from "./loader/SdMapData";
 import { LocAnimated } from "./loc/LocAnimated";
 import { Npc } from "./npc/Npc";
+import { readsLightMap } from "./shaders/ShaderUtil";
 
 const FRAME_RENDER_DELAY = 3;
 
@@ -63,6 +64,8 @@ export class WebGLMapSquare {
         mapData: SdMapData,
         time: number,
         frame: number,
+        // A lit map's light map (GameWebGLRenderer.lightMap), for programs that read it
+        lightMap?: Texture,
     ): WebGLMapSquare {
         const { mapX, mapY, borderSize, tileRenderFlags } = mapData;
 
@@ -147,6 +150,9 @@ export class WebGLMapSquare {
                 .drawRanges(...drawRanges);
             if (modelInfoTexture) {
                 drawCall.texture("u_modelInfoTexture", modelInfoTexture);
+            }
+            if (lightMap && readsLightMap(program)) {
+                drawCall.texture("u_lightMap", lightMap);
             }
             return {
                 drawCall,

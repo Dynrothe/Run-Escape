@@ -44,6 +44,8 @@ go stale. Add anything that cost you time to work out.
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
+| How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
+| Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
@@ -230,6 +232,8 @@ desktop build.
   as well, and don't report an effect as seen unless you saw it.
 - Don't serve the game from a git worktree with a symlinked `node_modules`. Vite refuses the files,
   and the failed load can leave a bad cache in the browser profile for that port.
+- A slow first load after the dev server starts, or a page that reloads itself mid-load, is
+  usually down to Vite's file watcher or its dependency scan: see Scripts in `docs/DEVELOPMENT.md`.
 
 ## Conventions
 
