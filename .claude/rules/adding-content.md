@@ -226,7 +226,8 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   dodge as a person does.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
   uses the real collision, so a sim also shows whether a map plays at all.
-- Fun maps don't count towards quests.
+- Fun maps don't count towards quests. A fun map with `explore` (the Battle for Varrock) is one to walk round:
+  no waves, an empty boss pool, no random events and nothing hurts.
 - The map screen lists maps by kind, a tab for each (`MAP_TABS` in `ui/GameUi.tsx`): a new list
   like `RAID_MAPS` needs a group there, or it won't be on the screen. Every tab's page is laid out
   at once, one over another, so the list keeps the tallest's height and the details below never
@@ -292,7 +293,9 @@ Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `eq
 and usually an `unlock` task. A `revival` bonus needs a `reviveLook`, the icon the HUD shows for
 it (a test checks). Act II's have a `trait` (`CharacterTraitDef`), a way to play rather than a
 bonus, which the sim plays out for their hero (the Forester's `timber`: `fellTree` and `cutReach`
-in `Sim.ts`); a new kind needs its case there. A description can use `**bold**`.
+in `Sim.ts`); a new kind needs its case there. A description can use `**bold**`. One drawn as an NPC
+(`npcLook`) with buttons of its own (`abilities`, `HeroAbilityDef`) is Justiciar Zachariah's
+(`justiciarKit.ts`): see A hero of their own in `docs/DEVELOPMENT.md`.
 
 ## Quest
 

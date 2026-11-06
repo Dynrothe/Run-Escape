@@ -909,6 +909,32 @@ Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apar
 of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
 2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
 
+### A hero of their own (the Battle for Varrock)
+
+Justiciar Zachariah is the player on the Battle for Varrock (`content/justiciarKit.ts`), a fun map
+with `fun.explore`: no waves, an empty boss pool (`firstAt: Infinity`), no random events
+(`stepRandomEvents`), nothing hurts (`damagePlayer`), and no item bar. Its pieces are fields any
+adventurer can have:
+
+- **`CharacterDef.npcLook`**: the hero's drawn as an NPC (`GameView.drawHeroNpc`): its idle and
+  walk, its abilities' animations (held on their first frame until they're due, then played out,
+  on the move too), and `swingSeq` for a weapon's swing, a player animation it hasn't got. It's
+  baked as the map that has everyone play it is travelled to (`GameAssets.loadHeroLook`, like a
+  pet's), and the slim cache keeps it with the pets (`getHeroLookRequests`). Its sim is a
+  player's: the same radius and movement, so `scale` keeps it near a player's size.
+- **`CharacterDef.abilities`** (`HeroAbilityDef`): buttons of the hero's own, in place of a fight's
+  one. `Sim.useAbility(slot)` goes to `useKitAbility`, which goes off where the hero faces with
+  or without anything to hit: `lunge` (a dash down a strip, `KIT_DASH_SPEED`), `wave` (a spot
+  animation flying along the ground), `square`, `checker` (cells of the world's grid of the colour
+  the hero isn't on, marked from the press) and `gaze` (all round). Each lands `windup` seconds
+  after the press (`KitCast`, `stepKit`), hits each enemy once, and `freeze` holds them. Its
+  cooldowns are the hero's (`Hero.kitReadyTicks`, `kitSecondsLeft`). Co-op's `ability` action
+  carries the slot as `index` (`cleanAction`; the relay's `actionKey` too), and a fight's own
+  button still has none. Keys: Space and 1 to 4 (the item keys, as an explore map has no items),
+  a pad's bottom button and its four shoulders, and on a touch screen `KitButtons`, the first
+  big in the items' corner and the others round it. The HUD's `HudNumbers.abilities` are their
+  charge.
+
 ### Raids
 
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and

@@ -1329,6 +1329,41 @@ planks, `174` flagstones, `196` ice, `84` sandstone. Overlay `42` isn't drawn at
 
 On land they stand on plots as buildings do (`fitsBuilding`, `pinPlot`), since a big loc on a slope shows its underside.
 
+### Ruins: a real place burnt
+
+`ruins.ts` (`ruinGrid`) burns a cut of the real world (`cutPrefab`) to ruins before it's stamped, so any town can be put
+through it; `maps/battleForVarrock.ts` is Varrock's, and its `RULES` are the settings to start from. What it does, tile
+by tile and loc by loc:
+
+- **Walls** (types 0 to 3 and 9) are charred, and by a noise over the walls (`wallScale` tiles a feature, so runs
+  fall together) some fall (`fallen`) or are half their height (`lowered`). A tenth of the fallen straight ones can be a
+  wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is what makes the place read as
+  itself.
+- **City walls** (level 0 under a `TILE_SHOWN` walkway) stand, charred, but for `breaches` (the same noise): the band's
+  tiles are down and open there, both faces, walkway and rails gone. `wallTopsKept` is the share of the walkway and its
+  rails still up. A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its
+  heaviest phone view from 74k to under 60k.
+- **Roofs, wall decorations, floor decoration and upstairs** go, but for a city wall's walkway and a bridge's deck
+  (level 1 with `TILE_BRIDGE`), whose walls stay burnt and whose blocking objects go, so it's still a way across.
+- **Objects** by name: trees become burnt trees of their size (`burntTrees`, `treesKept` of them), plants and what went
+  with the fire (doors, curtains, banners, torches: `plant`, `gone`) go, `landmark` names stay (a square's fountain,
+  the market's stalls), and of the rest `furnitureKept` stay, charred.
+- **The ground**: `underlays` turns grass and earth to mottled ash, and `overlays` paving and wooden floors to soot.
+
+**Charred locs** are the real ones with their colours burnt (`rs/config/loctype/LocOverrides.ts`): `CHARRED_LOCS + id`
+(`getCharredLoc`) is loc `id` with every face's lightness under half and its saturation a quarter, and its opaque textures
+swapped for dark planks (5) or dark cobbled rock (119), as a textured face is lit and not coloured (see-through ones,
+leaves and bars, keep theirs). `LOWERED_LOCS + id` (`getLoweredLoc`) is the same squashed to `LOWERED_HEIGHT`. They're
+read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and the slim cache
+keeps the base. Ids from `DERIVED_LOCS` are locs of our own made from another, listed in `LOC_OVERRIDES` with a `base`
+(Yama on his throne, `YAMA_ON_HIS_THRONE`: his throne's loc with his seated model on it, small, sitting with 12153).
+Keep every id under 2^21: the model caches key a loc by its id << 10.
+
+**What it can't do**: a lowered wall is the wall squashed, flat along its top, not broken; a charred texture is one of
+two, not the texture darkened; and the noise doesn't know a building's doors, so a ruin can lose the wall a door was
+in and keep the rest. check-maps.ts holds a ruin to what any cut is held to: Varrock's blocked decks (the Grand
+Exchange's counter) are its `squares`.
+
 ### City walls
 
 `CITY_WALLS` in `cityWalls.ts` is real walls as data, and `townWalls` is the share of `towns` with one. A real city wall is
