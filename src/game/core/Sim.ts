@@ -5892,9 +5892,11 @@ export class Sim {
     // Simon says: the symbols light up in an order, then he blasts all but the next one in it
     private startAkkhaMemory(boss: Enemy, fight: AkkhaFight, def: AkkhaDef): void {
         const memory = def.memory;
+        // One more in his last phase (BossDef.phases)
+        const last = (boss.bossState?.phase?.index ?? 0) >= 2 ? 1 : 0;
         const steps = Math.min(
             memory.most,
-            memory.steps + Math.floor(this.tombsPathLevel / memory.perLevels),
+            memory.steps + Math.floor(this.tombsPathLevel / memory.perLevels) + last,
         );
         // Each next one beside the last, never across
         const order = [this.rng.int(4)];
@@ -10672,6 +10674,10 @@ export class Sim {
         if (!protects || style === undefined) {
             return 1;
         }
+        // Its guard down, its prayer's down with it (BossGuardDef.pierce: Akkha's)
+        if (enemy.def.boss?.guard?.pierce && this.isExposed(enemy)) {
+            return 1;
+        }
         // On normal, a colour prays less against its own style (BossDef.colours.ownStyle)
         const colours = enemy.def.boss?.colours;
         if (colours?.offStyle !== undefined && style === enemy.def.onlyStyle) {
@@ -11753,6 +11759,13 @@ export class Sim {
         const player = this.player;
         const damage = attack.damage > 0 && !ground.safe ? this.getBossDamage(enemy, attack) : 0;
         const armed = ground.armed !== undefined;
+        // Akkha's: each glows its quadrant's element (BossAttackDef.elemental)
+        const akkha = attack.elemental ? enemy.def.boss?.akkha : undefined;
+        const quadrants = akkha ? this.tombsPathRoom?.boss?.quadrants : undefined;
+        const glow = (x: number, y: number) =>
+            akkha && quadrants
+                ? getEnemy(akkha.elements[this.akkhaQuadrant(x, y)].orb).light
+                : undefined;
         // square: a cell's, half its size either way, shown from start and landing at land
         const add = (
             x: number,
@@ -11779,6 +11792,7 @@ export class Sim {
                 lingerEnd: -1,
                 nextHurt: -1,
                 ...(square && { half: square.half }),
+                ...(akkha && { light: glow(x, y) }),
             });
         };
         for (const spots of ground.spots) {
@@ -13787,6 +13801,11 @@ export class Sim {
                 return;
             }
         }
+        const akkha = this.tombsAkkha;
+        const orbAttacks =
+            akkha?.uid === enemy.uid && this.tick < akkha.orbsUntil
+                ? def.akkha?.orbAttacks
+                : undefined;
         const usable: number[] = [];
         def.attacks.forEach((attack, i) => {
             if (
@@ -13797,6 +13816,10 @@ export class Sim {
                 (!attack.expert || this.expert) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
                 !(attack.parasite && this.parasite) &&
+                // Some only with an invocation on (BossAttackDef.onlyWith)
+                (!attack.onlyWith || this.invoked(attack.onlyWith)) &&
+                // Akkha's orbs out: only what one step answers (AkkhaDef.orbAttacks)
+                (!orbAttacks || orbAttacks.includes(attack.name)) &&
                 // Some only in its shadow realm, exhumes or yellows (BossAttackDef.ordeal)
                 !attack.ordeal &&
                 // No more of expert's own while an ordeal waits for one to land (stepOrdeal)
@@ -14238,7 +14261,14 @@ export class Sim {
                 seq: echoes.seq,
                 strikeAt: echoes.strikeAt,
                 impact: echoes.impact ?? attack.impact,
-                line: echoes.length !== undefined ? { ...line, length: echoes.length } : line,
+                line:
+                    echoes.length !== undefined || echoes.noDash
+                        ? {
+                              ...line,
+                              length: echoes.length ?? line.length,
+                              dash: echoes.noDash ? undefined : line.dash,
+                          }
+                        : line,
                 // Its own: no guard to drop, nothing after it, nothing said
                 opens: undefined,
                 chain: undefined,

@@ -1829,7 +1829,9 @@ describe("Akkha", () => {
         function shadows(): Sim {
             const sim = atAkkha();
             const boss = akkha(sim);
-            boss.hp = Math.floor(boss.maxHp * 0.79);
+            // Into his second phase, a hit held at its share, where they come
+            sim.damageEnemy(boss, boss.hp - Math.floor(boss.maxHp * 0.65), 0, boss.x, boss.y);
+            expect(boss.bossState!.phase!.index).toBe(1);
             seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
             return sim;
         }
@@ -1844,7 +1846,7 @@ describe("Akkha", () => {
             return boss;
         };
 
-        it("come in each corner at 80%, and he can't be hurt while they're all up", () => {
+        it("come in each corner at 66%, and he can't be hurt while they're all up", () => {
             const sim = shadows();
             expect(sim.tombsAkkha!.shadows).toHaveLength(4);
             const boss = akkha(sim);
@@ -1926,7 +1928,8 @@ describe("Akkha", () => {
             const boss = akkha(sim);
             boss.hp = Math.floor(boss.maxHp * 0.85);
             sim.damageEnemy(boss, boss.maxHp, 0, boss.x, boss.y);
-            expect(boss.hp).toBeCloseTo(boss.maxHp * 0.8, 5);
+            // Held at his second phase's share (BossDef.phases), where they come
+            expect(Math.abs(boss.hp - boss.maxHp * 0.66)).toBeLessThan(2);
             seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
             expect(sim.tombsAkkha!.shadows).toHaveLength(4);
         });
@@ -1959,6 +1962,72 @@ describe("Akkha", () => {
         });
     });
 
+    it("lets his prayer down with his guard: the style he prays against hurts him then", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        const style = boss.def.protects!.styles[0];
+        Object.defineProperty(sim, "sourceStyle", { get: () => style, configurable: true });
+        expect(sim.damageEnemy(boss, 100, 0, boss.x, boss.y)).toBe(0);
+        sim["dropGuard"](boss, 1.5, false, "test");
+        expect(sim.damageEnemy(boss, 100, 0, boss.x, boss.y)).toBeGreaterThan(0);
+    });
+
+    it("keeps to what one step answers while his orbs are out", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        sim.tombsAkkha!.orbsUntil = sim.tick + 30 * TICKS_PER_SECOND;
+        const used = new Set<string>();
+        for (let i = 0; i < 20 * TICKS_PER_SECOND; i++) {
+            sim.tombsAkkha!.attacks = 0;
+            const name = boss.bossState!.windup?.attack.name;
+            if (name) {
+                used.add(name);
+            }
+            tickAt(sim, { x: boss.x, y: boss.y - 2.5 });
+        }
+        expect(used.size).toBeGreaterThan(0);
+        for (const name of used) {
+            expect(DEF.orbAttacks).toContain(name);
+        }
+    });
+
+    it("lights each of his magic's marks with its quadrant's element", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        const strike = getEnemy("akkha_magic").boss!.attacks.find(
+            (a) => a.name === "Elemental strike",
+        )!;
+        sim.player.x = sim.player.prevX = IN[2].x;
+        sim.player.y = sim.player.prevY = IN[2].y;
+        sim["markGround"](boss, strike, sim.tick + 50);
+        const mark = sim.hazards.find(
+            (h) => h.attack === strike && Math.hypot(h.x - IN[2].x, h.y - IN[2].y) < 0.01,
+        )!;
+        expect(mark.light).toEqual(getEnemy(DEF.elements[2].orb).light);
+    });
+
+    it("has one of his shadows lunge his spear's strip, from where it stands", () => {
+        const sim = atAkkha();
+        const boss = akkha(sim);
+        sim.damageEnemy(boss, boss.hp - Math.floor(boss.maxHp * 0.65), 0, boss.x, boss.y);
+        seconds(sim, 0.1, { x: 1036.5, y: 1028.5 });
+        const shadows = sim.enemies.filter((e) => !e.dead && e.def.id === "akkha_shadow");
+        expect(shadows).toHaveLength(4);
+        const lunge = getEnemy("akkha").boss!.attacks.find((a) => a.name === "Spear lunge")!;
+        if (boss.def.id !== "akkha") {
+            sim["changeAkkhaForm"](boss, "akkha");
+        }
+        boss.bossState!.windup = undefined;
+        sim["startBossAttack"](boss, lunge);
+        const copying = shadows.filter((e) => e.echo);
+        expect(copying).toHaveLength(1);
+        expect(copying[0].echo!.attack.name).toBe("Shadow's lunge");
+        const { x, y } = copying[0];
+        seconds(sim, lunge.windup + 1, { x: 1036.5, y: 1028.5 });
+        expect(copying[0].x).toBe(x);
+        expect(copying[0].y).toBe(y);
+    });
+
     it("brings his quadrant's element with his magic: ice in the south-east", () => {
         const sim = atAkkha();
         const boss = akkha(sim);
@@ -1973,8 +2042,9 @@ describe("Akkha", () => {
     it("makes his final stand at 0 in a corner, against ranged and magic, sending orbs across", () => {
         const sim = atAkkha();
         const boss = akkha(sim);
-        // Past his shadows, which would shield him
+        // Past his shadows, which would shield him, and into his last phase
         sim.tombsAkkha!.shadowsDone = DEF.shadows.at.length;
+        boss.bossState!.phase!.index = 2;
         sim.damageEnemy(boss, 1e9, 0, boss.x, boss.y);
         seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         expect(boss.dead).toBe(false);

@@ -1134,7 +1134,7 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
 
 export const AKKHA: AkkhaDef = {
     forms: ["akkha", "akkha_ranged", "akkha_magic"],
-    specialEvery: 7,
+    specialEvery: 6,
     elements: AKKHA_ELEMENTS,
     memory: {
         steps: 4,
@@ -1162,15 +1162,18 @@ export const AKKHA: AkkhaDef = {
         linger: 1.2,
         message: "Magical orbs begin to materialise around you! Every step leaves one.",
     },
+    // While they're out: only what one step answers, whichever form he's in
+    orbAttacks: ["Sweep", "Spear lunge", "Sand wall", "Glowing sand"],
     shadows: {
-        at: [0.8, 0.6, 0.4, 0.2],
+        // His phases' changes (BossDef.phases)
+        at: [0.66, 0.33],
         enemyId: "akkha_shadow",
         // Tiles his middle must be from the lines between the quarters to be in one
         inside: 1,
         // Each shadow's hitpoints, of his: OSRS's 70 to his 400
         hpShare: 70 / 400,
         corner: 5.5,
-        flood: 20,
+        flood: 15,
         warn: 3,
         damage: 0.5,
         message:
@@ -1181,6 +1184,45 @@ export const AKKHA: AkkhaDef = {
         endMessage: "Akkha's shadows are gone. He can be hurt anywhere again!",
         struckMessage: "The other shadows shimmer, out of reach: finish this one.",
     },
+};
+
+// Each element's light, for his orbs and what's lit by them (and his marks, by their quadrant)
+const AKKHA_LIGHTS: Record<string, LightLook> = {
+    akkha_orb_darkness: { radius: 2, color: 0xa070ff, intensity: 0.7 },
+    akkha_orb_lightning: { radius: 2, color: 0xa8dcff, intensity: 0.8, flicker: 0.3 },
+    akkha_orb_frozen: { radius: 2, color: 0xc8f4ff, intensity: 0.6 },
+    akkha_orb_burning: { radius: 2, color: 0xff7a2a, intensity: 0.8, flicker: 0.25 },
+    akkha_unstable_orb: { radius: 2, color: 0xffffff, intensity: 0.7 },
+};
+
+// His three phases (66% and 33%, where his shadows come), the same on every form: quicker each,
+// opening on a leap, the last in a dimmer room; his stamp's ring out of him from the first second
+const AKKHA_PHASES: NonNullable<NonNullable<EnemyDef["boss"]>["phases"]> = {
+    phases: [
+        {
+            until: 0.66,
+            status: "Akkha",
+            ambients: [{ attack: "Stamp", interval: 9, delay: 4 }],
+        },
+        {
+            until: 0.33,
+            tempo: 0.85,
+            speed: 1.1,
+            opener: "Leap",
+            status: "Akkha's shadows",
+            ambients: [{ attack: "Stamp", interval: 7, delay: 3 }],
+        },
+        {
+            tempo: 0.7,
+            speed: 1.2,
+            light: 0.6,
+            opener: "Leaps",
+            status: "Akkha's fury",
+            ambients: [{ attack: "Stamp", interval: 5, delay: 3 }],
+        },
+    ],
+    shieldMessage: "",
+    blastMessage: "",
 };
 
 const akkhaForm = (
@@ -1197,7 +1239,7 @@ const akkhaForm = (
     walkSeq: AKKHA_WALK,
     attackSeq,
     deathSeq: AKKHA_DEATH,
-    // Up from 6,000 with his guard (Spear thrust's opens) and the raid's button
+    // Up from 6,000 with his guard and the raid's button
     hp: 9000,
     damage: 0,
     speed: 1.5,
@@ -1210,11 +1252,11 @@ const akkhaForm = (
     sounds: AKKHA_SOUNDS,
     spawnMessage: "Akkha rises to guard the path of Het!",
     boss: {
-        attackInterval: 1.8,
+        attackInterval: 1.4,
         enrage: { message: "Akkha's armour glows: he's furious!" },
-        // A spear thrust that finds no one leaves him open (opens). His prayer still holds
-        // against weapons of its style; the button gets through it
-        guard: TOMBS_GUARD,
+        // A lunge or a leap that finds no one leaves him open (opens), his prayer down with his
+        // guard (pierce): how a hero of the style he's praying against gets at him
+        guard: { ...TOMBS_GUARD, pierce: true },
         look: TOMBS_EXPOSED,
         rises: {
             times: 1,
@@ -1223,34 +1265,45 @@ const akkhaForm = (
             into: "akkha_enraged",
         },
         akkha: AKKHA,
-        attacks,
+        attacks: [...attacks, ...AKKHA_EVERY_FORM],
+        phases: AKKHA_PHASES,
     },
 });
 
-// His melee swings and stamps; his ranged's sand comes in fans, his magic's red sand in rings
-const AKKHA_MELEE: BossAttackDef[] = [
+// What every form does: a leap onto where you stood (his second and last phases' openers, open
+// when it misses), and his stamp's ring, now his ambient
+const AKKHA_LEAP: BossAttackDef = {
+    name: "Leap",
+    kind: "blast",
+    damage: 6,
+    windup: 1.4,
+    cooldown: 0,
+    range: 40,
+    weight: 0,
+    radius: 2,
+    leap: true,
+    shadow: {},
+    light: MARK_LIGHT,
+    opens: 1.5,
+    // No leap of his is in the cache (find-npc-seqs 11790): his stamp
+    seq: 9788,
+    sound: 5787,
+    // His sand thrown up where he lands, smaller than the quest fits it
+    impact: { spots: [{ spotAnim: AKKHA_SAND, fit: 2 }], shake: 0.3 },
+};
+const AKKHA_EVERY_FORM: BossAttackDef[] = [
+    AKKHA_LEAP,
+    // His last phase's: twice
+    { ...AKKHA_LEAP, name: "Leaps", chain: { times: 1, windup: 1 } },
     {
-        name: "Spear thrust",
-        kind: "swing",
-        damage: 8,
-        windup: 0.9,
-        cooldown: 0,
-        range: 3.2,
-        weight: 6,
-        radius: 3,
-        opens: 1.5,
-        seq: 9770,
-        sound: 5749,
-    },
-    {
-        // A stamp that rings out from him: step through its gap or keep your distance
+        // A ring of sand out of him, a way through on your side (BossPhasesDef ambients)
         name: "Stamp",
         kind: "pattern",
-        damage: 5,
+        damage: 3,
         windup: 0.8,
-        cooldown: 5,
-        range: 12,
-        weight: 3,
+        cooldown: 0,
+        range: 40,
+        weight: 0,
         seq: 9788,
         sound: 5787,
         spotAnim: AKKHA_SAND,
@@ -1258,23 +1311,111 @@ const AKKHA_MELEE: BossAttackDef[] = [
         pattern: {
             shape: "ring",
             count: 16,
-            volleys: 2,
+            volleys: 1,
             interval: 0.45,
             speed: 5,
             range: 12,
             radius: 0.4,
-            gap: 0.7,
+            gap: 0.8,
             gapAt: "player",
-            turn: 0.2,
+            bright: 0.5,
         },
     },
 ];
 
+// Each form speaks one shape language: melee lines and wedges, ranged walls and fans, magic marks
+// on the floor in his quadrants' elements
+// His spear down a strip, a dash along it, past you if he misses (opens)
+const AKKHA_LUNGE: BossAttackDef = {
+    name: "Spear lunge",
+    kind: "swing",
+    damage: 5,
+    windup: 0.9,
+    cooldown: 2.5,
+    range: 8,
+    weight: 5,
+    line: { width: 2, length: 7, dash: 5.5 },
+    opens: 1.5,
+    light: MARK_LIGHT,
+    seq: 9770,
+    sound: 5749,
+    impact: { trail: { spotAnim: AKKHA_SAND, fit: 1 }, shake: 0.2 },
+};
+const AKKHA_MELEE: BossAttackDef[] = [
+    {
+        // A wedge swept in front of him (first: what Keep Back's unseen hit is, akkhaKeepBack)
+        name: "Sweep",
+        kind: "swing",
+        damage: 5,
+        windup: 0.9,
+        cooldown: 0,
+        range: 3.2,
+        weight: 5,
+        radius: 3.2,
+        cone: 1.8,
+        underRadius: 1.4,
+        coneAlpha: 1.6,
+        seq: 9770,
+        sound: 5749,
+    },
+    AKKHA_LUNGE,
+    // Feeling Special: his lunge turns after you a moment before it's locked, from the first
+    { ...AKKHA_LUNGE, line: { ...AKKHA_LUNGE.line!, track: 0.25 }, onlyWith: "feeling_special" },
+    // Then (his second phase on) the sweep where he stops: sideways, then behind him
+    {
+        ...AKKHA_LUNGE,
+        name: "Lunge, then sweep",
+        cooldown: 5,
+        weight: 3,
+        follow: { attack: "Sweep", delay: 0.3 },
+        phases: [2, 3],
+    },
+    // His last: three, each turning after you a moment, then locked
+    {
+        ...AKKHA_LUNGE,
+        name: "Lunge flurry",
+        cooldown: 5,
+        weight: 3,
+        line: { ...AKKHA_LUNGE.line!, track: 0.25 },
+        chain: { times: 2, windup: 0.75 },
+        phases: [3],
+    },
+];
+
+// A rank of sand rolling at you, a gap of two in it
+const AKKHA_WALL: BossAttackDef = {
+    name: "Sand wall",
+    kind: "pattern",
+    damage: 4,
+    windup: 1.0,
+    cooldown: 6,
+    range: 30,
+    weight: 3,
+    seq: 9772,
+    sound: 5783,
+    spotAnim: AKKHA_SAND,
+    pattern: {
+        shape: "wall",
+        count: 11,
+        spacing: 1.6,
+        gap: 2,
+        volleys: 1,
+        interval: 1.6,
+        speed: 3.5,
+        range: 24,
+        radius: 0.45,
+        from: 2,
+        knockback: 1,
+        bright: 0.6,
+        glow: BULLET_GLOW,
+    },
+};
 const AKKHA_RANGED: BossAttackDef[] = [
     {
-        name: "Sand shot",
+        // A fan of sand where you are, twice the same way
+        name: "Sand volley",
         kind: "pattern",
-        damage: 5,
+        damage: 3,
         windup: 0.7,
         cooldown: 0,
         range: 30,
@@ -1286,20 +1427,30 @@ const AKKHA_RANGED: BossAttackDef[] = [
             shape: "spread",
             count: 5,
             arc: 0.9,
-            volleys: 3,
+            volleys: 2,
             interval: 0.35,
             speed: 7,
             range: 24,
             radius: 0.4,
-            track: true,
+            bright: 0.5,
         },
+    },
+    { ...AKKHA_WALL, phases: [1] },
+    // His second phase on: two ranks, the gap somewhere new in each
+    { ...AKKHA_WALL, pattern: { ...AKKHA_WALL.pattern!, volleys: 2 }, phases: [2, 3] },
+    // Then a fan at where you went
+    {
+        ...AKKHA_WALL,
+        name: "Wall, then volley",
+        follow: { attack: "Sand volley", delay: 0.4 },
+        phases: [2, 3],
     },
     {
         name: "Sandstorm",
         kind: "pattern",
-        damage: 4,
+        damage: 3,
         windup: 0.9,
-        cooldown: 6,
+        cooldown: 8,
         range: 30,
         weight: 3,
         seq: 9772,
@@ -1307,7 +1458,7 @@ const AKKHA_RANGED: BossAttackDef[] = [
         spotAnim: AKKHA_SAND,
         pattern: {
             shape: "spiral",
-            count: 6,
+            count: 4,
             volleys: 10,
             interval: 0.25,
             speed: 5,
@@ -1315,16 +1466,38 @@ const AKKHA_RANGED: BossAttackDef[] = [
             radius: 0.4,
             turn: 0.3,
             mirror: true,
+            bright: 0.5,
         },
     },
 ];
 
+// Three marks on the floor, one under you, each glowing its quadrant's element (Sim.markGround);
+// a shadow rather than his red sand fitted to it, whose spread isn't measured
+const AKKHA_STRIKE: BossAttackDef = {
+    name: "Elemental strike",
+    kind: "ground",
+    damage: 5,
+    windup: 1.2,
+    cooldown: 3,
+    range: 30,
+    weight: 4,
+    seq: 9774,
+    sound: 5723,
+    elemental: true,
+    impactSpotAnim: 2254,
+    ground: {
+        spots: [{ shape: "player" }, { shape: "scatter", count: 2, spread: 4 }],
+        radius: 1.3,
+        shadow: true,
+        light: MARK_LIGHT,
+    },
+};
 const AKKHA_MAGIC: BossAttackDef[] = [
     {
         // Rings of glowing red sand, each bringing its quadrant's element
         name: "Glowing sand",
         kind: "pattern",
-        damage: 5,
+        damage: 3,
         windup: 0.8,
         cooldown: 0,
         range: 30,
@@ -1337,7 +1510,7 @@ const AKKHA_MAGIC: BossAttackDef[] = [
         pattern: {
             shape: "ring",
             count: 14,
-            volleys: 3,
+            volleys: 2,
             interval: 0.5,
             speed: 5.5,
             range: 24,
@@ -1345,14 +1518,17 @@ const AKKHA_MAGIC: BossAttackDef[] = [
             gap: 0.7,
             gapAt: "player",
             turn: 0.25,
+            bright: 0.5,
         },
     },
+    AKKHA_STRIKE,
     {
-        name: "Red sand",
+        // A ring of red sand round you, closing, with a way out
+        name: "Red noose",
         kind: "pattern",
-        damage: 5,
-        windup: 0.8,
-        cooldown: 5,
+        damage: 3,
+        windup: 1.0,
+        cooldown: 8,
         range: 30,
         weight: 3,
         seq: 9774,
@@ -1361,16 +1537,27 @@ const AKKHA_MAGIC: BossAttackDef[] = [
         impactSpotAnim: 2254,
         elemental: true,
         pattern: {
-            shape: "spread",
-            count: 3,
-            arc: 0.5,
-            volleys: 7,
-            interval: 0.22,
-            speed: 8,
-            range: 24,
+            shape: "closing",
+            count: 20,
+            volleys: 1,
+            interval: 1,
+            distance: 6,
+            gap: 3,
+            speed: 2.4,
+            range: 8,
             radius: 0.45,
-            track: true,
+            bright: 0.6,
+            glow: BULLET_GLOW,
         },
+    },
+    // Then (his second phase on): the noose round where you stepped, off the mark toward its gap
+    {
+        ...AKKHA_STRIKE,
+        name: "Strike, then noose",
+        cooldown: 8,
+        weight: 2,
+        follow: { attack: "Red noose", delay: 0.4 },
+        phases: [2, 3],
     },
 ];
 
@@ -1396,6 +1583,8 @@ const UNSTABLE_ORBS: BossAttackDef = {
         range: 30,
         radius: 0.5,
         look: "akkha_unstable_orb",
+        bright: 0.6,
+        glow: AKKHA_LIGHTS.akkha_unstable_orb,
     },
 };
 
@@ -1418,6 +1607,16 @@ const AKKHA_ENRAGED: EnemyDef = {
     boss: {
         ...enragedForm.boss!,
         rises: undefined,
+        // Only his orbs (Sim.stepAkkhaStand), with no leaps, stamps or phases' openers
+        attacks: [UNSTABLE_ORBS],
+        phases: {
+            ...AKKHA_PHASES,
+            phases: AKKHA_PHASES.phases.map((p) => ({
+                ...p,
+                opener: undefined,
+                ambients: undefined,
+            })),
+        },
         akkha: {
             ...AKKHA,
             unstable: {
@@ -1432,14 +1631,6 @@ const AKKHA_ENRAGED: EnemyDef = {
 };
 
 // Never spawned: what his orbs are drawn as
-// Each element's light, for his orbs and what's lit by them
-const AKKHA_LIGHTS: Record<string, LightLook> = {
-    akkha_orb_darkness: { radius: 2, color: 0xa070ff, intensity: 0.7 },
-    akkha_orb_lightning: { radius: 2, color: 0xa8dcff, intensity: 0.8, flicker: 0.3 },
-    akkha_orb_frozen: { radius: 2, color: 0xc8f4ff, intensity: 0.6 },
-    akkha_orb_burning: { radius: 2, color: 0xff7a2a, intensity: 0.8, flicker: 0.25 },
-    akkha_unstable_orb: { radius: 2, color: 0xffffff, intensity: 0.7 },
-};
 
 const akkhaLook = (id: string, name: string, npcId: number): EnemyDef => ({
     light: AKKHA_LIGHTS[id],
@@ -1462,7 +1653,8 @@ TOMBS_ENEMIES.push(
     ...AKKHA_FORMS,
     AKKHA_ENRAGED,
     {
-        // Can't fight back: it charges up to flood its quarter (AkkhaDef.shadows)
+        // Charges up to flood its quarter (AkkhaDef.shadows), and lunges his spear's strip at the
+        // hero nearest it a beat after each of his, from where it stands (echoes)
         id: "akkha_shadow",
         name: "Akkha's Shadow",
         npcId: 11797,
@@ -1480,6 +1672,16 @@ TOMBS_ENEMIES.push(
         solid: true,
         healthBar: true,
         knockbackResist: 1,
+        echoes: {
+            boss: "akkha",
+            attacks: ["Spear lunge", "Lunge flurry"],
+            name: "Shadow's lunge",
+            damage: 4,
+            seq: 9770,
+            later: 0.25,
+            most: 1,
+            noDash: true,
+        },
         sounds: AKKHA_SOUNDS,
     },
     akkhaLook("akkha_orb_lightning", "Orb of Lightning", 11800),

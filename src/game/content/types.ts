@@ -714,6 +714,9 @@ export type AkkhaDef = {
         linger: number;
         message: string;
     };
+    // While his orbs are out he uses only these of his attacks (by name, whichever form he's in):
+    // shapes a single deliberate step answers, so standing still is a choice that can be made
+    orbAttacks?: string[];
     // His shadows: at each of these shares of his hitpoints, enemyId comes in each quadrant's
     // corner (corner tiles out from the middle each way), and he can't be hurt but in a quadrant
     // whose shadow is dead (his middle inside tiles clear of the lines between them). Only one's
@@ -966,6 +969,8 @@ export type BossAttackDef = {
     takeCover?: { reach: number; share: number };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
+    // The Tombs: only used with this invocation on (Feeling Special's tracked lunge)
+    onlyWith?: string;
     // Said over the boss's head when it's used, like OSRS overhead chat
     shout?: string;
     // A message on screen when it's used, for attacks the player has to do
@@ -1143,6 +1148,9 @@ export type EchoDef = {
     most?: number;
     // Its strip this long, in place of the boss's (a crocodile's snap is shorter than his jaws)
     length?: number;
+    // It stays where it stands, not dashing down its strip as the boss's lunge does (Akkha's
+    // shadows, which are stationary)
+    noDash?: boolean;
 };
 
 // A boss whose guard drops (Justiciar Zachariah's). An attack with `opens` that misses everyone
@@ -1154,6 +1162,9 @@ export type EchoDef = {
 export type BossGuardDef = {
     damage: number;
     stun: number;
+    // While it's down, its prayer (EnemyDef.protects) holds against nothing: Akkha's, so a hero
+    // whose style his form prays against gets at him through a missed lunge or leap
+    pierce?: boolean;
     stunSpotAnim?: number;
     stunHeight?: number;
     // Played as it's stunned, and as it's exposed

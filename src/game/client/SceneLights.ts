@@ -178,7 +178,7 @@ export class SceneLights {
             }
         }
         for (const hazard of sim.hazards) {
-            const look = hazard.attack.ground?.light;
+            const look = hazard.light ?? hazard.attack.ground?.light;
             if (look && sim.tick < hazard.endTick) {
                 const key = lightKey(KIND_HAZARD, hazard.uid);
                 this.offer(key, hazard.x, hazard.y, look.radius, look);

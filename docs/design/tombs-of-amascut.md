@@ -856,6 +856,59 @@ the room began with no wipes (before this stage, it failed with 11); a warrior f
 stand among them. Unchecked in a browser: the stampede's look on her floor, the Soldier coming up,
 and every mark at the last shield's 0.6.
 
+### The boss rework, stage 5: Akkha, "the Duelist of Het"
+
+Akkha reworked to the design (built November 2026), the tuning left for the last pass: each form
+speaks one shape language, melee lines and wedges, ranged walls and fans, magic marks on the floor
+in his quadrants' elements, and a miss drops his guard and his prayer with it. Memory Blast, the
+quadrants, the shadows, Detonate and the final stand stay.
+
+- **Three phases** (`BossDef.phases` at 66% and 33%, where his shadows come now: two times, not
+  four, flooding every 15 seconds, not 20), `tempo` 1, 0.85, 0.7, the last dimmed to 0.6, the same
+  on every form (`akkhaForm`; a form's change keeps the phase). His attack interval is 1.4 seconds
+  (1.8), a special every 6 attacks (7). Memory Blast is a step longer in the last phase.
+- **His prayer down with his guard** (`BossGuardDef.pierce`, E2): while he's open, his overhead
+  holds against nothing, so a hero of the style his form prays against gets at him through a miss.
+- **Every form**: a **Leap** onto where you stood (a blast with `leap`, radius 2, 6 damage, 1.4
+  seconds under its shadow), open 1.5 seconds when it misses, his second phase's opener (twice,
+  Leaps, his last's); and his **Stamp** as an ambient, a ring of 16 out of him with a gap on your
+  side, every 9, 7 and 5 seconds by phase, 3 damage (5).
+- **Melee**: Spear lunge (a strip 2 wide, 7 long, a dash of 5.5, 5 damage, open 1.5 seconds on a
+  miss), Sweep (a wedge of 1.8 radians, 3.2 tiles, 5 damage, in place of the thrust round him that
+  hit for 8), from the second phase a lunge then the sweep where he stops, and in the last a
+  flurry of three lunges, each turning after you a quarter second. Feeling Special adds a lunge
+  that turns from the first phase (`BossAttackDef.onlyWith`, E6).
+- **Ranged**: Sand volley (a fan of 5, two volleys aimed once, 3; it was three re-aimed at 5),
+  Sand wall (11 across with a gap of two rolling at you, 4, knocking back a tile; two ranks from the
+  second phase, and a wall then a volley), Sandstorm with 4 arms (6) at 3.
+- **Magic**: Elemental strike (three marks, one on you, 5, each glowing its quadrant's element:
+  `GroundHazard.light`, E12), Glowing sand (two rings, 3), Red noose (a ring of 20 closing on you
+  from 6 tiles with a gap of three, in place of Red sand's tracking triplets), and from the second
+  phase a strike then the noose round where you stepped.
+- **While his trailing orbs are out** he uses only Sweep, Spear lunge, Sand wall and Glowing sand
+  (`AkkhaDef.orbAttacks`, E13), shapes a single step answers.
+- **His shadows lunge**: the one nearest you copies his Spear lunge and his flurry from where it
+  stands, a beat later (`echoes`, with `EchoDef.noDash`, E14: it doesn't dash down its strip).
+- **His final stand**'s orbs are lit (`bright`, and a glow of their own light).
+- **The bot**: stage 1's readers do the rest (off a strip sideways and to the pocket between his
+  and a shadow's, out of a wall's or a closing ring's gap, off the leap's and the marks' circles),
+  and it goes in to press the button whenever his guard's down, whatever form he's in (its weapons
+  get through then too). A wedge as short as his Sweep it backs out of, as it does a swing round him.
+
+Ids: nothing new from the cache. No leap of his is in it (`find-npc-seqs.ts 11790`), so his leap
+plays his stamp (9788); his shadow (11797) plays his lunge (9770) on his skeleton (2065). His sand
+(2255) is fitted at 2 where he lands and 1 down his strip, under the 3 the quest fits it to (its
+spread isn't measured). Elemental strike's marks are shadows, not his red sand (2253) fitted to
+them, whose spread isn't measured either; they show the burst (2254) unfitted as they land.
+
+Hitpoints and the final stand's share are as stage 1 left them (9,000, 20%), for the last pass.
+One check each, Expert with everything bought (`ROOM=akkha`, one seed), before and after: all three
+characters reached him weak from his path's room (a ranger at level 4) and failed the 15 minutes
+either way, with fewer wipes and further into him after (warrior 5 wipes and 73% left at best
+before, 3 and 63% after; wizard 10 and 40%, 4 and 35%; ranger 5 and 80%, 3 and 66%), Red sand's
+tracking triplets gone from what hurt most. Unchecked in a browser: the leap (his stamp played as
+one), the marks' glow by quadrant, the shadows' lunges, and the wall and noose on his floor at 0.6.
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on

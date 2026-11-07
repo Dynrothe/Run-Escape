@@ -261,6 +261,9 @@ export type GroundHazard = {
     half?: number;
     // An exhumed's ticks stood in so far (GroundPatternDef.smother)
     stood?: number;
+    // Its glow in place of its ground's (GroundPatternDef.light): an Akkha mark's quadrant's
+    // element (BossAttackDef.elemental). Only drawn.
+    light?: LightLook;
 };
 
 // A boss's corpse flowers (BossAttackDef quarters), crossing at (x, y). The
