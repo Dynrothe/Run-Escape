@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { KeyHint } from "./PadHint";
 
 // Rolls a level up's rewards or a casket's item again (R), for one of the
@@ -22,7 +23,7 @@ export function RerollButton({
                     e.currentTarget.blur();
                 }}
             >
-                <KeyHint keyLabel="R" pad="west" /> Reroll ({rerolls} left)
+                <KeyHint keyLabel="R" pad="west" /> {t("canvas.reroll", { n: rerolls })}
             </button>
         </div>
     );

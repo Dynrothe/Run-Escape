@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 
 import { FLAG_FRAMES, FLAG_SPRITE } from "../content/flags";
+import { getLang, useLang } from "../i18n";
 import { iconCache } from "./ItemIcon";
 
-let regionNames: Intl.DisplayNames | undefined;
+let regionNames: { lang: string; names: Intl.DisplayNames } | undefined;
 
 // A country's name ("Finland"), or its letters where the browser doesn't know it
 export function countryName(code: string): string {
     try {
-        regionNames ??= new Intl.DisplayNames(["en"], { type: "region" });
-        return regionNames.of(code) ?? code;
+        const lang = getLang();
+        if (regionNames?.lang !== lang) {
+            regionNames = { lang, names: new Intl.DisplayNames([lang], { type: "region" }) };
+        }
+        return regionNames.names.of(code) ?? code;
     } catch {
         return code;
     }
@@ -27,6 +31,7 @@ type Props = {
 // Where a co-op player's playing from: their country's flag from the world list,
 // or its letters for a country without one
 export function CountryFlag({ country, label, keepSpace }: Props): JSX.Element | null {
+    useLang();
     const frame = country !== undefined ? FLAG_FRAMES[country] : undefined;
     const cached = () => (frame !== undefined ? iconCache.getFrame(FLAG_SPRITE, frame) : undefined);
     const [loaded, setLoaded] = useState(() => ({ frame, url: cached() }));

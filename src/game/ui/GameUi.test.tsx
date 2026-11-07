@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
 import { GameUi } from "./GameUi";
+
+vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
 
 const device = vi.hoisted(() => ({ coarse: false }));
 
@@ -379,5 +381,16 @@ describe("the title's export reminder", () => {
         expect(screen.getByRole("button", { name: "Export save" })).toBeInTheDocument();
         act(() => store.set({ saveBlock: { kind: "otherTab" }, saveBlockClosed: true }));
         expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("has language button that opens settings with language controls", () => {
+        expect.hasAssertions();
+        renderTitle(0);
+        const langBtn = screen.getByRole("button", { name: "Language" });
+        expect(langBtn).toBeInTheDocument();
+        fireEvent.click(langBtn);
+        expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Português (BR)" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Español" })).toBeInTheDocument();
     });
 });

@@ -9,6 +9,7 @@ import { diffStats } from "../content/stats";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { t, tl } from "../i18n";
 import {
     BuffView,
     ChestView,
@@ -27,11 +28,13 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
     const set = getItemSet(item);
     return {
         id: item.id,
-        name: upgradedName(item.name, upgrades),
+        name: upgradedName(tl(item.name), upgrades),
         objId: item.objId,
         rarity: { name: rarity.name, color: rarity.color },
         kindLabel:
-            item.kind === "gear" ? `${GEAR_SLOT_BY_ID.get(item.slot)!.name} slot` : "Utility",
+            item.kind === "gear"
+                ? t("canvas.gear_slot", { slot: tl(GEAR_SLOT_BY_ID.get(item.slot)!.name) })
+                : t("canvas.utility"),
         lines: describeItem(item, upgrades),
         ...(set && {
             set: {
@@ -51,10 +54,10 @@ function getRoundLines(sim: Sim, item: ItemDef): string[] {
     const times = (n: number) => `${Math.round(n * 10) / 10}x`;
     const use = item.use;
     if (use.kind === "heal" || (use.kind === "cure" && use.heal)) {
-        return [`Heals ${times(sim.roundDamage)} as much in round ${sim.round}.`];
+        return [t("canvas.round_heal", { times: times(sim.roundDamage), round: sim.round })];
     }
     if (use.kind === "blast") {
-        return [`Hits ${times(sim.roundHp)} as hard in round ${sim.round}.`];
+        return [t("canvas.round_hit", { times: times(sim.roundHp), round: sim.round })];
     }
     return [];
 }
@@ -180,7 +183,7 @@ export function getEventView(sim: Sim): EventView | undefined {
             if (option.kind === "revive") {
                 const item = getItem(EXTRA_REVIVE_ITEM);
                 return {
-                    title: "Extra revive",
+                    title: t("canvas.extra_revive"),
                     text: item.kind === "utility" ? item.description : "",
                     iconObjId: item.objId,
                     price: option.price,
@@ -190,8 +193,8 @@ export function getEventView(sim: Sim): EventView | undefined {
             }
             if (option.kind === "teleport") {
                 return {
-                    title: "Teleport",
-                    text: "Uses one of this raid's teleports.",
+                    title: t("canvas.teleport"),
+                    text: t("canvas.teleport_desc"),
                     // A teleport tablet
                     iconObjId: 8013,
                     enabled: true,

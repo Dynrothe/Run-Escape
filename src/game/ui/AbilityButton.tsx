@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { AbilityView } from "../client/GameStore";
+import { t, tl } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
 
@@ -25,8 +26,8 @@ export function AbilityButton({
         <button
             data-silent
             className={abilityClass(ability, touch)}
-            aria-label={ability.name}
-            title={`${ability.name}: from right by him, and twice as hard while his guard's down`}
+            aria-label={tl(ability.name)}
+            title={t("canvas.ability_hint", { name: tl(ability.name) })}
             // Keep focus on the game, so Space doesn't press it again
             onMouseDown={(e) => e.preventDefault()}
             onPointerDown={touch ? () => client.useAbility() : undefined}
@@ -38,7 +39,7 @@ export function AbilityButton({
                 className="ui-ability-charge"
                 style={{ transform: `scaleY(${1 - ability.charge})` }}
             />
-            <span className="ui-ability-name">{ability.name}</span>
+            <span className="ui-ability-name">{tl(ability.name)}</span>
         </button>
     );
 }

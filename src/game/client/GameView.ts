@@ -35,6 +35,7 @@ import {
     Thrall,
     Visitor,
 } from "../core/entities";
+import { t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
 import { BossFightView } from "./BossFightView";
 import { FloorView } from "./FloorView";
@@ -1195,9 +1196,9 @@ export class GameView {
                 continue;
             }
             ctx.fillStyle = "#000000";
-            ctx.fillText(shout.text, p.x + pixel, p.y - 4 * pixel + pixel);
+            ctx.fillText(tl(shout.text), p.x + pixel, p.y - 4 * pixel + pixel);
             ctx.fillStyle = "#ffff00";
-            ctx.fillText(shout.text, p.x, p.y - 4 * pixel);
+            ctx.fillText(tl(shout.text), p.x, p.y - 4 * pixel);
         }
     }
 
@@ -1842,7 +1843,7 @@ export class GameView {
         ctx.textAlign = "center";
         ctx.textBaseline = "alphabetic";
         const text = hero.down
-            ? `${hero.name} (${sim.canBeRevived(hero) ? "down, revive me!" : "down"})`
+            ? `${hero.name} (${sim.canBeRevived(hero) ? t("canvas.down_revive") : t("canvas.down")})`
             : hero.name;
         const y = p.y - 7 * pixel;
         ctx.fillStyle = "#000000";

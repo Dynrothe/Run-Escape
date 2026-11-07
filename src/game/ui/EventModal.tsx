@@ -1,5 +1,6 @@
 import { GameClient } from "../client/GameClient";
 import { EventView } from "../client/GameStore";
+import { fmtNum, t, tl } from "../i18n";
 import { Coins } from "./Coins";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
@@ -13,8 +14,8 @@ export function EventModal({ event, coins, client }: Props): JSX.Element {
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-levelup">
-                <h2>{event.name}</h2>
-                <p className="ui-subtle ui-event-speech">{event.speech}</p>
+                <h2>{tl(event.name)}</h2>
+                <p className="ui-subtle ui-event-speech">{tl(event.speech)}</p>
                 <div className="ui-choices">
                     {event.options.map((option, i) => (
                         <button
@@ -26,15 +27,19 @@ export function EventModal({ event, coins, client }: Props): JSX.Element {
                             <KeyHint keyLabel={String(i + 1)} />
                             <ItemIcon objId={option.iconObjId} size={44} />
                             <div className="ui-card-body">
-                                <div className="ui-card-title">{option.title}</div>
-                                {option.text && <div className="ui-card-text">{option.text}</div>}
+                                <div className="ui-card-title">{tl(option.title)}</div>
+                                {option.text && (
+                                    <div className="ui-card-text">{tl(option.text)}</div>
+                                )}
                             </div>
                             {option.price !== undefined && (
                                 <div className="ui-card-cost">
                                     {option.sold ? (
-                                        "Sold"
+                                        t("canvas.sold")
                                     ) : event.points !== undefined ? (
-                                        <span className="ui-raid-price">{option.price} pts</span>
+                                        <span className="ui-raid-price">
+                                            {t("canvas.points_short", { n: fmtNum(option.price) })}
+                                        </span>
                                     ) : (
                                         <Coins amount={option.price} />
                                     )}
@@ -46,12 +51,14 @@ export function EventModal({ event, coins, client }: Props): JSX.Element {
                 <div className="ui-levelup-actions ui-event-actions">
                     {forSale &&
                         (event.points !== undefined ? (
-                            <span className="ui-raid-price">{event.points} raid points</span>
+                            <span className="ui-raid-price">
+                                {t("canvas.raid_points", { n: fmtNum(event.points) })}
+                            </span>
                         ) : (
                             <Coins amount={coins} />
                         ))}
                     <button className="ui-button" onClick={() => client.leaveEvent()}>
-                        {event.leaveLabel}
+                        {tl(event.leaveLabel)}
                     </button>
                 </div>
             </div>

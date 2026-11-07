@@ -2,7 +2,7 @@ import { Camera } from "../../mapviewer/Camera";
 import { MapViewer } from "../../mapviewer/MapViewer";
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
-import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
+import type { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { CHARACTERS, getCharacter } from "../content/characters";
@@ -65,9 +65,9 @@ import {
     refundUpgrades,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
+import { fmtNum, t, tl, tp } from "../i18n";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
-import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import { DamageMeter } from "./DamageMeter";
 import {
@@ -232,10 +232,12 @@ function setPlayArea(
 // What a new endless round brings, for its toast
 function describeRound(sim: Sim): string {
     const times = (n: number) => `${Math.round(n * 10) / 10}x`;
-    return (
-        `Round ${sim.round} begins! Monsters have ${times(sim.roundHp)} the hitpoints and hit ` +
-        `${times(sim.roundDamage)} as hard, and caskets' gear comes +${sim.round - 1}.`
-    );
+    return t("toast.round", {
+        round: sim.round,
+        hp: times(sim.roundHp),
+        damage: times(sim.roundDamage),
+        gear: sim.round - 1,
+    });
 }
 
 function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
@@ -294,8 +296,10 @@ function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
         return undefined;
     }
     // Nylocas Vasilias takes her colour's style better, so it's most of the Theatre's bosses
-    const bosses = raidHasColours(sim.map) ? "most bosses" : "bosses";
-    return `-${Math.round((1 - share) * 100)}% damage to ${bosses}: they pray against ${style}`;
+    return t(raidHasColours(sim.map) ? "canvas.boss_penalty_most" : "canvas.boss_penalty", {
+        percent: Math.round((1 - share) * 100),
+        style: t(`canvas.style.${style}`),
+    });
 }
 
 function getChoiceViews(sim: Sim): ChoiceView[] {
@@ -420,6 +424,7 @@ export class GameClient implements GameFrameHandler {
     ): Promise<GameClient> {
         // Before the first map squares load, so they're only what the title screen needs
         setPlayArea(renderer, getArenaRegion(TITLE_MAP), false);
+        const { RegionDataLoader } = await import("../../mapviewer/worker/RegionDataLoader");
         const workerPool = mapViewer.workerPool;
         const regionPromise = workerPool.queueLoad<RegionDataInput, RegionData, RegionDataLoader>(
             new RegionDataLoader(),
@@ -432,13 +437,16 @@ export class GameClient implements GameFrameHandler {
         const actors = await renderer.getActorRenderer();
         const assets = new GameAssets(workerPool, renderer, actors);
         const spritesPromise = assets.loadSprites();
-        store.set({ loadingText: "Summoning monsters", loadingProgress: 10 });
+        store.set({ loadingText: t("canvas.loading_monsters"), loadingProgress: 10 });
         await assets.loadBase((done, total) => {
             store.set({ loadingProgress: 10 + Math.round((done / total) * 70) });
         });
-        store.set({ loadingText: "Dressing up", loadingProgress: 85 });
+        store.set({ loadingText: t("canvas.loading_dressing"), loadingProgress: 85 });
         await assets.setCharacterLook(store.getSnapshot().characterId);
-        store.set({ loadingText: `Building ${TITLE_MAP.name}`, loadingProgress: 95 });
+        store.set({
+            loadingText: t("canvas.loading_building", { name: tl(TITLE_MAP.name) }),
+            loadingProgress: 95,
+        });
         const grid = new ArenaGrid(await regionPromise);
         await soundsPromise;
         await spritesPromise;
@@ -558,13 +566,13 @@ export class GameClient implements GameFrameHandler {
         this.input.pads.onConnect = (pad) =>
             this.store.toast(
                 pad.standard
-                    ? `${pad.name} connected.`
-                    : `${pad.name} connected. Its buttons aren't on a layout the browser knows, so only its stick works.`,
+                    ? t("toast.controller_connected", { name: pad.name })
+                    : t("toast.controller_unknown", { name: pad.name }),
                 pad.standard ? 3000 : 7000,
             );
         // A controller going flat mid-run pauses it, as leaving the window does
         this.input.pads.onDisconnect = (pad) => {
-            this.store.toast(`${pad.name} disconnected.`, 4000);
+            this.store.toast(t("toast.controller_disconnected", { name: pad.name }), 4000);
             if (this.sim && !this.coopRun && this.store.getSnapshot().overlay === "none") {
                 this.pause();
             }
@@ -592,12 +600,12 @@ export class GameClient implements GameFrameHandler {
         this.coop.onClosed = () => this.onCoopClosed();
         this.coop.onReconnecting = () => {
             if (this.coopRun) {
-                this.store.toast("Connection dropped. Reconnecting...", 4000);
+                this.store.toast(t("toast.reconnecting"), 4000);
             }
         };
         this.coop.onResumed = () => {
             if (this.coopRun) {
-                this.store.toast("Reconnected.", 2000);
+                this.store.toast(t("toast.reconnected"), 2000);
             }
             this.toCoopRun((run) => run.resumed());
         };
@@ -906,12 +914,12 @@ export class GameClient implements GameFrameHandler {
     // Kicked or disbanded, or the host left: a run that was going ends
     private onCoopGone(reason: GoneReason): void {
         if (reason !== "left") {
-            this.store.toast(ENDED_EARLY[reason] ?? "You left the party.", 5000);
+            this.store.toast(tl(ENDED_EARLY[reason] ?? "You left the party."), 5000);
         }
         // A run that's still loading never starts
         this.coopInbox = undefined;
         if (this.coopRun && this.sim && !this.sim.runOver) {
-            this.endCoopRunEarly(ENDED_EARLY[reason] ?? "You left the party.");
+            this.endCoopRunEarly(tl(ENDED_EARLY[reason] ?? "You left the party."));
         }
     }
 
@@ -933,12 +941,9 @@ export class GameClient implements GameFrameHandler {
             this.coopRun = undefined;
             // Solo now: a hidden tab no longer needs stepping
             this.stopBackgroundTicker();
-            this.store.toast(
-                "Lost the connection to the others. The run goes on without them.",
-                6000,
-            );
+            this.store.toast(t("toast.coop_lost_others"), 6000);
         } else {
-            this.endCoopRunEarly("Lost the connection to the co-op server.");
+            this.endCoopRunEarly(t("toast.coop_lost_server"));
         }
     }
 
@@ -1222,6 +1227,10 @@ export class GameClient implements GameFrameHandler {
     private async loadGrid(mapId: string): Promise<ArenaGrid> {
         let grid = this.grids.get(mapId);
         if (!grid) {
+            const [{ installRecipe }, { RegionDataLoader }] = await Promise.all([
+                import("../scaperune/squares"),
+                import("../../mapviewer/worker/RegionDataLoader"),
+            ]);
             await installRecipe(this.mapViewer, mapId);
             const region = await this.mapViewer.workerPool.queueLoad<
                 RegionDataInput,
@@ -1258,7 +1267,7 @@ export class GameClient implements GameFrameHandler {
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
-                loadingText: `Travelling to ${map.name}`,
+                loadingText: t("canvas.travelling", { name: tl(map.name) }),
                 loadingProgress: 25,
             });
         }
@@ -1274,7 +1283,7 @@ export class GameClient implements GameFrameHandler {
         } catch (e) {
             console.error("Failed to load map", mapId, e);
             this.store.set({ screen: back });
-            this.store.toast(`Couldn't get to ${map.name}.`);
+            this.store.toast(t("toast.couldnt_get_to", { name: tl(map.name) }));
             return false;
         }
     }
@@ -1336,7 +1345,7 @@ export class GameClient implements GameFrameHandler {
     // playing their own hero
     private async beginCoopRun(game: GameStart): Promise<void> {
         if (!isGameStart(game, MAX_PARTY)) {
-            this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.store.toast(t("toast.missing_run_content"), 6000);
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1354,7 +1363,7 @@ export class GameClient implements GameFrameHandler {
             !MAP_BY_ID.has(game.mapId) ||
             !game.heroes.every((hero) => CHARACTERS.some((c) => c.id === hero.characterId))
         ) {
-            this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.store.toast(t("toast.missing_run_content"), 6000);
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1488,7 +1497,7 @@ export class GameClient implements GameFrameHandler {
         // the loop only steps the sim once they're made
         this.syncOverlay();
         if (this.coopRun?.isHost && this.coopRun.waitingForLoad) {
-            this.store.toast("Waiting for everyone to arrive...", 3000);
+            this.store.toast(t("toast.waiting_arrivals"), 3000);
         }
     }
 
@@ -1910,19 +1919,24 @@ export class GameClient implements GameFrameHandler {
             ...earned.characters.map((c) => ({
                 key: `character:${c.id}`,
                 task: c.unlock!,
-                text: `The ${c.name} joins you after this run.`,
+                text: t("toast.character_unlocked", { name: tl(c.name) }),
             })),
             ...earned.items.map((i) => ({
                 key: `item:${i.id}`,
                 task: i.unlock,
-                text: `${i.name} ${i.kind === "item" ? "joins the loot" : "can be found"} after this run.`,
+                text: t(i.kind === "item" ? "toast.item_loot_unlocked" : "toast.item_unlocked", {
+                    name: tl(i.name),
+                }),
             })),
         ];
         for (const { key, task, text } of news) {
             if (!this.tasksAnnounced.has(key)) {
                 this.tasksAnnounced.add(key);
                 this.sounds.taskDone();
-                this.store.toast(`Task done: ${describeUnlockTask(task)}! ${text}`, 6000);
+                this.store.toast(
+                    t("toast.task_done", { task: describeUnlockTask(task), reward: text }),
+                    6000,
+                );
             }
         }
         for (const quest of getFinishedQuests(this.save, result)) {
@@ -1931,8 +1945,10 @@ export class GameClient implements GameFrameHandler {
                 this.tasksAnnounced.add(key);
                 this.sounds.taskDone();
                 this.store.toast(
-                    `Quest complete: ${quest.name}! ${quest.coins.toLocaleString()} coins ` +
-                        "are yours after this run.",
+                    t("toast.quest_complete", {
+                        name: tl(quest.name),
+                        coins: fmtNum(quest.coins),
+                    }),
                     6000,
                 );
             }
@@ -2299,10 +2315,7 @@ export class GameClient implements GameFrameHandler {
                 if (event.action && event.hero === sim.focus) {
                     this.afterCoopAction(sim, event.action);
                     if (event.auto) {
-                        this.store.toast(
-                            "Everyone was waiting, so that was decided for you.",
-                            4000,
-                        );
+                        this.store.toast(t("toast.decided_for_you"), 4000);
                     }
                 }
             }
@@ -2316,7 +2329,7 @@ export class GameClient implements GameFrameHandler {
             // Nothing brings the copies back together, so this one stops
             // rather than everyone waiting on it
             this.coop.leave();
-            this.endCoopRunEarly("Your game fell out of step with the host's, so your run ended.");
+            this.endCoopRunEarly(t("toast.out_of_step"));
             return;
         }
         // Choices and caskets come and go with the frames
@@ -2469,7 +2482,11 @@ export class GameClient implements GameFrameHandler {
             }
             switch (event.type) {
                 case "casketDropped":
-                    this.store.toast(`A ${CASKETS[event.tier].name.toLowerCase()} drops!`);
+                    this.store.toast(
+                        t("toast.casket_drops", {
+                            name: tl(CASKETS[event.tier].name).toLowerCase(),
+                        }),
+                    );
                     break;
                 case "bossSpawned":
                 case "bossRose":
@@ -2478,67 +2495,81 @@ export class GameClient implements GameFrameHandler {
                     // Bosses that turn up together say so once (Pest Control's
                     // portals, on the first)
                     if (event.message) {
-                        this.store.toast(event.message, 6000);
+                        this.store.toast(tl(event.message), 6000);
                     }
                     break;
                 case "coinsStolen":
                     this.store.toast(
-                        `The ${getEnemy(event.enemyId).name} grabs ${event.amount} of your coins!`,
+                        t("toast.coins_stolen", {
+                            name: tl(getEnemy(event.enemyId).name),
+                            n: fmtNum(event.amount),
+                        }),
                     );
                     break;
                 case "coinsReturned":
-                    this.store.toast(`You get your ${event.amount} coins back!`);
+                    this.store.toast(t("toast.coins_returned", { n: fmtNum(event.amount) }));
                     break;
                 case "revive":
-                    this.store.toast("Your ring of life saves you!");
+                    this.store.toast(t("toast.ring_saves_you"));
                     break;
                 case "roundStarted":
                     this.store.toast(describeRound(sim), 7000);
                     break;
                 case "powerUp":
                 case "notice":
-                    this.store.toast(event.message);
+                    this.store.toast(tl(event.message));
                     break;
                 case "heroDown":
                     this.store.toast(
                         sim.canBeRevived(sim.heroes[sim.focus])
-                            ? "You're down! A teammate standing over you for a few seconds can revive you."
-                            : "You're down! Watch the rest of your party fight on.",
+                            ? t("toast.you_down_revivable")
+                            : t("toast.you_down"),
                         5000,
                     );
                     break;
                 case "heroRevived":
                     this.store.toast(
-                        `${sim.heroes[event.by].name} revives you! Nothing can hurt you for ${REVIVE_IMMUNITY_SECONDS / 60} minutes.`,
+                        t("toast.revived_you", {
+                            name: sim.heroes[event.by].name,
+                            minutes: REVIVE_IMMUNITY_SECONDS / 60,
+                        }),
                         6000,
                     );
                     break;
                 case "extraRevive":
                     this.store.toast(
-                        `A teammate can revive you once more (${describeRevives(sim.revivesLeftFor(sim.heroes[sim.focus]))}).`,
+                        t("toast.extra_revive_you", {
+                            revives: describeRevives(sim.revivesLeftFor(sim.heroes[sim.focus])),
+                        }),
                         6000,
                     );
                     break;
                 case "visitor":
                     if (event.message) {
-                        this.store.toast(event.message);
+                        this.store.toast(tl(event.message));
                     }
                     break;
                 // An automatic answer had no casket screen to show what it was
                 case "alch":
                     if (this.autoChestDone(sim)) {
                         this.store.toast(
-                            `High alched ${getItem(event.itemId).name} for ${event.coins.toLocaleString()} coins`,
+                            t("toast.alched", {
+                                name: tl(getItem(event.itemId).name),
+                                coins: fmtNum(event.coins),
+                            }),
                         );
                     }
                     break;
                 case "equip":
                     if (this.autoChestDone(sim)) {
                         this.store.toast(
-                            `Equipped ${getItem(event.itemId).name}` +
-                                (event.replacedId
-                                    ? `; high alched ${getItem(event.replacedId).name} for ${event.coins.toLocaleString()} coins`
-                                    : ""),
+                            event.replacedId
+                                ? t("toast.equipped_alched", {
+                                      name: tl(getItem(event.itemId).name),
+                                      replaced: tl(getItem(event.replacedId).name),
+                                      coins: fmtNum(event.coins),
+                                  })
+                                : t("toast.equipped", { name: tl(getItem(event.itemId).name) }),
                         );
                     }
                     break;
@@ -2551,29 +2582,34 @@ export class GameClient implements GameFrameHandler {
             case "heroDown":
                 this.store.toast(
                     sim.canBeRevived(sim.heroes[event.hero!])
-                        ? `${name} is down! Stand over them to revive them.`
-                        : `${name} is down!`,
+                        ? t("toast.teammate_down_revivable", { name })
+                        : t("toast.teammate_down", { name }),
                     5000,
                 );
                 break;
             case "heroRevived":
                 this.store.toast(
                     event.by === sim.focus
-                        ? `You revive ${name}!`
-                        : `${sim.heroes[event.by].name} revives ${name}!`,
+                        ? t("toast.you_revive", { name })
+                        : t("toast.teammate_revives", {
+                              by: sim.heroes[event.by].name,
+                              name,
+                          }),
                 );
                 break;
             case "extraRevive":
-                this.store.toast(`${name} can be revived once more.`);
+                this.store.toast(t("toast.teammate_extra_revive", { name }));
                 break;
             case "heroLeft":
-                this.store.toast(`${name} left the game.`);
+                this.store.toast(t("toast.teammate_left", { name }));
                 break;
             case "revive":
-                this.store.toast(`${name}'s ring of life saves them!`);
+                this.store.toast(t("toast.teammate_ring", { name }));
                 break;
             case "powerUp":
-                this.store.toast(`${name} picked up the ${getPowerUp(event.id).name}!`);
+                this.store.toast(
+                    t("toast.teammate_powerup", { name, item: tl(getPowerUp(event.id).name) }),
+                );
                 break;
         }
     }
@@ -2852,11 +2888,16 @@ export class GameClient implements GameFrameHandler {
                 const level = w.def.levels[Math.min(w.level, last) - 1];
                 return {
                     id: w.def.id,
-                    name: upgradedName(level.name ?? w.def.name, w.level - last),
+                    name: upgradedName(tl(level.name ?? w.def.name), w.level - last),
                     level: w.level,
                     maxLevel: w.def.levels.length,
                     iconObjId: level.objId ?? w.def.iconObjId,
-                    detail: w.bonus > 0 ? `${formatWeaponBonus(w.bonus)} damage` : "",
+                    detail:
+                        w.bonus > 0
+                            ? t("canvas.weapon_bonus_damage", {
+                                  bonus: formatWeaponBonus(w.bonus),
+                              })
+                            : "",
                     stats: weaponStats(w.def, level).map(formatWeaponStat),
                     evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
@@ -2866,7 +2907,7 @@ export class GameClient implements GameFrameHandler {
                 const def = getPassive(p.id);
                 return {
                     id: p.id,
-                    name: upgradedName(def.name, p.level - def.maxLevel),
+                    name: upgradedName(tl(def.name), p.level - def.maxLevel),
                     level: p.level,
                     maxLevel: def.maxLevel,
                     iconObjId: def.iconObjId,
@@ -3069,7 +3110,7 @@ export class GameClient implements GameFrameHandler {
 
 // "2 revives left"
 function describeRevives(left: number): string {
-    return `${left} ${left === 1 ? "revive" : "revives"} left`;
+    return tp("toast.revives_left", left);
 }
 
 // How far along a downed hero's revive is, 0 to 1

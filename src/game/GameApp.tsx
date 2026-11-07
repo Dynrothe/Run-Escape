@@ -22,6 +22,7 @@ import { GameStore } from "./client/GameStore";
 import { SaveLock } from "./client/SaveLock";
 import { MAPS } from "./content/maps";
 import { LocalSaveStore } from "./core/save";
+import { t } from "./i18n";
 import { GameWebGLRenderer } from "./render/GameWebGLRenderer";
 import { GameUi } from "./ui/GameUi";
 import { iconCache } from "./ui/ItemIcon";
@@ -125,12 +126,12 @@ export function GameApp(): JSX.Element {
         const abortController = new AbortController();
         loadViewer(abortController.signal, (progress: DownloadProgress) => {
             store.set({
-                loadingText: `Downloading cache (${formatBytes(progress.total)})`,
+                loadingText: t("canvas.downloading_cache", { size: formatBytes(progress.total) }),
                 loadingProgress: ((progress.current / progress.total) * 100) | 0,
             });
         })
             .then((loaded) => {
-                store.set({ loadingText: "Loading Lumbridge", loadingProgress: 0 });
+                store.set({ loadingText: t("canvas.loading_lumbridge"), loadingProgress: 0 });
                 setLoaded(loaded);
                 if (import.meta.env.DEV) {
                     (window as any).mapViewer = loaded.mapViewer;
@@ -228,15 +229,14 @@ export function GameApp(): JSX.Element {
             ) : graphicsLost ? (
                 <div className="game-status game-status-lost content-text">
                     <p>
-                        Your device took the game's graphics away, as it can when it's short of
-                        memory, and they can't come back without reloading.
-                        {graphicsLost === "solo" && " Your run is paused."}
+                        {t("canvas.graphics_lost")}
+                        {graphicsLost === "solo" && t("canvas.run_paused")}
                         {graphicsLost === "none"
-                            ? " Reload to carry on."
-                            : " Reload to play again: the coins and quests from this run are kept."}
+                            ? t("canvas.reload_continue")
+                            : t("canvas.reload_kept")}
                     </p>
                     <button className="ui-button" onClick={reloadAfterLoss}>
-                        Reload
+                        {t("save.reload")}
                     </button>
                 </div>
             ) : (

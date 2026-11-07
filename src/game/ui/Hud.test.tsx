@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react";
 
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import { GameStore, HudNumbers, HudView, SlotView } from "../client/GameStore";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
+
+vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
+
+vi.mock("../client/GameView", () => ({
+    formatTime: (seconds: number) => {
+        const s = Math.floor(seconds);
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    },
+}));
 
 function slot(id: string, level: number): SlotView {
     return { id, name: id, level, maxLevel: 8, iconObjId: 1, detail: "", rarityColor: "#fff" };

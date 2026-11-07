@@ -12,6 +12,7 @@ import {
     SimEvent,
     SurgeLane,
 } from "../core/entities";
+import { tl } from "../i18n";
 import {
     GameAssets,
     HINT_ARROW_SPRITE,
@@ -1280,15 +1281,15 @@ export class BossFightView {
         // anything nearer the middle is on top of the player
         const y = height * 0.72;
         ctx.fillStyle = "#000000";
-        ctx.fillText(def.title, width / 2 + pixel, y + pixel);
+        ctx.fillText(tl(def.title), width / 2 + pixel, y + pixel);
         ctx.fillStyle = look?.title ?? "#ff9ae6";
-        ctx.fillText(def.title, width / 2, y);
+        ctx.fillText(tl(def.title), width / 2, y);
         if (def.subtitle) {
             ctx.font = `${12 * pixel}px "OSRS Bold", sans-serif`;
             ctx.fillStyle = "#000000";
-            ctx.fillText(def.subtitle, width / 2 + pixel, y + 18 * pixel + pixel);
+            ctx.fillText(tl(def.subtitle), width / 2 + pixel, y + 18 * pixel + pixel);
             ctx.fillStyle = look?.subtitle ?? "#e8d0ff";
-            ctx.fillText(def.subtitle, width / 2, y + 18 * pixel);
+            ctx.fillText(tl(def.subtitle), width / 2, y + 18 * pixel);
         }
         ctx.globalAlpha = 1;
     }

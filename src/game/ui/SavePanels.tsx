@@ -3,6 +3,7 @@ import { useState } from "react";
 import { GameClient } from "../client/GameClient";
 import { SaveBlock } from "../client/GameStore";
 import { SaveData } from "../core/save";
+import { getLang, t } from "../i18n";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
 import {
@@ -19,46 +20,41 @@ function describeBlock(
 ): { title: string; body: JSX.Element; actions: JSX.Element } {
     const reload = (
         <button className="ui-button" onClick={() => window.location.reload()}>
-            Reload
+            {t("save.reload")}
         </button>
     );
     switch (block.kind) {
         case "otherTab":
             return {
-                title: "Open in another tab",
+                title: t("save.other_tab_title"),
                 body: (
                     <>
-                        <p>
-                            Run Escape is open in another tab, and only one can save your progress.
-                            Play here, and that one stops saving.
-                        </p>
-                        <p>
-                            Or play without saving: what you earn here lasts until that tab closes
-                            or this one reloads.
-                        </p>
+                        <p>{t("save.other_tab_body_1")}</p>
+                        <p>{t("save.other_tab_body_2")}</p>
                     </>
                 ),
                 actions: (
                     <button className="ui-button" onClick={() => client.takeOverSave()}>
-                        Play here
+                        {t("save.play_here")}
                     </button>
                 ),
             };
         case "newerGame":
             return {
-                title: "Your save is from a newer version",
+                title: t("save.newer_title"),
                 body: (
                     <>
                         <p>
-                            It was saved by
-                            {block.gameVersion ? ` v${block.gameVersion} of` : " a newer"} Run
-                            Escape, and this is v{GAME_VERSION}, which would undo what's new in it.
-                            So this one won't save.
+                            {t("save.newer_body", {
+                                saved: block.gameVersion
+                                    ? t("save.version_of", { version: block.gameVersion })
+                                    : t("save.a_newer"),
+                                version: GAME_VERSION,
+                            })}
                         </p>
                         <p>
-                            Reload to get the new version.
-                            {!block.format &&
-                                " If it doesn't come, save anyway: you lose what was new in your save, and nothing else."}
+                            {t("save.newer_reload")}
+                            {!block.format && t("save.newer_anyway_warning")}
                         </p>
                     </>
                 ),
@@ -67,7 +63,7 @@ function describeBlock(
                         {reload}
                         {!block.format && (
                             <button className="ui-button" onClick={() => client.saveOverNewer()}>
-                                Save anyway
+                                {t("save.save_anyway")}
                             </button>
                         )}
                     </>
@@ -75,23 +71,17 @@ function describeBlock(
             };
         case "noRoom":
             return {
-                title: "Your save couldn't be read",
+                title: t("save.unreadable_title"),
                 body: (
                     <>
-                        <p>
-                            Something went wrong with the save in this browser, and there's no room
-                            to keep a copy of it. So this one won't save over it.
-                        </p>
-                        <p>
-                            Export it to mend by hand or ask for help on the Discord, then free some
-                            space in this browser and reload.
-                        </p>
+                        <p>{t("save.no_room_body_1")}</p>
+                        <p>{t("save.no_room_body_2")}</p>
                     </>
                 ),
                 actions: (
                     <>
                         <button className="ui-button" onClick={() => client.exportSave()}>
-                            Export
+                            {t("save.export")}
                         </button>
                         {reload}
                     </>
@@ -119,7 +109,7 @@ export function SaveBlockPanel({
                 <div className="ui-notice-close">
                     {actions}
                     <button className="ui-button" onClick={() => client.playWithoutSaving()}>
-                        Play without saving
+                        {t("save.play_without")}
                     </button>
                 </div>
             </div>
@@ -139,26 +129,20 @@ export function UnreadableSavePanel({
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-notice">
-                <h2>Your save couldn't be read</h2>
+                <h2>{t("save.unreadable_title")}</h2>
                 <div className="ui-notice-body">
-                    <p>
-                        Something went wrong with the save in this browser, so you're starting
-                        afresh. A copy of the old one has been kept.
-                    </p>
-                    <p>
-                        Export it to ask for help on the Discord, or to mend by hand and import.
-                        It's in Settings too.
-                    </p>
+                    <p>{t("save.unreadable_body_1")}</p>
+                    <p>{t("save.unreadable_body_2")}</p>
                 </div>
                 <div className="ui-notice-close">
                     <button
                         className="ui-button"
                         onClick={() => client.exportUnreadableSave(keptAs)}
                     >
-                        Export
+                        {t("save.export")}
                     </button>
                     <button className="ui-button" onClick={() => client.closeUnreadableNotice()}>
-                        Got it
+                        {t("save.got_it")}
                     </button>
                 </div>
             </div>
@@ -184,18 +168,20 @@ export function ExportReminder({
         <div className="ui-panel rs-border rs-background ui-export-reminder">
             <span className="ui-export-reminder-text">
                 {last === undefined
-                    ? "Your progress is kept only on this device. Export a copy to keep it safe."
-                    : `Last exported ${new Date(last).toLocaleDateString()}. Export a fresh copy to keep it safe.`}
+                    ? t("save.export_reminder_first")
+                    : t("save.export_reminder", {
+                          date: new Date(last).toLocaleDateString(getLang()),
+                      })}
             </span>
             <span className="ui-export-reminder-buttons">
                 <button className="ui-button ui-button-small" onClick={() => client.exportSave()}>
-                    Export save
+                    {t("save.export_save")}
                 </button>
                 <button
                     className="ui-button ui-button-small"
                     onClick={() => setDismissed(dismissExportReminder(Date.now()))}
                 >
-                    Not today
+                    {t("save.not_today")}
                 </button>
             </span>
         </div>

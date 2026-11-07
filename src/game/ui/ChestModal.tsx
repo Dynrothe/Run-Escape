@@ -3,6 +3,7 @@ import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { GameClient } from "../client/GameClient";
 import { ChestView } from "../client/GameStore";
 import { ChestAction } from "../core/Loot";
+import { fmtNum, t, tl, tp } from "../i18n";
 import { BanishButton } from "./BanishButton";
 import "./ChestModal.css";
 import { Coins } from "./Coins";
@@ -108,20 +109,23 @@ const COIN_ARCS = scatter(10, 3, (random, i) => {
 type ActionButton = { action: ChestAction; label: string; disabled?: boolean };
 
 function getActions(chest: ChestView): ActionButton[] {
-    const alch = { action: "alch" as const, label: `High alch (${chest.alchCoins} coins)` };
+    const alch = {
+        action: "alch" as const,
+        label: t("chest.high_alch", { coins: fmtNum(chest.alchCoins) }),
+    };
     if (chest.isGear) {
-        return [{ action: "take", label: "Equip" }, alch];
+        return [{ action: "take", label: t("chest.equip") }, alch];
     }
     if (chest.instant) {
-        return [{ action: "use", label: "Take" }, alch];
+        return [{ action: "use", label: t("chest.take") }, alch];
     }
     return [
         {
             action: "take",
-            label: chest.canStash ? "Keep" : "Inventory full",
+            label: chest.canStash ? t("chest.keep") : t("chest.inventory_full"),
             disabled: !chest.canStash,
         },
-        { action: "use", label: "Use now" },
+        { action: "use", label: t("chest.use_now") },
         alch,
     ];
 }
@@ -291,11 +295,13 @@ export function ChestModal({ chest, rerolls, banishes, client }: Props): JSX.Ele
             <div className="ui-chest-caption">
                 {opening ? (
                     <Fragment key={rolls}>
-                        <div className="ui-chest-name">{chest.item.name}</div>
-                        <div className="ui-chest-rarity">{chest.item.rarity.name}!</div>
+                        <div className="ui-chest-name">{tl(chest.item.name)}</div>
+                        <div className="ui-chest-rarity">
+                            {t("chest.rarity_exclaim", { rarity: tl(chest.item.rarity.name) })}
+                        </div>
                     </Fragment>
                 ) : (
-                    <div className="ui-chest-casket-name">{chest.casketName}</div>
+                    <div className="ui-chest-casket-name">{tl(chest.casketName)}</div>
                 )}
             </div>
             {phase === "reveal" && (
@@ -309,7 +315,7 @@ export function ChestModal({ chest, rerolls, banishes, client }: Props): JSX.Ele
                     onBanish={banish}
                 />
             )}
-            {!opening && <div className="ui-chest-hint">Space or click to open</div>}
+            {!opening && <div className="ui-chest-hint">{t("chest.open_hint")}</div>}
         </div>
     );
 }
@@ -341,19 +347,19 @@ function ChestCard({
                 <ItemIcon objId={item.objId} size={40} />
                 <div className="ui-card-body">
                     <div className="ui-card-title" style={{ color: item.rarity.color }}>
-                        {item.name}
+                        {tl(item.name)}
                     </div>
                     <div className="ui-chest-kind">
-                        {item.rarity.name} · {item.kindLabel}
+                        {t("chest.kind", { rarity: tl(item.rarity.name), kind: item.kindLabel })}
                     </div>
                     {chest.upgradedFrom && (
                         <div className="ui-chest-upgraded">
-                            Your {chest.upgradedFrom}, upgraded in the Armoury
+                            {t("chest.upgraded_from", { name: tl(chest.upgradedFrom) })}
                         </div>
                     )}
                 </div>
                 <div className="ui-chest-found">
-                    Found <Coins amount={chest.coins} />
+                    {t("chest.found")} <Coins amount={chest.coins} />
                 </div>
             </div>
             <ul className="ui-chest-lines">
@@ -370,12 +376,12 @@ function ChestCard({
                 (chest.replaces ? (
                     <div className="ui-chest-compare">
                         <div className="ui-chest-replaces">
-                            Replaces
+                            {t("chest.replaces")}
                             <ItemIcon objId={chest.replaces.item.objId} size={22} />
                             <span style={{ color: chest.replaces.item.rarity.color }}>
-                                {chest.replaces.item.name}
+                                {tl(chest.replaces.item.name)}
                             </span>
-                            (alched for {chest.replaces.alchCoins} coins)
+                            {t("chest.alched_for", { coins: fmtNum(chest.replaces.alchCoins) })}
                         </div>
                         <div className="ui-chest-changes">
                             {chest.changes.map((change) => (
@@ -390,16 +396,16 @@ function ChestCard({
                     </div>
                 ) : (
                     <div className="ui-chest-compare">
-                        Nothing in your {item.kindLabel.toLowerCase()} yet.
+                        {t("chest.nothing_equipped", { kind: item.kindLabel.toLowerCase() })}
                     </div>
                 ))}
             {!chest.isGear && (
                 <div className="ui-chest-compare">
                     {chest.instant
-                        ? "Yours the moment you take it."
+                        ? t("chest.instant")
                         : chest.carried > 0
-                          ? `You have ${chest.carried} already; they stack.`
-                          : "Kept items are used with 1-4."}
+                          ? t("chest.carried", { n: fmtNum(chest.carried) })
+                          : t("chest.kept_items")}
                 </div>
             )}
             <div className="ui-chest-actions">
@@ -422,20 +428,18 @@ function ChestCard({
                 <RerollButton rerolls={rerolls} onReroll={onReroll} />
                 {chest.banish && (
                     <BanishButton
-                        label={`Banish (${banishes} left)`}
+                        label={t("chest.banish", { n: fmtNum(banishes) })}
                         title={
                             chest.banish.set
-                                ? `Alch it, and no ${chest.banish.set} pieces in a casket again this run`
-                                : `Alch it, and never see it in a casket again this run`
+                                ? t("chest.banish_set_hint", { set: tl(chest.banish.set) })
+                                : t("chest.banish_hint")
                         }
                         onBanish={onBanish}
                     />
                 )}
             </div>
             {chest.queued > 0 && (
-                <div className="ui-subtle ui-chest-queued">
-                    {chest.queued} more {chest.queued === 1 ? "casket" : "caskets"} to open
-                </div>
+                <div className="ui-subtle ui-chest-queued">{tp("chest.queued", chest.queued)}</div>
             )}
         </div>
     );

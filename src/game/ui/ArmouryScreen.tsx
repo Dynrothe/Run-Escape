@@ -9,6 +9,7 @@ import { describeSetProgress, getItemSet } from "../content/sets";
 import { compareStats, formatStats } from "../content/stats";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
 import { SaveData, getArmouryStep } from "../core/save";
+import { fmtNum, t, tl } from "../i18n";
 import "./ArmouryScreen.css";
 import { Coins } from "./Coins";
 import { ItemIcon } from "./ItemIcon";
@@ -27,16 +28,13 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-armoury">
-                <h2>Armoury</h2>
-                <p className="ui-subtle">
-                    Gear found in caskets, upgraded here for good: from then on it comes out of
-                    every casket as what it&apos;s become.
-                </p>
+                <h2>{t("armoury.title")}</h2>
+                <p className="ui-subtle">{t("armoury.intro")}</p>
                 <div className="ui-armoury-body">
                     <div className="ui-armoury-slots">
                         {GEAR_SLOTS.map((slot) => (
                             <div key={slot.id} className="ui-armoury-slot">
-                                <div className="ui-armoury-slot-name">{slot.name}</div>
+                                <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
                                 <div className="ui-armoury-pieces">
                                     {CASKET_GEAR.filter((g) => g.slot === slot.id).map((g) => (
                                         <ArmouryTile
@@ -55,10 +53,13 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
                 </div>
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
-                        Back
+                        {t("canvas.back")}
                     </button>
                     <span className="ui-armoury-count">
-                        Found {save.foundGear.length} / {CASKET_GEAR.length}
+                        {t("armoury.found", {
+                            n: fmtNum(save.foundGear.length),
+                            total: fmtNum(CASKET_GEAR.length),
+                        })}
                     </span>
                     <Coins amount={save.coins} />
                 </div>
@@ -91,7 +92,7 @@ function ArmouryTile({
                 (found ? "" : " ui-card-locked")
             }
             style={found ? { borderColor: RARITIES[piece.rarity].color } : undefined}
-            title={found ? piece.name : `${piece.name} (not found yet)`}
+            title={found ? tl(piece.name) : t("armoury.not_found_title", { name: tl(piece.name) })}
             aria-pressed={selected}
             onClick={onSelect}
         >
@@ -134,23 +135,23 @@ function ArmouryDetails({
         action = (
             <div className="ui-card-cost">
                 {lockedBy
-                    ? `${describeUnlockTask(lockedBy)} to find it in caskets.`
-                    : "Not found yet: find it in a casket to upgrade it."}
+                    ? t("armoury.unlock_to_find", { task: describeUnlockTask(lockedBy) })
+                    : t("armoury.not_found")}
             </div>
         );
     } else if (!step || !next) {
         action = (
             <div className="ui-card-style">
-                {line.length > 1 ? "Fully upgraded." : "There's nothing to upgrade it into."}
+                {line.length > 1 ? t("armoury.fully_upgraded") : t("armoury.no_upgrade")}
             </div>
         );
     } else {
         action = (
             <div className="ui-armoury-next">
                 <div className="ui-armoury-into">
-                    Upgrade into
+                    {t("armoury.upgrade_into")}
                     <ItemIcon objId={next.objId} size={22} />
-                    <span style={{ color: RARITIES[next.rarity].color }}>{next.name}</span>
+                    <span style={{ color: RARITIES[next.rarity].color }}>{tl(next.name)}</span>
                 </div>
                 {/* Its stats once upgraded, with what they are now */}
                 <ul className="ui-armoury-changes">
@@ -175,7 +176,9 @@ function ArmouryDetails({
                     ))}
                 </ul>
                 {step.locked ? (
-                    <div className="ui-card-cost">{describeUnlockTask(step.locked)} to unlock</div>
+                    <div className="ui-card-cost">
+                        {t("armoury.to_unlock", { task: describeUnlockTask(step.locked) })}
+                    </div>
                 ) : (
                     <button
                         className="ui-button ui-button-go ui-armoury-buy"
@@ -183,7 +186,7 @@ function ArmouryDetails({
                         disabled={save.coins < step.cost}
                         onClick={() => client.upgradeGear(itemId)}
                     >
-                        Upgrade <Coins amount={step.cost} />
+                        {t("armoury.upgrade")} <Coins amount={step.cost} />
                     </button>
                 )}
             </div>
@@ -195,10 +198,13 @@ function ArmouryDetails({
                 <ItemIcon objId={piece.objId} size={36} />
                 <div>
                     <div className="ui-card-title" style={{ color: RARITIES[piece.rarity].color }}>
-                        {piece.name}
+                        {tl(piece.name)}
                     </div>
                     <div className="ui-card-style">
-                        {RARITIES[piece.rarity].name} · {GEAR_SLOT_BY_ID.get(piece.slot)!.name} slot
+                        {t("armoury.style", {
+                            rarity: tl(RARITIES[piece.rarity].name),
+                            slot: tl(GEAR_SLOT_BY_ID.get(piece.slot)!.name),
+                        })}
                     </div>
                 </div>
             </div>
@@ -221,7 +227,7 @@ function ArmouryDetails({
                                         (found && i <= upgrades ? " ui-armoury-step-done" : "") +
                                         (found && i === upgrades ? " ui-armoury-step-now" : "")
                                     }
-                                    title={form.name}
+                                    title={tl(form.name)}
                                 >
                                     <ItemIcon objId={form.objId} size={28} />
                                 </span>

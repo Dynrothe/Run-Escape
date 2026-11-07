@@ -1,4 +1,5 @@
 import { MAP_BY_ID } from "../../content/maps";
+import { t, tl } from "../../i18n";
 import { GameStore } from "../GameStore";
 import {
     ClientMessage,
@@ -146,12 +147,14 @@ export function parseRoomCode(text: string): string {
 // What's missing for a room's map, by the map's name
 export function describeMissing(need: MissingMap): string {
     const map = MAP_BY_ID.get(need.mapId);
-    const what =
-        `${map?.name ?? need.mapId}` +
-        `${need.hard ? " hard" : ""}${need.endless ? " endless" : ""}`;
+    const what = t("coop.missing_map", {
+        map: map ? tl(map.name) : need.mapId,
+        hard: need.hard ? t("coop.hard_suffix") : "",
+        endless: need.endless ? t("coop.endless_suffix") : "",
+    });
     return need.who
-        ? `${need.who} hasn't got ${what} unlocked.`
-        : `You need ${what} unlocked to join this room.`;
+        ? t("coop.player_missing_unlock", { name: need.who, what })
+        : t("coop.you_missing_unlock", { what });
 }
 
 // The connection to the co-op relay, and the room this player is in. What
@@ -246,7 +249,7 @@ export class CoopLobby {
             try {
                 socket = new WebSocket(getRelayUrl());
             } catch (e) {
-                this.update({ status: "offline", error: "Couldn't reach the co-op server." });
+                this.update({ status: "offline", error: t("coop.couldnt_reach_server") });
                 resolve();
                 return;
             }
@@ -285,9 +288,7 @@ export class CoopLobby {
                     name: "",
                     rooms: [],
                     roomsPage: 0,
-                    error: wasOnline
-                        ? "Lost the connection to the co-op server."
-                        : "Couldn't reach the co-op server.",
+                    error: wasOnline ? t("coop.lost_server") : t("coop.couldnt_reach_server"),
                 });
                 this.onClosed?.();
                 resolve();
@@ -346,7 +347,7 @@ export class CoopLobby {
         try {
             socket = new WebSocket(getRoomUrl(code, ticket));
         } catch {
-            this.update({ error: "Couldn't reach that room." });
+            this.update({ error: t("coop.couldnt_reach_room") });
             this.outOfRoom();
             return;
         }
@@ -378,7 +379,7 @@ export class CoopLobby {
         socket.onclose = () => {
             if (socket === this.enteringSocket) {
                 this.enteringSocket = undefined;
-                this.update({ error: "Couldn't reach that room." });
+                this.update({ error: t("coop.couldnt_reach_room") });
                 this.outOfRoom();
             }
         };
@@ -410,7 +411,7 @@ export class CoopLobby {
             } else if (this.resume) {
                 this.startResuming();
             } else {
-                this.roomLost("Lost the connection to the room.");
+                this.roomLost(t("coop.lost_room"));
             }
         };
     }
@@ -428,7 +429,7 @@ export class CoopLobby {
             return;
         }
         if (Date.now() - resuming.since > RESUME_WINDOW_MS) {
-            this.roomLost("Lost the connection to the room.");
+            this.roomLost(t("coop.lost_room"));
             return;
         }
         const delay = RESUME_DELAYS_MS[Math.min(resuming.tries, RESUME_DELAYS_MS.length - 1)];
@@ -587,7 +588,10 @@ export class CoopLobby {
                 break;
             case "gone":
                 this.resume = undefined;
-                this.update({ room: undefined, error: GONE_TEXT[message.reason] || undefined });
+                this.update({
+                    room: undefined,
+                    error: GONE_TEXT[message.reason] ? tl(GONE_TEXT[message.reason]) : undefined,
+                });
                 // A room on its own connection closes it next, which asks
                 // (outOfRoom)
                 if (!this.roomSocket) {
@@ -647,7 +651,7 @@ export class CoopLobby {
             this.activeAt = now;
         } else if (now - this.activeAt > LOBBY_IDLE_MS) {
             this.close();
-            this.update({ error: IDLE_TEXT });
+            this.update({ error: tl(IDLE_TEXT) });
             return;
         }
         this.send({ t: "ping" });
