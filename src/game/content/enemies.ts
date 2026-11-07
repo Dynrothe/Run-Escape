@@ -5,6 +5,7 @@ import { PHOSANI_ENEMIES } from "./phosani";
 import { STRANGLEWOOD_ENEMIES } from "./stranglewood";
 import { getTheatreBosses } from "./theatre";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
+import { YAMA_ENEMIES } from "./yama";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -8356,6 +8357,8 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    // Yama, in burnt Varrock's palace (yama.ts)
+    ...YAMA_ENEMIES,
     ...STRANGLEWOOD_ENEMIES,
 ];
 

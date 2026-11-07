@@ -154,6 +154,88 @@ describe("its patterns", () => {
         // A tile of the west half never came up
         expect(floor.isHurting(RECT.x0, y, at + 5)).toBe(false);
     });
+
+    test("lanes come up through the player every so many tiles, and between them stays down", () => {
+        const { floor, run, setPlayer } = makeFloor(
+            floorWith({
+                kind: "lanes",
+                axis: "y",
+                at: "player",
+                spacing: 5,
+                width: 2,
+                tileSeconds: 0.1,
+            }),
+        );
+        setPlayer(RECT.x0 + 8.5, RECT.y0 + 9.5);
+        run(T);
+        const rises = riseTicks(floor);
+        const top = SIZE_Y - 1;
+        // Two wide, one through the player (columns 7 and 8), then every 5
+        for (const x of [2, 3, 7, 8, 12, 13, 17, 18, 22]) {
+            expect(rises.has(`${x},9`)).toBe(true);
+        }
+        for (const x of [4, 5, 6, 9, 10, 11, 14, 15, 16]) {
+            expect(rises.has(`${x},9`)).toBe(false);
+        }
+        // Down from the north end, a tile at a time
+        expect(rises.get(`8,${top}`)).toBe(2 * T);
+        expect(rises.get(`8,${top - 1}`)).toBe(2 * T + 0.1 * T);
+        expect(rises.get("8,0")).toBe(2 * T + top * 0.1 * T);
+    });
+
+    test("crossed lanes come up across the floor too, out from its middle", () => {
+        const { floor, run, setPlayer } = makeFloor(
+            floorWith({
+                kind: "lanes",
+                axis: "both",
+                at: "player",
+                spacing: 5,
+                width: 2,
+                tileSeconds: 0.1,
+            }),
+        );
+        setPlayer(RECT.x0 + 8.5, RECT.y0 + 9.5);
+        run(T);
+        const rises = riseTicks(floor);
+        // Rows 8 and 9 across, from the middle column out; what's on neither stays down
+        expect(rises.get(`${MIDDLE_X},9`)).toBe(2 * T);
+        expect(rises.get(`${MIDDLE_X + 3},9`)).toBe(2 * T + 3 * 0.1 * T);
+        expect(rises.get(`${MIDDLE_X - 2},8`)).toBe(2 * T + 2 * 0.1 * T);
+        // Where they cross, the lane down the floor's timing
+        expect(rises.get("8,8")).toBe(2 * T + (SIZE_Y - 1 - 8) * 0.1 * T);
+        expect(rises.has("10,11")).toBe(false);
+        expect(rises.has("5,5")).toBe(false);
+    });
+
+    test("an action put off keeps who it was aimed at, not whoever the floor's after now", () => {
+        const { floor, run, setPlayer } = makeFloor({
+            ...createWardensFloor(RECT),
+            script: [],
+            loopSeconds: 1000,
+        });
+        setPlayer(RECT.x0 + 3.5, RECT.y0 + 3.5);
+        const boss = { x: RECT.x0 + 15.5, y: RECT.y0 + 15.5 };
+        floor.act(
+            {
+                kind: "pattern",
+                pattern: {
+                    kind: "ripple",
+                    at: "player",
+                    ringSeconds: 0.2,
+                    radius: 2,
+                    spokes: "cross",
+                },
+                delay: 0.5,
+            },
+            0,
+            () => boss,
+        );
+        run(T);
+        const rises = riseTicks(floor);
+        // Its ripple's under the boss it was aimed at, from half a second on
+        expect(rises.get("15,15")).toBe(0.5 * T + T);
+        expect(rises.has("3,3")).toBe(false);
+    });
 });
 
 // The tiles marked from a pattern's start (ArenaFloor.cueAt), as the client shows them

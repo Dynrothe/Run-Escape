@@ -44,7 +44,8 @@ go stale. Add anything that cost you time to work out.
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | The Battle for Varrock: burnt Varrock, to explore      | `content/fun/maps.ts`, `scaperune/maps/battleForVarrock.ts`            |
 | A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `fun/varrockOpening.ts`     |
-| Yama's fight in burnt Varrock: the plan (not built)    | `docs/design/yama.md`                                                  |
+| Yama's fight in burnt Varrock, and its design          | `content/yama.ts`, `docs/design/yama.md`                               |
+| A boss asleep on a map to walk round (`MapDef.lair`)   | `Sim.stepLair`, `docs/DEVELOPMENT.md` (A hero of their own)            |
 | Burning a real place to ruins (any town)               | `src/game/scaperune/ruins.ts`, `rs/config/loctype/LocOverrides.ts`     |
 | Zachariah as the player: his model and his buttons     | `src/game/content/justiciarKit.ts`, `Sim.useKitAbility`                |
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |

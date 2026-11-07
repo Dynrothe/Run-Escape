@@ -19,7 +19,7 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
-import { ENEMIES } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { getHeroNpcSeqs } from "../content/justiciarKit";
@@ -270,6 +270,13 @@ export function getSpotAnimIds(): number[] {
             add(...(attack.impactSpotAnims ?? []));
             addImpact(attack.impact);
         }
+        // A meteor falling and its shadow, and what's left of it when it's stopped; what a boss
+        // raises against a gaze throws up (BossDef.gazeWard)
+        for (const attack of enemy.boss?.attacks ?? []) {
+            add(attack.meteor?.spotAnim, attack.meteor?.shadowSpotAnim);
+            addImpact(attack.interruptedBy?.broken);
+        }
+        addImpact(enemy.boss?.gazeWard?.impact);
         const guard = enemy.boss?.guard;
         add(guard?.stunSpotAnim);
         addImpact(guard?.stuck);
@@ -446,6 +453,12 @@ export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): strin
 // An NPC posed on a map (MapDef.props)
 export function getPropKey(npcId: number): string {
     return "prop:" + npcId;
+}
+
+// A lair's seal (MapDef.lair), burning: its own key, as the same loc may be baked still elsewhere
+// (a boss's pool)
+export function getLairSealKey(locId: number): string {
+    return "lairSeal:" + locId;
 }
 
 // A hero drawn as an NPC (CharacterDef.npcLook)
@@ -958,6 +971,10 @@ export class GameAssets {
         };
         for (const prop of maps.flatMap((map) => map.props ?? [])) {
             add(prop.npcId, [prop.seq]);
+            // and what it's drawn as once its lair's woken (MapPropDef.awake)
+            if (prop.awake) {
+                add(prop.awake.npcId, [prop.awake.seq]);
+            }
         }
         // and the cast of its opening cinematic (MapDef.cinematic), with everything they play
         for (const map of maps) {
@@ -967,16 +984,30 @@ export class GameAssets {
                 }
             }
         }
-        return [...seqs].map(([npcId, seqIds]) => ({
+        const requests: BakeRequest[] = [...seqs].map(([npcId, seqIds]) => ({
             kind: "npc",
             key: getPropKey(npcId),
             npcId,
             seqIds,
         }));
+        // A lair's seal, burning (MapDef.lair), and the pillars its boss raises against a gaze
+        // (BossDef.gazeWard)
+        for (const map of maps) {
+            const lair = map.lair;
+            if (lair) {
+                const locId = lair.seal.locId;
+                requests.push({ kind: "loc", key: getLairSealKey(locId), locId, animated: true });
+                const ward = getEnemy(lair.enemyId).boss?.gazeWard;
+                if (ward) {
+                    requests.push({ kind: "loc", key: "loc:" + ward.locId, locId: ward.locId });
+                }
+            }
+        }
+        return requests;
     }
 
     loadProps(map: MapDef): Promise<void> {
-        if (!map.props?.length && !map.cinematic) {
+        if (!map.props?.length && !map.cinematic && !map.lair) {
             return Promise.resolve();
         }
         let baking = this.propBakes.get(map.id);

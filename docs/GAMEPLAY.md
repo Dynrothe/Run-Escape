@@ -222,7 +222,19 @@ version and how to run it.
   death; then the camera flies south over the city to Zachariah and the run begins. Any key,
   click, tap or controller button skips it, and it plays each time the map's travelled to.
   Zachariah starts facing into the city. Its music is Sign Here, Yama's own fight track.
-  For now there's nothing to fight: no waves, no bosses, no random events and nothing hurts.
+  There are no waves, no other bosses and no random events, and nothing hurts until you step onto
+  the palace floor. Then Yama wakes: he rises before his throne, every way off the floor bursts
+  into fire, and you fight him there until he's dead (5,400 hitpoints, in three phases). The floor
+  is his weapon. His stomp ripples rings of slabs out from him, with spokes left down to stand
+  on, and his shadow lanes raise lanes of the floor through where you stand, crossing from his
+  second phase. Close in he claws: step out of it or round him, and a claw that misses leaves his
+  guard down. At range he throws fiery skulls that leave the floor burning. The Owl's gaze can't
+  touch him: he raises four stone pillars against it. From 85% of his hitpoints, at every phase
+  change and every 35 seconds or so (28 in his last phase), he calls down a meteor that kills you
+  wherever you stand. The only answer is the gaze cast at him as he calls it, which breaks it in
+  the sky and leaves him open. He never starts one while your gaze is too far from ready. Killing
+  him puts the fires out and leaves the city to walk round again; dying offers Retry, straight
+  back onto his floor.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any

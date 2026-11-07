@@ -43,7 +43,7 @@ describe("the Battle for Varrock", () => {
         expect(MAP.scaperune).toBe(true);
     });
 
-    it("lays the palace's floor over its rooms, in one piece, solid, in a phone's budget", () => {
+    it("lays the palace's floor over its rooms, in one piece, still, in a phone's budget", () => {
         const floor = MAP.floor!;
         const { x0, y0, x1, y1 } = PALACE_FLOOR_RECT_REAL;
         expect(PALACE_FLOOR_ASCII).toHaveLength(y1 - y0 + 1);
@@ -51,8 +51,9 @@ describe("the Battle for Varrock", () => {
             expect(row).toHaveLength(x1 - x0 + 1);
         }
         expect(floor.rect).toEqual(BATTLE_FOR_VARROCK.palaceFloor);
+        // Slabs that rise only under Yama's attacks: nothing on its own clock
         expect(floor.script).toEqual([]);
-        expect(floor.tiles?.[0]).toMatchObject({ type: "solid" });
+        expect(floor.tiles?.[0]).not.toHaveProperty("type");
         // From the top of the palace's front steps
         const lint = lintFloor(floor, { x: 12, y: 0 });
         expect(lint.warnings).toEqual([]);

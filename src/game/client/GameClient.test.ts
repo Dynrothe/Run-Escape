@@ -1717,6 +1717,7 @@ describe("the opening cinematic", () => {
             startRun,
         });
         client.retry();
-        expect(startRun).toHaveBeenCalledWith("zachariah", false);
+        // and starts at its lair, if it has one (MapDef.lair)
+        expect(startRun).toHaveBeenCalledWith("zachariah", false, true);
     });
 });

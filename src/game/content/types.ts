@@ -581,8 +581,10 @@ export type BossAttackDef = {
     // Seconds the boss stands winding up (and animating) before it lands
     windup: number;
     // What it does to the map's floor (MapDef.floor) as it starts, aimed at the player it's after
-    // (Sim.floorAct): drop the tile under them, start a pattern, change phase
+    // (Sim.floorAct): drop the tile under them, start a pattern, change phase. floorAt "boss":
+    // aimed at the boss instead (a ripple out from its stomp)
     floor?: FloorActionDef;
+    floorAt?: "boss";
     // What it does with the map's rule (MapDef.rule), as it lands: heart, a root heart where the
     // boss lands, the first time it's used; lane, roots laid along the way a surge or lunge went,
     // radius tiles either side of it. Nothing on a map without a rule.
@@ -747,6 +749,22 @@ export type BossAttackDef = {
     // Its spotAnim turned this much more (RS yaw units) than the way it's going: a model that
     // faces back along its way (his shock wave's)
     spotYaw?: number;
+    // Swings: something falling out of the sky onto where the player stood as it began, over its
+    // windup, from height tiles up, with shadowSpotAnim growing under it (Yama's meteor). It's
+    // drawn, not a mark on the ground: the swing's radius is what it hits. dark: the scene's
+    // light while it falls, on a map with lighting.
+    meteor?: { spotAnim: number; shadowSpotAnim?: number; height: number; dark?: number };
+    // Stopped by a hero's own button (HeroAbilityDef, by id) landing on the boss while it winds
+    // this up (the Owl's gaze stopping Yama's meteor): it's lost, broken shows where it would have
+    // landed (where it is, if it isn't a meteor), and the boss is stunned for stun seconds and
+    // its guard's down for open (BossDef.guard), saying shout
+    interruptedBy?: {
+        ability: string;
+        open: number;
+        stun: number;
+        broken?: ImpactDef;
+        shout?: string;
+    };
     // Projectiles: thrown from count of the map's knight statues (ArenaFeatures.knights),
     // picked at random as it begins, at where the player was then, not from the boss
     from?: "knights";
@@ -806,7 +824,8 @@ export type FightAbilityDef = {
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
-export type ImpactSpotDef = { spotAnim: number; fit?: number };
+// height: tiles up off the ground (a meteor broken in the sky)
+export type ImpactSpotDef = { spotAnim: number; fit?: number; height?: number };
 
 // What a hit throws up, for show: spots where it lands (each played out once), trail laid
 // along the way it went every TRAIL_GAP tiles and turned along it (a lunge's strip), and the
@@ -1109,6 +1128,29 @@ export type BossDef = {
     look?: BossLookDef;
     // Its guard drops after a miss, and its arena can stun it (BossGuardDef)
     guard?: BossGuardDef;
+    // Keeps within this many tiles of where it first stood, going after the player only along
+    // there (Yama by his throne): what reaches them is what it sends across the floor
+    home?: number;
+    // An attack (by name) on a clock of its own (Yama's meteor): first once its hitpoints are
+    // down to from of them, then every so many seconds after the last (every, a number for each
+    // of its phases, BossDef.phases). It's put off while no player up could interrupt it
+    // (BossAttackDef.interruptedBy) within ready seconds: their button's charging for longer.
+    critical?: { attack: string; from: number; every: number[]; ready: number };
+    // A hero's gaze (HeroAbilityDef kind "gaze") does nothing to it unless it stops what it can
+    // interrupt (BossAttackDef.interruptedBy), and then hits it. Cast at it otherwise, from within
+    // reach tiles, count pillars (locId, rising over rise seconds) come up out of the floor
+    // between it and whoever cast it, distance tiles out from its middle, real occluders that hide
+    // it, and sink after seconds. It says one of shouts.
+    gazeWard?: {
+        reach: number;
+        count: number;
+        distance: number;
+        seconds: number;
+        rise: number;
+        locId: number;
+        shouts: string[];
+        impact?: ImpactDef;
+    };
 };
 
 // The shared fight screen's colours (CSS), for a boss that isn't to look like the
@@ -1668,6 +1710,8 @@ export type MapDef = {
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
+    // A boss asleep in its lair, woken by stepping onto the map's floor (LairDef)
+    lair?: LairDef;
 };
 
 // A rule a map is played by (MapDef.rule), which core/rules runs each tick. A rule only reads the
@@ -1775,6 +1819,32 @@ export type MapPropDef = {
     y: number;
     yaw?: number;
     scale?: number;
+    // The map's lair's boss, asleep (MapDef.lair): from its fight's start drawn as this instead
+    // (his throne, empty), as he's up and fighting
+    awake?: { npcId: number; seq: number };
+};
+
+// A boss asleep in its lair on a map to walk round (the Battle for Varrock's Yama, on his throne
+// in the palace). Its fight starts when a player steps onto the map's floor (MapDef.floor, which
+// a lair needs): the boss's intro plays (BossIntroDef, rising at at with the players brought
+// distance south of it), and every way off the floor is sealed with fire until it's dead. Hits
+// land on a map to walk round only while it's on (FunMapDef.explore). Beaten, the seal lifts and
+// the map's free to walk round again; a death there can be retried from start, without the map's
+// opening cinematic.
+export type LairDef = {
+    enemyId: string;
+    hp: number;
+    // Where it rises (its middle), and where a retry starts the player, in world tiles: start is
+    // on the floor, so the fight's on again at once
+    at: { x: number; y: number };
+    start: { x: number; y: number };
+    // What seals each way out: a loc playing its own animation (fire), on every tile it seals,
+    // drawn this much bigger; sound as it's sealed and lifted
+    seal: { locId: number; scale: number; sound?: number };
+    // On screen as it's sealed, and once the boss is beaten; and what it says as it falls
+    message: string;
+    victory: string;
+    shout?: string;
 };
 
 // A map's opening cinematic (MapDef.cinematic), played as a run starts on the map (not on a
@@ -1873,6 +1943,11 @@ export type FloorDef = {
     // "." and " " are no floor, any other character is, and tiles rules can pick tiles out by
     // their character (FloorWhereDef "chars"). With shape too, the floor's where both say.
     ascii?: string[];
+    // Laid a whisker over the map's own ground, not over a pit (the Battle for Varrock's
+    // palace): nothing under it can show, so no light's drawn under its tiles and no cut edge
+    // beside what isn't floor, and a tile's its top alone (its sides are a whisker) but while
+    // it's coming up. Nothing on it should fall.
+    onGround?: boolean;
     // What its tiles look like (FloorSkinDef); tiles rules pick them by index. When unset, one:
     // the slam's own slab, rising with its animation.
     skins?: FloorSkinDef[];
@@ -2030,7 +2105,7 @@ export type FloorMaterialFxDef = { spotAnim?: number; sound?: number; scale?: nu
 // a tile (the player's, or the middle), with spokes along which nothing rises (a cross, or the
 // diagonals), the tile itself first. dropRows: rows from the back fall away, one after another.
 // holes: single tiles fall away at random, never next to another hole or the floor's edge.
-// restore: everything that's fallen comes back up, front first.
+// restore: everything that's fallen comes back up, front first. lanes: below.
 // How a pattern shows the tiles it'll hit from the moment it starts, so where's safe can be read
 // before the wave gets there (client/FloorView.ts). Either way each tile's last second before it
 // rises or falls is a strong warning: the tremor and the light through its seams.
@@ -2164,6 +2239,18 @@ export type FloorPatternDef = (
     | { kind: "dropRows"; rows: number; rowSeconds: number }
     | { kind: "holes"; count: number }
     | { kind: "restore"; rowSeconds: number }
+    // Lanes width tiles wide, every spacing tiles, one through the player (or the middle): down
+    // the floor north to south (axis "y"), across it (axis "x"), or both, crossing. A lane down
+    // it rises from its north end, a tile every tileSeconds; one across it from the middle out.
+    // Between two lanes is safe (Yama's shadow lanes).
+    | {
+          kind: "lanes";
+          axis: "x" | "y" | "both";
+          at: "player" | "middle";
+          spacing: number;
+          width: number;
+          tileSeconds: number;
+      }
 ) & {
     // Its own cue (FloorCue), over the floor's
     cue?: FloorCue;
@@ -2246,7 +2333,8 @@ export type FunMapDef = {
     // and every[1])
     playerChat?: { lines: string[]; every: [number, number] };
     // A map to walk round and nothing more: no waves (the map's are empty), no bosses (an empty
-    // pool), no random events, and nothing hurts (the Battle for Varrock)
+    // pool), no random events, and nothing hurts (the Battle for Varrock), but while its lair's
+    // boss is fought (MapDef.lair)
     explore?: boolean;
 };
 

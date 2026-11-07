@@ -13,6 +13,7 @@ import { FLOOR_SKINS } from "../floorSkins";
 import { MapDef, RunEventDef } from "../types";
 import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
+import { YAMA_HITPOINTS } from "../yama";
 import { VARROCK_OPENING } from "./varrockOpening";
 
 // The fun maps: open from the start, endless from the start, and full of other
@@ -767,7 +768,7 @@ export const FUN_MAPS: MapDef[] = [
             "Varrock after the battle, every street and house of it burnt to ruins, fires still " +
             "burning and the dead where they fell. Walk it as Justiciar Zachariah, his lunge, " +
             "shock wave, ice, lightning and gaze on your buttons, up to Yama on his throne in " +
-            "the palace. Nothing to fight yet: a map to explore.",
+            "the palace. A map to explore, until you step onto his floor.",
         // Varrock teleport
         iconObjId: 8007,
         // Varrock and the country round it, inside its margin (scaperune/maps/battleForVarrock.ts)
@@ -789,35 +790,49 @@ export const FUN_MAPS: MapDef[] = [
             explore: true,
         },
         // The palace's floor is gone: the game lays its own from the top of its front steps,
-        // ash-grey paving gone to soot with cinders and smouldering tiles among it, all solid
-        // (nothing rises or falls)
+        // ash-grey paving gone to soot with cinders and smouldering tiles among it. Nothing moves
+        // it but Yama, once he's woken (his attacks' patterns, content/yama.ts).
         floor: {
             ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor),
+            // A slab that catches the Justiciar takes 6 of his 38 hitpoints
+            slam: { ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor).slam, damage: 0.15 },
             ascii: PALACE_FLOOR_ASCII,
+            // A whisker over the palace's own ground: its tiles are drawn as their tops, or a
+            // phone couldn't draw his patterns on it
+            onGround: true,
             skins: [
                 FLOOR_SKINS.ashenFlagstones,
                 FLOOR_SKINS.charredFlagstones,
                 FLOOR_SKINS.smouldering,
             ],
-            tiles: [
-                { type: "solid", turn: "random" },
-                { share: 0.3, skin: 1 },
-                { share: 0.03, skin: 2 },
-            ],
+            tiles: [{ turn: "random" }, { share: 0.3, skin: 1 }, { share: 0.03, skin: 2 }],
             seed: 3482,
             script: [],
             loopSeconds: 60,
         },
         // Yama on his throne at the north end of the palace, facing down it: npc 15645 sitting
-        // (12153), small
+        // (12153), small. Once he's woken, his throne alone (14157).
         props: [
             {
                 npcId: 15645,
                 seq: 12153,
                 ...BATTLE_FOR_VARROCK.yama,
                 scale: YAMA_SCALE,
+                awake: { npcId: 14157, seq: 12153 },
             },
         ],
+        // Stepping onto the palace floor wakes him: he rises before his throne, and every way
+        // off the floor burns until he's dead
+        lair: {
+            enemyId: "yama",
+            hp: YAMA_HITPOINTS,
+            at: BATTLE_FOR_VARROCK.yamaRise,
+            start: BATTLE_FOR_VARROCK.yamaStart,
+            seal: { locId: LOW_FIRE, scale: 1.4, sound: 10271 },
+            message: "Yama wakes! The palace is sealed in fire!",
+            victory: "Yama is beaten. The fires round the palace die down.",
+            shout: "This city... was already... ash...",
+        },
         // Yama's own track, from his fight: the city's his now
         music: "Sign Here",
         // It opens on Yama and the last of the palace guard (fun/varrockOpening.ts)

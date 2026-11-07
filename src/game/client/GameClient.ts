@@ -17,6 +17,7 @@ import {
     MAPS,
     MAP_BY_ID,
     RAID_MAPS,
+    canRetry,
     getArenaRegion,
     getMap,
     getMapCharacter,
@@ -1343,10 +1344,12 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // cinematic: false to start without the map's opening cinematic (a retry)
+    // cinematic: false to start without the map's opening cinematic (a retry). atLair: start at
+    // its lair's start (MapDef.lair), on its floor, so its fight's on again at once (a retry)
     async startRun(
         mapId: string = this.store.getSnapshot().mapId,
         cinematic = true,
+        atLair = false,
     ): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
@@ -1364,14 +1367,15 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         usePortableMath(false);
+        const spawn = (atLair && map.lair?.start) || map.spawn;
         const sim = new Sim({
             grid: this.grid,
             mapId,
             characterId,
             metaStats: getMetaStats(this.save, getCharacter(characterId).style),
             seed: (Math.random() * 0x7fffffff) | 0,
-            spawnX: map.spawn.x,
-            spawnY: map.spawn.y,
+            spawnX: spawn.x,
+            spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
             endless,
             hard,
@@ -1868,15 +1872,15 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
-    // The same boss fight again, from its results (MapDef.fight), on your own
+    // The same boss fight again, from its results (MapDef.fight, or a lair's), on your own
     retry(): void {
         const mapId = this.sim?.map.id;
-        if (!mapId || this.coopRun || !getMap(mapId).fight) {
+        if (!mapId || this.coopRun || !canRetry(getMap(mapId))) {
             return;
         }
         this.leaveRun();
         // The fight again at once, without the map's cinematic
-        void this.startRun(mapId, false);
+        void this.startRun(mapId, false, true);
     }
 
     leaveRun(show = true): void {
@@ -2454,7 +2458,7 @@ export class GameClient implements GameFrameHandler {
     private getIntroPan(sim: Sim, px: number, py: number, alpha: number): { x: number; y: number } {
         const intro = sim.intro;
         const pan = intro?.def.boss?.intro?.pan;
-        const rise = sim.map.features?.rise;
+        const rise = sim.riseSpot;
         if (!intro || !pan) {
             return { x: 0, y: 0 };
         }

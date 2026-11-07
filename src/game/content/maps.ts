@@ -550,6 +550,12 @@ export function isFightMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fight !== undefined;
 }
 
+// Whether a death on the map can be retried straight away, on your own: one boss fight
+// (MapDef.fight), or its lair's (MapDef.lair), from its floor
+export function canRetry(map: MapDef): boolean {
+    return map.fight !== undefined || map.lair !== undefined;
+}
+
 // The adventurer everyone plays on a map, if it has one (Durial321 in
 // Falador, the Inquisitor against Phosani's Nightmare)
 export function getMapCharacter(map: MapDef): string | undefined {

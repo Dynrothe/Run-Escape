@@ -192,10 +192,19 @@ export function lintFloor(def: FloorDef, start: { x: number; y: number }): Floor
             neighbours(i, sizeX, sizeY).every(
                 (k) => layout.mask[k] && layout.height[k] === layout.height[i],
             );
-        rest += (inner ? top : whole) + underWhole;
+        // Over the ground (FloorDef.onGround) a plain tile's its top but while it's coming up,
+        // which the busy allowance covers
+        const lidded =
+            def.onGround === true &&
+            layout.slabX[i] === 1 &&
+            layout.slabY[i] === 1 &&
+            skin.light === undefined &&
+            !under &&
+            layout.trigger[i] < 0;
+        rest += (inner || lidded ? top : whole) + underWhole;
         // A tile that never moves stays as it is at rest
         const moves = MOVING.has(layout.type[i]);
-        busy += (moves || !inner ? whole : top) + underWhole;
+        busy += ((moves || !inner) && !lidded ? whole : top) + underWhole;
         // A raised tile's sides
         if (layout.height[i] > 0.01) {
             const steps = Math.ceil(layout.height[i] / 0.13);

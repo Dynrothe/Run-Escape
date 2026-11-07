@@ -94,6 +94,10 @@ const YAMA = toGrid(3211, 3494);
 const YAMA_SIZE = { x: 5, y: 3 };
 // His npc is 7 tiles across; at 0.6 he's about 4
 export const YAMA_SCALE = 0.6;
+// Woken, he rises before his throne (content/yama.ts, MapDef.lair), and the fight starts the
+// player this far south of him, by the floor's middle
+const YAMA_RISE = { x: YAMA.x + 2, y: YAMA.y - 4 };
+const YAMA_START = { x: YAMA_RISE.x, y: YAMA_RISE.y - 9 };
 
 // What the conversion leaves standing, by name: the square's fountain, the churches' altars and
 // the like are what make it Varrock (the market's stalls burnt: burnFabric)
@@ -338,6 +342,8 @@ const POINTS: MapPoint[] = [
     { name: "Varrock Square", ...SQUARE },
     { name: "the palace's court", ...PALACE_COURT },
     { name: "before Yama's throne", x: YAMA.x + 1, y: YAMA.y - 3 },
+    { name: "where Yama rises", ...YAMA_RISE },
+    { name: "where his fight starts", ...YAMA_START },
 ];
 
 const DECKS_BLOCKED = [
@@ -806,5 +812,14 @@ export const BATTLE_FOR_VARROCK = {
     yama: {
         x: MAP_X * MAP_SQUARE_SIZE + YAMA.x + YAMA_SIZE.x / 2,
         y: MAP_Y * MAP_SQUARE_SIZE + YAMA.y + YAMA_SIZE.y / 2,
+    },
+    // Where he rises once he's woken, and where the player starts his fight (a tile's middle)
+    yamaRise: {
+        x: MAP_X * MAP_SQUARE_SIZE + YAMA_RISE.x + 0.5,
+        y: MAP_Y * MAP_SQUARE_SIZE + YAMA_RISE.y + 0.5,
+    },
+    yamaStart: {
+        x: MAP_X * MAP_SQUARE_SIZE + YAMA_START.x + 0.5,
+        y: MAP_Y * MAP_SQUARE_SIZE + YAMA_START.y + 0.5,
     },
 };

@@ -1,9 +1,10 @@
 # Yama in burnt Varrock: the fight's plan
 
-A plan, written 2026-11-07 for the Battle for Varrock (PR #167), before anything is built. Dynny
+A plan, written 2026-11-07 for the Battle for Varrock (PR #167), before anything was built. Dynny
 asked for it on 2026-11-06. The fixed points in section 1 are his; the rest of the attacks and all
-the numbers are proposals, to tune by playtest. When it's built, the data is the truth and this
-records the why. The lessons from Zachariah's playtests (`justiciar-zachariah.md`, section 1) are
+the numbers are proposals, to tune by playtest. The first build is in (section 9, which says what
+changed from this plan and what's still to come): the data (`content/yama.ts`) is the truth, and
+this records the why. The lessons from Zachariah's playtests (`justiciar-zachariah.md`, section 1) are
 the bar: the player acts and doesn't only dodge, an attack about every 1.5 s, lots of effects,
 hitboxes exactly as drawn, nothing painted on the floor as an arrow, and phone under 69k.
 
@@ -142,3 +143,47 @@ Their real shadows cover him, so the gaze does nothing to him. The pillars stay 
   free" ending?
 - **Losing.** Retry goes straight back into the arena (sealed, no cinematic). Should a death send
   you back to the south gate instead?
+
+## 9. What's built (2026-11-07)
+
+**In.** The lair (`MapDef.lair`): stepping onto the palace floor wakes him, the seal is found by
+code (every floor tile beside a way off it), Retry starts on his floor, and once he's dead the
+fires go out and the map's free roam again with his throne empty (section 8's first two
+questions, answered the simple way for now). The fight's in `content/yama.ts`: Hellstomp,
+Shadow lanes, Hellfire volley, Claw and the Meteor, with the gaze, its pillars and the meteor's
+clock as in section 5. Co-op: either player's gaze stops the meteor for both.
+
+**Changed from the plan, and why:**
+
+| What                      | Planned                      | Built                                       | Why                                                                                                    |
+| ------------------------- | ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Floor damage              | Stomp 8, lanes 10            | 6 for any slab                              | The floor's slab damage is one number for the floor (`MapDef.floor.slam`, a share: 0.15 of 38)         |
+| Hellstomp                 | Every 3rd ring burns         | Rings with the diagonals left down          | Spokes give a way through; from phase 2 quicker rings with the cross left down instead                 |
+| Shadow lanes              | 3–4 lanes                    | Lanes 2 wide every 5, one through you       | The floor's `lanes` pattern; crossed from phase 2, and in phase 3 a volley follows lanes               |
+| Volley                    | 2–3 at 6, burning 2 a second | 2 at 5 (3 in phase 3), burning 1 a second   | Six a hit and two a second took too much of 38 with the floor going too                                |
+| Claw                      | 12, his back open 2 s        | 10, reach 3, 4.5 s cooldown, a miss opens 3 | His guard drops on any claw that misses (`guard`); a 2.5 s cooldown let a claw land inside the opening |
+| Pace                      | 1.5 s, 1.2 s in phase 3      | 1.7 s, then × 0.9 and × 0.8                 | Every attack but the claw is the floor's, which already overlaps                                       |
+| Meteor waits for the gaze | 4 s of cooldown left at most | 2.4 s                                       | At 4 a meteor could start that the gaze's 1.6 s windup, and a moment to turn, couldn't stop in its 4.5 |
+| The meteor's cue          | Its shadow, growing          | Its shadow and a glow where it'll land      | In the dark it calls for, the shadow alone didn't show on the burnt stone                              |
+| The arena cinematic       | A second cinematic           | His boss intro: title, rise, camera pan     | Not built yet (below)                                                                                  |
+
+**Not built yet:** the arena cinematic and his opening line; the Voidflare (and with it the heal,
+the player's only way back up); the Element floor; the Collapse; the burning rings; fire and
+shadow as colours on the floor; and the pillars blocking his volleys and lanes (they hide him
+from the gaze and block the way, as planned, but don't stop his attacks).
+
+**Phone** (740 × 360, landscape, the probe's triangles): at rest 44.7k; at the busiest, Hellstomp
+49.9k, its quick rings 59.1k, Shadow lanes 54.9k, crossed lanes 59.4k, lanes then volley 55.6k,
+and the meteor 61.2k. Drawn as the Wardens' floor is, his patterns on the palace's paving came to
+101k: a moving tile is drawn whole (110 triangles, 38 as its top) and so are the tiles beside it,
+with a glow and a cut edge under them that the ground hides anyway. The palace floor is
+`onGround` now, which draws its tiles as tops unless they're coming up.
+
+**Bot sims** (`MAP=battle_for_varrock`, 6 seeds, `GAZE` as below). The careful bot lasts 51 to
+105 s (71, 105, 51, 54, 52, 89), into phase 2 in four seeds, and never wins: section 7 asked for a
+third at most, and without the Voidflare's heal 38 hitpoints don't last 4 minutes of a bot's
+dodging. Most of what it takes is the floor, then claws and volleys. With `GAZE=never` the first
+meteor kills it in 5 seeds (25 to 41 s); the sixth never got him to 85%. With `GAZE=waste` it lasts
+43 to 89 s, once into phase 3, and no meteor ever kills it: the meteor waits for the gaze to be
+ready, so wasting it costs time between meteors, not a death. Section 7's "dies more" doesn't
+hold, and that's the fairness rule working.

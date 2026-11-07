@@ -29,7 +29,16 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
     // Random events go by their effects: the rest is names and lines of chat
     const randomEvents = RANDOM_EVENTS.map((event) => event.effect);
     collectEnemyIds(
-        [map.waves, map.events, map.fun?.bosses, map.raid, map.rule, pumpkins, randomEvents],
+        [
+            map.waves,
+            map.events,
+            map.fun?.bosses,
+            map.raid,
+            map.rule,
+            map.lair,
+            pumpkins,
+            randomEvents,
+        ],
         ids,
         seen,
     );

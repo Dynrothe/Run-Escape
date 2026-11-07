@@ -42,6 +42,7 @@ import {
     MAP_BY_ID,
     RAID_MAPS,
     SEASONAL_MAPS,
+    canRetry,
     getMap,
     getMapCharacter,
 } from "../content/maps";
@@ -3192,15 +3193,15 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                 )}
                 <div className="ui-row">
-                    {/* A boss fight on your own: straight into it again */}
-                    {!ui.coop.room && getMap(ui.mapId).fight && (
+                    {/* A boss fight on your own (a lair's too): straight into it again */}
+                    {!ui.coop.room && canRetry(getMap(ui.mapId)) && (
                         <button className="ui-button ui-button-go" onClick={() => client.retry()}>
                             Retry
                         </button>
                     )}
                     <button
                         className={
-                            !ui.coop.room && getMap(ui.mapId).fight
+                            !ui.coop.room && canRetry(getMap(ui.mapId))
                                 ? "ui-button"
                                 : "ui-button ui-button-go"
                         }

@@ -37,6 +37,7 @@ import {
     Glyph,
     GroundFire,
     GroundPool,
+    Lair,
     Pickup,
     Rampage,
     SimEvent,
@@ -54,6 +55,7 @@ import {
     HITSPLAT_SPRITES,
     PLAYER_SEQS,
     getEnemyModelKey,
+    getLairSealKey,
     getPickupModelKey,
     getPileLook,
     getPropKey,
@@ -92,6 +94,12 @@ const PLAYER_HIT_TINT = 0xff9090;
 const FLAME_SCALE = 2;
 const FLAME_STEP_TICKS = 7;
 const FLAME_TURN = 683;
+// A lair's seal (MapDef.lair): each flame comes up over this many ticks, this many ticks a tile
+// further from the boss than the last (so the fire runs along the walls), and all die down over
+// SEAL_LIFT_TICKS once it's beaten
+const SEAL_RISE_TICKS = 12;
+const SEAL_RUN_TICKS = 1.2;
+const SEAL_LIFT_TICKS = 60;
 
 // What's running from a boss's entrance fades out this many ticks before it goes
 const LEAVING_FADE_TICKS = 20;
@@ -661,6 +669,9 @@ export class GameView {
         if (cinematic) {
             this.cinematicView.submitActors(actors, sim, cinematic);
         }
+        if (sim.lair) {
+            this.drawLairSeal(actors, sim, sim.lair, alpha);
+        }
 
         for (const ring of sim.rings) {
             this.drawRing(actors, sim, ring);
@@ -786,11 +797,13 @@ export class GameView {
     // lit up a little
     // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock
     private drawProp(actors: ActorRenderer, sim: Sim, prop: MapPropDef, alpha: number): void {
-        const model = this.assets.get(getPropKey(prop.npcId));
+        // Its lair's boss up and fighting, or beaten: what's left without it (MapPropDef.awake)
+        const look = prop.awake && sim.lair && sim.lair.state !== "asleep" ? prop.awake : prop;
+        const model = this.assets.get(getPropKey(look.npcId));
         if (!model) {
             return;
         }
-        const anim = model.getAnim(prop.seq);
+        const anim = model.getAnim(look.seq);
         const { x, y } = prop;
         actors.draw(
             model,
@@ -804,6 +817,44 @@ export class GameView {
                 scale: prop.scale ?? 1,
             },
         );
+    }
+
+    // A lair's seal (MapDef.lair): fire on every way off its floor, running out from the boss as
+    // it's sealed, each flame a little out of step with the next, and dying down as it's lifted
+    private drawLairSeal(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
+        const def = sim.map.lair!;
+        const model = this.assets.get(getLairSealKey(def.seal.locId));
+        if (!model || lair.sealTick < 0) {
+            return;
+        }
+        const now = sim.tick + alpha;
+        const lifted = lair.liftTick >= 0 ? (now - lair.liftTick) / SEAL_LIFT_TICKS : 0;
+        if (lifted >= 1) {
+            return;
+        }
+        const anim = model.anims[0];
+        const { sealed } = lair;
+        for (let k = 0; k < sealed.length; k += 2) {
+            const x = sealed[k] + 0.5;
+            const y = sealed[k + 1] + 0.5;
+            const away = Math.hypot(x - def.at.x, y - def.at.y);
+            const up = Math.min(1, (now - lair.sealTick - away * SEAL_RUN_TICKS) / SEAL_RISE_TICKS);
+            const size = Math.min(up, 1 - lifted);
+            if (size <= 0) {
+                continue;
+            }
+            const i = k / 2;
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick + i * FLAME_STEP_TICKS),
+                x,
+                this.ground(sim, x, y),
+                y,
+                (i * FLAME_TURN) & 2047,
+                { scale: def.seal.scale * size, unlit: 1 },
+            );
+        }
     }
 
     private drawRampage(actors: ActorRenderer, sim: Sim, rampage: Rampage, alpha: number): void {
@@ -1570,7 +1621,11 @@ export class GameView {
                 // It hits everywhere it can see: the shadows are what's shown
                 windup.attack.cover ||
                 // Thrown by the arena's statues, not the boss: their lines are shown
-                windup.attack.from !== undefined
+                windup.attack.from !== undefined ||
+                // It's falling out of the sky, and its shadow's shown (BossFightView)
+                windup.attack.meteor !== undefined ||
+                // It's all the floor's, whose own cue is the warning
+                (windup.attack.floor !== undefined && windup.attack.damage === 0)
             ) {
                 continue;
             }

@@ -983,6 +983,37 @@ adventurer can have:
       run starts, to face the way the cinematic's camera ends looking.
     - To see a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`.
       The page reloads if a source file changes, which ends it.
+- **`MapDef.lair`** (`LairDef`): a boss asleep on a map to walk round, Yama on his throne
+  (`content/yama.ts`; the plan and what's built, `docs/design/yama.md`). `Sim.stepLair` wakes it
+  when a hero's on the map's floor (`MapDef.floor`, which a lair needs). `wakeLair` drops every
+  tile beside a way off the floor (`ArenaGrid.dropTile`, kept in `Lair.sealed` and drawn as fire
+  by `GameView.drawLairSeal`), and the boss's intro plays, rising at `at` (`Sim.riseSpot`, which
+  the intro's camera pan goes by too). It isn't the final boss, so its death doesn't end the run:
+  the seal lifts (`liftSeal`) with the `victory` notice and the `shout`. On an explore map, hits
+  land only while it's fought (`damagePlayer`). A death there offers Retry (`canRetry` in
+  `maps.ts`), which starts the hero at `start`, on the floor (`GameClient.startRun`'s `atLair`), so
+  it wakes on the first tick. `MapPropDef.awake` swaps the sleeping prop for what's left once it's
+  up (his empty throne). His fight's own pieces are fields any boss can have:
+    - `BossDef.home` keeps it within so many tiles of where it rose.
+    - `BossAttackDef.meteor` is a swing drawn as something falling from `height` tiles onto where
+      the player stood (`BossFightView.drawMeteors`, `meteorFallen`), its shadow growing under it,
+      and the scene dimmed to `dark` (`Sim.dimTo`). The swing's radius is what it hits. The
+      attack's `light` glows where it'll land: on the burnt floor, its shadow alone didn't show.
+    - `BossAttackDef.interruptedBy` lets a hero's button (a `HeroAbilityDef`, by id) stop the
+      attack by landing on the boss during its windup (`interruptBoss`). `broken` plays where it
+      would have landed, the boss is stunned, and its guard's down for `open` seconds.
+    - `BossDef.critical` puts an attack on a clock of its own (`timeCritical`,
+      `BossState.criticalAt`). It comes first at a share of the boss's hitpoints and at every
+      phase change, then every so many seconds. It's put off while no hero's button that stops it
+      is ready within `ready` seconds, so it can always be answered.
+    - `BossDef.gazeWard`: outside an interrupt, the gaze does nothing to it. Cast at it, pillars
+      rise between them (`Sim.wardPillars`, `stepWardPillars`, `BossFightView.drawWardPillars`).
+      They're grid pillars (`ArenaGrid.dropTile` with `pillar`, so `isPillar`), and so real
+      occluders for the gaze's sight and light. It says one of its `shouts`.
+    - `BossAttackDef.floorAt: "boss"` aims its floor action at the boss (a ripple from his stomp).
+      `ImpactSpotDef.height` lifts an impact's spot off the ground (the meteor breaking in the sky).
+    - The balance bot plays it with the hero's own buttons (`kitPlan` in `simulate-run.ts`).
+      `GAZE=never` and `GAZE=waste` check that the meteor is fair.
 
 ### Raids
 
@@ -1087,6 +1118,15 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   and ice), tiles that rebuild, pressure plates and actions (`ArenaFloor.act`, `Sim.floorAct`,
   `BossAttackDef.floor`), phases, raised tiles and ramps (`ArenaGrid.addLedge`, `ArenaFloor.liftAt`,
   which `GameView` stands actors on), and pillars that stop shots and sight (`ArenaFloor.blocksSight`).
+  The `lanes` pattern raises lanes through the player, down the floor, across it or both: where
+  they cross, the lane down wins (Yama's shadow lanes).
+- **A floor over the ground** (`FloorDef.onGround`, the Battle for Varrock's palace) is laid a
+  whisker over the map's own ground, with no pit. Nothing under it can show, so `FloorView` draws
+  no light under its tiles and no cut edge beside what isn't floor. A tile is drawn as its top
+  alone (`topOnly`) unless it's coming up, cued or trembling as well as at rest, since its sides
+  are a whisker. Without that, Yama's patterns on its paving (110 triangles a tile whole, 38 as a
+  top) took a phone from 57k to 101k. They now peak at about 60k, and `floorLint` counts it the
+  same way.
 - Two renderer pieces are the floor's. `ActorDrawOptions.early` draws an actor before the
   silhouettes (`ActorRenderer.renderEarly`), so the player shows through a floor's pillars and
   raised tiles as through walls. `ModelBakeRequest.topOnly` bakes a model's upward faces near its top

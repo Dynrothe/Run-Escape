@@ -225,6 +225,7 @@ export class GameSounds {
                     break;
                 case "bossIntro":
                 case "bossRising":
+                case "lair":
                 case "totemBlast":
                     if (event.sound !== -1) {
                         audio.play(event.sound, { volume: 1 });

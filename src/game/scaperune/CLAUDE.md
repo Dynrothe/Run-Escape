@@ -785,7 +785,10 @@ dev maps in `maps/wardensFloor.ts` show what it can do: the Wardens' floor itsel
 
 **The room.** The floor's box is a bridge (`TILE_BRIDGE` on level 1) of the hidden overlay over a dug-out pit, so
 nothing of the map is drawn there and a fallen tile opens onto the dark. `maps/wardensFloor.ts` does this for the
-Wardens' room (`digPit`); `floorRoom` puts any `FloorDef` in that room on squares of its own.
+Wardens' room (`digPit`); `floorRoom` puts any `FloorDef` in that room on squares of its own. A floor laid a
+whisker over a map's own ground instead, with no pit (the Battle for Varrock's palace), sets `onGround`: no light
+under it, no cut edges, and its tiles drawn as their tops unless they're coming up, which is what keeps a moving
+floor of paving in a phone's budget. Nothing on it should fall.
 
 **A minimal floor** is the Wardens' numbers with a script of your own. Everything else has a default: the whole
 box is floor, of the Wardens' slab, all normal tiles:
@@ -928,6 +931,8 @@ tiles: [{ where: { kind: "ellipse", rx: 6, ry: 6 }, slab: [2, 2] }],
 **The patterns on any shape.**
 
 - `side`, `sweep` and `ripple` go by the floor's own extent and middle.
+- `lanes` raises lanes `width` tiles wide, every `spacing` tiles, one through the player (or the middle), down the
+  floor, across it or both. Between two is safe, and where they cross, the lane down wins.
 - A sweep's gap is always on floor: the nearest place it fits in that row. A row with no room for it stays down.
 - `dropRows` falls from the floor's own back row, and `keepRows` counts from there.
 - `holes` are only ever inside the edge.
