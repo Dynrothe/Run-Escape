@@ -469,6 +469,8 @@ const SUMMON_BESIDE = 1.8;
 const ABSORB_REACH = 2.6;
 // A surge's reach along its lane, either side of the boss's middle
 const SURGE_BODY = 2.5;
+// Seconds a slam of the Wardens' last phase takes to rise, that its phantoms land nothing in
+const WARDENS_SLAM_RISE = 0.5;
 // The Tombs have no boss square: a surge's lane runs this far at most either way from the player,
 // along the floor (Sim.tombsLaneBox)
 const TOMBS_LANE_MOST = 24;
@@ -1087,6 +1089,8 @@ export type WardensFight = {
     }[];
     pyramids: { side: WardenSide; x: number; y: number; startTick: number }[];
     shots: { side: WardenSide; hero: number; startTick: number; landTick: number }[];
+    // The obelisk open (WardensDef flicker) till this tick, after a discharge
+    flickerUntil?: number;
     // Which Warden wakes for the second phase
     winner?: WardenSide;
     // What's on the floor in the second and third phases, drawn from here (there are too many for
@@ -1106,6 +1110,8 @@ export type WardensMark = {
     hurts: number;
     // What it's from, as damage from an enemy
     by: string;
+    // A glow on it while it's up (the enrage's lightning's shadows). Only drawn.
+    light?: LightLook;
 };
 
 // The second phase: when the Warden's up, and its uid then; the charged obelisk and the wreck;
@@ -5241,15 +5247,28 @@ export class Sim {
     // An attack as an invocation that's on makes it (BossAttackDef.invoked), kept so it's the same
     // attack every time (bullet sources go by it)
     private readonly invokedAttacks = new Map<BossAttackDef, BossAttackDef>();
+    // The copies made, so a copy isn't made over again (a chain's links)
+    private readonly invokedMade = new Set<BossAttackDef>();
     private invokedAttack(attack: BossAttackDef): BossAttackDef {
         const invoked = attack.invoked;
-        if (!invoked || !this.invoked(invoked.id)) {
+        if (!invoked || !this.invoked(invoked.id) || this.invokedMade.has(attack)) {
             return attack;
         }
         let made = this.invokedAttacks.get(attack);
         if (!made) {
             made = {
                 ...attack,
+                // A surge's charge (Rampage), and a chain's more links (Acceleration)
+                speed:
+                    attack.kind === "surge" && attack.speed !== undefined
+                        ? attack.speed * (invoked.speed ?? 1)
+                        : attack.speed,
+                chain: invoked.times
+                    ? {
+                          times: (attack.chain?.times ?? 0) + invoked.times,
+                          windup: attack.chain?.windup ?? attack.windup,
+                      }
+                    : attack.chain,
                 radius:
                     attack.radius !== undefined
                         ? attack.radius * (invoked.radius ?? 1)
@@ -5269,6 +5288,7 @@ export class Sim {
                 },
             };
             this.invokedAttacks.set(attack, made);
+            this.invokedMade.add(made);
         }
         return made;
     }
@@ -6627,6 +6647,15 @@ export class Sim {
         }
         const attack = fight.next[side];
         fight.next[side] = attack === "pyramids" ? "shot" : "pyramids";
+        // The obelisk flickers open as it gives up its charge (WardensDef flicker)
+        const flicker = WARDENS.flicker;
+        if (flicker) {
+            const seconds = this.invoked("ancient_haste") ? flicker.haste : flicker.seconds;
+            fight.flickerUntil = Math.max(
+                fight.flickerUntil ?? 0,
+                this.tick + secondsToTicks(seconds),
+            );
+        }
         if (attack === "pyramids" && fight.pyramidsDone === undefined) {
             fight.pyramidsDone = this.tick + secondsToTicks(WARDENS.pyramids.leave);
         }
@@ -6672,6 +6701,29 @@ export class Sim {
                 });
             }
         });
+    }
+
+    // The first phase's obelisk, open as a Warden discharges (WardensDef flicker)
+    obeliskFlickers(enemy: Enemy): boolean {
+        const fight = this.tombsWardens;
+        return (
+            fight?.phase === 1 &&
+            enemy.uid === fight.obeliskUid &&
+            this.tick < (fight.flickerUntil ?? 0)
+        );
+    }
+
+    // Whether the second phase's obelisk is striking with a special, or will within seconds
+    // (BossAttackDef.clearOfObelisk)
+    private obeliskStrikesWithin(seconds: number): boolean {
+        const two = this.tombsWardens?.phase === 2 ? this.tombsWardens.two : undefined;
+        if (!two) {
+            return false;
+        }
+        const soon = this.tick + secondsToTicks(seconds);
+        return (
+            (two.current !== undefined && this.tick < two.current.endTick) || soon >= two.nextOpen
+        );
     }
 
     // The obelisk broken: the Warden that's charged the more over the phase wakes (Tumeken's on a
@@ -7436,6 +7488,13 @@ export class Sim {
             };
             const phantom = this.spawnEnemy(getEnemy(id), "boss", at, 1);
             if (phantom) {
+                // The second takes turns with the first, half its interval behind, rather than
+                // both landing at once
+                const first = this.enemies.find((e) => e.uid === three.phantoms[0] && !e.dead);
+                if (first && phantom.def.boss) {
+                    const every = secondsToTicks(phantom.def.boss.attackInterval);
+                    phantom.attackCooldown = (first.attackCooldown + Math.floor(every / 2)) % every;
+                }
                 three.phantoms.push(phantom.uid);
                 this.addEffect(def.phantomSpotAnim, at.x, at.y, 0, 90);
                 this.emit({ type: "notice", message: def.phantomMessage });
@@ -7505,8 +7564,9 @@ export class Sim {
             });
             this.animate(warden, def.staggerSeq);
             this.emit({ type: "notice", message: def.staggerMessage });
-            // And open for the slams' restart (BossDef.guard)
-            this.dropGuard(warden, def.restart, false, "Energy Siphon");
+            // And open for the slams' restart (BossDef.guard): Insanity's, half of it
+            const open = this.invoked("insanity") ? def.restart / 2 : def.restart;
+            this.dropGuard(warden, open, false, "Energy Siphon");
         } else {
             this.animate(warden, def.releaseSeq);
             this.floor?.start(
@@ -7612,6 +7672,7 @@ export class Sim {
                 spotAnim: lightning.shadowSpotAnim,
                 hurts: 0,
                 by: warden.def.id,
+                light: lightning.light,
             });
             fight.marks.push({
                 x: x + 0.5,
@@ -13818,6 +13879,9 @@ export class Sim {
                 !(attack.parasite && this.parasite) &&
                 // Some only with an invocation on (BossAttackDef.onlyWith)
                 (!attack.onlyWith || this.invoked(attack.onlyWith)) &&
+                // Not into the obelisk's special (BossAttackDef.clearOfObelisk)
+                (attack.clearOfObelisk === undefined ||
+                    !this.obeliskStrikesWithin(attack.clearOfObelisk + attack.windup)) &&
                 // Akkha's orbs out: only what one step answers (AkkhaDef.orbAttacks)
                 (!orbAttacks || orbAttacks.includes(attack.name)) &&
                 // Some only in its shadow realm, exhumes or yellows (BossAttackDef.ordeal)
@@ -13839,7 +13903,9 @@ export class Sim {
         const index = usable[pick];
         const attack = def.attacks[index];
         state.cooldowns[index] = Math.round(attack.cooldown * TICKS_PER_SECOND);
-        state.chain = attack.chain ? { attack, left: attack.chain.times } : undefined;
+        // Its chain as its invocation makes it (BossAttackDef.invoked times)
+        const invoked = this.invokedAttack(attack);
+        state.chain = invoked.chain ? { attack: invoked, left: invoked.chain.times } : undefined;
         this.startBossAttack(enemy, attack);
     }
 
@@ -14064,10 +14130,12 @@ export class Sim {
         }
         const player = this.player;
         const startTick = this.tick;
-        const landTick =
+        const landTick = this.clearOfSlam(
+            enemy,
             startTick +
-            Math.max(1, Math.round(windupSeconds * TICKS_PER_SECOND)) +
-            (middle?.ticks ?? 0);
+                Math.max(1, Math.round(windupSeconds * TICKS_PER_SECOND)) +
+                (middle?.ticks ?? 0),
+        );
         const toPlayer = Math.max(0.001, fm.hypot(player.x - enemy.x, player.y - enemy.y));
         const windup: BossWindup = {
             attack,
@@ -14799,6 +14867,15 @@ export class Sim {
                 }
             }
             state.walkers = undefined;
+        } else {
+            // A channelled beam (a tether's): it's gone
+            const beam = this.tethers.find(
+                (t) => t.bossUid === boss.uid && t.attack.channel && this.tick < t.endTick,
+            );
+            if (beam) {
+                attack = beam.attack;
+                this.tethers = this.tethers.filter((t) => t !== beam);
+            }
         }
         const channel = attack?.channel;
         if (!attack || !channel) {
@@ -14944,6 +15021,24 @@ export class Sim {
             armTick: this.tick + secondsToTicks(tether.warn),
             endTick: this.tick + secondsToTicks(tether.seconds),
         });
+        // Channelled (Elidinis' Judgement): its guard's down for as long as the beam runs, and
+        // the fight's button breaks it (breakChannel)
+        if (attack.channel) {
+            this.dropGuard(boss, tether.seconds, false, attack.name);
+        }
+    }
+
+    // A last-phase phantom of the Wardens' lands nothing in the half second a slam rises: its
+    // windup's pushed past it (the shapes it throws and the slam's half of the floor at once was
+    // a hit nobody could help)
+    private clearOfSlam(enemy: Enemy, landTick: number): number {
+        const three = this.tombsWardens?.three;
+        if (!three || three.enraged || !three.phantoms.includes(enemy.uid)) {
+            return landTick;
+        }
+        const rise = secondsToTicks(WARDENS_SLAM_RISE);
+        const slam = three.nextSlam;
+        return landTick >= slam && landTick < slam + rise ? slam + rise : landTick;
     }
 
     // A tether's two ends: its boss and the nearest of its partners still up, or undefined once
@@ -16287,7 +16382,11 @@ export class Sim {
         const naps = enemy.def.boss?.naps;
         const guard = naps && !this.isNapping(enemy) ? naps.awakeDamage : 1;
         // Its guard down after a miss, or stunned (BossDef.guard)
-        const opened = this.isExposed(enemy) ? (enemy.def.boss?.guard?.damage ?? 1) : 1;
+        const opened = this.isExposed(enemy)
+            ? (enemy.def.boss?.guard?.damage ?? 1)
+            : this.obeliskFlickers(enemy)
+              ? WARDENS.flicker!.damage
+              : 1;
         const prayed = this.prayedAgainst(enemy) * guard * offColour * opened;
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too

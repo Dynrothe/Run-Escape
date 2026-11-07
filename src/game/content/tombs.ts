@@ -2975,8 +2975,13 @@ export const WARDENS: WardensDef = {
         every: 0.6,
         leave: 6.6,
         damage: 4,
+        // Each cell's glow, cool, from when it's up till it first hits
+        light: MARK_LIGHT,
     },
     shot: { flight: 8, impactSpotAnim: 1605 },
+    // The obelisk open for a moment as a Warden discharges, gold (the guard's light): a reason to
+    // be near it, in a pyramid's gap
+    flicker: { seconds: 2, haste: 1.5, damage: 2, light: TOMBS_EXPOSED.exposedLight },
     // The obelisk won't go below this share of its hitpoints till a Warden's pyramids have come
     // and gone: OSRS's lasts long enough that they always do, and a run with little to hit it
     // with at Entry, where it's weakest, broke it before either Warden had charged
@@ -3168,6 +3173,7 @@ export const WARDENS: WardensDef = {
                 shadowSpotAnim: 1446,
                 spotAnim: 2197,
                 damage: 0.12,
+                light: MARK_LIGHT,
             },
             message: "The Warden is enraged! Amascut tears the floor away!",
         },
@@ -3220,16 +3226,17 @@ const RED_SKULL = 2224;
 const PLAIN_SKULL = 2241;
 const WARDEN_ATTACKS: BossAttackDef[] = [
     {
+        // Turning after you, but no sharper than a step aside beats
         name: "Red skull",
         kind: "projectile",
-        damage: 7,
+        damage: 5,
         windup: 1.2,
         cooldown: 0,
         range: 40,
         weight: 4,
         speed: 7,
         count: 1,
-        homing: 1.4,
+        homing: 0.8,
         radius: 0.5,
         seq: 9661,
         sound: 6236,
@@ -3239,7 +3246,7 @@ const WARDEN_ATTACKS: BossAttackDef[] = [
     {
         name: "Plain skull",
         kind: "projectile",
-        damage: 6,
+        damage: 4,
         windup: 1.2,
         cooldown: 0,
         range: 40,
@@ -3253,9 +3260,10 @@ const WARDEN_ATTACKS: BossAttackDef[] = [
         spotAnim: PLAIN_SKULL,
     },
     {
+        // A fan aimed where you are, three volleys the same way
         name: "Skull storm",
         kind: "pattern",
-        damage: 5,
+        damage: 3,
         windup: 1.2,
         cooldown: 6,
         range: 40,
@@ -3272,11 +3280,12 @@ const WARDEN_ATTACKS: BossAttackDef[] = [
             speed: 6,
             range: 26,
             radius: 0.45,
-            track: true,
+            bright: 0.5,
         },
     },
     {
-        // Stone dropped on where you stand: still there, and you're held in it
+        // Stone dropped on where you stand: still there, and you're held in it a moment; never
+        // into the obelisk's special, whose strike a hold made a hit nobody could help
         name: "Entomb",
         kind: "blast",
         damage: 4,
@@ -3286,26 +3295,72 @@ const WARDEN_ATTACKS: BossAttackDef[] = [
         weight: 2,
         radius: 1.1,
         shadow: {},
+        light: MARK_LIGHT,
+        clearOfObelisk: 2,
         seq: 9661,
         spotAnim: 2210,
         impactSpotAnim: 2212,
-        effect: { kind: "freeze", seconds: 2.4 },
+        effect: { kind: "freeze", seconds: 1.2 },
         message: "Stone falls from above! Step off the shadow!",
     },
 ];
-// Tumeken's walks up to you, and hits beside it
+// Tumeken's walks up to you, and slashes a wedge in front of it, open when it misses
 const WARDEN_SLASH: BossAttackDef = {
     name: "Slash",
     kind: "swing",
-    damage: 8,
+    damage: 6,
     windup: 0.9,
     cooldown: 0,
     range: 4.5,
     weight: 6,
     radius: 3.6,
+    cone: 2.0,
+    coneAlpha: 1.6,
     seq: 9659,
     sound: 6111,
     opens: 1.2,
+};
+// And charges down a strip at you, open past you if it misses (Acceleration: twice)
+const WARDEN_CHARGE: BossAttackDef = {
+    name: "Charge",
+    kind: "swing",
+    damage: 6,
+    windup: 1.1,
+    cooldown: 6,
+    range: 12,
+    weight: 3,
+    line: { width: 3, length: 9, dash: 8 },
+    opens: 2,
+    light: MARK_LIGHT,
+    // Its walk, as it goes (no run of its own is in the cache)
+    seq: 9649,
+    sound: 6111,
+    // The beam's own red glow down the strip, unfitted (its spread isn't measured)
+    impact: { trail: { spotAnim: 2236 }, shake: 0.3 },
+    invoked: { id: "acceleration", times: 1 },
+};
+// Elidinis' channels a beam to the obelisk, standing gold the while: keep your side of it (it
+// swings as she walks), or break it with the fight's button (Penetration: harder)
+const WARDEN_JUDGEMENT: BossAttackDef = {
+    name: "Judgement",
+    kind: "tether",
+    damage: 3,
+    windup: 1.0,
+    cooldown: 14,
+    range: 40,
+    weight: 3,
+    seq: 9661,
+    spotAnim: 2227,
+    tether: {
+        partner: "wardens_obelisk_charged",
+        width: 1.2,
+        seconds: 6,
+        interval: 0.5,
+        warn: 1.2,
+    },
+    channel: { stagger: 2.5, broken: "The beam breaks!" },
+    invoked: { id: "penetration", damage: 1.3 },
+    message: "Elidinis' Warden channels a beam to the obelisk! Keep your side, or break it!",
 };
 
 // A Warden form of the second phase: only `open` hurts it, filling its shield (Sim.wardenTakes)
@@ -3334,13 +3389,15 @@ const wardenForm = (
     onlyStyle: open,
     sounds: WARDENS_SOUNDS,
     boss: {
-        attackInterval: chases ? 4.8 : 4.2,
+        attackInterval: chases ? 2.6 : 2.4,
         keepDistance: chases ? undefined : 5,
         // Each hit on it fills its shield twice over while it's down
         guard: TOMBS_GUARD,
         look: TOMBS_EXPOSED,
         enrage: { message: `${name} is enraged!` },
-        attacks: chases ? [...WARDEN_ATTACKS, WARDEN_SLASH] : WARDEN_ATTACKS,
+        attacks: chases
+            ? [...WARDEN_ATTACKS, WARDEN_SLASH, WARDEN_CHARGE]
+            : [...WARDEN_ATTACKS, WARDEN_JUDGEMENT],
     },
 });
 
@@ -3490,6 +3547,7 @@ const phantomShot = (
     weight: 1,
     seq,
     spotAnim,
+    // A fan aimed where you are as it fires, not after you
     pattern: {
         shape: "spread",
         count: 5,
@@ -3499,7 +3557,39 @@ const phantomShot = (
         speed: 7,
         range: 30,
         radius: 0.45,
-        track: true,
+        bright: 0.55,
+    },
+    ...more,
+});
+// Akkha's: a rank of his sand rolling at you from his side, a gap of two
+const phantomWall = (
+    name: string,
+    seq: number,
+    spotAnim: number,
+    more: Partial<BossAttackDef> = {},
+): BossAttackDef => ({
+    name,
+    kind: "pattern",
+    damage: 4,
+    windup: 1.2,
+    cooldown: 0,
+    range: 60,
+    weight: 1,
+    seq,
+    spotAnim,
+    pattern: {
+        shape: "wall",
+        count: 9,
+        spacing: 1.6,
+        gap: 2,
+        volleys: 1,
+        interval: 1,
+        speed: 3.5,
+        range: 30,
+        radius: 0.45,
+        from: 2,
+        bright: 0.6,
+        glow: BULLET_GLOW,
     },
     ...more,
 });
@@ -3604,7 +3694,27 @@ const WARDENS_PHASE_THREE: EnemyDef[] = [
         "Ba-Ba's Phantom",
         11775,
         9741,
-        [phantomDrop("Phantom rockfall", 9743, 1.2, 2250, 2250)],
+        [
+            {
+                // Her rockfall's cross of shadows on you, a rock into each
+                name: "Phantom rockfall",
+                kind: "ground",
+                damage: 5,
+                windup: 1.4,
+                cooldown: 0,
+                range: 60,
+                weight: 1,
+                seq: 9743,
+                impactSpotAnim: 2250,
+                falls: { look: "rolling_boulder", height: 12, scale: 0.35 },
+                ground: {
+                    spots: [{ shape: "cross", reach: 2 }],
+                    radius: 0.5,
+                    shadow: true,
+                    light: MARK_LIGHT,
+                },
+            },
+        ],
         1.3,
     ),
     // Akkha's: three of his ranged, or three of his magic
@@ -3614,25 +3724,8 @@ const WARDENS_PHASE_THREE: EnemyDef[] = [
         11777,
         9760,
         [
-            phantomShot("Phantom sand", 9772, 2255, {
-                kind: "projectile",
-                pattern: undefined,
-                speed: 8,
-                count: 1,
-                homing: 0.8,
-                damage: 5,
-                chain: { times: 2, windup: 0.5 },
-            }),
-            phantomShot("Phantom red sand", 9774, 2253, {
-                kind: "projectile",
-                pattern: undefined,
-                speed: 8,
-                count: 1,
-                homing: 0.8,
-                damage: 5,
-                impactSpotAnim: 2254,
-                chain: { times: 2, windup: 0.5 },
-            }),
+            phantomWall("Phantom sand", 9772, 2255),
+            phantomWall("Phantom red sand", 9774, 2253, { impactSpotAnim: 2254 }),
         ],
         1.4,
     ),

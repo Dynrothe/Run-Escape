@@ -3524,6 +3524,29 @@ describe("the Wardens' first phase", () => {
         expect(obelisk.hp).toBeLessThanOrEqual(0);
     });
 
+    it("flickers the obelisk open as a Warden discharges: twice what it's hit for, a moment", () => {
+        const sim = atWardens();
+        const fight = sim.tombsWardens!;
+        const obelisk = sim.enemies.find((e) => e.uid === fight.obeliskUid)!;
+        for (let i = 0; i < 60 * TICKS_PER_SECOND && fight.flickerUntil === undefined; i++) {
+            sim.player.hp = sim.player.maxHp;
+            sim.step();
+        }
+        expect(sim.obeliskFlickers(obelisk)).toBe(true);
+        // The same hit, open and not, on the same tick
+        sim["damageSource"] = "weapon:dark_bow";
+        const open = sim.damageEnemy(obelisk, 20, 0, obelisk.x, obelisk.y, 0);
+        const until = fight.flickerUntil;
+        fight.flickerUntil = sim.tick;
+        sim["damageSource"] = "weapon:dark_bow";
+        const shut = sim.damageEnemy(obelisk, 20, 0, obelisk.x, obelisk.y, 0);
+        fight.flickerUntil = until;
+        // (each hit rolls its own damage)
+        expect(open).toBeGreaterThan(shut * 1.5);
+        step(sim, WARDENS.flicker!.seconds + 0.1, () => (sim.player.hp = sim.player.maxHp));
+        expect(sim.obeliskFlickers(obelisk)).toBe(false);
+    });
+
     it("sends orbs down the troughs that charge their Warden, unless a player soaks them", () => {
         const sim = atWardens();
         const fight = sim.tombsWardens!;
@@ -3678,6 +3701,49 @@ describe("the Wardens' second and last phases", () => {
         obelisk.dead = true;
         step(sim, 0.1);
         expect(fight.winner).toBe("elidinis");
+    });
+
+    it("has Elidinis' channel her Judgement, open while it runs, and the button breaks it", () => {
+        const sim = atPhaseTwo();
+        const two = sim.tombsWardens!.two!;
+        const warden = find(sim, two.wardenUid);
+        const judgement = warden.def.boss!.attacks.find((a) => a.name === "Judgement")!;
+        warden.bossState!.windup = undefined;
+        sim["startBossAttack"](warden, judgement);
+        step(sim, judgement.windup + 0.1);
+        expect(sim.tethers.some((t) => t.bossUid === warden.uid)).toBe(true);
+        step(sim, 2);
+        expect(sim.isExposed(warden)).toBe(true);
+        sim.player.x = sim.player.prevX = warden.x;
+        sim.player.y = sim.player.prevY = warden.y - (warden.radius + 1);
+        expect(sim.useAbility()).toBe(true);
+        expect(sim.tethers.some((t) => t.bossUid === warden.uid)).toBe(false);
+        expect(sim.isExposed(warden)).toBe(true);
+    });
+
+    it("gives Tumeken's a charge down a strip, twice with Acceleration", () => {
+        const charge = getEnemy("tumeken_warden_magic").boss!.attacks.find(
+            (a) => a.name === "Charge",
+        )!;
+        expect(charge.line?.dash).toBeGreaterThan(0);
+        expect(charge.opens).toBeGreaterThan(0);
+        const sim = tombs(["acceleration"]);
+        expect(sim["invokedAttack"](charge).chain?.times).toBe(1);
+        expect(tombs([])["invokedAttack"](charge).chain).toBeUndefined();
+    });
+
+    it("never entombs into the obelisk's special", () => {
+        const sim = atPhaseTwo();
+        const two = sim.tombsWardens!.two!;
+        two.nextOpen = sim.tick + TICKS_PER_SECOND;
+        expect(sim["obeliskStrikesWithin"](2)).toBe(true);
+        two.nextOpen = sim.tick + 30 * TICKS_PER_SECOND;
+        two.current = undefined;
+        expect(sim["obeliskStrikesWithin"](2)).toBe(false);
+        const entomb = getEnemy("elidinis_warden_magic").boss!.attacks.find(
+            (a) => a.name === "Entomb",
+        )!;
+        expect(entomb.clearOfObelisk).toBeDefined();
     });
 
     it("wakes the Warden with the more charge, which only its open style hurts, filling its shield", () => {

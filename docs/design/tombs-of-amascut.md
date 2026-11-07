@@ -909,6 +909,59 @@ before, 3 and 63% after; wizard 10 and 40%, 4 and 35%; ranger 5 and 80%, 3 and 6
 tracking triplets gone from what hurt most. Unchecked in a browser: the leap (his stamp played as
 one), the marks' glow by quadrant, the shadows' lunges, and the wall and noose on his floor at 0.6.
 
+### The boss rework, stage 6: the Wardens' additions
+
+Added round the Wardens as they were (built November 2026), nothing swapped out: the first
+phase's soaking, and the last phase's order (slams; siphons at 80%; the phantom at 60% and the
+second at 40%; siphons at 20%; at 5% the enrage, lightning in the slams' place and the floor down to
+one row) are as they were. The tuning's left for the last pass.
+
+- **The first phase: the obelisk flickers.** As a Warden discharges (pyramids or its shot), the
+  obelisk takes twice what it's hit for, 2 seconds (1.5 with Ancient Haste), lit gold
+  (`WardensDef.flicker`; `Sim.obeliskFlickers`). It isn't a boss in the sim, so this is its own
+  window, not a guard, and the raid's button still doesn't land on it. Each pyramid cell glows cool
+  from when it's up till its first hit (`WardensDef.pyramids.light`).
+- **The second phase**: the Warden attacks every 2.6 seconds chasing (Tumeken's) and 2.4 standing
+  off (Elidinis'), from 4.8 and 4.2, its hits lower: Red skull 5 (7), turning at 0.8 a second
+  (1.4); Plain skull 4 (6); Skull storm 3 (5), aimed once (its three volleys were re-aimed); Entomb
+  holds 1.2 seconds (2.4), its shadow lit, and never within 2 seconds of the obelisk's special
+  (`BossAttackDef.clearOfObelisk`, E15).
+    - Tumeken's **Slash** is a wedge now (2 radians, 3.6 tiles, 6 from 8), open 1.2 seconds on a
+      miss as before; its **Charge** (new) runs a strip 3 wide and 9 long at you, a dash of 8, 6
+      damage, open 2 seconds when it misses, twice with Acceleration (`invoked.times`, E6).
+    - Elidinis' **Judgement** (new, every 14 seconds): a beam from her to the obelisk (a `tether`,
+      faint for 1.2 seconds, 6 long, hurting whoever's across it every half second), her guard down
+      while it runs (a tether with `channel`), and the raid's button breaks it (`breakChannel` ends
+      a channelled tether now). Penetration makes it a third harder.
+- **The last phase**: every siphon stopped, the Warden's open for the slams' restart (stage 1's),
+  half of it with Insanity. Its phantoms throw shapes, not homing shots: Zebak's fans are aimed
+  once and lit, Akkha's a rank of his sand (9 across, a gap of two) rolling from his side, Ba-Ba's
+  her rockfall's cross on you; Kephri's fireball is as it was. A phantom lands nothing in the half
+  second a slam rises (its windup's pushed past it, `Sim.clearOfSlam`, E15), and the second phantom
+  takes turns with the first, half its interval behind. The enrage's lightning's shadows glow cool
+  till they strike (`WardensMark.light`).
+- **The bot**: stage 1's readers take Tumeken's charge (a strip), Judgement (its side of a tether)
+  and Akkha's phantom's wall (its gap); it presses the button on Judgement as on any open boss,
+  and goes in for it. In the last phase it already stands in front of the Warden in its weapons'
+  reach, where the restart's window is.
+
+Engine pieces: `WardensDef.flicker`, `pyramids.light` and the lightning's `light`, all drawn
+through `SceneLights` (the only client change); `BossAttackDef.clearOfObelisk`; `invoked.times`,
+and `invoked.speed` on a surge (Ba-Ba's Rampage with Boulderdash: it did nothing before); a
+channelled tether. Not done: the pyramid seals' and the lightning shadows' `alpha` (drawn by the
+floor's view, which another change has open), and a glow on the first phase's shot.
+
+Ids: nothing new from the cache. The charge plays the Warden's walk (9649) and trails the beam's
+glow (2236) unfitted; Judgement's beam is the siphon's (2227); the phantoms' rockfall lands as
+Ba-Ba's phantom's rock (2250) did, unfitted.
+
+One check, Expert with the dev kit (`ROOM=wardens KIT=max`, warrior, one seed): won in 1:16 with no
+wipes (1:21 before), the stagger opening the Warden 4 times. With everything bought but the run's
+own kit the bot doesn't reach them (the raid before them stalls), and at level one it doesn't get
+past the first phase either way. At 500 with the dev kit a wizard won in 2:00 (2:03 before), Judgement
+cast twice and broken once by the button. Unchecked in a browser: all of it, the charge's strip and
+the beam most.
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on

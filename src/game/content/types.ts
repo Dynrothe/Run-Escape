@@ -934,8 +934,19 @@ export type BossAttackDef = {
     ordeal?: boolean;
     // The Tombs of Amascut: with this invocation on, the attack's that much bigger, quicker or
     // harder (Boulderdash's boulders twice as fast, Shaking Things Up's wider shockwave)
-    // (count: a summon's more of them)
-    invoked?: { id: string; speed?: number; radius?: number; damage?: number; count?: number };
+    // (count: a summon's more of them; speed: a pattern's bullets, or a surge's charge; times:
+    // that many more links of its chain, Acceleration's second charge)
+    invoked?: {
+        id: string;
+        speed?: number;
+        radius?: number;
+        damage?: number;
+        count?: number;
+        times?: number;
+    };
+    // The Wardens: not used while the obelisk's special strikes, nor within this many seconds of
+    // one landing (Entomb's hold under its beam was a hit nobody could help)
+    clearOfObelisk?: number;
     // Blasts: each one breaks up where it lands into count shards flying out all round (drawn as
     // the attack's spotAnim), each doing damage (Ba-Ba's rockfall)
     // (scale: drawn that much bigger than they hit, to be seen)
@@ -2111,8 +2122,14 @@ export type WardensDef = {
         every: number;
         leave: number;
         damage: number;
+        // A glow on each cell from when it's up till its first hit: what's about to hit, readable
+        // on the tomb's floor. Only drawn.
+        light?: LightLook;
     };
     shot: { flight: number; impactSpotAnim: number };
+    // As a Warden discharges, the obelisk flickers: open (damage times what it's hit for) for
+    // seconds, haste's with Ancient Haste, gold while it is (light)
+    flicker?: { seconds: number; haste: number; damage: number; light: LightLook };
     // Seconds before the first orbs, once the party's in
     holdShare: number;
     startDelay: number;
@@ -2265,6 +2282,8 @@ export type WardensPhaseThreeDef = {
             shadowSpotAnim: number;
             spotAnim: number;
             damage: number;
+            // A glow under each bolt's shadow till it strikes. Only drawn.
+            light?: LightLook;
         };
         message: string;
     };

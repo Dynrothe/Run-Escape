@@ -192,18 +192,24 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   an attack's `tether` is a beam to its partner that hurts to cross (Two bosses fought together,
   in `docs/DEVELOPMENT.md`). Give each a `healthBar`: the top of the screen shows only one.
   The fight's button lands on either. One can copy the other's lunge with `echoes` (only
-  while it's free). An attack with `channel` drops its guard while it's cast, and the fight's
-  button breaks it; a swing with `outside` hits all but its feet. The bot needs to know a new
-  one: both bots read a boss's shapes from `scripts/game/bossReads.ts` (`shelter`,
+  while it's free). An attack with `channel` drops its guard while it's cast (a tether's, while
+  its beam runs), and the fight's button breaks it; a swing with `outside` hits all but its feet.
+  The bot needs to know a new one: both bots read a boss's shapes from `scripts/game/bossReads.ts` (`shelter`,
   `exposedBoss`, strips, wedges, walls and the rest), so a new shape's reader goes there.
 - A ground attack's `trail` spots land on where the player stood so many seconds ago (at most
   `TRAIL_SECONDS`, kept on each `Hero`): the Champion of Scabaras's path that bursts behind you.
 - An enemy with `echoes` (the Menaphite Akh's shadow) copies a boss's lunges: as that boss
   starts one of the named line swings, it winds up its own from where it stands at the nearest
   player, with its own name, damage, seq (baked with it, so one its rig can play), impact and
-  strip `length` if it's shorter.
+  strip `length` if it's shorter; `noDash` keeps a stationary one where it stands.
   Name only one phase's attacks to keep it to that phase (a finale's need names of their own).
   The bot finds the pocket between two strips (`sharedPocket` in `bossReads.ts`).
+- The Tombs' bosses: a lunge or a surge into one of Ba-Ba's rocks (`leavesCover`) is stunned
+  as one into a pillar is; a guard with `pierce` lets its prayer down while it's open (Akkha's);
+  `phases.by: "shields"` steps Kephri's phases at her shields; `onlyWith` keeps an attack to an
+  invocation, and `invoked.times` adds links to its chain; `AkkhaDef.orbAttacks` are all he
+  uses while his orbs are out; `clearOfObelisk` keeps a Wardens attack off the obelisk's
+  special. Each boss's stage in `docs/design/tombs-of-amascut.md` says what it uses.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
