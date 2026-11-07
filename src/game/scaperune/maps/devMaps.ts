@@ -7,7 +7,11 @@ import {
 } from "../generator";
 import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
+import { BACKDROP_TEST_RECIPE } from "./backdropTest";
 import { CLIFF_GALLERY } from "./cliffGallery";
+import { DARK_TEST } from "./darkTest";
+import { DEPTH_TEST_RECIPE } from "./depthTest";
+import { GLOW_TEST } from "./glowTest";
 import { KALUAS_WAKE } from "./kaluasWake";
 import { PREFAB_GALLERY } from "./prefabGallery";
 import { ROCK_SHEET } from "./rockSheet";
@@ -20,7 +24,7 @@ import {
 } from "./tombsOfAmascut";
 import { VARDHELM } from "./vardhelm";
 import { WALL_SHEET } from "./wallSheet";
-import { WARDENS_FLOOR } from "./wardensFloor";
+import { FLOOR_DEMOS, WARDENS_FLOOR } from "./wardensFloor";
 
 // Maps for development, shown on the dev server only (content/maps.ts). Each
 // needs its own squares: nothing in the cache lives at x 70-99, y 66-199, and the
@@ -136,6 +140,8 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     PALETTE_RECIPE,
     PREFAB_GALLERY,
     CLIFF_GALLERY,
+    DEPTH_TEST_RECIPE,
+    BACKDROP_TEST_RECIPE,
     ROCK_SHEET,
     WALL_SHEET,
     VARDHELM,
@@ -143,6 +149,9 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     SHATTERED_REALM,
     TOMBS_OF_AMASCUT,
     WARDENS_FLOOR,
+    ...FLOOR_DEMOS,
+    DARK_TEST,
+    GLOW_TEST,
 ];
 
 // Boss fights still in development (a real MapDef each, so a win's kept: it unlocks what comes

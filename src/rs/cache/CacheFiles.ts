@@ -173,6 +173,8 @@ export type DownloadProgress = {
     total: number;
     current: number;
     part: Uint8Array;
+    // Downloaded, and being kept for next time: on a phone that can take a while
+    saving?: boolean;
 };
 
 export type ProgressListener = (progress: DownloadProgress) => void;
@@ -262,60 +264,122 @@ async function fetchCachedFile(
         };
     }
     const partUrls: RequestInfo[] = [];
-    const partBuffers: Uint8Array[][] = [];
+    const partResponses: (Response | undefined)[] = [];
     if (incremental) {
-        const partResponses = await cache.matchAll(path + "/part/", {
+        const stored = await cache.matchAll(path + "/part/", {
             ignoreSearch: true,
         });
-        for (const partResp of partResponses) {
+        for (const partResp of stored) {
             const index = parseInt(partResp.headers.get("Cache-Part") || "0");
             partUrls.push(path + "/part/?p=" + index);
-            partBuffers[index] = await toBufferParts(partResp, 0);
+            partResponses[index] = partResp;
         }
     }
 
+    // The parts in order, for as long as each starts where the last one ended and they're all from
+    // the same copy of the file (its Last-Modified). One left from another download ends it there.
     const parts: Uint8Array[] = [];
     let partCount = 0;
     let offset = 0;
-    for (let i = 0; i < partBuffers.length; i++) {
-        const partBuffer = partBuffers[i];
-        if (!partBuffer) {
+    let modified: string | null = null;
+    for (const partResp of partResponses) {
+        if (
+            !partResp ||
+            partResp.headers.get("Cache-Offset") !== String(offset) ||
+            (partCount > 0 && partResp.headers.get("Cache-Modified") !== modified)
+        ) {
             break;
         }
-        partCount++;
-        for (const part of partBuffer) {
+        modified = partResp.headers.get("Cache-Modified");
+        for (const part of await toBufferParts(partResp, 0)) {
             parts.push(part);
             offset += part.byteLength;
         }
+        partCount++;
     }
 
-    const headers: HeadersInit = {};
-
-    if (offset > 0) {
-        headers["Range"] = `bytes=${offset}-${Number.MAX_SAFE_INTEGER}`;
-    }
-
-    const resp = await fetch(path, {
-        headers,
-        signal,
-    });
-    if (resp.status !== 200 && resp.status !== 206) {
-        throw new Error("Failed downloading " + path + ", " + resp.status);
-    }
-    if (offset > 0 && resp.status !== 206) {
-        // The server ignored the Range and sent it all: start again from the
-        // top rather than adding the whole file to the part already here
+    const restart = async () => {
         await Promise.all(partUrls.map((url) => cache.delete(url)));
         partUrls.length = 0;
         parts.length = 0;
         partCount = 0;
         offset = 0;
+        modified = null;
+    };
+    // The rest of the file. With If-Range, one that's changed since its parts were saved comes
+    // back whole (a 200), not as the rest of a different file.
+    const request = () => {
+        const headers: Record<string, string> = {};
+        if (offset > 0) {
+            headers["Range"] = `bytes=${offset}-${Number.MAX_SAFE_INTEGER}`;
+            if (modified) {
+                headers["If-Range"] = modified;
+            }
+        }
+        return fetch(path, { headers, signal });
+    };
+
+    let resp = await request();
+    // Asked for what's past the end. If the file's as long as the parts, every part was saved and
+    // only the whole file's copy wasn't (the page was closed or reloaded as it was written).
+    // Otherwise they're from another copy of it.
+    let complete = false;
+    if (offset > 0 && resp.status === 416) {
+        complete = resp.headers.get("Content-Range") === `bytes */${offset}`;
+        if (!complete) {
+            await restart();
+            resp = await request();
+        }
     }
+    if (!complete && resp.status !== 200 && resp.status !== 206) {
+        throw new Error("Failed downloading " + path + ", " + resp.status);
+    }
+    if (!complete && offset > 0 && resp.status !== 206) {
+        // The server ignored the Range, or the file's changed (If-Range), and sent it all: start
+        // again from the top rather than adding the whole file to the parts already here
+        await restart();
+    }
+    const fileModified = resp.headers.get("Last-Modified");
     const cacheUpdates: Promise<void>[] = [];
     let partCache: Uint8Array[] = [];
     let partCacheLength = 0;
+    let partStart = offset;
+    let partsFailed = false;
+    // Keeps what's come since the last part, so a download that's cut off picks up from here
+    const savePart = () => {
+        const partUrl = path + "/part/?p=" + partCount;
+        partUrls.push(partUrl);
+        const headers: Record<string, string> = {
+            "Content-Type": "application/octet-stream",
+            "Content-Length": partCacheLength.toString(),
+            "Cache-Part": partCount.toString(),
+            "Cache-Offset": partStart.toString(),
+        };
+        if (fileModified) {
+            headers["Cache-Modified"] = fileModified;
+        }
+        const partResp = new Response(ReadableBufferStream(partsToBuffer(partCache, false)), {
+            status: 200,
+            headers,
+        });
+        Object.defineProperty(partResp, "url", { value: partUrl });
+        // Out of room, say: the load goes on, and the parts before this one are still a place
+        // to pick up from. Any after it are left out (see above), so it stops writing them.
+        const update = cache.put(partUrl, partResp).catch((e) => {
+            if (!partsFailed) {
+                console.warn("Couldn't keep part of " + path, e);
+            }
+            partsFailed = true;
+        });
+        cacheUpdates.push(update);
+        partCount++;
+        partStart += partCacheLength;
+
+        partCache = [];
+        partCacheLength = 0;
+    };
     const partProgressListener = (progress: DownloadProgress) => {
-        if (incremental && progress.part.byteLength > 0) {
+        if (incremental && !partsFailed && progress.part.byteLength > 0) {
             partCache.push(progress.part);
             partCacheLength += progress.part.byteLength;
 
@@ -323,59 +387,67 @@ async function fetchCachedFile(
             const partCacheThreshold = Math.max(progress.total * 0.01, 1000 * 1024);
 
             if (partCacheLength > partCacheThreshold) {
-                const partUrl = path + "/part/?p=" + partCount;
-                partUrls.push(partUrl);
-                const partResp = new Response(
-                    ReadableBufferStream(partsToBuffer(partCache, false)),
-                    {
-                        status: 200,
-                        headers: {
-                            "Content-Type": "application/octet-stream",
-                            "Content-Length": partCacheLength.toString(),
-                            "Cache-Part": partCount.toString(),
-                        },
-                    },
-                );
-                Object.defineProperty(partResp, "url", { value: partUrl });
-                const update = cache.put(partUrl, partResp);
-                cacheUpdates.push(update);
-                partCount++;
-
-                partCache = [];
-                partCacheLength = 0;
+                savePart();
             }
         }
         if (progressListener) {
             progressListener(progress);
         }
     };
-    const newParts = await toBufferParts(resp, offset, partProgressListener);
-    for (const part of newParts) {
-        parts.push(part);
+    if (!complete) {
+        for (const part of await toBufferParts(resp, offset, partProgressListener)) {
+            parts.push(part);
+        }
+    }
+    // The last of it too, so the parts hold the whole file if it can't be kept in one piece
+    if (incremental && !partsFailed && partCacheLength > 0) {
+        savePart();
     }
 
     const buffer = partsToBuffer(parts, shared);
 
-    cache.put(
-        path,
-        new Response(ReadableBufferStream(buffer), {
-            status: 200,
-            headers: {
-                "Content-Type": "application/octet-stream",
-                "Content-Length": buffer.byteLength.toString(),
-            },
-        }),
-    );
-
-    if (incremental) {
-        await Promise.all(cacheUpdates);
-        for (const url of partUrls) {
-            cache.delete(url);
-        }
-    }
+    await Promise.all(cacheUpdates);
+    progressListener?.({
+        total: buffer.byteLength,
+        current: buffer.byteLength,
+        part: new Uint8Array(0),
+        saving: true,
+    });
+    await saveWhole(cache, path, buffer, partUrls);
 
     return {
         name,
         data: buffer,
     };
+}
+
+// Keeps the whole file, and drops its parts only once that's saved: a phone can take a while to
+// write a big cache, or run out of room, and with the parts gone first a reload started the
+// download again from where the last part left off. If it can't be saved, the parts stay, so
+// the next load is put together from them rather than downloaded again.
+async function saveWhole(
+    cache: Cache,
+    path: string,
+    buffer: ArrayBuffer,
+    partUrls: RequestInfo[],
+): Promise<void> {
+    try {
+        await cache.put(
+            path,
+            new Response(ReadableBufferStream(buffer), {
+                status: 200,
+                headers: {
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": buffer.byteLength.toString(),
+                },
+            }),
+        );
+    } catch (e) {
+        console.warn("Couldn't keep " + path + ", it'll load from its parts next time", e);
+        return;
+    }
+    // A part that's left does no harm: the whole file's read first
+    await Promise.all(partUrls.map((url) => cache.delete(url))).catch((e) =>
+        console.warn("Couldn't drop the parts of " + path, e),
+    );
 }

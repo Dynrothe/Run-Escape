@@ -3,12 +3,25 @@ import { execFileSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
+import { pipeline } from "node:stream";
+import { normalizePath } from "vite";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
+import { parseRange } from "./desktop/gameServer";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
+
+// Claude Code keeps its worktrees in .claude/worktrees, whole checkouts inside
+// this one. Watching them all held up the first load after every start. Taken
+// from this checkout's root, so a server started in a worktree still watches it.
+const CLAUDE_DIR = normalizePath(resolve(process.cwd(), ".claude"));
+
+function isInClaudeDir(file: string): boolean {
+    const path = normalizePath(file);
+    return path === CLAUDE_DIR || path.startsWith(`${CLAUDE_DIR}/`);
+}
 
 // Shown on the title screen, beside CHANGELOG.md
 const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
@@ -100,7 +113,14 @@ function serveCachesPlugin(): Plugin {
     const serveCaches = (middlewares: Connect.Server, root: string) => {
         middlewares.use("/caches", (req, res, next) => {
             // The game asks for caches.json?build=<its build>
-            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
+            let reqUrl: string;
+            try {
+                reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
+            } catch {
+                res.statusCode = 400;
+                res.end();
+                return;
+            }
             const filePath = normalize(join(root, reqUrl));
             const rel = relative(root, filePath);
             if (rel.startsWith("..") || rel.includes(`..${sep}`)) {
@@ -118,9 +138,41 @@ function serveCachesPlugin(): Plugin {
                     notFound();
                     return;
                 }
+                const lastModified = stat.mtime.toUTCString();
                 res.setHeader("Content-Type", mimeFor(filePath));
                 res.setHeader("Cache-Control", "no-cache");
-                createReadStream(filePath).on("error", notFound).pipe(res);
+                res.setHeader("Accept-Ranges", "bytes");
+                res.setHeader("Last-Modified", lastModified);
+                // A download that was cut off (a phone on a tunnel) resumes from where it got to:
+                // CacheFiles asks for bytes=<offset>-<MAX_SAFE_INTEGER>, and without this got the
+                // whole file again, back to 0% each time. Parsed as the desktop app's server does
+                // (parseRange). CacheFiles sends the Last-Modified its parts came with as If-Range,
+                // so a file that's changed since is sent whole.
+                const ifRange = req.headers["if-range"];
+                const range =
+                    ifRange === undefined || ifRange === lastModified
+                        ? parseRange(req.headers.range ?? null, stat.size)
+                        : undefined;
+                if (range === "unsatisfiable") {
+                    res.statusCode = 416;
+                    res.setHeader("Content-Range", `bytes */${stat.size}`);
+                    res.end();
+                    return;
+                }
+                const { start, end } = range ?? { start: 0, end: stat.size - 1 };
+                if (range) {
+                    res.statusCode = 206;
+                    res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
+                }
+                res.setHeader("Content-Length", Math.max(0, end - start + 1));
+                if (req.method === "HEAD" || end < start) {
+                    res.end();
+                    return;
+                }
+                // pipeline, not pipe: the file's closed with the reply (a phone that drops it),
+                // and a read that fails cuts the reply off rather than leaving it short. It's
+                // already destroyed by then, so there's nothing left to answer with.
+                pipeline(createReadStream(filePath, { start, end }), res, () => {});
             } catch {
                 notFound();
             }
@@ -263,6 +315,9 @@ export default defineConfig({
         ],
     },
     optimizeDeps: {
+        // Only the render worker imports these, and the startup scan doesn't
+        // follow workers. Found mid-load instead, they made Vite reload the page.
+        include: ["threads/worker", "jszip"],
         // wasm-gzip finds its .wasm via `new URL(..., import.meta.url)`, which
         // breaks once the dep optimizer moves it into node_modules/.vite.
         exclude: ["wasm-gzip"],
@@ -273,6 +328,7 @@ export default defineConfig({
             "Cross-Origin-Opener-Policy": "same-origin",
             "Cross-Origin-Embedder-Policy": "require-corp",
         },
+        watch: { ignored: [isInClaudeDir] },
     },
     worker: {
         // The render data worker is spawned with `{ type: "module" }` and its

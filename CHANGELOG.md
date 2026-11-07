@@ -7,14 +7,25 @@ the version in the corner).
 
 ### Added
 
+- Android updates, by trippy22: opening the app checks GitHub and offers to download a newer APK,
+  then asks before installing it. Offline play still works when the check is unavailable.
+- Cloud save, by trippy22: keep a copy of your progress online, and bring it to another browser,
+  the Windows app or a phone with a code. No account, name or email. Its button beside Settings
+  on the title screen shows whether it's synced and opens it; it's in Settings too.
+- Co-op choice countdown, by Deivid Smarzaro: everyone can see when the next automatic reward
+  choice is due while the party is still choosing.
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.
 - Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
   it saves you, and the Pyromancer's own revive shows as a phoenix.
+- Stat icons, by Giordano Souza: each stat shows its icon from the game's cache wherever it's
+  listed, from descriptions and level ups to the pause menu, caskets and the Armoury.
 
 ### Changed
 
+- Blocking jungle plants, by Deivid Smarzaro: low wooden bases help distinguish them from
+  passable foliage.
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
@@ -53,6 +64,8 @@ the version in the corner).
   expert mode, not Hard. Fixed by Okaeri.
 - A casket carried into the next room of the Theatre of Blood could be set down in a wall, out of
   reach. Fixed by Okaeri.
+- On a phone, the damage a second and its panel no longer show on top of level ups, caskets,
+  random events and the menus.
 
 ## 0.27.0 - 2026-11-05
 
@@ -80,7 +93,7 @@ the version in the corner).
 - Skill prices, by trippy22: the same skills cost the same whatever order you buy them in. Most
   pages of several skills cost less, a whole page about a quarter less, but a cheap skill costs
   more once dearer ones are bought.
-- Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
+- Skills, by Deivid Smarzaro: clearer preset names and an explanation of which adventurers use them.
 - The Toxic blowpipe, by Deivid Smarzaro: its darts visibly upgrade from bronze to dragon as it
   levels.
 - Co-op caskets, by Okaeri: everyone who's up gets an item of their own from a casket, not just

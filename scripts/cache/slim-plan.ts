@@ -26,6 +26,7 @@ import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
+import { STAT_ICON_OBJ_IDS } from "../../src/game/content/statIcons";
 import { COLLECTION_LOG_OBJ } from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
 import { WEAPONS } from "../../src/game/content/weapons";
@@ -154,6 +155,7 @@ function getContentObjIds(): number[] {
         COLLECTION_LOG_OBJ,
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
+        ...STAT_ICON_OBJ_IDS,
     ]);
     for (const [, objId] of getWornObjs()) {
         ids.add(objId);
@@ -225,7 +227,12 @@ function getBakeRequests(group: BakeGroup): BakeRequest[] {
                   ? GameAssets.getEnemyRequests(ENEMIES)
                   : // Pets are baked as they're picked, not with the base: every one of them
                     group === "pets"
-                    ? GameAssets.getPetRequests(PETS)
+                    ? [
+                          ...GameAssets.getPetRequests(PETS),
+                          // and maps' NPCs posed as scenery, and their cinematics' casts, which
+                          // are baked as their map's played
+                          ...GameAssets.getPropRequests(ALL_MAPS),
+                      ]
                     : getPlayerRequests();
         bakeRequests.set(group, requests);
     }

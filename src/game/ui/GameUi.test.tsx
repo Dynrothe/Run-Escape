@@ -380,4 +380,85 @@ describe("the title's export reminder", () => {
         act(() => store.set({ saveBlock: { kind: "otherTab" }, saveBlockClosed: true }));
         expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
     });
+
+    test("goes while cloud save has a copy, and comes back when it stops keeping one", () => {
+        expect.hasAssertions();
+        const { store } = renderTitle(4);
+        act(() => store.set({ cloud: { code: CLOUD_CODE, syncedAt: 5, working: false } }));
+        expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+        // A code that's stopped working (unused for weeks, or replaced on another device)
+        act(() =>
+            store.set({
+                cloud: { code: CLOUD_CODE, syncedAt: 5, working: false, problem: "unknownCode" },
+            }),
+        );
+        expect(screen.getByRole("button", { name: "Export save" })).toBeInTheDocument();
+        // On, but never synced
+        act(() => store.set({ cloud: { code: CLOUD_CODE, working: false } }));
+        expect(screen.getByRole("button", { name: "Export save" })).toBeInTheDocument();
+    });
+});
+
+const CLOUD_CODE = "K7Q2-M9XD-4TPA-W3RN-H8BE-6FZC";
+
+describe("cloud save's choice on the title", () => {
+    const choice = { cloud: { revision: 2 }, newer: false, closed: false };
+    // The export reminder's, as above
+    beforeEach(() => {
+        const items = new Map<string, string>();
+        vi.stubGlobal("localStorage", {
+            getItem: (key: string) => items.get(key) ?? null,
+            setItem: (key: string, value: string) => void items.set(key, value),
+        });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    function renderCloudTitle() {
+        const store = new GameStore({ ...createSave(), runs: 4 });
+        const view = { code: CLOUD_CODE, syncedAt: 5, working: false };
+        store.set({ screen: "title", cloud: view });
+        const setChoice = (closed: boolean) =>
+            store.set({ cloud: { ...view, choice: { ...choice, closed } } });
+        const sync = {
+            later: vi.fn(() => setChoice(true)),
+            reopenChoice: vi.fn(() => setChoice(false)),
+            useCloud: vi.fn(),
+            keepLocal: vi.fn(),
+            check: vi.fn(),
+        };
+        const client = { cloud: sync, playClick: vi.fn() };
+        render(<GameUi store={store} client={client as unknown as GameClient} />);
+        return { setChoice, sync };
+    }
+    const asking = () => screen.queryByRole("heading", { name: "Which save do you want?" });
+    const panel = () => screen.queryByRole("heading", { name: "Cloud save" });
+
+    test("shows over cloud save's own panel, and Escape puts it off before closing that", () => {
+        expect.hasAssertions();
+        const { setChoice, sync } = renderCloudTitle();
+        fireEvent.click(screen.getByRole("button", { name: /^Cloud save:/ }));
+        expect(panel()).toBeInTheDocument();
+        // A code linked there, or Sync now, finds a different save
+        act(() => setChoice(false));
+        expect(asking()).toBeInTheDocument();
+        expect(panel()).toBeInTheDocument();
+        fireEvent.keyDown(window, { code: "Escape" });
+        expect(sync.later).toHaveBeenCalledTimes(1);
+        expect(asking()).toBeNull();
+        expect(panel()).toBeInTheDocument();
+        // Choose, from the panel's Two saves row, shows it again
+        fireEvent.click(screen.getByRole("button", { name: "Choose" }));
+        expect(asking()).toBeInTheDocument();
+        fireEvent.keyDown(window, { code: "Escape" });
+        fireEvent.keyDown(window, { code: "Escape" });
+        expect(panel()).toBeNull();
+    });
+
+    test("shows over Settings too", () => {
+        expect.hasAssertions();
+        const { setChoice } = renderCloudTitle();
+        fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+        act(() => setChoice(false));
+        expect(asking()).toBeInTheDocument();
+    });
 });

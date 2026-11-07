@@ -4,8 +4,9 @@ import java.net.URI;
 import java.util.Locale;
 
 /**
- * The only remote addresses the bundled game may reach, matching the desktop app: the relay, and
- * the run collector by POST (and its preflight) to its one URL.
+ * The only remote addresses the bundled game may reach, matching the desktop app: the relay, the
+ * run collector by POST (and its preflight) to its one URL, and the cloud-save Worker's /v1/
+ * (src/util/cloudSaveUrl.ts).
  */
 public final class RelayPolicy {
     private static final String COLLECTOR_PATH = "/v1/runs";
@@ -17,12 +18,19 @@ public final class RelayPolicy {
     private final String collectorHost;
     private final int collectorPort;
     private final String collectorUrl;
+    private final String savesHost;
+    private final int savesPort;
+    private final String savesOrigin;
 
     public RelayPolicy(String coopUrl) {
-        this(coopUrl, "");
+        this(coopUrl, "", "");
     }
 
     public RelayPolicy(String coopUrl, String runAnalyticsUrl) {
+        this(coopUrl, runAnalyticsUrl, "");
+    }
+
+    public RelayPolicy(String coopUrl, String runAnalyticsUrl, String cloudSaveUrl) {
         URI relay = parse(coopUrl);
         boolean valid = relay != null && "wss".equals(relay.getScheme())
                 && relay.getHost() != null && relay.getRawUserInfo() == null
@@ -41,6 +49,18 @@ public final class RelayPolicy {
         collectorPort = collectorValid ? effectivePort(collector) : -1;
         collectorUrl = collectorHost == null
                 ? null : "https://" + authority(collectorHost, collectorPort) + COLLECTOR_PATH;
+
+        // An https origin with no path, as src/util/cloudSaveUrl.ts takes it
+        URI saves = parse(cloudSaveUrl);
+        boolean savesValid = saves != null && "https".equals(saves.getScheme())
+                && saves.getHost() != null && saves.getRawUserInfo() == null
+                && saves.getRawQuery() == null && saves.getRawFragment() == null
+                && validPort(saves.getPort())
+                && (saves.getRawPath() == null || saves.getRawPath().isEmpty()
+                        || "/".equals(saves.getRawPath()));
+        savesHost = savesValid ? saves.getHost().toLowerCase(Locale.ROOT) : null;
+        savesPort = savesValid ? effectivePort(saves) : -1;
+        savesOrigin = savesHost == null ? null : "https://" + authority(savesHost, savesPort);
     }
 
     public boolean allowsNetworkRequest(String method, String url) {
@@ -51,6 +71,13 @@ public final class RelayPolicy {
             return false;
         }
         String requestHost = request.getHost().toLowerCase(Locale.ROOT);
+        if (savesHost != null && savesHost.equals(requestHost)
+                && savesPort == effectivePort(request) && request.getRawQuery() == null
+                && request.getRawPath() != null && request.getRawPath().startsWith("/v1/")
+                && ("GET".equals(method) || "PUT".equals(method) || "POST".equals(method)
+                        || "DELETE".equals(method) || "OPTIONS".equals(method))) {
+            return true;
+        }
         if ("GET".equals(method)) {
             return host != null && host.equals(requestHost) && port == effectivePort(request);
         }
@@ -63,7 +90,8 @@ public final class RelayPolicy {
     public String contentSecurityPolicy() {
         return "connect-src 'self'"
                 + (httpsOrigin == null ? "" : " " + httpsOrigin + " " + websocketOrigin)
-                + (collectorUrl == null ? "" : " " + collectorUrl);
+                + (collectorUrl == null ? "" : " " + collectorUrl)
+                + (savesOrigin == null ? "" : " " + savesOrigin + "/v1/");
     }
 
     private static boolean isCollector(URI uri) {

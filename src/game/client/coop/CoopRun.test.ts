@@ -428,6 +428,143 @@ describe("co-op lockstep", () => {
         expect(sim.heroes[2].pendingLevelUps).toBe(pending - 1);
     });
 
+    it("shares the host's countdown without depending on a guest's clock or paused sim ticks", () => {
+        const clock = { now: 100 };
+        const { run, sent } = hostRun(clock);
+        let guestNow = 500_000;
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: () => {}, sendDown: () => {} },
+            new Map(IDS.map((id, i) => [id, i])),
+            "host",
+            () => guestNow,
+        );
+        expect(run.decisionSeconds).toBeUndefined();
+        run.sim.xp = guest.sim.xp = 100;
+        run.stepFrame();
+        run.stepFrame();
+        const tick = run.sim.tick;
+        run.flush(true);
+        guest.receiveDown(sent.at(-1)!);
+        while (guest.canStep()) {
+            guest.stepFrame();
+        }
+        expect(run.decisionSeconds).toBe(20);
+        expect(guest.decisionSeconds).toBe(20);
+        clock.now += 6500;
+        guestNow += 6500;
+        expect(run.sim.tick).toBe(tick);
+        expect(run.decisionSeconds).toBe(14);
+        expect(guest.decisionSeconds).toBe(14);
+        // Answering locally does not hide the party's timer or restart anyone else's.
+        run.act({ kind: "choose", index: 0 });
+        run.stepFrame();
+        expect(run.decisionSeconds).toBe(14);
+        clock.now += DECIDE_AFTER_MS;
+        guestNow += DECIDE_AFTER_MS;
+        expect(run.decisionSeconds).toBe(0);
+        expect(guest.decisionSeconds).toBe(0);
+    });
+
+    it("clears the countdown when the party finishes and sends fresh time on a resend", () => {
+        const clock = { now: 0 };
+        const { run, sent } = hostRun(clock);
+        run.sim.xp = 100;
+        run.stepFrame();
+        run.stepFrame();
+        run.flush(true);
+        clock.now = 8000;
+        run.receiveUp("guest1", { resend: 0 });
+        run.flush(true);
+        expect(sent.at(-1)!.decisionMs).toBe(12_000);
+        // Drain the queued level ups for everyone.
+        while (run.sim.waitingOn.length > 0) {
+            for (const hero of run.sim.waitingOn) {
+                run.receiveUp(IDS[hero.index], { action: { kind: "choose", index: 0 } });
+            }
+            run.stepFrame();
+        }
+        expect(run.decisionSeconds).toBeUndefined();
+        run.flush(true);
+        expect(sent.at(-1)!.decisionMs).toBeUndefined();
+    });
+
+    it("counts down a casket for everyone until the last player answers", () => {
+        const clock = { now: 0 };
+        const { run } = hostRun(clock);
+        const { player } = run.sim;
+        run.sim.dropPickup("casket", player.x, player.y, 1, { tier: "easy" });
+        run.stepFrame();
+        expect(run.sim.state).toBe("chest");
+        run.stepFrame();
+        clock.now += 9000;
+        run.act({ kind: "chest", action: "take" });
+        run.receiveUp("guest1", { action: { kind: "chest", action: "take" } });
+        run.stepFrame();
+        expect(run.sim.waitingOn.map((hero) => hero.index)).toEqual([2]);
+        expect(run.decisionSeconds).toBe(11);
+        clock.now += 11_000;
+        expect(run.stepFrame()).toContainEqual(
+            expect.objectContaining({
+                hero: 2,
+                action: { kind: "chest", action: "take" },
+                auto: true,
+            }),
+        );
+        expect(run.decisionSeconds).toBeUndefined();
+    });
+
+    it("does not show invalid countdowns or revive them from duplicate frames", () => {
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: () => {}, sendDown: () => {} },
+            new Map(IDS.map((id, i) => [id, i])),
+            "host",
+            () => 0,
+        );
+        guest.sim.xp = 100;
+        guest.sim.step();
+        for (const [i, decisionMs] of [NaN, Infinity, -1, DECIDE_AFTER_MS + 1].entries()) {
+            guest.receiveDown({ upTo: i + 1, events: [], decisionMs });
+            expect(guest.decisionSeconds).toBeUndefined();
+        }
+        guest.receiveDown({ upTo: 5, events: [], decisionMs: 5000 });
+        expect(guest.decisionSeconds).toBe(5);
+        guest.receiveDown({ upTo: 5, events: [], decisionMs: 20_000 });
+        expect(guest.decisionSeconds).toBe(5);
+        guest.receiveDown({ upTo: 6, events: [] });
+        expect(guest.decisionSeconds).toBeUndefined();
+    });
+
+    it("doesn't count a guest's countdown back up when a frame comes late", () => {
+        let now = 0;
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: () => {}, sendDown: () => {} },
+            new Map(IDS.map((id, i) => [id, i])),
+            "host",
+            () => now,
+        );
+        guest.sim.xp = 100;
+        guest.sim.step();
+        guest.receiveDown({ upTo: 1, events: [], decisionMs: 10_000 });
+        now = 1010;
+        expect(guest.decisionSeconds).toBe(9);
+        // Sent 40 ms after the last, it took 40 ms longer to come
+        guest.receiveDown({ upTo: 2, events: [], decisionMs: 9030 });
+        expect(guest.decisionSeconds).toBe(9);
+        // One that came quicker brings it forward
+        guest.receiveDown({ upTo: 3, events: [], decisionMs: 8900 });
+        now = 1910;
+        expect(guest.decisionSeconds).toBe(8);
+        // Someone decided for, and waited on again: a new wait starts it over
+        guest.receiveDown({ upTo: 4, events: [], decisionMs: DECIDE_AFTER_MS });
+        expect(guest.decisionSeconds).toBe(20);
+    });
+
     it("decides for them with a reward they haven't banished", () => {
         const clock = { now: 0 };
         const { run } = hostRun(clock);

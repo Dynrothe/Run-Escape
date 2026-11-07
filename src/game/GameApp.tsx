@@ -124,8 +124,9 @@ export function GameApp(): JSX.Element {
     useEffect(() => {
         const abortController = new AbortController();
         loadViewer(abortController.signal, (progress: DownloadProgress) => {
+            const doing = progress.saving ? "Saving" : "Downloading";
             store.set({
-                loadingText: `Downloading cache (${formatBytes(progress.total)})`,
+                loadingText: `${doing} cache (${formatBytes(progress.total)})`,
                 loadingProgress: ((progress.current / progress.total) * 100) | 0,
             });
         })

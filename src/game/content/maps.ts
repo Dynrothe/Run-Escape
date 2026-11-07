@@ -443,7 +443,7 @@ export { FUN_MAPS };
 // campaign's chain.
 export { RAID_MAPS };
 
-function createDevMap(recipe: MapRecipe): MapDef {
+export function createDevMap(recipe: MapRecipe): MapDef {
     const play = recipe.play;
     const source = play && MAPS.find((map) => map.id === play.waveSet);
     const density = play?.enemyDensity ?? 1;

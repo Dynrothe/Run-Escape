@@ -36,6 +36,9 @@ flat out uint v_texId;
 flat out float v_alphaCutOff;
 out float v_fogAmount;
 flat out vec4 v_interactId;
+#ifdef LIGHTS
+out vec3 v_lightPos;
+#endif
 
 #include "./includes/branchless-logic.glsl";
 #include "./includes/hsl-to-rgb.glsl";
@@ -131,6 +134,10 @@ void main() {
         interactType,
         1.0
     );
+
+#ifdef LIGHTS
+    v_lightPos = vec3(localPos.xz, 0.0);
+#endif
 
     gl_Position = u_viewMatrix * vec4(localPos, 1.0);
     // gl_Position.z += (float(vertex.priority)) * 0.0007;

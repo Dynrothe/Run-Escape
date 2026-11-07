@@ -3,6 +3,7 @@ import {
     ActorBakeInput,
     ActorBakeResult,
     BakeRequest,
+    NpcBakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
@@ -30,7 +31,8 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import {
     AKKHA,
     APMEKEN_BARRIER_LOC,
@@ -50,11 +52,20 @@ import {
     WARDENS,
     ZEBAK,
 } from "../content/tombs";
-import { EnemyDef, EnemyOutfit, GearSlot, ImpactDef, WeaponDef } from "../content/types";
+import {
+    EnemyDef,
+    EnemyOutfit,
+    FloorSkinDef,
+    GearSlot,
+    ImpactDef,
+    MapDef,
+    WeaponDef,
+} from "../content/types";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { getCinematicSeqs } from "./Cinematic";
 
 export const PLAYER_SEQS = {
     idle: 808,
@@ -168,7 +179,7 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's
-// tabs, empty equipment slots, the skills' refund button, co-op's flags and the
+// tabs and cloud save's button, empty equipment slots, the skills' refund button, co-op's flags and the
 // overhead prayers (every frame comes with the first) and the passives with a
 // sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
@@ -182,9 +193,11 @@ export function getGameSpriteIds(): number[] {
         ...GAME_VIEW_SPRITES,
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
+        ...Object.values(CLOUD_SAVE_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
+        ...STAT_ICON_SPRITE_IDS,
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
@@ -206,7 +219,7 @@ export function getGameSpriteIds(): number[] {
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
 // Amulet of blood fury's heal, a random event's visitor coming and going, a
 // co-op revive's emote)
-function getSpotAnimIds(): number[] {
+export function getSpotAnimIds(): number[] {
     const ids = new Set<number>([
         53,
         199,
@@ -310,9 +323,16 @@ function getSpotAnimIds(): number[] {
     }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
+        // What plays in its opening cinematic (MapDef.cinematic)
+        add(...(map.cinematic?.cues.map((cue) => cue.spotAnim) ?? []));
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
+        // and each skin's own (FloorSkinDef.material)
+        for (const skin of map.floor?.skins ?? []) {
+            const { rise, fall, crack } = skin.material ?? {};
+            add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim, skin.idle?.spotAnim);
+        }
     }
     for (const enemy of ENEMIES) {
         if (!TOMBS_LISTED && TOMBS_ENEMY_IDS.has(enemy.id)) {
@@ -495,6 +515,49 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
     return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
+// A floor with no skins of its own draws the slam's slab (FloorView); this is it, for its top
+export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): FloorSkinDef {
+    return { spotAnim: floor.slam.spotAnim };
+}
+
+// An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
+export function getPropKey(npcId: number): string {
+    return "prop:" + npcId;
+}
+
+// A piece of what's under a floor (FloorDef.under)
+export function getFloorPieceKey(locId: number): string {
+    return "floorpiece:" + locId;
+}
+
+// A floor's tile skin (FloorDef.skins): what it's baked from is all there is to it
+export function getFloorSkinKey(skin: FloorSkinDef): string {
+    const { spotAnim, loc, model, recolor, retexture, scale } = skin;
+    return "floorskin:" + JSON.stringify([spotAnim, loc, model, recolor, retexture, scale]);
+}
+
+// The same, its top alone, for a tile at rest among others (FloorView: none of its sides show)
+export function getFloorLidKey(skin: FloorSkinDef): string {
+    return getFloorSkinKey(skin) + ":top";
+}
+
+function getFloorSkinRequest(skin: FloorSkinDef, topOnly = false): BakeRequest {
+    return {
+        kind: "model",
+        key: topOnly ? getFloorLidKey(skin) : getFloorSkinKey(skin),
+        topOnly,
+        spotAnimId: skin.spotAnim,
+        locId: skin.loc,
+        modelId: skin.model,
+        recolor: skin.recolor,
+        retexture: skin.retexture,
+        scale: skin.scale,
+        // A spot animation's baked with its own animation even when it rises in code: its first
+        // frame is it at rest (the Wardens' slab's model unposed is nowhere near)
+        still: skin.spotAnim === undefined,
+    };
+}
+
 // The baked model of a statue a boss fight draws and animates (BossAttackDef.statues)
 export function getStatueModelKey(locId: number): string {
     return "statue:" + locId;
@@ -567,6 +630,8 @@ function getRequestBody(request: BakeRequest): string {
             return `spotanim:${request.spotAnimId}`;
         case "obj":
             return `obj:${request.objId}:${request.count}`;
+        case "model":
+            return request.key;
         case "loc":
             // A statue's (seqs) isn't plain scenery
             return `loc:${request.locId}:${request.animated ? 1 : 0}${request.seqs ? ":" + request.seqs.join(",") : ""}`;
@@ -625,6 +690,8 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
+    // Maps' props and cinematic casts baked or being baked, by model key (getPropKey)
+    private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -755,6 +822,19 @@ export class GameAssets {
         const requests: BakeRequest[] = [];
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
+        }
+        // What's under a floor (a dev map's, as its slabs are)
+        for (const map of ALL_MAPS) {
+            for (const locId of Object.values(map.floor?.under ?? {})) {
+                requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
+            }
+            for (const skin of map.floor?.skins ?? []) {
+                requests.push(getFloorSkinRequest(skin), getFloorSkinRequest(skin, true));
+            }
+            // The slam's own slab, for a floor with no skins of its own
+            if (map.floor && !map.floor.skins) {
+                requests.push(getFloorSkinRequest(DEFAULT_FLOOR_SKIN(map.floor), true));
+            }
         }
         for (const [kind, objId] of Object.entries(PICKUP_OBJS)) {
             requests.push({ kind: "obj", key: "pickup:" + kind, objId, count: 1 });
@@ -969,6 +1049,67 @@ export class GameAssets {
             waits.push(baking);
         }
         return Promise.all(waits).then(() => undefined);
+    }
+
+    // A map's NPCs posed as scenery (MapDef.props), and the cast of its opening cinematic
+    // (MapDef.cinematic) with everything they play: baked as the map's travelled to
+    static getPropRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
+        const seqs = new Map<number, number[]>();
+        const add = (npcId: number, seqIds: number[]) => {
+            const list = seqs.get(npcId) ?? [];
+            for (const seq of seqIds) {
+                if (!list.includes(seq)) {
+                    list.push(seq);
+                }
+            }
+            seqs.set(npcId, list);
+        };
+        for (const prop of maps.flatMap((map) => map.props ?? [])) {
+            add(prop.npcId, [prop.seq]);
+        }
+        for (const map of maps) {
+            if (map.cinematic) {
+                for (const [npcId, seqIds] of getCinematicSeqs(map.cinematic)) {
+                    add(npcId, seqIds);
+                }
+            }
+        }
+        return [...seqs].map(([npcId, seqIds]) => ({
+            kind: "npc",
+            key: getPropKey(npcId),
+            npcId,
+            seqIds,
+        }));
+    }
+
+    // Bakes a map's props and cinematic cast, unless they're baked already or on their way. Each
+    // NPC's baked once, under one key, so it's baked with what every map plays on it (maps), as
+    // the slim cache has it: one map's alone would leave another's animations out.
+    loadProps(map: MapDef, maps: readonly MapDef[] = ALL_MAPS): Promise<void> {
+        const npcIds = new Set([
+            ...(map.props ?? []).map((prop) => prop.npcId),
+            ...(map.cinematic?.cast ?? []).map((actor) => actor.npcId),
+        ]);
+        if (npcIds.size === 0) {
+            return Promise.resolve();
+        }
+        // This map's own def first: a dev map's is made again for each run
+        const requests = GameAssets.getPropRequests([
+            map,
+            ...maps.filter((other) => other.id !== map.id),
+        ]).filter((request) => npcIds.has(request.npcId));
+        const missing = requests.filter((request) => !this.propBakes.has(request.key));
+        if (missing.length > 0) {
+            const baking = this.bakeInTasks(missing, this.loadBake).catch((e) =>
+                console.error("Couldn't bake", map.id, "props", e),
+            );
+            for (const request of missing) {
+                this.propBakes.set(request.key, baking);
+            }
+        }
+        return Promise.all(requests.map((request) => this.propBakes.get(request.key))).then(
+            () => undefined,
+        );
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready

@@ -47,6 +47,7 @@ jobs:
         env:
             COOP_URL: ${{ inputs.coop_url || vars.COOP_URL }}
             RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+            CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
         steps:
             - name: Choose whether to bundle the game
               id: mode
@@ -106,6 +107,7 @@ jobs:
               env:
                   VITE_COOP_URL: ${{ env.COOP_URL }}
                   VITE_RUN_ANALYTICS_URL: ${{ env.RUN_ANALYTICS_URL }}
+                  VITE_CLOUD_SAVE_URL: ${{ env.CLOUD_SAVE_URL }}
               run: |
                   bun run build
                   bun run slim-cache
@@ -130,7 +132,7 @@ jobs:
               working-directory: android
               run: >-
                   gradle --no-daemon test :app:assembleDebug -PcoopUrl="$COOP_URL"
-                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL"
+                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL" -PcloudSaveUrl="$CLOUD_SAVE_URL"
 
             - name: Name the playable APK
               if: steps.mode.outputs.playable == 'true'
