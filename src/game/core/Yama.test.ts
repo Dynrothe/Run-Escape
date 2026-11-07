@@ -5,7 +5,7 @@ import { JUSTICIAR_ABILITIES } from "../content/justiciarKit";
 import { canRetry, getMap, getMapCharacter } from "../content/maps";
 import { BossAttackDef, emptyStats } from "../content/types";
 import { YAMA_HITPOINTS } from "../content/yama";
-import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
+import { METEOR_FIT, PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent } from "./entities";
 import { makeGrid } from "./world/testGrid";
 
@@ -104,6 +104,10 @@ const windingUp = (boss: Enemy) => boss.bossState!.windup?.attack.name;
 
 // Whether his meteor came down on a hero
 const struck = (sim: Sim, hero = 0) => sim.heroes[hero].damageByAttack["Meteor"] !== undefined;
+
+// The meteor breaking up, its own spot animation played on from where it cracks
+const burst = (sim: Sim) =>
+    sim.effects.find((e) => e.spotAnim === attackNamed("Meteor").meteor!.spotAnim);
 
 function events(sim: Sim): SimEvent[] {
     return sim.takeEvents();
@@ -244,6 +248,28 @@ describe("his meteor", () => {
         expect(sim.runOver).toBe(true);
     });
 
+    test("falls whole and breaks up where it lands, on its animation from where it cracks", () => {
+        const meteor = attackNamed("Meteor");
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 6);
+        sim["startBossAttack"](boss, meteor);
+        const windup = boss.bossState!.windup!;
+        const at = windup.targets[0];
+        run(sim, meteor.windup - 0.1);
+        expect(burst(sim)).toBeUndefined();
+        run(sim, 0.2);
+        expect(burst(sim)).toMatchObject({
+            x: at.x,
+            y: at.y,
+            height: 0,
+            once: true,
+            fitRadius: METEOR_FIT,
+        });
+        const breaks = Math.round(meteor.meteor!.breaksAt! * T);
+        expect(burst(sim)!.startTick).toBe(windup.landTick - breaks);
+    });
+
     test("the gaze cast at him while he calls it down stops it, and drops his guard", () => {
         const meteor = attackNamed("Meteor");
         const sim = createSim(LAIR.start);
@@ -252,6 +278,13 @@ describe("his meteor", () => {
         sim["startBossAttack"](boss, meteor);
         run(sim, 1);
         expect(sim.useAbility(slot("owls_gaze"))).toBe(true);
+        for (let i = 0; i < 3 * T && windingUp(boss) === "Meteor"; i++) {
+            sim.step(0, 0);
+        }
+        // Broken up in the sky, where it had got to
+        const height = burst(sim)!.height;
+        expect(height).toBeGreaterThan(1);
+        expect(height).toBeLessThan(meteor.meteor!.height);
         run(sim, meteor.windup);
         expect(struck(sim)).toBe(false);
         expect(sim.runOver).toBe(false);
@@ -276,6 +309,45 @@ describe("his meteor", () => {
         sim.heroes[0].kitReadyTicks[slot("owls_gaze")] = sim.tick + 2 * T;
         run(sim, 0.1);
         expect(windingUp(boss)).toBe("Meteor");
+    });
+});
+
+// Every slab of the floor west of beforeX up and hurting this tick, halfway through its hurt
+function slam(sim: Sim, beforeX = Infinity): void {
+    const floor = sim.floor!;
+    const [from, to] = MAP.floor!.slam.hurt;
+    const since = Math.round(((from + to) / 2) * T);
+    for (let i = 0; i < floor.roseAt.length; i++) {
+        if (floor.x0 + (i % floor.sizeX) < beforeX) {
+            floor.roseAt[i] = sim.tick - since;
+        }
+    }
+}
+
+describe("his floor", () => {
+    test("a lunge goes over its rising slabs unharmed, and standing on one hurts", () => {
+        const lunge = JUSTICIAR_ABILITIES[slot("lunge")];
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 9);
+        sim.player.facingX = 1;
+        sim.player.facingY = 0;
+        const hp = sim.player.hp;
+        const fromX = sim.player.x;
+        expect(sim.useAbility(slot("lunge"))).toBe(true);
+        run(sim, lunge.windup);
+        // The slabs come up under them all the way along, short of where it ends
+        const before = fromX + lunge.length - 1.5;
+        for (let i = 0; i < T && sim.player.x < fromX + lunge.length - 0.1; i++) {
+            slam(sim, before);
+            sim.step(0, 0);
+        }
+        expect(sim.player.x).toBeCloseTo(fromX + lunge.length, 1);
+        expect(sim.player.hp).toBe(hp);
+        run(sim, 0.1);
+        slam(sim);
+        sim.step(0, 0);
+        expect(sim.player.hp).toBeLessThan(hp);
     });
 });
 

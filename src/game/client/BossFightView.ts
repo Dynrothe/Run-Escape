@@ -2,7 +2,14 @@ import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/acto
 import { getEnemy } from "../content/enemies";
 import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
-import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, meteorFallen, yawFromVector } from "../core/Sim";
+import {
+    FREEZE_SPOTANIM,
+    METEOR_FIT,
+    Sim,
+    TICKS_PER_SECOND,
+    meteorFallen,
+    yawFromVector,
+} from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
 import {
     BossQuarters,
@@ -65,9 +72,8 @@ const GRAB_WARNING_TICK = 40;
 const LANE_CHEVRON_GAP = 4;
 // The line a wave or a thrown sword will take, at most this solid as it's let go
 const THROW_LINE_ALPHA = 0.3;
-// A meteor (BossAttackDef.meteor): tiles across it's drawn, and its shadow's, as it starts and as
-// it lands
-const METEOR_FIT = 1.6;
+// A meteor's shadow (BossAttackDef.meteor): tiles across it's drawn as the meteor starts and as it
+// lands (the meteor's own is the sim's METEOR_FIT, as it breaks there)
 const METEOR_SHADOW_FIT: [number, number] = [1.2, 4.5];
 // A boss's pillars against a gaze (BossDef.gazeWard): how far under the ground they come up from
 const PILLAR_SINK = 3;
@@ -478,7 +484,18 @@ export class BossFightView {
             if (model) {
                 const anim = model.anims[0];
                 const height = ground - meteor.height * (1 - fallen);
-                actors.draw(model, anim, anim.getFrame(since), at.x, height, at.y, 0, {
+                // Whole all the way down: the frames before it breaks, slowed to the fall (the sim
+                // plays the rest where it ends, Sim.shatterMeteor)
+                const span = Math.max(1, windup.landTick - windup.startTick);
+                const frame =
+                    meteor.breaksAt === undefined
+                        ? anim.getFrame(since)
+                        : anim.getFrame(
+                              (Math.min(since, span) / span) *
+                                  (meteor.breaksAt * TICKS_PER_SECOND - 1),
+                              false,
+                          );
+                actors.draw(model, anim, frame, at.x, height, at.y, 0, {
                     scale: (METEOR_FIT * 128) / Math.max(1, model.radius),
                     unlit: 1,
                 });

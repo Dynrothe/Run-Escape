@@ -15,7 +15,8 @@ the version in the corner).
   speaks from his throne, goes from it in embers and rises before it: the palace is sealed in fire,
   the floor rises under you, and only the Owl's gaze stops his meteor. Freeze his void flares with
   Ice barrage and shatter them with Lightning for food. It opens on Yama on his throne, facing the
-  last of the palace guard (any key, click or tap skips it).
+  last of the palace guard (any key, click or tap skips it). Lunge through his rising floor
+  unharmed.
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
   maps to play in any order, each harder the more of the others you've beaten. The first is the
   Stranglewood; the Lassar Undercity, Ghorrock and the Scar are coming.

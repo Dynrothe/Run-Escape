@@ -364,6 +364,8 @@ const MAX_EFFECTS = 160;
 // light comes back over this many seconds once it's landed or broken
 const METEOR_DARKEN = 0.5;
 const METEOR_LIGHT_BACK = 1.2;
+// The tiles a meteor's model's radius is drawn at (BossAttackDef.meteor), falling and breaking
+export const METEOR_FIT = 1.6;
 // How much of its height a meteor (BossAttackDef.meteor) has fallen at tick: slowly at first and
 // faster as it comes, over its windup. The view draws it from the same.
 export function meteorFallen(windup: BossWindup, tick: number): number {
@@ -6789,7 +6791,11 @@ export class Sim {
                 };
                 player.frozen = Math.max(player.frozen, ticks);
                 this.hitByFloor(def.drop.damage, def.drop.sound, true);
-            } else if (!shoved && floor.isHurting(tileX, tileY, this.tick)) {
+            } else if (
+                !shoved &&
+                !this.isLunging(this.hero) &&
+                floor.isHurting(tileX, tileY, this.tick)
+            ) {
                 this.hitByFloor(def.slam.damage, def.slam.sound, false);
             }
         });
@@ -7956,6 +7962,7 @@ export class Sim {
             // Broken apart where it's got to in the sky
             const at = windup.targets[0];
             const up = meteor.height * (1 - meteorFallen(windup, this.tick));
+            this.shatterMeteor(windup, up);
             for (const spot of stop.broken.spots ?? []) {
                 this.addImpactSpot({ ...spot, height: (spot.height ?? 0) + up }, at.x, at.y);
             }
@@ -8316,6 +8323,22 @@ export class Sim {
         return effect;
     }
 
+    // A meteor (BossAttackDef.meteor) breaking up where it's got to, up tiles off the ground: the
+    // rest of its own animation from where it starts to break (breaksAt), at the size it fell
+    private shatterMeteor(windup: BossWindup, up: number): void {
+        const meteor = windup.attack.meteor;
+        const at = windup.targets[0];
+        if (meteor?.breaksAt === undefined || !at) {
+            return;
+        }
+        const effect = this.addEffect(meteor.spotAnim, at.x, at.y, up, IMPACT_TICKS);
+        if (effect) {
+            effect.startTick -= secondsToTicks(meteor.breaksAt);
+            effect.once = true;
+            effect.fitRadius = METEOR_FIT;
+        }
+    }
+
     // An arena's attack that's caught its own boss (BossAttackDef.turns): hurt, and stunned
     private turnOnBoss(boss: Enemy, attack: BossAttackDef): void {
         const turns = attack.turns;
@@ -8449,6 +8472,14 @@ export class Sim {
     // lunge's dash after it moves them by itself.
     isCasting(hero: Hero = this.hero): boolean {
         return this.kitCasts.some((cast) => cast.hero === hero.index && !cast.landed);
+    }
+
+    // Whether a hero's dashing down a lunge's strip (from its strike to its end): over the floor's
+    // rising slabs unharmed (Yama's ripples and lanes), so a lunge is a way through them
+    private isLunging(hero: Hero): boolean {
+        return this.kitCasts.some(
+            (cast) => cast.hero === hero.index && cast.landed && cast.ability.kind === "lunge",
+        );
     }
 
     // Each hero's gaze winding up (HeroAbilityDef kind "gaze"), for its light: whose, how far it
@@ -8882,6 +8913,7 @@ export class Sim {
         if (attack.meteor?.dark !== undefined && this.lighting) {
             this.dimTo(this.baseAmbient, METEOR_LIGHT_BACK);
         }
+        this.shatterMeteor(windup, 0);
         this.emit({
             type: "bossAttack",
             enemyId: enemy.def.id,

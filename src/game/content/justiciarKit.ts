@@ -28,7 +28,8 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
     {
         id: "lunge",
         name: "Lunge",
-        description: "Draws back and lunges six tiles ahead, cutting through what's in the way.",
+        description:
+            "Draws back and lunges six tiles ahead, cutting through what's in the way. Rising floor can't hurt you mid-lunge.",
         kind: "lunge",
         // Justiciar chestguard
         iconObjId: 22327,

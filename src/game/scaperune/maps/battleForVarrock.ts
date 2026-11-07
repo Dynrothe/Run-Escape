@@ -1,6 +1,7 @@
 import {
     BREACH_BRICKS,
     BROKEN_CITY_WALL,
+    WALKABLE_FIRE,
     getCharredLoc,
 } from "../../../rs/config/loctype/LocOverrides";
 import { Ground } from "../Ground";
@@ -584,7 +585,15 @@ function dressPalace(grid: TileGrid, report: VarrockDressing): void {
             }
             const roll = tileHash(x, y, 31);
             if (roll < 0.012) {
-                grid.locs.push({ id: FIRE[0], type: LOC_NORMAL, rotation: 0, level: 0, x, y });
+                // One that blocks nothing: his fight's on this floor
+                grid.locs.push({
+                    id: WALKABLE_FIRE,
+                    type: LOC_NORMAL,
+                    rotation: 0,
+                    level: 0,
+                    x,
+                    y,
+                });
                 report.fires++;
             } else if (roll > 0.988) {
                 const id = BURNT_SKELETONS[Math.floor(tileHash(x, y, 2) * 2)];

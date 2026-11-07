@@ -1,3 +1,4 @@
+import { WALKABLE_FIRE } from "../../../rs/config/loctype/LocOverrides";
 import {
     BATTLE_FOR_VARROCK,
     BLAZE,
@@ -846,6 +847,8 @@ export const FUN_MAPS: MapDef[] = [
             ambientColor: 0xf4e4da,
             locs: {
                 4266: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                // The same fire, on the palace floor, which blocks nothing
+                [WALKABLE_FIRE]: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
                 5499: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
                 31722: { radius: 4.5, color: 0xff7a2a, intensity: 0.7, flicker: 0.4 },
                 3862: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },

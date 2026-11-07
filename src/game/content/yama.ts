@@ -23,8 +23,6 @@ const CLAW_AT = 0.9;
 // A stomp (STOMP01, 2.4 s): his foot comes down 1.16 s in, with its sound
 const STOMP_SEQ = 12148;
 const STOMP_AT = 1.16;
-// A hand to the ground (SUMMON01, 2.4 s): his shadow lanes
-const SUMMON_SEQ = 12156;
 // Coming up through a portal (PORTAL02, 4.8 s), and going down through one (DESPAWN01, 3.6 s)
 const RISE_SEQ = 12160;
 const DEATH_SEQ = 12161;
@@ -148,7 +146,9 @@ const SHADOW_LANES: BossAttackDef = {
     range: 999,
     weight: 3,
     phases: [1],
-    seq: SUMMON_SEQ,
+    // Fire from his hands: SUMMON01, a hand to the ground, starts with him down under the floor
+    // and rising out of it, so he was gone for a moment as the lanes came up
+    seq: CAST_SEQ,
     floor: lanes("y"),
 };
 
@@ -214,7 +214,15 @@ const METEOR_ATTACK: BossAttackDef = {
     sound: STOMP_SOUND,
     shout: "Kneel.",
     message: "Turn your gaze on him!",
-    meteor: { spotAnim: METEOR, shadowSpotAnim: DEBRIS_SHADOW, height: 14, dark: 0.45 },
+    // 3271 is whole for its first 99 ticks (1.98 s), then cracks and bursts: it falls on those
+    // and bursts where it lands, or where a gaze stops it
+    meteor: {
+        spotAnim: METEOR,
+        shadowSpotAnim: DEBRIS_SHADOW,
+        height: 14,
+        dark: 0.45,
+        breaksAt: 1.98,
+    },
     // Its glow on the floor where it's coming down, growing as it falls: in the dark it calls
     // for, its shadow alone doesn't show on the burnt stone (and at 1.2 nor did this)
     light: { radius: 3, color: 0xff6a20, intensity: 3, flicker: 0.2 },

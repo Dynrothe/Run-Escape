@@ -1386,7 +1386,9 @@ leaves turn scorched brown (33), and other see-through ones (bars, shingles) kee
 holes. They're read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and
 the slim cache keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in
 `LOC_OVERRIDES` with a `base` (the breach's Falador pieces, charred to `charLight`, the bricks `walkable`). Keep every id under 2^21:
-the model caches key a loc by its id << 10.
+the model caches key a loc by its id << 10. `WALKABLE_FIRE` is the fire on its logs (4266) blocking nothing, for the
+palace floor Yama's fought on. A map's lights go by the placed id (`LightingDef.locs`), so a derived loc needs its own
+entry there to glow.
 
 **A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
 his throne (npc 15645, seq 12153), is a `MapDef.props` entry the game draws instead, and the recipe blocks the ground

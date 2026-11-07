@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
+import { WALKABLE_FIRE, getLocOverride } from "../../../rs/config/loctype/LocOverrides";
 import { GAME_CACHE_NAME } from "../../cache";
 import { getMap, getMapCharacter } from "../../content/maps";
 import { PHONE_TRIANGLES, lintFloor } from "../../core/floorLint";
@@ -58,6 +59,11 @@ describe("the Battle for Varrock", () => {
         const lint = lintFloor(floor, { x: 12, y: 0 });
         expect(lint.warnings).toEqual([]);
         expect(lint.triangles.busy).toBeLessThanOrEqual(PHONE_TRIANGLES);
+    });
+
+    it("has fires on the palace floor that block nothing, as Yama's fight is there", () => {
+        // The fire on its logs (4266) that the rest of the city burns with, walked through
+        expect(getLocOverride(WALKABLE_FIRE)).toEqual({ base: 4266, walkable: true });
     });
 });
 

@@ -180,6 +180,18 @@ stand and nothing hurting, so co-op sees it together; a solo skip brings his int
 | Lightning on a flare      | Shatters it                  | Breaks it only while held                   | The kit's Lightning strikes the cells of the colour you're not on, so stand a cell away from it        |
 | The heal                  | 6                            | 6, as the game's food                       | The game's own pickup, drawn in towards whoever comes near; in co-op it's whoever picks it up          |
 
+**After the first playtest:**
+
+- The meteor falls whole and breaks up where it lands, or where the gaze stops it. Its animation
+  (3271) cracks at 1.98 s, and looped over the 4.5 s fall it burst halfway down and came round
+  whole again.
+- Shadow lanes is cast with his hands (MAGIC01). Its first animation, SUMMON01, starts with him
+  under the floor, so he vanished as the lanes came up.
+- The palace floor's fires block nothing.
+- A lunge goes over rising slabs unharmed: section 4's way through a ring, and through lanes too.
+  The bot's six seeds came out at 95, 80, 45, 138, 55 and 112 s (from 59, 77, 105, 112, 56 and
+  146), into phase 3 in two: no better or worse beyond a seed's noise, and still no win.
+
 **Not built yet:** the Element floor; the Collapse; the burning rings; fire and shadow as colours on
 the floor; and the pillars blocking his volleys and lanes (they hide him from the gaze and block the
 way, as planned, but don't stop his attacks).

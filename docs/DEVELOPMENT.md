@@ -936,7 +936,8 @@ adventurer can have:
   charge.
     - From the press to its strike the hero's rooted (`Sim.isCasting`: `stepPlayer` and co-op's
       prediction take it as frozen), facing the way it goes. A lunge's dash after its windup
-      moves them by itself.
+      moves them by itself, and the floor's rising slabs don't hurt them on the way
+      (`Sim.isLunging`), so it's a way through Yama's ripples and lanes.
     - A `gaze` can't see through the map: `core/gazeSight.ts` takes every wall and object that
       stops a shot (the cache's projectile-blocking collision flags) within its reach as
       segments, and the sim spares what's hidden behind one (`hiddenFrom`, the enemy's middle).
@@ -980,6 +981,10 @@ adventurer can have:
       the player stood (`BossFightView.drawMeteors`, `meteorFallen`), its shadow growing under it,
       and the scene dimmed to `dark` (`Sim.dimTo`). The swing's radius is what it hits. The
       attack's `light` glows where it'll land: on the burnt floor, its shadow alone didn't show.
+      `breaksAt` is where its spot animation starts to break up: it falls on the frames before,
+      slowed to the windup, and `Sim.shatterMeteor` plays the rest where it ends, landed or
+      stopped in the sky, as an effect started that far back. Left looping, Yama's (3271) burst
+      halfway down and came round whole again.
     - `BossAttackDef.interruptedBy` lets a hero's button (a `HeroAbilityDef`, by id) stop the
       attack by landing on the boss during its windup (`interruptBoss`). `broken` plays where it
       would have landed, the boss is stunned, and its guard's down for `open` seconds.

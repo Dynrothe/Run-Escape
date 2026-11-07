@@ -777,8 +777,17 @@ export type BossAttackDef = {
     // Swings: something falling out of the sky onto where the player stood as it began, over its
     // windup, from height tiles up, with shadowSpotAnim growing under it (Yama's meteor). It's
     // drawn, not a mark on the ground: the swing's radius is what it hits. dark: the scene's
-    // light while it falls, on a map with lighting.
-    meteor?: { spotAnim: number; shadowSpotAnim?: number; height: number; dark?: number };
+    // light while it falls, on a map with lighting. breaksAt: the seconds into spotAnim's own
+    // animation where it starts to break up; it falls on the frames before, slowed to its windup,
+    // and plays the rest where it ends, landed or stopped in the sky. Without it, its animation
+    // plays on as it falls.
+    meteor?: {
+        spotAnim: number;
+        shadowSpotAnim?: number;
+        height: number;
+        dark?: number;
+        breaksAt?: number;
+    };
     // Stopped by a hero's own button (HeroAbilityDef, by id) landing on the boss while it winds
     // this up (the Owl's gaze stopping Yama's meteor): it's lost, broken shows where it would have
     // landed (where it is, if it isn't a meteor), and the boss is stunned for stun seconds and
