@@ -1,5 +1,22 @@
+import { WALKABLE_FIRE } from "../../../rs/config/loctype/LocOverrides";
+import {
+    BATTLE_FOR_VARROCK,
+    BLAZE,
+    BRAZIER,
+    CRATER_HEART,
+    GREAT_FIRE,
+    LOW_FIRE,
+    PALACE_FLOOR_ASCII,
+    WALL_OF_FLAME,
+    YAMA_SCALE,
+} from "../../scaperune/maps/battleForVarrock";
+import { FLOOR_SKINS } from "../floorSkins";
 import { MapDef, RunEventDef } from "../types";
+import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
+import { YAMA_HITPOINTS } from "../yama";
+import { VARROCK_OPENING } from "./varrockOpening";
+import { YAMA_WAKES } from "./yamaWakes";
 
 // The fun maps: open from the start, endless from the start, and full of other
 // players (Pest Control's are pests). Their rounds turn over every fifteen
@@ -744,6 +761,107 @@ export const FUN_MAPS: MapDef[] = [
                 },
             },
             playerChat: { lines: PEST_CONTROL_PLAYER_LINES, every: [10, 18] },
+        },
+    },
+    {
+        id: "battle_for_varrock",
+        name: "The Battle for Varrock",
+        description:
+            "Varrock after the battle, every street and house of it burnt to ruins, fires still " +
+            "burning and the dead where they fell. Walk it as Justiciar Zachariah, his lunge, " +
+            "shock wave, ice, lightning and gaze on your buttons, up to Yama on his throne in " +
+            "the palace. A map to explore, until you step onto his floor.",
+        // Varrock teleport
+        iconObjId: 8007,
+        // Varrock and the country round it, inside its margin (scaperune/maps/battleForVarrock.ts)
+        arena: BATTLE_FOR_VARROCK.arena,
+        // Just outside the south gate
+        spawn: BATTLE_FOR_VARROCK.spawn,
+        // Facing into the city, as the opening's camera ends
+        spawnFacing: { x: 0, y: 1 },
+        difficulty: { hp: 1, damage: 1 },
+        waves: [],
+        events: [],
+        finalBossWarning: "",
+        victoryText: "",
+        scaperune: true,
+        fun: {
+            // Nobody comes (FunMapDef.explore)
+            bosses: { pool: [], firstAt: Infinity, every: [Infinity, Infinity] },
+            character: "justiciar_zachariah",
+            explore: true,
+        },
+        // The palace's floor is gone: the game lays its own from the top of its front steps,
+        // ash-grey paving gone to soot with cinders and smouldering tiles among it. Nothing moves
+        // it but Yama, once he's woken (his attacks' patterns, content/yama.ts).
+        floor: {
+            ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor),
+            // A slab that catches the Justiciar takes 6 of his 38 hitpoints
+            slam: { ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor).slam, damage: 0.15 },
+            ascii: PALACE_FLOOR_ASCII,
+            // A whisker over the palace's own ground: its tiles are drawn as their tops, or a
+            // phone couldn't draw his patterns on it
+            onGround: true,
+            skins: [
+                FLOOR_SKINS.ashenFlagstones,
+                FLOOR_SKINS.charredFlagstones,
+                FLOOR_SKINS.smouldering,
+            ],
+            tiles: [{ turn: "random" }, { share: 0.3, skin: 1 }, { share: 0.03, skin: 2 }],
+            seed: 3482,
+            script: [],
+            loopSeconds: 60,
+        },
+        // Yama on his throne at the north end of the palace, facing down it: npc 15645 sitting
+        // (12153), small. Once he's woken, his throne alone (14157).
+        props: [
+            {
+                npcId: 15645,
+                seq: 12153,
+                ...BATTLE_FOR_VARROCK.yama,
+                scale: YAMA_SCALE,
+                awake: { npcId: 14157, seq: 12153 },
+            },
+        ],
+        // Stepping onto the palace floor wakes him: he rises before his throne, and every way
+        // off the floor burns until he's dead
+        lair: {
+            enemyId: "yama",
+            hp: YAMA_HITPOINTS,
+            at: BATTLE_FOR_VARROCK.yamaRise,
+            start: BATTLE_FOR_VARROCK.yamaStart,
+            seal: { locId: LOW_FIRE, scale: 1.4, sound: 10271 },
+            message: "Yama wakes! The palace is sealed in fire!",
+            victory: "Yama is beaten. The fires round the palace die down.",
+            shout: "This city... was already... ash...",
+            // He speaks from his throne first, and is gone from it in embers (fun/yamaWakes.ts)
+            opening: YAMA_WAKES,
+        },
+        // Yama's own track, from his fight: the city's his now
+        music: "Sign Here",
+        // It opens on Yama and the last of the palace guard (fun/varrockOpening.ts)
+        cinematic: VARROCK_OPENING,
+        // A smoky, dimmed city lit by its fires
+        lighting: {
+            ambient: 0.92,
+            ambientColor: 0xf4e4da,
+            locs: {
+                4266: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                // The same fire, on the palace floor, which blocks nothing
+                [WALKABLE_FIRE]: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                5499: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                31722: { radius: 4.5, color: 0xff7a2a, intensity: 0.7, flicker: 0.4 },
+                3862: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
+                [WALL_OF_FLAME]: { radius: 3.5, color: 0xff7022, intensity: 0.65, flicker: 0.45 },
+                // Either side of Yama's throne
+                [BRAZIER]: { radius: 5, color: 0xff6a20, intensity: 0.9, flicker: 0.3 },
+                // What was cloth: Gypsy Aris's tent burning down, the tents and the stalls
+                [GREAT_FIRE]: { radius: 5.5, color: 0xff7022, intensity: 1, flicker: 0.45 },
+                [BLAZE]: { radius: 5, color: 0xff6a1a, intensity: 0.9, flicker: 0.5 },
+                [LOW_FIRE]: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
+                // The crater's molten heart, where the square's fountain stood
+                [CRATER_HEART]: { radius: 6, color: 0xff5a1a, intensity: 0.9, flicker: 0.25 },
+            },
         },
     },
 ];

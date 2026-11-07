@@ -1,7 +1,9 @@
 import { MapRecipe } from "../recipe";
+import { BATTLE_FOR_VARROCK_RECIPE } from "./battleForVarrock";
 import { HALLOWED_NIGHT } from "./hallowedNight";
 import { OWLS_COURT_RECIPE } from "./owlsCourt";
 import { SISTERHOOD_SANCTUARY } from "./sisterhoodSanctuary";
+import { STRANGLEWOOD_RECIPE } from "./stranglewood";
 import { THEATRE_OF_BLOOD } from "./theatreOfBlood";
 
 // Recipes behind real maps in MAPS: these ship, and DEV_MAPS has nothing to do with them
@@ -10,4 +12,6 @@ export const SCAPERUNE_MAPS: MapRecipe[] = [
     SISTERHOOD_SANCTUARY,
     THEATRE_OF_BLOOD,
     OWLS_COURT_RECIPE,
+    STRANGLEWOOD_RECIPE,
+    BATTLE_FOR_VARROCK_RECIPE,
 ];

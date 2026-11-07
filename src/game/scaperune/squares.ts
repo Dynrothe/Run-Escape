@@ -19,13 +19,17 @@ export function createBuildContext(maps: MapFileLoader, locTypes: LocTypeLoader)
         maps,
         locs(id) {
             const type = locTypes.load(id);
+            const { transforms } = type;
             return {
                 name: type.name,
                 sizeX: type.sizeX,
                 sizeY: type.sizeY,
                 clipType: type.clipType,
                 blocksProjectile: type.blocksProjectile,
-                drawn: type.transforms !== undefined || (type.models?.length ?? 0) > 0,
+                drawn: transforms !== undefined || (type.models?.length ?? 0) > 0,
+                ...(transforms && {
+                    shows: transforms[0] !== -1 ? transforms[0] : transforms[transforms.length - 1],
+                }),
             };
         },
     };

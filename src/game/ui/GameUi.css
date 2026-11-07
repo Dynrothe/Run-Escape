@@ -874,6 +874,58 @@
     white-space: nowrap;
 }
 
+/* An act's page: its four maps round the act's own card, two above it and two below */
+.ui-act {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+        "a b"
+        "m m"
+        "c d";
+    gap: 4px;
+}
+
+.ui-act-card,
+.ui-act-middle {
+    gap: 6px;
+    min-width: 0;
+    padding: 3px 8px 3px 4px;
+    font-size: 15px;
+    text-align: left;
+}
+
+.ui-act-card-text,
+.ui-act-middle {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ui-act-middle {
+    align-items: center;
+    padding: 4px 8px;
+    text-align: center;
+    cursor: default;
+}
+
+.ui-act-line {
+    overflow: hidden;
+    color: #b8aa8a;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-act-middle .ui-act-line {
+    white-space: normal;
+}
+
+/* Not open yet: the whole act faded */
+.ui-act-closed {
+    opacity: 0.6;
+}
+
 /* A tick for a map that's been beaten */
 .ui-beaten {
     flex-shrink: 0;
@@ -1139,6 +1191,14 @@
 
 .ui-run {
     pointer-events: none;
+}
+
+/* Over the opening cinematic: catches the click or tap that skips it */
+.ui-cinematic {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+    touch-action: none;
 }
 
 .ui-xp {
@@ -1669,7 +1729,14 @@
     top: -4px;
 }
 
+/* A hero's own buttons (KitButtons), in a row with their keys */
+.ui-kit {
+    display: flex;
+    gap: 6px;
+}
+
 /* Only on a touch screen (Mobile.css) */
+.ui-touch-kit,
 .ui-touch-ability {
     display: none;
 }

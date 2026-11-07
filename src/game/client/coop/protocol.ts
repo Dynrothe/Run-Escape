@@ -76,6 +76,8 @@ export type GameStart = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // An act's map: the host's step (content/acts.ts), which everyone plays at
+    actStep?: number;
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -90,6 +92,7 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
         typeof game.mapId === "string" &&
         typeof game.endless === "boolean" &&
         typeof game.hard === "boolean" &&
+        (game.actStep === undefined || (Number.isSafeInteger(game.actStep) && game.actStep >= 0)) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&

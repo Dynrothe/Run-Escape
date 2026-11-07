@@ -68,6 +68,15 @@ export const TROPHIES: TrophyDef[] = [
         how: "Rarely found in a trick or treat pumpkin.",
         from: { kind: "pumpkin", chance: 1 / 200 },
     },
+    // Act II's: a piece of the Soulreaper axe from each of its final bosses, the first time
+    // they're beaten (the axe itself is made once all four are in)
+    {
+        id: "executioners_axe_head",
+        name: "Executioner's axe head",
+        objId: 28319,
+        how: "From Vardorvis, the first time he's beaten in the Stranglewood.",
+        from: { kind: "boss", enemyId: "vardorvis", mapId: "stranglewood", chance: 1 },
+    },
 ];
 
 // The Theatre of Blood's uniques, weighted as the real raid's are, and its pet off Verzik

@@ -1,6 +1,6 @@
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
-import { MAPS } from "../content/maps";
+import { ALL_MAPS, MAPS } from "../content/maps";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
@@ -9,6 +9,7 @@ import { ItemUse } from "../content/types";
 import { WEAPONS } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { SimEvent } from "../core/entities";
+import { getMapCinematics } from "./Cinematic";
 import { GameAudio } from "./GameAudio";
 
 // Moments in the casket opening animation: it lands, rattles, bursts open
@@ -63,6 +64,16 @@ export function getGameSoundIds(): number[] {
     }
     for (const map of MAPS) {
         ids.push(map.fight?.ability?.sound ?? -1);
+    }
+    for (const map of ALL_MAPS) {
+        ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
+        for (const cinematic of getMapCinematics(map)) {
+            ids.push(...cinematic.cues.map((cue) => cue.sound ?? -1));
+        }
+        for (const skin of map.floor?.skins ?? []) {
+            const { rise, fall, crack } = skin.material ?? {};
+            ids.push(rise?.sound ?? -1, fall?.sound ?? -1, crack?.sound ?? -1);
+        }
     }
     ids.push(VISITOR_SOUND);
     for (const { effect } of RANDOM_EVENTS) {
@@ -217,6 +228,7 @@ export class GameSounds {
                     break;
                 case "bossIntro":
                 case "bossRising":
+                case "lair":
                 case "totemBlast":
                     if (event.sound !== -1) {
                         audio.play(event.sound, { volume: 1 });

@@ -5,6 +5,7 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { getAct, getActStep } from "../content/acts";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -16,6 +17,7 @@ import {
     MAPS,
     MAP_BY_ID,
     RAID_MAPS,
+    canRetry,
     getArenaRegion,
     getMap,
     getMapCharacter,
@@ -32,7 +34,7 @@ import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { TROPHY_BY_ID } from "../content/trophies";
-import { CombatStyle, Stats, emptyStats } from "../content/types";
+import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
@@ -69,6 +71,12 @@ import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/Camera
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
+import {
+    CinematicCamera,
+    CinematicPlayer,
+    getCinematicCamera,
+    getCinematicSquares,
+} from "./Cinematic";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -111,12 +119,14 @@ import {
     getInventoryViews,
     getUsedRevive,
 } from "./ItemViews";
+import { LightBudget, MAX_SHOWN_LIGHTS } from "./LightBudget";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getPlayerPose } from "./PlayerPose";
 import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
 import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
+import { SceneLights } from "./SceneLights";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
@@ -203,6 +213,10 @@ const SHAKE_FAR = 24;
 // window does, and the player stays big enough to see
 const PHONE_RUN_DISTANCE = 15;
 const PHONE_MAX_HEIGHT = 520;
+// The most of the opening cinematic a frame moves it on by (ms)
+const CINEMATIC_MAX_FRAME_MS = 100;
+// The longest it waits for what it sees to load before it plays anyway (ms)
+const CINEMATIC_LOAD_MS = 45000;
 
 // How far past the arena the camera can get: a run's is behind the player, zoomed
 // all the way out, and the title screen's circles them
@@ -213,6 +227,14 @@ const CAMERA_REACH: CameraReach = {
 
 // The world fades out past the arena's edge. A ScapeRune map's world carries on: it
 // has scenery there (scaperune/CLAUDE.md).
+// What to build a map's collision from: its arena, and on a lit map where its glowing scenery is
+// (LightingDef.locs)
+function getRegionInput(map: MapDef): RegionDataInput {
+    const locs = map.lighting?.locs;
+    const region = getArenaRegion(map);
+    return locs ? { ...region, glowLocs: Object.keys(locs).map(Number) } : region;
+}
+
 function setPlayArea(
     renderer: GameWebGLRenderer,
     arena: { baseX: number; baseY: number; sizeX: number; sizeY: number },
@@ -474,6 +496,14 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
+    // The map's opening cinematic while it plays (MapDef.cinematic), or its lair's (LairDef.opening),
+    // and its own camera, so the run's (and the player's zoom) is left as it was
+    cinematic?: CinematicPlayer;
+    private readonly cinematicRig = new CameraRig();
+    // While what it sees loads, behind the loading screen: since when (performance.now)
+    private cinematicLoading?: number;
+    // The tick the lair woke whose opening's been played (Lair.wakeTick), so it plays once
+    private lairOpeningTick = -1;
 
     sim?: Sim;
     paused = false;
@@ -517,6 +547,8 @@ export class GameClient implements GameFrameHandler {
     private shownBrightness = 1;
     // The raid hall's colour wash as last set (RaidRoomDef.hall)
     private shownWash: string | undefined;
+    // A lit map's lights (MapDef.lighting), picked each frame for the shaders
+    private readonly sceneLights = new SceneLights(new LightBudget(MAX_SHOWN_LIGHTS));
     private shownDpsTick = 0;
     private readonly damageMeter = new DamageMeter();
     // Each hero's look, as last baked
@@ -564,7 +596,7 @@ export class GameClient implements GameFrameHandler {
         this.minimap = new Minimap(mapViewer);
         this.overlay = new Overlay(overlayCanvas);
         this.input = new GameInput(renderer.canvas);
-        this.input.onPress = this.onKeyPress;
+        this.input.onPress = (code) => this.pressKey(code);
         this.input.takesKey = (code) => code === "Tab" && this.isPlaying();
         this.input.pads.onConnect = (pad) =>
             this.store.toast(
@@ -900,6 +932,8 @@ export class GameClient implements GameFrameHandler {
                 map.fun !== undefined ||
                 (room.endless && (anyMap || isEndlessUnlocked(this.save, map.id))),
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
+            // An act's map is at the host's step (content/acts.ts)
+            ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1253,7 +1287,7 @@ export class GameClient implements GameFrameHandler {
                 RegionDataInput,
                 RegionData,
                 RegionDataLoader
-            >(new RegionDataLoader(), getArenaRegion(getMap(mapId)));
+            >(new RegionDataLoader(), getRegionInput(getMap(mapId)));
             grid = new ArenaGrid(region);
             // Only the title screen's and this map's are kept: a phone needn't
             // hold every map played
@@ -1290,12 +1324,19 @@ export class GameClient implements GameFrameHandler {
         }
         // A pet that won't bake isn't a reason to stay: loadPets doesn't fail
         const petsBaked = this.assets.loadPets(pets);
+        // A hero the map has everyone play, drawn as an NPC (Justiciar Zachariah)
+        const mapCharacter = getMapCharacter(map);
+        const heroBaked = mapCharacter ? this.assets.loadHeroLook(mapCharacter) : undefined;
+        // And its NPCs posed as scenery (MapDef.props)
+        const propsBaked = this.assets.loadProps(map);
         try {
             this.grid = await this.loadGrid(mapId);
             await this.assets.loadEnemies(enemies, (done, total) => {
                 this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
             });
             await petsBaked;
+            await heroBaked;
+            await propsBaked;
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);
@@ -1305,7 +1346,13 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    async startRun(mapId: string = this.store.getSnapshot().mapId): Promise<void> {
+    // cinematic: false to start without the map's opening cinematic (a retry). atLair: start at
+    // its lair's start (MapDef.lair), on its floor, so its fight's on again at once (a retry)
+    async startRun(
+        mapId: string = this.store.getSnapshot().mapId,
+        cinematic = true,
+        atLair = false,
+    ): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
         }
@@ -1322,14 +1369,15 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         usePortableMath(false);
+        const spawn = (atLair && map.lair?.start) || map.spawn;
         const sim = new Sim({
             grid: this.grid,
             mapId,
             characterId,
             metaStats: getMetaStats(this.save, getCharacter(characterId).style),
             seed: (Math.random() * 0x7fffffff) | 0,
-            spawnX: map.spawn.x,
-            spawnY: map.spawn.y,
+            spawnX: spawn.x,
+            spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
             endless,
             hard,
@@ -1337,6 +1385,7 @@ export class GameClient implements GameFrameHandler {
             raidTeleports: RAID_TELEPORTS,
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
+            actStep: getActStep(map, this.save.mapVictories),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -1344,7 +1393,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet]);
+        this.enterRun(sim, [this.save.pet], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -1424,6 +1473,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             endless: game.endless,
             hard: game.hard,
+            actStep: game.actStep,
             party,
             focus,
         });
@@ -1437,7 +1487,7 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(sim, pets);
+        this.enterRun(sim, pets, true);
         if (!this.coop.isHost) {
             this.coop.sendUp({ loaded: true });
         }
@@ -1448,9 +1498,14 @@ export class GameClient implements GameFrameHandler {
     }
 
     // pets: each hero's pet, in the party's order
-    private enterRun(sim: Sim, pets: (string | undefined)[]): void {
+    // cinematic: play the map's opening cinematic, if it has one
+    private enterRun(sim: Sim, pets: (string | undefined)[], cinematic: boolean): void {
         const map = sim.map;
         this.sim = sim;
+        this.cinematic =
+            cinematic && map.cinematic ? new CinematicPlayer(map.cinematic) : undefined;
+        this.view.cinematic = this.cinematic;
+        this.lairOpeningTick = -1;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.scaperune === true);
         this.grid.exactGround = map.scaperune === true;
@@ -1460,6 +1515,8 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = map.brightness ?? 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
+        this.renderer.setLighting(map.lighting !== undefined);
+        this.sceneLights.reset();
         this.minimap.setMap(map);
         const music = map.music && musicFor(map.music);
         if (music) {
@@ -1508,7 +1565,11 @@ export class GameClient implements GameFrameHandler {
             party: [],
             waitingOn: [],
             revive: undefined,
+            cinematic: this.cinematic !== undefined,
         });
+        if (this.cinematic) {
+            this.preloadCinematic(sim, this.cinematic);
+        }
         this.updateHud(true);
         // A run that begins with picks to make (a boss fight's) shows them now:
         // the loop only steps the sim once they're made
@@ -1735,13 +1796,24 @@ export class GameClient implements GameFrameHandler {
     }
 
     // The fight's own button (MapDef.fight.ability): Space, a pad's bottom button, or the touch
-    // screen's. Out of reach, or not ready, it says no.
-    useAbility(): void {
+    // screen's. Out of reach, or not ready, it says no. A hero with buttons of their own
+    // (CharacterDef.abilities) has slot for which: Space is the first, and 1 to 4 the others.
+    useAbility(slot = 0): void {
         const sim = this.sim;
-        if (!sim?.map.fight?.ability || (this.paused && !this.coopRun)) {
+        if (!sim || (this.paused && !this.coopRun)) {
             return;
         }
-        this.act({ kind: "ability" });
+        if (this.hasKit(sim)) {
+            this.act({ kind: "ability", index: slot });
+        } else if (sim.map.fight?.ability) {
+            this.act({ kind: "ability" });
+        }
+    }
+
+    // Whether the hero this player plays has buttons of their own (CharacterDef.abilities)
+    private hasKit(sim: Sim): boolean {
+        const hero = sim.heroes[sim.focus] ?? sim.heroes[0];
+        return getCharacter(hero.characterId).abilities !== undefined;
     }
 
     // The opening animation's sounds, timed by the UI
@@ -1803,14 +1875,15 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
-    // The same boss fight again, from its results (MapDef.fight), on your own
+    // The same boss fight again, from its results (MapDef.fight, or a lair's), on your own
     retry(): void {
         const mapId = this.sim?.map.id;
-        if (!mapId || this.coopRun || !getMap(mapId).fight) {
+        if (!mapId || this.coopRun || !canRetry(getMap(mapId))) {
             return;
         }
         this.leaveRun();
-        void this.startRun(mapId);
+        // The fight again at once, without the map's cinematic
+        void this.startRun(mapId, false, true);
     }
 
     leaveRun(show = true): void {
@@ -1824,6 +1897,7 @@ export class GameClient implements GameFrameHandler {
         usePortableMath(false);
         this.assets.dropPlayers(1);
         this.sim = undefined;
+        this.endCinematic();
         this.reportRun = undefined;
         this.paused = false;
         this.audio.stopMusic();
@@ -1834,6 +1908,7 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
+        this.renderer.setLighting(false);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -1907,7 +1982,8 @@ export class GameClient implements GameFrameHandler {
                 bossKills: getBossKillViews(result.stats),
                 endlessRecord,
                 firstHardWin,
-                unlockedMap: unlockedMap?.name,
+                // An act opens all its maps at once: it's the act that's said to open
+                unlockedMap: unlockedMap?.act ? getAct(unlockedMap.act.id).name : unlockedMap?.name,
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
@@ -1965,6 +2041,15 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // Any key or controller button skips the opening cinematic, and does nothing else
+    private pressKey(code: string): void {
+        if (this.cinematic) {
+            this.skipCinematic();
+        } else {
+            this.onKeyPress(code);
+        }
+    }
+
     private onKeyPress = (code: string): void => {
         if (code === "F3") {
             this.store.set({ debug: !this.store.getSnapshot().debug });
@@ -2014,6 +2099,9 @@ export class GameClient implements GameFrameHandler {
             this.reroll();
         } else if (overlay === "levelUp" && code === "KeyX") {
             this.skip();
+        } else if (overlay === "none" && code.startsWith("Digit") && this.hasKit(sim)) {
+            // A hero's own buttons: 1 to 4 after Space's (CharacterDef.abilities)
+            this.useAbility(parseInt(code.slice(5)));
         } else if (overlay === "none" && code.startsWith("Digit")) {
             // The casket screen has its own keys (it knows when its animation
             // is done)
@@ -2047,7 +2135,11 @@ export class GameClient implements GameFrameHandler {
 
         if (this.coopRun) {
             this.updateCoop(deltaTimeMs, sim, this.coopRun);
-        } else if (!this.paused && (sim.state === "playing" || sim.runOver)) {
+        } else if (
+            !this.paused &&
+            !this.cinematic?.holdsRun &&
+            (sim.state === "playing" || sim.runOver)
+        ) {
             const wasOver = sim.runOver;
             this.accumulator = Math.min(
                 this.accumulator + deltaTimeMs,
@@ -2062,7 +2154,9 @@ export class GameClient implements GameFrameHandler {
                 steps++;
                 this.accumulator -= TICK_MS;
                 const move = this.input.getMoveVector(this.move);
-                sim.step(move.x, move.y);
+                // Stood still while the cinematic plays
+                const held = this.cinematic !== undefined;
+                sim.step(held ? 0 : move.x, held ? 0 : move.y);
                 this.handleEvents(sim, sim.takeEvents());
             }
             if (sim.state !== "playing" && !wasOver) {
@@ -2129,13 +2223,51 @@ export class GameClient implements GameFrameHandler {
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
         const pan = this.getIntroPan(sim, px, py, alpha);
         const shake = this.getShake(now);
-        this.cameraRig.apply(
-            camera,
-            px + this.cameraLean.x + pan.x + shake.x,
-            ground - 0.6,
-            py + this.cameraLean.y + pan.y + shake.y,
-        );
-        this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
+        // Where the run's camera looks, and where the lights are gathered round
+        let focusX = px;
+        let focusY = py;
+        const cinematic = this.updateCinematic(deltaTimeMs, sim, alpha, {
+            x: px + this.cameraLean.x + pan.x,
+            y: py + this.cameraLean.y + pan.y,
+            height: ground - 0.6,
+            pitch: this.cameraRig.pitch,
+            yaw: this.cameraRig.yaw,
+            distance: this.cameraRig.distance,
+        });
+        if (cinematic) {
+            const rig = this.cinematicRig;
+            rig.pitch = cinematic.pitch;
+            rig.yaw = cinematic.yaw;
+            rig.distance = cinematic.distance;
+            rig.apply(camera, cinematic.x, cinematic.height, cinematic.y);
+            this.cameraOffsetY = cinematic.y - py;
+            focusX = cinematic.x;
+            focusY = cinematic.y;
+        } else {
+            this.cameraRig.apply(
+                camera,
+                px + this.cameraLean.x + pan.x + shake.x,
+                ground - 0.6,
+                py + this.cameraLean.y + pan.y + shake.y,
+            );
+            this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
+        }
+        const lighting = sim.map.lighting;
+        if (lighting) {
+            this.sceneLights.update(
+                this.renderer,
+                sim,
+                lighting,
+                alpha,
+                this.viewHero,
+                this.view.localPlayerPose,
+                focusX,
+                focusY,
+                deltaTimeMs / 1000,
+                this.grid.data.glowLocs,
+                this.view.getCinematicSpots(),
+            );
+        }
         // A raid hall can be drawn darker than the map, and washed with a colour
         // (RaidRoomDef.hall)
         const hall =
@@ -2156,6 +2288,25 @@ export class GameClient implements GameFrameHandler {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
         }
+    }
+
+    // A hero's own buttons, for the HUD (CharacterDef.abilities): always in reach, as they go
+    // off with or without anything to hit
+    private getKitViews(sim: Sim): AbilityView[] | undefined {
+        const hero = sim.heroes[sim.focus] ?? sim.heroes[0];
+        const kit = getCharacter(hero.characterId).abilities;
+        return kit?.map((ability, slot) => {
+            const left = sim.kitSecondsLeft(slot, hero);
+            return {
+                name: ability.name,
+                iconObjId: ability.iconObjId,
+                charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
+                inReach: true,
+                opened: false,
+                keyLabel: slot === 0 ? "Space" : String(slot),
+                description: ability.description,
+            };
+        });
     }
 
     // The fight's own button, for the HUD (MapDef.fight.ability)
@@ -2205,12 +2356,142 @@ export class GameClient implements GameFrameHandler {
         return { x: Math.sin(now * 0.09) * reach, y: Math.cos(now * 0.077) * reach };
     }
 
+    // Everything the opening cinematic's camera will see is loaded before it starts, behind the
+    // loading screen, and kept until it's over (MapManager.setPinned), so nothing pops in as it
+    // flies over the map
+    private preloadCinematic(sim: Sim, cinematic: CinematicPlayer): void {
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        const { x, y } = sim.player;
+        const squares = getCinematicSquares(cinematic.def, ground, {
+            x,
+            y,
+            height: ground(x, y) - 0.6,
+            pitch: this.cameraRig.pitch,
+            yaw: this.cameraRig.yaw,
+            distance: this.cameraRig.distance,
+        });
+        this.renderer.mapManager.setPinned(squares);
+        this.cinematicLoading = performance.now();
+        this.store.set({
+            screen: "loading",
+            loadingText: `Travelling to ${sim.map.name}`,
+            loadingProgress: 0,
+        });
+    }
+
+    // Whether the cinematic's still waiting on what it sees to load, showing how far it's got
+    private isCinematicLoading(): boolean {
+        const since = this.cinematicLoading;
+        if (since === undefined) {
+            return false;
+        }
+        const { total, left } = this.renderer.mapManager.getPinnedProgress();
+        if (left > 0 && performance.now() - since < CINEMATIC_LOAD_MS) {
+            const progress = Math.round(((total - left) / Math.max(1, total)) * 100);
+            if (progress !== this.store.getSnapshot().loadingProgress) {
+                this.store.set({ loadingProgress: progress });
+            }
+            return true;
+        }
+        this.cinematicLoading = undefined;
+        this.store.set({ screen: "run" });
+        return false;
+    }
+
+    // The opening cinematic on by a frame (MapDef.cinematic): its sounds as their cues go by,
+    // and where its camera is, or undefined once it's over (or there isn't one). play: the run's
+    // camera now, which it ends on.
+    private updateCinematic(
+        deltaTimeMs: number,
+        sim: Sim,
+        alpha: number,
+        play: CinematicCamera,
+    ): CinematicCamera | undefined {
+        this.startLairOpening(sim);
+        const cinematic = this.cinematic;
+        if (!cinematic) {
+            return undefined;
+        }
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        if (this.isCinematicLoading()) {
+            return getCinematicCamera(cinematic.def, 0, ground, play);
+        }
+        // A lair's opening is on the sim's clock, from when it woke. The map's own plays on behind
+        // a menu (a co-op run's pause doesn't stop it either), a frame at most at a time (the
+        // first after the map loads can be long).
+        const wakeTick = sim.lair?.wakeTick ?? 0;
+        const cues = cinematic.onSim
+            ? cinematic.advanceTo((sim.tick + alpha - wakeTick) / TICKS_PER_SECOND)
+            : cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000);
+        for (const cue of cues) {
+            if (cue.sound !== undefined) {
+                this.audio.play(cue.sound, { volume: 1, minGap: 0 });
+            }
+        }
+        if (cinematic.done) {
+            this.endCinematic();
+            return undefined;
+        }
+        return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
+    }
+
+    // A lair's opening as it wakes (LairDef.opening), once for each time it does
+    private startLairOpening(sim: Sim): void {
+        const lair = sim.lair;
+        const opening = sim.map.lair?.opening;
+        if (
+            this.cinematic ||
+            !opening ||
+            lair?.state !== "waking" ||
+            this.lairOpeningTick === lair.wakeTick
+        ) {
+            return;
+        }
+        this.lairOpeningTick = lair.wakeTick;
+        this.cinematic = new CinematicPlayer(opening.cinematic, true);
+        this.view.cinematic = this.cinematic;
+        this.store.set({ cinematic: true });
+    }
+
+    // Any key, click, tap or button during the opening cinematic: straight to the run
+    skipCinematic(): void {
+        const cinematic = this.cinematic;
+        if (cinematic?.skip()) {
+            this.endCinematic();
+            // Solo, a lair's boss comes straight on (in co-op, the others may be watching)
+            if (cinematic.onSim && !this.coopRun) {
+                this.sim?.skipLairOpening();
+            }
+        }
+    }
+
+    private endCinematic(): void {
+        if (!this.cinematic) {
+            return;
+        }
+        this.cinematic = undefined;
+        this.view.cinematic = undefined;
+        // What it saw goes back to loading and unloading with the camera
+        this.renderer.mapManager.setPinned([]);
+        if (this.cinematicLoading !== undefined) {
+            this.cinematicLoading = undefined;
+            if (this.store.getSnapshot().screen === "loading") {
+                this.store.set({ screen: "run" });
+            }
+        }
+        // The solo run's clock starts from here: nothing banked while it was held
+        this.accumulator = Math.min(this.accumulator, TICK_MS);
+        if (this.store.getSnapshot().cinematic) {
+            this.store.set({ cinematic: false });
+        }
+    }
+
     // A boss's intro that pans (BossIntroDef.pan): from the player to where it rises, held
     // there, then eased back to the player
     private getIntroPan(sim: Sim, px: number, py: number, alpha: number): { x: number; y: number } {
         const intro = sim.intro;
         const pan = intro?.def.boss?.intro?.pan;
-        const rise = sim.map.features?.rise;
+        const rise = sim.riseSpot;
         if (!intro || !pan) {
             return { x: 0, y: 0 };
         }
@@ -2315,7 +2596,10 @@ export class GameClient implements GameFrameHandler {
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
-        const deciding = this.store.getSnapshot().overlay !== "none" && !this.paused;
+        // and through the opening cinematic
+        const deciding =
+            (this.store.getSnapshot().overlay !== "none" && !this.paused) ||
+            this.cinematic !== undefined;
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
@@ -2516,6 +2800,17 @@ export class GameClient implements GameFrameHandler {
                     this.store.toast(`A ${CASKETS[event.tier].name.toLowerCase()} drops!`);
                     break;
                 case "bossSpawned":
+                    // The final boss's own track takes over (MapDef.bossMusic)
+                    if (event.finalBoss && sim.map.bossMusic) {
+                        const music = musicFor(sim.map.bossMusic);
+                        if (music) {
+                            this.audio.playMusic(music);
+                        }
+                    }
+                    if (event.message) {
+                        this.store.toast(event.message, 6000);
+                    }
+                    break;
                 case "bossRose":
                 case "bossEnraged":
                 case "bossStage":
@@ -2880,6 +3175,7 @@ export class GameClient implements GameFrameHandler {
             buffs: getBuffViews(sim),
             boss,
             ability: this.getAbilityView(sim),
+            abilities: this.getKitViews(sim),
             quests: getQuestTrackViews(this.save, sim),
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { GameClient } from "../client/GameClient";
+import { PadButton } from "../client/GamePad";
 import { AbilityView } from "../client/GameStore";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
@@ -40,6 +41,68 @@ export function AbilityButton({
             />
             <span className="ui-ability-name">{ability.name}</span>
         </button>
+    );
+}
+
+// A hero's own buttons (CharacterDef.abilities: Justiciar Zachariah's), in place of a fight's
+// one: Space and 1 to 4 on a keyboard, the bottom button and the shoulders on a pad, and on a
+// touch screen a big first button in the items' corner with the others round it. Each fills as
+// it charges, and goes off where the hero faces.
+const KIT_PAD: PadButton[] = ["south", "leftBumper", "rightBumper", "leftTrigger", "rightTrigger"];
+
+export function KitButtons({
+    client,
+    touch = false,
+}: {
+    client: GameClient;
+    touch?: boolean;
+}): JSX.Element | null {
+    const store = client.store;
+    const abilities = useSyncExternalStore(
+        store.subscribeNumbers,
+        () => store.getNumbers()?.abilities,
+    );
+    if (!abilities) {
+        return null;
+    }
+    return (
+        <div className={touch ? "ui-touch-kit" : "ui-kit"}>
+            {abilities.map((ability, slot) => (
+                <button
+                    key={ability.name}
+                    data-silent
+                    className={
+                        abilityClass(ability, touch) +
+                        (touch ? ` ui-touch-kit-${slot}` : "") +
+                        (slot === 0 ? " ui-kit-first" : "")
+                    }
+                    aria-label={ability.name}
+                    title={`${ability.name}: ${ability.description ?? ""}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onPointerDown={touch ? () => client.useAbility(slot) : undefined}
+                    onClick={touch ? undefined : () => client.useAbility(slot)}
+                >
+                    {!touch && (
+                        <KeyHint
+                            keyLabel={ability.keyLabel}
+                            pad={KIT_PAD[slot]}
+                            className="ui-inv-key"
+                        />
+                    )}
+                    <ItemIcon
+                        objId={ability.iconObjId}
+                        size={touch ? (slot === 0 ? 40 : 30) : 30}
+                    />
+                    <div
+                        className="ui-ability-charge"
+                        style={{ transform: `scaleY(${1 - ability.charge})` }}
+                    />
+                    {(!touch || slot === 0) && (
+                        <span className="ui-ability-name">{ability.name}</span>
+                    )}
+                </button>
+            ))}
+        </div>
     );
 }
 

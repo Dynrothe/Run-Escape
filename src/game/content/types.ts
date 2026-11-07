@@ -180,10 +180,41 @@ export type EnemyDef = {
     // Drawn as this item's model, never animated, instead of as the NPC
     // (Phosani's eggs are the Parasitic egg): npcId goes unused
     objId?: number;
+    // Drawn as one of these NPCs instead of npcId, picked as each turns up: looks of the same
+    // creature that share its animations (the Strangled's)
+    looks?: number[];
+    // Lays the map's rule's stuff (roots, MapDef.rule) this many tiles round it as it goes: a
+    // Strangled Bear's trail
+    plants?: number;
+    // Rushes the last range tiles to the player at speed times its pace (a Strangled Lynx's
+    // pounce)
+    pounce?: { range: number; speed: number };
     // Still alive this many seconds after it turns up, it's gone, and count of
     // into come out where it stood, dropping nothing (Phosani's eggs hatch
     // parasites unless they're broken first)
     hatches?: { seconds: number; into: string; count: number; spotAnim?: number; sound?: number };
+    // Bursts fuse seconds after it turns up, or as it touches someone once it's been about arm
+    // seconds (it's forming), for damage to whoever's within radius tiles of it (damage is like
+    // explodes'), and starts floor where it burst (a plus of the map's floor rising). Nothing
+    // hurts it: frozenBy (a hero's button, by HeroAbilityDef.id) holds it still for frozen
+    // seconds, its fuse with it, and shatteredBy landing on it while it's held breaks it, leaving
+    // heal hitpoints to pick up (the game's food). Yama's Voidflares.
+    bursts?: {
+        fuse: number;
+        arm?: number;
+        damage: number;
+        radius: number;
+        floor?: FloorActionDef;
+        sound?: number;
+        shatter?: {
+            frozenBy: string;
+            frozen: number;
+            shatteredBy: string;
+            heal: number;
+            frozenSpotAnim?: number;
+            sound?: number;
+        };
+    };
     // Its health bar's over it for as long as it's alive, full or not, so what
     // it's got left can be read at a glance (Phosani's eggs, against their time)
     healthBar?: boolean;
@@ -200,6 +231,10 @@ export type EnemyDef = {
     // Wars Dungeon's armies), while still coming for the player; each
     // faction's come from their own side, so the armies meet
     faction?: string;
+    // A light it carries (the Scar's light leeches, a fire elite), and one it leaves where it dies
+    // for seconds. A sim light: on a map with lighting.litTargetsOnly, weapons can aim by it. Off a
+    // map with lighting it does nothing.
+    light?: LightLook & { left?: LightLook & { seconds: number } };
     // What it is, for the weapons that hit some things harder
     tags?: EnemyTag[];
     // Runs from the player when they're within range tiles instead of coming
@@ -442,6 +477,8 @@ export type BulletPatternDef = {
 // Where a boss's "ground" attack marks the ground, each spot radius tiles
 // across. Everything's on the ground for the attack's windup before it lands.
 export type GroundPatternDef = {
+    // A glow on each mark while it's on the ground. Only drawn, on a map with lighting.
+    light?: LightLook;
     // under: on the boss; player: on the player; ring: around the boss (or
     // the player, with around), distance tiles out; grid: a lattice around
     // the player, spacing tiles apart; scatter: at random within spread tiles
@@ -452,6 +489,9 @@ export type GroundPatternDef = {
         | { shape: "grid"; size: number; spacing: number }
         // awayFrom: no closer to the boss than this, and on ground the player can get to
         | { shape: "scatter"; count: number; spread: number; awayFrom?: number }
+        // rule: on count of what the map's rule has laid within within tiles of the player (roots
+        // erupting), as many as there are; nothing on a map without a rule
+        | { shape: "rule"; count: number; within: number }
         // checker: every cell of one colour of the map's checker (ArenaFeatures.checker),
         // at random, square; then the other colour's cells, shown from when the first
         // land and landing then seconds after. With cross, only the cells within cross
@@ -531,6 +571,9 @@ export type QuartersDef = {
 
 export type BossAttackDef = {
     name: string;
+    // A glow under it as it winds up, on each spot it'll land (on the boss when it has none),
+    // growing as the hit comes. Only drawn, on a map with lighting.
+    light?: LightLook;
     // Only on a raid's expert mode
     expert?: boolean;
     // swing: hits around the boss once the windup is done (step away to dodge);
@@ -559,6 +602,15 @@ export type BossAttackDef = {
     damage: number;
     // Seconds the boss stands winding up (and animating) before it lands
     windup: number;
+    // What it does to the map's floor (MapDef.floor) as it starts, aimed at the player it's after
+    // (Sim.floorAct): drop the tile under them, start a pattern, change phase. floorAt "boss":
+    // aimed at the boss instead (a ripple out from its stomp)
+    floor?: FloorActionDef;
+    floorAt?: "boss";
+    // What it does with the map's rule (MapDef.rule), as it lands: heart, a root heart where the
+    // boss lands, the first time it's used; lane, roots laid along the way a surge or lunge went,
+    // radius tiles either side of it. Nothing on a map without a rule.
+    rule?: { heart?: boolean; lane?: number };
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -615,6 +667,9 @@ export type BossAttackDef = {
         thrown?: { seconds: number };
         holds?: number;
         walkTo?: { distance: number; perAbsorbed: number };
+        // They turn up on the boss's side towards whoever it's after, distance tiles out, as if
+        // out of its hands (Yama's Voidflares)
+        toward?: boolean;
     };
     // A mark on the player, bursting after seconds for damage (and the attack's
     // hit damage does nothing), leaving enemyId behind. An antidote keeping
@@ -719,6 +774,31 @@ export type BossAttackDef = {
     // Its spotAnim turned this much more (RS yaw units) than the way it's going: a model that
     // faces back along its way (his shock wave's)
     spotYaw?: number;
+    // Swings: something falling out of the sky onto where the player stood as it began, over its
+    // windup, from height tiles up, with shadowSpotAnim growing under it (Yama's meteor). It's
+    // drawn, not a mark on the ground: the swing's radius is what it hits. dark: the scene's
+    // light while it falls, on a map with lighting. breaksAt: the seconds into spotAnim's own
+    // animation where it starts to break up; it falls on the frames before, slowed to its windup,
+    // and plays the rest where it ends, landed or stopped in the sky. Without it, its animation
+    // plays on as it falls.
+    meteor?: {
+        spotAnim: number;
+        shadowSpotAnim?: number;
+        height: number;
+        dark?: number;
+        breaksAt?: number;
+    };
+    // Stopped by a hero's own button (HeroAbilityDef, by id) landing on the boss while it winds
+    // this up (the Owl's gaze stopping Yama's meteor): it's lost, broken shows where it would have
+    // landed (where it is, if it isn't a meteor), and the boss is stunned for stun seconds and
+    // its guard's down for open (BossDef.guard), saying shout
+    interruptedBy?: {
+        ability: string;
+        open: number;
+        stun: number;
+        broken?: ImpactDef;
+        shout?: string;
+    };
     // Projectiles: thrown from count of the map's knight statues (ArenaFeatures.knights),
     // picked at random as it begins, at where the player was then, not from the boss
     from?: "knights";
@@ -731,6 +811,10 @@ export type BossAttackDef = {
     // attack (by name) on them, whatever it was winding up (a shock wave that binds,
     // then a flurry)
     onHit?: { pull?: number; pullSeconds?: number; bind?: number; attack?: string };
+    // Whoever it hits: knocked distance tiles straight away from it (as far as open ground goes)
+    // over seconds, and out of whatever of their own they were casting (Yama's swat at a gaze
+    // cast too close for his pillars, BossDef.gazeWard.tooClose)
+    push?: { distance: number; seconds: number };
     // Swings: whoever's out of its sight behind a pillar of the map's (ArenaFeatures.pillars)
     // is spared (inShadow in core/arena.ts). While it winds up, the arena's lit and the
     // pillars' shadows are drawn on the floor, soft-edged (BossFightView.drawGazeShadows).
@@ -778,7 +862,8 @@ export type FightAbilityDef = {
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
-export type ImpactSpotDef = { spotAnim: number; fit?: number };
+// height: tiles up off the ground (a meteor broken in the sky)
+export type ImpactSpotDef = { spotAnim: number; fit?: number; height?: number };
 
 // What a hit throws up, for show: spots where it lands (each played out once), trail laid
 // along the way it went every TRAIL_GAP tiles and turned along it (a lunge's strip), and the
@@ -885,6 +970,9 @@ export type BossPhasesDef = {
         ambients?: BossAmbientDef[];
         tempo?: number;
         speed?: number;
+        // The scene's ambient through this phase (LightingDef), faded to over a couple of seconds
+        // and back as the boss falls: an enrage that darkens the arena
+        light?: number;
     }[];
     // After the last blast it stands for seconds more before it falls, using
     // only these attacks (by name) interval seconds apart, opener first, with
@@ -1078,6 +1166,32 @@ export type BossDef = {
     look?: BossLookDef;
     // Its guard drops after a miss, and its arena can stun it (BossGuardDef)
     guard?: BossGuardDef;
+    // Keeps within this many tiles of where it first stood, going after the player only along
+    // there (Yama by his throne): what reaches them is what it sends across the floor
+    home?: number;
+    // An attack (by name) on a clock of its own (Yama's meteor): first once its hitpoints are
+    // down to from of them, then every so many seconds after the last (every, a number for each
+    // of its phases, BossDef.phases). It's put off while no player up could interrupt it
+    // (BossAttackDef.interruptedBy) within ready seconds: their button's charging for longer.
+    critical?: { attack: string; from: number; every: number[]; ready: number };
+    // A hero's gaze (HeroAbilityDef kind "gaze") does nothing to it unless it stops what it can
+    // interrupt (BossAttackDef.interruptedBy), and then hits it. Cast at it otherwise, from within
+    // reach tiles, count pillars (locId, rising over rise seconds) come up out of the floor
+    // between it and whoever cast it, distance tiles out from its middle, real occluders that hide
+    // it, and sink after seconds. It says one of shouts. Cast from within tooClose.reach tiles of
+    // its edge, where pillars couldn't come up between them, it does tooClose.attack (by name) on
+    // them instead, straight away, whatever it was winding up, and says one of its shouts.
+    gazeWard?: {
+        reach: number;
+        count: number;
+        distance: number;
+        seconds: number;
+        rise: number;
+        locId: number;
+        shouts: string[];
+        impact?: ImpactDef;
+        tooClose?: { reach: number; attack: string; shouts: string[] };
+    };
 };
 
 // The shared fight screen's colours (CSS), for a boss that isn't to look like the
@@ -1087,6 +1201,9 @@ export type BossDef = {
 // lean: the camera leans towards it, so a boss north of the player stays on the
 // screen (a raid's boss rooms lean only as far as keeps theirs below the boss bar).
 export type BossLookDef = {
+    // A light on it while its guard's down (Sim.isExposed): a core lit up. Only drawn, on a map
+    // with lighting.
+    exposedLight?: LightLook;
     lean?: boolean;
     title?: string;
     subtitle?: string;
@@ -1419,6 +1536,88 @@ export type CharacterDef = {
     // nowhere else: never in the roster, never unlocked, never counted (the
     // Inquisitor, Phosani's)
     only?: string;
+    // A way to play rather than a bonus (CharacterTraitDef)
+    trait?: CharacterTraitDef;
+    // Drawn as an NPC rather than a player (Justiciar Zachariah, the Battle for Varrock's): its
+    // model, its own idle and walk, and every animation its abilities play (HeroAbilityDef.seq),
+    // which have to be on the NPC's skeleton
+    npcLook?: HeroNpcLookDef;
+    // Buttons of their own (HeroAbilityDef), in place of a map's one (MapDef.fight.ability):
+    // Space and 1 to 5 on a keyboard, the touch screen's buttons. Each goes off wherever they
+    // face, with or without anything to hit.
+    abilities?: HeroAbilityDef[];
+};
+
+export type HeroNpcLookDef = {
+    npcId: number;
+    idleSeq: number;
+    walkSeq: number;
+    // What it plays for a weapon's swing, which is a player's animation it hasn't got
+    swingSeq: number;
+    // How big it's drawn, 1 as the cache has it
+    scale?: number;
+};
+
+// A hero's own button (CharacterDef.abilities), played out by Sim.useAbility: the hero plays
+// `seq` (held on its first frame and timed so its `strikeAt` seconds falls as it lands), and
+// `windup` seconds after the press it lands, by its kind, along the way they face:
+// - lunge: they dash `length` tiles straight ahead (stopping at a wall), hitting what's within
+//   `width` / 2 of the strip, with `impact.trail` laid along it
+// - wave: `spotAnim` flies `length` tiles at `speed` a second, hitting what it passes within
+//   `width` / 2, each once
+// - square: a `size` by `size` square on the nearest enemy within `length` (`length` / 2 ahead
+//   if none), `spotAnim` on each of its tiles
+// - checker: every `size` by `size` cell of one colour within `length` of them, each marked by
+//   `markSpotAnim` from the press and struck by `spotAnim` as it lands
+// - gaze: everything within `length` of them
+// `freeze` holds what it hits for that many seconds; `impact` is shown where it lands (a
+// lunge's at its end, a wave's where it's cast).
+export type HeroAbilityDef = {
+    id: string;
+    name: string;
+    kind: "lunge" | "wave" | "square" | "checker" | "gaze";
+    iconObjId: number;
+    damage: number;
+    cooldown: number;
+    windup: number;
+    length: number;
+    width?: number;
+    size?: number;
+    speed?: number;
+    spotAnim?: number;
+    // Turns the wave's spot animation this much (2048 a turn) from the way it flies
+    spotYaw?: number;
+    markSpotAnim?: number;
+    // Shown on each of a checker's cells as it lands, with spotAnim
+    cellImpact?: ImpactSpotDef;
+    freeze?: number;
+    seq?: number;
+    strikeAt?: number;
+    windupSound?: number;
+    sound?: number;
+    shout?: string;
+    impact?: ImpactDef;
+    // What the HUD's button says it does
+    description: string;
+};
+
+// An adventurer's trait (CharacterDef.trait), which the sim plays out for their hero.
+// timber (the Forester's): every `every` kills, their next melee swing fells a tree instead, a
+// strip `length` tiles long and `width` across ahead of them, hitting everything in it for
+// `damage` times the swing's own, drawn as locId falling over; and their swings cut what a map's
+// rule lays (roots) cutReach tiles further out.
+export type CharacterTraitDef = {
+    kind: "timber";
+    name: string;
+    every: number;
+    length: number;
+    width: number;
+    damage: number;
+    cutReach: number;
+    locId: number;
+    sound?: number;
+    // What it throws up as it lands, along the strip (ImpactDef)
+    impact?: ImpactDef;
 };
 
 export type ShopUpgradeDef = {
@@ -1475,6 +1674,9 @@ export type MapDef = {
     plane?: number;
     // Where the player starts (moved to the nearest free spot if it's blocked)
     spawn: { x: number; y: number };
+    // The way the player faces as the run starts (x east, y north), south when unset: the Battle
+    // for Varrock's into the city, as its opening cinematic's camera ends looking
+    spawnFacing?: { x: number; y: number };
     // A ditch two tiles deep, its south row at y, across the arena (the
     // Wilderness Ditch): the player can't cross it, enemies jump it
     ditch?: { y: number };
@@ -1495,6 +1697,8 @@ export type MapDef = {
     // its recording goes in src/media/music, named as GameClient's musicFor
     // says, and until it's there the map plays nothing
     music?: string;
+    // The track that takes over as the final boss comes (its own), as music is named and found
+    bossMusic?: string;
     // Fun maps: endless from the start and outside the unlock chain (see
     // FunMapDef). Campaign maps leave it unset.
     fun?: FunMapDef;
@@ -1526,6 +1730,588 @@ export type MapDef = {
     // A raid: the run's a series of rooms rather than one timeline (see RaidDef). waves and
     // events are then every room's, for what bakes and checks a map's enemies.
     raid?: RaidDef;
+    // NPCs that sit on the map as scenery, posed with their own animation (MapPropDef): drawn by
+    // the view alone, never in the sim, so they're in no hash. For what a loc can't be: a loc
+    // can't play a skeletal animation (Yama on his throne, the Battle for Varrock's).
+    props?: MapPropDef[];
+    // An opening cinematic (CinematicDef), played as a run starts here: the camera on a path of
+    // shots, NPCs acting and speaking, then the run's own camera. View only, like props.
+    cinematic?: CinematicDef;
+    // A floor that fights back (FloorDef): slabs of it rise under the player in waves, and rows of
+    // it fall away. A prototype, on a dev map only.
+    floor?: FloorDef;
+    // A map of an act after the first campaign (content/acts.ts): open once requires (a map id)
+    // has been beaten, in any order with the act's other maps, outside the campaign's chain. Its
+    // toughness is the act's step (ActDef.steps), set as a run starts by how many of the act's
+    // other maps have been beaten; difficulty is its first step's.
+    act?: { id: string; requires: string };
+    // The rule it's played by (RunRuleDef, core/rules): what makes it that map, run by the sim
+    // every tick
+    rule?: RunRuleDef;
+    // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
+    // always was: those pay nothing for lights.
+    lighting?: LightingDef;
+    // A boss asleep in its lair, woken by stepping onto the map's floor (LairDef)
+    lair?: LairDef;
+};
+
+// A rule a map is played by (MapDef.rule), which core/rules runs each tick. A rule only reads the
+// map's grid and what's here, never an Act II map's own data, so it works on any map (the remixes
+// put them on old ones). Shared things (roots) are the party's; what it does to a player is each
+// player's own.
+export type RunRuleDef = RootsRuleDef;
+
+// The Stranglewood's: roots creep in from the wood (the arena's blocked ground), slowing and
+// hurting whoever's on them and speeding enemies; hits cut them back, and root hearts make them
+// grow. They're cells of 2 by 2 tiles, drawn by client/RootsView.ts as they're hit: a cell hurts
+// where its roots stand, all of it.
+export type RootsRuleDef = {
+    kind: "roots";
+    // Seconds into the run they start creeping
+    start: number;
+    // How many creeping fronts there are, and the seconds between each one's spreads, from start to
+    // lateBy seconds, easing between
+    fronts: [from: number, to: number];
+    every: [from: number, to: number];
+    lateBy: number;
+    // Seconds a cell shows sprouts before it takes root: the warning
+    sprout: number;
+    // The circle roots never take (a final fight's clearing), in world tiles
+    safe?: { x: number; y: number; radius: number };
+    // On roots: a player's this much slower, and after grace seconds on them loses share of their
+    // hitpoints every `every` seconds; enemies are haste faster (not fliers)
+    slow: number;
+    hurt: { share: number; every: number; grace: number };
+    haste: number;
+    // Tiles round an enemy a player's hit cuts (one on roots), and a kill on roots; seconds before a
+    // cut cell can take root again from a rooted neighbour
+    cut: { hit: number; kill: number; regrow: number };
+    // Root hearts: enemyId turns up at a root front every `every` seconds from `from`, at most max
+    // at once; roots within reach tiles of one grow twice as fast; killed, it clears clear tiles
+    // round it, where nothing takes root for calm seconds
+    hearts: {
+        enemyId: string;
+        from: number;
+        every: number;
+        max: number;
+        reach: number;
+        clear: number;
+        calm: number;
+    };
+    // What they're drawn as (client/RootsView.ts), scenery all of it: runners laid along the
+    // ground from cell to cell, picked by cell; loops standing up out of it, which are also the tips
+    // pushing up where roots are coming and what wraps round the legs of a player on them; colours
+    // swapped on both, after the scenery's own; and the spot animation a cut throws up
+    look: {
+        runners: number[];
+        loops: number[];
+        recolor?: [from: number, to: number][];
+        cutSpotAnim: number;
+    };
+};
+
+// What a light looks like and how far it reaches (docs/DEVELOPMENT.md, Lights). Every kind of light
+// is one: a map's, a loc's, an enemy's, a spell's, a floor tile's, a boss's.
+export type LightLook = {
+    // Tiles. Full strength out to under half of it, then a soft fade to its edge.
+    radius: number;
+    // 0xRRGGBB (WARM_LIGHT, a lantern's, when unset)
+    color?: number;
+    // How much it adds to what it lights, at its middle (1 when unset). On a dark map 1 lights
+    // things about as they'd be anyway; on a lit one 0.5 is a strong glow.
+    intensity?: number;
+    // 0 to 1: a fire's unsteady light, up to this much of its strength. Only drawn.
+    flicker?: number;
+    // A slow throb, this much of its strength every seconds. Only drawn.
+    pulse?: { amount: number; seconds: number };
+};
+
+// A map with lights (lights.glsl). Each part's optional; a map with any of it draws with the lit
+// programs. See "Lights" in docs/DEVELOPMENT.md for every kind of light.
+export type LightingDef = {
+    // How bright what's out of every light is, 0 to 1 (1, as it always is, when unset; about 0.16
+    // is the dark: shapes, not detail), and its tint (0xRRGGBB, white when unset). A boss's phase
+    // can change it for a while (BossPhasesDef light, Sim.dimTo).
+    ambient?: number;
+    ambientColor?: number;
+    // Lights that stay put, world tiles. Sim lights: weapons aim by them (litTargetsOnly).
+    lights?: (LightLook & { x: number; y: number })[];
+    // A light round each player. A sim light.
+    player?: LightLook;
+    // Scenery that lights itself, by loc id: every one on the map. Only drawn: weapons don't aim
+    // by it, so a fire that should count is in lights too.
+    locs?: Record<number, LightLook>;
+    // The rule (the Scar's): weapons only pick targets within half a tile of a sim light's edge,
+    // and the minimap only shows those. Shots carry on into the dark and hit what they meet.
+    litTargetsOnly?: boolean;
+    // A lantern's (powerups.ts, LANTERN_ID) weight among the power-ups that drop here (0
+    // everywhere else), and lanterns lying on the ground as the run starts, world tiles
+    lanternWeight?: number;
+    lanterns?: { x: number; y: number }[];
+};
+
+// An NPC posed on a map as scenery (MapDef.props): npcId playing seq over and over, its middle at
+// x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and drawn scale times its size.
+// Give it a loc that blocks where it stands, as it blocks nothing itself.
+export type MapPropDef = {
+    npcId: number;
+    seq: number;
+    x: number;
+    y: number;
+    yaw?: number;
+    scale?: number;
+    // The map's lair's boss, asleep (MapDef.lair): from its fight's start drawn as this instead
+    // (his throne, empty), as he's up and fighting
+    awake?: { npcId: number; seq: number };
+};
+
+// A boss asleep in its lair on a map to walk round (the Battle for Varrock's Yama, on his throne
+// in the palace). Its fight starts when a player steps onto the map's floor (MapDef.floor, which
+// a lair needs): the boss's intro plays (BossIntroDef, rising at at with the players brought
+// distance south of it), and every way off the floor is sealed with fire until it's dead. Hits
+// land on a map to walk round only while it's on (FunMapDef.explore). Beaten, the seal lifts and
+// the map's free to walk round again; a death there can be retried from start, without the map's
+// opening cinematic.
+export type LairDef = {
+    enemyId: string;
+    hp: number;
+    // Where it rises (its middle), and where a retry starts the player, in world tiles: start is
+    // on the floor, so the fight's on again at once
+    at: { x: number; y: number };
+    start: { x: number; y: number };
+    // What seals each way out: a loc playing its own animation (fire), on every tile it seals,
+    // drawn this much bigger; sound as it's sealed and lifted
+    seal: { locId: number; scale: number; sound?: number };
+    // On screen as it's sealed, and once the boss is beaten; and what it says as it falls
+    message: string;
+    victory: string;
+    shout?: string;
+    // Played as it wakes (LairOpeningDef), but not on a retry, which starts on its floor
+    opening?: LairOpeningDef;
+};
+
+// A lair's cinematic as its boss wakes (Yama on his throne, before he rises). It's on the sim's
+// clock, from the tick a player steps onto the floor: the party's held where they stand, turned to
+// where it'll rise, until introAt seconds in, when the floor's sealed and the boss's intro begins
+// (BossIntroDef). So every player sees it at once, and nobody's hit while watching. Its last shot,
+// the run's camera, comes during the intro. Skipped, the camera's the player's own again, and a
+// solo run goes straight on to the intro.
+export type LairOpeningDef = {
+    cinematic: CinematicDef;
+    introAt: number;
+};
+
+// A map's opening cinematic (MapDef.cinematic), played as a run starts on the map (not on a
+// retry): the camera follows its shots, its cast act out its cues, and then the camera is the
+// run's own, behind the player. Each player's game plays it on its own clock and draws it alone
+// (client/Cinematic.ts, client/CinematicView.ts): nothing of it is in the sim or its hashes, so
+// co-op can't fall out of step over it. The player's input is held until it's over, and any key,
+// click, tap or controller button skips it. A solo run doesn't step until the camera's on its way
+// back to the player (the last shot's start); a co-op run goes on, with the player standing still.
+export type CinematicDef = {
+    // How long it lasts, in seconds: the last shot's (the run's camera) at
+    seconds: number;
+    // Who's in it (CinematicActorDef), and what they do (CinematicCueDef, in any order)
+    cast: CinematicActorDef[];
+    cues: CinematicCueDef[];
+    // Where the camera is (CinematicShotDef), in order of at, the first at 0 and the last the
+    // run's camera
+    shots: CinematicShotDef[];
+};
+
+// An NPC in a cinematic, drawn only while it plays: npcId playing seq over and over (until a cue
+// says otherwise), its middle at x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and
+// drawn scale times its size. prop: it stands in for the map's prop at that index (MapDef.props)
+// while the cinematic plays, so the scenery itself can act (Yama off his throne's idle). head:
+// tiles above the ground their overhead chat sits at, when it isn't the top of their model (Yama's
+// is his throne's back, well over his head).
+export type CinematicActorDef = {
+    id: string;
+    npcId: number;
+    seq: number;
+    x: number;
+    y: number;
+    yaw?: number;
+    scale?: number;
+    prop?: number;
+    head?: number;
+};
+
+// Something that happens at seconds into a cinematic, to actor (its id): any of
+// - seq: they play it from then, once and held on its last frame, or over and over with loop;
+// - say: said over their head in the game's overhead chat, for sayFor seconds (3 when unset);
+// - spotAnim: a spot animation played out on them, once, lifted lift tiles off the ground and
+//   scale times its size;
+// - sound: a sound effect (the cache's id) played;
+// - gone: they're no longer drawn.
+export type CinematicCueDef = {
+    at: number;
+    actor: string;
+    seq?: number;
+    loop?: boolean;
+    say?: string;
+    sayFor?: number;
+    spotAnim?: number;
+    lift?: number;
+    scale?: number;
+    sound?: number;
+    gone?: boolean;
+};
+
+// Where a cinematic's camera is at seconds in: looking at x, y (world tiles), lift tiles above the
+// ground there, from distance tiles away, at pitch and yaw (RS angle units, as CameraRig's: pitch
+// -512 straight down and 0 level, yaw 0 facing north). Between shots it moves smoothly through
+// them (a monotone curve, so it never overshoots one); hold eases it to a stop on that shot.
+// player: the run's own camera, behind the player, as the cinematic ends there.
+export type CinematicShotDef =
+    | {
+          at: number;
+          x: number;
+          y: number;
+          lift: number;
+          pitch: number;
+          yaw: number;
+          distance: number;
+          hold?: boolean;
+      }
+    | { at: number; player: true };
+
+// A floor that rises and falls away, after the Wardens' third phase in the Tombs of Amascut
+// (core/ArenaFloor.ts runs it, client/FloorView.ts draws it). It's a rectangle of 1 by 1 tiles,
+// each drawn by the game as a slab, so each can shake, rise and fall on its own. Its front is
+// north, where a boss would stand: slams travel out from it, and rows fall away from the south,
+// the back, towards it. Every hit is warned by the tiles themselves shaking.
+//
+// Everything past rect, slam, drop and script has a default, so a floor of the Wardens' slabs is
+// those and nothing else. To make it your own (scaperune/CLAUDE.md, "Floors that fight back"):
+// shape or ascii for which tiles there are, skins for what they look like, tiles for which skin,
+// type and slab size goes where.
+export type FloorDef = {
+    // World tiles, both ends in: the box the floor's in. Its tiles are counted from its south-west
+    // corner (floor tiles) by everything below.
+    rect: { x0: number; y0: number; x1: number; y1: number };
+    // Which tiles of the box are floor (FloorShapeDef; all of it when unset). The rest is the
+    // pit's dark from the start: blocked, and never there.
+    shape?: FloorShapeDef;
+    // A hand-drawn floor, a row a string, the north row first, from the box's south-west corner:
+    // "." and " " are no floor, any other character is, and tiles rules can pick tiles out by
+    // their character (FloorWhereDef "chars"). With shape too, the floor's where both say.
+    ascii?: string[];
+    // Laid a whisker over the map's own ground, not over a pit (the Battle for Varrock's
+    // palace): nothing under it can show, so no light's drawn under its tiles and no cut edge
+    // beside what isn't floor, and a tile's its top alone (its sides are a whisker) but while
+    // it's coming up. Nothing on it should fall.
+    onGround?: boolean;
+    // What its tiles look like (FloorSkinDef); tiles rules pick them by index. When unset, one:
+    // the slam's own slab, rising with its animation.
+    skins?: FloorSkinDef[];
+    // Which skin, type, turn and slab size each tile has: every rule that covers a tile is
+    // applied, in order, a later one over an earlier. Every tile starts as skin 0, "normal", unturned,
+    // and a tile on its own.
+    tiles?: FloorTileRuleDef[];
+    // For the tiles rules' shares and weights: the same seed lays the floor out the same way
+    seed?: number;
+    slam: {
+        // Seconds a tile shakes before it rises
+        warn: number;
+        // Seconds after it starts rising that it hits whoever's on it: while it's up
+        hurt: [from: number, to: number];
+        // Of the player's hitpoints
+        damage: number;
+        // Seconds after a hit from the floor before it can hit them again
+        grace: number;
+        // The slab coming up: a 1 by 1 tile, its top flush with the ground at rest
+        spotAnim: number;
+        // As tiles come up (one a tick at most, where they are), and as one hits the player
+        sound: number;
+    };
+    drop: {
+        // Seconds a tile shakes and sags before it falls
+        warn: number;
+        // Of the player's hitpoints, for being on a tile as it goes; they're pushed to the
+        // nearest tile that isn't going, over shove seconds
+        damage: number;
+        shove: number;
+        // The slab tumbling, and how long it's drawn falling into the dark
+        spotAnim: number;
+        fall: number;
+        // Rows that never fall: the last row in front of the boss
+        keepRows: number;
+        // As tiles fall, and as the player's hurt by one
+        sound: number;
+        // A fragile tile's warning is this much of warn (default 0.5), and it falls by itself
+        // after it's risen this many times (default 2)
+        fragile?: { warn?: number; hits?: number };
+        // Holes, falling rows and fragile tiles never cut the floor in two (so nobody's left on
+        // an island) unless this is set
+        islands?: boolean;
+    };
+    // What it throws up, all spot animations (client/FloorView.ts): dust as a slab comes up and
+    // as a tile goes, and a chip of rock (crumbling off a tile about to go, and falling with it)
+    effects?: { dust: number; fallDust: number; rock: number };
+    // What's under the floor, seen through its holes (locs, drawn by client/FloorView.ts on a
+    // regular grid): pillars holding it up, beams between them, and the arena's wall going down
+    // round its edge, over a glow far below
+    under?: { pillar: number; beam: number; wall: number };
+    // The light under the floor, in its cracks as tiles tremble and far below (0xRRGGBB)
+    glow?: number;
+    // How a pattern shows every tile it'll hit from the moment it starts, unless it says
+    // otherwise (FloorCue; subtle when unset)
+    cue?: FloorCue;
+    // A slab coming up this near a player shakes the camera this much, and a tile going from under
+    // or beside them this much (ImpactDef.shake; Settings can turn it off)
+    shake?: { slam: number; drop: number };
+    // What the floor does, at seconds into the loop, and then the loop again from the top
+    script: FloorBeatDef[];
+    loopSeconds: number;
+    // How much the tiles' effects do (FloorTileRuleDef.effect), over their defaults
+    tileEffects?: FloorTileEffectsDef;
+    // Fallen tiles rise back by themselves (FloorRebuildDef); a tiles rule can say otherwise
+    rebuild?: FloorRebuildDef;
+    // Patterns by name, for triggers, phases and bosses to start (FloorActionDef "pattern")
+    patterns?: Record<string, FloorPatternDef>;
+    // What stepping on a tile with a trigger does (FloorTileRuleDef.trigger: its name here)
+    triggers?: Record<string, FloorTriggerDef>;
+    // The floor's phases by name (FloorActionDef "phase"): another script, and skins swapped
+    phases?: Record<string, FloorPhaseDef>;
+};
+
+export type FloorBeatDef = {
+    at: number;
+    // A pattern to start, or something else to do (FloorActionDef); one of them
+    pattern?: FloorPatternDef;
+    action?: FloorActionDef;
+    // On-screen notice as it starts
+    message?: string;
+};
+
+// What standing on a tile does to whoever's on it (FloorTileRuleDef.effect, or its skin's).
+// burn: hurts, a share of their hitpoints every so often (lava); enemies too. heal: heals the
+// player, a share of their hitpoints every so often (a glyph). haste and slow: faster or slower,
+// enemies too (a speed plate, mud or sand). ice: they keep their momentum and steer only a little
+// each tick, so they slide (enemies aren't moved by it).
+export type FloorEffect = "burn" | "heal" | "haste" | "slow" | "ice";
+
+// How much: burn's and heal's share of the player's hitpoints, every so often (seconds), and
+// burn's hit on an enemy; haste's and slow's change to speed (0.4 is 40% faster or slower); ice's
+// grip, how much of the way to where they're steering they get each tick (0 to 1)
+export type FloorTileEffectsDef = {
+    burn?: { damage?: number; every?: number; enemyDamage?: number };
+    heal?: { amount?: number; every?: number };
+    haste?: number;
+    slow?: number;
+    ice?: { grip?: number };
+};
+
+// Fallen tiles coming back: after seconds, warned for warn seconds (a light far down the hole and
+// the tile rising into view), taking rise seconds to come up. A rule's rebuild (seconds, or 0 for
+// never) is over this, for its tiles.
+export type FloorRebuildDef = { after: number; warn?: number; rise?: number };
+
+// A tile that does something when it's stepped on (a pressure plate): what, and then not again for
+// cooldown seconds (5 when unset); once, never again. A trigger that starts disarmed does nothing
+// until something arms it (FloorActionDef "arm"). Only players set them off.
+export type FloorTriggerDef = {
+    actions: FloorActionDef[];
+    cooldown?: number;
+    once?: boolean;
+    armed?: boolean;
+    message?: string;
+};
+
+// Something done to the floor, by a trigger, a beat, a phase or a boss's attack (Sim.floorAct),
+// after delay seconds if it has one. pattern: start one (or one of FloorDef.patterns by name).
+// drop: a group's tiles fall (warned as a fall is); raise: a group's fallen tiles come back;
+// slam: a group's tiles rise, a warning from now (a trap). dropUnder: the tile under whoever it's
+// aimed at falls (a boss's). arm: a trigger armed or disarmed. phase: one of FloorDef.phases.
+export type FloorActionDef = (
+    | { kind: "pattern"; pattern: FloorPatternDef | string }
+    | { kind: "drop"; group: string }
+    | { kind: "raise"; group: string }
+    | { kind: "slam"; group: string }
+    | { kind: "dropUnder" }
+    | { kind: "arm"; trigger: string; armed?: boolean }
+    | { kind: "phase"; phase: string }
+) & { delay?: number };
+
+// A phase of the floor (FloorActionDef "phase"): its own script from now (with its own loop), and
+// skins swapped on every tile, [from, to] by index, effects going with them (their skins'); and
+// what's said as it starts
+export type FloorPhaseDef = {
+    script?: FloorBeatDef[];
+    loopSeconds?: number;
+    skins?: [from: number, to: number][];
+    message?: string;
+};
+
+// What a skin does as it rises, falls, and cracks (a fragile tile's rise that brings it nearer
+// giving way), each a spot animation and a sound, either or both (FloorSkinDef.material)
+export type FloorMaterialDef = {
+    rise?: FloorMaterialFxDef;
+    fall?: FloorMaterialFxDef;
+    crack?: FloorMaterialFxDef;
+};
+export type FloorMaterialFxDef = { spotAnim?: number; sound?: number; scale?: number };
+
+// side: one half of the floor rises, row by row away from the front, the middle column with it
+// (east or west), or all of it but the middle three columns (both). sweep: every row from the
+// front, each with a gap of gap tiles that wanders a tile at a time. ripple: square rings out from
+// a tile (the player's, or the middle), with spokes along which nothing rises (a cross, or the
+// diagonals), the tile itself first. dropRows: rows from the back fall away, one after another.
+// holes: single tiles fall away at random, never next to another hole or the floor's edge.
+// restore: everything that's fallen comes back up, front first. lanes: below.
+// How a pattern shows the tiles it'll hit from the moment it starts, so where's safe can be read
+// before the wave gets there (client/FloorView.ts). Either way each tile's last second before it
+// rises or falls is a strong warning: the tremor and the light through its seams.
+// subtle: the floor still reads as stone. Marked tiles are a shade darker, with a thin warm line
+// in their seams and the faintest tremor; the safe shape is there if you look for it.
+// bold: the pattern's whole shape lit at once. Marked tiles' edges glow gold, bleeding in over
+// them and breathing slowly, building to a wide bright glow; for a signature attack whose
+// telegraph is the point.
+export type FloorCue = "subtle" | "bold";
+
+// Which tiles of a floor's box are floor, in floor tiles from its south-west corner (FloorDef).
+// rect: a box, both ends in. ellipse: within rx and ry of a middle (a circle when they're the
+// same). ring: between inner and outer of a middle, round (or square, by square). diamond: within
+// r of a middle, counting steps. cross: the middle's row and column, width tiles wide. union: in
+// any of them. minus: in from, and not in cut. A middle can be in half tiles (11.5 is between
+// 11 and 12); it's the box's middle when unset.
+export type FloorShapeDef =
+    | { kind: "rect"; x0: number; y0: number; x1: number; y1: number }
+    | { kind: "ellipse"; rx: number; ry: number; cx?: number; cy?: number }
+    | { kind: "ring"; inner: number; outer: number; square?: boolean; cx?: number; cy?: number }
+    | { kind: "diamond"; r: number; cx?: number; cy?: number }
+    | { kind: "cross"; width: number; cx?: number; cy?: number }
+    | { kind: "union"; of: FloorShapeDef[] }
+    | { kind: "minus"; from: FloorShapeDef; cut: FloorShapeDef };
+
+// What a floor's tiles look like: a model at a tile's middle, its top at the floor. A spot
+// animation's (its model, recoloured as the cache has it, and its animation as its rise), a loc's,
+// or a model's own. It should be a tile across (a slab more tiles across is stretched to them).
+export type FloorSkinDef = {
+    spotAnim?: number;
+    loc?: number;
+    model?: number;
+    // Colours (the cache's HSL) and textures swapped, after the cache's own swaps
+    recolor?: [from: number, to: number][];
+    retexture?: [from: number, to: number][];
+    // Bigger or smaller (1 as it is), and raised (tiles, up), as baked
+    scale?: number;
+    // Tiles across it's made (1 when unset): a slab of the tiles it's on draws it as it is, and a
+    // bigger or smaller one stretches it (a 2 by 2 pillar on a 2 by 2 slab)
+    size?: number;
+    height?: number;
+    // A tint over it (0xRRGGBB)
+    tint?: number;
+    // How it comes up: its spot animation's own rise ("anim", only a spotAnim skin with one), or
+    // lifted, tipped the way the wave goes and settled back in code ("code", the default for
+    // everything else)
+    rise?: "anim" | "code";
+    // How it falls: tumbling away as drop.spotAnim does ("tumble", only for a 1 by 1 tile of the
+    // slam's slab), or dropping and turning over in code ("code", the default otherwise)
+    fall?: "tumble" | "code";
+    // A steady light along its edges while nothing's coming (0xRRGGBB): a glyph's glow
+    light?: number;
+    // Another skin (its index) drawn under this one, for a model that's only a decal (a rune
+    // that lies on a floor), or one that doesn't cover its tiles (a pillar standing on them)
+    under?: number;
+    // How the cues look on it, for a skin the floor's own light doesn't suit: the light's colour
+    // (FloorDef.glow when unset), its strength and width (times as much), and the tremor before
+    // a tile's own warning (times as much)
+    cue?: { color?: number; strength?: number; width?: number; tremor?: number };
+    // A glow all over it, in its tint's colour (0 to 1): lava's; and how much more it glows at the
+    // height of a slow pulse, each tile on its own beat
+    glow?: number;
+    pulse?: number;
+    // A spot animation played now and then on a share of its tiles at rest (lava's embers): every
+    // so many seconds, on one tile in share (4 when unset)
+    idle?: { spotAnim: number; every: number; share?: number; scale?: number };
+    // What standing on it does (FloorEffect), unless a tiles rule says otherwise
+    effect?: FloorEffect;
+    // Its dust, chips and sounds as it rises, falls and cracks (FloorMaterialDef; FLOOR_MATERIALS)
+    material?: FloorMaterialDef;
+    // Skins (their indices) to draw instead once a fragile tile's risen once, twice and so on, so
+    // you can see when it's about to go; without, it darkens and sits askew a little more each time
+    stages?: number[];
+};
+
+// What a tile does. normal: rises and falls. solid: never rises or falls. reinforced: rises,
+// never falls. fragile: falls faster, and falls by itself after rising a few times (drop.fragile).
+// safe: never rises or falls, as solid does; for the glyphs a floor promises as safe spots.
+// pillar: never rises or falls, and nobody can walk through it (give it a pillar's skin).
+export type FloorTileType = "normal" | "solid" | "reinforced" | "fragile" | "safe" | "pillar";
+
+// Where a tiles rule applies (FloorTileRuleDef), in floor tiles. A shape (FloorShapeDef); checker:
+// alternate squares of size tiles (1 when unset), odd ones if odd; border: within width tiles
+// (1) of the floor's edge, or of no floor; stripes: every every tiles along x or y, width wide
+// (1), from offset (0); chars: the ascii map's tiles with any of these characters; all: every
+// tile.
+export type FloorWhereDef =
+    | FloorShapeDef
+    | { kind: "all" }
+    | { kind: "checker"; size?: number; odd?: boolean }
+    | { kind: "border"; width?: number }
+    | { kind: "stripes"; axis: "x" | "y"; every: number; width?: number; offset?: number }
+    | { kind: "chars"; chars: string };
+
+// A rule laying out a floor's tiles (FloorDef.tiles). Only where it says (everywhere when unset),
+// and of those only a share of them (all when unset), picked by the floor's seed.
+// skin: which (FloorDef.skins), or one of several by weight; type: what it does; turn: quarter
+// turns (0 to 3), or any by chance; slab: tiles that rise and fall as one piece, [x, y] tiles
+// across, laid from the south-west wherever the whole of one fits in what the rule covers and
+// isn't in a slab already.
+// effect: what standing on it does (FloorEffect; "none" for nothing, over its skin's). rebuild:
+// seconds after it falls that it comes back, 0 never (FloorDef.rebuild when unset). trigger: the
+// name of what stepping on it sets off (FloorDef.triggers). group: a name for its tiles, for
+// actions (FloorActionDef). height: tiles up (or down, below 0) it stands, a platform or a sunken
+// tile; ramp: a slope up the way it says, from the tile behind it to the one ahead (core/floorLayout.ts).
+export type FloorTileRuleDef = {
+    where?: FloorWhereDef;
+    share?: number;
+    skin?: number | { skin: number; weight: number }[];
+    type?: FloorTileType;
+    turn?: number | "random";
+    slab?: [x: number, y: number];
+    effect?: FloorEffect | "none";
+    rebuild?: number;
+    trigger?: string;
+    group?: string;
+    height?: number;
+    ramp?: "north" | "east" | "south" | "west";
+};
+
+export type FloorPatternDef = (
+    | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number }
+    | { kind: "sweep"; rowSeconds: number; gap: number }
+    | {
+          kind: "ripple";
+          at: "player" | "middle";
+          ringSeconds: number;
+          radius: number;
+          spokes: "cross" | "diagonal";
+      }
+    | { kind: "dropRows"; rows: number; rowSeconds: number }
+    | { kind: "holes"; count: number }
+    | { kind: "restore"; rowSeconds: number }
+    // Lanes width tiles wide, every spacing tiles, one through the player (or the middle): down
+    // the floor north to south (axis "y"), across it (axis "x"), or both, crossing. A lane down
+    // it rises from its north end, a tile every tileSeconds; one across it from the middle out.
+    // Between two lanes is safe (Yama's shadow lanes).
+    | {
+          kind: "lanes";
+          axis: "x" | "y" | "both";
+          at: "player" | "middle";
+          spacing: number;
+          width: number;
+          tileSeconds: number;
+      }
+    // A plus: the row and column through a tile (the player's, or the middle), out to arm tiles
+    // each way, the tile first and then a tile further out every tileSeconds. Off a diagonal from
+    // it is safe (a Voidflare's burst).
+    | { kind: "plus"; at: "player" | "middle"; arm: number; tileSeconds: number }
+) & {
+    // Its own cue (FloorCue), over the floor's
+    cue?: FloorCue;
 };
 
 // A raid's rooms, one after another. Each has its waves for a while, then the party's taken into
@@ -1604,6 +2390,10 @@ export type FunMapDef = {
     // Lines the player says now and then, every few seconds (between every[0]
     // and every[1])
     playerChat?: { lines: string[]; every: [number, number] };
+    // A map to walk round and nothing more: no waves (the map's are empty), no bosses (an empty
+    // pool), no random events, and nothing hurts (the Battle for Varrock), but while its lair's
+    // boss is fought (MapDef.lair)
+    explore?: boolean;
 };
 
 // Where a piece of gear is worn. The client's equipment slots, plus the ring
@@ -1783,7 +2573,11 @@ export type PowerUpEffect =
           radius: number;
           speed: number;
           shout: string;
-      };
+      }
+    // A light: bonus tiles on the player's own light (LightingDef.player), or a light of its own
+    // that big, for seconds (Effect duration stretches it), shrinking back over the last fade
+    // seconds. Its look is the player's light's, or the lantern's. Only on a map with lighting.
+    | { kind: "light"; bonus: number; seconds: number; fade: number; look?: LightLook };
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
 // with the player (GameAssets.getPowerUpLookRequests), so it's on at once.

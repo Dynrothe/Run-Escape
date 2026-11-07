@@ -12,6 +12,7 @@ export function createProgram(
     fragShader: string,
     hasMultiDraw: boolean,
     discardAlpha: boolean,
+    lights = false,
 ): ProgramSource {
     const defines: string[] = [];
     if (hasMultiDraw) {
@@ -20,15 +21,27 @@ export function createProgram(
     if (discardAlpha) {
         defines.push("DISCARD_ALPHA");
     }
+    // A dark map's (lights.glsl); every other map's programs go without
+    if (lights) {
+        defines.push("LIGHTS");
+    }
     return [prependDefines(vertShader, defines), prependDefines(fragShader, defines)];
 }
 
-export function createMainProgram(hasMultiDraw: boolean, discardAlpha: boolean): ProgramSource {
-    return createProgram(mainVertShader, mainFragShader, hasMultiDraw, discardAlpha);
+export function createMainProgram(
+    hasMultiDraw: boolean,
+    discardAlpha: boolean,
+    lights = false,
+): ProgramSource {
+    return createProgram(mainVertShader, mainFragShader, hasMultiDraw, discardAlpha, lights);
 }
 
-export function createNpcProgram(hasMultiDraw: boolean, discardAlpha: boolean): ProgramSource {
-    return createProgram(npcVertShader, mainFragShader, hasMultiDraw, discardAlpha);
+export function createNpcProgram(
+    hasMultiDraw: boolean,
+    discardAlpha: boolean,
+    lights = false,
+): ProgramSource {
+    return createProgram(npcVertShader, mainFragShader, hasMultiDraw, discardAlpha, lights);
 }
 
 export const FRAME_PROGRAM = [frameVertShader, frameFragShader];

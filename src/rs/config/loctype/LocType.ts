@@ -4,7 +4,7 @@ import { ByteBuffer } from "../../io/ByteBuffer";
 import { ParamsMap, Type } from "../Type";
 import { VarManager } from "../vartype/VarManager";
 import { LocModelType } from "./LocModelType";
-import { LOC_OVERRIDES } from "./LocOverrides";
+import { CHARRED_LOCS, getLocOverride } from "./LocOverrides";
 import { LocTypeLoader } from "./LocTypeLoader";
 
 export class LocType extends Type {
@@ -92,6 +92,11 @@ export class LocType extends Type {
     randomSeqDelays?: number[];
 
     params!: ParamsMap;
+
+    // A loc of our own burnt black (LocOverrides.ts CHARRED_LOCS): LocModelLoader darkens its colours
+    charred = false;
+    // A burnt loc's lightness, of what it was (LocOverride.charLight; LocModelLoader's own if unset)
+    charLight?: number;
 
     constructor(id: number, cacheInfo: CacheInfo) {
         super(id, cacheInfo);
@@ -569,8 +574,42 @@ export class LocType extends Type {
     }
 
     override post(): void {
-        const override = LOC_OVERRIDES.get(this.id);
-        if (override) {
+        const override = getLocOverride(this.id);
+        if (override?.base !== undefined) {
+            // A loc of our own: only what's set changes
+            if (override.models) {
+                this.models = [override.models];
+                this.types = undefined;
+            }
+            if (override.size !== undefined) {
+                this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size;
+            }
+            if (override.solid) {
+                this.clipType = 2;
+                this.blocksProjectile = false;
+            }
+            if (override.walkable) {
+                this.clipType = 0;
+                this.blocksProjectile = false;
+            }
+            if (override.height !== undefined) {
+                this.offsetHeight = -override.height;
+            }
+            this.sizeX = override.sizeX ?? this.sizeX;
+            this.sizeY = override.sizeY ?? this.sizeY;
+            if (override.seq !== undefined) {
+                this.seqId = override.seq;
+                this.randomSeqIds = undefined;
+            }
+            if (override.charred) {
+                this.charred = true;
+                this.charLight = override.charLight;
+                // A burnt loc that changes with a varbit changes into burnt ones
+                this.transforms = this.transforms?.map((id) =>
+                    id === -1 || id >= CHARRED_LOCS ? id : CHARRED_LOCS + id,
+                );
+            }
+        } else if (override) {
             this.models = override.models ? [override.models] : this.models;
             this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size ?? 128;
             if (override.solid) {
