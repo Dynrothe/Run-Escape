@@ -55,6 +55,8 @@ import {
 // How often a room tells the lobby it's still there. Each one is a billed
 // request to the lobby, whatever it says.
 const ROOM_HEARTBEAT_MS = 60_000;
+// Retry only an unknown location, on existing listing updates or heartbeats.
+const LOCATION_RETRY_MS = 60_000;
 // How long a player whose connection dropped keeps their place: longer than
 // their game keeps trying (RESUME_WINDOW_MS in CoopLobby.ts)
 const RESUME_GRACE_MS = 15_000;
@@ -105,7 +107,6 @@ export class Room extends DurableObject {
         this.code = "";
         // The room, once it's made, until it's empty or closed
         this.room = undefined;
-        this.serverCountry = undefined;
         this.locationLookup = undefined;
         // Kicked addresses outlast a room's members, for the room's life
         this.kicked = new Set();
@@ -716,20 +717,30 @@ export class Room extends DurableObject {
         });
     }
 
-    // Measure from inside the object. A failed lookup clears the flag;
-    // never substitute the host player's country for a server location.
+    // Cloudflare currently keeps an object's placement. Save the first
+    // successful measurement with this game room, through wakes and restarts.
     checkLocation() {
         const room = this.room;
-        if (!room?.open || room.started || this.locationLookup) return;
+        if (
+            !room?.open ||
+            room.started ||
+            room.serverCountry ||
+            this.locationLookup ||
+            Date.now() < (room.locationRetryAt ?? 0)
+        )
+            return;
+        room.locationRetryAt = Date.now() + LOCATION_RETRY_MS;
         const lookup = roomLocation()
             .then((location) => {
                 // A closed/replaced game room mustn't be advertised again.
                 if (this.room !== room) return;
-                const country = location?.country;
-                if (this.serverCountry !== country) {
-                    this.serverCountry = country;
-                    this.tellLobby();
+                if (location) {
+                    room.serverCountry = location.country;
+                    delete room.locationRetryAt;
                 }
+                // Also keep a failure's cooldown across hibernation/restarts.
+                this.save();
+                if (location) this.tellLobby();
             })
             .finally(() => {
                 if (this.locationLookup === lookup) this.locationLookup = undefined;
@@ -758,7 +769,7 @@ export class Room extends DurableObject {
             endless: room.endless,
             hard: room.hard === true,
             host: host?.name ?? "",
-            country: this.serverCountry,
+            country: room.serverCountry,
             countrySource: "server",
             hostAddress: host?.address ?? "",
             order: room.order,
@@ -789,7 +800,6 @@ export class Room extends DurableObject {
         this.watch?.finish();
         this.watch = undefined;
         this.room = undefined;
-        this.serverCountry = undefined;
         this.locationLookup = undefined;
         this.kicked.clear();
         this.ctx.storage.deleteAll().catch(() => {});

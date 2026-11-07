@@ -57,7 +57,8 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - **The lobby's room flag** is measured inside the room, independently of its host. `location.mjs`
   calls Cloudflare's `https://www.cloudflare.com/cdn-cgi/trace` and maps its `colo` through
   the bundled `colo-countries.json`, generated from Cloudflare's public status directory.
-  It never uses trace's IP-country `loc` or an incoming player's country as a fallback. This is the diagnostic method used by
+  It never uses trace's IP-country `loc` or an incoming player's country as a fallback. This is
+  the diagnostic method used by
   [Where Durable Objects Live](https://github.com/helloimalastair/where-durableobjects-live/blob/main/apps/worker/src/DO.ts),
   not a contractual guarantee of physical placement. Unknown/failed measurements show no flag.
   Old stored host-country entries are suppressed until the room measures its location.
@@ -66,12 +67,14 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   Refresh the bundled mapping with `node scripts/update-colo-countries.mjs` in this directory,
   then review and commit the JSON diff. New/unmapped colos stay blank until the next update.
   Only the trace is fetched at runtime; a directory outage cannot interrupt existing mappings.
-  The lookup runs in the background with a bounded request deadline. `CACHE_MS` in `location.mjs`
-  sets how long the executing isolate shares a result; `RETRY_MS` sets the failure cooldown.
-  Hibernation can reuse that cache; a new isolate measures again. The location isn't stored with
-  the room, and late results cannot bring back a closed room. Changes to an open room's listing
-  and its existing heartbeat check the cache, even when nobody is browsing the lobby. No lookup
-  starts for private rooms or started runs, and there is no new alarm or interval.
+  The lookup runs in the background with a bounded request deadline when the room first becomes
+  public. The first successful country is saved with that game room and never refreshed, including
+  after hibernation, a restart or a host handoff. This relies on Cloudflare's current placement
+  rules: existing Durable Objects don't change location. Revisit this if dynamic relocation ships.
+  A failed lookup stays blank and can retry on existing listing updates or heartbeats after
+  `LOCATION_RETRY_MS` in `room.mjs`; the cooldown is saved too. There is no new alarm or interval,
+  and private rooms and started runs don't initiate lookups. Closing the room deletes the saved
+  country, so a new room reusing its code measures again. Late results cannot revive a closed room.
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
   (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
   and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from

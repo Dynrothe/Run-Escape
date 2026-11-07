@@ -333,9 +333,13 @@ describe("Cloudflare co-op room", () => {
     });
 
     it("can create another game room inside the same object before it shuts down", async () => {
-        const { room } = await party();
+        const { room, host } = await party();
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        expect(saved.serverCountry).toBe("US");
         const oldGameRoom = room.room;
         room.disband("closed");
+        vi.mocked(roomLocation).mockResolvedValue({ colo: "ARN", country: "SE" });
         const nextHost = enter(room, "nextHost", "create");
         nextHost.country = "SE";
         say(room, nextHost, { t: "create", open: true, me });
@@ -346,8 +350,10 @@ describe("Cloudflare co-op room", () => {
         expect(room.room).not.toBe(oldGameRoom);
         expect(room.room.code).toBe("ABCDEFGH");
         expect(room.room.hostId).toBe("nextHost");
-        expect(listings.at(-1)).toMatchObject({ code: "ABCDEFGH", country: "US" });
+        expect(listings.at(-1)).toMatchObject({ code: "ABCDEFGH", country: "SE" });
         expect(saved.hostId).toBe("nextHost");
+        expect(saved.serverCountry).toBe("SE");
+        expect(roomLocation).toHaveBeenCalledTimes(2);
     });
 
     it("leaves the server flag unknown until measured and discards late results after closing", async () => {
@@ -363,34 +369,93 @@ describe("Cloudflare co-op room", () => {
         await wait(room, 2000);
         expect(listings.at(-1)).toMatchObject({ countrySource: "server" });
         expect(listings.at(-1).country).toBeUndefined();
+        room.tellLobby(true);
+        room.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledOnce();
         const pending = room.locationLookup;
         room.disband("closed");
         const count = listings.length;
         finish({ colo: "EWR", country: "US" });
         await pending;
         expect(listings).toHaveLength(count);
-        expect(room.serverCountry).toBeUndefined();
+        expect(saved).toBeUndefined();
     });
 
-    it("remeasures after waking and clears the flag when measurement fails", async () => {
+    it("keeps the first country through later heartbeats, hibernation and restarts", async () => {
         const { room, host } = await party();
         host.country = "FI";
         say(room, host, { t: "settings", open: true });
         await wait(room, 2000);
         await room.locationLookup;
         expect(listings.at(-1).country).toBe("US");
-        expect(saved.serverCountry).toBeUndefined();
+        expect(saved.serverCountry).toBe("US");
+        expect(saved.locationRetryAt).toBeUndefined();
 
-        vi.mocked(roomLocation).mockResolvedValue({ colo: "ARN", country: "SE" });
+        vi.mocked(roomLocation).mockClear();
+        await wait(room, 65_000);
         const awake = await loadRoom();
         awake.tellLobby(true);
-        await awake.locationLookup;
-        expect(listings.at(-1).country).toBe("SE");
-        vi.mocked(roomLocation).mockResolvedValue(undefined);
-        awake.tellLobby(true);
-        await awake.locationLookup;
-        expect(listings.at(-1).country).toBeUndefined();
+        expect(listings.at(-1).country).toBe("US");
         expect(awake.roomView().members[0].country).toBe("FI");
+        const restarted = await restart();
+        vi.setSystemTime(Date.now() + 2 * 60 * 60_000);
+        restarted.tellLobby(true);
+        expect(listings.at(-1).country).toBe("US");
+        expect(roomLocation).not.toHaveBeenCalled();
+    });
+
+    it("doesn't save an old room's late measurement into a replacement room", async () => {
+        let finish!: (location: { colo: string; country: string }) => void;
+        vi.mocked(roomLocation).mockReturnValueOnce(
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+        );
+        const { room, host } = await party();
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        const pending = room.locationLookup;
+        room.disband("closed");
+        vi.mocked(roomLocation).mockResolvedValue({ colo: "ARN", country: "SE" });
+        const nextHost = enter(room, "nextHost", "create");
+        say(room, nextHost, { t: "create", open: true, me });
+        await room.locationLookup;
+        expect(saved.serverCountry).toBe("SE");
+
+        finish({ colo: "EWR", country: "US" });
+        await pending;
+        expect(saved.hostId).toBe("nextHost");
+        expect(saved.serverCountry).toBe("SE");
+        expect(listings.at(-1).country).toBe("SE");
+        expect(roomLocation).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps a failed lookup's cooldown through waking, then saves the first success", async () => {
+        vi.mocked(roomLocation).mockResolvedValueOnce(undefined);
+        const { room, host } = await party();
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        expect(roomLocation).toHaveBeenCalledOnce();
+        expect(saved.serverCountry).toBeUndefined();
+        expect(saved.locationRetryAt).toBeGreaterThan(Date.now());
+        const retryAt = saved.locationRetryAt;
+
+        const awake = await loadRoom();
+        awake.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledOnce();
+        const restarted = await restart();
+        restarted.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledOnce();
+        vi.setSystemTime(retryAt);
+        restarted.tellLobby(true);
+        await restarted.locationLookup;
+        expect(roomLocation).toHaveBeenCalledTimes(2);
+        expect(listings.at(-1).country).toBe("US");
+        expect(saved.serverCountry).toBe("US");
+        expect(saved.locationRetryAt).toBeUndefined();
+
+        restarted.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledTimes(2);
     });
 
     it("doesn't measure private rooms or started runs", async () => {

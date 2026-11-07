@@ -1805,8 +1805,9 @@ from inside the Durable Object (`server/cloudflare/src/location.mjs`): trace's d
 mapped through the bundled countries from Cloudflare's status directory. It carries
 `countrySource: "server"` and says "Server in".
 Failed/unknown measurements leave the flag blank, never falling back to the player's country.
-The measurement is cached within the executing isolate, not stored with the room; see that relay's
-README for its timeout, refresh and diagnostic limitations. Host handoffs don't change this flag.
+The first successful measurement is stored with the game room, through hibernation, restarts and
+host handoffs, without periodic refreshes. Only unknown locations retry; see that relay's README
+for the timeout, cooldown and placement assumption. Closing the room discards its saved country.
 Older and Node relays still supply the host player's country, labeled "Host playing from".
 Party flags stay player flags, sampled on joining; a resume token keeps the original player country.
 Automatic placement aims near the first request, but the serving edge and the Durable Object can

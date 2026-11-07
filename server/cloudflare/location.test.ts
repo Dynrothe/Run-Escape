@@ -31,28 +31,10 @@ describe("Cloudflare room location measurement", () => {
         }
     });
 
-    it("shares concurrent and cached lookups, then refreshes after an hour", async () => {
-        responses();
-        expect(await Promise.all([lookup(), lookup(), lookup()])).toEqual(
-            Array(3).fill({ colo: "EWR", country: "US" }),
-        );
-        expect(fetching).toHaveBeenCalledTimes(1);
-        await lookup();
-        expect(fetching).toHaveBeenCalledTimes(1);
-        vi.advanceTimersByTime(60 * 60_000);
-        responses("ARN");
-        expect(await lookup()).toEqual({ colo: "ARN", country: "SE" });
-        expect(fetching).toHaveBeenCalledTimes(2);
-    });
-
-    it("returns unknown for failures and limits retries", async () => {
+    it("returns unknown for a network failure", async () => {
         fetching.mockRejectedValue(new Error("offline"));
         expect(await lookup()).toBeUndefined();
-        responses();
-        expect(await lookup()).toBeUndefined();
         expect(fetching).toHaveBeenCalledTimes(1);
-        vi.advanceTimersByTime(60_000);
-        expect(await lookup()).toEqual({ colo: "EWR", country: "US" });
     });
 
     it.each(["loc=FI\n", "colo=ZZZ\n", "colo=ewr\n", "colo=EWR extra\n"])(
