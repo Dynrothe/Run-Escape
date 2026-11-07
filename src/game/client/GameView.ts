@@ -2364,6 +2364,11 @@ export class GameView {
         this.traceGroundCircle(overlay, sim, x, y, radius * (0.55 + 0.45 * t));
         ctx.fillStyle = `rgba(0, 0, 0, ${0.2 + 0.45 * t})`;
         ctx.fill();
+        // A pale rim where it'll reach, from the start: black alone is lost on a dark floor
+        this.traceGroundCircle(overlay, sim, x, y, radius);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 228, 170, ${0.45 + 0.45 * t})`;
+        ctx.stroke();
     }
 
     // The ground the boss's glyph shelters from a blockable attack: from the
