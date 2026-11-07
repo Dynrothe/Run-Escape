@@ -51,14 +51,13 @@ has what changed in each version.
 The game is built on one Old School RuneScape cache, and only runs on that one: every NPC, item,
 animation and spot animation id in `src/game/content/` was checked against it.
 
-| Cache                 | Game build        | Date              | OpenRS2 Archive                                                 |
-| --------------------- | ----------------- | ----------------- | --------------------------------------------------------------- |
-| `osrs-241_2026-09-30` | OSRS revision 241 | 30 September 2026 | [cache 2727](https://archive.openrs2.org/caches/runescape/2727) |
+| Cache                 | Game build        | Date            | OpenRS2 Archive                                                 |
+| --------------------- | ----------------- | --------------- | --------------------------------------------------------------- |
+| `osrs-242_2026-11-03` | OSRS revision 242 | 3 November 2026 | [cache 2757](https://archive.openrs2.org/caches/runescape/2757) |
 
 It's set by `GAME_CACHE_NAME` in [`src/game/cache.ts`](src/game/cache.ts), and a test checks this
-table names the same cache. Moving to a newer cache means checking the content against it first
-(`scripts/cache/validate-decoders.ts`, `check-items.ts` and `check-fun-outfits.ts` help), then
-changing both.
+table names the same cache. Moving to a newer cache means checking the content against it first,
+then changing both: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#a-newer-cache) has the steps.
 
 ## Getting started
 

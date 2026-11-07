@@ -745,7 +745,7 @@ deployment's slim cache cover them too. Equipped slots still show their item's m
 still hide the gear row.
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
-learned the rev 241 opcodes, the map loader can take extra map squares as plain data
+learned the rev 241 and 242 opcodes, the map loader can take extra map squares as plain data
 (`src/rs/map/CustomMapFileLoader.ts`, from ScapeRune), `src/rs/config/loctype/LocOverrides.ts`
 gives a ScapeRune map a loc a different model or size, and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
@@ -1205,6 +1205,8 @@ scripts/cache/find-npc-seqs.ts 655 1173  animations built on an NPC's skeleton
 scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death animations apart
 scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
+scripts/cache/compare-caches.ts osrs-241_2026-09-30   what changed since an older cache, in what the
+                                         game reads (see A newer cache)
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
@@ -1248,6 +1250,35 @@ URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizar
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed, `?raidtest` (dev only) speeds up a raid (see Raids). F3
 shows collision and stats.
+
+### A newer cache
+
+The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). Moving it on:
+
+1. With no `caches/slim/` (a checked slim-cache run, which step 4 reads), run
+   `bun run build && bun run slim-cache` first, on the old cache. Then point `GAME_CACHE_NAME`
+   at the new cache's folder name (`osrs-<revision>_<date>`, from the archive's timestamp) and run
+   `bun run download-caches`, which fetches just that one. Keep the old one in `caches/`.
+2. `validate-decoders.ts`. A new revision can move or add opcodes: one type failing on opcodes
+   that don't make sense (255, 253, 63) means an opcode it knows now carries data. Rev 242 moved
+   multilocs from 77 and 92 to 97 and 98, with 3 byte ids. `dump-config.ts` shows the bytes;
+   compare an entry with the same one in the old cache. Gate the fix on the revision.
+3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`.
+4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
+   kept, the ones the game reads: the map squares, models and so on that changed, and each npc,
+   item, animation, spot animation and loc that changed, decoded, with the fields that differ. A
+   type only written a new way doesn't count. Look up the ids that changed in the content; a map
+   square that changed in an arena can move its collision.
+5. The tests with the cache there. `grid-hash.ts` pins what the ScapeRune maps write, and a map
+   that copies the real world's squares can change with them: re-pin it on purpose.
+6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
+   play exactly as before, run for run, so any difference there is a bug; the ones that changed
+   reshuffle their seeds, so give those 6.
+7. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
+   `slim-cache` makes new chunks only where the groups changed, so returning players download
+   just those.
+
+The browser's copy of the old full cache goes when the game next loads (`deleteOtherGameCaches`).
 
 ### Co-op
 
