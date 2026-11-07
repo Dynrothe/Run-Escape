@@ -462,18 +462,30 @@ job fails, there's no draft at all, rather than one without the APK. Without the
 are as they were. To sign a local build, set `ANDROID_KEYSTORE_PATH` and the other three as
 environment variables.
 
-**Only on GitHub, and no updates.** The APK is only ever published on this repository's releases,
-never in an app store, and the app never checks for, downloads or installs a new version. That's
-by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
-first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
-job adds to the draft when the APK's built, and a line beside the APK's link at the top), and so do
-the app's About and Save help, whose New versions button opens the releases page. Unlike desktop
-players, whose launcher updates the game, Android players on an older APK can't join rooms on the
-current build until they install it.
+**Updates from GitHub.** The APK is only published on this repository's releases, never in an app
+store. `AppUpdater.java` checks the public GitHub releases API once when the app opens, off the UI
+thread, without delaying the game. `UpdateRelease.java` selects the exact Android APK of a newer
+stable release; a draft, prerelease, missing APK, offline connection or failed check leaves the
+installed game running without an error dialog. There is no token or extra update menu.
+
+The player chooses Download update. Android's DownloadManager handles progress and cancellation
+in its notification and keeps downloading if the app closes. The app remembers the download ID
+and checks it on returning, validates the APK's size, package, version and minimum Android version,
+then hands it to Android's installer through a FileProvider limited to the app's download folder.
+Android verifies the signature and asks for install consent; the first update may need Allow from
+this source in settings. Declining or a failed download leaves the current version installed. The
+update replaces the APK, so finish a run before installing; saved progress stays in place. These
+native requests don't change the bundled game's `RelayPolicy` or Content-Security-Policy.
+
+The About menu still links to releases for manual downloads. Older copies need a manual install
+of an APK with the updater first. Install over the old app: uninstalling deletes its save.
+Android players need the current game build to join its co-op rooms.
 
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
 `-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
 won't install an older APK over a newer one.
+The startup check compares game versions; an Android-only rebuild of the same game version still
+needs a manual install from releases.
 
 **Google's developer verification** applies outside app stores too. Certified Android phones are
 starting to refuse new installs and updates of apps whose developer hasn't registered with Google:

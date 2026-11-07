@@ -152,8 +152,10 @@ and Export and Import in Settings carry one across.
 And an Android one, only here on GitHub: open `Run-Escape-<version>-android.apk` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) on your phone, and let your browser
 install apps when Android asks. The whole game's in it, so it plays offline, even the first time,
-and co-op works when there's a connection. It doesn't update itself: for a new version, install its
-APK over the old one (uninstalling first deletes your progress). It needs a current Android System
+and co-op works when there's a connection. On opening, it checks GitHub for a newer release and
+offers to download its APK. Android asks you to allow installs from Run Escape, then confirm the
+update. If the check fails or you're offline, the current game keeps working. You can also install
+a new APK over the old one yourself (uninstalling first deletes your progress). It needs a current Android System
 WebView, and says so if the phone's is too old. Its saves are apart from a browser's too, and
 Export and Import carry one across.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#android) covers building it and setting up its releases.

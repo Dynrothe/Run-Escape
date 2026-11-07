@@ -191,13 +191,13 @@ desktop build.
 - **Never change its application ID (`io.jere.run_escape`) or its page's address**
   (`https://appassets.androidplatform.net/assets/game/`): Android players' saves belong to them. An
   ID can't have a hyphen.
-- **It's only published on GitHub's releases, and never updates itself.** Don't add an update
-  check, a download or an app store build: players install a new APK over the old one, as the
-  release notes (`android/release-notes.md`) and the app's About say.
+- **It's only published on GitHub's releases.** `AppUpdater.java` checks once on open and prompts
+  for a newer APK; Android handles the download and installation consent. A failed check must
+  never block the bundled game. See `docs/DEVELOPMENT.md`, Android, for the update flow.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
-- The app lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
+- The bundled game lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
   the relay, and the run collector. A new address the game reaches needs adding to both.
 - Its generated game files, APKs and keys stay out of Git (`.gitignore`).
 - Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
