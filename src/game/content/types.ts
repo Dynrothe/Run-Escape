@@ -644,7 +644,10 @@ export type KephriDef = {
         medic: number;
     };
     dung: {
+        // Seconds between, on her last (every's for the shields), and the least either comes to
+        // with the path level
         every: number;
+        finalEvery?: number;
         least: number;
         warn: number;
         knock: number;
@@ -1254,6 +1257,9 @@ export type BossPhasesDef = {
         message: string;
         shout?: string;
     };
+    // shields: a phase a shield broken (Kephri's, KephriDef), as she's back behind the next,
+    // not by her hitpoints (until is ignored); the form she rises into for her last keeps the last
+    by?: "shields";
     // Without them, the phases go by its hitpoints (phases' until), each change a
     // pause (threshold), and it dies at none, as anything does
     totems?: {

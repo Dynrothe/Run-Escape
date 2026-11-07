@@ -1692,7 +1692,7 @@ export const KEPHRI: KephriDef = {
         // After the first two shields break: dazed, she can't be hurt while swarms (swarms of
         // them) rush in to restore it, and her overlords come (moreOverlords too, with More
         // Overlords). It's over once the swarms are all in or dead and the overlords are dead.
-        swarms: [28, 24],
+        swarms: [18, 16],
         overlords: [["kephri_spitting"], ["kephri_soldier", "kephri_arcane"]],
         moreOverlords: [["kephri_soldier"], ["kephri_spitting"]],
         message: "Kephri's shield breaks! She's dazed, and her swarms rush in to restore it!",
@@ -1716,6 +1716,8 @@ export const KEPHRI: KephriDef = {
     },
     dung: {
         every: 11,
+        // Sooner on her last, a race
+        finalEvery: 7,
         least: 6,
         // The flies round you for warn seconds (2146), then you're thrown back from her up to
         // knock tiles, stunned stun seconds, for damage, with dung dropped every gap tiles along
@@ -1727,7 +1729,7 @@ export const KEPHRI: KephriDef = {
         // Shorter than a Fireball's windup, so one begun while you're down can still be stepped
         // out of (two seconds made the pair a hit nobody could help)
         stun: 0.8,
-        damage: 6,
+        damage: 5,
         gap: 1.4,
         radius: 0.65,
         seconds: 10,
@@ -1774,17 +1776,26 @@ export const KEPHRI: KephriDef = {
 };
 
 // Her specials as attacks, which no boss uses but which fire bullets as hers: the Arcane
-// Scarab's swarm going off, and an egg going off
+// Scarab's swarm going off (fourteen, so there's a way between them at four tiles), and an egg
+// going off
 export const KEPHRI_ARCANE_BLAST: BossAttackDef = {
     name: "Arcane swarm",
     kind: "blast",
-    damage: 6,
+    damage: 4,
     windup: 0,
     cooldown: 0,
     range: 30,
     weight: 0,
     spotAnim: 2153,
-    shards: { count: 24, speed: 3.5, range: 12, radius: 0.45, damage: 6, spotAnim: 2153 },
+    shards: {
+        count: 14,
+        speed: 3.5,
+        range: 12,
+        radius: 0.45,
+        damage: 4,
+        spotAnim: 2153,
+        bright: 0.5,
+    },
 };
 export const KEPHRI_EGG_BLAST: BossAttackDef = {
     name: "Egg",
@@ -1798,91 +1809,199 @@ export const KEPHRI_EGG_BLAST: BossAttackDef = {
     shards: { count: 8, speed: 4, range: 7, radius: 0.4, damage: 3, spotAnim: SCARAB_SPIT },
 };
 
-const KEPHRI_ATTACKS: BossAttackDef[] = [
-    {
-        // Into the air and down on where you stood, under its shadow, breaking up (Aerial
-        // Assault: bigger and harder), twice over
-        name: "Fireball",
-        kind: "blast",
-        damage: 7,
-        windup: 1.8,
-        cooldown: 0,
-        range: 30,
-        weight: 6,
-        radius: 1,
-        shadow: {},
+// Into the air and down on where you stood, under its shadow, breaking up (Aerial Assault: bigger
+// and harder), twice over, and three times from her second shield
+const KEPHRI_FIREBALL: BossAttackDef = {
+    name: "Fireball",
+    kind: "blast",
+    damage: 5,
+    windup: 1.8,
+    cooldown: 0,
+    range: 30,
+    weight: 6,
+    radius: 1,
+    shadow: {},
+    light: MARK_LIGHT,
+    spotAnim: 2167,
+    impactSpotAnim: 2157,
+    chain: { times: 1, windup: 0.9 },
+    shards: {
+        count: 6,
+        speed: 4,
+        range: 7,
+        radius: 0.4,
+        damage: 3,
         spotAnim: 2167,
-        impactSpotAnim: 2157,
-        chain: { times: 1, windup: 0.9 },
-        shards: {
-            count: 8,
-            speed: 4,
-            range: 7,
-            radius: 0.4,
-            damage: 3,
-            spotAnim: 2167,
-            scale: 0.5,
-        },
-        invoked: { id: "aerial_assault", radius: 1.5, damage: 1.3 },
-        seq: 9575,
+        scale: 0.5,
+        bright: 0.6,
     },
-    {
-        // Spit all round from her, a way through each ring
-        name: "Scarab spit",
-        kind: "pattern",
-        damage: 4,
-        windup: 0.8,
-        cooldown: 3,
-        range: 30,
-        weight: 4,
-        seq: 9576,
-        spotAnim: SCARAB_SPIT,
-        pattern: {
-            shape: "ring",
-            count: 18,
-            volleys: 3,
-            interval: 0.55,
-            speed: 5,
-            range: 16,
-            radius: 0.4,
-            gap: 0.6,
-            gapAt: "player",
-            turn: 0.15,
-        },
+    invoked: { id: "aerial_assault", radius: 1.5, damage: 1.3 },
+    seq: 9575,
+    phases: [1],
+};
+// Spit all round from her, a way through each ring
+const KEPHRI_SPIT: BossAttackDef = {
+    name: "Scarab spit",
+    kind: "pattern",
+    damage: 3,
+    windup: 0.8,
+    cooldown: 3,
+    range: 30,
+    weight: 4,
+    seq: 9576,
+    spotAnim: SCARAB_SPIT,
+    pattern: {
+        shape: "ring",
+        count: 14,
+        volleys: 2,
+        interval: 0.55,
+        speed: 5,
+        range: 16,
+        radius: 0.4,
+        gap: 0.8,
+        gapAt: "player",
+        turn: 0.15,
+        bright: 0.45,
     },
+};
+// Her swarm wheeling out from her both ways
+const KEPHRI_SPIRAL: BossAttackDef = {
+    name: "Swarm spiral",
+    kind: "pattern",
+    damage: 3,
+    windup: 0.8,
+    cooldown: 9,
+    range: 30,
+    weight: 3,
+    seq: 9577,
+    spotAnim: 2153,
+    pattern: {
+        shape: "spiral",
+        count: 3,
+        volleys: 12,
+        interval: 0.25,
+        speed: 4.5,
+        range: 16,
+        radius: 0.4,
+        turn: 0.28,
+        mirror: true,
+        bright: 0.45,
+    },
+    phases: [2],
+};
+// A rank of her swarm crawling at you out of the floor behind her, a gap in it: walk to the gap
+// (they're slower than you). Drawn as her swarm, walking.
+const KEPHRI_STAMPEDE: BossAttackDef = {
+    name: "Scarab stampede",
+    kind: "pattern",
+    damage: 4,
+    windup: 1.2,
+    cooldown: 12,
+    range: 30,
+    weight: 3,
+    seq: 9577,
+    sound: -1,
+    pattern: {
+        shape: "wall",
+        count: 13,
+        spacing: 1.5,
+        gap: 3,
+        volleys: 1,
+        interval: 2,
+        speed: 3.2,
+        range: 18,
+        radius: 0.6,
+        look: "kephri_swarm",
+        knockback: 1,
+        // Out of the floor behind her, and through her
+        from: -3,
+    },
+    message: "Find the gap in the stampede!",
+    phases: [2],
+};
+// She rears up and calls her swarm home, her guard down while they walk in: shoot them on the
+// way, or go in and break the call with the button (the Scarab Mages' channel), or take a blast
+// for each that gets to her. Medic!: twice as many.
+const KEPHRI_HOME: BossAttackDef = {
+    name: "Swarm, come home",
+    kind: "summon",
+    damage: 3,
+    windup: 1.0,
+    cooldown: 16,
+    range: 30,
+    weight: 3,
+    seq: 9577,
+    summon: { enemyId: "kephri_swarm_home", count: 5, walkTo: { distance: 9, perAbsorbed: 1.5 } },
+    channel: { stagger: 2.5, broken: "The swarm scatters!" },
+    invoked: { id: "medic", count: 2 },
+    message: "Kephri calls her swarm home! Shoot them, or break her call!",
+    phases: [1, 2],
+};
+// Five fireballs at once, one on you, and again round where you went
+const KEPHRI_FIRESTORM: BossAttackDef = {
+    ...KEPHRI_FIREBALL,
+    name: "Firestorm",
+    windup: 1.6,
+    cooldown: 14,
+    weight: 3,
+    count: 5,
+    spread: 5,
+    chain: { times: 1, windup: 1.0 },
+    shards: { ...KEPHRI_FIREBALL.shards!, count: 4 },
+    message: "Kephri calls down a firestorm!",
+    phases: [3],
+};
+
+const KEPHRI_ATTACKS: BossAttackDef[] = [
+    KEPHRI_FIREBALL,
+    // From her second shield, three
+    { ...KEPHRI_FIREBALL, chain: { times: 2, windup: 0.8 }, phases: [2, 3] },
+    KEPHRI_SPIT,
+    // Then (her second shield on): a fireball where you went
     {
-        // Her swarm wheeling out from her both ways
-        name: "Swarm spiral",
-        kind: "pattern",
-        damage: 4,
-        windup: 0.8,
+        ...KEPHRI_SPIT,
+        name: "Spit, then fire",
         cooldown: 6,
-        range: 30,
-        weight: 3,
-        seq: 9577,
-        spotAnim: 2153,
-        pattern: {
-            shape: "spiral",
-            count: 5,
-            volleys: 12,
-            interval: 0.25,
-            speed: 4.5,
-            range: 16,
-            radius: 0.4,
-            turn: 0.28,
-            mirror: true,
-        },
+        weight: 2,
+        follow: { attack: "Fireball", delay: 0.5 },
+        phases: [2, 3],
     },
+    // Her ambient (BossPhasesDef ambients): a ring at a time
+    {
+        ...KEPHRI_SPIT,
+        name: "Spit ring",
+        weight: 0,
+        pattern: { ...KEPHRI_SPIT.pattern!, volleys: 1 },
+    },
+    KEPHRI_SPIRAL,
+    // Her last shield's ambient
+    { ...KEPHRI_SPIRAL, name: "Swarm spirals", weight: 0, phases: undefined },
+    KEPHRI_STAMPEDE,
+    // Her last shield: two ranks, each gap somewhere new
+    {
+        ...KEPHRI_STAMPEDE,
+        name: "Scarab stampedes",
+        pattern: { ...KEPHRI_STAMPEDE.pattern!, volleys: 2 },
+        phases: [3],
+    },
+    KEPHRI_HOME,
+    // Her last shield: six
+    {
+        ...KEPHRI_HOME,
+        summon: { ...KEPHRI_HOME.summon!, count: 6 },
+        phases: [3],
+    },
+    KEPHRI_FIRESTORM,
     {
         // Eggs splattered round the arena: dark ones hatch, the light one goes off (Lively
-        // Larvae: more dark ones)
+        // Larvae: more dark ones), from her second shield
         name: "Mass Incubation",
         kind: "summon",
         damage: 0,
         // Rearing up to lay, her guard down the while: the button stops the eggs
         windup: 3,
         channel: { stagger: 2.5, broken: "The eggs go cold!" },
-        cooldown: 12,
+        cooldown: 14,
         range: 30,
         weight: 2,
         seq: 9578,
@@ -1895,10 +2014,69 @@ const KEPHRI_ATTACKS: BossAttackDef[] = [
         },
         invoked: { id: "lively_larvae", count: 2 },
         message: "Kephri splatters eggs round the arena: break them!",
+        phases: [2, 3],
     },
 ];
 
-const kephriForm = (id: string, npcId: number, hp: number, rises: boolean): EnemyDef => ({
+// Her last (her swarm spent): a race, no spells to break. Stampedes, fireballs three at a time,
+// her spit and her firestorm, her Dung Strike sooner (KephriDef.dung finalEvery), her Soldier
+// healing her if it's up
+const KEPHRI_FINAL_ATTACKS: BossAttackDef[] = [
+    { ...KEPHRI_FIREBALL, chain: { times: 2, windup: 0.8 }, phases: undefined },
+    KEPHRI_SPIT,
+    {
+        ...KEPHRI_SPIT,
+        name: "Spit ring",
+        weight: 0,
+        pattern: { ...KEPHRI_SPIT.pattern!, volleys: 1 },
+    },
+    { ...KEPHRI_SPIRAL, name: "Swarm spirals", weight: 0, phases: undefined },
+    {
+        ...KEPHRI_STAMPEDE,
+        name: "Scarab stampedes",
+        pattern: { ...KEPHRI_STAMPEDE.pattern!, volleys: 2 },
+        phases: undefined,
+    },
+    { ...KEPHRI_FIRESTORM, phases: undefined },
+];
+
+// Her phases, one a shield (BossPhasesDef by): quicker by the shield, each opening on what it
+// brings, her spit ring from the first; the form she rises into for her last keeps the third
+const KEPHRI_PHASES: NonNullable<NonNullable<EnemyDef["boss"]>["phases"]> = {
+    by: "shields",
+    phases: [
+        {
+            status: "The first shield",
+            ambients: [{ attack: "Spit ring", interval: 8, delay: 3 }],
+        },
+        {
+            status: "The second shield",
+            tempo: 0.85,
+            opener: "Scarab stampede",
+            ambients: [{ attack: "Spit ring", interval: 6.5, delay: 3 }],
+        },
+        {
+            status: "The last shield",
+            tempo: 0.7,
+            light: 0.6,
+            opener: "Firestorm",
+            ambients: [
+                { attack: "Spit ring", interval: 5, delay: 3 },
+                { attack: "Swarm spirals", interval: 12, delay: 6 },
+            ],
+        },
+    ],
+    shieldMessage: "",
+    blastMessage: "",
+};
+
+const kephriForm = (
+    id: string,
+    npcId: number,
+    hp: number,
+    rises: boolean,
+    attacks: BossAttackDef[],
+): EnemyDef => ({
     id,
     name: "Kephri",
     npcId,
@@ -1919,9 +2097,10 @@ const kephriForm = (id: string, npcId: number, hp: number, rises: boolean): Enem
     sounds: KEPHRI_SOUNDS,
     spawnMessage: "Kephri rises to guard the path of Scabaras!",
     boss: {
-        attackInterval: 2.2,
+        attackInterval: 1.6,
         enrage: { message: "Kephri buzzes in a fury!" },
-        // Open while she rears up to lay (Mass Incubation's channel), and the button breaks it
+        // Open while she rears up to call her swarm or lay (their channels), and the button
+        // breaks either
         guard: TOMBS_GUARD,
         look: TOMBS_EXPOSED,
         ...(rises && {
@@ -1933,7 +2112,8 @@ const kephriForm = (id: string, npcId: number, hp: number, rises: boolean): Enem
             },
         }),
         kephri: KEPHRI,
-        attacks: KEPHRI_ATTACKS,
+        attacks,
+        phases: KEPHRI_PHASES,
     },
 });
 
@@ -1958,8 +2138,25 @@ const scarab = (id: string, name: string, npcId: number, more: Partial<EnemyDef>
 
 TOMBS_ENEMIES.push(
     // Up from 7,000 with her guard (Mass Incubation's channel) and the raid's button
-    kephriForm("kephri", 11719, 8400, true),
-    kephriForm("kephri_final", 11721, 8400, false),
+    kephriForm("kephri", 11719, 8400, true, KEPHRI_ATTACKS),
+    kephriForm("kephri_final", 11721, 8400, false, KEPHRI_FINAL_ATTACKS),
+    {
+        // Her swarm called home (Swarm, come home): walks in to her from round the room, a blast
+        // on everyone for each that gets there, the call broken by the button (it scatters)
+        id: "kephri_swarm_home",
+        name: "Scarab Swarm",
+        npcId: 11723,
+        idleSeq: 9606,
+        walkSeq: 9606,
+        attackSeq: 9605,
+        deathSeq: 9608,
+        hp: 4,
+        damage: 0,
+        speed: 2.2,
+        radius: 0.4,
+        xp: 4,
+        sounds: { attack: -1, hit: -1, death: -1 },
+    },
     {
         // Walks to her and restores her shield if it gets there (Sim.stepKephri): anything kills it
         id: "kephri_swarm",
@@ -2000,6 +2197,17 @@ TOMBS_ENEMIES.push(
     scarab("kephri_soldier", "Soldier Scarab", 11724, {
         damage: 9,
         speed: 1.8,
+        // Burrows (its dust) and comes up beside you, slowly: step away as it surfaces
+        blinks: {
+            interval: 6,
+            minRange: 2,
+            distance: 1.5,
+            windup: 0.8,
+            castSpotAnim: 2184,
+            impactSpotAnim: 2184,
+            surface: { seq: 9584, seconds: 0.8 },
+            gap: 6,
+        },
         heals: {
             fraction: 0.02,
             interval: 5,

@@ -2567,6 +2567,50 @@ describe("Kephri", () => {
         expect(sim.tombsKephri!.shield).toBeGreaterThanOrEqual(sim.tombsKephri!.shieldMax);
         sim["damageSource"] = "weapon:scythe_of_vitur";
         expect(sim.damageEnemy(boss, 50, 0, boss.x, boss.y)).toBeGreaterThan(0);
+        // And into her second phase (by her shields), opening on her stampede
+        const phase = boss.bossState!.phase!;
+        expect(phase.index).toBe(1);
+        expect(phase.opener?.name ?? boss.bossState!.windup?.attack.name).toBe("Scarab stampede");
+    });
+
+    it("stays in her first phase till her shield breaks, whatever her hitpoints", () => {
+        const sim = atKephri();
+        const boss = kephri(sim);
+        boss.hp = Math.round(boss.maxHp * 0.3);
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        sim.damageEnemy(boss, 10, 0, boss.x, boss.y);
+        seconds(sim, 0.5, SOUTH);
+        expect(boss.bossState!.phase!.index).toBe(0);
+    });
+
+    it("calls her swarm home with her guard down, a blast for each that gets to her", () => {
+        for (const press of [false, true]) {
+            const sim = atKephri();
+            const boss = kephri(sim);
+            const home = boss.def.boss!.attacks.find((a) => a.name === "Swarm, come home")!;
+            sim["startBossAttack"](boss, home);
+            const at = { x: boss.x, y: boss.y - (boss.radius + 1) };
+            seconds(sim, home.windup + 0.2, at);
+            expect(sim.isExposed(boss)).toBe(true);
+            const walkers = sim.enemies.filter((e) => !e.dead && e.def.id === "kephri_swarm_home");
+            expect(walkers).toHaveLength(home.summon!.count);
+            if (press) {
+                expect(sim.useAbility()).toBe(true);
+                expect(sim.enemies.some((e) => !e.dead && e.def.id === "kephri_swarm_home")).toBe(
+                    false,
+                );
+            }
+            const taken = sim.damageTaken;
+            for (let i = 0; i < 15 * TICKS_PER_SECOND && boss.bossState!.walkers; i++) {
+                sim.player.x = sim.player.prevX = at.x;
+                sim.player.y = sim.player.prevY = at.y;
+                sim.player.invulnerable = 0;
+                sim.player.hp = sim.player.maxHp;
+                sim.step();
+            }
+            expect(boss.bossState!.walkers).toBeUndefined();
+            expect(sim.damageTaken > taken).toBe(!press);
+        }
     });
 
     it("brings another overlord with More Overlords", () => {

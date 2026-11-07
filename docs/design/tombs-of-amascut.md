@@ -811,6 +811,51 @@ One check, Expert with everything bought (`ROOM=baba`, warrior, one seed): done 
 the puzzle taking 1:57, with 4 wipes (before this stage, 2:12 with none: she fell in 15 seconds), the bot's damage mostly from her
 rolling boulders as before; her rocks stunned her 5 times, and 7 more times only opened her.
 
+### The boss rework, stage 4: Kephri, "the Hive"
+
+Kephri reworked to the design (built November 2026), the tuning left for the last pass: she
+doesn't move, so her windows are her channels, and each shield adds a layer.
+
+- **Phases by her shields** (`BossPhasesDef.by: "shields"`, E5): her hitpoints aren't touched till
+  the third shield's gone, so a phase is a shield, and the next begins as she's back behind it,
+  after the intermission (`Sim.kephriNextPhase`): `tempo` 1, 0.85, 0.7, the last dimmed to 0.6 with
+  Firestorm as its opener, the second with the stampede. The form she rises into for her last
+  (`kephri_final`) carries the same phases, so it stays in the third. Her ambients pause while
+  she's dazed between shields. Her attack interval is 1.6 seconds (2.2); her intermissions bring
+  18 and 16 swarms (28 and 24).
+- **Swarm, come home** (new, every 16 seconds, first and second shields; six in the third): she
+  rears up and five of her swarm (`kephri_swarm_home`, which restores nothing) walk in from 9
+  tiles (`summon.walkTo`, the Scarab Mages'), her guard down the while (`channel`). Shoot them, or
+  go in and break it with the button (they scatter, and she's open 2.5 seconds more); each that
+  gets to her adds 1.5 to a blast of 3 on everyone. Medic! brings two more.
+- **Mass Incubation** keeps its channel, from her second shield.
+- **Scarab stampede** (the second shield's opener, every 12 seconds; two ranks in the third): a
+  wall of her swarm, 13 across with a gap of three, out of the floor behind her at you, knocking
+  back a tile, 4 damage (the Scarab Mages' stampede, drawn as her swarm).
+- **Firestorm** (the third's opener, every 14): five fireballs, one on you, then again round where
+  you went.
+- **Bullets** are chip damage: Fireball 5 (7), its shards six (8) and lit, twice in the first
+  shield, three times after; Scarab spit 3 (4), 14 a ring (18), two rings (three), a wider gap, and
+  from the second shield a fireball where you went after it; her spit ring as an ambient (every 8,
+  6.5 and 5 seconds), the swarm spiral 3 arms (5) at 3 in the second and an ambient every 12 in the
+  third. The Arcane Scarab's ring is 14 at 4 (24 at 6). Dung Strike's 5 (6), every 7 seconds on
+  her last (`KephriDef.dung.finalEvery`).
+- **The Soldier burrows**: every 6 seconds out of your reach it digs (dust, 2184) and comes up a
+  tile and a half from you, slowly (`blinks.surface`, its walk 9584, 0.8 seconds), then slashes.
+- **Her last** (`kephri_final`): no channels, a race. Fireballs three at a time, her spit, two-rank
+  stampedes and Firestorm, under the third shield's ambients.
+- **The bot**: presses the button on either channel (stage 1's `tombsButton`) from where it waits,
+  a tile and a half from her, and finds the stampede's gap (stage 1's wall reader).
+
+Ids: nothing new from the cache. Her swarm called home is her Scarab Swarm (11723) again; the
+Soldier's burrow is the blown dust (2184, unfitted) and its own walk (9584).
+
+One check each, Expert with everything bought (`ROOM=kephri`, one seed): a wizard, done 2:48 after
+the room began with no wipes (before this stage, it failed with 11); a warrior failed either way
+(11 wipes after, 10 before), most of it her fireballs and the Soldier, for a melee hero who has to
+stand among them. Unchecked in a browser: the stampede's look on her floor, the Soldier coming up,
+and every mark at the last shield's 0.6.
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on
@@ -852,7 +897,8 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   a tether. **The raid's button**: pressed whenever what it'd land on has its guard down
   (`tombsButton`), and the bot goes in for it while it's ready (`SMITE=0` turns both off).
 - **Kephri**: her overlords first, the Arcane Scarab before the others (the wiki's advice), kept
-  out of the Soldier's reach; between, a tile and a half from her (she's in the middle, and a Dung
+  out of the Soldier's reach (it burrows up beside you now: the bot walks back off it, but
+  doesn't read it surfacing); between, a tile and a half from her (she's in the middle, and a Dung
   Strike from further out threw it against a wall, stunned among the dung).
 - **The Wardens**: phase one soaking the orbs of the side whose Warden its own style can't hurt
   first (a magic hero takes Tumeken's, so Elidinis' wakes open to magic; ranged the other way),

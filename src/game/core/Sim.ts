@@ -8224,6 +8224,7 @@ export class Sim {
             }
             fight.nextDungTick = this.tick + secondsToTicks(this.kephriDungEvery(def));
             this.emit({ type: "notice", message: def.intermissions.endMessage });
+            this.kephriNextPhase(boss, fight);
         }
     }
 
@@ -8337,7 +8338,34 @@ export class Sim {
     }
 
     private kephriDungEvery(def: KephriDef): number {
-        return Math.max(def.dung.least, def.dung.every - this.tombsPathWeight);
+        const every = this.tombsKephri?.final
+            ? (def.dung.finalEvery ?? def.dung.every)
+            : def.dung.every;
+        return Math.max(def.dung.least, every - this.tombsPathWeight);
+    }
+
+    // Behind her next shield: on to her next phase, if she fights in phases by her shields
+    // (BossPhasesDef by), its tempo, light, opener and ambients from now
+    private kephriNextPhase(boss: Enemy, fight: KephriFight): void {
+        const phases = boss.def.boss?.phases;
+        const phase = boss.bossState?.phase;
+        if (phases?.by !== "shields" || !phase) {
+            return;
+        }
+        const index = Math.min(fight.phase, phases.phases.length - 1);
+        if (index <= phase.index) {
+            return;
+        }
+        const next = phases.phases[index];
+        phase.index = index;
+        this.phaseLight(next);
+        phase.startTick = this.tick;
+        phase.ambientNext = this.tick;
+        phase.ambientsNext = undefined;
+        phase.opener = next.opener
+            ? boss.def.boss!.attacks.find((a) => a.name === next.opener)
+            : undefined;
+        this.pushStage(boss, phase, next.message ?? next.status ?? "");
     }
 
     // Flies round these heroes: they're thrown back once the tell's done
@@ -11487,6 +11515,10 @@ export class Sim {
     // threshold is lost, so no phase is skipped.
     private passThreshold(boss: Enemy, phase: BossPhase): boolean {
         const phases = boss.def.boss!.phases!;
+        // Kephri's go by her shields (kephriNextPhase)
+        if (phases.by === "shields") {
+            return false;
+        }
         const count = phases.phases.length;
         const index = phase.index;
         if (index >= count - 1) {
@@ -12178,8 +12210,10 @@ export class Sim {
             return;
         }
         const ambients = phase.stage === "finale" ? undefined : phases.phases[phase.index].ambients;
-        // Not through an ordeal (Ba-Ba's rolling stones): only what it calls for, meanwhile
-        if (ambients && !this.intro && !state.leap && !state.ordeal) {
+        // Not through an ordeal (Ba-Ba's rolling stones): only what it calls for, meanwhile; nor
+        // while Kephri's dazed between her shields
+        const dazed = this.tombsKephri?.uid === boss.uid && this.tombsKephri.intermission;
+        if (ambients && !this.intro && !state.leap && !state.ordeal && !dazed) {
             this.stepAmbients(boss, phase, ambients);
         }
         const ambient =
