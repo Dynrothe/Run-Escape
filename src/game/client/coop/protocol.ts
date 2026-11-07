@@ -60,8 +60,10 @@ export type RoomListing = {
     code: string;
     name: string;
     host: string;
-    // The host's, for their flag (see MemberView)
+    // The relay's measured country when countrySource is "server".
+    // Older/Node relays send the host player's country (see MemberView).
     country?: string;
+    countrySource?: "server";
     players: number;
     max: number;
     mapId: string;

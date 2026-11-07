@@ -18,7 +18,7 @@ export function countryName(code: string): string {
 type Props = {
     // ISO 3166's two letters, as the relay sends them. Nothing's shown without.
     country?: string;
-    // Before the country's name, for the tooltip: "Hosted from"
+    // Before the country's name, for the tooltip: "Server in"
     label: string;
     // An empty space the flag's size without a country, to keep rows in line
     keepSpace?: boolean;

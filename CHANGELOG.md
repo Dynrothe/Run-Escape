@@ -9,6 +9,8 @@ the version in the corner).
 
 - Justiciar Zachariah's Smite, by Okaeri: while his guard's down its button pulses with a tag
   saying so, and early in the fight a hint says what it's for, naming your button.
+- Room flags, by trippy22: a room's flag in the co-op list shows where its server is, not where
+  its host is.
 
 ### Fixed
 
