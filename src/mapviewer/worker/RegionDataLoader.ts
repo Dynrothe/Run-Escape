@@ -108,7 +108,7 @@ function getFootprint(
 export function buildRegionData(
     sceneBuilder: SceneBuilder,
     varManager: VarManager,
-    { baseX, baseY, sizeX, sizeY, plane = 0 }: RegionDataInput,
+    { baseX, baseY, sizeX, sizeY, plane = 0, glowLocs }: RegionDataInput,
 ): RegionData {
     const sceneBaseX = baseX - BORDER;
     const sceneBaseY = baseY - BORDER;
@@ -171,6 +171,25 @@ export function buildRegionData(
         }
         collisionLocs.push({ map, numbers });
     };
+    // The glowing scenery asked for, in the region
+    const glowIds = glowLocs && new Set(glowLocs);
+    const glowing: number[] = [];
+    if (glowIds) {
+        sceneBuilder.onLoc = (level, tileX, tileY, locSizeX, locSizeY, id) => {
+            const x = sceneBaseX + tileX + locSizeX / 2;
+            const y = sceneBaseY + tileY + locSizeY / 2;
+            if (
+                level === plane &&
+                glowIds.has(id) &&
+                x >= baseX &&
+                y >= baseY &&
+                x < baseX + sizeX &&
+                y < baseY + sizeY
+            ) {
+                glowing.push(id, x, y);
+            }
+        };
+    }
     let scene;
     try {
         scene = sceneBuilder.buildScene(
@@ -184,6 +203,7 @@ export function buildRegionData(
         );
     } finally {
         sceneBuilder.onCollisionLoc = undefined;
+        sceneBuilder.onLoc = undefined;
     }
 
     // The plane's collision has its bridges folded in already: where a bridge
@@ -248,6 +268,7 @@ export function buildRegionData(
         tileFlags,
         overlays,
         collisionLocs: locs,
+        glowLocs: glowIds ? new Float32Array(glowing) : undefined,
     };
 }
 
@@ -267,6 +288,7 @@ export class RegionDataLoader implements RenderDataLoader<RegionDataInput, Regio
                 data.tileFlags.buffer,
                 data.overlays.buffer,
                 data.collisionLocs.buffer,
+                ...(data.glowLocs ? [data.glowLocs.buffer] : []),
             ],
         };
     }

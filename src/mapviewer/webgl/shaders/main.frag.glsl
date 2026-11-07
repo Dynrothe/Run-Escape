@@ -5,6 +5,9 @@ precision highp float;
 layout(std140, column_major) uniform;
 
 #include "./includes/scene-uniforms.glsl";
+#ifdef LIGHTS
+#include "./includes/lights.glsl";
+#endif
 
 uniform highp sampler2DArray u_textures;
 
@@ -14,6 +17,10 @@ flat in uint v_texId;
 flat in float v_alphaCutOff;
 in float v_fogAmount;
 flat in vec4 v_interactId;
+#ifdef LIGHTS
+// World tiles x and z, and how much it's drawn as if it were lit (lights.glsl)
+in vec3 v_lightPos;
+#endif
 #ifdef ACTOR_EDGE
 in vec2 v_edgePos;
 flat in vec4 v_edge;
@@ -32,6 +39,10 @@ void main() {
     if ((v_texId == 0u && fragColor.a < 0.01) || (textureColor.a < v_alphaCutOff)) {
         discard;
     }
+#endif
+#ifdef LIGHTS
+    // Only a dark map's programs have this (GameWebGLRenderer.setDarkness)
+    fragColor.rgb = applyLight(fragColor.rgb, v_lightPos.xy, v_lightPos.z);
 #endif
 #ifdef ACTOR_EDGE
     // Light along a tile-sized actor's edges, strongest at the edge and fading in towards the

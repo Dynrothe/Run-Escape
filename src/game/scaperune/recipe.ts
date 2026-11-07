@@ -85,6 +85,7 @@ export type MapRecipe = {
             | "props"
             | "cinematic"
             | "spawnFacing"
+            | "lighting"
         >
     >;
 };

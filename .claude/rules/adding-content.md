@@ -240,6 +240,14 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
   cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
   one to copy. Check every shot's triangles at a phone's size, as it says.
+- Lights: a map opts in with `lighting` (`LightingDef`), and then anything can give off light: the
+  map's own `lights`, glowing scenery by loc id (`locs`), each player's (`player`), an enemy's
+  (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
+  spells by spot animation (`SPOT_LIGHTS` in `content/lights.ts`), a floor's tiles
+  (`FLOOR_LIGHTS`), a boss's windups and marks (`light` on the attack or its ground pattern), and
+  its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
+  for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
+  has an example of each. Off a map with `lighting`, none of it does anything.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
   `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.
