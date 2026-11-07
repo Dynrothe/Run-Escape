@@ -762,6 +762,14 @@ gives a ScapeRune map a loc a different model or size, and two bugs were fixed (
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
 
+Selected blocking jungle plants have low wooden bases, made from the cache's Tree stump
+(loc 1354, model 1635). `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static render
+list in `SdMapDataLoader`, not to the scene or cache definitions: collision, pathfinding and the
+minimap stay unchanged. It copies and scales the model, fits it to the terrain, and reuses matching
+sizes for batching. Similar nonblocking plants, animated jungle and transforming scenery are left
+alone. Keep this decoration separate from `RegionDataLoader`'s footprints and `LocOverrides`.
+The slim-cache map pass uses the same renderer loader, so it collects the base asset automatically.
+
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays
 (`ReferenceTable`); a group's files stay in one array (`Archive`), so a file's data can be part of

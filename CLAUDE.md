@@ -254,6 +254,8 @@ desktop build.
   folder, so a `caches` symlink gets committed.
 - **Changelog**: written for players, in one-line bullets under Added, Changed or Fixed. Keep it
   short, and never mention secret content (like hidden bosses) in it or in map descriptions.
+- **Change attribution**: when documenting who made a change in logs, refer to `@braiansmarzaro`
+  as **Deivid Smarzaro**.
 - **Comments**: short, and they say why or what something's for. Match what's around them.
 - **Content** is plain data with real cache ids. Look ids up with the scripts, not from memory. OSRS
   names should be spelled as the cache spells them.

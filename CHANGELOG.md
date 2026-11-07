@@ -19,6 +19,8 @@ the version in the corner).
 
 ### Changed
 
+- Blocking jungle plants, by Deivid Smarzaro: low wooden bases help distinguish them from
+  passable foliage.
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
@@ -82,7 +84,7 @@ the version in the corner).
 - Skill prices, by trippy22: the same skills cost the same whatever order you buy them in. Most
   pages of several skills cost less, a whole page about a quarter less, but a cheap skill costs
   more once dearer ones are bought.
-- Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
+- Skills, by Deivid Smarzaro: clearer preset names and an explanation of which adventurers use them.
 - The Toxic blowpipe, by Deivid Smarzaro: its darts visibly upgrade from bronze to dragon as it
   levels.
 - Co-op caskets, by Okaeri: everyone who's up gets an item of their own from a casket, not just
