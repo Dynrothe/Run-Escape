@@ -1162,6 +1162,13 @@ describe("Ba-Ba", () => {
         sim.step();
         expect(sim.tombsPeels).toHaveLength(0);
         expect(sim.player.frozen).toBeGreaterThan(0);
+        // Rooted already, another peel under them waits: slips don't chain
+        sim.tombsPeels.push({ x: peel.x, y: peel.y, endTick: sim.tick + 1000 });
+        sim.step();
+        expect(sim.tombsPeels).toHaveLength(1);
+        sim.player.frozen = 0;
+        sim.step();
+        expect(sim.tombsPeels).toHaveLength(0);
     });
 
     it("rolls her boulders no further than the arena's foot", () => {

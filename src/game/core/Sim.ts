@@ -5697,9 +5697,11 @@ export class Sim {
             if (this.tick >= peel.endTick) {
                 return false;
             }
+            // Not one already rooted: pushed onto more peels while down, they'd chain
             const hero = this.heroes.find(
                 (one) =>
                     this.isUp(one) &&
+                    one.player.frozen <= 0 &&
                     fm.hypot(one.player.x - peel.x, one.player.y - peel.y) <=
                         JUNGLE_JAPES.radius + one.player.radius,
             );
