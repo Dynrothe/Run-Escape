@@ -46,11 +46,13 @@ import {
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
+import { statIconFor } from "../content/statIcons";
+import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
-import { WeaponStatLine } from "../content/weaponStats";
+import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import type { RaidChest } from "../core/Sim";
 import {
@@ -84,6 +86,7 @@ import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
+import { StatLine } from "./StatLine";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
@@ -1271,6 +1274,14 @@ function AdventurerDetails({
                 )}
             </div>
             <div className="ui-card-text">{character.description}</div>
+            {/* What they bring, a stat to a line */}
+            {formatStats(character.bonus).length > 0 && (
+                <div className="ui-select-bonus">
+                    {formatStats(character.bonus).map((text) => (
+                        <StatLine key={text} text={text} />
+                    ))}
+                </div>
+            )}
             {!unlocked && character.unlock && (
                 <div className="ui-card-cost">{describeUnlockTask(character.unlock)} to unlock</div>
             )}
@@ -1642,7 +1653,12 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     }}
                                 >
                                     <div className="ui-card-title">{upgrade.name}</div>
-                                    <div className="ui-card-text">{upgrade.description}</div>
+                                    <div className="ui-card-text">
+                                        <StatLine
+                                            text={upgrade.description}
+                                            statKey={upgrade.stat}
+                                        />
+                                    </div>
                                     <div className="ui-pips">
                                         {Array.from({ length: upgrade.maxRank }, (_, i) => (
                                             <span
@@ -1813,7 +1829,7 @@ const Slots = memo(function Slots({
                                             : `Level ${slot.level} of ${slot.maxLevel}`}
                                     </div>
                                     {slot.stats?.map((line) => (
-                                        <div key={line}>{line}</div>
+                                        <StatLine key={line} text={line} />
                                     ))}
                                     {slot.detail && <div>{slot.detail}</div>}
                                     {slot.evolution && <EvolutionLine {...slot.evolution} />}
@@ -2181,23 +2197,36 @@ const Minimap = memo(function Minimap({ client }: { client: GameClient }): JSX.E
 function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
     return (
         <div className="ui-choice-stats">
-            {stats.map((line) => (
-                <span key={line.label} className="ui-choice-stat">
-                    <span className="ui-choice-stat-label">{line.label}</span>{" "}
-                    {line.from !== undefined && <>{line.from} → </>}
-                    <span
-                        className={
-                            line.from === undefined
-                                ? undefined
-                                : line.better
-                                  ? "ui-choice-stat-up"
-                                  : "ui-choice-stat-down"
-                        }
-                    >
-                        {line.value}
+            {stats.map((line) => {
+                const text = formatWeaponStat(line);
+                const icon = statIconFor(text) ?? statIconFor(line.label);
+                return (
+                    <span key={line.label} className="ui-choice-stat ui-stat-line">
+                        {icon ? (
+                            <ItemIcon objId={icon.objId ?? -1} spriteId={icon.spriteId} size={16} />
+                        ) : (
+                            <span
+                                className="ui-stat-spacer"
+                                style={{ width: 18, height: 16 }}
+                                aria-hidden="true"
+                            />
+                        )}
+                        <span className="ui-choice-stat-label">{line.label}</span>{" "}
+                        {line.from !== undefined && <>{line.from} → </>}
+                        <span
+                            className={
+                                line.from === undefined
+                                    ? undefined
+                                    : line.better
+                                      ? "ui-choice-stat-up"
+                                      : "ui-choice-stat-down"
+                            }
+                        >
+                            {line.value}
+                        </span>
                     </span>
-                </span>
-            ))}
+                );
+            })}
         </div>
     );
 }
@@ -2521,8 +2550,10 @@ function PauseModal({
                                         <span style={{ color: slot.rarityColor }}>{slot.name}</span>
                                         <span className="ui-pause-detail">
                                             {[...(slot.stats ?? []), slot.detail]
-                                                .filter((text) => text)
-                                                .join(", ")}
+                                                .filter((text): text is string => Boolean(text))
+                                                .map((text, i) => (
+                                                    <StatLine key={i} text={text} />
+                                                ))}
                                         </span>
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                     </span>
@@ -2539,7 +2570,7 @@ function PauseModal({
                                 <h3 className="ui-pause-heading">Your stats</h3>
                                 <div className="ui-pause-stats">
                                     {hud.stats.map((line) => (
-                                        <span key={line}>{line}</span>
+                                        <StatLine key={line} text={line} />
                                     ))}
                                 </div>
                             </>
@@ -2553,23 +2584,29 @@ function PauseModal({
                                             item && (
                                                 <div key={slot} className="ui-pause-item">
                                                     <ItemIcon objId={item.objId} size={28} />
-                                                    <span style={{ color: item.rarity.color }}>
-                                                        {item.name}
-                                                    </span>
-                                                    <span className="ui-pause-detail">
-                                                        {item.lines.join(", ")}
-                                                        {item.set && (
-                                                            <span
-                                                                className={
-                                                                    "ui-pause-set" +
-                                                                    (item.set.active
-                                                                        ? " ui-pause-set-on"
-                                                                        : "")
-                                                                }
-                                                            >
-                                                                {item.set.text}
-                                                            </span>
-                                                        )}
+                                                    <span className="ui-pause-name">
+                                                        <span style={{ color: item.rarity.color }}>
+                                                            {item.name}
+                                                        </span>
+                                                        <span className="ui-pause-detail">
+                                                            {item.lines.map((line, i) => (
+                                                                <StatLine key={i} text={line} />
+                                                            ))}
+                                                            {item.set && (
+                                                                <span
+                                                                    className={
+                                                                        "ui-pause-set" +
+                                                                        (item.set.active
+                                                                            ? " ui-pause-set-on"
+                                                                            : "")
+                                                                    }
+                                                                >
+                                                                    <StatLine
+                                                                        text={item.set.text}
+                                                                    />
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                     </span>
                                                 </div>
                                             ),
