@@ -105,6 +105,12 @@ applied; preserve them when coalescing queued moves. Movement rules shared by si
 prediction live in `core/PlayerMovement.ts`. Keep the delayed-network tests in
 `MovementPrediction.test.ts` covering corrections, fallbacks, changes to movement, stalls and
 resends, and the camera's steadiness (an echo of an unchanged move mustn't re-time the picture).
+Stops bypass the move throttle; an axis starting, stopping or reversing (east to northeast too)
+spends bounded send credits. Keep inputs pending before the first host frame, until their real
+echoes arrive, but keep the prediction's clock moving meanwhile. Keep the rapid-input
+tests below the relay's input limit. `?movementDiagnostics` opts into local prediction counters
+and a bounded sample buffer (see Development, Measuring prediction); don't log or allocate per
+frame for diagnostics, or treat input-to-confirmation time as network ping.
 
 ## Commands
 
