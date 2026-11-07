@@ -1738,6 +1738,8 @@ generator's). The Theatre's halls and boss rooms are.
 Three maps are whole worked examples, each going further than this one:
 
 - `maps/vardhelm.ts`: land carved by hand from a massif, a road up a cliff in hairpins, and prefabs of its own.
+  Its `mapDef` has an opening cinematic too (`maps/vardhelmOpening.ts`), with knights at the keep's door as props:
+  see Props and opening cinematics in `docs/DEVELOPMENT.md`.
 - `maps/kaluasWake.ts`: coasts drawn as splines, a `Build` of its own with the generator's parts run in its order, sea
   bridges and a raised village. `paintThinRock` puts back the colour on cliffs too thin for `paintRock`.
 - `maps/shatteredRealm.ts`: land over a void, its own waves, events and bosses, and terrain as architecture.

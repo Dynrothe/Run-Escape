@@ -1834,8 +1834,14 @@ export type MapDef = {
     requires?: string;
     // A fight in parts, each a run of its own (a quest's bosses one after another, as OSRS's are):
     // a run plays the next part not beaten yet, its events in place of the map's, and the map's
-    // beaten once the last is (SaveData.fightStages)
-    stages?: { name: string; events: RunEventDef[]; victoryText: string }[];
+    // beaten once the last is (SaveData.fightStages). cinematic: the part's own, played as its run
+    // starts (not on a retry) in place of the map's (MapDef.cinematic): a boss's entrance.
+    stages?: {
+        name: string;
+        events: RunEventDef[];
+        victoryText: string;
+        cinematic?: CinematicDef;
+    }[];
     // What its boss's attacks read from the arena: pillars, rows, statues
     features?: ArenaFeatures;
     // The plane (level) the arena is on: 0, the ground floor, when unset. Some
@@ -1844,6 +1850,9 @@ export type MapDef = {
     plane?: number;
     // Where the player starts (moved to the nearest free spot if it's blocked)
     spawn: { x: number; y: number };
+    // The way the player faces as the run starts (x east, y north), south when unset: the way an
+    // opening cinematic's camera ends looking (MapDef.cinematic)
+    spawnFacing?: { x: number; y: number };
     // A ditch two tiles deep, its south row at y, across the arena (the
     // Wilderness Ditch): the player can't cross it, enemies jump it
     ditch?: { y: number };
@@ -1903,6 +1912,13 @@ export type MapDef = {
     // to start in, with a door to each path, and the invocations' raid level (invocations.ts) in
     // place of hard mode
     tombs?: TombsDef;
+    // NPCs that sit on the map as scenery, posed with their own animation (MapPropDef): drawn by
+    // the view alone, never in the sim, so they're in no hash. For what a loc can't be: a loc
+    // can't play a skeletal animation.
+    props?: MapPropDef[];
+    // An opening cinematic (CinematicDef), played as a run starts here: the camera on a path of
+    // shots, NPCs acting and speaking, then the run's own camera. View only, like props.
+    cinematic?: CinematicDef;
     // A floor that fights back (FloorDef): slabs of it rise under the player in waves, and rows of
     // it fall away. A prototype, on a dev map only.
     floor?: FloorDef;
@@ -2326,6 +2342,93 @@ export type TombsGateDef = { locId: number; tiles: { x: number; y: number }[] } 
 );
 
 export type TombsSpotDef = { kind: "pillar" | "vent"; x: number; y: number; reach: number };
+// An NPC posed on a map as scenery (MapDef.props): npcId playing seq over and over, its middle at
+// x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and drawn scale times its size.
+// Give it a loc that blocks where it stands, as it blocks nothing itself.
+export type MapPropDef = {
+    npcId: number;
+    seq: number;
+    x: number;
+    y: number;
+    yaw?: number;
+    scale?: number;
+};
+
+// A map's opening cinematic (MapDef.cinematic), played as a run starts on the map (not on a
+// retry): the camera follows its shots, its cast act out its cues, and then the camera is the
+// run's own, behind the player. Each player's game plays it on its own clock and draws it alone
+// (client/Cinematic.ts, client/CinematicView.ts): nothing of it is in the sim or its hashes, so
+// co-op can't fall out of step over it. The player's input is held until it's over, and any key,
+// click, tap or controller button skips it. A solo run doesn't step until the camera's on its way
+// back to the player (the last shot's start); a co-op run goes on, with the player standing still.
+export type CinematicDef = {
+    // How long it lasts, in seconds: the last shot's (the run's camera) at
+    seconds: number;
+    // Who's in it (CinematicActorDef), and what they do (CinematicCueDef, in any order)
+    cast: CinematicActorDef[];
+    cues: CinematicCueDef[];
+    // Where the camera is (CinematicShotDef), in order of at, the first at 0 and the last the
+    // run's camera
+    shots: CinematicShotDef[];
+};
+
+// An NPC in a cinematic, drawn only while it plays: npcId playing seq over and over (until a cue
+// says otherwise), its middle at x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and
+// drawn scale times its size. prop: it stands in for the map's prop at that index (MapDef.props)
+// while the cinematic plays, so the scenery itself can act. head: tiles above the ground their
+// overhead chat sits at, when it isn't the top of their model (someone on a tall throne). light:
+// a light on them while they're drawn, on a map with lighting (a tomb's boss, seen in the dark).
+export type CinematicActorDef = {
+    id: string;
+    npcId: number;
+    seq: number;
+    x: number;
+    y: number;
+    yaw?: number;
+    scale?: number;
+    prop?: number;
+    head?: number;
+    light?: LightLook;
+};
+
+// Something that happens at seconds into a cinematic, to actor (its id): any of
+// - seq: they play it from then, once and held on its last frame, or over and over with loop;
+// - say: said over their head in the game's overhead chat, for sayFor seconds (3 when unset);
+// - spotAnim: a spot animation played out on them, once, lifted lift tiles off the ground and
+//   scale times its size;
+// - sound: a sound effect (the cache's id) played;
+// - gone: they're no longer drawn.
+export type CinematicCueDef = {
+    at: number;
+    actor: string;
+    seq?: number;
+    loop?: boolean;
+    say?: string;
+    sayFor?: number;
+    spotAnim?: number;
+    lift?: number;
+    scale?: number;
+    sound?: number;
+    gone?: boolean;
+};
+
+// Where a cinematic's camera is at seconds in: looking at x, y (world tiles), lift tiles above the
+// ground there, from distance tiles away, at pitch and yaw (RS angle units, as CameraRig's: pitch
+// -512 straight down and 0 level, yaw 0 facing north). Between shots it moves smoothly through
+// them (a monotone curve, so it never overshoots one); hold eases it to a stop on that shot.
+// player: the run's own camera, behind the player, as the cinematic ends there.
+export type CinematicShotDef =
+    | {
+          at: number;
+          x: number;
+          y: number;
+          lift: number;
+          pitch: number;
+          yaw: number;
+          distance: number;
+          hold?: boolean;
+      }
+    | { at: number; player: true };
 
 // A floor that rises and falls away, after the Wardens' third phase in the Tombs of Amascut
 // (core/ArenaFloor.ts runs it, client/FloorView.ts draws it). It's a rectangle of 1 by 1 tiles,

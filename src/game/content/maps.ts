@@ -8,7 +8,7 @@ import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
-import { EnemyDef, MapDef } from "./types";
+import { CinematicDef, EnemyDef, MapDef } from "./types";
 import {
     BARROWS_EVENTS,
     BARROWS_WAVES,
@@ -443,7 +443,7 @@ export { FUN_MAPS };
 // campaign's chain.
 export { RAID_MAPS };
 
-function createDevMap(recipe: MapRecipe): MapDef {
+export function createDevMap(recipe: MapRecipe): MapDef {
     const play = recipe.play;
     const source = play && MAPS.find((map) => map.id === play.waveSet);
     const density = play?.enemyDensity ?? 1;
@@ -510,6 +510,18 @@ export function isFightMap(mapId: string): boolean {
 // Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
 export function isCoopMap(map: MapDef): boolean {
     return map.fight?.solo !== true;
+}
+
+// Every cinematic a map can play: its opening (MapDef.cinematic) and each part's of a fight in
+// parts (MapDef.stages), for what bakes and loads them
+export function getMapCinematics(map: MapDef): CinematicDef[] {
+    const all = [map.cinematic, ...(map.stages ?? []).map((stage) => stage.cinematic)];
+    return all.filter((def): def is CinematicDef => def !== undefined);
+}
+
+// The cinematic a run plays as it starts: its part's own (a fight in parts), or the map's
+export function getRunCinematic(map: MapDef, stage: number): CinematicDef | undefined {
+    return (map.stages && map.stages[stage]?.cinematic) ?? map.cinematic;
 }
 
 export function getMapCharacter(map: MapDef): string | undefined {

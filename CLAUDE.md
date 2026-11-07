@@ -46,6 +46,8 @@ go stale. Add anything that cost you time to work out.
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
+| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
+| A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |

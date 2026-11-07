@@ -37,6 +37,7 @@ import { DEFAULT_SETTINGS, GeneratorSettings } from "../settings";
 import { PlacedBuilding, pinPlot } from "../settlements";
 import { FOUNTAIN, PAVING, placeWaymarkers } from "../structures";
 import { Terrain, getTileSlope, spreadNearest } from "../terrain";
+import { createVardhelmOpening } from "./vardhelmOpening";
 
 // Vardhelm, a hand-made map: a kingdom that climbs a mountain from south to north, so that
 // every cliff faces the camera. Nothing here's generated: the land's carved by hand out of
@@ -1321,10 +1322,13 @@ export function buildVardhelm(context: BuildContext): GeneratedMap {
     };
 }
 
+const MAP_X = 84;
+const MAP_Y = 80;
+
 export const VARDHELM: MapRecipe = {
     id: "scaperune_vardhelm",
-    mapX: 84,
-    mapY: 80,
+    mapX: MAP_X,
+    mapY: MAP_Y,
     squaresX: SQUARES_X,
     squaresY: SQUARES_Y,
     margin: 1,
@@ -1337,6 +1341,10 @@ export const VARDHELM: MapRecipe = {
             "The High Kingdom has shut its gates, and the trolls are coming down with the thaw. " +
             "Climb from the Vale of Aldmere over the three bridges of the Silverrun, up the " +
             "King's Stair and through Widow's Gate to the walled city under the Frosthorn.",
+        // An opening cinematic at the keep (vardhelmOpening.ts), ending as the player looks up
+        // the mountain
+        ...createVardhelmOpening(MAP_X, MAP_Y, SPAWN),
+        spawnFacing: { x: 0, y: 1 },
     },
     play: { waveSet: "fremennik", enemyDensity: 1, brightness: 1.12 },
 };

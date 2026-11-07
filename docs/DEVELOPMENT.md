@@ -971,6 +971,62 @@ Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apar
 of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
 2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
 
+### Props and opening cinematics
+
+- **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
+  on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
+  such as a person standing guard (Vardhelm's two knights at the keep's door). They're baked as
+  the map's travelled to (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+- **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
+  map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
+  NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
+  so a prop can act and go back to standing), `cues` at seconds in (a seq played once or looped,
+  overhead chat, a spot animation on someone, a sound, gone), and the camera's `shots`, the last
+  of which is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out
+  everything from the def and a clock: the camera's a monotone cubic through the shots per
+  channel (target, height, pitch, yaw, distance), so it never overshoots one, with `hold` easing
+  to a stop; `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms
+  a frame at most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast,
+  their spot animations, overhead chat and the bars, and `GameView` hides the props it stands in
+  for. The cast is baked with the props (`getPropRequests`, so the slim cache keeps them), its
+  spot animations and sounds with the game's.
+    - It's view only, on each player's own clock, and never in the sim or its hashes, so co-op
+      can't fall out of step over it. Input's held while it plays: any key or controller button
+      (`GameClient.pressKey`) or a click or tap on the run screen (`.ui-cinematic`) skips it, and
+      does nothing else; the HUD and touch controls are hidden. A solo run doesn't step until the
+      last shot begins (`CinematicPlayer.holdsRun`); in co-op the run goes on with the player
+      standing still (`updateCoop` sends no movement).
+    - Nothing pops in as it flies: `getCinematicSquares` follows the camera's path (every
+      quarter second, rays through the screen's middle, corners and edges, wide enough for a
+      phone, to the ground or the render distance, with a margin) for the map squares it will
+      see, and `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever
+      the camera is, never unloaded) and keeps the loading screen up until they're in
+      (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
+      as usual from there.
+    - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
+      isn't its head. `MapDef.spawnFacing` turns the player as the run starts (south if it's left
+      out), to face the way the cinematic's camera ends looking.
+    - **A phone has to draw every shot.** A camera low and level sees much further than the play
+      camera, and a city costs far more than a phone's 69k triangles. Vardhelm's close shots look
+      down at a pitch of 240 to 320, so the city beyond stays out of the picture, and its flight
+      starts 14 tiles out over the city and pulls back to the play camera's 18 once past it. With
+      those, its shots come to 19k to 65k at 844 by 390, but one at 93k, over ground the play
+      camera sees at 94k. With its close shots near level, they were up to 309k.
+    - To watch one on the dev server: `game.selectMap("scaperune_vardhelm"); game.startRun()`. To
+      hold a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`,
+      then `await frameProbe.sample(5)` for its triangles. The page reloads if a source file
+      changes, which ends it.
+    - **Not only openings.** A fight in parts gives each part its own (`MapDef.stages`'
+      `cinematic`), played in place of the map's as that part's run starts, and not on a retry
+      (`getRunCinematic`; `getMapCinematics` lists every one a map has, for what bakes and loads
+      them). Beneath Cursed Sands' four bosses each have an entrance
+      (`scaperune/maps/cursedSandsEntrances.ts`): the boss stands where it rises and says its
+      piece, and its stand-in goes as the run starts (the last shot's start), with the boss's own
+      intro rising there, so it's never there twice.
+    - **In the dark.** On a map with `lighting`, a cast member's `light` (`CinematicActorDef`) is
+      on them while they're drawn, and a spot animation in `SPOT_LIGHTS` lights them while it
+      plays (`CinematicView.getLights`, offered to `SceneLights` as `KIND_CINEMATIC`).
+
 ### Raids
 
 The Tombs of Amascut is in development, as a dev map until it's finished: its plan, and what's

@@ -12,6 +12,7 @@ import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
 import { LOC_FLOOR_DECORATION } from "../mapBuild";
 import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
 import { BuildContext, MapRecipe, getRecipeArena } from "../recipe";
+import { createSandsEntrances } from "./cursedSandsEntrances";
 import { digFloorPit } from "./wardensFloor";
 
 // The Tombs of Amascut, as a raid: its real rooms cut from the cache, each in a cell of its own,
@@ -1250,6 +1251,9 @@ const SANDS_ARENA = {
     size: AKKHA_HALF * 2,
 };
 
+// Each fight's entrance (MapDef.stages' cinematic), the boss where it rises
+const SANDS_ENTRANCES = createSandsEntrances(SANDS_MIDDLE);
+
 const SANDS_DONE = "The Menaphite Akh is slain! The Tombs of Amascut are open to you.";
 
 export const BENEATH_CURSED_SANDS: MapDef = {
@@ -1271,6 +1275,7 @@ export const BENEATH_CURSED_SANDS: MapDef = {
             name: "Coenus, the Head Menaphite Guard",
             events: [{ at: 0, kind: "finalBoss", enemyId: "coenus", hp: 8800 }],
             victoryText: "Coenus falls! Return when you're ready for what's below.",
+            cinematic: SANDS_ENTRANCES[0],
         },
         {
             name: "the Scarab Mages",
@@ -1286,16 +1291,19 @@ export const BENEATH_CURSED_SANDS: MapDef = {
                 },
             ],
             victoryText: "The Scarab Mages are dust! The Champion waits below.",
+            cinematic: SANDS_ENTRANCES[1],
         },
         {
             name: "the Champion of Scabaras",
             events: [{ at: 0, kind: "finalBoss", enemyId: "champion_of_scabaras", hp: 6500 }],
             victoryText: "The Champion of Scabaras is defeated! One more stands in your way.",
+            cinematic: SANDS_ENTRANCES[2],
         },
         {
             name: "the Menaphite Akh",
             events: [{ at: 0, kind: "finalBoss", enemyId: "menaphite_akh", hp: 8000 }],
             victoryText: SANDS_DONE,
+            cinematic: SANDS_ENTRANCES[3],
         },
     ],
     finalBossWarning: "",

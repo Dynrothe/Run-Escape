@@ -23,7 +23,7 @@ import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { ALL_MAPS, MAPS } from "../content/maps";
+import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
@@ -56,12 +56,14 @@ import {
     FloorSkinDef,
     GearSlot,
     ImpactDef,
+    MapDef,
     WeaponDef,
 } from "../content/types";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { getCinematicSeqs } from "./Cinematic";
 
 export const PLAYER_SEQS = {
     idle: 808,
@@ -213,7 +215,7 @@ export function getGameSpriteIds(): number[] {
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
 // Amulet of blood fury's heal, a random event's visitor coming and going, a
 // co-op revive's emote)
-function getSpotAnimIds(): number[] {
+export function getSpotAnimIds(): number[] {
     const ids = new Set<number>([
         53,
         199,
@@ -317,6 +319,8 @@ function getSpotAnimIds(): number[] {
     }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
+        // What plays in its cinematics (MapDef.cinematic, and a fight's parts')
+        add(...getMapCinematics(map).flatMap((def) => def.cues.map((cue) => cue.spotAnim)));
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -512,6 +516,11 @@ export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): Floor
     return { spotAnim: floor.slam.spotAnim };
 }
 
+// An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
+export function getPropKey(npcId: number): string {
+    return "prop:" + npcId;
+}
+
 // A piece of what's under a floor (FloorDef.under)
 export function getFloorPieceKey(locId: number): string {
     return "floorpiece:" + locId;
@@ -677,6 +686,8 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
+    // Maps' props and cinematic casts baked or being baked, by map id
+    private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -1035,6 +1046,49 @@ export class GameAssets {
             waits.push(baking);
         }
         return Promise.all(waits).then(() => undefined);
+    }
+
+    // A map's NPCs posed as scenery (MapDef.props), and the cast of its opening cinematic
+    // (MapDef.cinematic) with everything they play: baked as the map's travelled to
+    static getPropRequests(maps: readonly MapDef[]): BakeRequest[] {
+        const seqs = new Map<number, number[]>();
+        const add = (npcId: number, seqIds: number[]) => {
+            const list = seqs.get(npcId) ?? [];
+            for (const seq of seqIds) {
+                if (!list.includes(seq)) {
+                    list.push(seq);
+                }
+            }
+            seqs.set(npcId, list);
+        };
+        for (const prop of maps.flatMap((map) => map.props ?? [])) {
+            add(prop.npcId, [prop.seq]);
+        }
+        for (const def of maps.flatMap(getMapCinematics)) {
+            for (const [npcId, seqIds] of getCinematicSeqs(def)) {
+                add(npcId, seqIds);
+            }
+        }
+        return [...seqs].map(([npcId, seqIds]) => ({
+            kind: "npc",
+            key: getPropKey(npcId),
+            npcId,
+            seqIds,
+        }));
+    }
+
+    loadProps(map: MapDef): Promise<void> {
+        if (!map.props?.length && getMapCinematics(map).length === 0) {
+            return Promise.resolve();
+        }
+        let baking = this.propBakes.get(map.id);
+        if (!baking) {
+            baking = this.bakeInTasks(GameAssets.getPropRequests([map]), this.loadBake).catch((e) =>
+                console.error("Couldn't bake", map.id, "props", e),
+            );
+            this.propBakes.set(map.id, baking);
+        }
+        return baking;
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready

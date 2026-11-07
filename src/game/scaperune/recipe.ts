@@ -85,6 +85,9 @@ export type MapRecipe = {
             | "requires"
             | "floor"
             | "lighting"
+            | "props"
+            | "cinematic"
+            | "spawnFacing"
         >
     >;
 };
