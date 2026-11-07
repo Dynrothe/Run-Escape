@@ -1491,19 +1491,25 @@ shows collision and stats.
 The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). Moving it on:
 
 1. With no `caches/slim/` (a checked slim-cache run, which step 4 reads), run
-   `bun run build && bun run slim-cache` first, on the old cache. Then point `GAME_CACHE_NAME`
-   at the new cache's folder name (`osrs-<revision>_<date>`, from the archive's timestamp) and run
-   `bun run download-caches`, which fetches just that one. Keep the old one in `caches/`.
+   `bun run build && bun run slim-cache` first, on the old cache. A build leaves the dev maps out,
+   so for theirs run this on the old cache too:
+   `DEV_MAPS=1 SLIM_CHECK=0 bun run tsx scripts/cache/slim-cache.ts caches/slim-dev/`. Then point
+   `GAME_CACHE_NAME` at the new cache's folder name (`osrs-<revision>_<date>`, from the archive's
+   timestamp) and run `bun run download-caches`, which fetches just that one. Keep the old one in
+   `caches/`.
 2. `validate-decoders.ts`. A new revision can move or add opcodes: one type failing on opcodes
    that don't make sense (255, 253, 63) means an opcode it knows now carries data. Rev 242 moved
    multilocs from 77 and 92 to 97 and 98, with 3 byte ids. `dump-config.ts` shows the bytes;
    compare an entry with the same one in the old cache. Gate the fix on the revision.
-3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`.
+3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`, and that again with
+   `DEV_MAPS=1`: rev 242 renumbered the Tombs of Amascut's invocation sprites, which only a dev
+   map used.
 4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
-   kept, the ones the game reads: the map squares, models and so on that changed, and each npc,
-   item, animation, spot animation and loc that changed, decoded, with the fields that differ. A
-   type only written a new way doesn't count. Look up the ids that changed in the content; a map
-   square that changed in an arena can move its collision.
+   kept, the ones the game reads: the map squares, models and so on that changed or went, and each
+   npc, item, animation, spot animation and loc that changed, decoded, with the fields that differ.
+   A type only written a new way doesn't count. Look up the ids that changed in the content; a map
+   square that changed in an arena can move its collision. Then for the dev maps:
+   `compare-caches.ts <old cache> caches/slim-dev/`.
 5. The tests with the cache there. `grid-hash.ts` pins what the ScapeRune maps write, and a map
    that copies the real world's squares can change with them: re-pin it on purpose.
 6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
@@ -1514,6 +1520,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
    just those.
 
 The browser's copy of the old full cache goes when the game next loads (`deleteOtherGameCaches`).
+So does any other full cache the original map viewer (`?viewer=1`) loaded: the viewer downloads
+it again when it's next opened on it.
 
 ### Co-op
 

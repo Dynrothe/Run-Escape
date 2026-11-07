@@ -19,7 +19,8 @@ export function findGameCache(caches: CacheInfo[]): CacheInfo | undefined {
 // its own name, and slim caches used to be too, each with a new name (a slim
 // cache's chunks now share one, which keeps itself tidy). Drops the copies
 // other than the one in use, from this cache or an older one: a full cache the
-// game ran on before is osrs-<revision>_<date>.
+// game ran on before is osrs-<revision>_<date>. One the original map viewer
+// (?viewer=1) loaded goes too, and the viewer downloads it again if it's wanted.
 export async function deleteOtherGameCaches(inUse: string): Promise<void> {
     for (const name of await caches.keys()) {
         const isGameCache =
