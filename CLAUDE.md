@@ -65,6 +65,7 @@ go stale. Add anything that cost you time to work out.
 | How the player stands and runs with each weapon        | `src/game/content/stances.ts`                                          |
 | Stat names and types                                   | `src/game/content/stats.ts`, `types.ts`                                |
 | Balance bot                                            | `scripts/game/simulate-run.ts`                                         |
+| How both bots read a boss's shapes                     | `scripts/game/bossReads.ts`                                            |
 | Weapon attack benchmark                                | `scripts/game/measure-weapon-dps.ts`                                   |
 | Co-op: how it works, hosting its relay                 | `docs/DEVELOPMENT.md` (Co-op)                                          |
 | Co-op relay server                                     | `server/coop-relay.mjs`                                                |

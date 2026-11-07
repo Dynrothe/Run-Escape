@@ -1,5 +1,5 @@
 import { POINT_BLANK_VOLLEY } from "../../content/cursedSands";
-import { APMEKEN_BARRIER_LOC, TOMBS_LIGHTING } from "../../content/tombs";
+import { APMEKEN_BARRIER_LOC, TOMBS_LIGHTING, TOMBS_STRIKE } from "../../content/tombs";
 import { MapDef } from "../../content/types";
 import {
     WARDENS_CRATER_WARDEN,
@@ -1144,6 +1144,8 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
             loopSeconds: 1e7,
         },
         tombs: {
+            // The raid's fight button, for every boss (Sim.ability)
+            ability: TOMBS_STRIKE,
             nexus: TOA_PLACES.nexus.arrive,
             // The Nexus's north end, as OSRS's way to the Wardens is
             wardensDoor: worldTile(NEXUS_ARRIVE.x, NEXUS_ARRIVE.y + 22),

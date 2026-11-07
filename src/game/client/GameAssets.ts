@@ -317,6 +317,10 @@ export function getSpotAnimIds(): number[] {
     for (const map of MAPS) {
         addImpact(map.fight?.ability?.impact);
     }
+    // The Tombs' button (a dev map's, so only there on the dev server)
+    for (const map of ALL_MAPS) {
+        addImpact(map.tombs?.ability?.impact);
+    }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
         // What plays in its cinematics (MapDef.cinematic, and a fight's parts')

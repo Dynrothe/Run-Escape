@@ -998,8 +998,9 @@ export type BossAttackDef = {
     // track: for this many seconds of its windup the strip turns after the nearest player (no
     // quicker than LINE_TRACK_TURN), then it's locked: a step taken too soon is followed
     line?: { width: number; length: number; dash?: number; track?: number };
-    // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard): a swing,
-    // a wave or boomerang that reached no one, a surge that crossed without hitting anyone
+    // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard): a swing
+    // or blast, a wave or boomerang that reached no one, a surge that crossed without hitting
+    // anyone, a ground mark that landed on no one
     opens?: number;
     // A spell it channels (BossDef.guard): its guard's down from the moment it begins until it's
     // cast (a summon's walkTo: until its walkers are all in or dead), and the fight's button
@@ -1083,11 +1084,15 @@ export type BossAttackDef = {
 // nothing and costs nothing. With two final bosses up (the Scarab Mages) it hits either, one
 // with its guard down first, then the nearer, and breaks a spell it's channelling
 // (BossAttackDef.channel). The player plays playerSeq (one of their weapons' own, so it's
-// baked) as it goes, with sound; iconObjId is its button.
+// baked) as it goes, with sound; iconObjId is its button. The Tombs of Amascut carry one too
+// (TombsDef.ability), played with your own character.
 export type FightAbilityDef = {
     id: string;
     name: string;
     damage: number;
+    // Hits for this share of the boss's max hitpoints instead of damage, with none of the hero's
+    // bonuses to damage (so it scales with the raid level and the party, as the boss does)
+    damageShare?: number;
     reach: number;
     // Its reach while the boss's guard is down (BossDef.guard), when it's worth most
     openReach?: number;
@@ -1984,6 +1989,9 @@ export type TombsDef = {
     wardensDoor?: { x: number; y: number };
     // Where the Helpful Spirit stands in the Nexus, in world tiles
     spirit?: { x: number; y: number };
+    // The raid's fight button (Sim.ability): a share of the boss's hitpoints, doubled while its
+    // guard's down (BossDef.guard), and it breaks a spell the boss channels
+    ability?: FightAbilityDef;
 };
 
 // One of the Helpful Spirit's bundles (the Tombs of Amascut's), free, one taken each time: what's

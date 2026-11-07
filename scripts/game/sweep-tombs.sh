@@ -8,6 +8,7 @@
 #   KITS, the account's state, caskets dropping as they always do: zero (nothing bought), mid (half
 #   the shop's ranks and half of each Armoury line: META=mid ARMOURY=mid), all (everything:
 #   META=max ARMOURY=max); shop (META=max alone) and dev (KIT=max, the dev kit) on request
+#   RAW=dir keeps each run's whole output there, a file a line (room-level-kit-character.txt)
 #   JOBS=3 runs that many at once (with bash's `wait -n`: bash 4.3 or later, as Git Bash is;
 #   macOS's own bash 3.2 isn't)
 ROOMS=${ROOMS:-"apmeken het scabaras crondis baba akkha kephri zebak wardens"}
@@ -37,6 +38,9 @@ one() {
     local out
     out=$(env "${env[@]}" node node_modules/tsx/dist/cli.mjs scripts/game/simulate-tombs.ts \
         "$character" "$SEEDS" 2>&1)
+    if [ -n "$RAW" ]; then
+        mkdir -p "$RAW" && echo "$out" > "$RAW/$room-$level-$kit-$character.txt"
+    fi
     local summary best never
     summary=$(echo "$out" | grep -E "^[0-9]+/[0-9]+ done" | tail -1)
     best=$(echo "$out" | grep -oE "best [0-9]+% left" | sed 's/best //; s/ left//' | tr '\n' ' ')

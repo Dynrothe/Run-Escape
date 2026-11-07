@@ -9,6 +9,16 @@ import { getWeaponStyle } from "../../src/game/content/weapons";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim, wardenFrontRow } from "../../src/game/core/Sim";
 import { FlowField, canStep } from "../../src/game/core/world/FlowField";
+import {
+    buttonMove,
+    cageGap,
+    coneStep,
+    laneStep,
+    lungeStep,
+    offTether,
+    pressButton,
+    wallGap,
+} from "./bossReads";
 
 type Point = { x: number; y: number };
 
@@ -158,6 +168,26 @@ export function tombsMove(sim: Sim): Point | undefined {
         return walkTo(sim, def.gate.x + into, def.arrive.y);
     }
     return puzzleMove(sim, def);
+}
+
+// The raid's fight button (TombsDef.ability), pressed whenever what it'd land on has its guard
+// down, as the quest's bot does (bossReads)
+export function tombsButton(sim: Sim): void {
+    if (sim.map.tombs && SMITES) {
+        pressButton(sim);
+    }
+}
+
+// Whether the bot uses the button at all (a sim's SMITE=0: a person won't press it on every
+// window, so a fight's length without it is worth knowing)
+let SMITES = true;
+export function setSmites(on: boolean): void {
+    SMITES = on;
+}
+
+// In to the boss whose guard is down while the button's ready (bossReads), if it uses it
+function punishMove(sim: Sim): Point | undefined {
+    return SMITES ? buttonMove(sim) : undefined;
 }
 
 // Wears gear unless what's worn is better (counting sets, like the casket's
@@ -1076,16 +1106,27 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
         if (windup.attack.takeCover) {
             continue;
         }
-        // A swing hits round the boss (or along its line): out of its reach
+        // A swing hits round the boss: out of its reach. A lunge's strip (and its echoes', two at
+        // once to the pocket between) is stepped off sideways, and a long wedge out of its side,
+        // as a person reads them, not backed away from down its length (bossReads)
         if (windup.attack.kind === "swing") {
+            const open = (x: number, y: number) => !sim.grid.isSolid(Math.floor(x), Math.floor(y));
+            const longCone =
+                windup.attack.cone !== undefined && (windup.attack.radius ?? 2) > LONG_CONE;
+            if (windup.attack.line || longCone) {
+                const side = windup.attack.line
+                    ? lungeStep(sim, enemy, open)
+                    : coneStep(sim, enemy, windup, LONG_CONE, open);
+                if (side) {
+                    awayX += side.x * 4;
+                    awayY += side.y * 4;
+                }
+                continue;
+            }
             const dx = player.x - enemy.x;
             const dy = player.y - enemy.y;
             const away = Math.hypot(dx, dy) || 0.01;
-            const reach =
-                (windup.attack.line?.length ?? windup.attack.radius ?? 2) +
-                enemy.radius +
-                player.radius +
-                0.8;
+            const reach = (windup.attack.radius ?? 2) + enemy.radius + player.radius + 0.8;
             if (away < reach) {
                 awayX += (dx / away) * 4;
                 awayY += (dy / away) * 4;
@@ -1125,6 +1166,10 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
     const length = Math.hypot(awayX, awayY);
     return length > 0 ? { x: awayX / length, y: awayY / length } : undefined;
 }
+
+// A wedge longer than this is stepped out of sideways (its side's nearer than its end); a shorter
+// one's backed out of, as a swing round the boss is
+const LONG_CONE = 4;
 
 // The heading (of sixteen) out from under a blast's marks: the one that's clear of them all
 // soonest, over ground that can be walked, the player's radius kept off the walls
@@ -1174,6 +1219,12 @@ function blastEscape(sim: Sim, marks: Point[], reach: number): Point {
 // A move with a sidestep from what's coming mixed in, if anything is: out from under a boss's
 // blast, swing or ground mark, then whichever way (that, or round it) the bullets miss
 function dodging(sim: Sim, move: Point, avoid?: (x: number, y: number) => boolean): Point {
+    // A shape with one way out first, as the quest's bot reads them (bossReads): out of a
+    // charge's lane, to a wall's gap or a closing ring's, to its side of a tether
+    const shape = shapeStep(sim);
+    if (shape) {
+        return shape;
+    }
     const away = dodge(sim, false);
     let want = move;
     if (away) {
@@ -1183,6 +1234,20 @@ function dodging(sim: Sim, move: Point, avoid?: (x: number, y: number) => boolea
         want = { x: x / length, y: y / length };
     }
     return clearOfBullets(sim, want, avoid);
+}
+
+// The one way out of a shape a boss is making (bossReads), or undefined with none coming
+function shapeStep(sim: Sim): Point | undefined {
+    for (const enemy of sim.enemies) {
+        if (!enemy.dead && enemy.bossState) {
+            const lane = laneStep(sim, enemy);
+            if (lane) {
+                return lane;
+            }
+        }
+    }
+    const open = (x: number, y: number) => !sim.grid.isSolid(Math.floor(x), Math.floor(y));
+    return wallGap(sim, open) ?? cageGap(sim) ?? offTether(sim);
 }
 
 // How far ahead the bot looks for bullets (ticks, in steps of LOOK_STEP), and how near one has to
@@ -1370,12 +1435,12 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
             fight.acid.some(
                 (a) => Math.abs(a.x - x) <= a.half + margin && Math.abs(a.y - y) <= a.half + margin,
             );
-        return roaring ? move : dodging(sim, foodMove(sim) ?? move, inAcid);
+        return roaring ? move : dodging(sim, foodMove(sim) ?? punishMove(sim) ?? move, inAcid);
     }
     if (sim.tombsAkkha) {
         const remembering = sim.tombsAkkha.memory !== undefined;
         const move = akkhaMove(sim, def, boss);
-        return remembering ? move : dodging(sim, foodMove(sim) ?? move);
+        return remembering ? move : dodging(sim, foodMove(sim) ?? punishMove(sim) ?? move);
     }
     if (def.boulders) {
         const player = sim.player;
@@ -1391,13 +1456,15 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
             y >= pit.y0 - 0.8 &&
             y <= pit.y1 + 0.8;
         const chosen =
-            boss.bossState?.ordeal || avalanche ? move : dodging(sim, foodMove(sim) ?? move, inPit);
+            boss.bossState?.ordeal || avalanche
+                ? move
+                : dodging(sim, foodMove(sim) ?? punishMove(sim) ?? move, inPit);
         // Whatever it's after, never a step into the gap: north, away from it, instead
         const ahead = { x: player.x + chosen.x * 0.6, y: player.y + chosen.y * 0.6 };
         return inPit(ahead.x, ahead.y) ? { x: 0, y: 1 } : chosen;
     }
     if (sim.tombsKephri) {
-        return dodging(sim, foodMove(sim) ?? kephriMove(sim, boss));
+        return dodging(sim, foodMove(sim) ?? punishMove(sim) ?? kephriMove(sim, boss));
     }
     // Anything else: near enough for every weapon, off what's close
     return dodging(sim, kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5));
@@ -2168,7 +2235,12 @@ function wardensMove(sim: Sim): Point | undefined {
                 onAMark,
             );
         }
-        // Its skulls and their storms dodged, off the obelisk's marks as it goes
+        // Its skulls and their storms dodged, off the obelisk's marks as it goes; in to it while
+        // its guard's down and the button's ready
+        const punish = punishMove(sim);
+        if (punish) {
+            return dodging(sim, punish, onAMark);
+        }
         return dodging(
             sim,
             Math.hypot(to.x - player.x, to.y - player.y) < 1

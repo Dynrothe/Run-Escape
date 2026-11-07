@@ -25,6 +25,7 @@ import {
     TOMBS_BOSS_FOOD,
     TOMBS_POINTS,
     TOMBS_SPIRIT_BUNDLES,
+    TOMBS_STRIKE,
     WARDENS,
 } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -77,6 +78,7 @@ const TEST_TOMBS: MapDef = {
         loopSeconds: 1e7,
     },
     tombs: {
+        ability: TOMBS_STRIKE,
         nexus: { x: 1036.5, y: 1036.5 },
         // The way to the Wardens, 6 tiles south
         wardensDoor: { x: 1036.5, y: 1030.5 },
@@ -1115,6 +1117,71 @@ const TEST_HET: MapDef = {
     },
 };
 MAP_BY_ID.set(TEST_HET.id, TEST_HET);
+
+describe("the raid's button", () => {
+    function atBaba(): { sim: Sim; boss: Sim["enemies"][number] } {
+        const sim = apmeken();
+        expect(sim.devSkipToTombsBoss()).toBe(true);
+        seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
+        sim.weapons = [];
+        const boss = sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
+        return { sim, boss };
+    }
+    // Three tiles south of her, in the button's reach
+    const near = (sim: Sim, boss: Sim["enemies"][number]) => {
+        sim.player.x = sim.player.prevX = boss.x;
+        sim.player.y = sim.player.prevY = boss.y - 3;
+    };
+
+    it("hits a path boss for a share of its hitpoints, twice that with its guard down", () => {
+        const { sim, boss } = atBaba();
+        expect(sim.ability).toBe(TOMBS_STRIKE);
+        near(sim, boss);
+        let hp = boss.hp;
+        expect(sim.useAbility()).toBe(true);
+        const plain = hp - boss.hp;
+        const share = boss.maxHp * TOMBS_STRIKE.damageShare!;
+        expect(plain).toBeGreaterThanOrEqual(Math.floor(share * 0.85));
+        expect(plain).toBeLessThanOrEqual(Math.ceil(share * 1.15));
+        // Not again till it's charged
+        expect(sim.abilitySecondsLeft()).toBeCloseTo(TOMBS_STRIKE.cooldown);
+        hp = boss.hp;
+        sim["fireAbility"](TOMBS_STRIKE);
+        expect(boss.hp).toBe(hp);
+        sim["hero"].abilityReadyTick = 0;
+        sim["dropGuard"](boss, 2, false, "test");
+        expect(sim.isExposed(boss)).toBe(true);
+        hp = boss.hp;
+        expect(sim.useAbility()).toBe(true);
+        expect(hp - boss.hp).toBeGreaterThanOrEqual(Math.floor(share * 2 * 0.85));
+    });
+
+    it("does nothing out of reach, and in the Nexus", () => {
+        const { sim, boss } = atBaba();
+        sim.player.x = sim.player.prevX = boss.x;
+        sim.player.y = sim.player.prevY = boss.y - 8;
+        const hp = boss.hp;
+        sim["fireAbility"](TOMBS_STRIKE);
+        expect(boss.hp).toBe(hp);
+        expect(tombs([]).abilityTarget()).toBeUndefined();
+    });
+
+    it("drops Ba-Ba's guard when her shockwave hits no one, not when it hits", () => {
+        for (const under of [false, true]) {
+            const { sim, boss } = atBaba();
+            const shockwave = boss.def.boss!.attacks.find((a) => a.name === "Shockwave")!;
+            expect(shockwave.opens).toBeGreaterThan(0);
+            sim["startBossAttack"](boss, shockwave);
+            const at = under ? { x: boss.x, y: boss.y - 1.5 } : { x: boss.x, y: boss.y - 8 };
+            let opened = false;
+            for (let i = 0; i < 2.5 * TICKS_PER_SECOND; i++) {
+                seconds(sim, 1 / TICKS_PER_SECOND, at);
+                opened ||= sim.isExposed(boss);
+            }
+            expect(opened).toBe(!under);
+        }
+    });
+});
 
 describe("the Het room", () => {
     function het(invocations: string[] = [], seed = 3): Sim {
@@ -2251,6 +2318,7 @@ const TEST_KEPHRI: MapDef = {
     ...TEST_SCABARAS,
     id: "test_kephri",
     tombs: {
+        ability: TOMBS_STRIKE,
         nexus: { x: 1036.5, y: 1036.5 },
         paths: [
             {
@@ -2303,6 +2371,34 @@ describe("Kephri", () => {
     const kephri = (sim: Sim) => sim.enemies.find((e) => e.uid === sim.tombsKephri!.uid)!;
     const swarms = (sim: Sim) =>
         sim.enemies.filter((e) => !e.dead && e.def.id === DEF.swarm.enemyId);
+
+    it("drops her guard while she lays, and the raid's button stops the eggs", () => {
+        for (const press of [false, true]) {
+            const sim = atKephri();
+            const boss = kephri(sim);
+            const lay = boss.def.boss!.attacks.find((a) => a.name === "Mass Incubation")!;
+            expect(lay.channel).toBeDefined();
+            sim["startBossAttack"](boss, lay);
+            seconds(sim, 0.1, SOUTH);
+            expect(sim.isExposed(boss)).toBe(true);
+            const at = { x: boss.x, y: boss.y - (boss.radius + 1) };
+            seconds(sim, 0.1, at);
+            if (press) {
+                expect(sim.useAbility()).toBe(true);
+                expect(
+                    sim
+                        .takeEvents()
+                        .some((e) => e.type === "notice" && e.message === lay.channel!.broken),
+                ).toBe(true);
+                expect(boss.bossState!.windup).toBeUndefined();
+                // Still down for the stagger
+                expect(sim.isExposed(boss)).toBe(true);
+            }
+            seconds(sim, lay.windup + 1, at);
+            const eggs = sim.enemies.filter((e) => !e.dead && e.def.id.startsWith("kephri_egg"));
+            expect(eggs.length > 0).toBe(!press);
+        }
+    });
     // Down to her first shield's break
     function intermission(invocations: string[] = []): Sim {
         const sim = atKephri(invocations);

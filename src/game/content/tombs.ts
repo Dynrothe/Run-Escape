@@ -4,6 +4,7 @@ import {
     BossAttackDef,
     EnemyDef,
     EnemyShotDef,
+    FightAbilityDef,
     KephriDef,
     LightLook,
     LightingDef,
@@ -20,6 +21,35 @@ import {
 // little dim and warm, with a lantern's glow round each player, its braziers and fires and the
 // paths' teleport crystals lighting themselves. Not the Scar's rule: weapons aim at everything.
 const TORCHLIGHT = 0xffb060;
+
+// Every boss's guard (BossDef.guard): down a moment after a miss of its own (an attack's opens),
+// or while it channels a spell (BossAttackDef.channel), when it takes twice from everything,
+// the raid's button (TombsDef.ability) too. Not stunned: nothing in the Tombs stuns a boss yet.
+export const TOMBS_GUARD: NonNullable<NonNullable<EnemyDef["boss"]>["guard"]> = {
+    damage: 2,
+    stun: 0,
+};
+// And lit up gold while it's down, as the quest's bosses are (BossLookDef.exposedLight)
+export const TOMBS_EXPOSED = {
+    exposedLight: { radius: 2.5, color: 0xffc040, intensity: 0.6 },
+};
+
+// The raid's fight button (TombsDef.ability), played with your own character: a share of the
+// boss's hitpoints, so it's worth the same at every raid level and party size, doubled while
+// its guard's down, and it breaks a spell being channelled. Osmumten's fang is its button, the
+// raid's own weapon; the hero swings whatever they're holding (Sim.fireAbility).
+export const TOMBS_STRIKE: FightAbilityDef = {
+    id: "tombs_strike",
+    name: "Amascut's bane",
+    damage: 0,
+    damageShare: 0.004,
+    reach: 4,
+    openReach: 5.5,
+    cooldown: 5,
+    iconObjId: 26219,
+    // Dust thrown up off the boss, as the quest's button does
+    impact: { spots: [{ spotAnim: 2184, fit: 1.5 }], shake: 0.2 },
+};
 export const TOMBS_LIGHTING: LightingDef = {
     ambient: 0.72,
     ambientColor: 0xffe6c4,
@@ -281,7 +311,8 @@ export const BA_BA: EnemyDef = {
     walkSeq: 9737,
     attackSeq: 9745,
     deathSeq: DEATH,
-    hp: 6000,
+    // Up from 6,000 with her guard (Shockwave's opens) and the raid's button: no easier for them
+    hp: 7800,
     damage: 0,
     speed: 1.3,
     radius: 1.2,
@@ -293,6 +324,9 @@ export const BA_BA: EnemyDef = {
     boss: {
         attackInterval: 2.2,
         enrage: { message: "Ba-Ba's fur stands on end: she's furious!" },
+        // Her shockwave pounded into empty floor leaves her open (opens)
+        guard: TOMBS_GUARD,
+        look: TOMBS_EXPOSED,
         // Camp under her and she stomps, quicker the longer you stay
         stomp: { radius: 1.6, interval: 0.6, damage: 2, max: 8, sound: 5971 },
         rollingStones: {
@@ -319,6 +353,7 @@ export const BA_BA: EnemyDef = {
                 sound: 5984,
                 ground: { spots: [{ shape: "under" }], radius: 3.6, spotAnim: ROCK_IMPACT },
                 invoked: { id: "shaking_things_up", radius: 1.4 },
+                opens: 1,
             },
             {
                 // Shadows on the floor in a cross on you, a rock coming down into each, as OSRS's
@@ -956,7 +991,8 @@ const akkhaForm = (
     walkSeq: AKKHA_WALK,
     attackSeq,
     deathSeq: AKKHA_DEATH,
-    hp: 6000,
+    // Up from 6,000 with his guard (Spear thrust's opens) and the raid's button
+    hp: 9000,
     damage: 0,
     speed: 1.5,
     radius: 1.3,
@@ -970,6 +1006,10 @@ const akkhaForm = (
     boss: {
         attackInterval: 1.8,
         enrage: { message: "Akkha's armour glows: he's furious!" },
+        // A spear thrust that finds no one leaves him open (opens). His prayer still holds
+        // against weapons of its style; the button gets through it
+        guard: TOMBS_GUARD,
+        look: TOMBS_EXPOSED,
         rises: {
             times: 1,
             hp: 0.2,
@@ -992,6 +1032,7 @@ const AKKHA_MELEE: BossAttackDef[] = [
         range: 3.2,
         weight: 6,
         radius: 3,
+        opens: 1.5,
         seq: 9770,
         sound: 5749,
     },
@@ -1632,7 +1673,9 @@ const KEPHRI_ATTACKS: BossAttackDef[] = [
         name: "Mass Incubation",
         kind: "summon",
         damage: 0,
-        windup: 1,
+        // Rearing up to lay, her guard down the while: the button stops the eggs
+        windup: 3,
+        channel: { stagger: 2.5, broken: "The eggs go cold!" },
         cooldown: 12,
         range: 30,
         weight: 2,
@@ -1672,6 +1715,9 @@ const kephriForm = (id: string, npcId: number, hp: number, rises: boolean): Enem
     boss: {
         attackInterval: 2.2,
         enrage: { message: "Kephri buzzes in a fury!" },
+        // Open while she rears up to lay (Mass Incubation's channel), and the button breaks it
+        guard: TOMBS_GUARD,
+        look: TOMBS_EXPOSED,
         ...(rises && {
             rises: {
                 times: 1,
@@ -1705,8 +1751,9 @@ const scarab = (id: string, name: string, npcId: number, more: Partial<EnemyDef>
 });
 
 TOMBS_ENEMIES.push(
-    kephriForm("kephri", 11719, 7000, true),
-    kephriForm("kephri_final", 11721, 7000, false),
+    // Up from 7,000 with her guard (Mass Incubation's channel) and the raid's button
+    kephriForm("kephri", 11719, 8400, true),
+    kephriForm("kephri_final", 11721, 8400, false),
     {
         // Walks to her and restores her shield if it gets there (Sim.stepKephri): anything kills it
         id: "kephri_swarm",
@@ -2085,6 +2132,7 @@ const ZEBAK_ATTACKS: BossAttackDef[] = [
         range: 40,
         weight: 4,
         radius: 1.2,
+        opens: 1,
         shadow: {},
         spotAnim: 2178,
         impactSpotAnim: 2185,
@@ -2242,7 +2290,8 @@ export const WARDENS: WardensDef = {
             },
         },
         obeliskId: "wardens_obelisk_charged",
-        shield: 0.035,
+        // Up from 0.035 with its guard (Tumeken's slash), which fills it twice as fast
+        shield: 0.045,
         coreMultiplier: 5,
         distance: 3.5,
         // OSRS's 21, 29 and 37 ticks, at 100 to 80%, 80 to 60% and under
@@ -2294,7 +2343,8 @@ export const WARDENS: WardensDef = {
         endMessage: "uses the last of its power to restore",
     },
     three: {
-        hp: 25000,
+        // Up from 25,000 with its guard down for the restart after every siphon's stopped
+        hp: 30000,
         forms: {
             // The Warden that comes back is the one that fell in the first phase, with the
             // phantoms of its own two paths' bosses
@@ -2536,6 +2586,7 @@ const WARDEN_SLASH: BossAttackDef = {
     radius: 3.6,
     seq: 9659,
     sound: 6111,
+    opens: 1.2,
 };
 
 // A Warden form of the second phase: only `open` hurts it, filling its shield (Sim.wardenTakes)
@@ -2566,6 +2617,9 @@ const wardenForm = (
     boss: {
         attackInterval: chases ? 4.8 : 4.2,
         keepDistance: chases ? undefined : 5,
+        // Each hit on it fills its shield twice over while it's down
+        guard: TOMBS_GUARD,
+        look: TOMBS_EXPOSED,
         enrage: { message: `${name} is enraged!` },
         attacks: chases ? [...WARDEN_ATTACKS, WARDEN_SLASH] : WARDEN_ATTACKS,
     },
@@ -2753,18 +2807,26 @@ const phantomDrop = (
     ...more,
 });
 
+// The last phase's Warden: open for the slams' restart once every siphon's stopped
+const WARDEN_LAST: NonNullable<EnemyDef["boss"]> = {
+    ...QUIET,
+    fallSeconds: 5,
+    guard: TOMBS_GUARD,
+    look: TOMBS_EXPOSED,
+};
+
 const WARDENS_PHASE_THREE: EnemyDef[] = [
     stillWarden("elidinis_warden_last", "Elidinis' Warden", 11761, 9657, {
-        boss: { ...QUIET, fallSeconds: 5 },
+        boss: WARDEN_LAST,
     }),
     stillWarden("tumeken_warden_last", "Tumeken's Warden", 11762, 9657, {
-        boss: { ...QUIET, fallSeconds: 5 },
+        boss: WARDEN_LAST,
     }),
     stillWarden("elidinis_warden_charging", "Elidinis' Warden", 11763, 9683, {
-        boss: { ...QUIET, fallSeconds: 5 },
+        boss: WARDEN_LAST,
     }),
     stillWarden("tumeken_warden_charging", "Tumeken's Warden", 11764, 9683, {
-        boss: { ...QUIET, fallSeconds: 5 },
+        boss: WARDEN_LAST,
     }),
     {
         // An energy siphon, landed: stepped on, it's reversed (Sim.stepWardens)
@@ -2978,7 +3040,8 @@ TOMBS_ENEMIES.push(
         walkSeq: 9618,
         attackSeq: 9624,
         deathSeq: 9634,
-        hp: 7000,
+        // Up from 7,000 with his guard (Rock spit's opens) and the raid's button
+        hp: 8400,
         damage: 0,
         speed: 0,
         radius: 4,
@@ -2991,6 +3054,9 @@ TOMBS_ENEMIES.push(
         boss: {
             attackInterval: 2.6,
             enrage: { message: "Zebak is enraged!", at: 0.25 },
+            // A rock spat that misses leaves his head down at the water's edge (opens)
+            guard: TOMBS_GUARD,
+            look: TOMBS_EXPOSED,
             zebak: ZEBAK,
             attacks: ZEBAK_ATTACKS,
         },

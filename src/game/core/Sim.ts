@@ -7500,6 +7500,8 @@ export class Sim {
             });
             this.animate(warden, def.staggerSeq);
             this.emit({ type: "notice", message: def.staggerMessage });
+            // And open for the slams' restart (BossDef.guard)
+            this.dropGuard(warden, def.restart, false, "Energy Siphon");
         } else {
             this.animate(warden, def.releaseSeq);
             this.floor?.start(
@@ -13113,6 +13115,21 @@ export class Sim {
                     spent = true;
                 }
                 this.landHazard(hazard, landed, true);
+                // Into empty floor: its boss's guard's down (BossDef.guard). Only when nothing
+                // else landed on anyone this tick, so a mark that missed beside one that hit
+                // doesn't count
+                const opens = hazard.attack.opens;
+                if (
+                    opens !== undefined &&
+                    !lingers &&
+                    hazard.hit.length === 0 &&
+                    !landed.some(Boolean)
+                ) {
+                    const boss = this.enemies.find((e) => e.uid === hazard.enemyUid);
+                    if (boss) {
+                        this.dropGuard(boss, opens, false, hazard.attack.name);
+                    }
+                }
             }
             if (this.runOver) {
                 return;
@@ -14467,12 +14484,17 @@ export class Sim {
         }
     }
 
-    // The fight's button (MapDef.fight.ability), for the current hero: whether it went off
+    // The fight's button: a fight map's own (MapDef.fight.ability), or the Tombs' (TombsDef.ability)
+    get ability(): FightAbilityDef | undefined {
+        return this.map.fight?.ability ?? this.map.tombs?.ability;
+    }
+
+    // The fight's button (Sim.ability), for the current hero: whether it went off
     // A press a moment too soon (the button still charging, or the boss just out of reach) is
     // held for ABILITY_BUFFER_SECONDS and goes off as soon as it can, rather than lost; one that
     // couldn't in that time says no. Whether it went off, or is held.
     useAbility(): boolean {
-        const ability = this.map.fight?.ability;
+        const ability = this.ability;
         const hero = this.hero;
         if (!ability || this.state !== "playing" || !this.isUp(hero)) {
             return false;
@@ -14499,7 +14521,7 @@ export class Sim {
 
     // Each hero's held press, tried again each tick till it goes off or runs out
     private stepHeldAbilities(): void {
-        const ability = this.map.fight?.ability;
+        const ability = this.ability;
         if (!ability) {
             return;
         }
@@ -14537,8 +14559,12 @@ export class Sim {
         }
         hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
         const player = this.player;
-        if (ability.playerSeq !== undefined) {
-            player.attackSeq = ability.playerSeq;
+        // Without one of its own (the Tombs', played with your own character), the hero's
+        // first weapon's
+        const seq =
+            ability.playerSeq ?? (this.map.tombs ? this.weapons[0]?.def.playerSeq : undefined);
+        if (seq !== undefined) {
+            player.attackSeq = seq;
             player.attackStart = this.tick;
         }
         this.showImpact(ability.impact, boss.x, boss.y);
@@ -14552,9 +14578,53 @@ export class Sim {
             opened: this.isExposed(boss),
         });
         this.damageSource = `ability:${ability.id}`;
-        this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
+        if (ability.damageShare !== undefined) {
+            // A share of its hitpoints, none of the hero's bonuses (a guard down still doubles it)
+            this.damageEnemy(
+                boss,
+                this.abilityShareOf(boss) * ability.damageShare,
+                0,
+                player.x,
+                player.y,
+                0,
+            );
+        } else {
+            this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
+        }
         this.breakChannel(boss);
         return true;
+    }
+
+    private tombsAbilityBosses(): Enemy[] {
+        const uids: number[] = [];
+        const wardens = this.tombsWardens;
+        if (wardens) {
+            if (wardens.phase === 2 && wardens.two?.wardenUid !== undefined) {
+                // Not while it kneels: its core's what's hit then, and isn't a boss
+                if (!wardens.two.kneel) {
+                    uids.push(wardens.two.wardenUid);
+                }
+            } else if (wardens.phase === 3 && wardens.three) {
+                uids.push(wardens.three.wardenUid);
+            }
+        } else if (this.tombsRoom?.boss && this.tombsRoom.boss.uid !== -1) {
+            uids.push(this.tombsRoom.boss.uid);
+        }
+        return this.enemies.filter((e) => !e.dead && e.bossState && uids.includes(e.uid));
+    }
+
+    // What a button's damageShare is a share of, for this boss: what the hit comes off (Kephri's
+    // shield, the second-phase Warden's), else its hitpoints
+    private abilityShareOf(boss: Enemy): number {
+        const kephri = this.tombsKephri;
+        if (kephri && boss.uid === kephri.uid && !kephri.final) {
+            return kephri.shieldMax;
+        }
+        const two = this.tombsWardens?.phase === 2 ? this.tombsWardens.two : undefined;
+        if (two && boss.uid === two.wardenUid && !two.kneel) {
+            return two.shieldMax;
+        }
+        return boss.maxHp;
     }
 
     // The fight's button landed on a boss channelling a spell (BossAttackDef.channel): it's
@@ -14595,8 +14665,12 @@ export class Sim {
     }
 
     // The bosses the fight's button can land on: the one on the bar, or of two fought together
-    // (the Scarab Mages) either of them
+    // (the Scarab Mages) either of them; in the Tombs, the path's boss, or the Wardens' Warden in
+    // their second and third phases (the first phase's obelisk isn't a boss, nor the core)
     private abilityBosses(): Enemy[] {
+        if (this.map.tombs) {
+            return this.tombsAbilityBosses();
+        }
         let together: Enemy[] | undefined;
         for (const enemy of this.enemies) {
             if (enemy.finalBoss && !enemy.dead && enemy.bossState) {
@@ -14612,7 +14686,7 @@ export class Sim {
 
     // What the fight's button would land on now: the boss, up, in reach of the current hero; of
     // two fought together, one with its guard down first, then the nearer
-    abilityTarget(ability = this.map.fight?.ability): Enemy | undefined {
+    abilityTarget(ability = this.ability): Enemy | undefined {
         if (!ability || this.intro) {
             return undefined;
         }
@@ -16063,7 +16137,7 @@ export class Sim {
         const naps = enemy.def.boss?.naps;
         const guard = naps && !this.isNapping(enemy) ? naps.awakeDamage : 1;
         // Its guard down after a miss, or stunned (BossDef.guard)
-        const opened = this.isExposed(enemy) ? enemy.def.boss!.guard!.damage : 1;
+        const opened = this.isExposed(enemy) ? (enemy.def.boss?.guard?.damage ?? 1) : 1;
         const prayed = this.prayedAgainst(enemy) * guard * offColour * opened;
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too

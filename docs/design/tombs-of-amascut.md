@@ -655,6 +655,56 @@ raid's ranges.
 - **What the uniques unlock** (section 8's plan) isn't in yet: they're Collection log trophies,
   kept out of the log while the raid's a dev map.
 
+### The boss rework, stage 1: guards and the raid's button
+
+The first step of the boss rework (its design: every boss given readable answers and windows to
+punish): every boss has a guard, and the raid has a fight button. Built November 2026.
+
+- **The raid's button** (`TombsDef.ability`, `TOMBS_STRIKE`, "Amascut's bane"): Space, a pad's
+  bottom button or the touch screen's, as the quest's is (`Sim.ability` reads a fight map's or
+  the Tombs'). It hits for `damageShare` (0.4%) of the boss's hitpoints with none of the hero's
+  bonuses, so it's worth the same at every raid level and party size (a share of Kephri's shield
+  while she's behind one, and of the second-phase Warden's shield), twice that while the guard's
+  down, reach 4 (5.5 while it's down), every 5 seconds, each hero their own. It lands on the
+  path's boss, or the Wardens' Warden in their second and third phases (not while it kneels: its
+  core's what's hit then; not the first phase's obelisk, which isn't a boss in the sim), and breaks a spell being channelled. The hero swings their first
+  weapon as it goes.
+- **Guards** (`TOMBS_GUARD`: twice the damage while down, no stun; gold `exposedLight` while it
+  is), and what drops each in this stage, with the bosses' own attacks as they are:
+    - Ba-Ba: a Shockwave that lands on no one (`opens: 1`; ground marks can open a guard now).
+    - Akkha, every form: a Spear thrust that hits no one (`opens: 1.5`). His prayer still holds
+      against weapons of its style while he's open; the button gets through it.
+    - Kephri: Mass Incubation is channelled (3 seconds, guard down the while); the button breaks
+      it and no eggs come.
+    - Zebak: a Rock spit that lands on no one (`opens: 1`), standing in for his Jaws to come.
+    - The Wardens: Tumeken's second-phase Slash at no one (`opens: 1.2`; each hit fills its
+      shield twice over while it's down), and in the last phase, every siphon stopped, the Warden's
+      open for the slams' restart (5.4 seconds). The first phase's obelisk isn't a boss in the sim,
+      so its flicker waits for the Wardens' stage.
+- **Hitpoints, so the raid's no easier for it**: Ba-Ba 6,000 to 7,800, Akkha 6,000 to 9,000,
+  Kephri 7,000 to 8,400, Zebak 7,000 to 8,400, the second-phase Warden's shield 3.5% to 4.5% of its
+  hitpoints, the last phase's Warden 25,000 to 30,000. Tuned boss by boss against the same bosses
+  with no guards (each played after its own puzzle room, `sweep-tombs.sh` with `ROOMS=<boss>`),
+  then checked over the whole raid.
+
+The whole raid before (the new bot on the bosses as they were) and after, 9 runs a cell
+(warrior, wizard and ranger, 3 seeds): wins, deaths (wipes, all nine runs'), median winning time.
+
+| Invo Difficulty | Fresh Account (before / after)  | Mid-game                           | End-game                          |
+| --------------- | ------------------------------- | ---------------------------------- | --------------------------------- |
+| Entry (0-149)   | 7/9, 67, 19:55 / 8/9, 27, 21:56 | 9/9, 2, 14:45 / 9/9, 8, 37:02      | 9/9, 3, 10:46 / 9/9, 6, 12:04     |
+| Normal (150+)   | 0/9, 981 / 0/9, 936             | 4/9, 603, 23:37 / 2/9, 1058, 64:06 | 8/9, 6, 24:43 / 6/9, 271, 30:10   |
+| Expert (300+)   | 0/9, 1064 / 0/9, 994            | 0/9, 417 / 0/9, 444                | 3/9, 394, 29:09 / 1/9, 583, 20:41 |
+| Max invo (500)  | 0/9, 2806 / 0/9, 2806           | 0/9, 1051 / 0/9, 1033              | 0/9, 644 / 0/9, 643               |
+
+Fresh accounts lose on the first boss at Normal and up either way, so their deaths count tries in
+90 minutes, not how hard it is; played alone with that kit, Ba-Ba leaves as much of her hitpoints
+as before and Akkha's harder (6 of 9 at Entry before, 4 after). Entry's one more Fresh win was a
+warrior that stalled on the path of Het before. The rest is the same or harder, End-game the most:
+the hitpoints went up by more than the guards give a strong kit, as a share-of-hitpoints button
+is worth more to a weak one. The next stages put each boss's own punish windows in (lunges,
+leaps, jaws, channels) and are tuned the same way.
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on
@@ -686,7 +736,12 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   acid, in a wave's gap at a dry tile in its column, away from his blood clouds (they're slower,
   and die following), and, with every spot in reach acid, rolling a jug at rest to break by the
   pool; and it sidesteps bullets, boss blasts and swings, and the Wardens' red skulls as they
-  turn (a sidestep at the last beats their turning circle).
+  turn (a sidestep at the last beats their turning circle). It reads a boss's shapes with the
+  quest's own readers (`scripts/game/bossReads.ts`, shared with `simulate-run.ts`): off a lunge's
+  strip sideways (not backed away from down its length), to the pocket between two strips, out of
+  a long wedge's side, to a wall's or a closing ring's gap, out of a charge's lane, to its side of
+  a tether. **The raid's button**: pressed whenever what it'd land on has its guard down
+  (`tombsButton`), and the bot goes in for it while it's ready (`SMITE=0` turns both off).
 - **Kephri**: her overlords first, the Arcane Scarab before the others (the wiki's advice), kept
   out of the Soldier's reach; between, a tile and a half from her (she's in the middle, and a Dung
   Strike from further out threw it against a wall, stunned among the dung).

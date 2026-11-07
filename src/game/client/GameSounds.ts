@@ -66,6 +66,9 @@ export function getGameSoundIds(): number[] {
         ids.push(map.fight?.ability?.sound ?? -1);
     }
     for (const map of ALL_MAPS) {
+        ids.push(map.tombs?.ability?.sound ?? -1);
+    }
+    for (const map of ALL_MAPS) {
         ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
         for (const def of getMapCinematics(map)) {
             ids.push(...def.cues.map((cue) => cue.sound ?? -1));

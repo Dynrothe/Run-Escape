@@ -211,7 +211,7 @@ export type HudNumbers = {
     buffs: BuffView[];
     // enraged: below half its hitpoints, faster and with its enraged attacks
     boss?: BossView;
-    // A fight's own button (MapDef.fight.ability): how charged it is (0 to 1, by twentieths),
+    // A fight's own button (Sim.ability): how charged it is (0 to 1, by twentieths),
     // whether the boss is in its reach, and whether its guard's down, when it's worth most
     ability?: AbilityView;
     // The quests this run can get on with: this map's, then the ones done all

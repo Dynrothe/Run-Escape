@@ -850,7 +850,10 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       and a `boomerang` with `toEdge` flies to where its line leaves the `bossArena`
       (`Sim.throwReach`, `boxExit`), which the view's line uses too. A boss fight's HUD and
       touch screen have no item bar, and its results a Retry (`GameClient.retry`).
-    - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button: `Sim.useAbility`,
+    - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button, and `TombsDef.ability`
+      the raid's (`Sim.ability` reads either; in the Tombs it lands on the path's boss, or the
+      Wardens' second- and third-phase Warden, and `damageShare` hits for a share of its
+      hitpoints with no bonuses, so it scales with the raid level and the party): `Sim.useAbility`,
       through co-op's actions (`CoopAction` `ability`), on Space, a pad's bottom face button in a
       run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. A press that
       can't go off yet is held a moment (`Hero.abilityHeldUntil`, `stepHeldAbilities`), and
@@ -866,7 +869,7 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       from then, with a `bossGuard` event whose `cause` ends in ` (broken)` (the sim counts
       those) and `broken` on screen. A swing with `outside` hits only beyond that many tiles
       from the boss: `GameView` draws the shelter green and the storm's edge closing in red
-      (`STORM_EDGE`), and the bot heads for the shelter first (`shelter` in `simulate-run.ts`).
+      (`STORM_EDGE`), and the bot heads for the shelter first (`shelter` in `bossReads.ts`).
     - `ImpactDef` (`BossAttackDef.impact`, `guard.stuck`, `leash.jump.land`, `intro.land`,
       `FightAbilityDef.impact`) puts spot animations where a blow lands, scaled to `fit` and
       each played out once (`Effect.once`; a trail's laid along its way, turned with

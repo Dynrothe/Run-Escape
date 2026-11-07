@@ -181,8 +181,9 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   Menaphite Akh's). Attacks that read the arena (`MapDef.features`:
   a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
   under Arena fights there, with a boss whose `guard` drops when its attacks with `opens` miss
-  (a lunge, a wave, a charge across; a lunge's `line.track` turns it after the player first)
-  (and its arena's attacks with `turns` stun it), a fight's own button (`MapDef.fight.ability`)
+  (a lunge, a blast, a ground mark, a wave, a charge across; a lunge's `line.track` turns it
+  after the player first) (and its arena's attacks with `turns` stun it), a fight's own button
+  (`MapDef.fight.ability`, or the Tombs' `TombsDef.ability`: `Sim.ability` is either)
   and what a blow throws up (`impact`, an `ImpactDef`). Boss fights as data in
   `docs/DEVELOPMENT.md` has the lot.
 - Two bosses fought together (the Scarab Mages) are both `finalBoss` events, the second later
@@ -193,14 +194,15 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   The fight's button lands on either. One can copy the other's lunge with `echoes` (only
   while it's free). An attack with `channel` drops its guard while it's cast, and the fight's
   button breaks it; a swing with `outside` hits all but its feet. The bot needs to know a new
-  one (`shelter`, `exposedBoss` in `simulate-run.ts`).
+  one: both bots read a boss's shapes from `scripts/game/bossReads.ts` (`shelter`,
+  `exposedBoss`, strips, wedges, walls and the rest), so a new shape's reader goes there.
 - A ground attack's `trail` spots land on where the player stood so many seconds ago (at most
   `TRAIL_SECONDS`, kept on each `Hero`): the Champion of Scabaras's path that bursts behind you.
 - An enemy with `echoes` (the Menaphite Akh's shadow) copies a boss's lunges: as that boss
   starts one of the named line swings, it winds up its own from where it stands at the nearest
   player, with its own name, damage, seq (baked with it, so one its rig can play) and impact.
   Name only one phase's attacks to keep it to that phase (a finale's need names of their own).
-  The bot finds the pocket between two strips (`sharedPocket` in `simulate-run.ts`).
+  The bot finds the pocket between two strips (`sharedPocket` in `bossReads.ts`).
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 

@@ -23,6 +23,7 @@
 //                          sweep-tombs.sh runs: nothing bought, mid, everything)
 //   MINUTES=15   how long a room gets before it counts as failed (the raid gets 90)
 //   VERBOSE=1    the run's log as it goes (tombsBot's TombsLog)
+//   SMITE=0      never presses the raid's button (TombsDef.ability), nor goes in for it
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { INVOCATIONS, cleanInvocations, getRaidLevel } from "../../src/game/content/invocations";
@@ -42,6 +43,8 @@ import {
     chestAction,
     kite,
     setPathOrder,
+    setSmites,
+    tombsButton,
     tombsMove,
     useItems,
 } from "./tombsBot";
@@ -75,6 +78,7 @@ const kit = process.env.KIT === "max";
 // A weapon added to the kit as the room starts (a casket's lucky drop), e.g. WEAPON=twisted_bow
 const extraWeapon = process.env.WEAPON;
 const verbose = process.env.VERBOSE === "1";
+setSmites(process.env.SMITE !== "0");
 const minutes = parseFloat(process.env.MINUTES ?? (roomArg === "raid" ? "90" : "15"));
 // The order a raid level's made up in for INVOCATIONS=level:N
 const LADDER = [
@@ -587,6 +591,8 @@ function runOnce(seed: number): Outcome {
                 // Where tombsBot has nothing to say (a boss it doesn't know yet), away from what's close
                 // Eats when hurt, and uses what it's carrying, as a person does
                 useItems(sim);
+                // The raid's button, while what it'd land on has its guard down
+                tombsButton(sim);
                 moves[hero.index] = tombsMove(sim) ?? kite(sim, sim.player, 4);
                 sim.setInput(hero.index, moves[hero.index].x, moves[hero.index].y);
             });

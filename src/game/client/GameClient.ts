@@ -1854,11 +1854,11 @@ export class GameClient implements GameFrameHandler {
         this.act({ kind: "item", index });
     }
 
-    // The fight's own button (MapDef.fight.ability): Space, a pad's bottom button, or the touch
-    // screen's. Out of reach, or not ready, it says no.
+    // The fight's own button (Sim.ability: a fight map's, or the Tombs'): Space, a pad's bottom
+    // button, or the touch screen's. Out of reach, or not ready, it says no.
     useAbility(): void {
         const sim = this.sim;
-        if (!sim?.map.fight?.ability || (this.paused && !this.coopRun)) {
+        if (!sim?.ability || (this.paused && !this.coopRun)) {
             return;
         }
         this.act({ kind: "ability" });
@@ -2357,13 +2357,14 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // The fight's own button, for the HUD (MapDef.fight.ability)
+    // The fight's own button, for the HUD (Sim.ability): lit as gold while what it'd land on (or
+    // the boss on the bar, out of reach) has its guard down
     private getAbilityView(sim: Sim): AbilityView | undefined {
-        const ability = sim.map.fight?.ability;
+        const ability = sim.ability;
         if (!ability) {
             return undefined;
         }
-        const boss = sim.shownBoss;
+        const boss = sim.abilityTarget() ?? sim.shownBoss;
         const left = sim.abilitySecondsLeft();
         return {
             name: ability.name,
