@@ -1790,17 +1790,28 @@ messages and calls between objects are billed (see Cost in `server/cloudflare/RE
 the relay sends out is free.
 
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
-`welcome` for their own, on each room member, and on a room in the list for its host. The Cloudflare
-relay's Worker gets it from `request.cf.country` and hands it on as `x-country`, replacing whatever
-a player sent; the Node relay gets it only behind Cloudflare (`PROXY`, above). A player who turns
+`welcome` for their own and on each room member. The Cloudflare relay's Worker gets it from
+`request.cf.country` and hands it on as `x-country`, replacing whatever a player sent; the Node
+relay gets it only behind Cloudflare (`PROXY`, above). A player who turns
 off **Co-op flag** in Settings sends `hideCountry` with what they say about themselves, and the
-relay leaves their country out, except while they host an open room: then it shows in the room and
-the list anyway (`shownCountry` in each relay), and the game says so on Open to all. The game draws
+relay leaves their country out, except while they host an open room: then it shows in the party
+anyway (`shownCountry` in each relay), and the game says so on Open to all. Node and older relays
+also use the host's country in their room lists. The game draws
 a flag with `CountryFlag` (`ui/CountryFlag.tsx`): the login screen's world list flags (sprite 815, a
 frame for each country it has, in `content/flags.ts`), or the country's letters where there's no
 flag, with its name from `Intl.DisplayNames` as the tooltip. Emoji flags won't do: Windows has none,
-so they show as two letters there anyway. A room's flag is its host's, which on the Cloudflare relay
-is roughly where the room runs too.
+so they show as two letters there anyway. Cloudflare's room-list flag uses a separate measurement
+from inside the Durable Object (`server/cloudflare/src/location.mjs`): trace's data-center code
+mapped through the bundled countries from Cloudflare's status directory. It carries
+`countrySource: "server"` and says "Server in".
+Failed/unknown measurements leave the flag blank, never falling back to the player's country.
+The first successful measurement is stored with the game room, through hibernation, restarts and
+host handoffs, without periodic refreshes. Only unknown locations retry; see that relay's README
+for the timeout, cooldown and placement assumption. Closing the room discards its saved country.
+Older and Node relays still supply the host player's country, labeled "Host playing from".
+Party flags stay player flags, sampled on joining; a resume token keeps the original player country.
+Automatic placement aims near the first request, but the serving edge and the Durable Object can
+be outside the player's country. The incoming request's `cf.colo` isn't the room's location.
 
 To try it locally, `bun run start` and open the game in two windows (one private, for a
 save of its own), make a room in one and join it from the other. A second ordinary window says the
