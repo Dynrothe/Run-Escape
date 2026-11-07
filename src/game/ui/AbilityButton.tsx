@@ -1,16 +1,17 @@
 import { useSyncExternalStore } from "react";
 
 import { GameClient } from "../client/GameClient";
+import { padLabel } from "../client/GamePad";
 import { AbilityView } from "../client/GameStore";
 import { ItemIcon } from "./ItemIcon";
-import { KeyHint } from "./PadHint";
+import { KeyHint, PadIcon, usePadKind } from "./PadHint";
 
 // A fight's own button (MapDef.fight.ability), on the HUD and the touch screen: it fills as it
 // charges, is dim while the boss is out of its reach, and shines while the boss's guard is down
 // and it would land, which is when it's worth most. Space or a pad's bottom button use it too.
 // The touch screen's acts on the press, as its other buttons do (TouchControls). While his guard's
 // down it pulses with a tag over it saying so, and early in a fight, until it's first used, a hint
-// says what it's for.
+// says what it's for, naming the button for the input in use (a tap, a controller's, or Space).
 export function AbilityButton({
     client,
     touch = false,
@@ -20,12 +21,31 @@ export function AbilityButton({
 }): JSX.Element | null {
     const store = client.store;
     const ability = useSyncExternalStore(store.subscribeNumbers, () => store.getNumbers()?.ability);
+    const pad = usePadKind();
     if (!ability) {
         return null;
     }
-    const press = touch ? "Tap" : "Press Space or click";
+    const press = pad ? (
+        <>
+            Press <PadIcon kind={pad} icon="south" label={padLabel(pad, "south")} />
+        </>
+    ) : touch ? (
+        "Tap"
+    ) : (
+        "Press Space or click"
+    );
     return (
-        <div className={touch ? "ui-ability-wrap ui-ability-wrap-touch" : "ui-ability-wrap"}>
+        <div
+            className={[
+                "ui-ability-wrap",
+                touch ? "ui-ability-wrap-touch" : "",
+                // Its pulsing ring, whenever his guard's down, ready or not, so the moment's never
+                // missed
+                ability.opened ? "ui-ability-wrap-alert" : "",
+            ]
+                .filter(Boolean)
+                .join(" ")}
+        >
             {ability.opened ? (
                 // The moment it's for, said plainly: in reach, use it; out of it, get in
                 <span className="ui-ability-tag" role="status">
@@ -67,7 +87,7 @@ function abilityClass(ability: AbilityView, touch: boolean): string {
         touch ? "ui-ability ui-touch-ability" : "ui-ability",
         ready && ability.inReach ? "ui-ability-near" : "",
         ready && ability.inReach && ability.opened ? "ui-ability-opened" : "",
-        // Pulsing whenever his guard's down, ready or not, so the moment's never missed
+        // Lit whenever his guard's down, ready or not (its ring pulses: the wrap's)
         ability.opened ? "ui-ability-alert" : "",
     ]
         .filter(Boolean)

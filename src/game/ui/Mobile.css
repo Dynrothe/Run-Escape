@@ -50,18 +50,24 @@
         display: block;
     }
 
-    /* The stick and buttons do what the HUD's would */
+    /* The stick and buttons do what the HUD's would (the HUD's fight button with its tag, hint
+       and ring) */
     .ui-inventory,
-    .ui-hud-actions .ui-ability {
+    .ui-hud-actions .ui-ability-wrap {
         display: none;
     }
 
-    /* A fight's own button, big, above the items' corner (a fight has no items) */
-    .ui-touch-ability {
+    /* A fight's own button, big, above the items' corner (a fight has no items). Its wrap's placed,
+       so the tag, the hint and the ring go by the button. The hint's above it, clear of the stick
+       (bottom left), the pause button (top) and the HP bar (bottom middle). */
+    .ui-ability-wrap-touch {
         position: absolute;
-        display: flex;
         right: calc(var(--safe-right) + 16px);
         bottom: calc(var(--safe-bottom) + 16px);
+    }
+
+    .ui-touch-ability {
+        display: flex;
         width: 76px;
         height: 76px;
         border-radius: 50%;
