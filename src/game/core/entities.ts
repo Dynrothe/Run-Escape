@@ -123,6 +123,8 @@ export type BossWalkers = {
 export type BossState = {
     // Ticks until each of the boss's attacks can be used again
     cooldowns: number[];
+    // Where its last wall's way through was, in lanes (BulletPatternDef.gapStep)
+    wallGap?: number;
     windup?: BossWindup;
     // Taken from the player, given back when the boss dies
     stolenCoins: number;
@@ -287,6 +289,9 @@ export type BulletEmitter = {
     damage: number;
     // A phase's own pattern (BossPhasesDef ambient), not an attack
     ambient?: boolean;
+    // Where a pattern with origin "target" comes out of: where the player stood as it began
+    originX?: number;
+    originY?: number;
     // A row attack's rows (BulletPatternDef.rows), by index, and when it began
     rows?: number[];
     startTick?: number;
@@ -410,6 +415,22 @@ export type Enemy = {
     totemOf?: Enemy;
     // Walking to this boss to be absorbed (BossAttackDef summon.walkTo)
     walksTo?: Enemy;
+    // Rolling straight on, so far a tick, till endTick (Ba-Ba's cracked boulder:
+    // BulletPatternDef.cracked), hurting and knocking back whoever it runs into as its
+    // boss's attack would
+    rolls?: {
+        vx: number;
+        vy: number;
+        endTick: number;
+        damage: number;
+        knockback: number;
+        attack: BossAttackDef;
+        bossUid: number;
+    };
+    // Making for one of the arena's sarcophagi (Sim.tombsSarcophagi), to open it
+    seeks?: number;
+    // There, prying it open: it's open at this tick, if it's still alive
+    pryEnd?: number;
     // The last tick a blocked hit showed on it, so they don't pile up
     blockedTick: number;
     // The enemy that called it in (EnemyDef.spawns), 0 for none
@@ -771,6 +792,9 @@ export type EventOption =
     | { kind: "supply"; supplyId: string; price: number; sold: boolean }
     // A raid's teleporter: on to this room's boss now
     | { kind: "teleport" }
+    // The Helpful Spirit's bundles (the Tombs of Amascut's): free, one of them taken, its supplies
+    // into the inventory
+    | { kind: "bundle"; bundleId: string; items: { supplyId: string; count: number }[] }
     | { kind: "answer"; itemId: string; correct: boolean };
 
 export type EventOffer = {

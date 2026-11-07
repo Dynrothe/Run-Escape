@@ -9,9 +9,11 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
+    ALL_MAPS,
     FUN_MAPS,
     MAPS,
     MAP_BY_ID,
@@ -31,6 +33,7 @@ import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
+import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -50,10 +53,12 @@ import {
     buyUpgrade,
     exportSave,
     getEarnedUnlocks,
+    getFightStage,
     getFinishedQuests,
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
+    getReachedStages,
     getStartingCharacter,
     isEndlessRecord,
     isEndlessUnlocked,
@@ -676,6 +681,61 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
 
+    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps. Without
+    // it the dev server plays as players will (the Tombs of Amascut, listed with the raids, has none
+    // of its testing buttons), phones on the tunnel included.
+    get devTools(): boolean {
+        return (
+            import.meta.env.DEV &&
+            typeof location !== "undefined" &&
+            new URLSearchParams(location.search).has("devtools")
+        );
+    }
+
+    // Dev only: god mode, nothing hurting the player (Sim.devGod), for watching a fight
+    toggleDevGod(): void {
+        const sim = this.sim;
+        if (this.devTools && !this.coopRun && sim) {
+            sim.devGod = !sim.devGod;
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: to the Wardens, with the best of everything or as the run is (Sim.devToWardens)
+    devToWardens(kit = true): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devToWardens(kit);
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: from the Nexus straight to a path's boss (Sim.devToTombsBoss)
+    devToTombsBoss(pathId: string): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devToTombsBoss(pathId);
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: past the Tombs room to its boss (Sim.devSkipToTombsBoss)
+    devSkipToTombsBoss(): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devSkipToTombsBoss();
+        }
+    }
+
+    // The Tombs of Amascut's invocation board: on if it was off (taking off any it can't be on
+    // with), off if it was on
+    toggleInvocation(id: string): void {
+        this.save.invocations = toggleInvocation(this.save.invocations ?? [], id);
+        this.persist();
+    }
+
+    clearInvocations(): void {
+        this.save.invocations = [];
+        this.persist();
+    }
+
     // The pet to take along (one of the trophies found), or none
     selectPet(petId: string | undefined): void {
         if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
@@ -900,6 +960,7 @@ export class GameClient implements GameFrameHandler {
                 map.fun !== undefined ||
                 (room.endless && (anyMap || isEndlessUnlocked(this.save, map.id))),
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
+            stage: getFightStage(this.save, map.id),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1337,6 +1398,8 @@ export class GameClient implements GameFrameHandler {
             raidTeleports: RAID_TELEPORTS,
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
+            invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
+            stage: this.chosenStage(mapId),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -1424,6 +1487,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             endless: game.endless,
             hard: game.hard,
+            stage: game.stage,
             party,
             focus,
         });
@@ -1856,6 +1920,19 @@ export class GameClient implements GameFrameHandler {
     }
 
     // endedEarly: why a co-op run ended before anyone won or fell
+    // A fight in parts: the part picked (one reached), or the next not beaten
+    private chosenStage(mapId: string): number {
+        const picked = this.store.getSnapshot().fightStage;
+        return picked !== undefined && picked < getReachedStages(this.save, mapId)
+            ? picked
+            : getFightStage(this.save, mapId);
+    }
+
+    // A fight in parts' part to play next, picked on the map screen
+    pickFightStage(stage: number | undefined): void {
+        this.store.set({ fightStage: stage });
+    }
+
     private finishRun(
         endedEarly?: string,
         early: "abandoned" | "disconnected" = endedEarly ? "disconnected" : "abandoned",
@@ -1865,10 +1942,12 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.runRecorded = true;
+        // A part picked was for this run: the next one goes on from what's been won
+        this.store.set({ fightStage: undefined });
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
-        const locked = MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
+        const locked = ALL_MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
         const lockedCharacters = CHARACTERS.filter(
             (c) => !c.only && !this.save.unlockedCharacters.includes(c.id),
         );
@@ -2838,6 +2917,19 @@ export class GameClient implements GameFrameHandler {
                         : undefined,
                 };
             }
+            // The Wardens' three phases, Kephri's three shields and her last
+            const tombs = sim.wardensBar(shownBoss) ?? sim.kephriBar(shownBoss);
+            if (tombs) {
+                const kephri = shownBoss.def.boss?.kephri;
+                boss.fraction = tombs.fraction;
+                boss.fight = {
+                    phase: tombs.phase,
+                    phases: kephri ? kephri.shields.count + 1 : 3,
+                    stage: tombs.stage,
+                    status: tombs.status,
+                    totems: [],
+                };
+            }
         }
         if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
             this.shownDps = sim.dps;
@@ -2864,6 +2956,56 @@ export class GameClient implements GameFrameHandler {
                 portal: sim.raidTeleporter !== undefined && sim.raidTeleportsLeft > 0,
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
             },
+            tombsWave:
+                sim.tombsRoom && !sim.tombsRoom.boss
+                    ? sim.tombsRoom.het
+                        ? {
+                              // The Het room counts what's mined of the seal, not waves
+                              label: "Seal mined",
+                              wave: sim.hetSealMined.mined,
+                              of: sim.hetSealMined.of,
+                              waiting: false,
+                              done: sim.tombsRoom.doneTick !== undefined,
+                          }
+                        : sim.tombsPathRoom?.crondis
+                          ? {
+                                // The Crondis room counts the palm's stages
+                                label: "Palm grown",
+                                wave: sim.tombsRoom.crondis?.stage ?? 0,
+                                of: 4,
+                                waiting: !sim.tombsRoom.started,
+                                done: sim.tombsRoom.doneTick !== undefined,
+                            }
+                          : sim.tombsPathRoom?.scabaras
+                            ? {
+                                  // The Scabaras room counts its puzzles
+                                  label: "Puzzles solved",
+                                  wave: sim.tombsRoom.scabaras?.solved.length ?? 0,
+                                  of: 4,
+                                  waiting: !sim.tombsRoom.started,
+                                  done: sim.tombsRoom.doneTick !== undefined,
+                              }
+                            : {
+                                  wave: Math.max(0, sim.tombsRoom.wave) + 1,
+                                  of: APMEKEN_WAVES.length,
+                                  waiting: !sim.tombsRoom.started,
+                                  done: sim.tombsRoom.doneTick !== undefined,
+                              }
+                    : undefined,
+            tombsScabaras: sim.scabarasInfo,
+            tombsHet: sim.hetInfo,
+            tombsCrondis: sim.crondisInfo,
+            tombsRoar:
+                sim.zebakRoarSeconds === undefined ? undefined : Math.ceil(sim.zebakRoarSeconds),
+            tombsShadows: sim.akkhaShadows
+                ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
+                : undefined,
+            devGod: this.devTools ? sim.devGod : undefined,
+            devWardens:
+                this.devTools &&
+                sim.map.tombs?.wardens !== undefined &&
+                !sim.tombsPath &&
+                !sim.tombsWardens,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             poisoned: sim.player.poisonEnd !== -1,

@@ -167,6 +167,30 @@ export type HudNumbers = {
         portal: boolean;
         first: boolean;
     };
+    // The Tombs' Apmeken room: the wave it's on, of how many, and whether it's still waiting for
+    // the party to walk through the barrier, or beaten
+    tombsWave?: { wave: number; of: number; waiting: boolean; done: boolean; label?: string };
+    // Akkha's shadows: how many are up, and seconds till they flood
+    tombsShadows?: { left: number; seconds: number };
+    // The Scabaras room's puzzles: how many are solved, and Addition's number and what's made
+    tombsScabaras?: {
+        solved: number;
+        of: number;
+        target: number;
+        sum: number;
+        readable: boolean;
+        reading?: "slate" | "tablet";
+    };
+    // The Het room: the mirrors you're holding, and how far the caster's charged (0 to 1)
+    tombsHet?: { held: number; charge: number };
+    // The Crondis room: your water, and the palm's growth against what it needs
+    tombsCrondis?: { water: number; growth: number; goal: number };
+    // Seconds till Zebak roars, while he's about to
+    tombsRoar?: number;
+    // Dev server only: god mode's on (GameClient.toggleDevGod)
+    devGod?: boolean;
+    // Dev only: in the Tombs' Nexus (or the Wardens' room), so the Wardens can be skipped to
+    devWardens?: boolean;
     hp: number;
     maxHp: number;
     // The hitpoints bar turns green, like the client's orb
@@ -384,6 +408,9 @@ export type UiSnapshot = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // A fight in parts: the part picked to play (one already reached, MapDef.stages), till the run
+    // it's for ends; the next not beaten when unset
+    fightStage?: number;
     // A raid's expert mode (solo for now)
     expert: boolean;
     hud?: HudView;

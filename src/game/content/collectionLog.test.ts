@@ -13,8 +13,10 @@ describe("the Collection log's rewards", () => {
     it("lists every trophy once, under its own map", () => {
         const save = createSave();
         const listed = REWARD_MAPS.flatMap((mapId) => getRewards(save, mapId).map((r) => r.id));
+        // (The Tombs of Amascut's stay out while the raid's a dev map, which tests don't load)
         for (const trophy of TROPHIES) {
-            expect(listed.filter((id) => id === trophy.id)).toHaveLength(1);
+            const times = trophy.from.kind === "tombs" ? 0 : 1;
+            expect(listed.filter((id) => id === trophy.id)).toHaveLength(times);
         }
         // The Theatre's aren't under the Hallowed Night
         const halloween = getRewards(save, "halloween").map((r) => r.id);

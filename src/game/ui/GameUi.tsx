@@ -31,6 +31,18 @@ import {
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
+import {
+    INVOCATIONS,
+    INVOCATION_BY_ID,
+    INVOCATION_GROUPS,
+    MAX_RAID_LEVEL,
+    OFF_SPRITE,
+    RAID_BAND_SPRITES,
+    TOMBS_UNIQUES,
+    getRaidBand,
+    getRaidLevel,
+    getRaidLevelScale,
+} from "../content/invocations";
 import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     CAMPAIGN_MAPS,
@@ -47,16 +59,19 @@ import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { WeaponStatLine } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import type { RaidChest } from "../core/Sim";
+import type { RaidChest, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
+    getFightStage,
     getNextUpgradeCost,
+    getReachedStages,
     getSkillCoins,
     importSave,
     isEndlessUnlocked,
@@ -881,29 +896,191 @@ function TitleHint(): JSX.Element {
 // Adventurers on the left and maps on the right, so the adventurer picked
 // stands in view between them
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
+    const map = getMap(ui.mapId);
+    const [board, setBoard] = useState(false);
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
-    const expertShown = getMap(ui.mapId).raid !== undefined && ui.coop.status === "offline";
+    const expertShown = map.raid !== undefined && ui.coop.status === "offline";
     return (
         <div className="ui-fill ui-select">
-            <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(getMap(ui.mapId))} />
+            <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(map)} />
             <MapPanel ui={ui} client={client} />
             <div className="ui-panel rs-border rs-background ui-select-bar">
                 <button className="ui-button" onClick={() => client.showScreen("title")}>
                     Back
                 </button>
                 <Coins amount={ui.save.coins} />
-                {/* A raid ends with its last room: no endless */}
-                {!getMap(ui.mapId).raid && <EndlessSwitch ui={ui} client={client} />}
-                <HardSwitch ui={ui} client={client} />
-                {expertShown && <ExpertSwitch ui={ui} client={client} />}
+                {map.tombs ? (
+                    // The Tombs go by their invocations instead of endless and hard mode
+                    <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
+                ) : (
+                    <>
+                        {/* A raid ends with its last room: no endless */}
+                        {!map.raid && <EndlessSwitch ui={ui} client={client} />}
+                        <HardSwitch ui={ui} client={client} />
+                        {expertShown && <ExpertSwitch ui={ui} client={client} />}
+                    </>
+                )}
                 <button
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
-                    <KeyHint pad="start" /> Enter {getMap(ui.mapId).name}
-                    {ui.hard && (ui.expert && expertShown ? " expert" : " hard")}
-                    {ui.endless && !getMap(ui.mapId).fun && " endless"}
+                    <KeyHint pad="start" /> Enter {map.name}
+                    {ui.hard && !map.tombs && (ui.expert && expertShown ? " expert" : " hard")}
+                    {ui.endless && !map.fun && !map.tombs && " endless"}
                 </button>
+            </div>
+            {board && map.tombs && (
+                <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            )}
+        </div>
+    );
+}
+
+// The Tombs of Amascut's raid level, and the way to its invocation board
+function InvocationsButton({ ui, onOpen }: { ui: UiSnapshot; onOpen: () => void }): JSX.Element {
+    const level = getRaidLevel(ui.save.invocations ?? []);
+    return (
+        <button className="ui-button ui-invocations-button" onClick={onOpen}>
+            Invocations
+            <span className="ui-invocations-level">
+                Raid level {level} ({getRaidBand(level)})
+            </span>
+        </button>
+    );
+}
+
+// The invocation board, as OSRS's: every invocation's icon in a grid, lit while it's on, and beside
+// it the reward potential (the raid level, its band's Amascut and what the chest can hold). Pointing
+// at an icon says what it is below; clicking turns it on or off, and one of a group that allows only
+// one takes the last off.
+// A scale as a change: 0.6 is "-40%", 1.1 "+10%"
+function signedPercent(scale: number): string {
+    const percent = Math.round((scale - 1) * 100);
+    return `${percent >= 0 ? "+" : ""}${percent}%`;
+}
+
+function InvocationBoard({
+    ui,
+    client,
+    onClose,
+}: ScreenProps & { onClose: () => void }): JSX.Element {
+    const on = ui.save.invocations ?? [];
+    const level = getRaidLevel(on);
+    const band = getRaidBand(level);
+    const scale = getRaidLevelScale(level);
+    const [shown, setShown] = useState<string>();
+    const pointed = shown === undefined ? undefined : INVOCATION_BY_ID.get(shown);
+    return (
+        <div className="ui-modal">
+            <div className="ui-panel rs-border rs-background ui-invocations">
+                <h2 className="ui-invocations-title">Invocations</h2>
+                <div className="ui-invocations-body">
+                    <div className="ui-invocations-grid" onMouseLeave={() => setShown(undefined)}>
+                        {INVOCATIONS.map((invocation) => {
+                            const picked = on.includes(invocation.id);
+                            return (
+                                <button
+                                    key={invocation.id}
+                                    className={
+                                        "ui-invocation" + (picked ? " ui-invocation-on" : "")
+                                    }
+                                    aria-label={invocation.name}
+                                    aria-pressed={picked}
+                                    title={invocation.name}
+                                    onMouseEnter={() => setShown(invocation.id)}
+                                    onFocus={() => setShown(invocation.id)}
+                                    onClick={() => {
+                                        setShown(invocation.id);
+                                        client.toggleInvocation(invocation.id);
+                                    }}
+                                >
+                                    <ItemIcon
+                                        objId={-1}
+                                        spriteId={
+                                            picked ? invocation.icon : invocation.icon + OFF_SPRITE
+                                        }
+                                        size={36}
+                                    />
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="ui-invocations-reward">
+                        <div className="ui-invocations-reward-title">Reward Potential</div>
+                        <div className="ui-invocations-level-row">
+                            <span className="ui-invocations-number">{level}</span>
+                            <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={40} />
+                            <span className="ui-invocations-band">{band}</span>
+                        </div>
+                        <div className="ui-invocations-bar" aria-hidden>
+                            <div
+                                className="ui-invocations-bar-fill"
+                                style={{
+                                    width: `${Math.min(100, (level / MAX_RAID_LEVEL) * 100)}%`,
+                                }}
+                            />
+                        </div>
+                        <div className="ui-invocations-scale">
+                            Enemies {signedPercent(scale.hp)} hitpoints,{" "}
+                            {signedPercent(scale.damage)} damage
+                        </div>
+                        <div className="ui-invocations-uniques">
+                            {TOMBS_UNIQUES.map((unique) => {
+                                const out = level < unique.minLevel;
+                                return (
+                                    <span
+                                        key={unique.objId}
+                                        className={
+                                            "ui-invocations-unique" +
+                                            (out ? " ui-invocations-unique-out" : "")
+                                        }
+                                        title={
+                                            out
+                                                ? `${unique.name}: from raid level ${unique.minLevel}`
+                                                : unique.name
+                                        }
+                                    >
+                                        <ItemIcon objId={unique.objId} size={32} />
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+                <div className="ui-invocations-detail">
+                    {pointed ? (
+                        <>
+                            <span className="ui-invocations-detail-name">
+                                {pointed.name}{" "}
+                                <span className="ui-invocations-detail-level">
+                                    +{pointed.level}
+                                </span>
+                            </span>
+                            <span>
+                                {pointed.description}
+                                {INVOCATION_GROUPS.find((g) => g.id === pointed.group)?.one &&
+                                    " Only one of its kind can be on."}
+                            </span>
+                            {pointed.comes && (
+                                <span className="ui-invocation-soon">
+                                    Not in yet: comes with {pointed.comes}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="ui-subtle">
+                            Point at an invocation to see what it does.
+                        </span>
+                    )}
+                </div>
+                <div className="ui-invocations-buttons">
+                    <button className="ui-button" onClick={() => client.clearInvocations()}>
+                        Reset All
+                    </button>
+                    <button className="ui-button ui-button-go" onClick={onClose}>
+                        Done
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -1013,14 +1190,18 @@ function RaidObjective({
 // The chest at the end of a raid: what it was rolled with, and what came out
 function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
     const found = chest.found.map((id) => TROPHY_BY_ID.get(id)!).filter(Boolean);
+    // The Tombs' pet, Thread and jewels aren't purples
+    const purple = found.some((t) => t.from.kind !== "tombs" || t.from.weight !== undefined);
     return (
         <div className="ui-raid-chest">
             <div className="ui-raid-chest-title">
-                {found.length > 0 ? "A purple chest!" : "The raid's chest"}
+                {purple ? "A purple chest!" : "The raid's chest"}
             </div>
             <div className="ui-subtle">
-                {chest.points.toLocaleString("en-GB")} raid points: a{" "}
-                {Math.round(chest.chance * 100)}% chance of a unique
+                {chest.level !== undefined
+                    ? `${chest.points.toLocaleString("en-GB")} points at raid level ${chest.level}`
+                    : `${chest.points.toLocaleString("en-GB")} raid points`}
+                : a {Math.round(chest.chance * 100)}% chance of a unique
             </div>
             {found.length > 0 ? (
                 <div className="ui-raid-chest-items">
@@ -1033,6 +1214,105 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
                 </div>
             ) : (
                 <div className="ui-subtle">No unique this time.</div>
+            )}
+        </div>
+    );
+}
+
+// The Tombs of Amascut's board at the end, as OSRS's raid summary has it: the raid level and the
+// invocations that made it, each path's time and the Wardens', and the party's points and deaths
+function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
+    const band = getRaidBand(tombs.level);
+    const total =
+        tombs.paths.reduce((sum, path) => sum + path.seconds, 0) + (tombs.wardensSeconds ?? 0);
+    const party = tombs.party.reduce((sum, player) => sum + player.points, 0);
+    return (
+        <div className="ui-tombs-board">
+            <div className="ui-tombs-board-level">
+                <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={32} />
+                <span>
+                    Raid level <b>{tombs.level}</b> ({band})
+                </span>
+            </div>
+            {tombs.invocations.length > 0 && (
+                <div className="ui-tombs-board-invocations" aria-label="Invocations">
+                    {tombs.invocations.map((id) => {
+                        const invocation = INVOCATION_BY_ID.get(id);
+                        return invocation ? (
+                            <span key={id} title={invocation.name}>
+                                <ItemIcon objId={-1} spriteId={invocation.icon} size={24} />
+                            </span>
+                        ) : null;
+                    })}
+                </div>
+            )}
+            <div className="ui-tombs-board-columns">
+                <table className="ui-tombs-board-table">
+                    <thead>
+                        <tr>
+                            <th>Room</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tombs.paths.map((path) => (
+                            <tr key={path.id}>
+                                <td>{path.name}</td>
+                                <td>{formatTime(path.seconds)}</td>
+                            </tr>
+                        ))}
+                        {tombs.wardensSeconds !== undefined && (
+                            <tr>
+                                <td>The Wardens</td>
+                                <td>{formatTime(tombs.wardensSeconds)}</td>
+                            </tr>
+                        )}
+                        <tr className="ui-tombs-board-total">
+                            <td>Total</td>
+                            <td>{formatTime(total)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <table className="ui-tombs-board-table">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Points</th>
+                            <th>Deaths</th>
+                            <th>Purple</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tombs.party.map((player, i) => (
+                            <tr key={i} className={player.you ? "ui-tombs-board-you" : undefined}>
+                                <td>{player.name || "You"}</td>
+                                <td>{player.points.toLocaleString("en-GB")}</td>
+                                <td>{player.deaths}</td>
+                                <td>{Math.round(player.chance * 100)}%</td>
+                            </tr>
+                        ))}
+                        {tombs.party.length > 1 && (
+                            <tr className="ui-tombs-board-total">
+                                <td>Party</td>
+                                <td>{party.toLocaleString("en-GB")}</td>
+                                <td>{tombs.party.reduce((sum, p) => sum + p.deaths, 0)}</td>
+                                <td />
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            {tombs.timeLimit && (
+                <div className="ui-subtle">
+                    {tombs.timeLimit.met
+                        ? `Inside the ${tombs.timeLimit.minutes} minute time limit.`
+                        : `Past the ${tombs.timeLimit.minutes} minute time limit: the chest goes by raid level ${Math.max(0, tombs.level - tombs.timeLimit.drop)}.`}
+                </div>
+            )}
+            {tombs.wipes > 0 && (
+                <div className="ui-subtle">
+                    The party died {tombs.wipes} {tombs.wipes === 1 ? "time" : "times"}.
+                </div>
             )}
         </div>
     );
@@ -1299,7 +1579,12 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
         name: "Bosses",
         groups: [
             { name: "Boss fights", hint: "once their map's beaten", maps: FIGHT_MAPS },
-            { name: "Raids", hint: "room by room, open from the start", maps: RAID_MAPS },
+            // On the dev server, the Tombs of Amascut too, behind its quest (MapDef.requires)
+            {
+                name: "Raids",
+                hint: "room by room",
+                maps: [...RAID_MAPS, ...DEV_MAPS.filter((map) => map.tombs)],
+            },
         ],
     },
     {
@@ -1310,7 +1595,13 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
     {
         id: "dev",
         name: "Dev",
-        groups: [{ name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
+        groups: [
+            {
+                name: "Dev maps",
+                hint: "dev server only",
+                maps: DEV_MAPS.filter((map) => !map.tombs),
+            },
+        ],
     },
 ]
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
@@ -1437,14 +1728,50 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 ))}
             </div>
             {/* Its own for each map, so a long one scrolled down doesn't leave the next scrolled */}
-            <MapDetails key={peek ?? ui.mapId} save={save} map={getMap(peek ?? ui.mapId)} />
+            <MapDetails
+                key={peek ?? ui.mapId}
+                save={save}
+                map={getMap(peek ?? ui.mapId)}
+                picked={(peek ?? ui.mapId) === ui.mapId ? ui.fightStage : undefined}
+                onPick={
+                    (peek ?? ui.mapId) === ui.mapId ? (s) => client.pickFightStage(s) : undefined
+                }
+            />
         </div>
     );
 }
 
-function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element {
+// The result screen's button back into a boss fight: a fight in parts (MapDef.stages) goes on to
+// its next part once one's won ("Next fight"), or from the first again once the last has been;
+// anything else is tried again
+function nextFightLabel(map: MapDef, victory: boolean, stage: number | undefined): string {
+    if (!victory || !map.stages) {
+        return "Retry";
+    }
+    return (stage ?? 0) + 1 < map.stages.length ? "Next fight" : "Fight again";
+}
+
+// What a win says: the part's own words in a fight in parts (MapDef.stages), else the map's
+function stageVictoryText(map: MapDef, stage: number | undefined): string {
+    return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
+}
+
+function MapDetails({
+    save,
+    map,
+    picked,
+    onPick,
+}: {
+    save: SaveData;
+    map: MapDef;
+    // A fight in parts: the part picked to play, and picking one (the selected map's only)
+    picked?: number;
+    onPick?: (stage: number | undefined) => void;
+}): JSX.Element {
     const wins = save.mapVictories[map.id] ?? 0;
     const unlocked = isMapUnlocked(save, map.id);
+    const reached = getReachedStages(save, map.id);
+    const stage = picked !== undefined && picked < reached ? picked : getFightStage(save, map.id);
     const endless = save.endlessBest[map.id];
     const hardWins = save.hardVictories[map.id] ?? 0;
     const hardEndless = save.hardEndlessBest[map.id];
@@ -1460,16 +1787,38 @@ function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
                                 ? `Fun map, endless. You play as ${getCharacter(map.fun.character).name}.`
                                 : "Fun map, endless"
                             : !unlocked
-                              ? `Beat ${getMap(map.fight?.requires ?? MAPS[MAPS.indexOf(map) - 1].id).name} to unlock`
-                              : map.fight
-                                ? `Boss fight. You play as the ${getCharacter(map.fight.character).name}` +
-                                  (wins > 0
-                                      ? `, beaten ${wins === 1 ? "once" : `${wins} times`}.`
-                                      : ".")
-                                : wins > 0
-                                  ? `Beaten ${wins === 1 ? "once" : `${wins} times`}`
-                                  : "Not beaten yet"}
+                              ? `Beat ${getMap(map.requires ?? map.fight?.requires ?? MAPS[MAPS.indexOf(map) - 1].id).name} to unlock`
+                              : map.stages
+                                ? `Part ${stage + 1} of ${map.stages.length}: ` +
+                                  `${map.stages[stage].name}.` +
+                                  (wins > 0 ? " Complete." : "")
+                                : map.fight
+                                  ? `Boss fight. You play as the ${getCharacter(map.fight.character).name}` +
+                                    (wins > 0
+                                        ? `, beaten ${wins === 1 ? "once" : `${wins} times`}.`
+                                        : ".")
+                                  : wins > 0
+                                    ? `Beaten ${wins === 1 ? "once" : `${wins} times`}`
+                                    : "Not beaten yet"}
                     </div>
+                    {map.stages && unlocked && onPick && reached > 1 && (
+                        <div className="ui-row ui-fight-parts">
+                            {map.stages.slice(0, reached).map((part, i) => (
+                                <button
+                                    key={part.name}
+                                    className={
+                                        "ui-button ui-button-small" +
+                                        (i === stage ? " ui-button-go" : "")
+                                    }
+                                    aria-pressed={i === stage}
+                                    title={part.name}
+                                    onClick={() => onPick(i)}
+                                >
+                                    Part {i + 1}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     {endless && (
                         <div className="ui-card-style">
                             Endless best: round {endless.round}, {formatTime(endless.seconds)}
@@ -1974,11 +2323,20 @@ const Hud = memo(function Hud({
                     <GearSlots gear={hud.gear} disabled={disabled} />
                 </div>
                 <RunTimer client={client} />
+                <TombsScabarasReading client={client} />
                 <div className="ui-hud-right">
                     <Minimap client={client} />
                     <KillsAndCoins client={client} />
                     {hud.round !== undefined && <div className="ui-round">Round {hud.round}</div>}
                     <RaidRoomInfo client={client} />
+                    <TombsWaveInfo client={client} />
+                    <TombsShadowsInfo client={client} />
+                    <TombsScabarasInfo client={client} />
+                    <TombsHetInfo client={client} />
+                    <TombsCrondisInfo client={client} />
+                    <TombsRoarInfo client={client} />
+                    <DevGodButton client={client} />
+                    <DevWardensButton client={client} />
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
@@ -2043,6 +2401,192 @@ function RaidRoomInfo({ client }: { client: GameClient }): JSX.Element | null {
                 {room.points} pts
             </div>
         </>
+    );
+}
+
+// Dev server only, with ?devtools: god mode, for watching a fight's mechanics without dying to them
+function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
+    const on = useHudNumber(client, (n) => n.devGod);
+    if (!client.devTools || on === undefined) {
+        return null;
+    }
+    return (
+        <button className="ui-button ui-button-small" onClick={() => client.toggleDevGod()}>
+            God mode (dev): {on ? "on" : "off"}
+        </button>
+    );
+}
+
+// Dev server only, with ?devtools, in the Tombs' Nexus: straight to any boss, for testing its mechanics (with
+// God mode, without dying to them). The path bosses as the run is, with the dev skip's bow; the
+// Wardens with the best of everything, or as the run is. Gone before the raid ships.
+const DEV_TOMBS_BOSSES: { pathId: string; name: string }[] = [
+    { pathId: "apmeken", name: "Ba-Ba" },
+    { pathId: "het", name: "Akkha" },
+    { pathId: "scabaras", name: "Kephri" },
+    { pathId: "crondis", name: "Zebak" },
+];
+
+function DevWardensButton({ client }: { client: GameClient }): JSX.Element | null {
+    const shown = useHudNumber(client, (n) => n.devWardens);
+    if (!client.devTools || !shown) {
+        return null;
+    }
+    return (
+        <>
+            {DEV_TOMBS_BOSSES.map((boss) => (
+                <button
+                    key={boss.pathId}
+                    className="ui-button ui-button-small"
+                    onClick={() => client.devToTombsBoss(boss.pathId)}
+                >
+                    {boss.name} (dev)
+                </button>
+            ))}
+            <button className="ui-button ui-button-small" onClick={() => client.devToWardens()}>
+                Wardens, max kit (dev)
+            </button>
+            <button
+                className="ui-button ui-button-small"
+                onClick={() => client.devToWardens(false)}
+            >
+                Wardens, as you are (dev)
+            </button>
+        </>
+    );
+}
+
+// The Tombs' Apmeken room: always the wave it's on, so it's never a guess
+function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const wave = useHudNumber(client, (n) => n.tombsWave);
+    if (!wave) {
+        return null;
+    }
+    return (
+        <>
+            <div className="ui-round">
+                {wave.done
+                    ? "Room done"
+                    : wave.waiting
+                      ? "Through the barrier to begin"
+                      : `${wave.label ?? "Wave"} ${wave.wave} / ${wave.of}`}
+            </div>
+            {/* Dev server only, with ?devtools: straight to the boss, for testing it */}
+            {client.devTools && !wave.done && (
+                <button
+                    className="ui-button ui-button-small"
+                    onClick={() => client.devSkipToTombsBoss()}
+                >
+                    Skip to boss (dev)
+                </button>
+            )}
+        </>
+    );
+}
+
+// Zebak's roar coming: how long there is to get behind a boulder
+function TombsRoarInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const seconds = useHudNumber(client, (n) => n.tombsRoar);
+    if (seconds === undefined) {
+        return null;
+    }
+    return <div className="ui-round">Zebak roars in {seconds}s: get behind a boulder!</div>;
+}
+
+// The Crondis room: your water, and the palm's growth
+function TombsCrondisInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsCrondis);
+    if (!info) {
+        return null;
+    }
+    return (
+        <div className="ui-round">
+            Water {info.water}: the palm has {info.growth} of {info.goal}
+        </div>
+    );
+}
+
+// The Het room: the mirrors you're holding, and the caster's charge till its beam goes
+function TombsHetInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsHet);
+    if (!info) {
+        return null;
+    }
+    const filled = Math.round(info.charge * 10);
+    return (
+        <div className="ui-round">
+            Mirrors held: {info.held} · Beam {"▰".repeat(filled)}
+            {"▱".repeat(10 - filled)}
+        </div>
+    );
+}
+
+// The Scabaras room's Ancient tablet's number, once it's read (the puzzles solved are the wave line's)
+function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsScabaras);
+    if (!info) {
+        return null;
+    }
+    return (
+        <>
+            {info.readable && (
+                <div className="ui-round">
+                    The tablet says {info.target}: made {info.sum}
+                </div>
+            )}
+        </>
+    );
+}
+
+// What a slate or the Ancient tablet in the Scabaras room says, on a screen of its own while
+// you're stood by it: the slates' nine symbols (the floor's own, from above) with what each is
+// worth, or the tablet's number
+function TombsScabarasReading({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsScabaras);
+    if (!info?.reading) {
+        return null;
+    }
+    if (info.reading === "tablet") {
+        return (
+            <div className="ui-panel rs-border rs-background ui-scabaras-reading">
+                <div className="ui-scabaras-title">Ancient tablet</div>
+                {info.readable ? (
+                    <>
+                        <div className="ui-scabaras-number">{info.target}</div>
+                        <div>So far: {info.sum}</div>
+                    </>
+                ) : (
+                    <div>Its markings are dark.</div>
+                )}
+            </div>
+        );
+    }
+    return (
+        <div className="ui-panel rs-border rs-background ui-scabaras-reading">
+            <div className="ui-scabaras-title">Ancient slate</div>
+            <div className="ui-scabaras-symbols">
+                {SCABARAS.symbolNames.map((name, i) => (
+                    <div key={name} className="ui-scabaras-symbol">
+                        <ItemIcon locId={SCABARAS.locs.symbols[i]} size={40} />
+                        <span className="ui-scabaras-value">{i + 1}</span>
+                        <span className="ui-scabaras-name">{name}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// Akkha's shadows: how many are left, and how long till those still up flood their quarters
+function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const shadows = useHudNumber(client, (n) => n.tombsShadows);
+    if (!shadows) {
+        return null;
+    }
+    return (
+        <div className="ui-round">
+            Shadows {shadows.left} / 4: they flood in {shadows.seconds}s
+        </div>
     );
 }
 
@@ -2747,7 +3291,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
             <div className="ui-panel rs-border rs-background ui-result">
                 <h2 className={victory ? "ui-victory" : "ui-defeat"}>
                     {victory && result
-                        ? getMap(result.mapId).victoryText
+                        ? stageVictoryText(getMap(result.mapId), result.stage)
                         : (result?.endedEarly ?? "Oh dear, you are dead!")}
                 </h2>
                 {result?.party && (
@@ -2761,6 +3305,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                         {getMap(result.mapId).name}!
                     </p>
                 )}
+                {result?.tombs && <TombsBoardView tombs={result.tombs} />}
                 {result?.raidChest && <RaidChestView chest={result.raidChest} />}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
@@ -3017,7 +3562,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     {/* A boss fight on your own: straight into it again */}
                     {!ui.coop.room && getMap(ui.mapId).fight && (
                         <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                            Retry
+                            {nextFightLabel(getMap(ui.mapId), victory, result?.stage)}
                         </button>
                     )}
                     <button

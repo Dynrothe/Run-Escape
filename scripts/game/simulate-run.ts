@@ -16,24 +16,28 @@
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
 //   DODGE=1 ...     # also keeps off what any boss marks on the ground, and sidesteps its bullets
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
+//   STAGE=1 ...     # a fight in parts (MapDef.stages): the second, as a run that's won the first
 //   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 //   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
+//   MAP=tombs_of_amascut DEV_MAPS=1 ...   # the Tombs of Amascut, the whole raid (tombsBot.ts)
+//   INVOCATIONS=walk_for_it,insanity ...   # its invocations (INVOCATIONS=all for every one the
+//                                          # board allows: one of a group that's one at a time)
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
 //                    # half the chances to use the fight's button
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
-import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
+import { INVOCATIONS } from "../../src/game/content/invocations";
+import { CASKET_GEAR, getGear } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { emptyStats } from "../../src/game/content/types";
 import { RUN_LENGTH } from "../../src/game/content/waves";
-import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
@@ -41,8 +45,14 @@ import { SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { makeGrid } from "../../src/game/core/world/testGrid";
 import { loadRegionData } from "./collision-snapshot";
+import { TombsLog, chestAction, tombsMove, useItems } from "./tombsBot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
+// The Tombs' invocations
+const invocations =
+    process.env.INVOCATIONS === "all"
+        ? INVOCATIONS.map((i) => i.id)
+        : (process.env.INVOCATIONS ?? "").split(",").filter(Boolean);
 const characters = characterArg ? [characterArg] : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
 // How often to print progress (REPORT=15 for every 15 seconds)
@@ -121,51 +131,11 @@ function choiceScore(choice: UpgradeChoice): number {
     return CHOICE_PRIORITY[choice.kind] * 10 - quality * 15;
 }
 
-// Wears gear unless what's worn is better (counting sets, like the casket's
-// advice), keeps utility items when they fit
-function chestAction(sim: Sim): ChestAction {
-    const chest = sim.chest!;
-    const item = getItem(chest.itemId);
-    if (item.kind === "utility") {
-        return sim.canStash(item.id) ? "take" : "use";
-    }
-    return shouldWear(sim.gear, sim.gearUpgrades, item, chest.upgrades) ? "take" : "alch";
-}
-
 // Runs a set was started in (a piece worn), and finished in (its bonus), for
 // the summary at the end
 const setsStarted = new Map<string, number>();
 const setsFinished = new Map<string, number>();
 let runs = 0;
-
-// Eats when hurt, throws chinchompas into crowds, drinks antidotes when
-// poisoned or drained, uses everything else straight away
-function useItems(sim: Sim): void {
-    const player = sim.player;
-    let near = 0;
-    for (const enemy of sim.enemies) {
-        if (!enemy.dead && Math.hypot(enemy.x - player.x, enemy.y - player.y) < 5) {
-            near++;
-        }
-    }
-    sim.inventory.forEach((slot, index) => {
-        const item = slot && getItem(slot.itemId);
-        if (!item || item.kind !== "utility") {
-            return;
-        }
-        const use = item.use.kind;
-        if (
-            (use === "heal" && player.hp < player.maxHp * 0.5) ||
-            (use === "blast" && near >= 15) ||
-            (use === "cure" && (player.poisonEnd !== -1 || sim.debuffs.length > 0)) ||
-            use === "buff" ||
-            use === "bones" ||
-            use === "xp"
-        ) {
-            sim.useItem(index);
-        }
-    });
-}
 
 // Steers away from nearby enemies (closer counts more) and towards bones when
 // nothing is close; slides along walls by trying a few nearby directions.
@@ -264,6 +234,29 @@ function sidestepBullets(sim: Sim): { x: number; y: number } | undefined {
     }
     const length = Math.hypot(awayX, awayY);
     return { x: awayX / length, y: awayY / length };
+}
+
+// Away that way, or as near it as there's room (round the side, not into a wall or the boss
+// square's edge), as a person circles out rather than backing into a corner
+function openWay(sim: Sim, x: number, y: number): { x: number; y: number } {
+    const player = sim.player;
+    const square = sim.map.bossArena;
+    for (const turn of [0, 0.6, -0.6, 1.2, -1.2, 1.6, -1.6, 2.2, -2.2]) {
+        const cx = x * Math.cos(turn) - y * Math.sin(turn);
+        const cy = x * Math.sin(turn) + y * Math.cos(turn);
+        const tx = player.x + cx * 1.6;
+        const ty = player.y + cy * 1.6;
+        const inside =
+            !square ||
+            (tx > square.baseX + 0.6 &&
+                tx < square.baseX + square.size - 0.6 &&
+                ty > square.baseY + 0.6 &&
+                ty < square.baseY + square.size - 0.6);
+        if (inside && !sim.grid.isSolid(Math.floor(tx), Math.floor(ty))) {
+            return { x: cx, y: cy };
+        }
+    }
+    return { x, y };
 }
 
 // A phased boss's fight, as a careful person plays it, or undefined outside one. With DODGE it
@@ -398,6 +391,28 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 }
             }
         }
+        // Out of a swing's reach round the boss, and off where a blast's to land, as it winds up:
+        // what anyone steps out of
+        if (windup?.attack.kind === "swing") {
+            const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
+            const dx = player.x - boss.x;
+            const dy = player.y - boss.y;
+            const away = Math.hypot(dx, dy);
+            if (away < reach) {
+                return openWay(sim, away > 0.001 ? dx / away : 1, away > 0.001 ? dy / away : 0);
+            }
+        }
+        if (windup?.attack.kind === "blast") {
+            const reach = (windup.attack.radius ?? 1) + player.radius + 0.5;
+            for (const spot of windup.targets) {
+                const dx = player.x - spot.x;
+                const dy = player.y - spot.y;
+                const away = Math.hypot(dx, dy);
+                if (away < reach) {
+                    return away > 0.001 ? { x: dx / away, y: dy / away } : { x: 1, y: 0 };
+                }
+            }
+        }
         for (const projectile of sim.enemyProjectiles) {
             if (!projectile.hit) {
                 continue;
@@ -447,6 +462,22 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                     ? { x: 0, y: 0 }
                     : towards(best.x, best.y);
             }
+        }
+        // A fight in parts (Beneath Cursed Sands): round a boss that's close, not straight away from
+        // it, pulled back towards the square's middle, as a ranged player kites a melee boss and
+        // never backs into a corner
+        const square = sim.map.bossArena;
+        const close = Math.hypot(player.x - boss.x, player.y - boss.y);
+        if (sim.map.stages && square && close < 5) {
+            const ax = (player.x - boss.x) / Math.max(close, 0.001);
+            const ay = (player.y - boss.y) / Math.max(close, 0.001);
+            const mx = square.baseX + square.size / 2 - player.x;
+            const my = square.baseY + square.size / 2 - player.y;
+            const middle = Math.max(Math.hypot(mx, my), 0.001);
+            const x = ax * 0.7 - ay * 0.8 + (mx / middle) * 0.6;
+            const y = ay * 0.7 + ax * 0.8 + (my / middle) * 0.6;
+            const length = Math.max(Math.hypot(x, y), 0.001);
+            return { x: x / length, y: y / length };
         }
         for (const hazard of sim.hazards) {
             // A checker's cell (GroundHazard.half), once it's shown: off it the short way
@@ -553,6 +584,10 @@ function uncursed(sim: Sim, move: { x: number; y: number }): { x: number; y: num
 // answer to every question
 // How long a run can go: two minutes past the final boss's time
 function runSeconds(): number {
+    // The Tombs: as long as a slow raid takes
+    if (map.tombs) {
+        return 90 * 60;
+    }
     const rooms = map.raid?.rooms;
     return (rooms ? rooms[rooms.length - 1].at : RUN_LENGTH) + 120;
 }
@@ -562,7 +597,7 @@ function eventChoice(sim: Sim): number {
     let best = -1;
     let bestPrice = -1;
     options.forEach((option, index) => {
-        if (option.kind === "teleport") {
+        if (option.kind === "teleport" || option.kind === "bundle") {
             return;
         }
         if (option.kind === "answer") {
@@ -595,6 +630,9 @@ function runOnce(characterId: string, seed: number) {
         hard,
         expert,
         armoury,
+        invocations,
+        // A fight in parts (MapDef.stages): which, STAGE=0 for the first
+        stage: parseInt(process.env.STAGE ?? "0"),
     });
     // Another weapon to start with, to compare weapons on one character
     if (process.env.WEAPON) {
@@ -626,7 +664,9 @@ function runOnce(characterId: string, seed: number) {
     // weapon's reach (MapDef.fight.strikeReach)
     const phaseTicks: number[] = [];
     const reachTicks: number[] = [];
+    const tombsLog = sim.map.tombs ? new TombsLog() : undefined;
     while (sim.tick < maxTicks && !sim.runOver) {
+        tombsLog?.step(sim);
         if (sim.state === "levelUp") {
             const ranked = sim.choices
                 .map((choice, index) => ({ choice, index }))
@@ -678,7 +718,11 @@ function runOnce(characterId: string, seed: number) {
         if (sim.tick % 25 === 0) {
             useItems(sim);
         }
-        if (sim.tick % 5 === 0) {
+        // The Tombs' bot steers every tick: plates and mirrors want it exact
+        const planned = tombsMove(sim);
+        if (planned) {
+            move = planned;
+        } else if (sim.tick % 5 === 0) {
             move = fightMove(sim) ?? botMove(sim);
             // Stuck against a wall: wiggle sideways for a moment
             if (Math.hypot(sim.player.x - lastX, sim.player.y - lastY) < 0.05) {
@@ -795,6 +839,7 @@ function runOnce(characterId: string, seed: number) {
         }
     }
     const result = sim.getResult();
+    tombsLog?.report(sim);
     const ms = performance.now() - startTime;
     runs++;
     for (const set of started) {
@@ -833,6 +878,7 @@ function runParty(characterId: string, seed: number) {
         endless,
         hard,
         expert,
+        invocations,
         party: Array.from({ length: partySize }, (_, i) => ({
             name: "bot" + (i + 1),
             characterId,
@@ -845,7 +891,9 @@ function runParty(characterId: string, seed: number) {
     const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));
     let firstDown: number | undefined;
     let fightTicks = 0;
+    const tombsLog = sim.map.tombs ? new TombsLog() : undefined;
     while (sim.tick < maxTicks && !sim.runOver) {
+        tombsLog?.step(sim);
         if (sim.state !== "playing") {
             for (const hero of sim.waitingOn) {
                 sim.as(hero.index, () => {
@@ -874,7 +922,10 @@ function runParty(characterId: string, seed: number) {
                 if (sim.tick % 25 === 0) {
                     useItems(sim);
                 }
-                if (sim.tick % 5 === 0) {
+                const planned = tombsMove(sim);
+                if (planned) {
+                    moves[hero.index] = planned;
+                } else if (sim.tick % 5 === 0) {
                     moves[hero.index] = fightMove(sim) ?? botMove(sim);
                 }
                 useAbility(sim);

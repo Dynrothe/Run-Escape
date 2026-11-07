@@ -1442,6 +1442,75 @@
     color: #e0b0ff;
 }
 
+/* The Tombs of Amascut's board on the result screen: the raid level, invocations, times, points */
+.ui-tombs-board {
+    margin: 6px auto 4px;
+    padding: 8px 12px;
+    max-width: 620px;
+    border: 1px solid #6b5a3a;
+    background: rgba(0, 0, 0, 0.25);
+    text-align: center;
+}
+
+.ui-tombs-board-level {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    color: var(--ui-orange);
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-tombs-board-invocations {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+    margin: 4px 0;
+}
+
+.ui-tombs-board-columns {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 6px 18px;
+}
+
+.ui-tombs-board-table {
+    border-collapse: collapse;
+    font-size: 15px;
+}
+
+.ui-tombs-board-table th {
+    color: var(--ui-orange);
+    font-weight: normal;
+    padding: 1px 6px;
+    text-align: left;
+}
+
+.ui-tombs-board-table td {
+    color: var(--ui-yellow);
+    padding: 1px 6px;
+    text-align: left;
+}
+
+.ui-tombs-board-table td + td,
+.ui-tombs-board-table th + th {
+    text-align: right;
+}
+
+.ui-tombs-board-total td {
+    border-top: 1px solid #6b5a3a;
+    color: #fff;
+}
+
+.ui-tombs-board-you td {
+    color: #fff;
+}
+
 /* A raid's points, under its room, and what the supply chest charges */
 .ui-raid-points,
 .ui-raid-price {
@@ -2421,4 +2490,240 @@
 .ui-favourite-on {
     color: var(--ui-yellow);
     box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+/* The Tombs of Amascut's invocation board (and the button to it, in the setup bar), laid out as
+   OSRS's: the icons in a scrolling grid, the reward potential beside them */
+.ui-invocations-button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.ui-invocations-level {
+    color: var(--ui-yellow);
+    font-size: 13px;
+}
+
+.ui-invocations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(620px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+}
+
+.ui-invocations-title {
+    text-align: center;
+}
+
+.ui-invocations-body {
+    display: flex;
+    gap: 8px;
+    min-height: 0;
+}
+
+.ui-invocations-grid {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    gap: 6px;
+    align-content: start;
+    max-height: calc(50vh / var(--ui-scale));
+    overflow-y: auto;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 52px;
+    padding: 0;
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+}
+
+.ui-invocation:focus-visible,
+.ui-invocation:hover {
+    border-color: var(--ui-edge);
+}
+
+.ui-invocation-on {
+    border-color: rgba(255, 152, 31, 0.5);
+}
+
+.ui-invocations-reward {
+    flex: 0 0 186px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocations-reward-title {
+    color: #ff981f;
+}
+
+.ui-invocations-level-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ui-invocations-number {
+    color: #ffffff;
+    font-size: 20px;
+}
+
+.ui-invocations-band {
+    color: var(--ui-yellow);
+}
+
+/* Reward potential: the raid level against the highest, in OSRS's red */
+.ui-invocations-bar {
+    width: 100%;
+    height: 10px;
+    background: #3a0d0d;
+    border: 1px solid #000;
+}
+
+.ui-invocations-bar-fill {
+    height: 100%;
+    background: #b8211f;
+}
+
+.ui-invocations-scale {
+    font-size: 13px;
+    text-align: center;
+}
+
+.ui-invocations-uniques {
+    display: grid;
+    grid-template-columns: repeat(4, 38px);
+    gap: 3px;
+}
+
+.ui-invocations-unique {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    border: 1px solid #b08a3a;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* Below its raid level, as OSRS shows it: greyed out */
+.ui-invocations-unique-out {
+    border-color: #4a4336;
+}
+
+.ui-invocations-unique-out > * {
+    filter: grayscale(1) brightness(0.45);
+}
+
+.ui-invocations-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 58px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocations-detail-name {
+    color: #ff981f;
+}
+
+.ui-invocations-detail-level {
+    color: var(--ui-yellow);
+}
+
+.ui-invocation-soon {
+    color: #8a7f6a;
+    font-size: 13px;
+}
+
+.ui-invocations-buttons {
+    display: flex;
+    justify-content: space-between;
+}
+
+/* A phone: the reward potential goes under the icons */
+@media (max-width: 560px) {
+    .ui-invocations-body {
+        flex-direction: column;
+    }
+
+    .ui-invocations-reward {
+        flex: none;
+    }
+}
+
+/* The Scabaras room's slates and Ancient tablet, read while you're stood by one: over the play
+   area, not in the way of touching it */
+.ui-scabaras-reading {
+    position: absolute;
+    top: 14%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(360px, calc(92vw / var(--ui-scale)));
+    padding: 10px 14px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.ui-scabaras-title {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    color: var(--ui-orange);
+    margin-bottom: 6px;
+}
+
+.ui-scabaras-number {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 48px;
+    line-height: 1.1;
+    color: #ffff00;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.ui-scabaras-symbols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.ui-scabaras-symbol {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-scabaras-value {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 22px;
+    color: #ffff00;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-scabaras-name {
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+/* A fight in parts' part buttons, under its line on the map's card */
+.ui-fight-parts {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0;
 }

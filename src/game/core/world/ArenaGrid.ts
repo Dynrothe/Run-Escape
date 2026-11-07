@@ -61,6 +61,12 @@ export class ArenaGrid {
     private readonly boxes: Float32Array;
     // Which steps out of each tile are allowed, for finding the way
     readonly steps: Steps;
+    // Floor that's fallen away during a run (dropTile), by tile, so it can be put back
+    private readonly dropped: Uint8Array;
+    private droppedCount = 0;
+    // Goes up whenever a tile drops or comes back, so what's worked out from the grid (a flow
+    // field) knows to work it out again
+    version = 0;
 
     constructor(readonly data: RegionData) {
         this.baseX = data.baseX;
@@ -127,6 +133,61 @@ export class ArenaGrid {
             }
         }
         this.steps = new Steps(this, this.baseX, this.baseY, this.sizeX, this.sizeY);
+        this.dropped = new Uint8Array(this.sizeX * this.sizeY);
+    }
+
+    // An open tile's floor falls away (MapDef.floor): it's blocked floor, as water is, until it's
+    // put back. Grids are kept between runs, so a run with a floor puts them all back first.
+    dropTile(tileX: number, tileY: number): void {
+        const i = this.indexOf(tileX, tileY);
+        if (i < 0 || this.dropped[i] || this.isSolid(tileX, tileY)) {
+            return;
+        }
+        this.dropped[i] = 1;
+        this.droppedCount++;
+        this.flags[i] |= CollisionFlag.FLOOR;
+        this.boxes[i * 4] = this.boxes[i * 4 + 1] = 0;
+        this.boxes[i * 4 + 2] = this.boxes[i * 4 + 3] = 1;
+        this.changed(tileX, tileY);
+    }
+
+    restoreTile(tileX: number, tileY: number): void {
+        const i = this.indexOf(tileX, tileY);
+        if (i < 0 || !this.dropped[i]) {
+            return;
+        }
+        this.dropped[i] = 0;
+        this.droppedCount--;
+        this.flags[i] &= ~CollisionFlag.FLOOR;
+        this.boxes.fill(0, i * 4, i * 4 + 4);
+        this.changed(tileX, tileY);
+    }
+
+    restoreAllTiles(): void {
+        for (let i = 0; i < this.dropped.length && this.droppedCount > 0; i++) {
+            if (this.dropped[i]) {
+                this.restoreTile(
+                    this.baseX + (i % this.sizeX),
+                    this.baseY + Math.floor(i / this.sizeX),
+                );
+            }
+        }
+    }
+
+    isDropped(tileX: number, tileY: number): boolean {
+        const i = this.indexOf(tileX, tileY);
+        return i >= 0 && this.dropped[i] === 1;
+    }
+
+    private indexOf(tileX: number, tileY: number): number {
+        const x = tileX - this.baseX;
+        const y = tileY - this.baseY;
+        return this.contains(tileX, tileY) ? x + y * this.sizeX : -1;
+    }
+
+    private changed(tileX: number, tileY: number): void {
+        this.steps.refresh(tileX, tileY);
+        this.version++;
     }
 
     // Locs that share a tile (a rock on its base) are a stack, which blocks
@@ -228,12 +289,6 @@ export class ArenaGrid {
             }
         }
         return false;
-    }
-
-    private indexOf(tileX: number, tileY: number): number {
-        const x = tileX - this.baseX;
-        const y = tileY - this.baseY;
-        return this.contains(tileX, tileY) ? x + y * this.sizeX : -1;
     }
 
     // The whole tile, but for objects a little less on each side that has open

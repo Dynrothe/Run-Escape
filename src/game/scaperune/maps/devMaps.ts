@@ -1,3 +1,4 @@
+import { MapDef } from "../../content/types";
 import {
     DEFAULT_SETTINGS,
     GeneratorSettings,
@@ -12,8 +13,14 @@ import { PREFAB_GALLERY } from "./prefabGallery";
 import { ROCK_SHEET } from "./rockSheet";
 import { SHATTERED_REALM } from "./shatteredRealm";
 import { TERRAIN_TEST } from "./terrainTest";
+import {
+    BENEATH_CURSED_SANDS,
+    BENEATH_CURSED_SANDS_RECIPE,
+    TOMBS_OF_AMASCUT,
+} from "./tombsOfAmascut";
 import { VARDHELM } from "./vardhelm";
 import { WALL_SHEET } from "./wallSheet";
+import { WARDENS_FLOOR } from "./wardensFloor";
 
 // Maps for development, shown on the dev server only (content/maps.ts). Each
 // needs its own squares: nothing in the cache lives at x 70-99, y 66-199, and the
@@ -134,4 +141,12 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     VARDHELM,
     KALUAS_WAKE,
     SHATTERED_REALM,
+    TOMBS_OF_AMASCUT,
+    WARDENS_FLOOR,
+];
+
+// Boss fights still in development (a real MapDef each, so a win's kept: it unlocks what comes
+// after), on the dev server only, with their recipes
+export const SCAPERUNE_DEV_FIGHTS: { recipe: MapRecipe; map: MapDef }[] = [
+    { recipe: BENEATH_CURSED_SANDS_RECIPE, map: BENEATH_CURSED_SANDS },
 ];

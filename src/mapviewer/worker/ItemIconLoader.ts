@@ -1,7 +1,9 @@
 import { COSINE, SINE } from "../../rs/MathConstants";
+import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { Rasterizer2D } from "../../rs/graphics/Rasterizer2D";
 import { Rasterizer3D } from "../../rs/graphics/Rasterizer3D";
 import { Model } from "../../rs/model/Model";
+import { ModelData } from "../../rs/model/ModelData";
 import { RenderDataLoader, RenderDataResult } from "./RenderDataLoader";
 import { WorkerState } from "./RenderDataWorker";
 
@@ -12,6 +14,8 @@ import { WorkerState } from "./RenderDataWorker";
 export const ICON_WIDTH = 36;
 export const ICON_HEIGHT = 32;
 
+// A negative objId is a loc's model instead (-locId), seen from above: a floor symbol, for a
+// screen that shows what's on the ground (renderLocIcon)
 export type ItemIconRequest = { objId: number; count: number };
 
 export type ItemIconInput = { requests: ItemIconRequest[] };
@@ -251,7 +255,47 @@ function getStackObjId(state: WorkerState, objId: number, count: number): number
     return stackId;
 }
 
+// How far off a loc's icon is drawn: a tile's flat symbol filling the icon
+const LOC_ICON_ZOOM = 2000;
+
+// A loc's model as it lies, from straight above, filling the icon
+export function renderLocIcon(state: WorkerState, locId: number): Int32Array {
+    const pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
+    const locType = state.locTypeLoader.load(locId);
+    const type = locType.types?.[0] ?? LocModelType.NORMAL;
+    let model = state.locModelLoader.getModel(locType, type, 0);
+    if (model instanceof ModelData) {
+        model = model.light(state.textureLoader, model.ambient, model.contrast, -50, -10, -50);
+    }
+    if (!model) {
+        return pixels;
+    }
+    Rasterizer2D.setRaster(pixels, ICON_WIDTH, ICON_HEIGHT);
+    Rasterizer2D.setClip(0, 0, ICON_WIDTH, ICON_HEIGHT);
+    Rasterizer3D.setClip();
+    Rasterizer3D.setViewport(ICON_WIDTH / 2, ICON_HEIGHT / 2);
+    Rasterizer3D.rasterGouraudLowRes = false;
+    Rasterizer3D.rasterAlpha = 0;
+    model.calculateBoundsCylinder();
+    // Looking straight down (a pitch of a quarter turn), north up
+    const pitch = 512;
+    const sin = (SINE[pitch] * LOC_ICON_ZOOM) >> 16;
+    const cos = (COSINE[pitch] * LOC_ICON_ZOOM) >> 16;
+    if (projectModel(model, 0, 0, pitch, 0, sin, cos)) {
+        drawModel(model, (id) => state.textureLoader.getAverageHsl(id));
+    }
+    for (let i = 0; i < pixels.length; i++) {
+        if (pixels[i] !== 0) {
+            pixels[i] |= 0xff000000;
+        }
+    }
+    return pixels;
+}
+
 export function renderItemIcon(state: WorkerState, objId: number, count: number): Int32Array {
+    if (objId < 0) {
+        return renderLocIcon(state, -objId);
+    }
     const pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
     const stackId = getStackObjId(state, objId, count);
     const objType = state.objTypeLoader.load(stackId);

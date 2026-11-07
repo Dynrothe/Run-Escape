@@ -272,13 +272,18 @@ type Props = (
     // A sprite on its own (an empty gear slot's), or nothing if the cache
     // hasn't got it
     | { objId?: undefined; spriteId: number }
+    // A loc's model from above (a floor symbol), drawn as an item is
+    | { objId?: undefined; spriteId?: undefined; locId: number }
 ) & {
     // Display height in pixels (icons are 36x32)
     size?: number;
     count?: number;
 };
 
-export function ItemIcon({ objId, spriteId, size = 32, count = 1 }: Props): JSX.Element {
+export function ItemIcon(props: Props): JSX.Element {
+    const { spriteId, size = 32, count = 1 } = props;
+    // A loc's icon goes through as a negative item (ItemIconLoader.renderLocIcon)
+    const objId = "locId" in props ? -props.locId : props.objId;
     const stack = objId === 995 ? coinStackCount(count) : 1;
     const sprite =
         spriteId !== undefined && (objId === undefined || iconCache.getSprite(spriteId) !== "")

@@ -76,6 +76,8 @@ export type GameStart = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // A fight in parts (MapDef.stages): which, the host's next
+    stage?: number;
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -90,6 +92,7 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
         typeof game.mapId === "string" &&
         typeof game.endless === "boolean" &&
         typeof game.hard === "boolean" &&
+        (game.stage === undefined || Number.isSafeInteger(game.stage)) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&

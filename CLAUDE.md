@@ -42,6 +42,7 @@ go stale. Add anything that cost you time to work out.
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
+| A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
@@ -74,6 +75,8 @@ go stale. Add anything that cost you time to work out.
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
+| The Tombs of Amascut (in development, a dev map)       | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
+| The Tombs' bot, and its sim of puzzle rooms and bosses | `scripts/game/tombsBot.ts`, `scripts/game/simulate-tombs.ts`           |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
 | Frame cap, lost graphics, the HUD's two stores         | `docs/DEVELOPMENT.md`, Keeping it light                                |
 
@@ -161,6 +164,14 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   else, delete that folder. ScapeRune's dev maps don't get one: they're built each time, from their
   recipes.
 
+The Tombs of Amascut has a sim of its own, `scripts/game/simulate-tombs.ts` (`DEV_MAPS=1`): a puzzle
+room, a boss, the Wardens or the whole raid (`ROOM=scabaras`, `ROOM=zebak`, `ROOM=raid`), with what
+each puzzle room came to (mirrors turned, boards, trips and spills) and what hurt. Run it after any
+change to the raid, at a path level or two (`LEVEL=2`), with invocations and with `PARTY=2`.
+Without `KIT=max` it plays the raid up to the room asked for, as a run would get there. For the
+difficulty curve, `scripts/game/sweep-tombs.sh` runs rooms by raid level (`INVOCATIONS=level:N`)
+and kit; it's slow, so run it in the background.
+
 After a content change, also run the checks that apply:
 
 ```sh
@@ -211,6 +222,8 @@ desktop build.
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
+- `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
+  any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the

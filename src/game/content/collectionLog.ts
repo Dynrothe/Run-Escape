@@ -1,5 +1,5 @@
 import { SaveData } from "../core/save";
-import { FIGHT_MAPS } from "./maps";
+import { ALL_MAPS, FIGHT_MAPS } from "./maps";
 import { TROPHIES, TrophyDef } from "./trophies";
 import { describeUnlockTask } from "./unlocks";
 import { WEAPONS } from "./weapons";
@@ -13,8 +13,18 @@ export type RewardEntry = { id: string; name: string; objId: number; how: string
 
 // The map a trophy's from: a pumpkin's are the Hallowed Night's
 function trophyMap(trophy: TrophyDef): string {
-    return trophy.from.kind === "pumpkin" ? "halloween" : trophy.from.mapId;
+    return trophy.from.kind === "pumpkin"
+        ? "halloween"
+        : trophy.from.kind === "tombs"
+          ? "tombs_of_amascut"
+          : trophy.from.mapId;
 }
+
+// The Tombs of Amascut's stay out of the log while the raid's a dev map (only there to list)
+const LOGGED = TROPHIES.filter(
+    (trophy) =>
+        trophy.from.kind !== "tombs" || ALL_MAPS.some((map) => map.id === "tombs_of_amascut"),
+);
 
 // Whether a weapon's brought in on a map: its boss's drops, its chest's
 function bringsIn(mapId: string): boolean {
@@ -27,7 +37,7 @@ function bringsIn(mapId: string): boolean {
 // tab
 export const REWARD_MAPS: string[] = [
     ...new Set([
-        ...TROPHIES.map(trophyMap),
+        ...LOGGED.map(trophyMap),
         ...FIGHT_MAPS.filter((map) => bringsIn(map.id)).map((map) => map.id),
     ]),
 ];
@@ -50,7 +60,7 @@ export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
         how: `${describeUnlockTask(weapon.unlock!)} to bring it in.`,
         found: save.unlockedItems.includes(weapon.id),
     }));
-    const trophies = TROPHIES.filter((trophy) => trophyMap(trophy) === mapId).map(
+    const trophies = LOGGED.filter((trophy) => trophyMap(trophy) === mapId).map(
         ({ id, name, objId, how }) => ({
             id,
             name,

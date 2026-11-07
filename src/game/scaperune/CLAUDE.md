@@ -1526,6 +1526,15 @@ What the Owl's Court (`owlsCourt.ts`, `docs/design/justiciar-zachariah.md`) lear
 - **What the cache can't do is the fight's to draw.** Nothing in the cache casts a pillar's shadow, so the gaze's safe ground
   is a colour overlay the fight draws (the design doc's section 9). Keep that for what has to be read exactly.
 
+**A floor the game draws itself** (`wardensFloor.ts`, a dev map trying out `MapDef.floor`): the Wardens' room in the Tombs
+of Amascut, cut whole with `plane: 1`, with its own floor swapped for the hidden overlay and its floor decoration and middle pit
+left out. `client/FloorView.ts` draws every tile of it as a slab (the rising slab's model at rest), so each can rise or fall
+on its own. Nothing at the slabs' height is drawn, so there's nothing for them to z-fight: the floor's tiles are a bridge
+(`TILE_BRIDGE` on level 1, the hidden overlay, heights from level 0's) nine tiles over a pit with no floor and nothing
+on it, so a hole looks the same at every size. A level-0 loc under a bridge
+doesn't block what's walked or what's seen across it, so `check-maps.ts`'s sight lines leave it out, and its hidden-tile
+check stands a bridge's tiles at the deck.
+
 ### How big a map can be
 
 Measured in Node on this VM, on a forest-bound meadow with default settings otherwise, through `preview.ts`:
