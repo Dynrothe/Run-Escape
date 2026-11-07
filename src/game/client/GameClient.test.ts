@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
+import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { emptyStats } from "../content/types";
 import { Sim } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
@@ -13,6 +14,7 @@ import {
     getMetaStats,
 } from "../core/save";
 import { makeGrid } from "../core/world/testGrid";
+import { CinematicCamera, CinematicPlayer } from "./Cinematic";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -1585,5 +1587,135 @@ describe("raid modes", () => {
         client.toggleHard();
         expect(store.getSnapshot().hard).toBe(false);
         expect(store.getSnapshot().expert).toBe(false);
+    });
+});
+
+describe("the opening cinematic", () => {
+    // The client mid-run with the Battle for Varrock's opening playing, a second in
+    function cinematicClient() {
+        const { client, store } = createClient(createSim(), false);
+        const cinematic = new CinematicPlayer(VARROCK_OPENING);
+        cinematic.advance(1);
+        const view = { cinematic: cinematic as CinematicPlayer | undefined, onEvents() {} };
+        const useAbility = vi.fn();
+        const play = vi.fn();
+        Object.assign(client, {
+            cinematic,
+            view,
+            useAbility,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+        });
+        store.set({ cinematic: true });
+        const state = client as unknown as { cinematic?: CinematicPlayer; paused: boolean };
+        return { client, store, cinematic, view, useAbility, play, state };
+    }
+
+    test.each(["Space", "Escape", "KeyW", "Enter", "Digit1"])(
+        "is skipped by any key (or a controller's button), %s, which does nothing else",
+        (code) => {
+            const { client, store, view, useAbility, state } = cinematicClient();
+            (client as unknown as { pressKey(code: string): void }).pressKey(code);
+            expect(state.cinematic).toBeUndefined();
+            expect(view.cinematic).toBeUndefined();
+            expect(store.getSnapshot().cinematic).toBe(false);
+            expect(useAbility).not.toHaveBeenCalled();
+            expect(state.paused).toBe(false);
+        },
+    );
+
+    test("is skipped by a click or a tap, but not by one as it begins", () => {
+        const { client, store, state } = cinematicClient();
+        state.cinematic!.seconds = 0.1;
+        client.skipCinematic();
+        expect(state.cinematic).toBeDefined();
+        state.cinematic!.seconds = 0.5;
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+    });
+
+    test("plays its sounds as it goes, and hands the camera back to the run's at the end", () => {
+        const { client, store, play, state } = cinematicClient();
+        const update = (ms: number, camera: CinematicCamera) =>
+            (
+                client as unknown as {
+                    updateCinematic(ms: number, sim: Sim, play: CinematicCamera): unknown;
+                }
+            ).updateCinematic(ms, client.sim!, camera);
+        const run: CinematicCamera = {
+            x: 4747.5,
+            y: 10609.5,
+            height: -0.6,
+            pitch: -400,
+            yaw: 0,
+            distance: 18,
+        };
+        // A long first frame moves it on by a frame's worth, not all of it
+        expect(update(20000, run)).toBeDefined();
+        expect(state.cinematic!.seconds).toBeLessThan(1.2);
+        let last: unknown;
+        for (let i = 0; i < 2000 && state.cinematic; i++) {
+            last = update(50, run) ?? last;
+        }
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+        // Yama's click, heard once
+        expect(play.mock.calls.map(([id]) => id)).toEqual([10235]);
+        const end = last as CinematicCamera;
+        expect(end.x).toBeCloseTo(run.x, 1);
+        expect(end.y).toBeCloseTo(run.y, 1);
+        expect(end.distance).toBeCloseTo(run.distance, 1);
+        expect(end.pitch).toBeCloseTo(run.pitch, 0);
+    });
+
+    test("keeps a co-op player still while it plays", () => {
+        const { client, state } = cinematicClient();
+        const moves: number[][] = [];
+        const fake = {
+            isHost: true,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => false,
+            setMove: (x: number, y: number) => moves.push([x, y]),
+            flush() {},
+        };
+        Object.assign(client, {
+            coop: { keepAlive() {} },
+            coopRun: fake,
+            coopStopped: false,
+            input: {
+                getMoveVector: (into: { x: number; y: number }) =>
+                    Object.assign(into, { x: 1, y: 0 }),
+            },
+            move: { x: 0, y: 0 },
+        });
+        const update = () =>
+            (
+                client as unknown as { updateCoop(ms: number, sim: Sim, run: unknown): void }
+            ).updateCoop(TICK_MS, client.sim!, fake);
+        update();
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        update();
+        expect(moves).toEqual([
+            [0, 0],
+            [1, 0],
+        ]);
+    });
+
+    test("isn't played again on a retry", () => {
+        const { client } = createClient(createSim(), false);
+        const startRun = vi.fn(async () => {});
+        Object.assign(client, {
+            sim: { map: { id: "zachariah" } },
+            leaveRun: vi.fn(),
+            startRun,
+        });
+        client.retry();
+        expect(startRun).toHaveBeenCalledWith("zachariah", false);
     });
 });

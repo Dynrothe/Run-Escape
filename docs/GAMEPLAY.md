@@ -213,6 +213,11 @@ version and how to run it.
   throne at its north end. You start outside the south gate as Justiciar Zachariah, his own model, with the
   moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
   of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
+  It opens with a cinematic: close on Yama, who says resistance is futile; the camera pulls back
+  to Sir Prysin and four Varrock guards before his throne; Prysin defies him, Yama answers
+  "Pathetic." and snaps his fingers, and they burn away in Leagues IV's Trailblazer Reloaded
+  death; then the camera flies south over the city to Zachariah and the run begins. Any key,
+  click, tap or controller button skips it, and it plays each time the map's travelled to.
   For now there's nothing to fight: no waves, no bosses, no random events and nothing hurts.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are

@@ -13,6 +13,7 @@ import { FLOOR_SKINS } from "../floorSkins";
 import { MapDef, RunEventDef } from "../types";
 import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
+import { VARROCK_OPENING } from "./varrockOpening";
 
 // The fun maps: open from the start, endless from the start, and full of other
 // players (Pest Control's are pests). Their rounds turn over every fifteen
@@ -815,6 +816,8 @@ export const FUN_MAPS: MapDef[] = [
                 scale: YAMA_SCALE,
             },
         ],
+        // It opens on Yama and the last of the palace guard (fun/varrockOpening.ts)
+        cinematic: VARROCK_OPENING,
         // A smoky, dimmed city lit by its fires
         lighting: {
             ambient: 0.92,

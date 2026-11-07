@@ -32,6 +32,10 @@ export const SPOT_LIGHTS: ReadonlyMap<number, LightLook> = new Map<number, Light
     [383, SHADOW],
     // Saradomin Strike
     [76, HOLY],
+    // Leagues IV: Trailblazer Reloaded's death, burning them away (the Battle for Varrock's
+    // opening, fun/varrockOpening.ts), and Yama's click before it
+    [2610, { radius: 3, color: 0xffb040, intensity: 1, flicker: 0.45 }],
+    [3287, { radius: 4, color: 0xff5a20, intensity: 1, flicker: 0.2 }],
 ]);
 
 // A floor's tiles (FloorDef), by their effect: lava glows, ice faintly

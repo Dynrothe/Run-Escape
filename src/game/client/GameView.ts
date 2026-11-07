@@ -45,6 +45,8 @@ import {
 } from "../core/entities";
 import { formatCompact } from "../ui/formatCompact";
 import { BossFightView } from "./BossFightView";
+import { CinematicPlayer } from "./Cinematic";
+import { CinematicSpot, CinematicView } from "./CinematicView";
 import { FloorView } from "./FloorView";
 import {
     CANNON_MODEL_KEY,
@@ -298,11 +300,20 @@ export class GameView {
     private readonly roots: RootsView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
+    // The map's opening cinematic while it plays (MapDef.cinematic; GameClient sets it)
+    cinematic?: CinematicPlayer;
+    private readonly cinematicView: CinematicView;
 
     constructor(readonly assets: GameAssets) {
+        this.cinematicView = new CinematicView(assets);
         this.fight = new BossFightView(assets);
         this.floor = new FloorView(assets);
         this.roots = new RootsView(assets);
+    }
+
+    // The opening cinematic's spot animations playing now, for their lights
+    getCinematicSpots(): CinematicSpot[] | undefined {
+        return this.cinematic && this.cinematicView.getSpots(this.cinematic);
     }
 
     reset(): void {
@@ -641,8 +652,14 @@ export class GameView {
             this.drawRampage(actors, sim, rampage, alpha);
         }
 
-        for (const prop of sim.map.props ?? []) {
-            this.drawProp(actors, sim, prop, alpha);
+        const cinematic = this.cinematic;
+        sim.map.props?.forEach((prop, i) => {
+            if (!cinematic || !this.cinematicView.hidesProp(cinematic, i)) {
+                this.drawProp(actors, sim, prop, alpha);
+            }
+        });
+        if (cinematic) {
+            this.cinematicView.submitActors(actors, sim, cinematic);
         }
 
         for (const ring of sim.rings) {
@@ -1330,6 +1347,9 @@ export class GameView {
         this.drawShouts(overlay, sim, alpha, now, scale);
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
+        if (this.cinematic) {
+            this.cinematicView.drawScreen(overlay, sim, this.cinematic);
+        }
     }
 
     // A RuneLite-style pie over each power-up on the ground, draining clockwise as

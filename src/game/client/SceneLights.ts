@@ -2,6 +2,7 @@ import { FLOOR_LIGHTS, SPOT_LIGHTS, lightColor } from "../content/lights";
 import { FloorEffect, LightLook, LightingDef } from "../content/types";
 import { Sim } from "../core/Sim";
 import { EFFECT_BURN, EFFECT_ICE } from "../core/floorLayout";
+import type { CinematicSpot } from "./CinematicView";
 import { LightBudget, lightKey } from "./LightBudget";
 import { getPlayerPose } from "./PlayerPose";
 import type { PlayerPose } from "./PlayerPose";
@@ -25,6 +26,7 @@ const KIND_FLOOR = 9;
 const KIND_WINDUP = 10;
 const KIND_HAZARD = 11;
 const KIND_EXPOSED = 12;
+const KIND_CINEMATIC = 13;
 const SIM_KINDS = { player: KIND_PLAYER, map: KIND_MAP, enemy: KIND_ENEMY, left: KIND_LEFT };
 
 // A floor's tiles further than this from the view's middle aren't offered (tiles)
@@ -56,7 +58,8 @@ export class SceneLights {
     }
 
     // This frame's ambient and lights, into target. px, py: the shown player as drawn (the
-    // view's middle); glowLocs: the map's glowing scenery, if it has any
+    // view's middle); glowLocs: the map's glowing scenery, if it has any; spots: an opening
+    // cinematic's spot animations playing now (CinematicView.getSpots)
     update(
         target: LightTarget,
         sim: Sim,
@@ -68,6 +71,7 @@ export class SceneLights {
         py: number,
         deltaSeconds: number,
         glowLocs: GlowLocs | undefined,
+        spots?: readonly CinematicSpot[],
     ): void {
         this.seconds += deltaSeconds;
         const budget = this.budget;
@@ -122,6 +126,12 @@ export class SceneLights {
                 this.offer(key, effect.x, effect.y, look.radius, look);
             }
         }
+        spots?.forEach((spot, i) => {
+            const look = SPOT_LIGHTS.get(spot.spotAnim);
+            if (look) {
+                this.offer(lightKey(KIND_CINEMATIC, i), spot.x, spot.y, look.radius, look);
+            }
+        });
 
         const floor = sim.floor;
         if (floor) {

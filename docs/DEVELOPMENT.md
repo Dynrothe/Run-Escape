@@ -940,6 +940,27 @@ adventurer can have:
   the map's travelled to (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
 - An explore map's HUD is the minimap, the hitpoints and the hero's buttons: no level, clock,
   kills, coins, round, damage panel or quests (`Hud` in `ui/GameUi.tsx`).
+- **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
+  map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
+  NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
+  as Yama does for his throne's), `cues` at seconds in (a seq played once or looped, overhead
+  chat, a spot animation on someone, a sound, gone), and the camera's `shots`, the last of which
+  is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out everything from
+  the def and a clock: the camera's a monotone cubic through the shots per channel (target,
+  height, pitch, yaw, distance), so it never overshoots one, with `hold` easing to a stop;
+  `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms a frame at
+  most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast, their spot
+  animations (lit through `SPOT_LIGHTS`), overhead chat and the bars, and `GameView` hides the
+  props it stands in for. The cast is baked with the props (`getPropRequests`, so the slim cache
+  keeps them), its spot animations and sounds with the game's.
+    - It's view only, on each player's own clock, and never in the sim or its hashes, so co-op
+      can't fall out of step over it. Input's held while it plays: any key or controller button
+      (`GameClient.pressKey`) or a click or tap on the run screen (`.ui-cinematic`) skips it, and
+      does nothing else; the HUD and touch controls are hidden. A solo run doesn't step until the
+      last shot begins (`CinematicPlayer.holdsRun`); in co-op the run goes on with the player
+      standing still (`updateCoop` sends no movement).
+    - To see a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`.
+      The page reloads if a source file changes, which ends it.
 
 ### Raids
 

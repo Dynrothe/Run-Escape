@@ -46,6 +46,7 @@ import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { getCinematicSeqs } from "./Cinematic";
 
 export const PLAYER_SEQS = {
     idle: 808,
@@ -182,7 +183,7 @@ export function getGameSpriteIds(): number[] {
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
 // Amulet of blood fury's heal, a random event's visitor coming and going, a
 // co-op revive's emote)
-function getSpotAnimIds(): number[] {
+export function getSpotAnimIds(): number[] {
     const ids = new Set<number>([
         53,
         199,
@@ -246,6 +247,8 @@ function getSpotAnimIds(): number[] {
     for (const map of ALL_MAPS) {
         // What a cut through a map's roots throws up (MapDef.rule)
         add(map.rule?.look.cutSpotAnim);
+        // What plays in its opening cinematic (MapDef.cinematic)
+        add(...(map.cinematic?.cues.map((cue) => cue.spotAnim) ?? []));
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -944,12 +947,25 @@ export class GameAssets {
     // A map's NPCs posed as scenery (MapDef.props): baked as the map's travelled to
     static getPropRequests(maps: readonly MapDef[]): BakeRequest[] {
         const seqs = new Map<number, number[]>();
-        for (const prop of maps.flatMap((map) => map.props ?? [])) {
-            const list = seqs.get(prop.npcId) ?? [];
-            if (!list.includes(prop.seq)) {
-                list.push(prop.seq);
+        const add = (npcId: number, seqIds: number[]) => {
+            const list = seqs.get(npcId) ?? [];
+            for (const seq of seqIds) {
+                if (!list.includes(seq)) {
+                    list.push(seq);
+                }
             }
-            seqs.set(prop.npcId, list);
+            seqs.set(npcId, list);
+        };
+        for (const prop of maps.flatMap((map) => map.props ?? [])) {
+            add(prop.npcId, [prop.seq]);
+        }
+        // and the cast of its opening cinematic (MapDef.cinematic), with everything they play
+        for (const map of maps) {
+            if (map.cinematic) {
+                for (const [npcId, seqIds] of getCinematicSeqs(map.cinematic)) {
+                    add(npcId, seqIds);
+                }
+            }
         }
         return [...seqs].map(([npcId, seqIds]) => ({
             kind: "npc",
@@ -960,7 +976,7 @@ export class GameAssets {
     }
 
     loadProps(map: MapDef): Promise<void> {
-        if (!map.props?.length) {
+        if (!map.props?.length && !map.cinematic) {
             return Promise.resolve();
         }
         let baking = this.propBakes.get(map.id);
