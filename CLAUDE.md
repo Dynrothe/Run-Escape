@@ -89,6 +89,8 @@ go stale. Add anything that cost you time to work out.
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
 | The Tombs of Amascut (in development, a dev map)       | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
 | The Tombs' bot, and its sim of puzzle rooms and bosses | `scripts/game/tombsBot.ts`, `scripts/game/simulate-tombs.ts`           |
+| Beneath Cursed Sands, the Tombs' quest (a dev map)     | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
+| Its fights' design: four parts, each kept once won     | `docs/design/beneath-cursed-sands.md`                                  |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
 | Frame cap, lost graphics, the HUD's two stores         | `docs/DEVELOPMENT.md`, Keeping it light                                |
 

@@ -212,7 +212,9 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   `phases.by: "shields"` steps Kephri's phases at her shields; `onlyWith` keeps an attack to an
   invocation, and `invoked.times` adds links to its chain; `AkkhaDef.orbAttacks` are all he
   uses while his orbs are out; `clearOfObelisk` keeps a Wardens attack off the obelisk's
-  special. Each boss's stage in `docs/design/tombs-of-amascut.md` says what it uses.
+  special; `raidEase` eases a boss off from a raid level up (hitpoints, hits, the time between
+  its ambients), where the raid level's scale would make a wall. Each boss's stage in
+  `docs/design/tombs-of-amascut.md` says what it uses.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
@@ -243,18 +245,21 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   are no picks and no items: everyone plays `fight.character` there (`getMapCharacter` in `maps.ts`
   is what reads it, and a fun map's `character`), an adventurer made for the fight and kept to it
   (`only` on the `CharacterDef`: never in the roster, never unlocked), whose starting weapon
-  begins at `fight.weaponLevel`. Nothing in the fight drops
-  experience, so that kit is the whole run, and the boss's hitpoints (the event's `hp`) are tuned
-  to it. The spawn is the middle of the boss square, where the entrance puts the player anyway.
-  The bot keeps away from bosses, so with nothing but melee it walks up to a shielded one and
-  takes her swings: its numbers say how long the kit takes, not how a player fares. A fight can
-  open after another fight (Justiciar Zachariah after Phosani's), as long as the chain ends at a
-  map that isn't one. It's listed
-  under Boss fights on the map screen's Bosses tab, and can't be endless. `fight.solo` keeps it to one player
-  (the quest's fights): co-op's lobby leaves it out (`isCoopMap`). Sim it with
+  begins at `fight.weaponLevel`. Nothing in the fight drops experience, so that kit is the whole
+  run, and the boss's hitpoints (the event's `hp`) are tuned to it. The spawn is the middle of
+  the boss square, where the entrance puts the player anyway. The bot keeps away from bosses, so
+  with nothing but melee it walks up to a shielded one and takes her swings: its numbers say how
+  long the kit takes, not how a player fares. A fight can open after another fight (Justiciar
+  Zachariah after Phosani's), as long as the chain ends at a map that isn't one. It's listed
+  under Boss fights on the map screen's Bosses tab, and can't be endless. `fight.solo` keeps it to
+  one player (the quest's fights): co-op's lobby leaves it out (`isCoopMap`). Sim it with
   `FLAT=1 MAP=phosani DODGE=1`, which needs no cache, and go by how long the bot lasts and what
   hits it (its `boss attacks that hit` line says which of the boss's attacks did it): it can't
   dodge as a person does.
+- A fight in parts (Beneath Cursed Sands) sets `MapDef.stages`: each part is a run of its own,
+  with its own `events` in place of the map's and its own `cinematic` (the boss's entrance, played
+  as its run starts but not on a retry). A run plays the first part not beaten yet, a win's kept
+  (`SaveData.fightStages`), and the map's beaten once the last part is.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
   uses the real collision, so a sim also shows whether a map plays at all.
 - Fun maps don't count towards quests.
@@ -313,8 +318,9 @@ The Tombs of Amascut is being built a room or a boss at a time, as a dev map
 off the Raids tab in a build until it's finished (on the dev server it's listed with the raids,
 behind its quest, Beneath Cursed Sands: `MapDef.requires`). A new invocation goes in `INVOCATIONS`
 (`content/invocations.ts`), with its raid level and group, and `comes` until what it does is in.
-A new room or boss, or a mechanic in one, needs the Tombs' bot to know it (`scripts/game/tombsBot.ts`:
-the puzzle's steps, where to stand, what to step round), and its sim run on it
+A new room or boss, or a mechanic in one, needs the Tombs' bot to know it
+(`scripts/game/tombsBot.ts`: the puzzle's steps, where to stand, what to step round), and its sim
+run on it
 (`scripts/game/simulate-tombs.ts`, `ROOM=` the room), solo and with `PARTY=2`: in co-op one player
 works a puzzle two would undo between them.
 

@@ -58,6 +58,11 @@ a while to make and read nothing after: a worker makes those once, and every uni
 that made them. Before anything's published, the chunks in the out dir are read back, and every
 group has to come out of them as it went in; the check then loads it all from those same chunks.
 
+A dev map's enemies are on `ENEMIES` all the same, for the sims and tests, so `slim-plan.ts`,
+`getSpotAnimIds`, `getGameSoundIds` and `getBaseRequests` go by `LISTED_ENEMIES`
+(`content/maps.ts`): the Tombs of Amascut's and Beneath Cursed Sands' are left out unless their
+map's listed, which in a build it never is.
+
 A checked run is kept in `caches/slim/`, and the next one reuses it if nothing it's made from has
 changed. esbuild traces the runtime imports of `slim-cache.ts`, `slim-cache-worker.ts` and
 `slim-cache-boot.mjs` without running them: their files and what esbuild makes of them count, with
@@ -724,9 +729,9 @@ src/game/
               guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
-            offer), ItemIcon (an item's model, an interface sprite, or a loc's model from above), DescriptionButton (hover,
-            focus and hold descriptions), CountryFlag (a co-op player's flag), CoopScreen (the
-            rooms, the lobby, the party in a run),
+            offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
+            above), DescriptionButton (hover, focus and hold descriptions), CountryFlag (a
+            co-op player's flag), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -888,14 +893,14 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
       strike to its targets within that reach, and the boss bar says when it's out of it.
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
-      it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`) (`dropGuard`: `BossState.exposedEnd`, every hit doubled in
-      `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
-      does nothing, the stars over it) when its arena's attack with `turns` catches it
-      (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
-      (`BossState.dash`, `stepDash`), with its sounds as it drops; after a stun, `stunGrace`
-      seconds when nothing stuns it (`BossState.stunGraceEnd`). The view tints a boss whose
-      guard's down gold. A phased boss with `barPerPhase` shows each phase as a full bar
-      (`getPhaseBarFraction` in `GameClient`).
+      it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`)
+      (`dropGuard`: `BossState.exposedEnd`, every hit doubled in `damageEnemy`, a reach-limited
+      strike fired at once), and stuns it (`stunEnd`: `stepBoss` does nothing, the stars over
+      it) when its arena's attack with `turns` catches it (`boltsOnBosses`, `landHazard`,
+      `stepThrough`) or a `line.dash` lunge ends in a pillar (`BossState.dash`, `stepDash`), with
+      its sounds as it drops; after a stun, `stunGrace` seconds when nothing stuns it
+      (`BossState.stunGraceEnd`). The view tints a boss whose guard's down gold. A phased boss
+      with `barPerPhase` shows each phase as a full bar (`getPhaseBarFraction` in `GameClient`).
     - A boss attack's `strikeAt` times its animation to land with it: held on its first frame
       (the blow drawn back) until it's that far from landing (`BossWindup.seqTick`,
       `Sim.playWindup`). Players held for an entrance with `BossIntroDef.faces` face the boss
@@ -1010,9 +1015,9 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
   `delay` not read), and `stepPhase` kills it when the time's up. A boss fought by its hitpoints
   (no totems) gets one too: at none it's held at 1 behind `shieldEnd` instead of dying
   (`lastStand`, from `damageEnemy`; both go through `startFinale`), with `shout` over it, and its
-  guard can't drop meanwhile (the Menaphite Akh's last stand). `Hero.damageByAttack` is what each boss attack did to
-  that player, by name: `sim.damageByAttack` in the console, and the balance bot's `boss attacks
-that hit` line, for tuning a fight.
+  guard can't drop meanwhile (the Menaphite Akh's last stand). `Hero.damageByAttack` is what each
+  boss attack did to that player, by name: `sim.damageByAttack` in the console, and the balance
+  bot's `boss attacks that hit` line, for tuning a fight.
 - The Theatre of Blood's bosses (`content/theatre.ts`) add: patterns `wall` (a row with a gap
   somewhere new each volley) and `closing` (a ring round the player, coming in), ground marks that
   `lingers` and hurt while you stand in them, and `safe` marks a projectile spares you in;
