@@ -124,7 +124,12 @@ export function GameUi({ store, client }: Props): JSX.Element {
 
     if (ui.screen === "loading" || !client) {
         return (
-            <div className="ui-fill ui-center ui-loading">
+            <div
+                className="ui-fill ui-center ui-loading"
+                // The opening cinematic's squares loading: a click or tap skips it, as it would
+                // once it plays
+                onPointerDown={ui.cinematic && client ? () => client.skipCinematic() : undefined}
+            >
                 <OsrsLoadingBar text={ui.loadingText} progress={ui.loadingProgress} />
             </div>
         );

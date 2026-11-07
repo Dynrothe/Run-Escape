@@ -604,7 +604,7 @@ export class GameView {
             }
         });
         if (cinematic) {
-            this.cinematicView.submitActors(actors, sim, cinematic);
+            this.cinematicView.submitActors(actors, cinematic, (x, y) => this.ground(sim, x, y));
         }
 
         for (const ring of sim.rings) {
@@ -1136,7 +1136,9 @@ export class GameView {
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
         if (this.cinematic) {
-            this.cinematicView.drawScreen(overlay, sim, this.cinematic);
+            this.cinematicView.drawScreen(overlay, this.cinematic, (x, y) =>
+                this.ground(sim, x, y),
+            );
         }
     }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ALL_MAPS, createDevMap } from "../content/maps";
-import { CinematicDef } from "../content/types";
+import { CinematicDef, MapDef } from "../content/types";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { VARDHELM } from "../scaperune/maps/vardhelm";
 import {
@@ -93,6 +93,28 @@ describe("a cinematic's camera", () => {
         expect(monotoneAt(times, line, [], -1)).toBe(0);
         expect(monotoneAt(times, line, [], 5)).toBe(3);
     });
+
+    it("turns the short way round from one shot to the next", () => {
+        const shot = { x: 0, y: 0, lift: 0, pitch: -300, distance: 10 };
+        const def: CinematicDef = {
+            ...DEF,
+            shots: [
+                { at: 0, ...shot, yaw: 1984 },
+                { at: 2, ...shot, yaw: 64 },
+                { at: 4, ...shot, yaw: 1024 },
+                { at: 10, player: true },
+            ],
+        };
+        // Through north (2048), 128 round, not 1920 the other way through south
+        for (let t = 0; t <= 2; t += 0.1) {
+            const yaw = getCinematicCamera(def, t, flat, PLAY).yaw;
+            expect(yaw).toBeGreaterThanOrEqual(1984 - 1e-9);
+            expect(yaw).toBeLessThanOrEqual(2112 + 1e-9);
+        }
+        expect(getCinematicCamera(def, 2, flat, PLAY).yaw).toBe(64 + 2048);
+        // and on round from there, still the short way
+        expect(getCinematicCamera(def, 4, flat, PLAY).yaw).toBe(1024 + 2048);
+    });
 });
 
 describe("a cinematic's cast", () => {
@@ -162,6 +184,13 @@ describe("a cinematic playing", () => {
         expect(player.skip()).toBe(false);
     });
 
+    it("skips from the loading screen before it, once that's been up a moment", () => {
+        const player = new CinematicPlayer(DEF);
+        expect(player.skip(CINEMATIC_SKIP_AFTER / 2)).toBe(false);
+        expect(player.skip(CINEMATIC_SKIP_AFTER)).toBe(true);
+        expect(player.done).toBe(true);
+    });
+
     it("stands still when it's held", () => {
         const player = new CinematicPlayer(DEF);
         player.held = true;
@@ -226,6 +255,32 @@ describe.each(MAPS_WITH_CINEMATICS.map((map) => [map.id, map] as const))(
         });
     },
 );
+
+describe("baking props and casts", () => {
+    it("bakes each NPC once, with what every map plays on it", async () => {
+        // NPC 1 is a prop on one map and in the other's cast (DEF), playing other seqs there
+        const posed = { id: "posed", props: [{ npcId: 1, seq: 12, x: 0, y: 0 }] } as MapDef;
+        const acted = { id: "acted", cinematic: DEF } as MapDef;
+        const maps = [posed, acted];
+        const baked: number[][][] = [];
+        const assets: GameAssets = Object.create(GameAssets.prototype);
+        Object.assign(assets, {
+            propBakes: new Map(),
+            loadBake() {},
+            async bakeInTasks(requests: { npcId: number; seqIds: number[] }[]) {
+                baked.push(requests.map((r) => [r.npcId, ...[...r.seqIds].sort((a, b) => a - b)]));
+            },
+        });
+        await assets.loadProps(posed, maps);
+        // Its prop's seq and its cast's, so the other map finds them all there
+        expect(baked).toEqual([[[1, 10, 11, 12]]]);
+        await assets.loadProps(acted, maps);
+        expect(baked[1]).toEqual([[2, 20, 21]]);
+        await assets.loadProps(posed, maps);
+        await assets.loadProps(acted, maps);
+        expect(baked.length).toBe(2);
+    });
+});
 
 describe("Vardhelm's opening", () => {
     const map = createDevMap(VARDHELM);

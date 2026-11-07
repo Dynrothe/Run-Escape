@@ -955,7 +955,8 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 - **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
   on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
   such as a person standing guard (Vardhelm's two knights at the keep's door). They're baked as
-  the map's travelled to (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+  the map's travelled to (`GameAssets.loadProps`), each NPC once, with what every map plays on
+  it, as the slim cache keeps them (with the pets): a model has one key, whichever map baked it.
 - **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
   map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
   NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
@@ -964,7 +965,8 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
   of which is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out
   everything from the def and a clock: the camera's a monotone cubic through the shots per
   channel (target, height, pitch, yaw, distance), so it never overshoots one, with `hold` easing
-  to a stop; `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms
+  to a stop, and turns the short way round from one shot's yaw to the next; `CinematicPlayer` is
+  the clock, which `GameClient.updateCinematic` moves on (100 ms
   a frame at most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast,
   their spot animations, overhead chat and the bars, and `GameView` hides the props it stands in
   for. The cast is baked with the props (`getPropRequests`, so the slim cache keeps them), its
@@ -980,8 +982,11 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
       phone, to the ground or the render distance, with a margin) for the map squares it will
       see, and `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever
       the camera is, never unloaded) and keeps the loading screen up until they're in
-      (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
-      as usual from there.
+      (`getPinnedProgress`, 45 s at most). A key, button, click or tap there skips the wait and
+      the cinematic both. In co-op a guest tells the host it's loaded only then
+      (`cinematicLoaded`), and the host doesn't step until its own are in, so the run starts with
+      everyone watching (the host waits 20 s at most for a guest, as for its map). They're
+      unpinned as it ends or is skipped, and stream as usual from there.
     - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
       isn't its head. `MapDef.spawnFacing` turns the player as the run starts (south if it's left
       out), to face the way the cinematic's camera ends looking.
@@ -1441,7 +1446,8 @@ throttle), bounding accumulated timing drift when the host loses simulation time
 never steps a second full simulation or rolls back combat. Extreme latency remains visible,
 and a hit can still arrive after the local picture appears to have moved clear.
 
-- **Loading**: the host waits up to 20 seconds for everyone's map. Anything that comes for the run
+- **Loading**: the host waits up to 20 seconds for everyone's map (and an opening cinematic's
+  squares: see Props and opening cinematics). Anything that comes for the run
   while a player's map is still loading is kept and handed over once their copy's made
   (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't
   lost.

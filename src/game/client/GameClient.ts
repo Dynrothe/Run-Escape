@@ -1461,7 +1461,8 @@ export class GameClient implements GameFrameHandler {
             deliver(run);
         }
         this.enterRun(sim, pets, true);
-        if (!this.coop.isHost) {
+        // Or once the opening cinematic's squares are in, if it's loading them (cinematicLoaded)
+        if (!this.coop.isHost && this.cinematicLoading === undefined) {
             this.coop.sendUp({ loaded: true });
         }
         // Hidden while it loaded: it keeps up from the start
@@ -2307,9 +2308,24 @@ export class GameClient implements GameFrameHandler {
             }
             return true;
         }
-        this.cinematicLoading = undefined;
-        this.store.set({ screen: "run" });
+        this.cinematicLoaded();
         return false;
+    }
+
+    // What the cinematic sees is in, or it's stopped waiting (the time's up, or it was skipped):
+    // the run's screen, and a co-op guest tells the host it's ready, as the host's run waits for
+    // everyone's (CoopRun.waitingForLoad)
+    private cinematicLoaded(): void {
+        if (this.cinematicLoading === undefined) {
+            return;
+        }
+        this.cinematicLoading = undefined;
+        if (this.store.getSnapshot().screen === "loading") {
+            this.store.set({ screen: "run" });
+        }
+        if (this.coopRun && !this.coop.isHost) {
+            this.coop.sendUp({ loaded: true });
+        }
     }
 
     // The opening cinematic on by a frame (MapDef.cinematic): its sounds as their cues go by,
@@ -2342,9 +2358,12 @@ export class GameClient implements GameFrameHandler {
         return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
     }
 
-    // Any key, click, tap or button during the opening cinematic: straight to the run
+    // Any key, click, tap or button during the opening cinematic: straight to the run. On the
+    // loading screen before it, that skips the wait too.
     skipCinematic(): void {
-        if (this.cinematic?.skip()) {
+        const loading = this.cinematicLoading;
+        const waited = loading === undefined ? 0 : (performance.now() - loading) / 1000;
+        if (this.cinematic?.skip(waited)) {
             this.endCinematic();
         }
     }
@@ -2357,12 +2376,7 @@ export class GameClient implements GameFrameHandler {
         this.view.cinematic = undefined;
         // What it saw goes back to loading and unloading with the camera
         this.renderer.mapManager.setPinned([]);
-        if (this.cinematicLoading !== undefined) {
-            this.cinematicLoading = undefined;
-            if (this.store.getSnapshot().screen === "loading") {
-                this.store.set({ screen: "run" });
-            }
-        }
+        this.cinematicLoaded();
         // The solo run's clock starts from here: nothing banked while it was held
         this.accumulator = Math.min(this.accumulator, TICK_MS);
         if (this.store.getSnapshot().cinematic) {
@@ -2487,10 +2501,12 @@ export class GameClient implements GameFrameHandler {
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
         const started = performance.now();
+        // The host waits for its own opening cinematic's squares, as for the guests'
+        const loading = run.isHost && this.cinematicLoading !== undefined;
         let steps = 0;
         let threw = true;
         try {
-            while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
+            while (!loading && run.canStep() && steps < MAX_CATCH_UP_TICKS) {
                 if (this.accumulator >= TICK_MS) {
                     this.accumulator -= TICK_MS;
                 } else if (steps >= catchUp || performance.now() - started > CATCH_UP_BUDGET_MS) {
@@ -2513,7 +2529,7 @@ export class GameClient implements GameFrameHandler {
             }
             threw = false;
         } finally {
-            if (threw || !run.canStep()) {
+            if (threw || loading || !run.canStep()) {
                 // Waiting on the host, or stopped by an error after a step: no
                 // time to make up (an error every frame would otherwise bank
                 // it, for a rush of frames once it stops)

@@ -1708,6 +1708,69 @@ describe("the opening cinematic", () => {
         ]);
     });
 
+    test("is skipped from the loading screen before it, once that's been up a moment", () => {
+        const { client, store, state } = cinematicClient();
+        const loading = client as unknown as { cinematicLoading?: number };
+        state.cinematic!.seconds = 0;
+        store.set({ screen: "loading" });
+        loading.cinematicLoading = performance.now();
+        client.skipCinematic();
+        expect(state.cinematic).toBeDefined();
+        loading.cinematicLoading = performance.now() - 1000;
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        expect(loading.cinematicLoading).toBeUndefined();
+        expect(store.getSnapshot().screen).toBe("run");
+    });
+
+    test("in co-op, a guest's ready once its squares are in, and the host waits for its own", () => {
+        const { client, store } = cinematicClient();
+        const progress = { total: 2, left: 2 };
+        const sendUp = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const run = {
+            isHost: false,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            stepFrame,
+            flush() {},
+        };
+        Object.assign(client, {
+            cinematicLoading: performance.now(),
+            renderer: { mapManager: { setPinned: vi.fn(), getPinnedProgress: () => progress } },
+            coop: { isHost: false, sendUp, keepAlive() {} },
+            coopRun: run,
+            coopStopped: false,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+        });
+        store.set({ screen: "loading" });
+        const loading = client as unknown as { isCinematicLoading(): boolean };
+        expect(loading.isCinematicLoading()).toBe(true);
+        expect(sendUp).not.toHaveBeenCalled();
+        progress.left = 0;
+        expect(loading.isCinematicLoading()).toBe(false);
+        expect(sendUp).toHaveBeenCalledWith({ loaded: true });
+        expect(store.getSnapshot().screen).toBe("run");
+
+        // The host: no frames while its own squares load
+        const update = () =>
+            (
+                client as unknown as { updateCoop(ms: number, sim: Sim, run: unknown): void }
+            ).updateCoop(TICK_MS, client.sim!, run);
+        run.isHost = true;
+        Object.assign(client, { cinematicLoading: performance.now(), accumulator: 0 });
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        Object.assign(client, { cinematicLoading: undefined });
+        update();
+        expect(stepFrame).toHaveBeenCalled();
+    });
+
     test("isn't played again on a retry", () => {
         const { client } = createClient(createSim(), false);
         const startRun = vi.fn(async () => {});

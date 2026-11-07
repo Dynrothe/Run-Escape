@@ -1297,7 +1297,11 @@ export class Sim {
         // Updated with the ground one from the start (getFlight's would be at
         // the same target by the time it's needed)
         const flightField = this.flightGrid && new FlowField(FLOW_FIELD_SIZE);
-        const facing = this.map.spawnFacing ?? { x: 0, y: -1 };
+        // South, or the map's spawnFacing made a unit vector, as facing always is
+        const turned = this.map.spawnFacing;
+        const length = turned ? fm.hypot(turned.x, turned.y) : 0;
+        const facing =
+            turned && length > 0 ? { x: turned.x / length, y: turned.y / length } : { x: 0, y: -1 };
         return {
             index,
             name: options.name,

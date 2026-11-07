@@ -3,6 +3,7 @@ import {
     ActorBakeInput,
     ActorBakeResult,
     BakeRequest,
+    NpcBakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
@@ -596,7 +597,7 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
-    // Maps' props and cinematic casts baked or being baked, by map id
+    // Maps' props and cinematic casts baked or being baked, by model key (getPropKey)
     private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
@@ -875,7 +876,7 @@ export class GameAssets {
 
     // A map's NPCs posed as scenery (MapDef.props), and the cast of its opening cinematic
     // (MapDef.cinematic) with everything they play: baked as the map's travelled to
-    static getPropRequests(maps: readonly MapDef[]): BakeRequest[] {
+    static getPropRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
         const seqs = new Map<number, number[]>();
         const add = (npcId: number, seqIds: number[]) => {
             const list = seqs.get(npcId) ?? [];
@@ -904,18 +905,34 @@ export class GameAssets {
         }));
     }
 
-    loadProps(map: MapDef): Promise<void> {
-        if (!map.props?.length && !map.cinematic) {
+    // Bakes a map's props and cinematic cast, unless they're baked already or on their way. Each
+    // NPC's baked once, under one key, so it's baked with what every map plays on it (maps), as
+    // the slim cache has it: one map's alone would leave another's animations out.
+    loadProps(map: MapDef, maps: readonly MapDef[] = ALL_MAPS): Promise<void> {
+        const npcIds = new Set([
+            ...(map.props ?? []).map((prop) => prop.npcId),
+            ...(map.cinematic?.cast ?? []).map((actor) => actor.npcId),
+        ]);
+        if (npcIds.size === 0) {
             return Promise.resolve();
         }
-        let baking = this.propBakes.get(map.id);
-        if (!baking) {
-            baking = this.bakeInTasks(GameAssets.getPropRequests([map]), this.loadBake).catch((e) =>
+        // This map's own def first: a dev map's is made again for each run
+        const requests = GameAssets.getPropRequests([
+            map,
+            ...maps.filter((other) => other.id !== map.id),
+        ]).filter((request) => npcIds.has(request.npcId));
+        const missing = requests.filter((request) => !this.propBakes.has(request.key));
+        if (missing.length > 0) {
+            const baking = this.bakeInTasks(missing, this.loadBake).catch((e) =>
                 console.error("Couldn't bake", map.id, "props", e),
             );
-            this.propBakes.set(map.id, baking);
+            for (const request of missing) {
+                this.propBakes.set(request.key, baking);
+            }
         }
-        return baking;
+        return Promise.all(requests.map((request) => this.propBakes.get(request.key))).then(
+            () => undefined,
+        );
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready
