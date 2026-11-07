@@ -86,6 +86,9 @@ export type MapRecipe = {
             | "fun"
             | "floor"
             | "lighting"
+            | "props"
+            | "cinematic"
+            | "spawnFacing"
         >
     >;
 };

@@ -946,43 +946,12 @@ adventurer can have:
       on the line the sim uses, with the map's ambient dimmed as it winds up
       (`SceneLights.updateGaze`). It's drawn on a lit map only (`MapDef.lighting`). Zachariah's
       boss fight's gaze is unchanged: its arena's pillars (`BossAttackDef.cover`, `inShadow`).
-- **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
-  on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be:
-  a loc can't play a skeletal animation, so Yama sitting on his throne is one. They're baked as
-  the map's travelled to (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+- **Props and an opening cinematic**: Yama sitting on his throne is a prop (`MapDef.props`),
+  as a loc can't play a skeletal animation, and the map opens with a cinematic
+  (`fun/varrockOpening.ts`) in which he stands in for it. Both are in Props and opening
+  cinematics, below.
 - An explore map's HUD is the minimap, the hitpoints and the hero's buttons: no level, clock,
   kills, coins, round, damage panel or quests (`Hud` in `ui/GameUi.tsx`).
-- **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
-  map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
-  NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
-  as Yama does for his throne's), `cues` at seconds in (a seq played once or looped, overhead
-  chat, a spot animation on someone, a sound, gone), and the camera's `shots`, the last of which
-  is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out everything from
-  the def and a clock: the camera's a monotone cubic through the shots per channel (target,
-  height, pitch, yaw, distance), so it never overshoots one, with `hold` easing to a stop;
-  `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms a frame at
-  most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast, their spot
-  animations (lit through `SPOT_LIGHTS`), overhead chat and the bars, and `GameView` hides the
-  props it stands in for. The cast is baked with the props (`getPropRequests`, so the slim cache
-  keeps them), its spot animations and sounds with the game's.
-    - It's view only, on each player's own clock, and never in the sim or its hashes, so co-op
-      can't fall out of step over it. Input's held while it plays: any key or controller button
-      (`GameClient.pressKey`) or a click or tap on the run screen (`.ui-cinematic`) skips it, and
-      does nothing else; the HUD and touch controls are hidden. A solo run doesn't step until the
-      last shot begins (`CinematicPlayer.holdsRun`); in co-op the run goes on with the player
-      standing still (`updateCoop` sends no movement).
-    - Nothing pops in as it flies: `getCinematicSquares` follows the camera's path (every
-      quarter second, rays through the screen's middle, corners and edges, wide enough for a
-      phone, to the ground or the render distance, with a margin) for the map squares it will
-      see, and `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever
-      the camera is, never unloaded) and keeps the loading screen up until they're in
-      (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
-      as usual from there.
-    - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
-      isn't its head (Yama's is his throne's back). `MapDef.spawnFacing` turns the player as the
-      run starts, to face the way the cinematic's camera ends looking.
-    - To see a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`.
-      The page reloads if a source file changes, which ends it.
 - **`MapDef.lair`** (`LairDef`): a boss asleep on a map to walk round, Yama on his throne
   (`content/yama.ts`; the plan and what's built, `docs/design/yama.md`). `Sim.stepLair` wakes it
   when a hero's on the map's floor (`MapDef.floor`, which a lair needs). `wakeLair` drops every tile
@@ -1035,6 +1004,55 @@ adventurer can have:
       it's after, so a flare comes from his hands rather than behind him.
     - The balance bot plays it with the hero's own buttons (`kitPlan` in `simulate-run.ts`).
       `GAZE=never` and `GAZE=waste` check that the meteor is fair.
+
+### Props and opening cinematics
+
+- **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
+  on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
+  such as a person standing guard (Vardhelm's two knights at the keep's door) or someone playing
+  a skeletal animation (Yama on his throne). They're baked as the map's travelled to
+  (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+- **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
+  map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
+  NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
+  so a prop can act and go back to standing), `cues` at seconds in (a seq played once or looped,
+  overhead chat, a spot animation on someone, a sound, gone), and the camera's `shots`, the last
+  of which is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out
+  everything from the def and a clock: the camera's a monotone cubic through the shots per
+  channel (target, height, pitch, yaw, distance), so it never overshoots one, with `hold` easing
+  to a stop; `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms
+  a frame at most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast,
+  their spot animations (lit through `SPOT_LIGHTS` on a lit map), overhead chat and the bars,
+  and `GameView` hides the props it stands in for. The cast is baked with the props
+  (`getPropRequests`, so the slim cache keeps them), its spot animations and sounds with the
+  game's. A lair's cinematic as its boss wakes (`LairDef.opening`) is one too, on the sim's
+  clock: see `MapDef.lair` above.
+    - It's view only, on each player's own clock, and never in the sim or its hashes, so co-op
+      can't fall out of step over it. Input's held while it plays: any key or controller button
+      (`GameClient.pressKey`) or a click or tap on the run screen (`.ui-cinematic`) skips it, and
+      does nothing else; the HUD and touch controls are hidden. A solo run doesn't step until the
+      last shot begins (`CinematicPlayer.holdsRun`); in co-op the run goes on with the player
+      standing still (`updateCoop` sends no movement).
+    - Nothing pops in as it flies: `getCinematicSquares` follows the camera's path (every
+      quarter second, rays through the screen's middle, corners and edges, wide enough for a
+      phone, to the ground or the render distance, with a margin) for the map squares it will
+      see, and `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever
+      the camera is, never unloaded) and keeps the loading screen up until they're in
+      (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
+      as usual from there.
+    - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
+      isn't its head (Yama's is his throne's back). `MapDef.spawnFacing` turns the player as the
+      run starts (south if it's left out), to face the way the cinematic's camera ends looking.
+    - **A phone has to draw every shot.** A camera low and level sees much further than the play
+      camera, and a city costs far more than a phone's 69k triangles. Vardhelm's close shots look
+      down at a pitch of 240 to 320, so the city beyond stays out of the picture, and its flight
+      starts 14 tiles out over the city and pulls back to the play camera's 18 once past it. With
+      those, its shots come to 19k to 65k at 844 by 390, but one at 93k, over ground the play
+      camera sees at 94k. With its close shots near level, they were up to 309k.
+    - To watch one on the dev server: `game.selectMap("scaperune_vardhelm"); game.startRun()`. To
+      hold a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`,
+      then `await frameProbe.sample(5)` for its triangles. The page reloads if a source file
+      changes, which ends it.
 
 ### Raids
 

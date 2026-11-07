@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { getEnemy } from "../content/enemies";
 import { VARROCK_OPENING } from "../content/fun/varrockOpening";
-import { ALL_MAPS, getMap } from "../content/maps";
+import { ALL_MAPS, createDevMap, getMap } from "../content/maps";
 import { CinematicDef } from "../content/types";
+import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { VARDHELM } from "../scaperune/maps/vardhelm";
 import {
     CINEMATIC_SKIP_AFTER,
     CinematicCamera,
@@ -216,9 +218,14 @@ describe("Yama waking in his palace (LairDef.opening)", () => {
 });
 
 // Every map's cinematic is one that can play: its opening's (MapDef.cinematic) and its lair's
-// (LairDef.opening)
+// (LairDef.opening), the dev maps' too (only on the dev server)
+const MAPS_WITH_CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)].filter(
+    (map, i, all) =>
+        getMapCinematics(map).length > 0 && all.findIndex((m) => m.id === map.id) === i,
+);
+
 describe.each(
-    ALL_MAPS.flatMap((map) =>
+    MAPS_WITH_CINEMATICS.flatMap((map) =>
         getMapCinematics(map).map(
             (def) => [map.id + (def === map.cinematic ? "" : "'s lair"), map, def] as const,
         ),
@@ -327,6 +334,56 @@ describe("the Battle for Varrock's opening", () => {
     });
 });
 
+describe("Vardhelm's opening", () => {
+    const map = createDevMap(VARDHELM);
+    const def = map.cinematic!;
+    const cast = (id: string) => def.cast.find((actor) => actor.id === id)!;
+
+    it("is the map's, has the player face up the mountain, and lasts 15 to 25 seconds", () => {
+        expect(MAPS_WITH_CINEMATICS.map((m) => m.id)).toContain(map.id);
+        expect(map.spawnFacing).toEqual({ x: 0, y: 1 });
+        expect(def.seconds).toBeGreaterThanOrEqual(15);
+        expect(def.seconds).toBeLessThanOrEqual(25);
+    });
+
+    it("opens close on the king, who speaks first", () => {
+        const arthur = cast("arthur");
+        const first = def.shots[0];
+        expect("player" in first).toBe(false);
+        if (!("player" in first)) {
+            expect(Math.hypot(first.x - arthur.x, first.y - arthur.y)).toBeLessThan(1);
+            expect(first.distance).toBeLessThan(8);
+        }
+        const firstLine = def.cues.find((cue) => cue.say)!;
+        expect(firstLine.actor).toBe("arthur");
+    });
+
+    it("has a knight of the map's props bow in its place, and Merlin teleport away", () => {
+        const lancelot = cast("lancelot");
+        const prop = map.props![lancelot.prop!];
+        expect(lancelot).toMatchObject({ npcId: prop.npcId, x: prop.x, y: prop.y, seq: prop.seq });
+        expect(def.cues.some((cue) => cue.actor === "lancelot" && cue.seq !== undefined)).toBe(
+            true,
+        );
+        const teleport = def.cues.find((cue) => cue.actor === "merlin" && cue.spotAnim)!;
+        const gone = def.cues.find((cue) => cue.actor === "merlin" && cue.gone)!;
+        expect(teleport.sound).toBeDefined();
+        expect(gone.at).toBeGreaterThan(teleport.at);
+        expect(getActorState(def, cast("merlin"), def.seconds - 0.1).gone).toBe(true);
+    });
+
+    it("ends behind the player, after the flight down the mountain", () => {
+        const shots = def.shots.filter((shot) => !("player" in shot));
+        const last = shots[shots.length - 1];
+        const spawn = { x: map.spawn.x, y: map.spawn.y };
+        if (!("player" in last)) {
+            expect(Math.hypot(last.x - spawn.x, last.y - spawn.y)).toBeLessThan(
+                Math.hypot(cast("arthur").x - spawn.x, cast("arthur").y - spawn.y),
+            );
+        }
+    });
+});
+
 describe("what a cinematic's camera sees", () => {
     const square = (x: number, y: number) => (Math.floor(x / 64) << 8) + Math.floor(y / 64);
 
@@ -344,6 +401,24 @@ describe("what a cinematic's camera sees", () => {
         expect(squares.length).toBeLessThanOrEqual(25);
         for (const id of squares) {
             expect(Math.abs((id >> 8) - Math.floor(x / 64))).toBeLessThanOrEqual(3);
+        }
+    });
+
+    it("is every map square along its way, from the keep to the spawn, and not the world", () => {
+        const map = createDevMap(VARDHELM);
+        const def = map.cinematic!;
+        const { x, y } = map.spawn;
+        const play = { x, y, height: -0.6, pitch: -400, yaw: 0, distance: 18 };
+        const squares = getCinematicSquares(def, () => 0, play);
+        const arthur = def.cast.find((actor) => actor.id === "arthur")!;
+        expect(squares).toContain(square(arthur.x, arthur.y));
+        expect(squares).toContain(square(x, y));
+        expect(squares).toContain(square((x + arthur.x) / 2, (y + arthur.y) / 2));
+        // Only what's on the way, and no further than the camera's render distance
+        expect(squares.length).toBeLessThanOrEqual(30);
+        for (const id of squares) {
+            expect(id >> 8).toBeGreaterThanOrEqual(VARDHELM.mapX - 2);
+            expect(id >> 8).toBeLessThan(VARDHELM.mapX + VARDHELM.squaresX + 2);
         }
     });
 
