@@ -120,7 +120,7 @@ export const VARROCK_OPENING: CinematicDef = {
         { at: 13, x: YX, y: YY, lift: 1.8, pitch: -165, yaw: 0, distance: 5, hold: true },
         { at: SNAP, x: YX, y: YY, lift: 1.8, pitch: -170, yaw: 0, distance: 5.4, hold: true },
         // Back out to watch them burn, then up and away over the city
-        { at: DEATHS + 0.3, x: YX, y: YY - 4, lift: 1, pitch: -290, yaw: 0, distance: 11 },
+        { at: DEATHS + 0.3, x: YX, y: YY - 4, lift: 1, pitch: -310, yaw: 0, distance: 10.5 },
         { at: 18.6, x: YX, y: YY - 5.5, lift: 0.5, pitch: -330, yaw: 0, distance: 13 },
         { at: 20.2, x: YX, y: YY - 20, lift: 0, pitch: -420, yaw: 0, distance: 18 },
         { at: 22.4, x: SPAWN.x, y: SPAWN.y + 20, lift: 0, pitch: -410, yaw: 0, distance: 18 },
