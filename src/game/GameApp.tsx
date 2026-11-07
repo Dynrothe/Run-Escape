@@ -177,6 +177,18 @@ export function GameApp(): JSX.Element {
                 created = gameClient;
                 loaded.renderer.game = gameClient;
                 setClient(gameClient);
+                if (params.has("movementDiagnostics")) {
+                    gameClient.setMovementDiagnostics(true);
+                    (window as any).movementDiagnostics = {
+                        start: () => gameClient.setMovementDiagnostics(true),
+                        snapshot: () => gameClient.getMovementDiagnostics(),
+                        stop: () => {
+                            const snapshot = gameClient.getMovementDiagnostics();
+                            gameClient.setMovementDiagnostics(false);
+                            return snapshot;
+                        },
+                    };
+                }
                 if (import.meta.env.DEV) {
                     (window as any).game = gameClient;
                     import("./render/FrameProbe").then(({ FrameProbe }) => {
@@ -191,6 +203,7 @@ export function GameApp(): JSX.Element {
         return () => {
             disposed = true;
             created?.dispose();
+            if (params.has("movementDiagnostics")) delete (window as any).movementDiagnostics;
         };
     }, [loaded, store, saveStore]);
 

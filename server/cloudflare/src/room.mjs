@@ -30,6 +30,7 @@ import {
     runOf,
 } from "../../coop-checks.mjs";
 import { playerName } from "../../name-gen.mjs";
+import { roomLocation } from "./location.mjs";
 import {
     IDLE_MS,
     MAX_LOADOUT_BYTES,
@@ -54,6 +55,8 @@ import {
 // How often a room tells the lobby it's still there. Each one is a billed
 // request to the lobby, whatever it says.
 const ROOM_HEARTBEAT_MS = 60_000;
+// Retry only an unknown location, on existing listing updates or heartbeats.
+const LOCATION_RETRY_MS = 60_000;
 // How long a player whose connection dropped keeps their place: longer than
 // their game keeps trying (RESUME_WINDOW_MS in CoopLobby.ts)
 const RESUME_GRACE_MS = 15_000;
@@ -79,8 +82,8 @@ const SILENT_MS = 5 * 60_000;
 const AWAY_KEPT = 16;
 
 // A player's country, for their flag, unless they've hidden it. An open
-// room's host shows theirs anyway: it's where the room is, for whoever's
-// picking one from the list.
+// room's host shows theirs anyway in the party panel.
+// This is the player's IP country when they joined, not the relay's location.
 function shownCountry(member, room) {
     const openHost = room.open && room.hostId === member.id;
     return member.hideCountry && !openHost ? undefined : member.country;
@@ -104,6 +107,7 @@ export class Room extends DurableObject {
         this.code = "";
         // The room, once it's made, until it's empty or closed
         this.room = undefined;
+        this.locationLookup = undefined;
         // Kicked addresses outlast a room's members, for the room's life
         this.kicked = new Set();
         // socket -> the member it's for
@@ -713,14 +717,47 @@ export class Room extends DurableObject {
         });
     }
 
+    // Cloudflare currently keeps an object's placement. Save the first
+    // successful measurement with this game room, through wakes and restarts.
+    checkLocation() {
+        const room = this.room;
+        if (
+            !room?.open ||
+            room.started ||
+            room.serverCountry ||
+            this.locationLookup ||
+            Date.now() < (room.locationRetryAt ?? 0)
+        )
+            return;
+        room.locationRetryAt = Date.now() + LOCATION_RETRY_MS;
+        const lookup = roomLocation()
+            .then((location) => {
+                // A closed/replaced game room mustn't be advertised again.
+                if (this.room !== room) return;
+                if (location) {
+                    room.serverCountry = location.country;
+                    delete room.locationRetryAt;
+                }
+                // Also keep a failure's cooldown across hibernation/restarts.
+                this.save();
+                if (location) this.tellLobby();
+            })
+            .finally(() => {
+                if (this.locationLookup === lookup) this.locationLookup = undefined;
+            });
+        this.locationLookup = lookup;
+        this.ctx.waitUntil(lookup);
+    }
+
     // What the lobby lists changes far less often than the room (players'
     // loadouts and ready don't show), so it's only told of a change, unless
-    // it's the heartbeat saying the room's still there
+    // it's the heartbeat saying the room's still there.
     tellLobby(heartbeat = false) {
         const room = this.room;
         if (!room) {
             return;
         }
+        this.checkLocation();
         const host = room.members.find((member) => member.id === room.hostId);
         const entry = {
             code: room.code,
@@ -732,7 +769,8 @@ export class Room extends DurableObject {
             endless: room.endless,
             hard: room.hard === true,
             host: host?.name ?? "",
-            country: host ? shownCountry(host, room) : undefined,
+            country: room.serverCountry,
+            countrySource: "server",
             hostAddress: host?.address ?? "",
             order: room.order,
         };
@@ -762,6 +800,7 @@ export class Room extends DurableObject {
         this.watch?.finish();
         this.watch = undefined;
         this.room = undefined;
+        this.locationLookup = undefined;
         this.kicked.clear();
         this.ctx.storage.deleteAll().catch(() => {});
         this.lobby.roomGone(room.code).catch(() => {});

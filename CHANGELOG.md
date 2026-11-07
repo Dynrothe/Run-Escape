@@ -3,6 +3,20 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.28.1 - 2026-11-07
+
+### Changed
+
+- Room flags, by trippy22: a room's flag in the co-op list shows where its server is, not where
+  its host is.
+
+### Fixed
+
+- Cloud save is in the Windows app and the Android app: 0.28.0's downloads were built without it.
+  On Windows, download this release's zip, as updating from inside the app doesn't add it.
+- Co-op sends stops promptly and handles quick taps and direction changes with less sliding.
+  Fixed by trippy22.
+
 ## 0.28.0 - 2026-11-07
 
 ### Added
