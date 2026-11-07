@@ -962,6 +962,60 @@ past the first phase either way. At 500 with the dev kit a wizard won in 2:00 (2
 cast twice and broken once by the button. Unchecked in a browser: all of it, the charge's strip and
 the beam most.
 
+### The boss rework, tuning
+
+The last pass, once all five were built (November 2026), against stage 1's whole-raid table as the
+bar: no cell easier on wins or deaths. Sims: `sweep-tombs.sh`, 3 characters and 3 seeds a cell.
+
+What changed (Zebak and the Wardens kept their numbers):
+
+- **Ba-Ba**: hitpoints 7,800 to 12,000. Her fights had got short (1:17 at Normal, 1:52 at Expert
+  with everything bought) with fewer wipes; now 1:40 and 2:38, the wipes back where they were.
+- **Akkha**: the bot reads his shapes, so he'd stopped killing anyone at Normal (in the raid, 1
+  wipe in nine with everything bought, his room done in about 4 minutes). His attacks every 1
+  second (1.4), his phases' tempo 0.8 and 0.6 (0.85 and 0.7), his stamp every 6, 4.5 and 3.5
+  seconds (9, 7 and 5) and 20 in its ring (16); hits: Leap 7, Stamp 4, Spear lunge 6, Sweep 8,
+  Sand wall 7, Sand volley 5, Sandstorm 5, Elemental strike 8, Glowing sand 5, Red noose 5,
+  Unstable orbs 8 (6, 3, 5, 5, 4, 3, 3, 5, 3, 3, 5); hitpoints 9,000 to 10,000.
+- **Kephri**: hitpoints 8,400 to 9,000 (both forms), her attacks every 1.5 seconds (1.6), her
+  Fireball 6 (5). She'd gone from 3 wins in nine to 5 at Expert with everything bought.
+
+Akkha was tuned on `ROOM=akkha LEVEL=1` (Ba-Ba's path first, as the raid has it): played straight
+after his own room the adventurer is level 4 and any change reads as a wall. There, with stage 1
+first: Normal Mid-game 5/9, 99 wipes, now 3/9, 116; Normal End-game 6/9, 42 wipes, now 9/9, 0;
+Expert End-game 2/9, 54, now 0/9, 81.
+
+The whole raid (wins of 9, deaths, median winning time), stage 1's bar first:
+
+| Invo Difficulty | Fresh Account                   | Mid-game                            | End-game                          |
+| --------------- | ------------------------------- | ----------------------------------- | --------------------------------- |
+| Entry (0-149)   | 8/9, 27, 21:56 / 8/9, 19, 21:13 | 9/9, 8, 37:02 / 8/9, 23, 21:39      | 9/9, 6, 12:04 / 7/9, 2, 10:02     |
+| Normal (150+)   | 0/9, 936 / 0/9, 1087            | 2/9, 1058, 64:06 / 3/9, 1201, 23:57 | 6/9, 271, 30:10 / 7/9, 199, 18:23 |
+| Expert (300+)   | 0/9, 994 / 0/9, 1256            | 0/9, 444 / 0/9, 490                 | 1/9, 583, 20:41 / 0/9, 308        |
+| Max invo (500)  | 0/9, 2806 / 0/9, 2806           | 0/9, 1033 / 0/9, 1332               | 0/9, 643 / 0/9, 880               |
+
+Where it isn't the same or harder, and why:
+
+- **Normal, Mid-game and End-game: one win more each.** Stage 1 lost those runs to the 90
+  minutes: Akkha fights of 25 to 75 minutes (his old tracking sand) and a Kephri's Soldier loop
+  (the bot dying to the Soldier hundreds of times). With everything bought the adventurer now
+  takes almost nothing from any boss at Normal; taking that win back would need Akkha as a
+  hitpoint wall again. The Soldier loop is still there, both before and after, and it's most of
+  the deaths in every cell from Normal up.
+- **Entry End-game and Expert End-game: fewer deaths, fewer wins.** Entry's two losses are the
+  Scabaras puzzle stalling (no wipes); Expert's nine all stop at Akkha, so none reaches the
+  Soldier loop that made stage 1's deaths.
+- **Entry Fresh: fewer deaths at the same wins**, a few deaths either way (27 to 19).
+
+Co-op, `PARTY=2` at Expert with everything bought: stage 1 (6b70811) won 2 of 9 with 119 deaths,
+losing at Akkha, Kephri and Zebak; now 0 of 9 with 226, all nine stopped at Akkha.
+
+Not checked: Zebak and the Wardens were left alone (Zebak already harder; the Wardens can't be
+told apart from the raid before them); Kephri plays at Normal in 1:10 (raid order), short of the
+design's 3 minutes; and the Expert End-game raid has no wins, alone or as a pair (stage 1 had one alone, two as a
+pair). Akkha's what stops it: his numbers can't be harder at Normal without being harder at Expert,
+and the raid level's scale between them is the raid's, not his.
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on

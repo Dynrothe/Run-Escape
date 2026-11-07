@@ -405,7 +405,7 @@ export const BA_BA: EnemyDef = {
     attackSeq: 9745,
     deathSeq: DEATH,
     // Up from 6,000 with her guard and the raid's button: no easier for them
-    hp: 7800,
+    hp: 12000,
     damage: 0,
     speed: 1.3,
     radius: 1.2,
@@ -1202,23 +1202,23 @@ const AKKHA_PHASES: NonNullable<NonNullable<EnemyDef["boss"]>["phases"]> = {
         {
             until: 0.66,
             status: "Akkha",
-            ambients: [{ attack: "Stamp", interval: 9, delay: 4 }],
+            ambients: [{ attack: "Stamp", interval: 6, delay: 4 }],
         },
         {
             until: 0.33,
-            tempo: 0.85,
+            tempo: 0.8,
             speed: 1.1,
             opener: "Leap",
             status: "Akkha's shadows",
-            ambients: [{ attack: "Stamp", interval: 7, delay: 3 }],
+            ambients: [{ attack: "Stamp", interval: 4.5, delay: 3 }],
         },
         {
-            tempo: 0.7,
+            tempo: 0.6,
             speed: 1.2,
             light: 0.6,
             opener: "Leaps",
             status: "Akkha's fury",
-            ambients: [{ attack: "Stamp", interval: 5, delay: 3 }],
+            ambients: [{ attack: "Stamp", interval: 3.5, delay: 3 }],
         },
     ],
     shieldMessage: "",
@@ -1240,7 +1240,7 @@ const akkhaForm = (
     attackSeq,
     deathSeq: AKKHA_DEATH,
     // Up from 6,000 with his guard and the raid's button
-    hp: 9000,
+    hp: 10000,
     damage: 0,
     speed: 1.5,
     radius: 1.3,
@@ -1252,7 +1252,7 @@ const akkhaForm = (
     sounds: AKKHA_SOUNDS,
     spawnMessage: "Akkha rises to guard the path of Het!",
     boss: {
-        attackInterval: 1.4,
+        attackInterval: 1.0,
         enrage: { message: "Akkha's armour glows: he's furious!" },
         // A lunge or a leap that finds no one leaves him open (opens), his prayer down with his
         // guard (pierce): how a hero of the style he's praying against gets at him
@@ -1275,7 +1275,7 @@ const akkhaForm = (
 const AKKHA_LEAP: BossAttackDef = {
     name: "Leap",
     kind: "blast",
-    damage: 6,
+    damage: 7,
     windup: 1.4,
     cooldown: 0,
     range: 40,
@@ -1299,7 +1299,7 @@ const AKKHA_EVERY_FORM: BossAttackDef[] = [
         // A ring of sand out of him, a way through on your side (BossPhasesDef ambients)
         name: "Stamp",
         kind: "pattern",
-        damage: 3,
+        damage: 4,
         windup: 0.8,
         cooldown: 0,
         range: 40,
@@ -1310,7 +1310,7 @@ const AKKHA_EVERY_FORM: BossAttackDef[] = [
         elemental: true,
         pattern: {
             shape: "ring",
-            count: 16,
+            count: 20,
             volleys: 1,
             interval: 0.45,
             speed: 5,
@@ -1329,7 +1329,7 @@ const AKKHA_EVERY_FORM: BossAttackDef[] = [
 const AKKHA_LUNGE: BossAttackDef = {
     name: "Spear lunge",
     kind: "swing",
-    damage: 5,
+    damage: 6,
     windup: 0.9,
     cooldown: 2.5,
     range: 8,
@@ -1346,7 +1346,7 @@ const AKKHA_MELEE: BossAttackDef[] = [
         // A wedge swept in front of him (first: what Keep Back's unseen hit is, akkhaKeepBack)
         name: "Sweep",
         kind: "swing",
-        damage: 5,
+        damage: 8,
         windup: 0.9,
         cooldown: 0,
         range: 3.2,
@@ -1386,7 +1386,7 @@ const AKKHA_MELEE: BossAttackDef[] = [
 const AKKHA_WALL: BossAttackDef = {
     name: "Sand wall",
     kind: "pattern",
-    damage: 4,
+    damage: 7,
     windup: 1.0,
     cooldown: 6,
     range: 30,
@@ -1415,7 +1415,7 @@ const AKKHA_RANGED: BossAttackDef[] = [
         // A fan of sand where you are, twice the same way
         name: "Sand volley",
         kind: "pattern",
-        damage: 3,
+        damage: 5,
         windup: 0.7,
         cooldown: 0,
         range: 30,
@@ -1448,7 +1448,7 @@ const AKKHA_RANGED: BossAttackDef[] = [
     {
         name: "Sandstorm",
         kind: "pattern",
-        damage: 3,
+        damage: 5,
         windup: 0.9,
         cooldown: 8,
         range: 30,
@@ -1476,7 +1476,7 @@ const AKKHA_RANGED: BossAttackDef[] = [
 const AKKHA_STRIKE: BossAttackDef = {
     name: "Elemental strike",
     kind: "ground",
-    damage: 5,
+    damage: 8,
     windup: 1.2,
     cooldown: 3,
     range: 30,
@@ -1497,7 +1497,7 @@ const AKKHA_MAGIC: BossAttackDef[] = [
         // Rings of glowing red sand, each bringing its quadrant's element
         name: "Glowing sand",
         kind: "pattern",
-        damage: 3,
+        damage: 5,
         windup: 0.8,
         cooldown: 0,
         range: 30,
@@ -1526,7 +1526,7 @@ const AKKHA_MAGIC: BossAttackDef[] = [
         // A ring of red sand round you, closing, with a way out
         name: "Red noose",
         kind: "pattern",
-        damage: 3,
+        damage: 5,
         windup: 1.0,
         cooldown: 8,
         range: 30,
@@ -1567,7 +1567,7 @@ const UNSTABLE_ORBS: BossAttackDef = {
     name: "Unstable orbs",
     kind: "pattern",
     ordeal: true,
-    damage: 5,
+    damage: 8,
     windup: 0,
     cooldown: 0,
     range: 60,
@@ -2016,7 +2016,7 @@ export const KEPHRI_EGG_BLAST: BossAttackDef = {
 const KEPHRI_FIREBALL: BossAttackDef = {
     name: "Fireball",
     kind: "blast",
-    damage: 5,
+    damage: 6,
     windup: 1.8,
     cooldown: 0,
     range: 30,
@@ -2299,7 +2299,7 @@ const kephriForm = (
     sounds: KEPHRI_SOUNDS,
     spawnMessage: "Kephri rises to guard the path of Scabaras!",
     boss: {
-        attackInterval: 1.6,
+        attackInterval: 1.5,
         enrage: { message: "Kephri buzzes in a fury!" },
         // Open while she rears up to call her swarm or lay (their channels), and the button
         // breaks either
@@ -2340,8 +2340,8 @@ const scarab = (id: string, name: string, npcId: number, more: Partial<EnemyDef>
 
 TOMBS_ENEMIES.push(
     // Up from 7,000 with her guard (Mass Incubation's channel) and the raid's button
-    kephriForm("kephri", 11719, 8400, true, KEPHRI_ATTACKS),
-    kephriForm("kephri_final", 11721, 8400, false, KEPHRI_FINAL_ATTACKS),
+    kephriForm("kephri", 11719, 9000, true, KEPHRI_ATTACKS),
+    kephriForm("kephri_final", 11721, 9000, false, KEPHRI_FINAL_ATTACKS),
     {
         // Her swarm called home (Swarm, come home): walks in to her from round the room, a blast
         // on everyone for each that gets there, the call broken by the button (it scatters)

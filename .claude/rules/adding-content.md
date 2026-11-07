@@ -194,8 +194,9 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   The fight's button lands on either. One can copy the other's lunge with `echoes` (only
   while it's free). An attack with `channel` drops its guard while it's cast (a tether's, while
   its beam runs), and the fight's button breaks it; a swing with `outside` hits all but its feet.
-  The bot needs to know a new one: both bots read a boss's shapes from `scripts/game/bossReads.ts` (`shelter`,
-  `exposedBoss`, strips, wedges, walls and the rest), so a new shape's reader goes there.
+  The bot needs to know a new one: both bots read a boss's shapes from
+  `scripts/game/bossReads.ts` (`shelter`, `exposedBoss`, strips, wedges, walls and the rest), so
+  a new shape's reader goes there.
 - A ground attack's `trail` spots land on where the player stood so many seconds ago (at most
   `TRAIL_SECONDS`, kept on each `Hero`): the Champion of Scabaras's path that bursts behind you.
 - An enemy with `echoes` (the Menaphite Akh's shadow) copies a boss's lunges: as that boss
