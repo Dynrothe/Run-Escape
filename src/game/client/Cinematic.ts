@@ -1,9 +1,9 @@
-import { CinematicActorDef, CinematicCueDef, CinematicDef } from "../content/types";
+import { CinematicActorDef, CinematicCueDef, CinematicDef, MapDef } from "../content/types";
 
-// A map's opening cinematic (MapDef.cinematic) as it plays: its clock, and what the camera and
-// its cast are doing at any moment, worked out from the def and the clock alone. GameClient
-// advances it each frame and skips it on any input; CinematicView draws it. None of it touches
-// the sim.
+// A map's opening cinematic (MapDef.cinematic), or a lair's as its boss wakes (LairDef.opening),
+// as it plays: its clock, and what the camera and its cast are doing at any moment, worked out
+// from the def and the clock alone. GameClient advances it each frame and skips it on any input;
+// CinematicView draws it. None of it touches the sim.
 
 // The camera, as CameraRig has it: looking at x, y (world tiles), height (world tiles, up
 // negative, as the grid's heights over 128), from distance tiles at pitch and yaw
@@ -157,6 +157,19 @@ export function getSaying(def: CinematicDef, actor: string, seconds: number): st
     return saying;
 }
 
+// A map's cinematics, to bake and hear: its opening (MapDef.cinematic) and its lair's
+// (LairDef.opening)
+export function getMapCinematics(map: MapDef): CinematicDef[] {
+    const cinematics: CinematicDef[] = [];
+    if (map.cinematic) {
+        cinematics.push(map.cinematic);
+    }
+    if (map.lair?.opening) {
+        cinematics.push(map.lair.opening.cinematic);
+    }
+    return cinematics;
+}
+
 // Every seq a cinematic's actor plays, by npc: its own and its cues', to bake
 export function getCinematicSeqs(def: CinematicDef): Map<number, number[]> {
     const seqs = new Map<number, number[]>();
@@ -172,14 +185,18 @@ export function getCinematicSeqs(def: CinematicDef): Map<number, number[]> {
     return seqs;
 }
 
-// One playing: its clock, which GameClient moves on with each frame's time
+// One playing: its clock, which GameClient moves on with each frame's time, or sets from the sim's
+// (onSim, a lair's opening: LairOpeningDef), which it never holds
 export class CinematicPlayer {
     seconds = 0;
     skipped = false;
     // For screenshots (the dev console): the clock stands still
     held = false;
 
-    constructor(readonly def: CinematicDef) {}
+    constructor(
+        readonly def: CinematicDef,
+        readonly onSim = false,
+    ) {}
 
     get done(): boolean {
         return this.skipped || this.seconds >= this.def.seconds;
@@ -190,16 +207,21 @@ export class CinematicPlayer {
     get holdsRun(): boolean {
         const shots = this.def.shots;
         const release = shots.length > 1 ? shots[shots.length - 2].at : 0;
-        return !this.done && this.seconds < release;
+        return !this.onSim && !this.done && this.seconds < release;
     }
 
     // On by deltaSeconds; the cues it went past, to be heard
     advance(deltaSeconds: number): CinematicCueDef[] {
+        return this.advanceTo(this.seconds + Math.max(0, deltaSeconds));
+    }
+
+    // On to seconds in (never back); the cues it went past
+    advanceTo(seconds: number): CinematicCueDef[] {
         if (this.done || this.held) {
             return [];
         }
         const from = this.seconds;
-        this.seconds = Math.min(this.def.seconds, from + Math.max(0, deltaSeconds));
+        this.seconds = Math.min(this.def.seconds, Math.max(from, seconds));
         return this.def.cues.filter((cue) => cue.at >= from && cue.at < this.seconds);
     }
 

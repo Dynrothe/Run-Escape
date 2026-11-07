@@ -1870,6 +1870,19 @@ export type LairDef = {
     message: string;
     victory: string;
     shout?: string;
+    // Played as it wakes (LairOpeningDef), but not on a retry, which starts on its floor
+    opening?: LairOpeningDef;
+};
+
+// A lair's cinematic as its boss wakes (Yama on his throne, before he rises). It's on the sim's
+// clock, from the tick a player steps onto the floor: the party's held where they stand, turned to
+// where it'll rise, until introAt seconds in, when the floor's sealed and the boss's intro begins
+// (BossIntroDef). So every player sees it at once, and nobody's hit while watching. Its last shot,
+// the run's camera, comes during the intro. Skipped, the camera's the player's own again, and a
+// solo run goes straight on to the intro.
+export type LairOpeningDef = {
+    cinematic: CinematicDef;
+    introAt: number;
 };
 
 // A map's opening cinematic (MapDef.cinematic), played as a run starts on the map (not on a

@@ -985,15 +985,27 @@ adventurer can have:
       The page reloads if a source file changes, which ends it.
 - **`MapDef.lair`** (`LairDef`): a boss asleep on a map to walk round, Yama on his throne
   (`content/yama.ts`; the plan and what's built, `docs/design/yama.md`). `Sim.stepLair` wakes it
-  when a hero's on the map's floor (`MapDef.floor`, which a lair needs). `wakeLair` drops every
-  tile beside a way off the floor (`ArenaGrid.dropTile`, kept in `Lair.sealed` and drawn as fire
-  by `GameView.drawLairSeal`), and the boss's intro plays, rising at `at` (`Sim.riseSpot`, which
-  the intro's camera pan goes by too). It isn't the final boss, so its death doesn't end the run:
-  the seal lifts (`liftSeal`) with the `victory` notice and the `shout`. On an explore map, hits
-  land only while it's fought (`damagePlayer`). A death there offers Retry (`canRetry` in
-  `maps.ts`), which starts the hero at `start`, on the floor (`GameClient.startRun`'s `atLair`), so
-  it wakes on the first tick. `MapPropDef.awake` swaps the sleeping prop for what's left once it's
-  up (his empty throne). His fight's own pieces are fields any boss can have:
+  when a hero's on the map's floor (`MapDef.floor`, which a lair needs). `wakeLair` drops every tile
+  beside a way off the floor (`ArenaGrid.dropTile`, kept in `Lair.sealed` and drawn as fire by
+  `GameView.drawLairSeal`), and the boss's intro plays, rising at `at` (`Sim.riseSpot`, which the
+  intro's camera pan goes by too). It isn't the final boss, so its death doesn't end the run: the
+  seal lifts (`liftSeal`) with the `victory` notice and the `shout`. On an explore map, hits land
+  only while it's fought (`damagePlayer`). A death there offers Retry (`canRetry` in `maps.ts`),
+  which starts the hero at `start`, on the floor (`GameClient.startRun`'s `atLair`), so it wakes on
+  the first tick. `MapPropDef.awake` swaps the sleeping prop for what's left once it's up (his empty
+  throne). `LairDef.opening` (`LairOpeningDef`, Yama's in `fun/yamaWakes.ts`) is a cinematic as it
+  wakes, before its intro. Stepping onto the floor then puts the lair in `waking` (`Lair.wakeTick`),
+  which holds every player where they stand, turned to `at` (`Sim.introHolds`, `introFacing`), with
+  nothing sealed and nothing hurting; `introAt` seconds later (`Lair.introTick`) `wakeLair` seals it
+  and the intro starts. `GameClient.startLairOpening` plays the cinematic as it sees `waking`, once
+  per wake, on the sim's clock (`CinematicPlayer.onSim`, `advanceTo`: it never holds the run), so
+  every co-op player sees it in step. Its first shot can be `{ player: true }`, setting off from the
+  run's camera, and its last comes during the intro, whose camera pan it hands back to. A skip ends
+  it for that player; solo, `Sim.skipLairOpening` brings the intro on at the next tick. A run that
+  starts on the floor (a retry) has no opening (`Sim.lairOpens`). A cast member standing in for a
+  prop shows it again once they're `gone` (Yama, gone from his throne). `getMapCinematics` gives a
+  map's cinematics, this and `MapDef.cinematic`, for baking their cast and collecting their spot
+  animations and sounds. His fight's own pieces are fields any boss can have:
     - `BossDef.home` keeps it within so many tiles of where it rose.
     - `BossAttackDef.meteor` is a swing drawn as something falling from `height` tiles onto where
       the player stood (`BossFightView.drawMeteors`, `meteorFallen`), its shadow growing under it,

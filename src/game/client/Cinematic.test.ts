@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { getEnemy } from "../content/enemies";
 import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { ALL_MAPS, getMap } from "../content/maps";
 import { CinematicDef } from "../content/types";
@@ -11,6 +12,7 @@ import {
     getCinematicCamera,
     getCinematicSeqs,
     getCinematicSquares,
+    getMapCinematics,
     getSaying,
     monotoneAt,
 } from "./Cinematic";
@@ -167,60 +169,108 @@ describe("a cinematic playing", () => {
         expect(player.advance(3)).toEqual([]);
         expect(player.seconds).toBe(0);
     });
+
+    it("on the sim's clock, is set to its time, never back, and never holds the run", () => {
+        const player = new CinematicPlayer(DEF, true);
+        expect(player.holdsRun).toBe(false);
+        expect(player.advanceTo(4.5).map((cue) => cue.at)).toEqual([1, 4]);
+        expect(player.advanceTo(3)).toEqual([]);
+        expect(player.seconds).toBe(4.5);
+        expect(player.advanceTo(99).map((cue) => cue.at)).toEqual([5, 6, 7]);
+        expect(player.done).toBe(true);
+    });
 });
 
-// Every map's cinematic is one that can play
-describe.each(ALL_MAPS.filter((map) => map.cinematic).map((map) => [map.id, map] as const))(
-    "%s's cinematic",
-    (_, map) => {
-        const def = map.cinematic!;
-        const ids = new Set(def.cast.map((actor) => actor.id));
+describe("Yama waking in his palace (LairDef.opening)", () => {
+    const map = getMap("battle_for_varrock");
+    const opening = map.lair!.opening!;
+    const def = opening.cinematic;
+    const yama = def.cast[0];
+    const intro = getEnemy("yama").boss!.intro!;
 
-        it("starts at 0, its shots in order, and ends on the run's camera", () => {
-            const times = def.shots.map((shot) => shot.at);
-            expect(times[0]).toBe(0);
-            expect([...times].sort((a, b) => a - b)).toEqual(times);
-            const last = def.shots[def.shots.length - 1];
-            expect("player" in last && last.at).toBe(def.seconds);
-            expect(def.shots.slice(0, -1).every((shot) => !("player" in shot))).toBe(true);
-        });
+    it("is on his throne in its place, and gone from it as his intro begins", () => {
+        const prop = map.props![yama.prop!];
+        expect(yama).toMatchObject({ npcId: prop.npcId, x: prop.x, y: prop.y, seq: prop.seq });
+        expect(getActorState(def, yama, opening.introAt - 0.01).gone).toBe(false);
+        expect(getActorState(def, yama, opening.introAt).gone).toBe(true);
+        // What he plays in OSRS as he's challenged, ending with him gone, before then
+        const goes = def.cues.find((cue) => cue.seq === 12154)!;
+        expect(goes.at).toBeLessThan(opening.introAt);
+        expect(def.cues).toContainEqual(expect.objectContaining({ at: goes.at, spotAnim: 3278 }));
+    });
 
-        it("has cues for its cast alone, within its time", () => {
-            expect(ids.size).toBe(def.cast.length);
-            for (const cue of def.cues) {
-                expect(ids.has(cue.actor)).toBe(true);
-                expect(cue.at).toBeGreaterThanOrEqual(0);
-                expect(cue.at).toBeLessThan(def.seconds);
-            }
-            for (const actor of def.cast) {
-                if (actor.prop !== undefined) {
-                    expect(map.props?.[actor.prop]?.npcId).toBe(actor.npcId);
-                }
-            }
-        });
+    it("hands the camera back once he's up, before his intro's over", () => {
+        expect(def.seconds).toBeGreaterThan(opening.introAt + intro.riseAt);
+        expect(def.seconds).toBeLessThan(opening.introAt + intro.seconds);
+    });
 
-        it("bakes its cast with everything they play, its spot animations and sounds", () => {
-            const requests = GameAssets.getPropRequests([map]);
-            for (const [npcId, seqs] of getCinematicSeqs(def)) {
-                const request = requests.find((r) => r.key === getPropKey(npcId));
-                expect(request).toMatchObject({ kind: "npc", npcId });
-                for (const seq of seqs) {
-                    expect((request as { seqIds: number[] }).seqIds).toContain(seq);
-                }
+    it("has him speak before he goes, each line gone before the next", () => {
+        const lines = def.cues.filter((cue) => cue.say !== undefined);
+        expect(lines.length).toBeGreaterThan(0);
+        for (let i = 1; i < lines.length; i++) {
+            expect(lines[i - 1].at + lines[i - 1].sayFor!).toBeLessThanOrEqual(lines[i].at);
+        }
+        const last = lines[lines.length - 1];
+        expect(last.at + last.sayFor!).toBeLessThanOrEqual(opening.introAt);
+    });
+});
+
+// Every map's cinematic is one that can play: its opening's (MapDef.cinematic) and its lair's
+// (LairDef.opening)
+describe.each(
+    ALL_MAPS.flatMap((map) =>
+        getMapCinematics(map).map(
+            (def) => [map.id + (def === map.cinematic ? "" : "'s lair"), map, def] as const,
+        ),
+    ),
+)("%s's cinematic", (_, map, def) => {
+    const ids = new Set(def.cast.map((actor) => actor.id));
+
+    it("starts at 0, its shots in order, and ends on the run's camera", () => {
+        const times = def.shots.map((shot) => shot.at);
+        expect(times[0]).toBe(0);
+        expect([...times].sort((a, b) => a - b)).toEqual(times);
+        const last = def.shots[def.shots.length - 1];
+        expect("player" in last && last.at).toBe(def.seconds);
+        // It can begin from the run's camera, too (a lair's, as someone steps onto its floor)
+        expect(def.shots.slice(1, -1).every((shot) => !("player" in shot))).toBe(true);
+    });
+
+    it("has cues for its cast alone, within its time", () => {
+        expect(ids.size).toBe(def.cast.length);
+        for (const cue of def.cues) {
+            expect(ids.has(cue.actor)).toBe(true);
+            expect(cue.at).toBeGreaterThanOrEqual(0);
+            expect(cue.at).toBeLessThan(def.seconds);
+        }
+        for (const actor of def.cast) {
+            if (actor.prop !== undefined) {
+                expect(map.props?.[actor.prop]?.npcId).toBe(actor.npcId);
             }
-            const spots = getSpotAnimIds();
-            const sounds = getGameSoundIds();
-            for (const cue of def.cues) {
-                if (cue.spotAnim !== undefined) {
-                    expect(spots).toContain(cue.spotAnim);
-                }
-                if (cue.sound !== undefined) {
-                    expect(sounds).toContain(cue.sound);
-                }
+        }
+    });
+
+    it("bakes its cast with everything they play, its spot animations and sounds", () => {
+        const requests = GameAssets.getPropRequests([map]);
+        for (const [npcId, seqs] of getCinematicSeqs(def)) {
+            const request = requests.find((r) => r.key === getPropKey(npcId));
+            expect(request).toMatchObject({ kind: "npc", npcId });
+            for (const seq of seqs) {
+                expect((request as { seqIds: number[] }).seqIds).toContain(seq);
             }
-        });
-    },
-);
+        }
+        const spots = getSpotAnimIds();
+        const sounds = getGameSoundIds();
+        for (const cue of def.cues) {
+            if (cue.spotAnim !== undefined) {
+                expect(spots).toContain(cue.spotAnim);
+            }
+            if (cue.sound !== undefined) {
+                expect(sounds).toContain(cue.sound);
+            }
+        }
+    });
+});
 
 describe("the Battle for Varrock's opening", () => {
     const def = VARROCK_OPENING;

@@ -9,6 +9,7 @@ import { ItemUse } from "../content/types";
 import { WEAPONS } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { SimEvent } from "../core/entities";
+import { getMapCinematics } from "./Cinematic";
 import { GameAudio } from "./GameAudio";
 
 // Moments in the casket opening animation: it lands, rattles, bursts open
@@ -66,7 +67,9 @@ export function getGameSoundIds(): number[] {
     }
     for (const map of ALL_MAPS) {
         ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
-        ids.push(...(map.cinematic?.cues.map((cue) => cue.sound ?? -1) ?? []));
+        for (const cinematic of getMapCinematics(map)) {
+            ids.push(...cinematic.cues.map((cue) => cue.sound ?? -1));
+        }
         for (const skin of map.floor?.skins ?? []) {
             const { rise, fall, crack } = skin.material ?? {};
             ids.push(rise?.sound ?? -1, fall?.sound ?? -1, crack?.sound ?? -1);

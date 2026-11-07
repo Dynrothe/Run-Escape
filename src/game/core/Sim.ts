@@ -959,6 +959,8 @@ export class Sim {
     private aloneWith?: Enemy;
     // The map's lair (MapDef.lair): its boss asleep, fought or beaten
     readonly lair?: Lair;
+    // Whether it wakes with its opening (LairDef.opening)
+    private lairOpens = false;
     // Pillars up between a boss and a gaze (BossDef.gazeWard)
     wardPillars: WardPillars[] = [];
     // Burning ground left by weapons
@@ -1316,7 +1318,18 @@ export class Sim {
             : undefined;
         // Its seal's put back with the floor's tiles (ArenaFloor), as the grid's kept between runs
         if (this.map.lair && this.floor) {
-            this.lair = { state: "asleep", sealed: [], sealTick: -1, liftTick: -1 };
+            this.lair = {
+                state: "asleep",
+                wakeTick: -1,
+                introTick: -1,
+                sealed: [],
+                sealTick: -1,
+                liftTick: -1,
+            };
+            // Its opening plays unless the run starts on its floor (a retry)
+            this.lairOpens =
+                this.map.lair.opening !== undefined &&
+                !this.onLairFloor({ x: options.spawnX, y: options.spawnY });
         }
         // On its own Rng, so a map without one plays as it did
         this.rule = this.map.rule
@@ -5074,6 +5087,19 @@ export class Sim {
         const def = this.map.lair!;
         if (lair.state === "asleep") {
             if (this.heroes.some((hero) => this.isUp(hero) && this.onLairFloor(hero.player))) {
+                if (this.lairOpens) {
+                    // Its opening first, the party held to watch (LairDef.opening)
+                    lair.state = "waking";
+                    lair.wakeTick = this.tick;
+                    lair.introTick = this.tick + secondsToTicks(def.opening!.introAt);
+                } else {
+                    this.wakeLair(lair);
+                }
+            }
+            return;
+        }
+        if (lair.state === "waking") {
+            if (this.tick >= lair.introTick) {
                 this.wakeLair(lair);
             }
             return;
@@ -5104,6 +5130,14 @@ export class Sim {
         const floor = this.floor!;
         const i = floor.index(Math.floor(at.x), Math.floor(at.y));
         return i >= 0 && floor.layout.mask[i] === 1;
+    }
+
+    // A solo player's skipped its opening (LairDef.opening): on to its intro at the next tick
+    skipLairOpening(): void {
+        const lair = this.lair;
+        if (lair?.state === "waking") {
+            lair.introTick = Math.min(lair.introTick, this.tick + 1);
+        }
     }
 
     // Its fight begins: every way off the floor sealed, and its intro, which brings the party
@@ -5305,6 +5339,10 @@ export class Sim {
     // Where players held to watch an entrance look (BossIntroDef.holds, faces): at the boss once
     // it's up, and where it'll rise until then
     get introFacing(): { x: number; y: number } | undefined {
+        // Turned to where it'll rise as its lair wakes (LairDef.opening)
+        if (this.lair?.state === "waking") {
+            return this.map.lair!.at;
+        }
         if (!this.introHolds || !this.intro?.def.boss?.intro?.faces) {
             return undefined;
         }
@@ -5335,7 +5373,7 @@ export class Sim {
     // Whether an entrance has the players standing still to watch it
     // (BossIntroDef.holds): the movement rules take it like a hold
     get introHolds(): boolean {
-        return this.intro?.def.boss?.intro?.holds === true;
+        return this.intro?.def.boss?.intro?.holds === true || this.lair?.state === "waking";
     }
 
     // Up it comes beside the player, on the arena's side of them, so it's on the

@@ -63,6 +63,8 @@ const ICE = 369;
 // What the fight's tuned to: his hitpoints (the lair's), and the hero's 38 hitpoints that his
 // damage is out of (the floor's slabs take 6 of them: MapDef.floor's slam).
 export const YAMA_HITPOINTS = 5400;
+// Seconds into his intro he rises, which his lair's opening frames (fun/yamaWakes.ts)
+export const YAMA_RISES_AT = 0.8;
 const RADIUS = 2;
 // His claw reaches this far past his edge
 const CLAW_REACH = 3;
@@ -314,7 +316,7 @@ export const YAMA_ENEMIES: EnemyDef[] = [
             },
             intro: {
                 seconds: 5.5,
-                riseAt: 0.8,
+                riseAt: YAMA_RISES_AT,
                 seq: RISE_SEQ,
                 sound: PORTAL_SOUND,
                 title: "Yama",

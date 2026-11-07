@@ -16,16 +16,20 @@ export type CinematicSpot = { x: number; y: number; spotAnim: number };
 const HINT_FROM = 0.6;
 const HINT_UNTIL = 1.5;
 
-// Draws a map's opening cinematic (MapDef.cinematic) as it plays: its cast, their spot animations
-// and overhead chat, and the bars across the screen. client/Cinematic.ts says what's happening.
+// Draws a cinematic (MapDef.cinematic, LairDef.opening) as it plays: its cast, their spot
+// animations and overhead chat, and the bars across the screen. client/Cinematic.ts says what's
+// happening.
 export class CinematicView {
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
 
     constructor(readonly assets: GameAssets) {}
 
-    // Whether the map's prop at index is stood in for by one of the cast
+    // Whether the map's prop at index is stood in for by one of the cast, until they're gone
     hidesProp(player: CinematicPlayer, index: number): boolean {
-        return player.def.cast.some((actor) => actor.prop === index);
+        return player.def.cast.some(
+            (actor) =>
+                actor.prop === index && !getActorState(player.def, actor, player.seconds).gone,
+        );
     }
 
     // The spot animations playing now, each on whoever it's on

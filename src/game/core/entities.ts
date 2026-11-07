@@ -233,7 +233,10 @@ export type WardPillars = {
 // A map's lair (MapDef.lair): asleep until a player steps onto the floor, then its fight, with
 // every way off the floor sealed, then beaten (and the map free to walk round again)
 export type Lair = {
-    state: "asleep" | "fighting" | "beaten";
+    // waking: its opening cinematic (LairDef.opening) from wakeTick, until introTick
+    state: "asleep" | "waking" | "fighting" | "beaten";
+    wakeTick: number;
+    introTick: number;
     // Up once it's risen (BossIntro.boss)
     boss?: Enemy;
     // The tiles sealed while it's fought (world tiles, x then y), from sealTick, and lifted at

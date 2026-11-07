@@ -46,7 +46,7 @@ import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
-import { getCinematicSeqs } from "./Cinematic";
+import { getCinematicSeqs, getMapCinematics } from "./Cinematic";
 
 export const PLAYER_SEQS = {
     idle: 808,
@@ -247,8 +247,10 @@ export function getSpotAnimIds(): number[] {
     for (const map of ALL_MAPS) {
         // What a cut through a map's roots throws up (MapDef.rule)
         add(map.rule?.look.cutSpotAnim);
-        // What plays in its opening cinematic (MapDef.cinematic)
-        add(...(map.cinematic?.cues.map((cue) => cue.spotAnim) ?? []));
+        // What plays in its cinematics (MapDef.cinematic, LairDef.opening)
+        for (const cinematic of getMapCinematics(map)) {
+            add(...cinematic.cues.map((cue) => cue.spotAnim));
+        }
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -976,12 +978,11 @@ export class GameAssets {
                 add(prop.awake.npcId, [prop.awake.seq]);
             }
         }
-        // and the cast of its opening cinematic (MapDef.cinematic), with everything they play
-        for (const map of maps) {
-            if (map.cinematic) {
-                for (const [npcId, seqIds] of getCinematicSeqs(map.cinematic)) {
-                    add(npcId, seqIds);
-                }
+        // and the cast of its cinematics (MapDef.cinematic, LairDef.opening), with everything
+        // they play
+        for (const cinematic of maps.flatMap(getMapCinematics)) {
+            for (const [npcId, seqIds] of getCinematicSeqs(cinematic)) {
+                add(npcId, seqIds);
             }
         }
         const requests: BakeRequest[] = [...seqs].map(([npcId, seqIds]) => ({

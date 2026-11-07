@@ -152,7 +152,13 @@ fires go out and the map's free roam again with his throne empty (section 8's fi
 questions, answered the simple way for now). The fight's in `content/yama.ts`: Hellstomp,
 Shadow lanes, Hellfire volley, Claw and the Meteor, with the gaze, its pillars and the meteor's
 clock as in section 5, and from phase 2 the Voidflare and its heal. Co-op: either player's gaze
-stops the meteor for both, and a flare's burst hits every player in reach.
+stops the meteor for both, and a flare's burst hits every player in reach. The arena's cinematic
+is his lair's opening (`LairDef.opening`, `fun/yamaWakes.ts`): as a hero steps onto the floor,
+the camera goes up the hall to him on his throne and he says section 3's lines, then he does
+what he does in OSRS as his fight starts, gone from his throne in a drift of embers. His intro
+begins as he's gone: the dark, the seal and his rise before the throne, full size, with the
+camera back to see him come up. It runs on the sim's clock, with every hero held where they
+stand and nothing hurting, so co-op sees it together; a solo skip brings his intro on at once.
 
 **Changed from the plan, and why:**
 
@@ -166,7 +172,7 @@ stops the meteor for both, and a flare's burst hits every player in reach.
 | Pace                      | 1.5 s, 1.2 s in phase 3      | 1.7 s, then × 0.9 and × 0.8                 | Every attack but the claw is the floor's, which already overlaps                                       |
 | Meteor waits for the gaze | 4 s of cooldown left at most | 2.4 s                                       | At 4 a meteor could start that the gaze's 1.6 s windup, and a moment to turn, couldn't stop in its 4.5 |
 | The meteor's cue          | Its shadow, growing          | Its shadow and a glow where it'll land      | In the dark it calls for, the shadow alone didn't show on the burnt stone                              |
-| The arena cinematic       | A second cinematic           | His boss intro: title, rise, camera pan     | Not built yet (below)                                                                                  |
+| The arena cinematic       | He stands and grows big      | Gone in embers, then he rises               | OSRS's own: gone from his throne (12154, its embers 3278), up full size (12160) as the seal fires      |
 | Where a flare starts      | Not said                     | Out of his hands, on your side of him       | Round him at random, one could start behind him or right on top of you (`summon.toward`)               |
 | A flare on contact        | Bursts on contact            | Only once it's 1 s old (`arm`)              | Out of his hands beside a hero, it burst before anyone could see it                                    |
 | A flare's plus            | Shadow tiles                 | The floor's `plus`, 4 tiles each way        | His floor's slabs, as his other patterns: 6 a slab, as for any slab (above)                            |
@@ -174,9 +180,9 @@ stops the meteor for both, and a flare's burst hits every player in reach.
 | Lightning on a flare      | Shatters it                  | Breaks it only while held                   | The kit's Lightning strikes the cells of the colour you're not on, so stand a cell away from it        |
 | The heal                  | 6                            | 6, as the game's food                       | The game's own pickup, drawn in towards whoever comes near; in co-op it's whoever picks it up          |
 
-**Not built yet:** the arena cinematic and his opening line; the Element floor; the Collapse; the
-burning rings; fire and shadow as colours on the floor; and the pillars blocking his volleys and
-lanes (they hide him from the gaze and block the way, as planned, but don't stop his attacks).
+**Not built yet:** the Element floor; the Collapse; the burning rings; fire and shadow as colours on
+the floor; and the pillars blocking his volleys and lanes (they hide him from the gaze and block the
+way, as planned, but don't stop his attacks).
 
 **Phone** (740 × 360, landscape, the probe's triangles): at rest 44.7k; at the busiest, Hellstomp
 49.9k, its quick rings 59.1k, Shadow lanes 54.9k, crossed lanes 59.4k, lanes then volley 55.6k,
@@ -187,6 +193,9 @@ with a glow and a cut edge under them that the ground hides anyway. The palace f
 the phone's own camera distance (15): at rest 43.9k, a flare beside you 45.8k, its plus 46.4k,
 crossed lanes 62.4k, and crossed lanes with a plus 62.2k (the plus's tiles are in the lanes'
 peak). A player who zooms out to 18 sees about 10k more everywhere, and crossed lanes at 75k.
+His opening, at 15: up to 57.5k as the camera goes up the hall to him, and 62.3k with him risen
+and the seal's fires. The shot back to see him rise came to 110k looking level across the palace,
+so it looks down on him, as the run's camera does.
 
 **Bot sims** (`MAP=battle_for_varrock`, 6 seeds, `GAZE` as below). Before the Voidflare, the
 careful bot lasted 51 to 105 s (71, 105, 51, 54, 52, 89), into phase 2 in four seeds. With it,

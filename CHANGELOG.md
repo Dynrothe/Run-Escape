@@ -7,15 +7,15 @@ the version in the corner).
 
 ### Added
 
-- The Battle for Varrock, on the Fun tab: Varrock burnt to ruins, every street and building where
-  it stands, broken walls and broken breaches in the city wall, Gypsy Aris's tent ablaze, a
-  crater where the square's fountain was, fires still burning and the dead where they fell, up to Yama on his throne in the
-  palace. Explore it as Justiciar Zachariah, with his lunge, shock wave, ice barrage, lightning
-  and the Owl's gaze on buttons of your own. Step onto the palace floor and Yama wakes: the
-  palace is sealed in fire, the floor rises under you, and only the Owl's gaze stops his meteor.
-  Freeze his void flares with Ice barrage and shatter them with Lightning for food.
-  It opens on Yama on his throne, facing the last of the palace guard (any key, click or tap
-  skips it).
+- The Battle for Varrock, on the Fun tab: Varrock burnt to ruins, every street and building where it
+  stands, broken walls and broken breaches in the city wall, Gypsy Aris's tent ablaze, a crater
+  where the square's fountain was, fires still burning and the dead where they fell, up to Yama on
+  his throne in the palace. Explore it as Justiciar Zachariah, with his lunge, shock wave, ice
+  barrage, lightning and the Owl's gaze on buttons of your own. Step onto the palace floor and Yama
+  speaks from his throne, goes from it in embers and rises before it: the palace is sealed in fire,
+  the floor rises under you, and only the Owl's gaze stops his meteor. Freeze his void flares with
+  Ice barrage and shatter them with Lightning for food. It opens on Yama on his throne, facing the
+  last of the palace guard (any key, click or tap skips it).
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
   maps to play in any order, each harder the more of the others you've beaten. The first is the
   Stranglewood; the Lassar Undercity, Ghorrock and the Scar are coming.

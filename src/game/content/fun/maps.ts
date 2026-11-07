@@ -15,6 +15,7 @@ import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
 import { YAMA_HITPOINTS } from "../yama";
 import { VARROCK_OPENING } from "./varrockOpening";
+import { YAMA_WAKES } from "./yamaWakes";
 
 // The fun maps: open from the start, endless from the start, and full of other
 // players (Pest Control's are pests). Their rounds turn over every fifteen
@@ -832,6 +833,8 @@ export const FUN_MAPS: MapDef[] = [
             message: "Yama wakes! The palace is sealed in fire!",
             victory: "Yama is beaten. The fires round the palace die down.",
             shout: "This city... was already... ash...",
+            // He speaks from his throne first, and is gone from it in embers (fun/yamaWakes.ts)
+            opening: YAMA_WAKES,
         },
         // Yama's own track, from his fight: the city's his now
         music: "Sign Here",

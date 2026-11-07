@@ -188,8 +188,8 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   `BossDef.home`, `critical` (an attack on its own clock) and `gazeWard`, and an attack's
   `meteor`, `interruptedBy` (a hero's button stops it) and `floorAt`, and his Voidflare's
   `EnemyDef.bursts` (a summon that bursts unless a hero's buttons hold and break it, for food)
-  with `summon.toward`. `MapDef.lair` under A hero of their own in `docs/DEVELOPMENT.md` has the
-  lot.
+  with `summon.toward`. A lair's `opening` is a cinematic as it wakes, on the sim's clock, with
+  the party held. `MapDef.lair` under A hero of their own in `docs/DEVELOPMENT.md` has the lot.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 

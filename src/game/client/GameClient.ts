@@ -496,12 +496,14 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
-    // The map's opening cinematic while it plays (MapDef.cinematic), and its own camera, so the
-    // run's (and the player's zoom) is left as it was
+    // The map's opening cinematic while it plays (MapDef.cinematic), or its lair's (LairDef.opening),
+    // and its own camera, so the run's (and the player's zoom) is left as it was
     cinematic?: CinematicPlayer;
     private readonly cinematicRig = new CameraRig();
     // While what it sees loads, behind the loading screen: since when (performance.now)
     private cinematicLoading?: number;
+    // The tick the lair woke whose opening's been played (Lair.wakeTick), so it plays once
+    private lairOpeningTick = -1;
 
     sim?: Sim;
     paused = false;
@@ -1503,6 +1505,7 @@ export class GameClient implements GameFrameHandler {
         this.cinematic =
             cinematic && map.cinematic ? new CinematicPlayer(map.cinematic) : undefined;
         this.view.cinematic = this.cinematic;
+        this.lairOpeningTick = -1;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.scaperune === true);
         this.grid.exactGround = map.scaperune === true;
@@ -2223,7 +2226,7 @@ export class GameClient implements GameFrameHandler {
         // Where the run's camera looks, and where the lights are gathered round
         let focusX = px;
         let focusY = py;
-        const cinematic = this.updateCinematic(deltaTimeMs, sim, {
+        const cinematic = this.updateCinematic(deltaTimeMs, sim, alpha, {
             x: px + this.cameraLean.x + pan.x,
             y: py + this.cameraLean.y + pan.y,
             height: ground - 0.6,
@@ -2401,8 +2404,10 @@ export class GameClient implements GameFrameHandler {
     private updateCinematic(
         deltaTimeMs: number,
         sim: Sim,
+        alpha: number,
         play: CinematicCamera,
     ): CinematicCamera | undefined {
+        this.startLairOpening(sim);
         const cinematic = this.cinematic;
         if (!cinematic) {
             return undefined;
@@ -2411,9 +2416,14 @@ export class GameClient implements GameFrameHandler {
         if (this.isCinematicLoading()) {
             return getCinematicCamera(cinematic.def, 0, ground, play);
         }
-        // It plays on behind a menu (a co-op run's pause doesn't stop it either)
-        // (a frame at most: the first after the map loads can be long)
-        for (const cue of cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000)) {
+        // A lair's opening is on the sim's clock, from when it woke. The map's own plays on behind
+        // a menu (a co-op run's pause doesn't stop it either), a frame at most at a time (the
+        // first after the map loads can be long).
+        const wakeTick = sim.lair?.wakeTick ?? 0;
+        const cues = cinematic.onSim
+            ? cinematic.advanceTo((sim.tick + alpha - wakeTick) / TICKS_PER_SECOND)
+            : cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000);
+        for (const cue of cues) {
             if (cue.sound !== undefined) {
                 this.audio.play(cue.sound, { volume: 1, minGap: 0 });
             }
@@ -2425,10 +2435,33 @@ export class GameClient implements GameFrameHandler {
         return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
     }
 
+    // A lair's opening as it wakes (LairDef.opening), once for each time it does
+    private startLairOpening(sim: Sim): void {
+        const lair = sim.lair;
+        const opening = sim.map.lair?.opening;
+        if (
+            this.cinematic ||
+            !opening ||
+            lair?.state !== "waking" ||
+            this.lairOpeningTick === lair.wakeTick
+        ) {
+            return;
+        }
+        this.lairOpeningTick = lair.wakeTick;
+        this.cinematic = new CinematicPlayer(opening.cinematic, true);
+        this.view.cinematic = this.cinematic;
+        this.store.set({ cinematic: true });
+    }
+
     // Any key, click, tap or button during the opening cinematic: straight to the run
     skipCinematic(): void {
-        if (this.cinematic?.skip()) {
+        const cinematic = this.cinematic;
+        if (cinematic?.skip()) {
             this.endCinematic();
+            // Solo, a lair's boss comes straight on (in co-op, the others may be watching)
+            if (cinematic.onSim && !this.coopRun) {
+                this.sim?.skipLairOpening();
+            }
         }
     }
 

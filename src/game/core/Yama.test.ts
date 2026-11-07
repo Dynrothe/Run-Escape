@@ -118,14 +118,61 @@ describe("his lair", () => {
         const before = sim.player.hp;
         expect(sim["damagePlayer"](10, "test", false)).toBe(0);
         expect(sim.player.hp).toBe(before);
-        // North, onto the floor
+        // North, onto the floor: his opening first, then his fight
         for (let i = 0; i < 4 * T && sim.lair!.state === "asleep"; i++) {
             sim.step(0, 1);
         }
+        expect(sim.lair!.state).toBe("waking");
+        run(sim, LAIR.opening!.introAt);
         expect(sim.lair!.state).toBe("fighting");
         expect(events(sim)).toContainEqual(
             expect.objectContaining({ type: "notice", message: LAIR.message }),
         );
+    });
+
+    test("his opening holds everyone where they stand, turned to where he'll rise, until his intro", () => {
+        const sim = createSim(OUTSIDE, 2);
+        // The first player north onto the floor; the second presses south throughout
+        for (let i = 0; i < 4 * T && sim.lair!.state === "asleep"; i++) {
+            sim.setInput(0, 0, 1);
+            sim.setInput(1, 0, -1);
+            sim.step();
+        }
+        const lair = sim.lair!;
+        expect(lair.state).toBe("waking");
+        expect(lair.introTick - lair.wakeTick).toBe(Math.round(LAIR.opening!.introAt * T));
+        const at = sim.heroes.map((hero) => ({ x: hero.player.x, y: hero.player.y }));
+        while (sim.tick < lair.introTick - 1) {
+            sim.setInput(0, 1, 0);
+            sim.setInput(1, 0, -1);
+            sim.step();
+            // Nothing sealed, nothing risen and nothing hurts while he speaks
+            expect(lair.sealed.length).toBe(0);
+            expect(sim.intro).toBeUndefined();
+        }
+        sim.heroes.forEach((hero, i) => {
+            expect(hero.player.x).toBeCloseTo(at[i].x, 5);
+            expect(hero.player.y).toBeCloseTo(at[i].y, 5);
+        });
+        expect(sim.introFacing).toEqual(LAIR.at);
+        expect(sim["damagePlayer"](10, "test", false)).toBe(0);
+        run(sim, 0.1);
+        expect(lair.state).toBe("fighting");
+        expect(lair.sealed.length).toBeGreaterThan(0);
+        expect(sim.intro?.def.id).toBe("yama");
+    });
+
+    test("a player on their own who skips it brings him on at the next tick", () => {
+        const sim = createSim();
+        for (let i = 0; i < 4 * T && sim.lair!.state === "asleep"; i++) {
+            sim.step(0, 1);
+        }
+        run(sim, 1);
+        expect(sim.lair!.state).toBe("waking");
+        sim.skipLairOpening();
+        sim.step(0, 0);
+        expect(sim.lair!.state).toBe("fighting");
+        expect(sim.intro).toBeDefined();
     });
 
     test("every way off the floor burns while he's up, and he rises with his hitpoints", () => {
@@ -174,11 +221,12 @@ describe("his lair", () => {
         expect(sim["damagePlayer"](10, "test", false)).toBe(0);
     });
 
-    test("a retry starts on his floor, so his fight's on again at once", () => {
+    test("a retry starts on his floor, so his fight's on again at once, without his opening", () => {
         expect(canRetry(MAP)).toBe(true);
         const sim = createSim(LAIR.start);
         sim.step(0, 0);
         expect(sim.lair!.state).toBe("fighting");
+        expect(sim.lair!.wakeTick).toBe(-1);
     });
 });
 
