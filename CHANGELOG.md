@@ -59,6 +59,8 @@ the version in the corner).
   by Okaeri.
 - The results screen and the map screen's Enter button say Expert for a Theatre of Blood run on
   expert mode, not Hard. Fixed by Okaeri.
+- On a phone, the damage a second and its panel no longer show on top of level ups, caskets,
+  random events and the menus.
 
 ## 0.27.0 - 2026-11-05
 
