@@ -1149,6 +1149,48 @@
     touch-action: none;
 }
 
+.ui-choice-countdown {
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 5px 12px;
+    background: var(--ui-panel-dark);
+    box-shadow:
+        0 0 0 1px var(--ui-edge-light),
+        0 2px 4px #0008;
+    color: var(--ui-text);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ui-choice-countdown-time {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
+    font-variant-numeric: tabular-nums;
+}
+
+.ui-choice-countdown-soon .ui-choice-countdown-time {
+    color: #ff6050;
+}
+
+.ui-choice-countdown ~ .ui-hud-top .ui-timer {
+    visibility: hidden;
+}
+
+.ui-choice-countdown ~ .ui-modal {
+    padding-top: 64px;
+    box-sizing: border-box;
+}
+
+.ui-choice-countdown ~ .ui-modal > .ui-panel {
+    max-height: calc(100% - 12px);
+}
+
 .ui-xp {
     position: absolute;
     left: 0;

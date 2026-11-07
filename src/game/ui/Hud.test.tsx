@@ -303,4 +303,39 @@ describe("the run's HUD", () => {
             }
         }
     });
+
+    test("shows co-op's countdown while choosing and after the local player answers", () => {
+        const { store, view } = renderHud();
+        expect(view.queryByRole("timer")).toBeNull();
+        act(() => {
+            store.set({ overlay: "levelUp" });
+            store.setNumbers(numbers({ decisionSeconds: 20 }));
+        });
+        expect(view.getByRole("timer").textContent).toBe("Party choosingAuto-choice in 20s");
+        expect(view.getByRole("timer").getAttribute("aria-label")).toContain("20 seconds");
+        act(() => {
+            store.set({ overlay: "none", waitingOn: ["Teammate"] });
+            store.setNumbers(numbers({ decisionSeconds: 5 }));
+        });
+        expect(view.getByRole("timer").className).toContain("ui-choice-countdown-soon");
+        expect(view.getByRole("timer").textContent).toContain("5s");
+        act(() => store.setNumbers(numbers({ decisionSeconds: 0 })));
+        expect(view.getByRole("timer").textContent).toContain("0s");
+        act(() => {
+            store.set({ waitingOn: [] });
+            store.setNumbers(numbers());
+        });
+        expect(view.queryByRole("timer")).toBeNull();
+    });
+
+    test("keeps the countdown visible over chest, event and co-op menu overlays", () => {
+        const { store, view } = renderHud();
+        for (const overlay of ["chest", "event", "paused"] as const) {
+            act(() => {
+                store.set({ overlay });
+                store.setNumbers(numbers({ decisionSeconds: 12 }));
+            });
+            expect(view.getByRole("timer").textContent).toContain("12s");
+        }
+    });
 });

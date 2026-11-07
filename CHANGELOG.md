@@ -9,6 +9,8 @@ the version in the corner).
 
 - Android updates, by trippy22: opening the app checks GitHub and offers to download a newer APK,
   then asks before installing it. Offline play still works when the check is unavailable.
+- Co-op choice countdown, by Deivid Smarzaro: everyone can see when the next automatic reward
+  choice is due while the party is still choosing.
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.

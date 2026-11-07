@@ -175,6 +175,8 @@ export type HudNumbers = {
     xpFraction: number;
     // Whole seconds into the run
     seconds: number;
+    // Co-op's next automatic choice, using the host's wall clock rather than sim ticks.
+    decisionSeconds?: number;
     kills: number;
     coins: number;
     // Damage a second just now, every source counted
