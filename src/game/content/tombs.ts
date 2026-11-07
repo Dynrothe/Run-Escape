@@ -1358,7 +1358,9 @@ const AKKHA_MELEE: BossAttackDef[] = [
         radius: 3.2,
         cone: 1.8,
         underRadius: 1.4,
+        // Red on his red and grey floor: drawn plainly, and lit, or the wedge is lost
         coneAlpha: 1.6,
+        light: MARK_LIGHT,
         seq: 9770,
         sound: 5749,
     },

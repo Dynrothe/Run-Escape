@@ -1047,6 +1047,11 @@ export class BossFightView {
         const radius = attack.radius ?? 2;
         const cone = attack.cone!;
         const solid = attack.coneAlpha ?? 1;
+        // A cone asked to be plainer is drawn at full strength, as a lunge's strip is, not
+        // through the warnings' faintness (WARNING_ALPHA), which no multiplier could lift
+        if (attack.coneAlpha !== undefined) {
+            ctx.globalAlpha = 1;
+        }
         const base = Math.atan2(windup.dirY, windup.dirX);
         const steps = 8;
         const wedge = (reach: number) => {

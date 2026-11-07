@@ -842,8 +842,9 @@ export type BossAttackDef = {
     radius?: number;
     // Swings: hits only a wedge this many radians across, in the way the boss
     // faced as it began, and under the boss (around it, underRadius tiles).
-    // coneAlpha: how much more solid its wedge is drawn (1 as it is): a big one
-    // over bright ground, or in a dark room, wants to be plainer
+    // coneAlpha: how much more solid its wedge is drawn: a big one over bright
+    // ground, or in a dark room, wants to be plainer. Set at all, it's drawn at full
+    // strength as a lunge's strip is, not as faint as other warnings
     cone?: number;
     coneAlpha?: number;
     underRadius?: number;
