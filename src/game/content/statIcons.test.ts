@@ -1,4 +1,7 @@
+import { describeItem } from "../core/Loot";
+import { ITEMS } from "./items";
 import { PASSIVES, formatPassiveValue } from "./passives";
+import { RAID_SUPPLIES } from "./raids";
 import { StatIconRef, statIconFor, statKeyIcon } from "./statIcons";
 import { STAT_INFO, formatStat } from "./stats";
 import { StatKey } from "./types";
@@ -45,12 +48,31 @@ describe("stat icons", () => {
         expectOneIcon("bonus", statIconFor(`${formatWeaponBonus(0.15)} damage`));
     });
 
+    // Descriptions are written by hand: one that leads with a stat's number gets its icon
+    test("item and raid supply descriptions that lead with a stat resolve", () => {
+        const lines: [string, string][] = [
+            ...ITEMS.flatMap((item) =>
+                describeItem(item).map((line): [string, string] => [item.id, line]),
+            ),
+            ...RAID_SUPPLIES.map((supply): [string, string] => [supply.id, supply.description]),
+        ];
+        for (const [id, line] of lines) {
+            if (/^[+\-−]?\d/.test(line)) {
+                expectOneIcon(`${id}: ${line}`, statIconFor(line));
+            }
+        }
+        expect(statIconFor("+1 projectile and +20% projectile speed")).toEqual(
+            statIconFor("+2 projectiles"),
+        );
+        expect(statIconFor("+20% projectile speed")).not.toEqual(statIconFor("+2 projectiles"));
+    });
+
     test("the most specific label wins", () => {
         expect(statIconFor("+24% ranged damage")).toEqual(statIconFor("Ranged damage"));
         expect(statIconFor("+24% ranged damage")).not.toEqual(statIconFor("+24% damage"));
         expect(statIconFor("+10% damage to bosses")).not.toEqual(statIconFor("+10% damage"));
         expect(statIconFor("+34% luck")).toEqual({ objId: 28181 });
-        expect(statIconFor("+5% coins")).toEqual({ objId: 995 });
+        expect(statIconFor("+5% coins")).toEqual({ objId: 995, count: 100 });
     });
 
     test("a stat's key gives its icon, whatever the wording around it", () => {

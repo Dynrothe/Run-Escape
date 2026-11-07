@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { iconCache } from "./ItemIcon";
 import { StatLine } from "./StatLine";
 
-afterEach(cleanup);
+afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+});
 
 describe("StatLine", () => {
     it("renders a stat with its icon and identical text content", () => {
@@ -36,6 +40,29 @@ describe("StatLine", () => {
         expect(spacer).not.toBeNull();
         expect(spacer?.style.width).toBe("36px");
         expect(spacer?.style.height).toBe("32px");
+    });
+
+    // A skill icon is a sprite alone: one the cache hasn't got shows nothing,
+    // rather than asking for an item that doesn't exist
+    it("never asks for an item for a sprite icon", () => {
+        vi.spyOn(iconCache, "getSprite").mockReturnValue("");
+        const request = vi.spyOn(iconCache, "request");
+        const requestSprite = vi.spyOn(iconCache, "requestSprite");
+        render(<StatLine text="+24% ranged damage" />);
+        expect(requestSprite).toHaveBeenCalledWith(200, expect.any(Function));
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it("renders children in place of the text, with the text's icon", () => {
+        const { container } = render(
+            <StatLine text="Damage 10 → 13" className="ui-choice-stat">
+                <b>Damage</b> 10 → 13
+            </StatLine>,
+        );
+        const line = container.querySelector(".ui-stat-line.ui-choice-stat");
+        expect(line?.querySelector("b")?.textContent).toBe("Damage");
+        expect(line?.textContent).toBe("Damage 10 → 13");
+        expect(line?.querySelector(".ui-icon")).not.toBeNull();
     });
 
     it("renders stats with item objIds and interface sprites", () => {

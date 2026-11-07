@@ -46,7 +46,6 @@ import {
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
-import { statIconFor } from "../content/statIcons";
 import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -1247,6 +1246,7 @@ function AdventurerDetails({
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
     const favourite = save.favouriteCharacter === character.id;
+    const bonus = formatStats(character.bonus);
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
@@ -1275,9 +1275,9 @@ function AdventurerDetails({
             </div>
             <div className="ui-card-text">{character.description}</div>
             {/* What they bring, a stat to a line */}
-            {formatStats(character.bonus).length > 0 && (
+            {bonus.length > 0 && (
                 <div className="ui-select-bonus">
-                    {formatStats(character.bonus).map((text) => (
+                    {bonus.map((text) => (
                         <StatLine key={text} text={text} />
                     ))}
                 </div>
@@ -2197,36 +2197,23 @@ const Minimap = memo(function Minimap({ client }: { client: GameClient }): JSX.E
 function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
     return (
         <div className="ui-choice-stats">
-            {stats.map((line) => {
-                const text = formatWeaponStat(line);
-                const icon = statIconFor(text) ?? statIconFor(line.label);
-                return (
-                    <span key={line.label} className="ui-choice-stat ui-stat-line">
-                        {icon ? (
-                            <ItemIcon objId={icon.objId ?? -1} spriteId={icon.spriteId} size={16} />
-                        ) : (
-                            <span
-                                className="ui-stat-spacer"
-                                style={{ width: 18, height: 16 }}
-                                aria-hidden="true"
-                            />
-                        )}
-                        <span className="ui-choice-stat-label">{line.label}</span>{" "}
-                        {line.from !== undefined && <>{line.from} → </>}
-                        <span
-                            className={
-                                line.from === undefined
-                                    ? undefined
-                                    : line.better
-                                      ? "ui-choice-stat-up"
-                                      : "ui-choice-stat-down"
-                            }
-                        >
-                            {line.value}
-                        </span>
+            {stats.map((line) => (
+                <StatLine key={line.label} text={formatWeaponStat(line)} className="ui-choice-stat">
+                    <span className="ui-choice-stat-label">{line.label}</span>{" "}
+                    {line.from !== undefined && <>{line.from} → </>}
+                    <span
+                        className={
+                            line.from === undefined
+                                ? undefined
+                                : line.better
+                                  ? "ui-choice-stat-up"
+                                  : "ui-choice-stat-down"
+                        }
+                    >
+                        {line.value}
                     </span>
-                );
-            })}
+                </StatLine>
+            ))}
         </div>
     );
 }

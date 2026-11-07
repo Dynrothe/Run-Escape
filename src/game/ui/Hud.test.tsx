@@ -228,7 +228,10 @@ describe("the run's HUD", () => {
         for (const text of [item.name, ...item.lines, item.set.text]) {
             expect(tip).toHaveTextContent(text);
         }
-        expect(within(tip).getByText(item.set.text)).toHaveClass("ui-good");
+        // Its line is green, spaced to line up with the stats above it
+        expect(within(tip).getByText(item.set.text).closest(".ui-stat-line")).toHaveClass(
+            "ui-good",
+        );
         expect(button).not.toHaveAttribute("title");
     });
 

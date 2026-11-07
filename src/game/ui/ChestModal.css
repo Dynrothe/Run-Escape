@@ -617,11 +617,6 @@
     gap: 2px;
 }
 
-.ui-chest-lines .ui-stat-line,
-.ui-chest-set .ui-stat-line {
-    white-space: normal;
-}
-
 .ui-chest-compare {
     margin-top: 8px;
     padding-top: 6px;

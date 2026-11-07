@@ -12,6 +12,7 @@ import {
 } from "../client/GameStore";
 import { createSave } from "../core/save";
 import { ChestModal } from "./ChestModal";
+import { ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import { GameUi } from "./GameUi";
 
@@ -255,5 +256,97 @@ describe("stat icons on the screens that show stats", () => {
         // Second option has spacer
         expect(statLines[1].textContent).toContain("Sets up a cannon");
         expect(statLines[1].querySelector(".ui-stat-spacer")).not.toBeNull();
+    });
+
+    test("the pause menu lists each slot's, the player's and worn gear's stats a line each", () => {
+        const store = new GameStore(createSave());
+        const client = createMockClient(store);
+        store.set({
+            screen: "run",
+            overlay: "paused",
+            hud: {
+                ...createHud(),
+                weapons: [
+                    {
+                        id: "rune_scimitar",
+                        name: "Rune scimitar",
+                        level: 2,
+                        maxLevel: 8,
+                        iconObjId: 1333,
+                        detail: "+15% damage",
+                        stats: ["Damage 13", "Attacks 1.25/s"],
+                        rarityColor: "#fff",
+                    },
+                ],
+                stats: ["+10% damage", "+1 armour"],
+                gear: [
+                    {
+                        slot: "head",
+                        name: "Head",
+                        item: {
+                            id: "void_mage_helm",
+                            name: "Void mage helm",
+                            objId: 11663,
+                            rarity: { name: "Rare", color: "#0f0" },
+                            kindLabel: "Head slot",
+                            lines: ["+10% magic damage", "+1 armour"],
+                            set: { text: "Void knight 2/4", active: false },
+                        },
+                    },
+                ],
+            },
+        });
+        store.setNumbers(createNumbers());
+        const view = render(<GameUi store={store} client={client} />);
+
+        const [weapon, gear] = view.container.querySelectorAll(".ui-pause-item");
+        const weaponLines = weapon.querySelectorAll(".ui-pause-detail > .ui-stat-line");
+        expect([...weaponLines].map((line) => line.textContent)).toEqual([
+            "Damage 13",
+            "Attacks 1.25/s",
+            "+15% damage",
+        ]);
+        for (const line of weaponLines) {
+            expect(line.querySelector(".ui-icon")).not.toBeNull();
+        }
+
+        const stats = view.container.querySelectorAll(".ui-pause-stats > .ui-stat-line");
+        expect([...stats].map((line) => line.textContent)).toEqual(["+10% damage", "+1 armour"]);
+
+        // The name and its lines sit together beside the icon, as a slot's do
+        expect(gear.querySelector(":scope > .ui-pause-name")?.textContent).toContain(
+            "Void mage helm",
+        );
+        const gearLines = gear.querySelectorAll(".ui-pause-detail > .ui-stat-line");
+        expect([...gearLines].map((line) => line.textContent)).toEqual([
+            "+10% magic damage",
+            "+1 armour",
+        ]);
+        const set = gear.querySelector(".ui-pause-set .ui-stat-line");
+        expect(set?.textContent).toBe("Void knight 2/4");
+        expect(set?.querySelector(".ui-stat-spacer")).not.toBeNull();
+    });
+
+    test("a description's set line lines up with its stats", () => {
+        const view = render(
+            <ItemDescription
+                item={{
+                    id: "void_mage_helm",
+                    name: "Void mage helm",
+                    objId: 11663,
+                    rarity: { name: "Rare", color: "#0f0" },
+                    kindLabel: "Head slot",
+                    lines: ["+10% magic damage"],
+                    set: { text: "Void knight 2/4", active: true },
+                }}
+            />,
+        );
+        const lines = view.container.querySelectorAll(".ui-stat-line");
+        expect([...lines].map((line) => line.textContent)).toEqual([
+            "+10% magic damage",
+            "Void knight 2/4",
+        ]);
+        expect(lines[1]).toHaveClass("ui-good");
+        expect(lines[1].querySelector(".ui-stat-spacer")).not.toBeNull();
     });
 });

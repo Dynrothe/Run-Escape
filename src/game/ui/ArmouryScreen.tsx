@@ -236,7 +236,11 @@ function ArmouryDetails({
                         <StatLine text={text} />
                     </li>
                 ))}
-                {set && <li className="ui-armoury-set">{describeSetProgress(set)}</li>}
+                {set && (
+                    <li className="ui-armoury-set">
+                        <StatLine text={describeSetProgress(set)} />
+                    </li>
+                )}
             </ul>
             {line.length > 1 && (
                 <div className="ui-armoury-line">

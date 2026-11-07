@@ -14,12 +14,11 @@ the version in the corner).
   passive, worn piece or Armoury piece to read it.
 - Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
   it saves you, and the Pyromancer's own revive shows as a phoenix.
+- Stat icons, by Giordano Souza: each stat shows its icon from the game's cache wherever it's
+  listed, from descriptions and level ups to the pause menu, caskets and the Armoury.
 
 ### Changed
 
-- Stat icons, by Giordano: stats show the same icon from the game's cache wherever they appear:
-  the descriptions of weapons, passives and worn gear, the pause menu, level ups, caskets, random
-  events, the Armoury and the adventurer and skill screens.
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it

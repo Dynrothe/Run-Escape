@@ -341,9 +341,10 @@ export function ItemDescription({
                 <StatLine key={line} text={line} />
             ))}
             {item.set && (
-                <span className={setClassName ?? (item.set.active ? "ui-good" : "ui-subtle")}>
-                    {item.set.text}
-                </span>
+                <StatLine
+                    text={item.set.text}
+                    className={setClassName ?? (item.set.active ? "ui-good" : "ui-subtle")}
+                />
             )}
             {children}
         </>

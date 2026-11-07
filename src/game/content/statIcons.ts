@@ -1,8 +1,11 @@
 import { STAT_INFO } from "./stats";
 import { StatKey } from "./types";
 
-// An OSRS cache icon: an item (objId) or an interface sprite (spriteId), never both
-export type StatIconRef = { objId?: number; spriteId?: number };
+// An OSRS cache icon: an item (objId, and a stack size for coins) or an interface
+// sprite (spriteId), never both
+export type StatIconRef =
+    | { objId: number; count?: number; spriteId?: undefined }
+    | { spriteId: number; objId?: undefined; count?: undefined };
 
 const sprite = (spriteId: number): StatIconRef => ({ spriteId });
 const obj = (objId: number): StatIconRef => ({ objId });
@@ -43,15 +46,17 @@ const ICONS: Record<string, StatIconRef> = {
     "projectile speed": DART,
     "effect duration": HOURGLASS,
     projectiles: ARROWS,
+    // A potion's "+1 projectile and ..."
+    projectile: ARROWS,
     "movement speed": obj(88), // Boots of lightness
     "pickup range": obj(11941), // Looting bag
     luck: obj(28181), // Clover insignia
     experience: obj(2528), // Lamp
-    coins: obj(995), // Coins
+    // A pile of coins: one coin is a speck at a line's size
+    coins: { objId: 995, count: 100 },
     revivals: obj(2570), // Ring of life
     rerolls: obj(562), // Chaos rune
     banishes: obj(560), // Death rune
-    locks: obj(12791), // Rune pouch
     "recoil damage": obj(2550), // Ring of recoil
     "chance to heal on hit": obj(11090), // Phoenix necklace
     "melee knockback": obj(1347), // Rune warhammer
@@ -117,9 +122,9 @@ export const STAT_ICON_OBJ_IDS: number[] = [
     ),
 ];
 export const STAT_ICON_SPRITE_IDS: number[] = [
-    ...new Set([
-        ...Object.values(ICONS).flatMap((icon) =>
+    ...new Set(
+        Object.values(ICONS).flatMap((icon) =>
             icon.spriteId !== undefined ? [icon.spriteId] : [],
         ),
-    ]),
+    ),
 ];

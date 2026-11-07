@@ -1546,23 +1546,18 @@
     background: var(--ui-card);
 }
 
-/* Stat line with an OSRS icon, or spacer when there is none */
+/* Stat line with an OSRS icon, or spacer when there is none. Its text wraps
+   beside the icon where there's no room (a phone's level up cards) */
 .ui-stat-line {
     display: flex;
     align-items: center;
     gap: 4px;
-    white-space: nowrap;
 }
 
 .ui-stat-line .ui-icon,
 .ui-stat-spacer {
     display: inline-block;
     flex-shrink: 0;
-}
-
-/* Descriptions and cards wrap their lines */
-.ui-description-tip .ui-stat-line {
-    white-space: normal;
 }
 
 /* Buffs, inventory and hitpoints, bottom middle */
@@ -2045,11 +2040,6 @@
     color: #ff5a5a;
 }
 
-.ui-card-text .ui-stat-line,
-.ui-pause-set .ui-stat-line {
-    white-space: normal;
-}
-
 /* A weapon whose style a raid's bosses pray against: what it loses against them */
 .ui-card-penalty {
     color: #ff5a5a;
@@ -2176,7 +2166,7 @@
     gap: 10px;
 }
 
-.ui-pause-item span:nth-child(2) {
+.ui-pause-item > span:nth-child(2) {
     flex: 1;
 }
 

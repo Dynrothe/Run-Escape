@@ -30,9 +30,7 @@ export function EventModal({ event, coins, client }: Props): JSX.Element {
                                 <div className="ui-card-title">{option.title}</div>
                                 {option.text && (
                                     <div className="ui-card-text">
-                                        {option.text.split("\n").map((line, idx) => (
-                                            <StatLine key={idx} text={line} />
-                                        ))}
+                                        <StatLine text={option.text} />
                                     </div>
                                 )}
                             </div>

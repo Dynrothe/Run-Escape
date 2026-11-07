@@ -92,7 +92,8 @@ as the overhead prayers are), or the slim cache won't have it.
 
 Add the key to `StatKey` and `emptyStats` in `types.ts`, and to `STAT_INFO` in `stats.ts`.
 TypeScript points out what's missing. Give its label an icon in `content/statIcons.ts` (a test
-checks every stat's does); the slim cache keeps what that file lists. A stat does nothing until `Sim.ts` reads it, from `this.stats`
+checks every stat has one), and the slim cache keeps what that file lists.
+A stat does nothing until `Sim.ts` reads it, from `this.stats`
 (everything added up) or `this.metaStats` (the shop's alone, and set before the constructor adds the
 starting weapon).
 
