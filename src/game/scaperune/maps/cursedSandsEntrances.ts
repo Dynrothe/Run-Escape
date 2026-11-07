@@ -7,7 +7,9 @@ import { CinematicDef, CinematicShotDef, LightLook } from "../../content/types";
 // or shadow as the run starts, and the boss itself rises there under its intro
 // (BossIntroDef: rise in content/cursedSands.ts), so it never stands there twice.
 //
-// The ids are the fights' own (content/cursedSands.ts), so they're baked and loaded already.
+// The ids are the fights' own (content/cursedSands.ts), so they're baked and loaded already. Spot
+// animations play at their own size times scale, and the shadow spells and lightning spread a
+// long way as they play (SPREADS there), so they're kept small with the camera this close.
 
 // The bosses
 const COENUS = 11529;
@@ -146,12 +148,12 @@ export function createSandsEntrances(middle: Tile): CinematicDef[] {
                 },
             ],
             cues: [
-                { at: 0.3, actor: "champion", spotAnim: SHADOW_BARRAGE },
+                { at: 0.3, actor: "champion", spotAnim: SHADOW_BARRAGE, scale: 0.35 },
                 { at: 1.2, actor: "champion", say: "Scabaras chose me.", sayFor: 2.4 },
                 { at: 4, actor: "champion", seq: BURST_SEQ },
-                { at: 4.3, actor: "champion", spotAnim: SHADOW_BURST, scale: 1.2 },
+                { at: 4.3, actor: "champion", spotAnim: SHADOW_BURST, scale: 0.8 },
                 { at: 4.6, actor: "champion", say: "And Scabaras will judge you.", sayFor: 2.6 },
-                { at: 7.3, actor: "champion", spotAnim: SHADOW_BARRAGE, scale: 1.2 },
+                { at: 7.3, actor: "champion", spotAnim: SHADOW_BARRAGE, scale: 0.45 },
                 { at: 7.5, actor: "champion", gone: true },
             ],
             shots: [
@@ -166,7 +168,7 @@ export function createSandsEntrances(middle: Tile): CinematicDef[] {
             cast: [{ id: "akh", npcId: AKH, seq: AKH_IDLE, ...m, yaw: SOUTH, light: STORM }],
             cues: [
                 { at: 0.6, actor: "akh", seq: AKH_CALL },
-                { at: 1.2, actor: "akh", spotAnim: LIGHTNING, scale: 2 },
+                { at: 1.2, actor: "akh", spotAnim: LIGHTNING, scale: 1 },
                 {
                     at: 1.6,
                     actor: "akh",
@@ -176,7 +178,7 @@ export function createSandsEntrances(middle: Tile): CinematicDef[] {
                 { at: 5, actor: "akh", seq: AKH_SPEAR },
                 { at: 5.4, actor: "akh", spotAnim: BLOWN_DUST, scale: 2 },
                 { at: 5.6, actor: "akh", say: "Kneel, and be buried.", sayFor: 2.2 },
-                { at: 7.8, actor: "akh", spotAnim: LIGHTNING, scale: 2.5 },
+                { at: 7.8, actor: "akh", spotAnim: LIGHTNING, scale: 1.2 },
                 { at: 8, actor: "akh", gone: true },
             ],
             shots: [

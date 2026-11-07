@@ -27,6 +27,9 @@ const DARK_ORB = 2257;
 // a dark orb on dark stone has next to no contrast, so it's lifted as the Theatre's are, and the
 // scarabs' bolts a little less, as they're lighter to start with
 const ORB_BRIGHT = 0.6;
+// Held six ticks into its animation (BulletPatternDef.still): a spiked orb about a tile across,
+// before it bursts into shards five times that (its first frame is next to nothing)
+const ORB_STILL = 6;
 const BOLT_BRIGHT = 0.45;
 // And a glow on the floor under each orb, pale violet, so its edge stands out from the stone
 // round it whatever the light there
@@ -40,6 +43,23 @@ const JAVELIN = 27;
 const LIGHTNING = 2256;
 // Dust thrown up where a lunge ends
 const BLOWN_DUST = 2184;
+
+// How much further than its first frame each of these spreads as it plays (the model's reach over
+// its radius, measured in the game). A spot that's fitted (fit, in tiles) is sized by its first
+// frame, so the Shadow Barrage's shards, fitted to 1.5 tiles, flew out over 9 and filled the screen.
+// spread(id, tiles) fits one to what it really covers.
+const SPREADS: Record<number, number> = {
+    383: 6.2, // Shadow Barrage
+    382: 3.4, // Shadow Burst
+    2257: 5.5, // Akkha's darkness orb
+    2256: 3.3, // Akkha's lightning
+    2153: 4.3, // the scarab swarm
+    318: 1.6, // a stomp
+};
+const spread = (spotAnim: number, tiles: number) => ({
+    spotAnim,
+    fit: tiles / (SPREADS[spotAnim] ?? 1),
+});
 
 // Point-blank volley, the quest's fight button (MapDef.fight.ability): a volley of crystal arrows
 // into the boss from close by, about a second of the bow's damage, doubled with a guard down
@@ -143,6 +163,7 @@ const shockwave = (name: string, volleys: number): BossAttackDef => ({
     weight: 0,
     pattern: {
         bright: ORB_BRIGHT,
+        still: ORB_STILL,
         glow: ORB_GLOW,
         shape: "ring",
         count: 18,
@@ -269,10 +290,7 @@ const COENUS_ATTACKS: BossAttackDef[] = [
         weight: 3,
         follow: { attack: "Spear lunge (following)", delay: 0.35 },
         impact: {
-            spots: [
-                { spotAnim: SAND, fit: 3 },
-                { spotAnim: STOMP, fit: 3 },
-            ],
+            spots: [{ spotAnim: SAND, fit: 3 }, spread(STOMP, 3)],
             shake: 0.4,
         },
         phases: [2, 3],
@@ -416,7 +434,7 @@ const crossfire = (name: string, more: Partial<BossAttackDef>): BossAttackDef =>
     range: 14,
     weight: 3,
     line: { width: 2, length: 14 },
-    impact: { trail: { spotAnim: SCARAB_SWARM, fit: 1 }, shake: 0.15 },
+    impact: { trail: spread(SCARAB_SWARM, 1), shake: 0.15 },
     phases: [2],
     ...more,
 });
@@ -681,7 +699,7 @@ const shadowBurst = (
     weight: 0,
     opens: 1.5,
     light: SHADOW_LIGHT,
-    impact: { spots: [{ spotAnim: SHADOW_BURST, fit: 3 }], shake: 0.2 },
+    impact: { spots: [spread(SHADOW_BURST, 4)], shake: 0.2 },
     phases: [],
     ...more,
 });
@@ -701,6 +719,7 @@ const shadowRing = (name: string, count: number, volleys: number): BossAttackDef
     weight: 0,
     pattern: {
         bright: ORB_BRIGHT,
+        still: ORB_STILL,
         glow: ORB_GLOW,
         shape: "ring",
         count,
@@ -738,7 +757,7 @@ const betrayal = (name: string, more: Partial<BossAttackDef> = {}): BossAttackDe
         light: SHADOW_LIGHT,
         alpha: SHADOW_ALPHA,
     },
-    impact: { spots: [{ spotAnim: SHADOW_BARRAGE, fit: 1.2 }] },
+    impact: { spots: [spread(SHADOW_BARRAGE, 1.2)] },
     phases: [3],
     ...more,
 });
@@ -791,7 +810,7 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
             alpha: SHADOW_ALPHA,
             lingers: { seconds: 3, interval: 0.5, damage: 0.25 },
         },
-        impact: { spots: [{ spotAnim: SHADOW_BARRAGE, fit: 1.5 }] },
+        impact: { spots: [spread(SHADOW_BARRAGE, 1.5)] },
         shout: "We are born in the shadows!",
     },
     {
@@ -815,7 +834,7 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
             alpha: SHADOW_ALPHA,
             lingers: { seconds: 2, interval: 0.5, damage: 0.25 },
         },
-        impact: { spots: [{ spotAnim: SHADOW_BARRAGE, fit: 0.8 }] },
+        impact: { spots: [spread(SHADOW_BARRAGE, 0.8)] },
         phases: [2, 3],
     },
     {
@@ -883,6 +902,7 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
         light: SHADOW_LIGHT,
         pattern: {
             bright: ORB_BRIGHT,
+            still: ORB_STILL,
             glow: ORB_GLOW,
             shape: "spiral",
             count: 5,
@@ -953,7 +973,7 @@ const dive = (
     opens: 1.5,
     // Her lightning along the way she went, dust where she lands
     impact: {
-        trail: { spotAnim: LIGHTNING, fit: 1 },
+        trail: spread(LIGHTNING, 1),
         spots: [{ spotAnim: BLOWN_DUST, fit: 2 }],
         shake: 0.2,
     },
@@ -982,7 +1002,7 @@ const lightningCone = (
     coneAlpha: 2.2,
     weight: 3,
     light: { radius: 3, color: 0xa8c8ff, intensity: 0.7 },
-    impact: { spots: [{ spotAnim: LIGHTNING, fit: 2 }], shake: 0.2, flash: "#dfe8ff" },
+    impact: { spots: [spread(LIGHTNING, 2)], shake: 0.2, flash: "#dfe8ff" },
     phases,
     ...more,
 });
@@ -1005,7 +1025,7 @@ const sparks = (
     weight: 0,
     // Solid, not the usual faint mark: they're all there is to read, and phase 3 is dark
     ground: { ...ground, spotAnim: SPARK_SWIRL, light: SPARK_LIGHT, alpha: 0.65 },
-    impact: { spots: [{ spotAnim: LIGHTNING, fit: 1.2 }] },
+    impact: { spots: [spread(LIGHTNING, 1.2)] },
     // Only ever an ambient, or what follows her cone
     phases: [],
 });
@@ -1564,7 +1584,7 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
             most: 1,
             impact: {
                 trail: { spotAnim: SHADOW_FLOOR_SMALL, fit: SHADOW_FLOOR_FIT },
-                spots: [{ spotAnim: DARK_ORB, fit: 1.5 }],
+                spots: [spread(DARK_ORB, 1.5)],
             },
         },
         sounds: NO_SOUNDS,

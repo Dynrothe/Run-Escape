@@ -378,6 +378,7 @@ export class BossFightView {
                 continue;
             }
             const { model, anim, rolls } = look;
+            const still = attack.pattern?.still;
             const wx = lerp(prevX[slot], x[slot], alpha);
             const wy = lerp(prevY[slot], y[slot], alpha);
             // A blast's shards (BossAttackDef.shards) are bullets with no pattern
@@ -392,7 +393,7 @@ export class BossFightView {
             actors.draw(
                 model,
                 anim,
-                anim.getFrame(tick - startTick[slot], true),
+                anim.getFrame(still ?? tick - startTick[slot], true),
                 wx,
                 this.ground(sim, wx, wy) - BULLET_HEIGHT,
                 wy,

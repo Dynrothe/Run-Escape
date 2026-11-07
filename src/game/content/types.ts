@@ -463,6 +463,9 @@ export type BulletPatternDef = {
     // A glow on the floor under each bullet while it flies, so a dark one reads on dark ground.
     // Only drawn, on a map with lighting.
     glow?: LightLook;
+    // Held at this tick of its spot animation, not played: for one that bursts as it plays (Akkha's
+    // darkness orb throws shards five times its size), so each bullet looks the size of what it hits
+    still?: number;
     // Seconds the boss stands still firing before it can begin its next attack,
     // instead of until the last volley's out: a slow ring keeps coming while
     // she aims the next thing through it (Phosani's)
