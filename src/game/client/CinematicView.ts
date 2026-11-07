@@ -109,7 +109,7 @@ export class CinematicView {
             if (text === undefined || getActorState(def, actor, seconds).gone) {
                 continue;
             }
-            const height = ((model?.height ?? 200) * (actor.scale ?? 1)) / 128;
+            const height = actor.head ?? ((model?.height ?? 200) * (actor.scale ?? 1)) / 128;
             const top = sim.grid.getHeight(actor.x, actor.y) / 128 - height;
             const p = overlay.project(actor.x, top, actor.y, this.screen);
             if (!p.visible) {

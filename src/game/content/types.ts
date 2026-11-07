@@ -1591,6 +1591,9 @@ export type MapDef = {
     plane?: number;
     // Where the player starts (moved to the nearest free spot if it's blocked)
     spawn: { x: number; y: number };
+    // The way the player faces as the run starts (x east, y north), south when unset: the Battle
+    // for Varrock's into the city, as its opening cinematic's camera ends looking
+    spawnFacing?: { x: number; y: number };
     // A ditch two tiles deep, its south row at y, across the arena (the
     // Wilderness Ditch): the player can't cross it, enemies jump it
     ditch?: { y: number };
@@ -1795,7 +1798,9 @@ export type CinematicDef = {
 // An NPC in a cinematic, drawn only while it plays: npcId playing seq over and over (until a cue
 // says otherwise), its middle at x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and
 // drawn scale times its size. prop: it stands in for the map's prop at that index (MapDef.props)
-// while the cinematic plays, so the scenery itself can act (Yama off his throne's idle).
+// while the cinematic plays, so the scenery itself can act (Yama off his throne's idle). head:
+// tiles above the ground their overhead chat sits at, when it isn't the top of their model (Yama's
+// is his throne's back, well over his head).
 export type CinematicActorDef = {
     id: string;
     npcId: number;
@@ -1805,6 +1810,7 @@ export type CinematicActorDef = {
     yaw?: number;
     scale?: number;
     prop?: number;
+    head?: number;
 };
 
 // Something that happens at seconds into a cinematic, to actor (its id): any of

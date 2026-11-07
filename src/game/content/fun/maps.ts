@@ -774,6 +774,8 @@ export const FUN_MAPS: MapDef[] = [
         arena: BATTLE_FOR_VARROCK.arena,
         // Just outside the south gate
         spawn: BATTLE_FOR_VARROCK.spawn,
+        // Facing into the city, as the opening's camera ends
+        spawnFacing: { x: 0, y: 1 },
         difficulty: { hp: 1, damage: 1 },
         waves: [],
         events: [],
@@ -816,6 +818,8 @@ export const FUN_MAPS: MapDef[] = [
                 scale: YAMA_SCALE,
             },
         ],
+        // Yama's own track, from his fight: the city's his now
+        music: "Sign Here",
         // It opens on Yama and the last of the palace guard (fun/varrockOpening.ts)
         cinematic: VARROCK_OPENING,
         // A smoky, dimmed city lit by its fires
