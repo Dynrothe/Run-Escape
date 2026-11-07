@@ -27,7 +27,7 @@ uniform int u_instanceOffset;
 //  1: scale, flash (0-1, or -1-0 to glow in the tint's colour), tint (0xRRGGBB, 0xFFFFFF = none),
 //     alpha
 //  2: edge light (0-1), how far in it reaches (0-1 of the way to the middle), its colour
-//     (0xRRGGBB), and how much it's drawn as if lit on a dark map (0-1, lights.glsl)
+//     (0xRRGGBB), and how much it's drawn at full brightness whatever the light (0-1, lights.glsl)
 //  3: stretch along x and z, tip about x and z (0-2047), before the yaw
 uniform highp sampler2D u_actorData;
 

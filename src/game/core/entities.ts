@@ -378,6 +378,9 @@ export type Enemy = {
     attackCooldown: number;
     // Ticks left frozen (Ice spells)
     frozen: number;
+    // Under LightingDef.litTargetsOnly, whether it stood in a sim light as this tick's lights were
+    // made, or as it came (Sim.isEnemyLit)
+    lit?: boolean;
     // Jumping a ditch, and nothing else until it lands
     jump?: EnemyJump;
     // Takes this much more damage from everything (0.25 = +25%) until

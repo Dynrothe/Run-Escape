@@ -1271,7 +1271,9 @@ things are separate, each optional:
   falls.
 - **The rule**: `litTargetsOnly` (the Scar's). Weapons only pick targets within half a tile of a sim
   light's edge (`nearestEnemies`, which every weapon, thrall, cannon and power-up aims with), and
-  the minimap only shows what's lit. Shots carry on and hit whatever they meet. The balance bot
+  the minimap only shows what's lit. Shots carry on and hit whatever they meet, and a chain's
+  hops go to what's near, lit or not. Each enemy's lit or not is worked out once a tick, in
+  `stepLights` (`Enemy.lit`, read through `isEnemyLit`). The balance bot
   only walks at what's lit, and faint arrows show what's coming out of the dark. A dark map without
   it is only dark; a lit one with glowing lights is cheap.
 
@@ -1283,7 +1285,7 @@ hashes: glowing scenery, spells and effects, a floor's tiles, bosses' windups an
 flicker and pulse on any light.
 
 **Drawing them.** Every frame `SceneLights` offers every light there is to `LightBudget`, which
-keeps the `MAX_SHOWN_LIGHTS` (24) that tell most: the shown player's own, then the brightest and
+keeps the `MAX_SHOWN_LIGHTS` that tell most: the shown player's own, then the brightest and
 biggest for how near the middle of the view each is. A light coming in fades in and one leaving fades
 out (a quarter of a second), so a map can have any number and none pops. Those are added into a
 light map on the CPU (`render/LightMap.ts`: two texels a tile, 64 tiles round the view, its corner
@@ -1328,10 +1330,10 @@ usual brightness with glowing scenery, a blue light of its own and the wizard's 
 
 **Cost**: only a map with `lighting` pays, and it pays about the same however many lights it has:
 one texture read a pixel, and the light map's few thousand texels on the CPU. In the headless
-renderer, a lit map's programs took about a tenth longer a frame than the same view without them
-(Lumbridge at 844×390: 94 ms without, 101 with none or 8 lights, 108 with 24), and Lumbridge
-itself, without lighting, took as long as before there were lights. A real phone hasn't been
-measured. Nothing past the lights is culled: the dark has to read as shapes, so a dark map draws as
+renderer, a lit map's programs took about a tenth longer a frame than the same view without them,
+with no lights or the most it draws, and Lumbridge itself, without lighting, took as long as
+before there were lights. A real phone hasn't been measured.
+Nothing past the lights is culled: the dark has to read as shapes, so a dark map draws as
 many triangles as a lit one.
 
 Combat sounds are picked by the server, not the cache, so the ids in `content/` come from the OSRS

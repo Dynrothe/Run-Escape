@@ -290,7 +290,7 @@ const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
 // Lights (MapDef.lighting): tiles past a light's edge that weapons can still aim
-// (litTargetsOnly), seconds over which a light an enemy left goes out, and over which a boss's
+// (litTargetsOnly; never more than the light's own radius, so one going out lights nothing), seconds over which a light an enemy left goes out, and over which a boss's
 // phase changes the scene's ambient (and back as it falls)
 const LIGHT_GRACE = 0.5;
 const LEFT_LIGHT_FADE = 3;
@@ -3122,6 +3122,10 @@ export class Sim {
             abilities: getAbilities(def, this.tick, this.rng),
         };
         this.enemies.push(enemy);
+        // Lit or not until the next tick's lights (stepLights); one carrying a light is in it
+        if (this.litTargetsOnly) {
+            enemy.lit = def.light !== undefined || this.isLit(enemy.x, enemy.y);
+        }
         if (def.shield) {
             const ticks = Math.round(def.shield.seconds * TICKS_PER_SECOND);
             enemy.shieldEnd = this.tick + ticks;
@@ -9761,6 +9765,8 @@ export class Sim {
             if (!hasTag(from, chain.tags)) {
                 continue;
             }
+            // Lit or not (LightingDef.litTargetsOnly): a hop carries on into the dark, as a shot
+            // hits what it meets there
             this.enemyHash.query(from.x, from.y, chain.range + 0.5, (enemy) => {
                 if (
                     left <= 0 ||
@@ -9986,6 +9992,12 @@ export class Sim {
             });
         }
         this.lights = lights;
+        // What weapons can aim at, worked out once a tick rather than on every search
+        if (this.litTargetsOnly) {
+            for (const enemy of this.enemies) {
+                enemy.lit = this.isLit(enemy.x, enemy.y);
+            }
+        }
     }
 
     // A hero's light: the map's round each player, and a light power-up's (the lantern) on top
@@ -10021,7 +10033,7 @@ export class Sim {
             return true;
         }
         for (const light of this.lights) {
-            const reach = light.radius + LIGHT_GRACE;
+            const reach = light.radius + Math.min(LIGHT_GRACE, light.radius);
             const dx = x - light.x;
             const dy = y - light.y;
             if (dx * dx + dy * dy <= reach * reach) {
@@ -10031,9 +10043,10 @@ export class Sim {
         return false;
     }
 
-    // What weapons can aim at under the rule, by where it stands
+    // What weapons can aim at under the rule: whether it was lit as this tick's lights were made
+    // (stepLights), or as it came
     isEnemyLit(enemy: Enemy): boolean {
-        return this.isLit(enemy.x, enemy.y);
+        return !this.litTargetsOnly || enemy.lit === true;
     }
 
     // How bright the scene is (LightingDef.ambient) at a tick, fractions too, as it changes over

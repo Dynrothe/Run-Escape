@@ -223,16 +223,16 @@ const CAMERA_REACH: CameraReach = {
     around: getGroundReach(ATTRACT_PITCH, ATTRACT_DISTANCE),
 };
 
-// The world fades out past the arena's edge. A ScapeRune map's world carries on: it
-// has scenery there (scaperune/CLAUDE.md).
-// What to build a map's collision from: its arena, and on a lit map where its glowing scenery is
-// (LightingDef.locs)
+// What a map's region data is built from: its arena, and on a map with glowing scenery the loc
+// ids to find (LightingDef.locs)
 function getRegionInput(map: MapDef): RegionDataInput {
     const locs = map.lighting?.locs;
     const region = getArenaRegion(map);
     return locs ? { ...region, glowLocs: Object.keys(locs).map(Number) } : region;
 }
 
+// The world fades out past the arena's edge. A ScapeRune map's world carries on: it
+// has scenery there (scaperune/CLAUDE.md).
 function setPlayArea(
     renderer: GameWebGLRenderer,
     arena: { baseX: number; baseY: number; sizeX: number; sizeY: number },
