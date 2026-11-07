@@ -94,6 +94,35 @@ describe("Cloudflare co-op lobby", () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it("reserves pending codes but allows a finished room's code to be reused", async () => {
+        const random = crypto.getRandomValues.bind(crypto);
+        // A for host 1; try A again for host 2, then B; A after host 1 leaves.
+        const picks = [...Array(16).fill(0), ...Array(8).fill(1), ...Array(8).fill(0)];
+        vi.spyOn(crypto, "getRandomValues").mockImplementation((array: any) => {
+            if (array instanceof Uint32Array) {
+                if (!picks.length) throw new Error("Unexpected code generation");
+                array[0] = picks.shift();
+                return array;
+            }
+            return random(array);
+        });
+        const lobby = await makeLobby();
+        const first = connect("first");
+        const second = connect("second");
+        const create = { t: "create", me: { unlocks: { maps: ["lumbridge"] } } };
+        await Promise.all([say(lobby, first, create), say(lobby, second, create)]);
+        expect(first.sent.at(-1)).toMatchObject({ t: "goto", code: "AAAAAAAA" });
+        expect(second.sent.at(-1)).toMatchObject({ t: "goto", code: "BBBBBBBB" });
+
+        await lobby.roomGone("AAAAAAAA");
+        const third = connect("third");
+        await say(lobby, third, create);
+        expect(third.sent.at(-1)).toMatchObject({ t: "goto", code: "AAAAAAAA" });
+        expect(third.sent.at(-1).ticket).not.toBe(first.sent.at(-1).ticket);
+        expect(picks).toHaveLength(0);
     });
 
     it("sends the open rooms to everyone looking at them as they change", async () => {
@@ -117,6 +146,25 @@ describe("Cloudflare co-op lobby", () => {
         const sent = rooms(browser).length;
         await lobby.roomUpdate({ ...listing("BBBBBBBB"), open: false });
         expect(rooms(browser)).toHaveLength(sent);
+    });
+
+    it("shows only measured server flags, suppressing legacy host countries and unknown locations", async () => {
+        const lobby = await makeLobby();
+        const browser = connect("browser");
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), country: "FI" });
+        await say(lobby, browser, { t: "list" });
+        expect(rooms(browser).at(-1).rooms[0].country).toBeUndefined();
+        expect(rooms(browser).at(-1).rooms[0].countrySource).toBe("server");
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), country: "FI", countrySource: "server" });
+        await Promise.resolve();
+        expect(rooms(browser).at(-1).rooms[0]).toMatchObject({
+            country: "FI",
+            countrySource: "server",
+        });
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), countrySource: "server" });
+        await Promise.resolve();
+        expect(rooms(browser).at(-1).rooms[0].country).toBeUndefined();
+        expect(rooms(browser).at(-1).rooms[0].countrySource).toBe("server");
     });
 
     it("stops sending the list to someone in a room, until they ask again", async () => {

@@ -30,6 +30,7 @@ import {
     runOf,
 } from "../../coop-checks.mjs";
 import { playerName } from "../../name-gen.mjs";
+import { roomLocation } from "./location.mjs";
 import {
     IDLE_MS,
     MAX_LOADOUT_BYTES,
@@ -79,8 +80,8 @@ const SILENT_MS = 5 * 60_000;
 const AWAY_KEPT = 16;
 
 // A player's country, for their flag, unless they've hidden it. An open
-// room's host shows theirs anyway: it's where the room is, for whoever's
-// picking one from the list.
+// room's host shows theirs anyway in the party panel.
+// This is the player's IP country when they joined, not the relay's location.
 function shownCountry(member, room) {
     const openHost = room.open && room.hostId === member.id;
     return member.hideCountry && !openHost ? undefined : member.country;
@@ -104,6 +105,8 @@ export class Room extends DurableObject {
         this.code = "";
         // The room, once it's made, until it's empty or closed
         this.room = undefined;
+        this.serverCountry = undefined;
+        this.locationLookup = undefined;
         // Kicked addresses outlast a room's members, for the room's life
         this.kicked = new Set();
         // socket -> the member it's for
@@ -713,14 +716,37 @@ export class Room extends DurableObject {
         });
     }
 
+    // Measure from inside the object. A failed lookup clears the flag;
+    // never substitute the host player's country for a server location.
+    checkLocation() {
+        const room = this.room;
+        if (!room?.open || room.started || this.locationLookup) return;
+        const lookup = roomLocation()
+            .then((location) => {
+                // A closed/replaced game room mustn't be advertised again.
+                if (this.room !== room) return;
+                const country = location?.country;
+                if (this.serverCountry !== country) {
+                    this.serverCountry = country;
+                    this.tellLobby();
+                }
+            })
+            .finally(() => {
+                if (this.locationLookup === lookup) this.locationLookup = undefined;
+            });
+        this.locationLookup = lookup;
+        this.ctx.waitUntil(lookup);
+    }
+
     // What the lobby lists changes far less often than the room (players'
     // loadouts and ready don't show), so it's only told of a change, unless
-    // it's the heartbeat saying the room's still there
+    // it's the heartbeat saying the room's still there.
     tellLobby(heartbeat = false) {
         const room = this.room;
         if (!room) {
             return;
         }
+        this.checkLocation();
         const host = room.members.find((member) => member.id === room.hostId);
         const entry = {
             code: room.code,
@@ -732,7 +758,8 @@ export class Room extends DurableObject {
             endless: room.endless,
             hard: room.hard === true,
             host: host?.name ?? "",
-            country: host ? shownCountry(host, room) : undefined,
+            country: this.serverCountry,
+            countrySource: "server",
             hostAddress: host?.address ?? "",
             order: room.order,
         };
@@ -762,6 +789,8 @@ export class Room extends DurableObject {
         this.watch?.finish();
         this.watch = undefined;
         this.room = undefined;
+        this.serverCountry = undefined;
+        this.locationLookup = undefined;
         this.kicked.clear();
         this.ctx.storage.deleteAll().catch(() => {});
         this.lobby.roomGone(room.code).catch(() => {});

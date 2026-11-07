@@ -77,7 +77,7 @@ go stale. Add anything that cost you time to work out.
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
 | Cloud saves' Worker: sync codes, revisions, backups    | `server/cloud-saves/`                                                  |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
-| Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
+| Co-op flags: player and room locations                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
 | Moving to a newer cache, and what changed in it        | `docs/DEVELOPMENT.md` (A newer cache), `compare-caches.ts`             |
 | The slim cache's chunks, and how the game loads them   | `src/rs/cache/ChunkedCache.ts`, `docs/DEVELOPMENT.md` (Hosting)        |

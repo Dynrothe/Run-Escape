@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Cloudflare room flags, by trippy22: the lobby shows the room server's measured country instead of its host player's country.
+
 ## 0.28.0 - 2026-11-07
 
 ### Added
