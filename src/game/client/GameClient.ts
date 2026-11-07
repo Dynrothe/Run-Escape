@@ -1925,13 +1925,17 @@ export class GameClient implements GameFrameHandler {
     // to the room. show: false when the next run's starting straight away.
     // The same boss fight again, from its results (MapDef.fight), on your own
     retry(): void {
-        const mapId = this.sim?.map.id;
-        if (!mapId || this.coopRun || !getMap(mapId).fight) {
+        const map = this.sim?.map;
+        const mapId = map?.id;
+        if (!mapId || this.coopRun || !map.fight) {
             return;
         }
+        // A retry of the same part is without its cinematic; "Next fight", on to a part not played
+        // just now, plays that part's entrance
+        const played = this.sim?.stage;
+        const onward = map.stages !== undefined && this.chosenStage(mapId) !== played;
         this.leaveRun();
-        // The fight again at once, without the map's cinematic
-        void this.startRun(mapId, false);
+        void this.startRun(mapId, onward);
     }
 
     leaveRun(show = true): void {

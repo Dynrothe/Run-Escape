@@ -1712,11 +1712,33 @@ describe("the opening cinematic", () => {
         const { client } = createClient(createSim(), false);
         const startRun = vi.fn(async () => {});
         Object.assign(client, {
-            sim: { map: { id: "zachariah" } },
+            sim: { map: { id: "zachariah", fight: {} } },
             leaveRun: vi.fn(),
             startRun,
         });
         client.retry();
         expect(startRun).toHaveBeenCalledWith("zachariah", false);
+    });
+
+    test("plays the next part's entrance on a fight in parts' Next fight, not on its retry", () => {
+        const { client } = createClient(createSim(), false);
+        const startRun = vi.fn(async () => {});
+        const chosen = { stage: 3 };
+        Object.assign(client, {
+            sim: {
+                map: { id: "beneath_cursed_sands", fight: {}, stages: [{}, {}, {}, {}] },
+                stage: 2,
+            },
+            leaveRun: vi.fn(),
+            startRun,
+            chosenStage: () => chosen.stage,
+        });
+        // The Champion won: on to the Akh
+        client.retry();
+        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", true);
+        // The Champion lost: him again
+        chosen.stage = 2;
+        client.retry();
+        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", false);
     });
 });
