@@ -140,6 +140,7 @@
     "HEL": "FI",
     "HFA": "IL",
     "HGH": "CN",
+    "HKG": "HK",
     "HNL": "US",
     "HRE": "ZW",
     "HYD": "IN",
@@ -167,6 +168,7 @@
     "KCH": "MY",
     "KEF": "IS",
     "KGL": "RW",
+    "KHH": "TW",
     "KHI": "PK",
     "KHN": "CN",
     "KIN": "JM",
@@ -209,6 +211,7 @@
     "MEL": "AU",
     "MEM": "US",
     "MEX": "MX",
+    "MFM": "MO",
     "MIA": "US",
     "MLA": "MT",
     "MLE": "MV",
@@ -306,6 +309,7 @@
     "TNA": "CN",
     "TNR": "MG",
     "TPA": "US",
+    "TPE": "TW",
     "TUN": "TN",
     "TXL": "DE",
     "TYN": "CN",
@@ -335,5 +339,6 @@
     "YYC": "CA",
     "YYZ": "CA",
     "ZAG": "HR",
+    "ZDM": "PS",
     "ZRH": "CH"
 }

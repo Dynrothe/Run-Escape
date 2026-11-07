@@ -17,13 +17,9 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   with nothing done (`LOBBY_IDLE_MS` in `CoopLobby.ts`).
 - **Each room** (`src/room.mjs`) is its own Durable Object, at `/coop/room/<code>`. Cloudflare
   starts one near the first request for it, which is the host making it, so a run's frames and
-  inputs go through a relay close to the host rather than one fixed place.
-  This is automatic placement near the initial request, not a guarantee of the closest data
-  center or the same country. The Worker resolves `idFromName(code)`: active and pending codes
-  are reserved, but a finished code can be reused and addresses the same object ID. An object
-  that is still alive accepts another game room after its previous one ends. Closing a room
-  clears its storage and lets its remaining alarm drain; a local test cannot establish
-  whether Cloudflare retains placement after the object has fully shut down and been deleted.
+  inputs go through a relay close to the host rather than one fixed place. Close, but not always
+  the closest data centre, or in the host's country: see Cloudflare's
+  [placement rules](https://developers.cloudflare.com/durable-objects/reference/data-location/).
 - **Rooms hibernate too.** Their connections use Cloudflare's hibernation API, so a room is billed
   only while it's handling a message, not for every second it's open. A pending `setTimeout` or
   `setInterval` would keep it billed throughout, so everything a room waits for (the 10 seconds to
@@ -47,34 +43,25 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - The Worker (`src/index.mjs`) only routes: `/coop` to the lobby, `/coop/room/<code>` to that room,
   and a plain GET of `/coop` answers whether co-op's there, as the game asks. It sets each player's
   address from Cloudflare's `CF-Connecting-IP`, for the limits, and their country from
-  `request.cf.country`, for their flag in the party (unless they've hidden it and
-  don't host an open room).
-  Player flags in the party remain each player's IP country when they joined; resuming keeps
-  that original country. The incoming request's `cf.colo` identifies the serving Worker edge,
-  not necessarily the Durable Object's location. See Cloudflare's
-  [placement rules](https://developers.cloudflare.com/durable-objects/reference/data-location/)
-  and [traffic routing](https://developers.cloudflare.com/support/troubleshooting/general-troubleshooting/geographic-traffic-routing/).
-- **The lobby's room flag** is measured inside the room, independently of its host. `location.mjs`
-  calls Cloudflare's `https://www.cloudflare.com/cdn-cgi/trace` and maps its `colo` through
-  the bundled `colo-countries.json`, generated from Cloudflare's public status directory.
-  It never uses trace's IP-country `loc` or an incoming player's country as a fallback. This is
-  the diagnostic method used by
-  [Where Durable Objects Live](https://github.com/helloimalastair/where-durableobjects-live/blob/main/apps/worker/src/DO.ts),
-  not a contractual guarantee of physical placement. Unknown/failed measurements show no flag.
-  Old stored host-country entries are suppressed until the room measures its location.
-  Listings identify this with `countrySource: "server"`, so the game says "Server in"; older and
-  Node relays' flags say "Host playing from". Only open, unstarted rooms request the measurement.
-  Refresh the bundled mapping with `node scripts/update-colo-countries.mjs` in this directory,
-  then review and commit the JSON diff. New/unmapped colos stay blank until the next update.
-  Only the trace is fetched at runtime; a directory outage cannot interrupt existing mappings.
-  The lookup runs in the background with a bounded request deadline when the room first becomes
-  public. The first successful country is saved with that game room and never refreshed, including
-  after hibernation, a restart or a host handoff. This relies on Cloudflare's current placement
-  rules: existing Durable Objects don't change location. Revisit this if dynamic relocation ships.
-  A failed lookup stays blank and can retry on existing listing updates or heartbeats after
-  `LOCATION_RETRY_MS` in `room.mjs`; the cooldown is saved too. There is no new alarm or interval,
-  and private rooms and started runs don't initiate lookups. Closing the room deletes the saved
-  country, so a new room reusing its code measures again. Late results cannot revive a closed room.
+  `request.cf.country`, for their flag in the party (unless they've hidden it and don't host an
+  open room). A player who resumes keeps the country they joined from. The request's `cf.colo` is
+  the edge that took it, not where the room runs.
+- **A room's flag in the list** is where the room runs, measured inside it: `location.mjs` fetches
+  `https://www.cloudflare.com/cdn-cgi/trace` and looks its `colo` up in `colo-countries.json`
+  (never trace's `loc`, which is where the request came from). It's the method
+  [Where Durable Objects Live](https://github.com/helloimalastair/where-durableobjects-live/blob/main/apps/worker/src/DO.ts)
+  uses: a good guide, not a guarantee. Listings say `countrySource: "server"`, and a room that
+  couldn't measure it has no flag, never its host's (the lobby drops a host's country stored by an
+  older relay). A room measures once it's open and on its menu, in the background with a short
+  deadline, and saves the first country it gets with the room, so waking, a restart or a new host
+  don't measure again. That relies on Cloudflare not moving an object once it's placed: revisit it
+  if they start to. A failed measurement is tried again with the next listing update or heartbeat
+  after `LOCATION_RETRY_MS`. Closing the room deletes its country with the rest of its storage, so
+  a new room that reuses the code measures afresh.
+- `colo-countries.json` is made from Cloudflare's status page by
+  `node scripts/update-colo-countries.mjs`, run in this directory: review its diff and commit it.
+  A data centre it hasn't got has no flag until then. The status page names a few without a
+  country, which the script's `places` lists, and it stops at any new one.
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
   (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
   and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from

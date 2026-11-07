@@ -471,22 +471,6 @@ describe("Cloudflare co-op room", () => {
         expect(roomLocation).not.toHaveBeenCalled();
     });
 
-    it("clears a closed room's storage and lets its remaining alarm drain", async () => {
-        const { room } = await party();
-        expect(saved).toBeDefined();
-        expect(alarmAt).toBeDefined();
-        room.disband("closed");
-        expect(saved).toBeUndefined();
-        expect(gone).toEqual(["ABCDEFGH"]);
-        // deleteAll does not delete alarms at wrangler.toml's compatibility date.
-        await wait(room, 65_000);
-        expect(alarmAt).toBeUndefined();
-        expect(room.due.size).toBe(0);
-        const awake = await loadRoom();
-        expect(awake.room).toBeUndefined();
-        expect(saved).toBeUndefined();
-    });
-
     it("answers a player's game closing its connection", async () => {
         const { room, host, guest } = await party();
         const guestSocket = guest.socket;

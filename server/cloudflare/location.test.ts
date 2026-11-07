@@ -27,7 +27,8 @@ describe("Cloudflare room location measurement", () => {
         ]);
         for (const [, options] of fetching.mock.calls) {
             expect(options.signal).toBeInstanceOf(AbortSignal);
-            expect(options.redirect).toBe("error");
+            // Workers throw on redirect: "error", which would leave every room blank
+            expect(options.redirect).toBe("manual");
         }
     });
 
@@ -62,8 +63,8 @@ describe("Cloudflare room location measurement", () => {
         expect(await pending).toBeUndefined();
     });
 
-    it("doesn't use an HTTP error response as a location", async () => {
-        fetching.mockResolvedValue(new Response("colo=EWR\nloc=US\n", { status: 403 }));
+    it.each([403, 302])("doesn't use an HTTP %i response as a location", async (status) => {
+        fetching.mockResolvedValue(new Response("colo=EWR\nloc=US\n", { status }));
         expect(await lookup()).toBeUndefined();
     });
 });

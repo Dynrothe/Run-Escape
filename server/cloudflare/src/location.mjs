@@ -11,7 +11,8 @@ export async function roomLocation() {
     // awake indefinitely or delay creating/joining/playing in it.
     try {
         const signal = AbortSignal.timeout(3000);
-        const trace = await fetch(TRACE_URL, { signal, redirect: "error", cache: "no-store" });
+        // Workers refuse redirect: "error"; a redirect isn't ok, so it's unknown
+        const trace = await fetch(TRACE_URL, { signal, redirect: "manual", cache: "no-store" });
         if (!trace.ok) return undefined;
         const text = await trace.text();
         const colo = /^colo=([A-Z]{3})\r?$/m.exec(text)?.[1];

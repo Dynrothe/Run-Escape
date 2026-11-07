@@ -19,12 +19,13 @@ import { ItemIcon } from "./ItemIcon";
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
-// An open room's party panel shows its host player's flag even if they've
-// hidden it, so making one says so. The room-list flag can instead be the server's.
+// An open room shows its host's flag to its party even if they've hidden it,
+// so making one says so. Cloudflare's list shows the server's country instead
+// (Node relays list the host's).
 function openRoomTitle(ui: UiSnapshot): string {
     return (
         "Open rooms are listed for anyone" +
-        (ui.coop.country && !ui.display.coopFlag ? ", showing your flag" : "")
+        (ui.coop.country && !ui.display.coopFlag ? ", and show your flag to whoever joins" : "")
     );
 }
 
