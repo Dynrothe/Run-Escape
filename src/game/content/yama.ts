@@ -98,6 +98,29 @@ const CLAW: BossAttackDef = {
     impact: { spots: [{ spotAnim: BLOWN_DUST, fit: 2.5 }], shake: 0.3 },
 };
 
+// A gaze cast at him from too close for his pillars (BossDef.gazeWard.tooClose): his claw, at
+// once, from the arm already drawn back, knocking them out of the gaze and well away. Never
+// picked: it's only ever his answer to that.
+const SWAT: BossAttackDef = {
+    name: "Swat",
+    kind: "swing",
+    damage: 5,
+    windup: 0.4,
+    cooldown: 0,
+    range: 999,
+    weight: 0,
+    phases: [],
+    seq: CLAW_SEQ,
+    strikeAt: CLAW_AT,
+    windupSound: CLAW_SOUND,
+    // His claw's wedge, at whoever cast it: they're rooted in it, casting
+    radius: CLAW_REACH + RADIUS,
+    cone: (Math.PI * 2) / 3,
+    underRadius: RADIUS,
+    push: { distance: 7, seconds: 0.35 },
+    impact: { spots: [{ spotAnim: BLOWN_DUST, fit: 2.5 }], shake: 0.45 },
+};
+
 // The floor rippling out from his stomp, a ring of slabs at a time out to radius tiles, with the
 // diagonals (or the cross) left down: out of its reach before it gets there, or onto a spoke.
 // Started so its first ring (under him) rises as his foot comes down.
@@ -252,6 +275,7 @@ const METEOR_ATTACK: BossAttackDef = {
 
 const ATTACKS: BossAttackDef[] = [
     CLAW,
+    SWAT,
     HELLSTOMP,
     // Quicker rings from the second phase, the other way through them
     { ...HELLSTOMP, name: "Hellstomp (quick)", phases: [2, 3], floor: ripple(0.22, 10, "cross") },
@@ -313,6 +337,12 @@ export const YAMA_ENEMIES: EnemyDef[] = [
                 locId: STONE_PILLAR,
                 shouts: ["Your little light? Here, let me help.", "Judge me? With what?"],
                 impact: { spots: [{ spotAnim: BLOWN_DUST, fit: 1.5 }], shake: 0.2 },
+                // Closer than his claw reaches, no pillar could come up between them
+                tooClose: {
+                    reach: CLAW_REACH,
+                    attack: "Swat",
+                    shouts: ["Not so close, little judge.", "You'd look me in the eye? Away!"],
+                },
             },
             look: {
                 title: "#ff9a3c",

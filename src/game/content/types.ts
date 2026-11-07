@@ -811,6 +811,10 @@ export type BossAttackDef = {
     // attack (by name) on them, whatever it was winding up (a shock wave that binds,
     // then a flurry)
     onHit?: { pull?: number; pullSeconds?: number; bind?: number; attack?: string };
+    // Whoever it hits: knocked distance tiles straight away from it (as far as open ground goes)
+    // over seconds, and out of whatever of their own they were casting (Yama's swat at a gaze
+    // cast too close for his pillars, BossDef.gazeWard.tooClose)
+    push?: { distance: number; seconds: number };
     // Swings: whoever's out of its sight behind a pillar of the map's (ArenaFeatures.pillars)
     // is spared (inShadow in core/arena.ts). While it winds up, the arena's lit and the
     // pillars' shadows are drawn on the floor, soft-edged (BossFightView.drawGazeShadows).
@@ -1174,7 +1178,9 @@ export type BossDef = {
     // interrupt (BossAttackDef.interruptedBy), and then hits it. Cast at it otherwise, from within
     // reach tiles, count pillars (locId, rising over rise seconds) come up out of the floor
     // between it and whoever cast it, distance tiles out from its middle, real occluders that hide
-    // it, and sink after seconds. It says one of shouts.
+    // it, and sink after seconds. It says one of shouts. Cast from within tooClose.reach tiles of
+    // its edge, where pillars couldn't come up between them, it does tooClose.attack (by name) on
+    // them instead, straight away, whatever it was winding up, and says one of its shouts.
     gazeWard?: {
         reach: number;
         count: number;
@@ -1184,6 +1190,7 @@ export type BossDef = {
         locId: number;
         shouts: string[];
         impact?: ImpactDef;
+        tooClose?: { reach: number; attack: string; shouts: string[] };
     };
 };
 

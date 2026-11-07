@@ -378,6 +378,51 @@ describe("the gaze otherwise", () => {
             expect(sim.grid.isPillar(tiles[k], tiles[k + 1])).toBe(false);
         }
     });
+
+    test("cast too close for pillars, he swats them out of it and well away, and says so", () => {
+        const ward = yama().boss!.gazeWard!;
+        const close = ward.tooClose!;
+        const swat = attackNamed(close.attack);
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        // Close enough to touch him, with a claw on its way
+        stand(sim, boss, boss.radius + 1);
+        sim["startBossAttack"](boss, attackNamed("Claw"));
+        events(sim);
+        const hp = sim.player.hp;
+        expect(sim.useAbility(slot("owls_gaze"))).toBe(true);
+        // His claw's dropped for it, and no pillars
+        expect(windingUp(boss)).toBe(close.attack);
+        expect(sim.wardPillars).toEqual([]);
+        const shouts = events(sim).filter((e) => e.type === "bossShout");
+        expect(shouts.some((e) => close.shouts.includes((e as { text: string }).text))).toBe(true);
+        run(sim, swat.windup + swat.push!.seconds + 0.1);
+        // Knocked back, out of the gaze, and hurt a little
+        const away = Math.hypot(sim.player.x - boss.x, sim.player.y - boss.y);
+        expect(away).toBeGreaterThan(boss.radius + 1 + swat.push!.distance - 0.5);
+        expect(sim.player.y).toBeLessThan(boss.y);
+        expect(sim.isCasting()).toBe(false);
+        expect(sim.player.hp).toBeLessThan(hp);
+        expect(sim.heroes[0].damageByAttack[close.attack]).toBeGreaterThan(0);
+        // and the gaze never lands
+        run(sim, 2);
+        expect(boss.hp).toBe(YAMA_HITPOINTS);
+        expect(sim.wardPillars).toEqual([]);
+    });
+
+    test("cast close while he calls the meteor down, it still stops it", () => {
+        const meteor = attackNamed("Meteor");
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, boss.radius + 1);
+        sim["startBossAttack"](boss, meteor);
+        run(sim, 1);
+        expect(sim.useAbility(slot("owls_gaze"))).toBe(true);
+        expect(windingUp(boss)).toBe("Meteor");
+        run(sim, meteor.windup);
+        expect(struck(sim)).toBe(false);
+        expect(sim.isExposed(boss)).toBe(true);
+    });
 });
 
 // One of his Voidflares, called in now, held where it's put (its drifting is its own test's)

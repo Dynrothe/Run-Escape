@@ -16,7 +16,7 @@ the version in the corner).
   the floor rises under you, and only the Owl's gaze stops his meteor. Freeze his void flares with
   Ice barrage and shatter them with Lightning for food. It opens on Yama on his throne, facing the
   last of the palace guard (any key, click or tap skips it). Lunge through his rising floor
-  unharmed.
+  unharmed, and keep your gaze out of his reach: up close he swats you away.
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
   maps to play in any order, each harder the more of the others you've beaten. The first is the
   Stranglewood; the Lassar Undercity, Ghorrock and the Scar are coming.

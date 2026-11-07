@@ -995,7 +995,13 @@ adventurer can have:
     - `BossDef.gazeWard`: outside an interrupt, the gaze does nothing to it. Cast at it, pillars
       rise between them (`Sim.wardPillars`, `stepWardPillars`, `BossFightView.drawWardPillars`).
       They're grid pillars (`ArenaGrid.dropTile` with `pillar`, so `isPillar`), and so real
-      occluders for the gaze's sight and light. It says one of its `shouts`.
+      occluders for the gaze's sight and light. It says one of its `shouts`. Cast from within
+      `tooClose.reach` of its edge, where no pillar could come up between them, it drops what it
+      was winding up and does `tooClose.attack` instead (`Sim.swatGaze`: Yama's Swat), saying
+      one of its own shouts. Not while it's stunned, kneeling or calling down what the gaze
+      stops: the meteor's answer works at any range.
+    - `BossAttackDef.push` knocks whoever it hits straight away from the boss, as far as open
+      ground goes (`Sim.pushFrom`, a `Hero.drag`), and out of a cast of their own.
     - `BossAttackDef.floorAt: "boss"` aims its floor action at the boss (a ripple from his stomp).
       `ImpactSpotDef.height` lifts an impact's spot off the ground (the meteor breaking in the sky).
     - `EnemyDef.bursts` is his Voidflare: a summon nothing hurts (`damageEnemy` blocks it, and

@@ -423,6 +423,8 @@ const ABILITY_BUFFER_REACH = 1.5;
 const TRAIL_GAP = 1.5;
 // A hero's lunge (CharacterDef.abilities, kind lunge), tiles a second down its strip
 const KIT_DASH_SPEED = 24;
+// A boss's push (BossAttackDef.push) looks along its way in steps this long for open ground
+const PUSH_STEP = 0.25;
 // What a hero's wave binds an enemy in: the justiciars' blue impact
 const BLUE_BIND_SPOT = 1458;
 // Tiles from the player that what holds them turns up
@@ -7996,11 +7998,18 @@ export class Sim {
             if (away > ward.reach + enemy.radius || away < 0.001) {
                 continue;
             }
-            // What the gaze can stop, it doesn't hide from; and pillars already up stay as they are
-            if (
-                enemy.bossState?.windup?.attack.interruptedBy?.ability === cast.ability.id ||
-                this.wardPillars.some((pillars) => pillars.enemyUid === enemy.uid && !pillars.sunk)
-            ) {
+            // What the gaze can stop, it doesn't hide from
+            if (enemy.bossState?.windup?.attack.interruptedBy?.ability === cast.ability.id) {
+                continue;
+            }
+            // Too close for pillars to come up between them: it swings at them instead
+            const close = ward.tooClose;
+            if (close && away - enemy.radius <= close.reach) {
+                this.swatGaze(enemy, close);
+                continue;
+            }
+            // Pillars already up stay as they are
+            if (this.wardPillars.some((p) => p.enemyUid === enemy.uid && !p.sunk)) {
                 continue;
             }
             const ux = dx / away;
@@ -8037,6 +8046,87 @@ export class Sim {
                 const text = ward.shouts[this.rng.int(ward.shouts.length)];
                 this.emit({ type: "bossShout", enemyUid: enemy.uid, text });
             }
+        }
+    }
+
+    // A gaze cast from too close for its pillars (BossDef.gazeWard.tooClose): it drops whatever it
+    // was winding up and swings at them straight away, unless it's in no state to (stunned,
+    // kneeling at a threshold, or already swinging)
+    private swatGaze(
+        enemy: Enemy,
+        close: NonNullable<NonNullable<BossDef["gazeWard"]>["tooClose"]>,
+    ): void {
+        const state = enemy.bossState;
+        const attack = enemy.def.boss!.attacks.find((a) => a.name === close.attack);
+        if (
+            !state ||
+            !attack ||
+            this.isStunned(enemy) ||
+            state.phase?.pauseEnd !== undefined ||
+            state.dash ||
+            state.leap ||
+            state.windup?.attack === attack
+        ) {
+            return;
+        }
+        state.windup = undefined;
+        state.chain = undefined;
+        state.follow = undefined;
+        this.startBossAttack(enemy, attack);
+        if (close.shouts.length > 0) {
+            const text = close.shouts[this.rng.int(close.shouts.length)];
+            this.emit({ type: "bossShout", enemyUid: enemy.uid, text });
+        }
+    }
+
+    // The current hero knocked straight away from a boss (BossAttackDef.push), as far as open
+    // ground goes, and out of a cast of their own
+    private pushFrom(enemy: Enemy, push: NonNullable<BossAttackDef["push"]>): void {
+        const hero = this.hero;
+        const player = this.player;
+        let ux = player.x - enemy.x;
+        let uy = player.y - enemy.y;
+        // Right on top of it: back the way they face
+        if (fm.hypot(ux, uy) < 0.001) {
+            ux = -player.facingX;
+            uy = player.facingX === 0 && player.facingY === 0 ? -1 : -player.facingY;
+        }
+        const length = fm.hypot(ux, uy);
+        ux /= length;
+        uy /= length;
+        let reach = 0;
+        for (let d = PUSH_STEP; d <= push.distance + 1e-6; d += PUSH_STEP) {
+            const x = player.x + ux * d;
+            const y = player.y + uy * d;
+            if (
+                !isCircleFree(this.grid, x, y, player.radius) ||
+                !this.isWalkableTile(Math.floor(x), Math.floor(y))
+            ) {
+                break;
+            }
+            reach = d;
+        }
+        const to = findFreeSpot(
+            this.grid,
+            player.x + ux * reach,
+            player.y + uy * reach,
+            player.radius,
+            (tileX, tileY) => this.isWalkableTile(tileX, tileY),
+        );
+        const ticks = Math.max(1, secondsToTicks(push.seconds));
+        hero.drag = {
+            fromX: player.x,
+            fromY: player.y,
+            toX: to.x,
+            toY: to.y,
+            startTick: this.tick,
+            endTick: this.tick + ticks,
+            holdEnd: this.tick + ticks,
+        };
+        player.frozen = Math.max(player.frozen, ticks);
+        if (this.isCasting(hero)) {
+            this.kitCasts = this.kitCasts.filter((c) => c.hero !== hero.index || c.landed);
+            player.attackSeq = -1;
         }
     }
 
@@ -9756,6 +9846,9 @@ export class Sim {
         }
         if (attack.effect) {
             this.applyPlayerEffect(attack.effect, enemy);
+        }
+        if (attack.push && enemy && !this.hero.down) {
+            this.pushFrom(enemy, attack.push);
         }
         this.recoil(enemy);
     }

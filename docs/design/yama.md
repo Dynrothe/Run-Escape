@@ -188,6 +188,13 @@ stand and nothing hurting, so co-op sees it together; a solo skip brings his int
 - Shadow lanes is cast with his hands (MAGIC01). Its first animation, SUMMON01, starts with him
   under the floor, so he vanished as the lanes came up.
 - The palace floor's fires block nothing.
+- The gaze cast within reach of his claw, where his pillars couldn't come up between them: he
+  drops what he was doing and swats the caster out of it and 7 tiles away, for 5, saying so. Up
+  close the gaze had done nothing to him all along (`gazeWard` blocks it), but with no pillars
+  it looked like it landed. The meteor's gaze still works at any range. The bot only gazes at the
+  meteor, so its sims don't change; with `GAZE=waste` it gazes him up close while his guard's
+  down and gets swatted out of reach of its sword: 96, 148, 45, 115, 56 and 137 s, into phase 2
+  in three seeds (from 57, 55, 80, 92, 71 and 168 s, into phase 2 in all six).
 - A lunge goes over rising slabs unharmed: section 4's way through a ring, and through lanes too.
   The bot's six seeds came out at 95, 80, 45, 138, 55 and 112 s (from 59, 77, 105, 112, 56 and
   146), into phase 3 in two: no better or worse beyond a seed's noise, and still no win.

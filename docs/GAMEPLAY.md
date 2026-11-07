@@ -234,12 +234,12 @@ version and how to run it.
   burst into a cross of rising floor when their time's up, or when they touch you. Nothing hurts
   one, but Ice barrage holds it still, its time too, and Lightning breaks a held one, leaving food
   behind: the fight's only healing. The Owl's gaze can't touch him: he raises four stone pillars
-  against it. From 85% of his hitpoints, at every phase change and every 35 seconds or so (28 in his
-  last phase), he calls down a meteor that kills you wherever you stand. The only answer is the gaze
-  cast at him as he calls it, which breaks it in the sky and leaves him open. He never starts one
-  while your gaze is too far from ready. Killing him puts the fires out and leaves the city to walk
-  round again; dying offers Retry, straight back onto his floor and into the fight, without his
-  words.
+  against it, and cast within reach of his claw he swats you out of it and well away. From 85% of
+  his hitpoints, at every phase change and every 35 seconds or so (28 in his last phase), he calls
+  down a meteor that kills you wherever you stand. The only answer is the gaze cast at him as he
+  calls it, which breaks it in the sky and leaves him open. He never starts one while your gaze is
+  too far from ready. Killing him puts the fires out and leaves the city to walk round again; dying
+  offers Retry, straight back onto his floor and into the fight, without his words.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
