@@ -20,11 +20,10 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
-import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
+import { ALL_MAPS, LISTED_ENEMIES, MAPS, TOMBS_LISTED, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
@@ -46,7 +45,6 @@ import {
     SARCOPHAGI,
     SARCOPHAGUS_BLAST,
     SCABARAS,
-    TOMBS_ENEMIES,
     TOMBS_SPIRIT,
     TOMBS_SPOTANIMS,
     WARDENS,
@@ -184,10 +182,7 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 // sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
 // The Tombs of Amascut's own assets are only wanted where the raid's on the map list: it's a dev
-// map, so a build leaves them out (its enemies too, which are on ENEMIES for the sims and tests)
-const TOMBS_LISTED = ALL_MAPS.some((map) => map.tombs !== undefined);
-const TOMBS_ENEMY_IDS = new Set(TOMBS_ENEMIES.map((enemy) => enemy.id));
-
+// map, so a build leaves them out (its enemies too: LISTED_ENEMIES, maps.ts)
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
@@ -338,10 +333,7 @@ export function getSpotAnimIds(): number[] {
             add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim, skin.idle?.spotAnim);
         }
     }
-    for (const enemy of ENEMIES) {
-        if (!TOMBS_LISTED && TOMBS_ENEMY_IDS.has(enemy.id)) {
-            continue;
-        }
+    for (const enemy of LISTED_ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
@@ -875,15 +867,18 @@ export class GameAssets {
                 });
             }
         }
-        // The visitors, and the Tombs' Helpful Spirit drawn as one
-        for (const { id, npcId, idleSeq } of [...RANDOM_EVENTS, TOMBS_SPIRIT]) {
+        // The visitors, and where the Tombs are listed, their Helpful Spirit drawn as one
+        for (const { id, npcId, idleSeq } of [
+            ...RANDOM_EVENTS,
+            ...(TOMBS_LISTED ? [TOMBS_SPIRIT] : []),
+        ]) {
             if (npcId !== undefined && idleSeq !== undefined) {
                 requests.push({ kind: "npc", key: "visitor:" + id, npcId, seqIds: [idleSeq] });
             }
         }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
-        for (const enemy of ENEMIES) {
+        for (const enemy of LISTED_ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 if (attack.pool) {
                     locIds.add(attack.pool.locId);

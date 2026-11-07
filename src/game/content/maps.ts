@@ -3,11 +3,13 @@ import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedN
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
-import { ENEMY_BY_ID, getEnemy } from "./enemies";
+import { CURSED_SANDS_ENEMIES, CURSED_SANDS_MAP_ID } from "./cursedSands";
+import { ENEMIES, ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
+import { TOMBS_ENEMIES } from "./tombs";
 import { CinematicDef, EnemyDef, MapDef } from "./types";
 import {
     BARROWS_EVENTS,
@@ -478,6 +480,22 @@ export const DEV_MAPS: MapDef[] = showDevMaps ? SCAPERUNE_DEV_MAPS.map(createDev
 export const ALL_MAPS: MapDef[] = [...MAPS, ...RAID_MAPS, ...FUN_MAPS, ...DEV_MAPS];
 
 export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
+
+// The Tombs of Amascut and Beneath Cursed Sands are dev maps, only on the list on the dev server.
+// Their enemies are on ENEMIES all the same, for the sims and tests, so what gathers assets for
+// every enemy (what a run bakes and synthesizes, and the slim cache) goes by these: a build leaves
+// theirs out.
+export const TOMBS_LISTED = ALL_MAPS.some((map) => map.tombs !== undefined);
+export const CURSED_SANDS_LISTED = MAP_BY_ID.has(CURSED_SANDS_MAP_ID);
+const UNLISTED_ENEMY_IDS = new Set(
+    [
+        ...(TOMBS_LISTED ? [] : TOMBS_ENEMIES),
+        ...(CURSED_SANDS_LISTED ? [] : CURSED_SANDS_ENEMIES),
+    ].map((enemy) => enemy.id),
+);
+export const LISTED_ENEMIES: EnemyDef[] = ENEMIES.filter(
+    (enemy) => !UNLISTED_ENEMY_IDS.has(enemy.id),
+);
 
 // The map generator's latest map (scaperune/MapGeneratorScreen.tsx). A new object
 // each time, which is how the minimap knows it's another map.

@@ -262,6 +262,11 @@ describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
                 expect((request as { seqIds: number[] }).seqIds).toContain(seq);
             }
         }
+        // A dev map that isn't listed here (Beneath Cursed Sands, with no DEV_MAPS) has its
+        // cues' assets left out, as a build does (LISTED_ENEMIES): only a listed map's are wanted
+        if (!ALL_MAPS.some((listed) => listed.id === map.id)) {
+            return;
+        }
         const spots = getSpotAnimIds();
         const sounds = getGameSoundIds();
         for (const cue of def.cues) {

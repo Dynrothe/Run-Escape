@@ -8,14 +8,23 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
+import { CURSED_SANDS_ENEMIES } from "../content/cursedSands";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { GEAR_SLOTS } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
-import { ALL_MAPS, getMap } from "../content/maps";
+import {
+    ALL_MAPS,
+    CURSED_SANDS_LISTED,
+    LISTED_ENEMIES,
+    TOMBS_LISTED,
+    getMap,
+} from "../content/maps";
 import { PASSIVES } from "../content/passives";
-import { POWER_UPS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { SOUNDS } from "../content/sounds";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
@@ -39,6 +48,7 @@ import {
     getRunAppearance,
     getRunAttackSeqs,
     getShieldedModelKey,
+    getSpotAnimIds,
     getStatueModelKey,
     lookHas,
 } from "./GameAssets";
@@ -106,7 +116,7 @@ describe("enemy bakes", () => {
 
     test("every spot animation a boss attack shows is in the base bake", () => {
         const keys = GameAssets.getBaseRequests().map((r) => r.key);
-        for (const enemy of ENEMIES) {
+        for (const enemy of LISTED_ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 for (const id of attack.impactSpotAnims ?? []) {
                     expect(keys).toContain("spot:" + id);
@@ -553,5 +563,75 @@ describe("a boss's overhead prayer", () => {
         expect(getPrayerHeadicon(["ranged", "magic"])).toBe(6);
         expect(getPrayerHeadicon(["melee", "ranged"])).toBe(7);
         expect(getPrayerHeadicon(["melee", "magic"])).toBe(8);
+    });
+});
+
+// Every spot animation and sound id in a piece of content, by what its fields are called: a
+// spotAnim or *SpotAnim(s), a sound or *Sound(s) (and an enemy's sounds' attack, hit and death)
+function collectAssetIds(value: unknown): { spotAnims: Set<number>; sounds: Set<number> } {
+    const found = { spotAnims: new Set<number>(), sounds: new Set<number>() };
+    const seen = new Set<object>();
+    const visit = (value: unknown, key: string, parent: string): void => {
+        if (typeof value === "number") {
+            if (value < 0) {
+                return;
+            }
+            if (/spotanims?$/i.test(key)) {
+                found.spotAnims.add(value);
+            } else if (/sounds?$/i.test(key) || /sounds$/i.test(parent)) {
+                found.sounds.add(value);
+            }
+        } else if (value && typeof value === "object" && !seen.has(value)) {
+            seen.add(value);
+            for (const [childKey, child] of Object.entries(value)) {
+                const array = Array.isArray(value);
+                visit(child, array ? key : childKey, array ? parent : key);
+            }
+        }
+    };
+    visit(value, "", "");
+    return found;
+}
+
+// The Tombs of Amascut and Beneath Cursed Sands are dev maps: a build (and the tests, with no
+// DEV_MAPS) doesn't list them, so it mustn't synthesize or bake what only their enemies use
+describe("a dev map's enemies, where it isn't listed", () => {
+    const dev = new Set([...TOMBS_ENEMIES, ...CURSED_SANDS_ENEMIES].map((enemy) => enemy.id));
+    const own = collectAssetIds([...TOMBS_ENEMIES, ...CURSED_SANDS_ENEMIES]);
+    const shared = collectAssetIds([
+        ENEMIES.filter((enemy) => !dev.has(enemy.id)),
+        WEAPONS,
+        ALL_MAPS,
+        POWER_UPS,
+        THRALLS,
+        RANDOM_EVENTS,
+    ]);
+    const sounds = new Set(Object.values(SOUNDS).flat());
+    const onlySpotAnims = [...own.spotAnims].filter((id) => !shared.spotAnims.has(id));
+    const onlySounds = [...own.sounds].filter((id) => !shared.sounds.has(id) && !sounds.has(id));
+
+    test("are off the list here, and have assets of their own to leave out", () => {
+        expect(TOMBS_LISTED).toBe(false);
+        expect(CURSED_SANDS_LISTED).toBe(false);
+        expect(LISTED_ENEMIES.some((enemy) => dev.has(enemy.id))).toBe(false);
+        expect(onlySpotAnims.length).toBeGreaterThan(0);
+        expect(onlySounds.length).toBeGreaterThan(0);
+    });
+
+    test("have none of their own spot animations baked", () => {
+        const ids = new Set(getSpotAnimIds());
+        expect(onlySpotAnims.filter((id) => ids.has(id))).toEqual([]);
+    });
+
+    test("have none of their own sounds synthesized", () => {
+        const ids = new Set(getGameSoundIds());
+        expect(onlySounds.filter((id) => ids.has(id))).toEqual([]);
+    });
+
+    test("the Tombs' Helpful Spirit isn't baked", () => {
+        const requests = GameAssets.getBaseRequests();
+        expect(requests.filter((r) => r.kind === "npc" && r.npcId === TOMBS_SPIRIT.npcId)).toEqual(
+            [],
+        );
     });
 });

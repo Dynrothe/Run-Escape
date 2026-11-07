@@ -1,4 +1,4 @@
-import { POINT_BLANK_VOLLEY } from "../../content/cursedSands";
+import { CURSED_SANDS_MAP_ID, POINT_BLANK_VOLLEY } from "../../content/cursedSands";
 import { APMEKEN_BARRIER_LOC, TOMBS_LIGHTING, TOMBS_STRIKE } from "../../content/tombs";
 import { MapDef } from "../../content/types";
 import {
@@ -1259,7 +1259,7 @@ const SANDS_ENTRANCES = createSandsEntrances(SANDS_MIDDLE);
 const SANDS_DONE = "The Menaphite Akh is slain! The Tombs of Amascut are open to you.";
 
 export const BENEATH_CURSED_SANDS: MapDef = {
-    id: "beneath_cursed_sands",
+    id: CURSED_SANDS_MAP_ID,
     name: "Beneath Cursed Sands",
     description:
         "A quest, as a boss fight in four parts, each kept once it's won: Coenus the Head " +
