@@ -3,9 +3,11 @@ import { execFileSync } from "node:child_process";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
+import { pipeline } from "node:stream";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
+import { parseRange } from "./desktop/gameServer";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
@@ -100,7 +102,14 @@ function serveCachesPlugin(): Plugin {
     const serveCaches = (middlewares: Connect.Server, root: string) => {
         middlewares.use("/caches", (req, res, next) => {
             // The game asks for caches.json?build=<its build>
-            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
+            let reqUrl: string;
+            try {
+                reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
+            } catch {
+                res.statusCode = 400;
+                res.end();
+                return;
+            }
             const filePath = normalize(join(root, reqUrl));
             const rel = relative(root, filePath);
             if (rel.startsWith("..") || rel.includes(`..${sep}`)) {
@@ -118,9 +127,45 @@ function serveCachesPlugin(): Plugin {
                     notFound();
                     return;
                 }
+                const lastModified = stat.mtime.toUTCString();
                 res.setHeader("Content-Type", mimeFor(filePath));
                 res.setHeader("Cache-Control", "no-cache");
-                createReadStream(filePath).on("error", notFound).pipe(res);
+                res.setHeader("Accept-Ranges", "bytes");
+                res.setHeader("Last-Modified", lastModified);
+                // A download that was cut off (a phone on a tunnel) resumes from where it got to:
+                // CacheFiles asks for bytes=<offset>-<MAX_SAFE_INTEGER>, and without this got the
+                // whole file again, back to 0% each time. Parsed as the desktop app's server does
+                // (parseRange), and a file that's changed since (If-Range) is sent whole.
+                const ifRange = req.headers["if-range"];
+                const range =
+                    ifRange === undefined || ifRange === lastModified
+                        ? parseRange(req.headers.range ?? null, stat.size)
+                        : undefined;
+                if (range === "unsatisfiable") {
+                    res.statusCode = 416;
+                    res.setHeader("Content-Range", `bytes */${stat.size}`);
+                    res.end();
+                    return;
+                }
+                const { start, end } = range ?? { start: 0, end: stat.size - 1 };
+                if (range) {
+                    res.statusCode = 206;
+                    res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
+                }
+                res.setHeader("Content-Length", Math.max(0, end - start + 1));
+                if (req.method === "HEAD" || end < start) {
+                    res.end();
+                    return;
+                }
+                // Closed with the reply (a phone that drops it), and a read that fails partway
+                // cuts it off rather than leaving it short
+                pipeline(createReadStream(filePath, { start, end }), res, (error) => {
+                    if (error && !res.headersSent) {
+                        notFound();
+                    } else if (error) {
+                        res.destroy(error);
+                    }
+                });
             } catch {
                 notFound();
             }
