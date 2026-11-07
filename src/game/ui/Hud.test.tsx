@@ -2,7 +2,15 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { GameClient } from "../client/GameClient";
-import { GameStore, HudNumbers, HudView, SlotView } from "../client/GameStore";
+import {
+    ChestView,
+    EventView,
+    GameStore,
+    HudNumbers,
+    HudView,
+    SlotView,
+    UiSnapshot,
+} from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, getGear } from "../content/items";
@@ -328,14 +336,48 @@ describe("the run's HUD", () => {
         expect(view.queryByRole("timer")).toBeNull();
     });
 
-    test("keeps the countdown visible over chest, event and co-op menu overlays", () => {
+    test("keeps the countdown up over a casket, an event and co-op's menu", () => {
         const { store, view } = renderHud();
-        for (const overlay of ["chest", "event", "paused"] as const) {
+        const chest: ChestView = {
+            uid: 1,
+            casketName: "Easy casket",
+            casketObjId: 20546,
+            tierColor: "#3fe03f",
+            rarity: "common",
+            coins: 10,
+            item: getItemView(CASKET_GEAR[0]),
+            isGear: true,
+            changes: [],
+            canStash: false,
+            carried: 0,
+            instant: false,
+            alchCoins: 5,
+            recommended: "take",
+            queued: 0,
+        };
+        const event: EventView = {
+            uid: 2,
+            name: "Drunken dwarf",
+            speech: "Have a drink!",
+            leaveLabel: "Leave",
+            options: [{ title: "Beer", iconObjId: 1917, enabled: true }],
+        };
+        const overlays: Partial<UiSnapshot>[] = [
+            { overlay: "chest", chest },
+            { overlay: "event", event },
+            { overlay: "paused" },
+        ];
+        for (const changes of overlays) {
             act(() => {
-                store.set({ overlay });
+                store.set(changes);
                 store.setNumbers(numbers({ decisionSeconds: 12 }));
             });
-            expect(view.getByRole("timer").textContent).toContain("12s");
+            const timer = view.getByRole("timer");
+            expect(timer.textContent).toContain("12s");
+            // GameUi.css makes room under it by the modal coming after it
+            const modal = view.container.querySelector(".ui-modal")!;
+            expect(modal.parentElement).toBe(timer.parentElement);
+            expect(timer.compareDocumentPosition(modal)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
         }
     });
 });

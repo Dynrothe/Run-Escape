@@ -1803,7 +1803,7 @@ function ChoiceCountdown({ client }: { client: GameClient }): JSX.Element | null
             role="timer"
             aria-label={`Party choosing. Next automatic choice in ${seconds} seconds`}
         >
-            <span>Party choosing</span>
+            <span className="ui-choice-countdown-label">Party choosing</span>
             <span className="ui-choice-countdown-time">Auto-choice in {seconds}s</span>
         </div>
     );

@@ -644,26 +644,32 @@
         font-size: 24px;
     }
 
+    /* Co-op's countdown: one line where the clock was, so the boss bar, the
+       waiting note and the toasts keep their places under it */
     .ui-choice-countdown {
         top: calc(var(--safe-top) + 16px);
-        flex-direction: column;
-        gap: 0;
         padding: 3px 8px;
         font-size: 14px;
         line-height: 18px;
     }
 
-    .ui-choice-countdown ~ .ui-boss,
-    .ui-choice-countdown ~ .ui-boss-warning {
-        top: calc(var(--safe-top) + 66px);
+    .ui-choice-countdown-label {
+        display: none;
     }
 
+    /* The panels under it, and clear of the home bar. Here they have their
+       padding and border inside their size. */
     .ui-choice-countdown ~ .ui-modal {
-        padding-top: calc(var(--safe-top) + 64px);
+        padding-top: calc(var(--safe-top) + 46px);
+        padding-bottom: var(--safe-bottom);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-panel {
+        max-height: calc(100% - 12px);
     }
 
     .ui-choice-countdown ~ .ui-modal > .ui-chest-card {
-        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 76px);
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 58px);
     }
 
     .ui-hud-right {

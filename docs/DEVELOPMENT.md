@@ -1553,9 +1553,14 @@ and a hit can still arrive after the local picture appears to have moved clear.
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.
   Everyone sees the time until the next automatic choice at the top center, even while choosing
-  or after answering. It replaces the run clock until the party finishes.
+  or after answering. It replaces the run clock until the party finishes, and shows the time
+  alone on a phone or a window under 860 pixels wide, so it fits where the clock was. Panels
+  under it make room and scroll if they must: a `.ui-panel` is content-box on a desktop, so its
+  padding and border sit outside a `max-height`, but border-box on a phone.
   `DownMessage.decisionMs` carries the host's remaining wall-clock time (also on resends);
   `CoopRun.decisionSeconds` feeds the HUD's numbers store. It never enters the sim or its hash.
+  A guest's deadline only moves later by more than `DEADLINE_SLACK_MS` (for the next wait), so
+  frames arriving unevenly can't make it count back up. A run that ends early drops it.
 - **Hidden tabs**: a co-op player whose tab is hidden keeps stepping off a worker's timer, so the
   host keeps the run going and a guest keeps up.
 

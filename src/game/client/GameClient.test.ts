@@ -475,6 +475,22 @@ describe("the HUD", () => {
         expect(numbers).not.toHaveBeenCalled();
         vi.unstubAllGlobals();
     });
+
+    test("drops co-op's countdown when a run ends early while the party's choosing", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        Object.assign(client, { coopRun: { decisionSeconds: 12 }, coopStopped: false });
+        updateHud(client, true);
+        expect(store.getNumbers()!.decisionSeconds).toBe(12);
+        // The host left mid-choice: the results show, and the run stays as it stopped
+        (client as unknown as { endCoopRunEarly(why: string): void }).endCoopRunEarly(
+            "The host left, so the run ended.",
+        );
+        expect(store.getSnapshot().overlay).toBe("dead");
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
+        updateHud(client);
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
+    });
 });
 
 describe("the frame rate setting", () => {

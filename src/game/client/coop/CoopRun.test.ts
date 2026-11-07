@@ -538,6 +538,33 @@ describe("co-op lockstep", () => {
         expect(guest.decisionSeconds).toBeUndefined();
     });
 
+    it("doesn't count a guest's countdown back up when a frame comes late", () => {
+        let now = 0;
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: () => {}, sendDown: () => {} },
+            new Map(IDS.map((id, i) => [id, i])),
+            "host",
+            () => now,
+        );
+        guest.sim.xp = 100;
+        guest.sim.step();
+        guest.receiveDown({ upTo: 1, events: [], decisionMs: 10_000 });
+        now = 1010;
+        expect(guest.decisionSeconds).toBe(9);
+        // Sent 40 ms after the last, it took 40 ms longer to come
+        guest.receiveDown({ upTo: 2, events: [], decisionMs: 9030 });
+        expect(guest.decisionSeconds).toBe(9);
+        // One that came quicker brings it forward
+        guest.receiveDown({ upTo: 3, events: [], decisionMs: 8900 });
+        now = 1910;
+        expect(guest.decisionSeconds).toBe(8);
+        // Someone decided for, and waited on again: a new wait starts it over
+        guest.receiveDown({ upTo: 4, events: [], decisionMs: DECIDE_AFTER_MS });
+        expect(guest.decisionSeconds).toBe(20);
+    });
+
     it("decides for them with a reward they haven't banished", () => {
         const clock = { now: 0 };
         const { run } = hostRun(clock);

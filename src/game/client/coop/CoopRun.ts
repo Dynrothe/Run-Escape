@@ -48,6 +48,10 @@ const RESEND_EVENTS = 1000;
 // Someone the run's waited on this long (a hidden tab, gone to make tea) has
 // it decided for them: the first reward, taking the casket, or walking away
 export const DECIDE_AFTER_MS = 20_000;
+// A guest's countdown to that comes with every frame message, each taking a
+// little more or less time to arrive. Its deadline only moves later by more
+// than this, for the next wait, so the shown seconds never count back up.
+const DEADLINE_SLACK_MS = 1000;
 // A guest that's still missing frames this long after it first saw them
 // missing, with the host's frames coming all the while, can't be caught up:
 // the host no longer has them (a connection that was dead for longer than
@@ -133,6 +137,8 @@ export class CoopRun {
     private readonly actionSeqs = new Map<number, { top: number; had: Set<number> }>();
     // The host's: since when the run's been waiting on each hero
     private readonly waitingSince = new Map<number, number>();
+    // A guest's: when, by its own clock, the host will next decide for
+    // someone (from the host's DownMessage.decisionMs)
     private decisionDeadline?: number;
     // The copies have gone apart (it's said once)
     desynced = false;
@@ -355,6 +361,9 @@ export class CoopRun {
         }
     }
 
+    // How long until the host next decides for someone (the soonest of those
+    // it's waiting on), while anyone's choosing. Only for showing: the
+    // host's comes from its clock, never the sim's.
     private get decisionMs(): number | undefined {
         const waiting = this.sim.waitingOn;
         if (waiting.length === 0) {
@@ -431,10 +440,15 @@ export class CoopRun {
         this.upTo = Math.max(this.upTo, message.upTo);
         this.gapSince = undefined;
         const ms = message.decisionMs;
-        this.decisionDeadline =
-            typeof ms === "number" && Number.isFinite(ms) && ms >= 0 && ms <= DECIDE_AFTER_MS
-                ? this.now() + ms
-                : undefined;
+        if (typeof ms === "number" && Number.isFinite(ms) && ms >= 0 && ms <= DECIDE_AFTER_MS) {
+            const deadline = this.now() + ms;
+            const shown = this.decisionDeadline;
+            if (shown === undefined || deadline < shown || deadline - shown > DEADLINE_SLACK_MS) {
+                this.decisionDeadline = deadline;
+            }
+        } else {
+            this.decisionDeadline = undefined;
+        }
     }
 
     // A guest's: frames missing that the host can't send again, so its run
@@ -517,12 +531,13 @@ export class CoopRun {
         ) {
             return;
         }
+        const decisionMs = this.decisionMs;
         const message: DownMessage = {
             from: this.sentUpTo,
             upTo: this.upTo,
             events: this.outgoing,
             ...(this.outgoingHash && { hash: this.outgoingHash }),
-            ...(this.decisionMs !== undefined && { decisionMs: this.decisionMs }),
+            ...(decisionMs !== undefined && { decisionMs }),
         };
         this.link.sendDown(message);
         this.sent.push(message);
@@ -560,6 +575,8 @@ export class CoopRun {
         }
         let chunk: DownMessage[] = [];
         let events = 0;
+        // The time left now, not when the frames were first sent
+        const decisionMs = this.decisionMs;
         const send = () => {
             const hash = chunk.findLast((m) => m.hash)?.hash;
             this.link.sendDown({
@@ -567,7 +584,7 @@ export class CoopRun {
                 upTo: chunk[chunk.length - 1].upTo,
                 events: chunk.flatMap((m) => m.events),
                 ...(hash && { hash }),
-                ...(this.decisionMs !== undefined && { decisionMs: this.decisionMs }),
+                ...(decisionMs !== undefined && { decisionMs }),
             });
             chunk = [];
             events = 0;

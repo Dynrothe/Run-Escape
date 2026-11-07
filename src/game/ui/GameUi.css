@@ -1187,8 +1187,23 @@
     box-sizing: border-box;
 }
 
+/* A panel too tall for what's left under it scrolls, rather than spilling out of its frame. Its
+   padding and border (28px and 12px) are outside its max-height, with 6px to spare each side. */
 .ui-choice-countdown ~ .ui-modal > .ui-panel {
+    max-height: calc(100% - 52px);
+    overflow-y: auto;
+}
+
+/* The casket's card has its border inside its size */
+.ui-choice-countdown ~ .ui-modal > .ui-chest-card {
     max-height: calc(100% - 12px);
+}
+
+/* A narrow window has room between six slots and the minimap for the time alone */
+@media (max-width: 860px) {
+    .ui-choice-countdown-label {
+        display: none;
+    }
 }
 
 .ui-xp {
