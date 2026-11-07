@@ -1899,10 +1899,12 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
-**Exports are the only backup** unless cloud save is on. Clearing the browser's data (or uninstalling the Android app)
+**Exports are the only backup** unless cloud save has a copy. Clearing the browser's data (or
+uninstalling the Android app)
 loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
 reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
-`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving or cloud save is on. It comes after the
+`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving or cloud save has a
+copy (`cloudKeepsCopy`: on, synced, and nothing wrong or waiting). It comes after the
 menu so a controller's highlight still starts on Singleplayer. The file Export gives has
 `SaveData.lastExported` (`Date.now()`) in it, so it says when it was made; a newer game's save goes
 as it's stored, without one. The save itself takes the date, and the reminder goes until tomorrow,
@@ -1932,18 +1934,30 @@ waiting and a "no" sign while it can't sync. It opens the choice, or cloud save'
 - **Uploads happen at save points only** (`CloudSync.savePoint`): a run's results, leaving
   Skills or the Armoury, an import, and leaving the tab. Not on every write: buying ranks one
   after another goes up once, on leaving Skills. A save point uploads only if the fingerprint's
-  changed, and only where the save's written at all (the lock, not a newer game's, room to keep
-  it). Uploads are `UPLOAD_COOLDOWN_MS` (2 minutes) apart at least: a save point within it waits
-  for it to pass, and whatever's changed by then goes up once. A save that didn't get up is still
-  changed, so the next save point or check sends it. Sync now in Settings sends it at once. A
-  download is in step as it goes in, so it doesn't come back up.
+  changed, and only where the save's written at all (`GameClient.canPersist`: the lock, not a
+  newer game's, room to keep it). Uploads are `UPLOAD_COOLDOWN_MS` (2 minutes) apart at least: a
+  save point within it waits for it to pass, and whatever's changed by then goes up once. Leaving
+  the tab doesn't wait: the page may not come back (an app closed, a phone's browser put away),
+  so it sends at once, with `keepalive`. A save that didn't get up is still changed, so the next
+  save point or check sends it. Sync now in Settings sends it at once. A download is in step as
+  it goes in, so it doesn't come back up. A request with no answer after `REQUEST_TIMEOUT_MS`
+  has failed, so one that hangs can't hold up the rest.
+- **A save with no runs never goes up over the cloud's.** One that's changed since it was in
+  step is a save that couldn't be read and was made fresh, so the cloud's goes in instead, as
+  for the player who cleared their browser.
 - **Checks** happen when the tab gets the save lock, and on coming back to the tab (every
   minute at most). They only read. The cloud's revision being this device's means only local
-  changes are news. A different one is taken silently when nothing changed here, or the save has
-  no runs (the player who cleared their browser). Otherwise, and when an upload's refused as
-  stale, the title screen asks which to keep, showing both summaries, unless the two hold the
-  same progress (the same fingerprint). Nothing syncs until the player picks (Later puts it in
-  Settings). Keeping this device's uploads with `force`.
+  changes are news. A different one is taken silently when nothing changed here and it has at
+  least this save's runs, or when this save has none (the player who cleared their browser).
+  Otherwise, and when an upload's refused as stale, the title screen asks which to keep, over
+  Settings or cloud save's panel if one's open, showing both summaries, unless the two hold the
+  same progress (the same fingerprint). Fewer runs is asked about so that a device that lost
+  its progress can't pass it on silently. Nothing syncs until the player picks: Later puts it in
+  Settings, and it stays put off, though checks go on (one about a newer cloud save updates the
+  choice). Keeping this device's uploads with `force`.
+- **A code that stops working** (New code used elsewhere, or the Worker's `INACTIVE_DAYS` without
+  use) is a 401: Settings says so and offers only Turn off, after which the new code can be
+  typed in or cloud save turned on again.
 - **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
   Worker refuses an older game's upload over it, so the choice says why, and only Keep this
   device's (losing what's new) or Later.

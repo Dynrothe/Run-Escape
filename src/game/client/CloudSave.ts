@@ -20,8 +20,13 @@ export const CLOUD_STATE_KEY = "rune-survivors-cloud";
 export const UPLOAD_COOLDOWN_MS = 120_000;
 // Coming back to the tab checks for a save from another device, this often at most
 const CHECK_EVERY_MS = 60_000;
+// A request with no answer by then has failed, so one that hangs (a network that's gone, a portal
+// that never answers) can't hold up the ones after it
+export const REQUEST_TIMEOUT_MS = 20_000;
+// The most a request that outlives its page may carry (fetch allows a page 64 KiB of them)
+const KEEPALIVE_BYTES = 60_000;
 
-// What the Worker says about a save (readSave in server/cloud-saves/worker.mjs)
+// What the Worker says about a save (readSave in server/cloud-saves/schema.mjs)
 export type CloudSummary = {
     gameVersion: string;
     runs: number;
@@ -74,6 +79,17 @@ export interface CloudHost {
 }
 
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+// Whether the cloud has a copy of this save now: on, synced, and nothing wrong or waiting. Only
+// then does the title's export reminder go.
+export function cloudKeepsCopy(view: CloudView | undefined): boolean {
+    return (
+        view?.code !== undefined &&
+        view.syncedAt !== undefined &&
+        view.problem === undefined &&
+        view.choice === undefined
+    );
+}
 
 export function summarize(save: SaveData, gameVersion: string): CloudSummary {
     return {
@@ -246,8 +262,8 @@ export class CloudSync {
         });
     }
 
-    // A save point (a run's results, leaving Skills or the Armoury, an import, leaving the tab):
-    // uploads if the progress has changed. Within the cooldown it waits, and whatever's changed
+    // A save point (a run's results, leaving Skills or the Armoury, an import; leaving the tab is
+    // onVisibility's): uploads if the progress has changed. Within the cooldown it waits, and whatever's changed
     // by then goes up once. Nothing goes up while the player's deciding which save to keep.
     savePoint(): void {
         if (!this.state || this.choice || this.uploadTimer !== undefined || !this.changedHere()) {
@@ -261,10 +277,14 @@ export class CloudSync {
         }
     }
 
-    // Leaving the tab is a save point, and coming back looks for a save from elsewhere
+    // Leaving the tab is a save point that goes at once, cooldown or not: the page may not come
+    // back (the app closed, the phone's browser put away), so a timer would never fire. Coming
+    // back looks for a save from elsewhere.
     onVisibility(hidden: boolean): void {
         if (hidden) {
-            this.savePoint();
+            if (this.state && !this.choice && this.changedHere()) {
+                this.upload(true);
+            }
         } else if (Date.now() - this.lastCheck > CHECK_EVERY_MS) {
             this.check();
         }
@@ -434,14 +454,24 @@ export class CloudSync {
         }
     }
 
-    private upload(): Promise<void> {
+    // leaving: the page is going, so the request is sent to outlive it
+    private upload(leaving = false): Promise<void> {
         clearTimeout(this.uploadTimer);
         this.uploadTimer = undefined;
         return this.run(async () => {
             this.state = readState(this.storage);
-            if (this.state && !this.choice && this.host.canWrite() && this.changedHere()) {
-                await this.put(false);
+            if (!this.state || this.choice || !this.host.canWrite() || !this.changedHere()) {
+                return;
             }
+            if (this.host.save().runs === 0 && this.state.revision > 0) {
+                // A save with no runs never goes up over the cloud's: settle takes the cloud's
+                const meta = await this.request("GET", "save/meta");
+                if (meta) {
+                    await this.settle(meta);
+                }
+                return;
+            }
+            await this.put(false, leaving);
         });
     }
 
@@ -456,10 +486,24 @@ export class CloudSync {
         if (!meta) {
             return;
         }
+        // Already waiting on the player about this one: nothing's new till they pick, and Later
+        // stays put off
+        if (this.choice && this.choice.cloud.revision === meta.revision) {
+            return;
+        }
         const state = this.state!;
-        if (meta.revision === state.revision || meta.revision === 0) {
-            // In step (or the cloud has nothing), so only this device's changes are news
-            state.revision = meta.revision;
+        // The player who cleared their browser: an untouched save takes the cloud's
+        const fresh = this.host.save().runs === 0;
+        // A save with no runs that's changed since it was in step is one that couldn't be read
+        // and was made fresh, not progress: it takes the cloud's too, rather than going up over it
+        const reset = fresh && meta.revision > 0 && this.changedHere();
+        if (meta.revision === 0 || (meta.revision === state.revision && !reset)) {
+            // In step (or the cloud has nothing), so only this device's changes are news. Kept,
+            // as an upload reads the state again.
+            if (state.revision !== meta.revision) {
+                state.revision = meta.revision;
+                this.write();
+            }
             this.choice = undefined;
             if (now && this.changedHere()) {
                 await this.put(false);
@@ -471,14 +515,20 @@ export class CloudSync {
         const newer =
             meta.summary !== undefined &&
             compareGameVersions(meta.summary.gameVersion, this.host.gameVersion) > 0;
-        // The player who cleared their browser's data: an untouched save takes the cloud's
-        const fresh = this.host.save().runs === 0;
         if (newer) {
-            this.choice = { cloud: meta, newer, closed: false };
+            this.ask(meta, true);
             return;
         }
+        // A cloud save with fewer runs than this one is asked about even when nothing changed
+        // here, so a device that lost its progress can't pass that on to every other
+        const behind = (meta.summary?.runs ?? 0) < this.host.save().runs;
         // Both changed: ask, unless they're the same save after all (a code linked again, say)
-        await this.download(this.changedHere() && !fresh);
+        await this.download(!fresh && (this.changedHere() || behind));
+    }
+
+    // Asks which save to keep. One put off with Later stays put off, though the cloud's moves on.
+    private ask(cloud: CloudMeta, newer: boolean): void {
+        this.choice = { cloud, newer, closed: this.choice?.closed ?? false };
     }
 
     // ifSame: only if it's the same as this device's, and if not, ask which to keep
@@ -503,7 +553,7 @@ export class CloudSync {
             save = importSave(answer.save, this.host.gameVersion);
         } catch (e) {
             if (e instanceof NewerSaveError) {
-                this.choice = { cloud: got, newer: true, closed: false };
+                this.ask(got, true);
             } else {
                 console.error("The cloud's save couldn't be read", e);
                 this.problem = "refused";
@@ -512,7 +562,7 @@ export class CloudSync {
         }
         const hash = fingerprint(save);
         if (ifSame && hash !== fingerprint(this.host.save())) {
-            this.choice = { cloud: got, newer: false, closed: false };
+            this.ask(got, false);
             return;
         }
         // In step before it goes in, so going in isn't a change to upload
@@ -525,17 +575,24 @@ export class CloudSync {
         }
     }
 
-    private async put(force: boolean): Promise<void> {
+    // keepalive: sent to outlive the page, as it's going
+    private async put(force: boolean, keepalive = false): Promise<void> {
         const state = this.state!;
         const save = this.host.save();
         // What goes up: a change made while it's on its way is left for the next save point
         const hash = fingerprint(save);
         this.lastUpload = Date.now();
-        const response = await this.call("PUT", "save", state.code, {
-            baseRevision: state.revision,
-            save: exportSave(save, this.host.gameVersion),
-            ...(force && { force }),
-        });
+        const response = await this.call(
+            "PUT",
+            "save",
+            state.code,
+            {
+                baseRevision: state.revision,
+                save: exportSave(save, this.host.gameVersion),
+                ...(force && { force }),
+            },
+            keepalive,
+        );
         const { status, data } = response;
         if (status === 200) {
             if (!Number.isInteger(data?.revision)) {
@@ -555,7 +612,7 @@ export class CloudSync {
                 data.reason === "newer" ||
                 (cloud.summary !== undefined &&
                     compareGameVersions(cloud.summary.gameVersion, this.host.gameVersion) > 0);
-            this.choice = { cloud, newer, closed: false };
+            this.ask(cloud, newer);
         } else {
             this.noteProblem(response, state.code);
         }
@@ -603,29 +660,41 @@ export class CloudSync {
         }
     }
 
+    // Gives up after REQUEST_TIMEOUT_MS, as a failure. keepalive: the request outlives the page,
+    // if it's small enough to.
     private async call(
         method: string,
         path: string,
         code?: string,
         body?: unknown,
+        keepalive = false,
     ): Promise<{ status: number; data: any }> {
-        const response = await this.fetcher(`${this.url}/v1/${path}`, {
-            method,
-            cache: "no-store",
-            credentials: "omit",
-            headers: {
-                ...(code && { Authorization: `Bearer ${code}` }),
-                ...(body !== undefined && { "Content-Type": "application/json" }),
-            },
-            body: body === undefined ? undefined : JSON.stringify(body),
-        });
-        let data: any;
+        const text = body === undefined ? undefined : JSON.stringify(body);
+        const timeout = new AbortController();
+        const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
         try {
-            data = await response.json();
-        } catch {
-            data = undefined;
+            const response = await this.fetcher(`${this.url}/v1/${path}`, {
+                method,
+                cache: "no-store",
+                credentials: "omit",
+                headers: {
+                    ...(code && { Authorization: `Bearer ${code}` }),
+                    ...(body !== undefined && { "Content-Type": "application/json" }),
+                },
+                body: text,
+                keepalive: keepalive && (text?.length ?? 0) < KEEPALIVE_BYTES,
+                signal: timeout.signal,
+            });
+            let data: any;
+            try {
+                data = await response.json();
+            } catch {
+                data = undefined;
+            }
+            return { status: response.status, data };
+        } finally {
+            clearTimeout(timer);
         }
-        return { status: response.status, data };
     }
 
     // Runs after whatever's already going. A request that can't get through is a problem, not

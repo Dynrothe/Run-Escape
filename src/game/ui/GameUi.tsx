@@ -14,6 +14,7 @@ import compass from "../../components/rs/minimap/compass.png";
 import minimapFrame from "../../components/rs/minimap/minimap-frame.png";
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { cloudKeepsCopy } from "../client/CloudSave";
 import { FRAME_RATES, FrameRate } from "../client/DisplaySettings";
 import { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
@@ -754,10 +755,17 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         savePanel,
         cloudChoice,
     ]);
+    // Over the title's own panels too: Sync now or a code linked from Settings or cloud save's
+    // panel can be what asks
+    const choicePanel =
+        !savePanel && cloudChoice && ui.cloud ? (
+            <CloudChoicePanel cloud={ui.cloud} save={save} client={client} />
+        ) : undefined;
     if (changelogOpen) {
         return (
             <div className="ui-fill ui-center">
                 <ChangelogPanel onClose={() => setChangelogOpen(false)} />
+                {choicePanel}
             </div>
         );
     }
@@ -765,6 +773,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         return (
             <div className="ui-fill ui-center">
                 <SettingsPanel ui={ui} client={client} onClose={() => setSettingsOpen(false)} />
+                {choicePanel}
             </div>
         );
     }
@@ -777,6 +786,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                     saving={!ui.saveBlock}
                     onClose={() => setCloudOpen(false)}
                 />
+                {choicePanel}
             </div>
         );
     }
@@ -842,8 +852,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 </div>
                 {/* Under the menu, so a controller's highlight still starts on
                     Singleplayer; not while nothing's saving, as that panel comes first */}
-                {/* Cloud save keeps a copy already */}
-                {!ui.saveBlock && !ui.cloud?.code && <ExportReminder save={save} client={client} />}
+                {/* Nor while cloud save has a copy: only while it's on, synced, and nothing's
+                    wrong, as a code that's stopped working keeps none */}
+                {!ui.saveBlock && !cloudKeepsCopy(ui.cloud) && (
+                    <ExportReminder save={save} client={client} />
+                )}
                 <TitleHint />
             </div>
             <div className="ui-title-utils">
@@ -875,8 +888,8 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <DiscordLink />
                 <GitHubLink />
             </div>
-            {savePanel ? null : cloudChoice && ui.cloud ? (
-                <CloudChoicePanel cloud={ui.cloud} save={save} client={client} />
+            {savePanel ? null : choicePanel ? (
+                choicePanel
             ) : ui.unreadableSave ? (
                 <UnreadableSavePanel keptAs={ui.unreadableSave} client={client} />
             ) : (

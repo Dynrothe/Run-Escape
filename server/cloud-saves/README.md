@@ -7,8 +7,8 @@ player types it in on the other device. The Worker keeps only the code's SHA-256
 
 The local save stays the main copy. The game uploads at save points (a run's results, leaving
 Skills or the Armoury, an import, leaving the tab), only when the progress has changed, and two
-minutes apart at least. A game whose build has no cloud-save URL, or that can't reach it, doesn't
-offer cloud save at all.
+minutes apart at least, except on leaving the tab, which sends at once. A game whose build has no
+cloud-save URL, or that can't reach it, doesn't offer cloud save at all.
 
 ## Set up the Worker
 
@@ -27,7 +27,7 @@ relay and the collector.
 2. **Say where the game is.** In `server/cloud-saves/wrangler.toml`, add the web game's origin to
    `ALLOWED_ORIGINS` (comma-separated). The desktop app's (`https://run-escape.invalid`) and the
    Android app's (`https://appassets.androidplatform.net`) are already there. If another Worker on
-   your account already uses rate limit namespaces `11503` to `11505`, pick others.
+   your account already uses rate limit namespaces `11503` to `11506`, pick others.
 
 3. **Create and deploy it**, the first time only:
 
@@ -45,7 +45,9 @@ relay and the collector.
 
 **After a change** to the Worker or a new migration, run `bun run saves:deploy`. Migrations must
 add to the schema rather than change it, since the running Worker uses it until the deploy
-finishes.
+finishes. `worker.mjs` may export only functions: workerd reads every name it exports as an
+entrypoint, and won't start a Worker that exports a number or a RegExp. Constants and the save's
+checks are in `schema.mjs`.
 
 **Locally**, run `bun run saves:dev`, which serves the Worker on port 8791 with a local database.
 Put the dev game's origin in `server/cloud-saves/.dev.vars`:
@@ -83,7 +85,7 @@ The code goes in `Authorization: Bearer <code>`, in any case, with or without it
   mustn't be able to wipe every version at once. `DELETE` only marks the code deleted
   (`accounts.deleted_at`). Its saves stay untouched for `DELETED_RETENTION_DAYS` (7), and
   meanwhile every request with the code but `POST /v1/account/restore` gets a 410 with
-  `restorableUntil`, which restore undoes. The hourly job then removes the code and its saves.
+  `restorableUntil`, which restore undoes. The daily job then removes the code and its saves.
 - **A new code shuts out a leaked one.** Deleting can't, since whoever has the code can restore
   it. `POST /v1/account/code` gives the same saves a new code and retires the old one, which
   then gets a 401 everywhere. The player's other devices need the new one typed in.
@@ -123,15 +125,16 @@ the maps with a victory, and `gameVersion`.
   (any request with it, such as the game's check when it starts) is noted at most once a day.
 - **Lost codes can't be recovered**, as there's nothing else to know a player by. The game keeps
   its file export, and shows the code again in Settings on any device that has it.
-- **Rate limits:** every request per address (60 a minute); new codes and new codes for old ones
-  per address (1 a minute); uploads per code (6 a minute) and per address, whatever the code (3 a
-  minute).
-- **Daily caps:** `MAX_SAVES_PER_DAY` (5,000) and `MAX_ACCOUNTS_PER_DAY` (2,000) bound what the
-  whole Worker writes; past them, the game is told to try again later and keeps its save locally.
-  Each is above what one address can send in a day at its rate limit (4,320 uploads, 1,440 new
-  codes), so no one address can use them up for everyone; it takes several working together.
-  Each code also has its own, `MAX_UPLOADS_PER_CODE_PER_DAY` (300): the game sends one every 2
-  minutes at most.
+- **Rate limits:** every request per address (60 a minute); new codes, deletes, restores and new
+  codes for old ones per address (1 a minute, between them); uploads per code (6 a minute) and
+  per address, whatever the code (3 a minute).
+- **Daily caps:** `MAX_SAVES_PER_DAY` (5,000), `MAX_ACCOUNTS_PER_DAY` (2,000) and
+  `MAX_ACCOUNT_CHANGES_PER_DAY` (2,000 deletes, restores and new codes for old ones, each a write
+  to a code's row) bound what the whole Worker writes; past them, the game is told to try again
+  later and keeps its save locally. Each is above what one address can send in a day at its rate
+  limit (4,320 uploads, 1,440 new codes or changes), so no one address can use them up for
+  everyone; it takes several working together. Each code also has its own,
+  `MAX_UPLOADS_PER_CODE_PER_DAY` (300): the game sends one every 2 minutes at most.
 - **The origin check isn't a lock.** CORS keeps other websites' pages from using the Worker in a
   visitor's browser, and a new code needs an allowed `Origin`, but anything but a browser can
   send any `Origin`, and Android's is every app's that uses `WebViewAssetLoader`. The code is
@@ -147,12 +150,15 @@ the maps with a victory, and `gameVersion`.
 
 D1's daily writes and storage are per account, so on the Free plan this shares them with the run
 collector. A save costs about 4 rows written (its row, the day's count, its code's count, and
-the oldest version deleted), a new code about 3. The default caps come to about 26,000 rows a
-day at most, which leaves the collector's share of the 100,000. A full save gzips to about 5 KB,
+the oldest version deleted), a new code about 3, and a delete, restore or new code for an old
+one about 3 (the code's row, its index, the day's count). The default caps come to about 32,000
+rows a day at most, and each code used that day writes one more (when it was last used), which
+leaves the collector's share of the 100,000. A full save gzips to about 5 KB,
 and none may pass 16 KB. A code keeps 6 versions, and up to 7 more for the days before, so 30 to
 65 KB for a real one: around 8,000 to 16,000 codes in D1 Free's 500 MB a database. On Workers
 Paid, these are far past what saves need; on Free, lower `KEEP_VERSIONS` or `KEEP_DAYS` before
 raising the caps.
 
-An hourly job removes codes deleted over a week ago, codes nobody's used (above), and the day
-counts from before yesterday.
+A daily job removes codes deleted over a week ago, codes nobody's used (above), and the day
+counts from before yesterday. Daily, not hourly: what it removes is counted in days, and each run
+reads the codes table through.

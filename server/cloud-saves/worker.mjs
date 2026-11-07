@@ -1,18 +1,18 @@
 // Cloud saves: a save kept against a sync code, so it can be carried to another device. The
 // Worker checks a save's shape and size only, never the game's rules, so a release with new
 // maps or items needs no redeploy (README, What it accepts).
+import {
+    MAX_STORED_BYTES,
+    compareGameVersions,
+    formatCode,
+    newCode,
+    normalizeCode,
+    readSave,
+} from "./schema.mjs";
 
-// A save's text, as the game exports it. A full one is about 22 KB.
-export const MAX_SAVE_BYTES = 65_536;
-// And gzipped, as it's stored. A full save is about 5 KB; junk that won't compress is turned
-// away, so the database can't be filled, or used to keep anything but saves.
-export const MAX_STORED_BYTES = 16_384;
-// The request around it: the save as a JSON string, escaped, plus a few fields
+// The request around a save (MAX_SAVE_BYTES): the save as a JSON string, escaped, plus a few
+// fields
 const MAX_BODY_BYTES = 196_608;
-export const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
-// A sync code: 120 random bits as 24 characters of Crockford's base32 (no I, L, O or U)
-const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const CODE = /^[0-9A-HJKMNP-TV-Z]{24}$/;
 const DAY_MS = 86_400_000;
 const utcDay = (time) => new Date(time).toISOString().slice(0, 10);
 
@@ -30,6 +30,9 @@ const DEFAULT_KEEP_DAYS = 7;
 // allowance, which the run collector shares if it's on the same account (README, Budget)
 const DEFAULT_MAX_SAVES_PER_DAY = 5000;
 const DEFAULT_MAX_ACCOUNTS_PER_DAY = 2000;
+// Deletes, restores and new codes for old ones: each writes the code's row, so taking turns at
+// deleting and restoring could otherwise run through the day's writes too
+const DEFAULT_MAX_ACCOUNT_CHANGES_PER_DAY = 2000;
 // Each code's own uploads a day, so no one code uses up MAX_SAVES_PER_DAY
 const DEFAULT_MAX_UPLOADS_PER_CODE_PER_DAY = 300;
 // A code nobody's used for this long goes, with its saves
@@ -42,82 +45,9 @@ const DEFAULT_DELETED_RETENTION_DAYS = 7;
 const retention = (env) =>
     setting(env.DELETED_RETENTION_DAYS, DEFAULT_DELETED_RETENTION_DAYS, 1, 90) * DAY_MS;
 
-// Below 0 when a is older than b, above 0 when it's newer, as the game compares them
-// (compareGameVersions in src/game/core/save.ts)
-export function compareGameVersions(a, b) {
-    const [partsA, partsB] = [a, b].map((v) => v.split(".").map((part) => parseInt(part) || 0));
-    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-        const diff = (partsA[i] ?? 0) - (partsB[i] ?? 0);
-        if (diff !== 0) return diff;
-    }
-    return 0;
-}
-
-// Reads a sync code as a player might type it: any case, with or without dashes and spaces,
-// and with O, I and L for 0, 1 and 1
-export function normalizeCode(text) {
-    if (typeof text !== "string" || text.length > 64) return undefined;
-    const code = text.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
-    return CODE.test(code) ? code : undefined;
-}
-
-export function newCode() {
-    const bytes = crypto.getRandomValues(new Uint8Array(15));
-    let code = "";
-    let bits = 0;
-    let value = 0;
-    for (const byte of bytes) {
-        value = (value << 8) | byte;
-        bits += 8;
-        while (bits >= 5) {
-            bits -= 5;
-            code += ALPHABET[(value >> bits) & 31];
-        }
-    }
-    return code;
-}
-
-// As it's shown to the player: K7Q2-M9XD-4TPA-W3RN-H8BE-6FZC
-export const formatCode = (code) => code.match(/.{4}/g).join("-");
-
 async function sha256(text) {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-// A save as the game sends it: its shape, and what the game shows of it. Undefined when it
-// isn't one.
-export function readSave(text) {
-    if (typeof text !== "string" || new TextEncoder().encode(text).byteLength > MAX_SAVE_BYTES) {
-        return undefined;
-    }
-    let save;
-    try {
-        save = JSON.parse(text);
-    } catch {
-        return undefined;
-    }
-    if (!save || typeof save !== "object" || Array.isArray(save)) return undefined;
-    const { version, gameVersion } = save;
-    if (!Number.isInteger(version) || version < 1 || version > 10_000) return undefined;
-    if (typeof gameVersion !== "string" || !VERSION.test(gameVersion)) return undefined;
-    // Fields every save has had, so it's a save and not something else kept here
-    const isCount = (n) => typeof n === "number" && Number.isFinite(n) && n >= 0;
-    if (!isCount(save.runs) || !isCount(save.coins)) return undefined;
-    const count = (n) => (isCount(n) ? Math.floor(n) : 0);
-    const victories =
-        save.mapVictories && typeof save.mapVictories === "object" ? save.mapVictories : {};
-    return {
-        version,
-        gameVersion,
-        summary: {
-            gameVersion,
-            runs: count(save.runs),
-            victories: count(save.victories),
-            totalCoins: count(save.totalCoins),
-            mapsBeaten: Object.values(victories).filter((n) => count(n) > 0).length,
-        },
-    };
 }
 
 // An ArrayBuffer, which D1 stores as a BLOB
@@ -222,13 +152,41 @@ async function createAccount(env, now, respond) {
     return respond({ code: formatCode(code) });
 }
 
+// A change to a code (a delete, a restore, a new code), counted in the day's, and false once
+// there have been MAX_ACCOUNT_CHANGES_PER_DAY. Read first, so one past the cap writes nothing.
+async function changeAccount(env, now, statement) {
+    const cap = setting(
+        env.MAX_ACCOUNT_CHANGES_PER_DAY,
+        DEFAULT_MAX_ACCOUNT_CHANGES_PER_DAY,
+        1,
+        10_000_000,
+    );
+    const day = utcDay(now);
+    const { results } = await env.DB.prepare("SELECT changes FROM daily_intake WHERE day = ?")
+        .bind(day)
+        .all();
+    if ((results[0]?.changes ?? 0) >= cap) return false;
+    await env.DB.batch([
+        statement,
+        env.DB.prepare(
+            `INSERT INTO daily_intake (day, changes) VALUES (?, 1)
+            ON CONFLICT(day) DO UPDATE SET changes = changes + 1`,
+        ).bind(day),
+    ]);
+    return true;
+}
+
+const NO_MORE_CHANGES = { error: "No more changes to cloud saves today" };
+
 // A new code for the same saves, and the old one stops working: what to do when a code's
 // leaked. Deleting wouldn't do, as whoever has the code could restore it.
-async function rotateCode(env, accountId, respond) {
+async function rotateCode(env, accountId, now, respond) {
     const code = newCode();
-    await env.DB.prepare("UPDATE accounts SET code_hash = ? WHERE id = ?")
-        .bind(await sha256(code), accountId)
-        .run();
+    const update = env.DB.prepare("UPDATE accounts SET code_hash = ? WHERE id = ?").bind(
+        await sha256(code),
+        accountId,
+    );
+    if (!(await changeAccount(env, now, update))) return respond(NO_MORE_CHANGES, 503);
     return respond({ code: formatCode(code) });
 }
 
@@ -384,13 +342,18 @@ export async function handle(request, env, now = Date.now()) {
     const found = await account(request, env);
     if (!found) return respond({ error: "Unknown sync code" }, 401);
     const accountId = found.id;
-    // Deleted: the saves are kept, untouched, until the hourly job removes them. Restoring is the
+    // Deletes, restores and new codes, per address as new codes are, so no one address can use
+    // up the day's changes for everyone
+    const changeLimit = async () => limit(env.ACCOUNT_LIMITER, ip);
+    // Deleted: the saves are kept, untouched, until the daily job removes them. Restoring is the
     // only thing the code can do meanwhile.
     if (found.deleted_at !== null && found.deleted_at !== undefined) {
         if (pathname === "/v1/account/restore") {
-            await env.DB.prepare("UPDATE accounts SET deleted_at = NULL WHERE id = ?")
-                .bind(accountId)
-                .run();
+            if (!(await changeLimit())) return respond({ error: "Too many requests" }, 429);
+            const restore = env.DB.prepare(
+                "UPDATE accounts SET deleted_at = NULL WHERE id = ?",
+            ).bind(accountId);
+            if (!(await changeAccount(env, now, restore))) return respond(NO_MORE_CHANGES, 503);
             return respond({ restored: true });
         }
         return respond(
@@ -408,15 +371,16 @@ export async function handle(request, env, now = Date.now()) {
             .run();
     }
     if (pathname === "/v1/account/code") {
-        if (!(await limit(env.ACCOUNT_LIMITER, ip))) {
-            return respond({ error: "Too many requests" }, 429);
-        }
-        return rotateCode(env, accountId, respond);
+        if (!(await changeLimit())) return respond({ error: "Too many requests" }, 429);
+        return rotateCode(env, accountId, now, respond);
     }
     if (pathname === "/v1/account") {
-        await env.DB.prepare("UPDATE accounts SET deleted_at = ? WHERE id = ?")
-            .bind(now, accountId)
-            .run();
+        if (!(await changeLimit())) return respond({ error: "Too many requests" }, 429);
+        const remove = env.DB.prepare("UPDATE accounts SET deleted_at = ? WHERE id = ?").bind(
+            now,
+            accountId,
+        );
+        if (!(await changeAccount(env, now, remove))) return respond(NO_MORE_CHANGES, 503);
         return respond({ deleted: true, restorableUntil: now + retention(env) });
     }
     if (pathname === "/v1/save/meta") return respond(meta(await latestSave(env, accountId)));

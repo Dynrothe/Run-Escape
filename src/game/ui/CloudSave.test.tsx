@@ -71,6 +71,20 @@ test("shows the code and what's wrong, once on", () => {
     expect(cloud.deleteCloud).toHaveBeenCalledTimes(1);
 });
 
+test("says what to do once a linked code stops working, and offers only turning off", () => {
+    const cloud = settings({ code: CODE, working: false, problem: "unknownCode" });
+    expect(screen.getByText(/doesn't work any more/)).toHaveTextContent(/Turn off, then/);
+    expect(screen.getByRole("button", { name: "Sync now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "New code" })).toBeDisabled();
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    expect(cloud.turnOff).toHaveBeenCalledTimes(1);
+    cleanup();
+    // A code typed in wrong is only that
+    settings({ working: false, problem: "unknownCode" });
+    expect(screen.getByText("That code isn't one cloud save knows.")).toBeInTheDocument();
+});
+
 test("asks which save to keep, and won't load a newer game's", () => {
     const { client, cloud } = mockClient();
     const view = (newer: boolean): CloudView => ({

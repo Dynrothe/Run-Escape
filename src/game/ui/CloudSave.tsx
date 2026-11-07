@@ -15,11 +15,15 @@ const PROBLEMS: Record<CloudProblem, string> = {
     refused: "Cloud save wouldn't take this save. Export it to keep a copy.",
 };
 
-// What's wrong, for Settings and the title's button: a deleted code says until when it's kept
+// What's wrong, for Settings and the title's button: a deleted code says until when it's kept,
+// and a linked one that stopped working says what to do
 function describeProblem(cloud: CloudView): string | undefined {
     if (cloud.problem === "deleted" && cloud.deletedUntil) {
         const until = new Date(cloud.deletedUntil).toLocaleDateString();
         return `That code's cloud save was deleted. It's kept until ${until}, and Restore brings it back.`;
+    }
+    if (cloud.problem === "unknownCode" && cloud.code) {
+        return "This code doesn't work any more: New code was used on another device, or it went unused for weeks. Turn off, then type in the new code or turn cloud save on again.";
     }
     return cloud.problem && PROBLEMS[cloud.problem];
 }
@@ -159,13 +163,15 @@ export function CloudSaveSettings({
               ? `On. Last synced ${new Date(cloud.syncedAt).toLocaleString()}.`
               : "On."));
     const code = cloud.code;
+    // A code that's stopped working can only be turned off
+    const dead = cloud.problem === "unknownCode";
     return (
         <>
             <CloudRow name={first} text={status}>
                 {restore}
                 <button
                     className="ui-button ui-button-small"
-                    disabled={busy}
+                    disabled={busy || dead}
                     onClick={(e) => {
                         blur(e);
                         sync.check(true);
@@ -229,7 +235,7 @@ export function CloudSaveSettings({
                 </button>
                 <button
                     className="ui-button ui-button-small"
-                    disabled={busy}
+                    disabled={busy || dead}
                     onClick={(e) => {
                         blur(e);
                         if (

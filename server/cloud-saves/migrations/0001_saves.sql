@@ -23,7 +23,7 @@ CREATE TABLE saves (
     PRIMARY KEY (account_id, revision)
 ) WITHOUT ROWID;
 
--- Saves and accounts stored each UTC day, for the daily caps. Old days are pruned hourly.
+-- Saves and accounts stored each UTC day, for the daily caps. Old days are pruned daily.
 CREATE TABLE daily_intake (
     day TEXT PRIMARY KEY,
     saves INTEGER NOT NULL DEFAULT 0,

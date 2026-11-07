@@ -4,7 +4,9 @@ import {
     CloudHost,
     CloudSync,
     CloudView,
+    REQUEST_TIMEOUT_MS,
     UPLOAD_COOLDOWN_MS,
+    cloudKeepsCopy,
     fingerprint,
     normalizeCode,
     readMeta,
@@ -20,14 +22,23 @@ class FakeWorker {
     accounts = new Map<string, { revision: number; text: string; at: number }[]>();
     // Codes deleted, whose saves are kept for restoring
     deleted = new Set<string>();
-    requests: { method: string; path: string; body?: any }[] = [];
+    requests: { method: string; path: string; body?: any; keepalive?: boolean }[] = [];
     down = false;
+    // Takes the request and never answers, till it's given up on
+    hang = false;
     // Something else answering these requests with a page (a captive portal, a proxy)
     garbage?: { method: string; status: number };
 
     fetch = async (url: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
         if (this.down) {
             throw new TypeError("Failed to fetch");
+        }
+        if (this.hang) {
+            return new Promise((_resolve, reject) =>
+                init.signal?.addEventListener("abort", () =>
+                    reject(new DOMException("The operation was aborted", "AbortError")),
+                ),
+            );
         }
         const path = String(url).slice(`${URL}/v1/`.length);
         if (this.garbage && this.garbage.method === (init.method ?? "GET")) {
@@ -37,7 +48,7 @@ class FakeWorker {
         }
         const method = init.method ?? "GET";
         const body = init.body ? JSON.parse(String(init.body)) : undefined;
-        this.requests.push({ method, path, body });
+        this.requests.push({ method, path, body, keepalive: init.keepalive });
         const auth = (init.headers as Record<string, string>)?.Authorization;
         const code = auth && normalizeCode(auth.slice(7));
         const reply = (value: unknown, status = 200) => Response.json(value, { status });
@@ -231,6 +242,115 @@ it("takes leaving the tab as a save point", async () => {
     sync.onVisibility(true);
     await sync.idle();
     expect(worker.latest?.runs).toBe(2);
+});
+
+it("sends what's changed on leaving the tab at once, cooldown or not, to outlive the page", async () => {
+    vi.useFakeTimers();
+    await start(withRuns(1)).turnOn();
+    // Skills left half a minute after a run went up: it waits out the cooldown
+    await vi.advanceTimersByTimeAsync(30_000);
+    current = withRuns(2);
+    sync.savePoint();
+    await sync.idle();
+    expect(worker.uploads()).toBe(1);
+    // The app's closed before then, so a timer would never fire
+    sync.onVisibility(true);
+    await sync.idle();
+    expect(worker.latest?.runs).toBe(2);
+    expect(worker.requests.at(-1)).toMatchObject({ method: "PUT", keepalive: true });
+    // The timer's gone with it: nothing goes up twice
+    await vi.advanceTimersByTimeAsync(UPLOAD_COOLDOWN_MS);
+    expect(worker.uploads()).toBe(2);
+    // Nothing new, nothing sent
+    sync.onVisibility(true);
+    await sync.idle();
+    expect(worker.uploads()).toBe(2);
+});
+
+it("takes the cloud's save over a fresh one put in its place, and never sends that up", async () => {
+    // The save couldn't be read, so the game made a fresh one: the cloud's is the player's
+    worker.put(withRuns(40));
+    link(1, withRuns(40));
+    await start(createSave()).check();
+    expect(current.runs).toBe(40);
+    expect(worker.uploads()).toBe(0);
+    expect(view()?.choice).toBeUndefined();
+    // However a save with no runs gets to a save point, it doesn't go up over the cloud's
+    current = createSave();
+    sync.savePoint();
+    await sync.idle();
+    expect(worker.uploads()).toBe(0);
+    expect(worker.latest?.runs).toBe(40);
+    expect(current.runs).toBe(40);
+    // A code with no save yet still takes a fresh device's first one
+    worker = new FakeWorker();
+    storage.clear();
+    await start(createSave()).turnOn();
+    expect(worker.latest?.runs).toBe(0);
+});
+
+it("asks before a cloud save with fewer runs replaces this one, even with nothing new here", async () => {
+    worker.put(withRuns(9));
+    worker.put(withRuns(9));
+    link(2, withRuns(9));
+    // Another device lost its progress and sent that up
+    worker.put(withRuns(3));
+    await start(withRuns(9)).check();
+    expect(current.runs).toBe(9);
+    expect(view()?.choice).toMatchObject({ newer: false, cloud: { revision: 3 } });
+});
+
+it("keeps a choice put off till the player makes it, though the tab comes back", async () => {
+    vi.useFakeTimers();
+    link(1, withRuns(1));
+    worker.put(withRuns(1));
+    worker.put(withRuns(9));
+    await start(withRuns(4)).check();
+    sync.later();
+    const downloads = () => worker.requests.filter((r) => r.path === "save" && r.method === "GET");
+    expect(downloads()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(61_000);
+    sync.onVisibility(false);
+    await sync.idle();
+    expect(view()?.choice).toMatchObject({ closed: true, cloud: { revision: 2 } });
+    expect(downloads()).toHaveLength(1);
+    // The cloud's moved on meanwhile: the choice is about the newest, still put off
+    worker.put(withRuns(12));
+    await vi.advanceTimersByTimeAsync(61_000);
+    sync.onVisibility(false);
+    await sync.idle();
+    expect(view()?.choice).toMatchObject({ closed: true, cloud: { revision: 3 } });
+    sync.reopenChoice();
+    await sync.useCloud();
+    expect(current.runs).toBe(12);
+    expect(view()?.choice).toBeUndefined();
+});
+
+it("gives up on a request that doesn't answer, so the rest aren't held up", async () => {
+    vi.useFakeTimers();
+    link(1, withRuns(1));
+    worker.put(withRuns(1));
+    worker.hang = true;
+    const checking = start(withRuns(1)).check();
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1000);
+    expect(view()?.working).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    await checking;
+    expect(view()).toMatchObject({ working: false, problem: "offline" });
+    await sync.turnOff();
+    expect(view()?.code).toBeUndefined();
+});
+
+it("says the cloud has a copy only while it's on, synced, and nothing's wrong or waiting", () => {
+    const synced = { code: CODE, syncedAt: 5, working: false };
+    expect(cloudKeepsCopy(synced)).toBe(true);
+    expect(cloudKeepsCopy(undefined)).toBe(false);
+    expect(cloudKeepsCopy({ working: false })).toBe(false);
+    expect(cloudKeepsCopy({ code: CODE, working: false })).toBe(false);
+    expect(cloudKeepsCopy({ ...synced, problem: "unknownCode" })).toBe(false);
+    expect(cloudKeepsCopy({ ...synced, problem: "offline" })).toBe(false);
+    const choice = { cloud: { revision: 2 }, newer: false, closed: true };
+    expect(cloudKeepsCopy({ ...synced, choice })).toBe(false);
 });
 
 it("gives a fresh device the cloud's save: the player who cleared their browser", async () => {

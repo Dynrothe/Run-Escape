@@ -651,8 +651,7 @@ export class GameClient implements GameFrameHandler {
             this.cloud = new CloudSync(CLOUD_SAVE_URL, {
                 gameVersion: this.saveStore.gameVersion,
                 save: () => this.save,
-                // Where persist() would write
-                canWrite: () => this.saveLock.held === true && !this.newerSave && !this.saveNoRoom,
+                canWrite: () => this.canPersist(),
                 apply: (save) => this.replaceSave(save),
                 onView: (cloud) => this.store.set({ cloud }),
             });
@@ -1286,9 +1285,15 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // Whether the save's written here: this tab has the lock, and the save isn't a newer game's or
+    // one there was no room to keep a copy of. Cloud save goes by it too.
+    private canPersist(): boolean {
+        return this.saveLock.held === true && !this.newerSave && !this.saveNoRoom;
+    }
+
     private persist(): void {
         // Played without saving, it carries on in memory
-        if (this.saveLock.held && !this.newerSave && !this.saveNoRoom) {
+        if (this.canPersist()) {
             this.saveStore.save(this.save);
         }
         // A fresh object so React sees the change

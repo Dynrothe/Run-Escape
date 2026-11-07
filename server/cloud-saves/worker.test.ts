@@ -1,21 +1,23 @@
 import { readFileSync, readdirSync } from "node:fs";
 
 import { SAVE_VERSION, createSave, exportSave } from "../../src/game/core/save";
-import worker, {
-    MAX_SAVE_BYTES,
-    MAX_STORED_BYTES,
-    handle,
-    newCode,
-    normalizeCode,
-    prune,
-    readSave,
-} from "./worker.mjs";
+import { MAX_SAVE_BYTES, MAX_STORED_BYTES, newCode, normalizeCode, readSave } from "./schema.mjs";
+import * as workerModule from "./worker.mjs";
+import worker, { handle, prune } from "./worker.mjs";
 
 const origin = "https://game.example";
 const now = Date.parse("2026-11-06T12:00:00Z");
 const DAY = 86_400_000;
 const saveText = (changes: Record<string, unknown> = {}, gameVersion = "0.28.0") =>
     JSON.stringify({ ...JSON.parse(exportSave(createSave(), gameVersion)), ...changes });
+
+// workerd reads each name the Worker's module exports as an entrypoint, and won't start it if
+// one is a number or a RegExp, so those live in schema.mjs
+it("exports only functions from the Worker's module", () => {
+    for (const [name, value] of Object.entries(workerModule)) {
+        if (name !== "default") expect(typeof value, name).toBe("function");
+    }
+});
 
 it("reads a save's shape and summary, not the game's rules", () => {
     const read = readSave(
@@ -387,5 +389,35 @@ describe.skipIf(!sqlite)("cloud-save Worker with the production SQLite migration
         env.ACCOUNT_LIMITER = { limit: async () => ({ success: true }) };
         await request("DELETE", "account", code);
         expect((await request("POST", "account/code", code)).status).toBe(410);
+    });
+
+    it("caps the day's deletes, restores and new codes, and limits them per address", async () => {
+        const code = await newAccount();
+        await put(code, 0);
+        env.MAX_ACCOUNT_CHANGES_PER_DAY = "2";
+        expect((await request("DELETE", "account", code)).status).toBe(200);
+        expect((await request("POST", "account/restore", code)).status).toBe(200);
+        // Taking turns at them stops writing once the day's are used up
+        const capped = await request("DELETE", "account", code);
+        expect(capped.status).toBe(503);
+        expect(await capped.json()).toEqual({ error: "No more changes to cloud saves today" });
+        expect((await request("POST", "account/code", code)).status).toBe(503);
+        expect(db.prepare("SELECT deleted_at FROM accounts").get()!.deleted_at).toBeNull();
+        expect((await request("GET", "save/meta", code)).status).toBe(200);
+        // Tomorrow they can again
+        clock = now + DAY;
+        const rotated = await request("POST", "account/code", code);
+        expect(rotated.status).toBe(200);
+        const { code: next } = await rotated.json();
+        expect((await request("DELETE", "account", next)).status).toBe(200);
+        // Per address, as new codes are: a restore too
+        env.ACCOUNT_LIMITER = { limit: async () => ({ success: false }) };
+        expect((await request("POST", "account/restore", next)).status).toBe(429);
+        env.ACCOUNT_LIMITER = { limit: async () => ({ success: true }) };
+        expect((await request("POST", "account/restore", next)).status).toBe(503);
+        clock = now + 2 * DAY;
+        expect((await request("POST", "account/restore", next)).status).toBe(200);
+        env.ACCOUNT_LIMITER = { limit: async () => ({ success: false }) };
+        expect((await request("DELETE", "account", next)).status).toBe(429);
     });
 });
