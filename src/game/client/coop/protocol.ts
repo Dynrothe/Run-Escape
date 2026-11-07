@@ -80,6 +80,8 @@ export type GameStart = {
     hard: boolean;
     // A fight in parts (MapDef.stages): which, the host's next
     stage?: number;
+    // The Tombs of Amascut: the host's invocations, the party's raid level (Sim cleans the ids)
+    invocations?: string[];
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -95,6 +97,10 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
         typeof game.endless === "boolean" &&
         typeof game.hard === "boolean" &&
         (game.stage === undefined || Number.isSafeInteger(game.stage)) &&
+        (game.invocations === undefined ||
+            (Array.isArray(game.invocations) &&
+                game.invocations.length <= 100 &&
+                game.invocations.every((id) => typeof id === "string" && id.length <= 64))) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&

@@ -457,9 +457,11 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                             : "Fun map, endless"
                                         : map.fight
                                           ? `Boss fight. Everyone plays the ${getCharacter(map.fight.character).name}.`
-                                          : room.endless
-                                            ? "Endless"
-                                            : "Fifteen minutes and the boss"}
+                                          : map.raid || map.tombs
+                                            ? "A raid, room by room"
+                                            : room.endless
+                                              ? "Endless"
+                                              : "Fifteen minutes and the boss"}
                                 </div>
                                 {room.hard && <div className="ui-card-style">On hard mode</div>}
                             </div>

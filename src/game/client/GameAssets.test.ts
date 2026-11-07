@@ -8,17 +8,11 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
-import { CURSED_SANDS_ENEMIES } from "../content/cursedSands";
+import { CURSED_SANDS_ENEMIES, CURSED_SANDS_MAP_ID } from "../content/cursedSands";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { GEAR_SLOTS } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
-import {
-    ALL_MAPS,
-    CURSED_SANDS_LISTED,
-    LISTED_ENEMIES,
-    TOMBS_LISTED,
-    getMap,
-} from "../content/maps";
+import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
@@ -116,7 +110,7 @@ describe("enemy bakes", () => {
 
     test("every spot animation a boss attack shows is in the base bake", () => {
         const keys = GameAssets.getBaseRequests().map((r) => r.key);
-        for (const enemy of LISTED_ENEMIES) {
+        for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 for (const id of attack.impactSpotAnims ?? []) {
                     expect(keys).toContain("spot:" + id);
@@ -593,9 +587,9 @@ function collectAssetIds(value: unknown): { spotAnims: Set<number>; sounds: Set<
     return found;
 }
 
-// The Tombs of Amascut and Beneath Cursed Sands are dev maps: a build (and the tests, with no
-// DEV_MAPS) doesn't list them, so it mustn't synthesize or bake what only their enemies use
-describe("a dev map's enemies, where it isn't listed", () => {
+// The Tombs of Amascut and Beneath Cursed Sands ship: what only their enemies use is baked and
+// synthesized with the rest (they were dev maps once, and left out of a build)
+describe("the Tombs' and its quest's enemies", () => {
     const dev = new Set([...TOMBS_ENEMIES, ...CURSED_SANDS_ENEMIES].map((enemy) => enemy.id));
     const own = collectAssetIds([...TOMBS_ENEMIES, ...CURSED_SANDS_ENEMIES]);
     const shared = collectAssetIds([
@@ -610,28 +604,25 @@ describe("a dev map's enemies, where it isn't listed", () => {
     const onlySpotAnims = [...own.spotAnims].filter((id) => !shared.spotAnims.has(id));
     const onlySounds = [...own.sounds].filter((id) => !shared.sounds.has(id) && !sounds.has(id));
 
-    test("are off the list here, and have assets of their own to leave out", () => {
-        expect(TOMBS_LISTED).toBe(false);
-        expect(CURSED_SANDS_LISTED).toBe(false);
-        expect(LISTED_ENEMIES.some((enemy) => dev.has(enemy.id))).toBe(false);
+    test("are on the list, and have assets of their own", () => {
+        expect(ALL_MAPS.some((map) => map.tombs !== undefined)).toBe(true);
+        expect(ALL_MAPS.some((map) => map.id === CURSED_SANDS_MAP_ID)).toBe(true);
         expect(onlySpotAnims.length).toBeGreaterThan(0);
         expect(onlySounds.length).toBeGreaterThan(0);
     });
 
-    test("have none of their own spot animations baked", () => {
+    test("have their own spot animations baked", () => {
         const ids = new Set(getSpotAnimIds());
-        expect(onlySpotAnims.filter((id) => ids.has(id))).toEqual([]);
+        expect(onlySpotAnims.filter((id) => !ids.has(id))).toEqual([]);
     });
 
-    test("have none of their own sounds synthesized", () => {
+    test("have their own sounds synthesized", () => {
         const ids = new Set(getGameSoundIds());
-        expect(onlySounds.filter((id) => ids.has(id))).toEqual([]);
+        expect(onlySounds.filter((id) => !ids.has(id))).toEqual([]);
     });
 
-    test("the Tombs' Helpful Spirit isn't baked", () => {
+    test("the Tombs' Helpful Spirit is baked", () => {
         const requests = GameAssets.getBaseRequests();
-        expect(requests.filter((r) => r.kind === "npc" && r.npcId === TOMBS_SPIRIT.npcId)).toEqual(
-            [],
-        );
+        expect(requests.some((r) => r.kind === "npc" && r.npcId === TOMBS_SPIRIT.npcId)).toBe(true);
     });
 });

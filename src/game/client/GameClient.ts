@@ -1029,6 +1029,8 @@ export class GameClient implements GameFrameHandler {
                 (room.endless && (anyMap || isEndlessUnlocked(this.save, map.id))),
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
             stage: getFightStage(this.save, map.id),
+            // The Tombs' raid level is the host's, as the invocation board set it
+            ...(map.tombs && { invocations: this.save.invocations ?? [] }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1573,6 +1575,7 @@ export class GameClient implements GameFrameHandler {
             endless: game.endless,
             hard: game.hard,
             stage: game.stage,
+            invocations: game.invocations,
             party,
             focus,
         });

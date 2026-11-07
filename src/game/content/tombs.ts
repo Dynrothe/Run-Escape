@@ -82,9 +82,9 @@ export const TOMBS_LIGHTING: LightingDef = {
     },
 };
 
-// The Tombs of Amascut (in development: docs/design/tombs-of-amascut.md): its enemies, and what
-// each path's room does. The map, with where things stand, is the dev map's
-// (scaperune/maps/tombsOfAmascut.ts); this is the data the sim plays it by.
+// The Tombs of Amascut (docs/design/tombs-of-amascut.md): its enemies, and what each path's room
+// does. The map, with where things stand, is scaperune/maps/tombsOfAmascut.ts; this is the data
+// the sim plays it by.
 
 // ---- The baboons of the Path of Apmeken ----
 //

@@ -21,7 +21,7 @@ cd "$(dirname "$0")/../.."
 
 one() {
     local room=$1 level=$2 kit=$3 character=$4
-    local env=(DEV_MAPS=1 ROOM="$room" INVOCATIONS="level:$level")
+    local env=(ROOM="$room" INVOCATIONS="level:$level")
     case $kit in
         shop) env+=(META=max) ;;
         mid) env+=(META=mid ARMOURY=mid) ;;

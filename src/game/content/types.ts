@@ -1878,7 +1878,7 @@ export type MapDef = {
     // totems' corners, its surges' lanes), in world tiles; all of the arena
     // when unset
     bossArena?: { baseX: number; baseY: number; size: number };
-    // A map beaten before this one opens, whatever else it is (a raid, a dev map): the Tombs of
+    // A map beaten before this one opens, whatever else it is (a raid, a boss fight): the Tombs of
     // Amascut behind Beneath Cursed Sands
     requires?: string;
     // A fight in parts, each a run of its own (a quest's bosses one after another, as OSRS's are):
@@ -1957,7 +1957,7 @@ export type MapDef = {
     // A raid: the run's a series of rooms rather than one timeline (see RaidDef). waves and
     // events are then every room's, for what bakes and checks a map's enemies.
     raid?: RaidDef;
-    // The Tombs of Amascut (in development, a dev map: docs/design/tombs-of-amascut.md): a Nexus
+    // The Tombs of Amascut (docs/design/tombs-of-amascut.md): a Nexus
     // to start in, with a door to each path, and the invocations' raid level (invocations.ts) in
     // place of hard mode
     tombs?: TombsDef;

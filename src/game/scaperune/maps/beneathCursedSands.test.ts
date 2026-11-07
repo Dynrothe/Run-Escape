@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MAPS, isCoopMap } from "../../content/maps";
+import { CAMPAIGN_MAPS, isCoopMap } from "../../content/maps";
 import { BENEATH_CURSED_SANDS } from "./tombsOfAmascut";
 
 // The quest's fights are played on your own, as OSRS's quest is
@@ -10,6 +10,6 @@ describe("Beneath Cursed Sands", () => {
     });
 
     it("leaves every campaign map open to co-op", () => {
-        expect(MAPS.every(isCoopMap)).toBe(true);
+        expect(CAMPAIGN_MAPS.every(isCoopMap)).toBe(true);
     });
 });

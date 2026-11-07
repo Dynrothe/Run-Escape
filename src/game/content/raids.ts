@@ -1,4 +1,5 @@
 import { THEATRE_OF_BLOOD, TOB_ROOM_PLACES, TobRoomId } from "../scaperune/maps/theatreOfBlood";
+import { TOMBS_OF_AMASCUT_MAP } from "../scaperune/maps/tombsOfAmascut";
 import { getRecipeArena } from "../scaperune/recipe";
 import { TOMBS_SUPPLIES } from "./tombs";
 import { MapDef, RaidRoomDef, RaidSupplyDef, RandomEventDef, RunEventDef, WaveDef } from "./types";
@@ -429,4 +430,6 @@ export const RAID_MAPS: MapDef[] = [
         scaperune: true,
         brightness: 1,
     },
+    // Behind its quest, Beneath Cursed Sands (MapDef.requires)
+    TOMBS_OF_AMASCUT_MAP,
 ];

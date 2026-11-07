@@ -7,8 +7,7 @@ import { BossAttackDef, EnemyDef, FightAbilityDef, GroundPatternDef } from "./ty
 // of Amascut (MapDef.requires). Everyone plays the Sands Delver (characters.ts) with its kit, so the
 // fights are as long as their hitpoints make them: hard, and in phases.
 
-// Its map's id: a dev map, so what bakes and loads its enemies' assets asks whether it's listed
-// (maps.ts' CURSED_SANDS_LISTED)
+// Its map's id (scaperune/maps/tombsOfAmascut.ts' BENEATH_CURSED_SANDS)
 export const CURSED_SANDS_MAP_ID = "beneath_cursed_sands";
 
 // The humanoid rig's own (the quest's foes are people, the Akh aside): standing, walking, falling

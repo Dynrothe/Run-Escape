@@ -687,6 +687,29 @@ describe("save", () => {
         expect(isMapUnlocked(guest, CAMPAIGN_MAPS[1].id)).toBe(false);
     });
 
+    test("the Tombs of Amascut open after its quest, which opens after the desert, as a build has them", () => {
+        const save = createSave();
+        expect(isMapUnlocked(save, "beneath_cursed_sands")).toBe(false);
+        expect(isMapUnlocked(save, "tombs_of_amascut")).toBe(false);
+        recordRun(save, run("desert", { victory: true, seconds: 900, level: 40 }));
+        expect(isMapUnlocked(save, "beneath_cursed_sands")).toBe(true);
+        expect(isMapUnlocked(save, "tombs_of_amascut")).toBe(false);
+        // The quest's four parts, each a run, only the last beating it
+        for (let stage = 0; stage < 4; stage++) {
+            recordRun(save, run("beneath_cursed_sands", { victory: true, stage }));
+        }
+        expect(save.mapVictories.beneath_cursed_sands).toBe(1);
+        expect(isMapUnlocked(save, "tombs_of_amascut")).toBe(true);
+        // A win's kept (it's no dev map), and the invocations stand in for endless and hard mode
+        recordRun(save, run("tombs_of_amascut", { victory: true, seconds: 3600, coins: 500 }));
+        expect(save.mapVictories.tombs_of_amascut).toBe(1);
+        expect(isEndlessUnlocked(save, "tombs_of_amascut")).toBe(false);
+        expect(isHardUnlocked(save, "tombs_of_amascut")).toBe(false);
+        const loaded = migrateSave(JSON.parse(JSON.stringify(save)));
+        expect(loaded.mapVictories.tombs_of_amascut).toBe(1);
+        expect(loaded.mapVictories.beneath_cursed_sands).toBe(1);
+    });
+
     test("Justiciar Zachariah's fight opens once Phosani's is beaten: the Wolf's trial, then the Owl's", () => {
         const save = createSave();
         expect(getMap("zachariah").fight?.requires).toBe("phosani");
@@ -1442,8 +1465,8 @@ describe("the save in the browser", () => {
 });
 
 describe("a fight in parts, and a map behind another", () => {
-    // A stand-in for Beneath Cursed Sands (a dev map, not here): two parts, behind the desert, and
-    // a map behind it, as the Tombs of Amascut is
+    // A stand-in for Beneath Cursed Sands: two parts, behind the desert, and a map behind it, as
+    // the Tombs of Amascut is
     const fight = {
         ...getMap("phosani"),
         id: "test_quest",

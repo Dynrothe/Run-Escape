@@ -4,9 +4,9 @@
 // turns, beam pulses and seal openings, Scabaras's boards and wrong steps, Crondis's trips, spills
 // and growth. Each wipe in the room is put down to the hit that landed it ("wiped by").
 //
-//   DEV_MAPS=1 bun run tsx scripts/game/simulate-tombs.ts                  # the whole raid, warrior, 3 seeds
-//   DEV_MAPS=1 ROOM=scabaras bun run tsx scripts/game/simulate-tombs.ts wizard 10   # one puzzle room
-//   DEV_MAPS=1 ROOM=zebak KIT=max bun run tsx scripts/game/simulate-tombs.ts        # a boss, best of everything
+//   bun run tsx scripts/game/simulate-tombs.ts                  # the whole raid, warrior, 3 seeds
+//   ROOM=scabaras bun run tsx scripts/game/simulate-tombs.ts wizard 10   # one puzzle room
+//   ROOM=zebak KIT=max bun run tsx scripts/game/simulate-tombs.ts        # a boss, best of everything
 //   ROOM=     apmeken het scabaras crondis (puzzle rooms), baba akkha kephri zebak (bosses),
 //             wardens, raid (the default: Nexus to chest)
 //   LEVEL=2   the path level: as many other paths done first (0 to 3)
@@ -174,7 +174,7 @@ const armoury =
 
 const map = getMap("tombs_of_amascut");
 if (!map.tombs) {
-    throw new Error("The Tombs aren't on this map list: run with DEV_MAPS=1");
+    throw new Error("tombs_of_amascut has no Tombs (MapDef.tombs)");
 }
 const grid = new ArenaGrid(loadRegionData(map));
 
@@ -673,7 +673,8 @@ function boardNotes(sim: Sim): string[] {
     return [
         `raid level ${board.level}: ` +
             board.paths.map((p) => `${p.id} ${clock(p.seconds)}`).join(", ") +
-            (board.wardensSeconds !== undefined ? `, wardens ${clock(board.wardensSeconds)}` : ""),
+            (board.wardensSeconds !== undefined ? `, wardens ${clock(board.wardensSeconds)}` : "") +
+            `, ${sim.coins} coins`,
         board.party
             .map((p) => `${p.name || "bot"} ${p.points} points ${Math.round(p.chance * 100)}%`)
             .join(", "),

@@ -1,6 +1,6 @@
-import { getEnemy } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
-import { ALL_MAPS, LISTED_ENEMIES, MAPS, getMapCinematics } from "../content/maps";
+import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
@@ -33,11 +33,10 @@ const USE_SOUNDS: Record<ItemUse["kind"], number> = {
     supply: SOUNDS.potion,
 };
 
-// Every sound effect a run can play, to synthesize up front (and a dev map's enemies' only where
-// it's listed: LISTED_ENEMIES)
+// Every sound effect a run can play, to synthesize up front
 export function getGameSoundIds(): number[] {
     const ids: number[] = [];
-    for (const enemy of LISTED_ENEMIES) {
+    for (const enemy of ENEMIES) {
         ids.push(enemy.sounds.attack, enemy.sounds.hit, enemy.sounds.death);
         ids.push(enemy.spawnSound ?? -1, enemy.explodes?.sound ?? -1, enemy.blinks?.sound ?? -1);
         for (const attack of enemy.boss?.attacks ?? []) {

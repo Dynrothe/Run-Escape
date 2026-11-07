@@ -313,10 +313,9 @@ script marks `follower`, not the other one. It's baked as it's wanted (and by `s
 offered once found, with nothing else to add. Pets never go in the sim: see Pets in
 `docs/DEVELOPMENT.md`.
 
-The Tombs of Amascut is being built a room or a boss at a time, as a dev map
-(`scaperune/maps/tombsOfAmascut.ts`), to the plan in `docs/design/tombs-of-amascut.md`: keep it
-off the Raids tab in a build until it's finished (on the dev server it's listed with the raids,
-behind its quest, Beneath Cursed Sands: `MapDef.requires`). A new invocation goes in `INVOCATIONS`
+The Tombs of Amascut (`scaperune/maps/tombsOfAmascut.ts`, to the plan in
+`docs/design/tombs-of-amascut.md`) is on the Raids tab, behind its quest, Beneath Cursed Sands
+(`MapDef.requires`). A new invocation goes in `INVOCATIONS`
 (`content/invocations.ts`), with its raid level and group, and `comes` until what it does is in.
 A new room or boss, or a mechanic in one, needs the Tombs' bot to know it
 (`scripts/game/tombsBot.ts`: the puzzle's steps, where to stand, what to step round), and its sim
@@ -328,7 +327,7 @@ A trophy (`trophies.ts`) shows in the Collection log under the map its `from` na
 under the Hallowed Night), with a tab of its own for a new map, and so do weapons whose `unlock`
 names that map (`content/collectionLog.ts`). A boss fight map (`MapDef.fight`) whose boss brings
 in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't. The Tombs of Amascut's
-stay out of it while the raid's a dev map.
+chest's are under the raid.
 
 ## Adventurer
 

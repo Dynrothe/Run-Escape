@@ -17,8 +17,9 @@ import {
 } from "../../src/game/client/GameAssets";
 import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
+import { ENEMIES } from "../../src/game/content/enemies";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
-import { ALL_MAPS, LISTED_ENEMIES, getArenaRegion } from "../../src/game/content/maps";
+import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
 import { PETS } from "../../src/game/content/pets";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
@@ -112,9 +113,8 @@ function getWornObjs(): [EquipSlot, number][] {
             }
         }
     }
-    // The fun maps' players (baked in getBaseRequests too). A dev map's enemies only where it's
-    // listed (LISTED_ENEMIES), as everywhere here.
-    for (const enemy of LISTED_ENEMIES) {
+    // The fun maps' players (baked in getBaseRequests too)
+    for (const enemy of ENEMIES) {
         for (const outfit of enemy.outfits ?? []) {
             for (const [slot, objId] of Object.entries(outfit.equipment)) {
                 if (objId !== undefined && objId !== -1) {
@@ -176,7 +176,7 @@ function getContentObjIds(): number[] {
     visit(
         {
             CHARACTERS,
-            LISTED_ENEMIES,
+            ENEMIES,
             WEAPONS,
             PASSIVES,
             ITEMS,
@@ -224,7 +224,7 @@ function getBakeRequests(group: BakeGroup): BakeRequest[] {
             group === "base"
                 ? GameAssets.getBaseRequests()
                 : group === "enemies"
-                  ? GameAssets.getEnemyRequests(LISTED_ENEMIES)
+                  ? GameAssets.getEnemyRequests(ENEMIES)
                   : // Pets are baked as they're picked, not with the base: every one of them
                     group === "pets"
                     ? [

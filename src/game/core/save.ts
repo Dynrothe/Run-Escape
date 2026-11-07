@@ -698,8 +698,10 @@ export function isMapUnlocked(save: SaveData, mapId: string): boolean {
 // A map can be played endless once it's been beaten; the fun maps are only
 // ever endless, and a boss fight never is (there's nothing after its boss)
 export function isEndlessUnlocked(save: SaveData, mapId: string): boolean {
-    // A raid ends with its last room: there's no round after it to come round again
-    if (MAP_BY_ID.get(mapId)?.fight || isRaidMap(mapId)) {
+    // A raid ends with its last room: there's no round after it to come round again. The Tombs of
+    // Amascut go by their invocations instead.
+    const map = MAP_BY_ID.get(mapId);
+    if (map?.fight || map?.tombs || isRaidMap(mapId)) {
         return false;
     }
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
@@ -708,6 +710,10 @@ export function isEndlessUnlocked(save: SaveData, mapId: string): boolean {
 // Hard mode opens the same way: once the map's been beaten, and from the start
 // on the fun maps, which can't be
 export function isHardUnlocked(save: SaveData, mapId: string): boolean {
+    // The Tombs of Amascut's invocations take hard mode's place
+    if (MAP_BY_ID.get(mapId)?.tombs) {
+        return false;
+    }
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
 }
 

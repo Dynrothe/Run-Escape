@@ -16,8 +16,9 @@ kept: you start in the Nexus, pick any of the four paths, solve its room, then f
 all four are done, the Wardens. Unlike OSRS's rooms, ours roll a variant as you come in and change
 while you're in them, so no two raids play alike.
 
-It isn't released until the whole raid is done. Until then it's a dev map (`tombs_of_amascut`, on
-the map screen's Dev tab, dev server only), and each piece goes in as a pull request of its own.
+It was built as a dev map, a piece a pull request, and ships in 0.29.0: `tombs_of_amascut` on the
+map screen's Raids tab (`RAID_MAPS`), behind its quest, Beneath Cursed Sands, which is in `MAPS`
+with the boss fights. Both recipes are in `maps/shippedMaps.ts`, their grids' hashes pinned.
 
 ## 2. Principles
 
@@ -94,9 +95,8 @@ nothing bought, so a fresh account clearing Entry isn't a target.
   room can't pick it (`isCoopMap`).
 - **Where**: the raid's own squares under its own id (the recipe's the same), fought in Akkha's
   arena (`bossArena`), a tomb beneath the sands.
-- **Dev only, for now**: it's in `MAPS` on the dev server alone (`SCAPERUNE_DEV_FIGHTS` in
-  `devMaps.ts`, empty in a build), so a win's kept and opens the raid there, and a build has
-  neither.
+- **Shipped** in `MAPS` with the boss fights (it was dev-only while it was built), so a win's
+  kept and opens the raid.
 - **The bot** (`FLAT=1 MAP=beneath_cursed_sands DODGE=1 STAGE=0..3`, sands_delver), which on
   these fights steps out of a swing or blast as it winds up and circles a melee boss back
   towards the square's middle rather than backing into a corner (and off its edges), finds a
@@ -359,9 +359,9 @@ animations from a lister of those whose model or animation is in the raid's rang
 - **The map**: `scaperune/maps/tombsOfAmascut.ts`, at map squares 86 to 93 by 66 to 69: a grid of
   one-square cells, six by two, one for each room, with only the Nexus filled so far. The Nexus is
   cut from world 3536,5130 (32 by 36), stood level, and sealed to what can be walked to from the
-  entry: 303 tiles. It's listed in `maps/devMaps.ts`, which a build leaves out, so none of it
-  ships. Its id doesn't start with `scaperune_`, so the catalogue's ban on the raid's own floor
-  doesn't apply.
+  entry: 303 tiles. (At first it was listed in `maps/devMaps.ts`, which a build leaves out; it's
+  in `maps/shippedMaps.ts` now.) A shipped map gets the catalogue's ban on the raid's own floor as
+  warnings only.
 - **The Nexus doors**: `MapDef.tombs.paths`, each with its door's middle. Walking up to one says
   it isn't open yet (`Sim.stepTombs`), once as you come up to it.
 - **The board**: Invocations in the setup bar, with the raid level and its band, opens the board.
@@ -653,7 +653,7 @@ animations from a lister of those whose model or animation is in the raid's rang
   is OSRS's raid summary: the raid level and its invocations, each path's time and the Wardens',
   the time limit, and each player's points, deaths and purple chance.
 - **What the uniques unlock** (section 8's plan) isn't in yet: they're Collection log trophies,
-  kept out of the log while the raid's a dev map.
+  under the raid's own tab.
 
 ### The boss rework, stage 1: guards and the raid's button
 
@@ -1105,7 +1105,7 @@ the whole raid (`ROOM`), over seeds, path levels (`LEVEL`), invocations, co-op p
 kits (`KIT=max`, the dev kit). Each puzzle room has its own account, which no other part of the game
 has: Apmeken's issues fixed and missed, Het's mirror turns, beam pulses and seal openings,
 Scabaras's boards and wrong steps, Crondis's fills, trips, spills and growth; and every run says what
-hurt it, by source and by boss attack. Run it with `DEV_MAPS=1`.
+hurt it, by source and by boss attack.
 
 Without the max kit, a boss (or a room with paths before it) is reached by playing the raid up to
 it from the Nexus (`PATHS=` for the order), so the run has the levels and gear it would really
@@ -1170,4 +1170,5 @@ off-style weapon can sit in phase two for ten minutes.
 
 **For trying a boss** (the dev server only, solo): God mode, on any map, and in the Nexus a button
 to each boss (the path bosses as the run is, with the dev skip's bow; the Wardens with the best of
-everything or as the run is). The boss buttons are for the dev map, and go before the raid ships.
+everything or as the run is). With `?devtools` on the dev server only (`GameClient.devTools`), so
+never in a build.

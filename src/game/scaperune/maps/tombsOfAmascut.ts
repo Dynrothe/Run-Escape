@@ -11,15 +11,14 @@ import { blockTile, findReachable, getCollisionFlags } from "../collision";
 import { MAP_SQUARE_SIZE, TILE_BLOCKED, TileGrid } from "../format";
 import { LOC_FLOOR_DECORATION } from "../mapBuild";
 import { bringDown, cutPrefab, rotatePrefab } from "../prefab";
-import { BuildContext, MapRecipe, getRecipeArena } from "../recipe";
+import { BuildContext, MapRecipe, getRecipeArena, getRecipeWorldTile } from "../recipe";
 import { createSandsEntrances } from "./cursedSandsEntrances";
 import { digFloorPit } from "./wardensFloor";
 
 // The Tombs of Amascut, as a raid: its real rooms cut from the cache, each in a cell of its own,
-// walled off in the dark. The Nexus is the hub, with a door to each of the four paths. In
-// development: a dev map only (maps/devMaps.ts) until the whole raid's built
-// (docs/design/tombs-of-amascut.md). It uses the raid's own floor and pillars, which the catalogue
-// keeps off made maps, so its id doesn't start with scaperune_ and check-maps leaves it alone.
+// walled off in the dark. The Nexus is the hub, with a door to each of the four paths
+// (docs/design/tombs-of-amascut.md). A shipped map (maps/shippedMaps.ts), with the raid's own floor
+// and pillars, which the catalogue keeps off made maps.
 //
 // Cells are one map square each, COLUMNS by ROWS, for the Nexus, the four puzzle rooms, the four
 // boss rooms, the Wardens' two rooms and the tomb.
@@ -1112,138 +1111,138 @@ export const TOMBS_OF_AMASCUT: MapRecipe = {
     margin: MARGIN,
     spawn: NEXUS_ARRIVE,
     build,
-    mapDef: {
-        name: "Tombs of Amascut",
-        // Behind the quest, as OSRS's is
-        requires: "beneath_cursed_sands",
-        lighting: TOMBS_LIGHTING,
-        description:
-            "Amascut's tomb beneath the desert: four paths from the Nexus, each a puzzle and its " +
-            "guardian, in any order, then the Wardens. The invocations set the raid level, and " +
-            "the chest pays out by it.",
-        // Osmumten's fang
-        iconObjId: 26219,
-        // As a first map's: the raid level's scale (getRaidLevelScale) makes it what it is, from
-        // Entry for a run that's bought nothing up past Expert
-        difficulty: { hp: 1, damage: 1 },
-        waves: [],
-        events: [],
-        finalBossWarning: "",
-        victoryText: "",
-        // A raid, not a fun map: not endless
-        fun: undefined,
-        // The Wardens' last room's floor, which moves as the fight says (Sim.stepWardens): no
-        // script of its own
-        floor: {
-            ...createWardensFloor(TOA_PLACES.wardens.last.floor),
-            holes: wardensCrater(
-                TOA_PLACES.wardens.last.floor.x0,
-                TOA_PLACES.wardens.last.floor.y0,
-            ),
-            script: [],
-            loopSeconds: 1e7,
+};
+
+// The raid, with the Theatre in RAID_MAPS (content/raids.ts): four paths and the Wardens on the
+// recipe's squares
+export const TOMBS_OF_AMASCUT_MAP: MapDef = {
+    id: TOMBS_OF_AMASCUT.id,
+    arena: getRecipeArena(TOMBS_OF_AMASCUT),
+    spawn: getRecipeWorldTile(TOMBS_OF_AMASCUT, NEXUS_ARRIVE.x, NEXUS_ARRIVE.y),
+    scaperune: true,
+    name: "Tombs of Amascut",
+    // Behind the quest, as OSRS's is
+    requires: "beneath_cursed_sands",
+    lighting: TOMBS_LIGHTING,
+    description:
+        "Amascut's tomb beneath the desert: four paths from the Nexus, each a puzzle and its " +
+        "guardian, in any order, then the Wardens. The invocations set the raid level, and " +
+        "the chest pays out by it.",
+    // Osmumten's fang
+    iconObjId: 26219,
+    // As a first map's: the raid level's scale (getRaidLevelScale) makes it what it is, from
+    // Entry for a run that's bought nothing up past Expert
+    difficulty: { hp: 1, damage: 1 },
+    waves: [],
+    events: [],
+    finalBossWarning: "",
+    victoryText: "",
+    // The Wardens' last room's floor, which moves as the fight says (Sim.stepWardens): no
+    // script of its own
+    floor: {
+        ...createWardensFloor(TOA_PLACES.wardens.last.floor),
+        holes: wardensCrater(TOA_PLACES.wardens.last.floor.x0, TOA_PLACES.wardens.last.floor.y0),
+        script: [],
+        loopSeconds: 1e7,
+    },
+    tombs: {
+        // The raid's fight button, for every boss (Sim.ability)
+        ability: TOMBS_STRIKE,
+        nexus: TOA_PLACES.nexus.arrive,
+        // The Nexus's north end, as OSRS's way to the Wardens is
+        wardensDoor: worldTile(NEXUS_ARRIVE.x, NEXUS_ARRIVE.y + 22),
+        // The Helpful Spirit, at the foot of the steps up to the Wardens' landing, on the
+        // west strip of red floor (well clear of the Wardens' door)
+        spirit: worldTile(NEXUS_ARRIVE.x - 3, NEXUS_ARRIVE.y + 15),
+        wardens: {
+            arrive: TOA_PLACES.wardens.arrive,
+            obelisk: TOA_PLACES.wardens.obelisk,
+            elidinis: TOA_PLACES.wardens.elidinis,
+            tumeken: TOA_PLACES.wardens.tumeken,
+            sides: TOA_PLACES.wardens.sides,
+            troughs: TOA_PLACES.wardens.troughs,
+            floor: TOA_PLACES.wardens.floor,
+            last: TOA_PLACES.wardens.last,
         },
-        tombs: {
-            // The raid's fight button, for every boss (Sim.ability)
-            ability: TOMBS_STRIKE,
-            nexus: TOA_PLACES.nexus.arrive,
-            // The Nexus's north end, as OSRS's way to the Wardens is
-            wardensDoor: worldTile(NEXUS_ARRIVE.x, NEXUS_ARRIVE.y + 22),
-            // The Helpful Spirit, at the foot of the steps up to the Wardens' landing, on the
-            // west strip of red floor (well clear of the Wardens' door)
-            spirit: worldTile(NEXUS_ARRIVE.x - 3, NEXUS_ARRIVE.y + 15),
-            wardens: {
-                arrive: TOA_PLACES.wardens.arrive,
-                obelisk: TOA_PLACES.wardens.obelisk,
-                elidinis: TOA_PLACES.wardens.elidinis,
-                tumeken: TOA_PLACES.wardens.tumeken,
-                sides: TOA_PLACES.wardens.sides,
-                troughs: TOA_PLACES.wardens.troughs,
-                floor: TOA_PLACES.wardens.floor,
-                last: TOA_PLACES.wardens.last,
-            },
-            paths: (Object.keys(PATH_NAMES) as ToaPathId[]).map((id) => ({
-                id,
-                name: PATH_NAMES[id],
-                door: TOA_PLACES.nexus.doors[id],
-                ...(id === "het" && {
-                    room: {
-                        arrive: TOA_PLACES.het.arrive,
-                        puzzle: "het" as const,
-                        gate: TOA_PLACES.het.gate,
-                        entrances: TOA_PLACES.het.entrances,
-                        het: TOA_PLACES.het.puzzle,
-                        boss: {
-                            enemyId: "akkha",
-                            arrive: TOA_PLACES.akkha.arrive,
-                            at: TOA_PLACES.akkha.at,
-                            line: TOA_PLACES.akkha.line,
-                            quadrants: TOA_PLACES.akkha.quadrants,
-                        },
+        paths: (Object.keys(PATH_NAMES) as ToaPathId[]).map((id) => ({
+            id,
+            name: PATH_NAMES[id],
+            door: TOA_PLACES.nexus.doors[id],
+            ...(id === "het" && {
+                room: {
+                    arrive: TOA_PLACES.het.arrive,
+                    puzzle: "het" as const,
+                    gate: TOA_PLACES.het.gate,
+                    entrances: TOA_PLACES.het.entrances,
+                    het: TOA_PLACES.het.puzzle,
+                    boss: {
+                        enemyId: "akkha",
+                        arrive: TOA_PLACES.akkha.arrive,
+                        at: TOA_PLACES.akkha.at,
+                        line: TOA_PLACES.akkha.line,
+                        quadrants: TOA_PLACES.akkha.quadrants,
                     },
-                }),
-                ...(id === "crondis" && {
-                    room: {
-                        arrive: TOA_PLACES.crondis.arrive,
-                        puzzle: "crondis" as const,
-                        gate: TOA_PLACES.crondis.gate,
-                        entrances: TOA_PLACES.crondis.entrances,
-                        crondis: TOA_PLACES.crondis.puzzle,
-                        boss: {
-                            enemyId: "zebak",
-                            arrive: TOA_PLACES.zebak.arrive,
-                            at: TOA_PLACES.zebak.at,
-                            line: TOA_PLACES.zebak.line,
-                            island: TOA_PLACES.zebak.island,
-                            steps: TOA_PLACES.zebak.steps,
-                        },
+                },
+            }),
+            ...(id === "crondis" && {
+                room: {
+                    arrive: TOA_PLACES.crondis.arrive,
+                    puzzle: "crondis" as const,
+                    gate: TOA_PLACES.crondis.gate,
+                    entrances: TOA_PLACES.crondis.entrances,
+                    crondis: TOA_PLACES.crondis.puzzle,
+                    boss: {
+                        enemyId: "zebak",
+                        arrive: TOA_PLACES.zebak.arrive,
+                        at: TOA_PLACES.zebak.at,
+                        line: TOA_PLACES.zebak.line,
+                        island: TOA_PLACES.zebak.island,
+                        steps: TOA_PLACES.zebak.steps,
                     },
-                }),
-                ...(id === "scabaras" && {
-                    room: {
-                        arrive: TOA_PLACES.scabaras.arrive,
-                        puzzle: "scabaras" as const,
-                        gate: TOA_PLACES.scabaras.gate,
-                        entrances: TOA_PLACES.scabaras.entrances,
-                        scabaras: TOA_PLACES.scabaras.puzzle,
-                        boss: {
-                            enemyId: "kephri",
-                            arrive: TOA_PLACES.kephri.arrive,
-                            at: TOA_PLACES.kephri.at,
-                            line: TOA_PLACES.kephri.line,
-                            swarms: TOA_PLACES.kephri.swarms,
-                        },
+                },
+            }),
+            ...(id === "scabaras" && {
+                room: {
+                    arrive: TOA_PLACES.scabaras.arrive,
+                    puzzle: "scabaras" as const,
+                    gate: TOA_PLACES.scabaras.gate,
+                    entrances: TOA_PLACES.scabaras.entrances,
+                    scabaras: TOA_PLACES.scabaras.puzzle,
+                    boss: {
+                        enemyId: "kephri",
+                        arrive: TOA_PLACES.kephri.arrive,
+                        at: TOA_PLACES.kephri.at,
+                        line: TOA_PLACES.kephri.line,
+                        swarms: TOA_PLACES.kephri.swarms,
                     },
-                }),
-                ...(id === "apmeken" && {
-                    room: {
-                        arrive: TOA_PLACES.apmeken.arrive,
-                        puzzle: "apmeken" as const,
-                        spots: TOA_PLACES.apmeken.spots,
-                        gate: TOA_PLACES.apmeken.gate,
-                        entrances: TOA_PLACES.apmeken.entrances,
-                        boss: {
-                            enemyId: "ba_ba",
-                            arrive: TOA_PLACES.baba.arrive,
-                            at: TOA_PLACES.baba.at,
-                            line: TOA_PLACES.baba.line,
-                            boulders: TOA_PLACES.baba.boulders,
-                        },
+                },
+            }),
+            ...(id === "apmeken" && {
+                room: {
+                    arrive: TOA_PLACES.apmeken.arrive,
+                    puzzle: "apmeken" as const,
+                    spots: TOA_PLACES.apmeken.spots,
+                    gate: TOA_PLACES.apmeken.gate,
+                    entrances: TOA_PLACES.apmeken.entrances,
+                    boss: {
+                        enemyId: "ba_ba",
+                        arrive: TOA_PLACES.baba.arrive,
+                        at: TOA_PLACES.baba.at,
+                        line: TOA_PLACES.baba.line,
+                        boulders: TOA_PLACES.baba.boulders,
                     },
-                }),
-            })),
-        },
+                },
+            }),
+        })),
     },
 };
 
 // Beneath Cursed Sands (content/cursedSands.ts): the quest's four fights as a boss fight in parts,
 // in a tomb under the sands. It's the raid's own squares under another id (the recipe's the
-// same), fought in Akkha's arena, and the Tombs of Amascut opens once it's done. On the dev server
-// only while the raid is (devMaps.ts' SCAPERUNE_DEV_FIGHTS).
+// same), fought in Akkha's arena, and the Tombs of Amascut opens once it's done.
 export const BENEATH_CURSED_SANDS_RECIPE: MapRecipe = {
     ...TOMBS_OF_AMASCUT,
     id: "beneath_cursed_sands",
-    mapDef: undefined,
 };
 
 const SANDS_MIDDLE = TOA_PLACES.akkha.quadrants.middle;

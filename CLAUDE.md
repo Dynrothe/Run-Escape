@@ -87,9 +87,9 @@ go stale. Add anything that cost you time to work out.
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
-| The Tombs of Amascut (in development, a dev map)       | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
+| The Tombs of Amascut (a raid, behind its quest)        | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
 | The Tombs' bot, and its sim of puzzle rooms and bosses | `scripts/game/tombsBot.ts`, `scripts/game/simulate-tombs.ts`           |
-| Beneath Cursed Sands, the Tombs' quest (a dev map)     | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
+| Beneath Cursed Sands, the Tombs' quest (a boss fight)  | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
 | Its fights' design: four parts, each kept once won     | `docs/design/beneath-cursed-sands.md`                                  |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
 | Frame cap, lost graphics, the HUD's two stores         | `docs/DEVELOPMENT.md`, Keeping it light                                |
@@ -178,7 +178,7 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   else, delete that folder. ScapeRune's dev maps don't get one: they're built each time, from their
   recipes.
 
-The Tombs of Amascut has a sim of its own, `scripts/game/simulate-tombs.ts` (`DEV_MAPS=1`): a puzzle
+The Tombs of Amascut has a sim of its own, `scripts/game/simulate-tombs.ts`: a puzzle
 room, a boss, the Wardens or the whole raid (`ROOM=scabaras`, `ROOM=zebak`, `ROOM=raid`), with what
 each puzzle room came to (mirrors turned, boards, trips and spills) and what hurt. Run it after any
 change to the raid, at a path level or two (`LEVEL=2`), with invocations and with `PARTY=2`.

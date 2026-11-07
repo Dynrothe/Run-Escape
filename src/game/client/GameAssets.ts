@@ -20,10 +20,11 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
+import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { ALL_MAPS, LISTED_ENEMIES, MAPS, TOMBS_LISTED, getMapCinematics } from "../content/maps";
+import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
@@ -181,8 +182,6 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 // overhead prayers (every frame comes with the first) and the passives with a
 // sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
-// The Tombs of Amascut's own assets are only wanted where the raid's on the map list: it's a dev
-// map, so a build leaves them out (its enemies too: LISTED_ENEMIES, maps.ts)
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
@@ -197,15 +196,8 @@ export function getGameSpriteIds(): number[] {
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
         // The Tombs of Amascut's invocation board: each icon lit and dark, and Amascut's faces
-        ...(TOMBS_LISTED
-            ? [
-                  ...INVOCATIONS.flatMap((invocation) => [
-                      invocation.icon,
-                      invocation.icon + OFF_SPRITE,
-                  ]),
-                  ...Object.values(RAID_BAND_SPRITES),
-              ]
-            : []),
+        ...INVOCATIONS.flatMap((invocation) => [invocation.icon, invocation.icon + OFF_SPRITE]),
+        ...Object.values(RAID_BAND_SPRITES),
     ];
     return [...new Set(ids)];
 }
@@ -261,62 +253,60 @@ export function getSpotAnimIds(): number[] {
     for (const { effect } of POWER_UPS) {
         add("spotAnim" in effect ? effect.spotAnim : undefined);
     }
-    if (TOMBS_LISTED) {
-        // Apmeken's issues
-        add(...Object.values(APMEKEN_SPOTANIMS));
-        // Ba-Ba's sarcophagi's blasts, which are no attack of hers
-        add(SARCOPHAGUS_BLAST.spotAnim);
-        // The Het room's beam, along and across, and where it stops
-        add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
-        // Kephri's shield (up, and taking a swarm), her flies, dung coming down, her eggs going
-        // off, the Arcane Scarab's charge, and what her specials' shards are drawn as
-        add(
-            TOMBS_SPOTANIMS.kephriShield,
-            TOMBS_SPOTANIMS.kephriShieldSwarm,
-            KEPHRI.dung.spotAnim,
-            KEPHRI.dung.dropSpotAnim,
-            KEPHRI.eggs.spotAnim,
-        );
-        add(KEPHRI.arcane.spotAnim, TOMBS_SPOTANIMS.arcaneCharge);
-        add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
-        // The Crondis room's poison, pale and dark, and its water poured
-        add(CRONDIS.spotAnims.pale, CRONDIS.spotAnims.dark, CRONDIS.spotAnims.pour);
-        // The Wardens: their seals as they discharge, their shots and where those land, and the one
-        // that loses blowing up
-        add(
-            ...Object.values(WARDENS.wardens).flatMap((w) => [
-                w.pyramidsSpotAnim,
-                w.shotSeal,
-                w.shotSpotAnim,
-            ]),
-            WARDENS.shot.impactSpotAnim,
-            TOMBS_SPOTANIMS.wardenBlowsUp,
-        );
-        // The obelisk's specials in the second phase (their warning rings, glows and strikes, its
-        // skulls and their shadows), and in the last, the siphons' skulls and beams, the phantoms
-        // coming, and the enraged lightning and its shadows
-        const { beam, windmill, skulls } = WARDENS.two;
-        add(beam.warnSpotAnim, beam.spotAnim, windmill.warnSpotAnim, windmill.glowSpotAnim);
-        add(windmill.spotAnim, skulls.warnSpotAnim, skulls.projectile, skulls.shadowSpotAnim);
-        add(skulls.spotAnim, WARDENS.three.siphon.beamSpotAnim, WARDENS.three.siphon.skull);
-        add(WARDENS.three.phantomSpotAnim);
-        // The Het room's circles to stand in, and the glow under a loose mirror
-        add(HET.circleSpotAnim);
-        add(WARDENS.three.enrage.lightning.shadowSpotAnim, WARDENS.three.enrage.lightning.spotAnim);
-        // Zebak's roar, and his jugs breaking and splashing
-        add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
-        // The Scabaras room's falling roof
-        add(SCABARAS.rockSpotAnim);
-        // Akkha's quadrants' elements, which are no attack of his
-        add(...AKKHA.elements.map((element) => element.spotAnim));
-    }
+    // Apmeken's issues
+    add(...Object.values(APMEKEN_SPOTANIMS));
+    // Ba-Ba's sarcophagi's blasts, which are no attack of hers
+    add(SARCOPHAGUS_BLAST.spotAnim);
+    // The Het room's beam, along and across, and where it stops
+    add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
+    // Kephri's shield (up, and taking a swarm), her flies, dung coming down, her eggs going
+    // off, the Arcane Scarab's charge, and what her specials' shards are drawn as
+    add(
+        TOMBS_SPOTANIMS.kephriShield,
+        TOMBS_SPOTANIMS.kephriShieldSwarm,
+        KEPHRI.dung.spotAnim,
+        KEPHRI.dung.dropSpotAnim,
+        KEPHRI.eggs.spotAnim,
+    );
+    add(KEPHRI.arcane.spotAnim, TOMBS_SPOTANIMS.arcaneCharge);
+    add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
+    // The Crondis room's poison, pale and dark, and its water poured
+    add(CRONDIS.spotAnims.pale, CRONDIS.spotAnims.dark, CRONDIS.spotAnims.pour);
+    // The Wardens: their seals as they discharge, their shots and where those land, and the one
+    // that loses blowing up
+    add(
+        ...Object.values(WARDENS.wardens).flatMap((w) => [
+            w.pyramidsSpotAnim,
+            w.shotSeal,
+            w.shotSpotAnim,
+        ]),
+        WARDENS.shot.impactSpotAnim,
+        TOMBS_SPOTANIMS.wardenBlowsUp,
+    );
+    // The obelisk's specials in the second phase (their warning rings, glows and strikes, its
+    // skulls and their shadows), and in the last, the siphons' skulls and beams, the phantoms
+    // coming, and the enraged lightning and its shadows
+    const { beam, windmill, skulls } = WARDENS.two;
+    add(beam.warnSpotAnim, beam.spotAnim, windmill.warnSpotAnim, windmill.glowSpotAnim);
+    add(windmill.spotAnim, skulls.warnSpotAnim, skulls.projectile, skulls.shadowSpotAnim);
+    add(skulls.spotAnim, WARDENS.three.siphon.beamSpotAnim, WARDENS.three.siphon.skull);
+    add(WARDENS.three.phantomSpotAnim);
+    // The Het room's circles to stand in, and the glow under a loose mirror
+    add(HET.circleSpotAnim);
+    add(WARDENS.three.enrage.lightning.shadowSpotAnim, WARDENS.three.enrage.lightning.spotAnim);
+    // Zebak's roar, and his jugs breaking and splashing
+    add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
+    // The Scabaras room's falling roof
+    add(SCABARAS.rockSpotAnim);
+    // Akkha's quadrants' elements, which are no attack of his
+    add(...AKKHA.elements.map((element) => element.spotAnim));
     const addImpact = (impact: ImpactDef | undefined) => {
         add(...(impact?.spots ?? []).map((spot) => spot.spotAnim), impact?.trail?.spotAnim);
     };
     for (const map of MAPS) {
         addImpact(map.fight?.ability?.impact);
     }
-    // The Tombs' button (a dev map's, so only there on the dev server)
+    // The Tombs' button
     for (const map of ALL_MAPS) {
         addImpact(map.tombs?.ability?.impact);
     }
@@ -333,7 +323,7 @@ export function getSpotAnimIds(): number[] {
             add(rise?.spotAnim, fall?.spotAnim, crack?.spotAnim, skin.idle?.spotAnim);
         }
     }
-    for (const enemy of LISTED_ENEMIES) {
+    for (const enemy of ENEMIES) {
         add(enemy.spawnSpotAnim);
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
@@ -867,18 +857,15 @@ export class GameAssets {
                 });
             }
         }
-        // The visitors, and where the Tombs are listed, their Helpful Spirit drawn as one
-        for (const { id, npcId, idleSeq } of [
-            ...RANDOM_EVENTS,
-            ...(TOMBS_LISTED ? [TOMBS_SPIRIT] : []),
-        ]) {
+        // The visitors, and the Tombs' Helpful Spirit drawn as one
+        for (const { id, npcId, idleSeq } of [...RANDOM_EVENTS, TOMBS_SPIRIT]) {
             if (npcId !== undefined && idleSeq !== undefined) {
                 requests.push({ kind: "npc", key: "visitor:" + id, npcId, seqIds: [idleSeq] });
             }
         }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
-        for (const enemy of LISTED_ENEMIES) {
+        for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 if (attack.pool) {
                     locIds.add(attack.pool.locId);
@@ -895,93 +882,89 @@ export class GameAssets {
                 locIds.add(powerUp.effect.locId);
             }
         }
-        // The Tombs of Amascut's, where the raid's on the map list (TOMBS_LISTED)
-        if (TOMBS_LISTED) {
-            // Jungle Japes's banana peels
-            objIds.add(JUNGLE_JAPES.objId);
-            // Ba-Ba's sarcophagi, open
-            locIds.add(SARCOPHAGI.loc);
-            // Zebak's acid
-            locIds.add(ZEBAK.acid.loc);
-            // The Crondis room's spears
-            locIds.add(CRONDIS.locs.spear);
-            // Kephri's dung, a wall where it's dropped
-            locIds.add(KEPHRI.dung.pileLoc);
-            // The Scabaras room's plates, as they stand
-            const { locs: scabaras } = SCABARAS;
-            for (const id of [
-                scabaras.plate,
-                scabaras.lightsPlate,
-                scabaras.hidden,
-                scabaras.tablet,
-                scabaras.button,
-                ...scabaras.symbols,
-                ...scabaras.shown,
-            ]) {
-                locIds.add(id);
-            }
-            // The Wardens' charging platforms, empty to full
-            for (const id of WARDENS.charge.platforms) {
-                locIds.add(id);
-            }
-            // The Het room's mirrors (clean, dirty, fixed), their spots and its barriers
-            locIds.add(HET.mirrorLoc);
-            locIds.add(HET.dirtyLoc);
-            locIds.add(HET.fixedLoc);
-            locIds.add(HET.spotLoc);
-            locIds.add(HET.barrierLoc);
-            locIds.add(HET.wornLoc);
+        // The Tombs of Amascut's
+        // Jungle Japes's banana peels
+        objIds.add(JUNGLE_JAPES.objId);
+        // Ba-Ba's sarcophagi, open
+        locIds.add(SARCOPHAGI.loc);
+        // Zebak's acid
+        locIds.add(ZEBAK.acid.loc);
+        // The Crondis room's spears
+        locIds.add(CRONDIS.locs.spear);
+        // Kephri's dung, a wall where it's dropped
+        locIds.add(KEPHRI.dung.pileLoc);
+        // The Scabaras room's plates, as they stand
+        const { locs: scabaras } = SCABARAS;
+        for (const id of [
+            scabaras.plate,
+            scabaras.lightsPlate,
+            scabaras.hidden,
+            scabaras.tablet,
+            scabaras.button,
+            ...scabaras.symbols,
+            ...scabaras.shown,
+        ]) {
+            locIds.add(id);
         }
+        // The Wardens' charging platforms, empty to full
+        for (const id of WARDENS.charge.platforms) {
+            locIds.add(id);
+        }
+        // The Het room's mirrors (clean, dirty, fixed), their spots and its barriers
+        locIds.add(HET.mirrorLoc);
+        locIds.add(HET.dirtyLoc);
+        locIds.add(HET.fixedLoc);
+        locIds.add(HET.spotLoc);
+        locIds.add(HET.barrierLoc);
+        locIds.add(HET.wornLoc);
         for (const objId of objIds) {
             requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
         }
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
-        if (TOMBS_LISTED) {
-            // The Tombs' barriers, glowing
+        // The Tombs' barriers, glowing
+        requests.push({
+            kind: "loc",
+            key: "loc:" + APMEKEN_BARRIER_LOC,
+            locId: APMEKEN_BARRIER_LOC,
+            animated: true,
+        });
+
+        // The Crondis room's waterfalls, running and dry
+        for (const id of [CRONDIS.locs.waterfall, CRONDIS.locs.dry]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
+
+        // The Scabaras room's plates' glows
+        for (const id of [
+            SCABARAS.locs.plateLit,
+            SCABARAS.locs.platePressed,
+            SCABARAS.locs.lightsOn,
+            SCABARAS.locs.stepped,
+            SCABARAS.locs.matched,
+        ]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
+
+        // The Wardens' pyramids, glowing
+        for (const { pyramid } of Object.values(WARDENS.wardens)) {
             requests.push({
                 kind: "loc",
-                key: "loc:" + APMEKEN_BARRIER_LOC,
-                locId: APMEKEN_BARRIER_LOC,
+                key: "loc:" + pyramid,
+                locId: pyramid,
                 animated: true,
             });
+        }
 
-            // The Crondis room's waterfalls, running and dry
-            for (const id of [CRONDIS.locs.waterfall, CRONDIS.locs.dry]) {
-                requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
-            }
-
-            // The Scabaras room's plates' glows
-            for (const id of [
-                SCABARAS.locs.plateLit,
-                SCABARAS.locs.platePressed,
-                SCABARAS.locs.lightsOn,
-                SCABARAS.locs.stepped,
-                SCABARAS.locs.matched,
-            ]) {
-                requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
-            }
-
-            // The Wardens' pyramids, glowing
-            for (const { pyramid } of Object.values(WARDENS.wardens)) {
-                requests.push({
-                    kind: "loc",
-                    key: "loc:" + pyramid,
-                    locId: pyramid,
-                    animated: true,
-                });
-            }
-
-            // Akkha's symbols, glowing
-            for (const { symbolLoc } of AKKHA.elements) {
-                requests.push({
-                    kind: "loc",
-                    key: "loc:" + symbolLoc,
-                    locId: symbolLoc,
-                    animated: true,
-                });
-            }
+        // Akkha's symbols, glowing
+        for (const { symbolLoc } of AKKHA.elements) {
+            requests.push({
+                kind: "loc",
+                key: "loc:" + symbolLoc,
+                locId: symbolLoc,
+                animated: true,
+            });
         }
 
         // A raid hall's teleporter, swirling

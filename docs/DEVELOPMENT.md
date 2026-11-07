@@ -58,11 +58,6 @@ a while to make and read nothing after: a worker makes those once, and every uni
 that made them. Before anything's published, the chunks in the out dir are read back, and every
 group has to come out of them as it went in; the check then loads it all from those same chunks.
 
-A dev map's enemies are on `ENEMIES` all the same, for the sims and tests, so `slim-plan.ts`,
-`getSpotAnimIds`, `getGameSoundIds` and `getBaseRequests` go by `LISTED_ENEMIES`
-(`content/maps.ts`): the Tombs of Amascut's and Beneath Cursed Sands' are left out unless their
-map's listed, which in a build it never is.
-
 A checked run is kept in `caches/slim/`, and the next one reuses it if nothing it's made from has
 changed. esbuild traces the runtime imports of `slim-cache.ts`, `slim-cache-worker.ts` and
 `slim-cache-boot.mjs` without running them: their files and what esbuild makes of them count, with
@@ -1096,8 +1091,8 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 
 ### Raids
 
-The Tombs of Amascut is in development, as a dev map until it's finished: its plan, and what's
-built so far, are in `docs/design/tombs-of-amascut.md`. Its map is `MapDef.tombs` (a Nexus with a
+The Tombs of Amascut (on the Raids tab, behind its quest, Beneath Cursed Sands): its plan, and how
+it was built, are in `docs/design/tombs-of-amascut.md`. Its map is `MapDef.tombs` (a Nexus with a
 door to each path), and its invocations (`content/invocations.ts`) take hard mode's place there:
 the sim's `hardScale` is their raid level's (`getRaidLevelScale`, `RAID_LEVEL_SCALE`), and `hard`
 stays off.
@@ -1531,7 +1526,7 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         how damage keeps up with the rounds)
 scripts/game/simulate-tombs.ts [character] [seeds]      the Tombs of Amascut's bot (tombsBot.ts)
                                                         on one room, boss or the whole raid
-                                                        (DEV_MAPS=1; ROOM=apmeken, het, scabaras,
+                                                        (ROOM=apmeken, het, scabaras,
                                                         crondis, baba, akkha, kephri, zebak,
                                                         wardens or raid; LEVEL=2 the path level;
                                                         INVOCATIONS=a,b, all or level:300;
@@ -1580,7 +1575,7 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
    compare an entry with the same one in the old cache. Gate the fix on the revision.
 3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`, and that again with
    `DEV_MAPS=1`: rev 242 renumbered the Tombs of Amascut's invocation sprites, which only a dev
-   map used.
+   map used then.
 4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
    kept, the ones the game reads: the map squares, models and so on that changed or went, and each
    npc, item, animation, spot animation and loc that changed, decoded, with the fields that differ.

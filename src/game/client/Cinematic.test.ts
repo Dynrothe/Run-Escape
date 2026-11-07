@@ -205,7 +205,7 @@ const MAX_CINEMATIC_TURN = 64;
 
 // Every cinematic is one that can play, the dev maps' too (only on the dev server): each map's
 // opening, and each part's of a fight in parts
-const CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap), BENEATH_CURSED_SANDS]
+const CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)]
     .filter((map, i, all) => all.findIndex((m) => m.id === map.id) === i)
     .flatMap((map) => [
         ...(map.cinematic ? [[map.id, map, map.cinematic] as const] : []),
@@ -261,11 +261,6 @@ describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
             for (const seq of seqs) {
                 expect((request as { seqIds: number[] }).seqIds).toContain(seq);
             }
-        }
-        // A dev map that isn't listed here (Beneath Cursed Sands, with no DEV_MAPS) has its
-        // cues' assets left out, as a build does (LISTED_ENEMIES): only a listed map's are wanted
-        if (!ALL_MAPS.some((listed) => listed.id === map.id)) {
-            return;
         }
         const spots = getSpotAnimIds();
         const sounds = getGameSoundIds();

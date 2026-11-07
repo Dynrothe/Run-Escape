@@ -22,7 +22,7 @@
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
-//   MAP=tombs_of_amascut DEV_MAPS=1 ...   # the Tombs of Amascut, the whole raid (tombsBot.ts)
+//   MAP=tombs_of_amascut ...   # the Tombs of Amascut, the whole raid (tombsBot.ts)
 //   INVOCATIONS=walk_for_it,insanity ...   # its invocations (INVOCATIONS=all for every one the
 //                                          # board allows: one of a group that's one at a time)
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s

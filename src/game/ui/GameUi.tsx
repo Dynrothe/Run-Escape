@@ -1649,12 +1649,7 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
         name: "Bosses",
         groups: [
             { name: "Boss fights", hint: "once their map's beaten", maps: FIGHT_MAPS },
-            // On the dev server, the Tombs of Amascut too, behind its quest (MapDef.requires)
-            {
-                name: "Raids",
-                hint: "room by room",
-                maps: [...RAID_MAPS, ...DEV_MAPS.filter((map) => map.tombs)],
-            },
+            { name: "Raids", hint: "room by room", maps: RAID_MAPS },
         ],
     },
     {
@@ -1665,13 +1660,7 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
     {
         id: "dev",
         name: "Dev",
-        groups: [
-            {
-                name: "Dev maps",
-                hint: "dev server only",
-                maps: DEV_MAPS.filter((map) => !map.tombs),
-            },
-        ],
+        groups: [{ name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
     },
 ]
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
@@ -2438,8 +2427,9 @@ const Hud = memo(function Hud({
                     <TombsHetInfo client={client} />
                     <TombsCrondisInfo client={client} />
                     <TombsRoarInfo client={client} />
-                    <DevGodButton client={client} />
-                    <DevWardensButton client={client} />
+                    {/* The dev server's testing buttons: a build drops them whole */}
+                    {import.meta.env.DEV && <DevGodButton client={client} />}
+                    {import.meta.env.DEV && <DevWardensButton client={client} />}
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
@@ -2522,7 +2512,7 @@ function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
 
 // Dev server only, with ?devtools, in the Tombs' Nexus: straight to any boss, for testing its mechanics (with
 // God mode, without dying to them). The path bosses as the run is, with the dev skip's bow; the
-// Wardens with the best of everything, or as the run is. Gone before the raid ships.
+// Wardens with the best of everything, or as the run is. Never in a build (GameClient.devTools).
 const DEV_TOMBS_BOSSES: { pathId: string; name: string }[] = [
     { pathId: "apmeken", name: "Ba-Ba" },
     { pathId: "het", name: "Akkha" },

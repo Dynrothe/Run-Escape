@@ -1,15 +1,14 @@
-import { SCAPERUNE_DEV_FIGHTS, SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
+import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
-import { CURSED_SANDS_ENEMIES, CURSED_SANDS_MAP_ID } from "./cursedSands";
-import { ENEMIES, ENEMY_BY_ID, getEnemy } from "./enemies";
+import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
-import { TOMBS_ENEMIES } from "./tombs";
 import { CinematicDef, EnemyDef, MapDef } from "./types";
 import {
     BARROWS_EVENTS,
@@ -414,19 +413,9 @@ export const MAPS: MapDef[] = [
         },
         music: "Blade of Forgotten Justice",
     },
+    // A quest in four parts after the desert, which opens the Tombs of Amascut
+    BENEATH_CURSED_SANDS,
 ];
-
-// Dev server only (or DEV_MAPS=1 in a script): ScapeRune's maps, ground of our
-// own rather than a slice of the real world (scaperune/CLAUDE.md)
-const showDevMaps =
-    (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
-    (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
-
-// Boss fights still in development, with the rest of the boss fights on the dev server, so a win's
-// kept and opens what comes after (Beneath Cursed Sands, the Tombs of Amascut)
-if (showDevMaps) {
-    MAPS.push(...SCAPERUNE_DEV_FIGHTS.map((fight) => fight.map));
-}
 
 // The maps that open one after another
 export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter((map) => !map.seasonal && !map.fight);
@@ -445,6 +434,11 @@ export { FUN_MAPS };
 // campaign's chain.
 export { RAID_MAPS };
 
+// Dev server only (or DEV_MAPS=1 in a script): ScapeRune's maps, ground of our
+// own rather than a slice of the real world (scaperune/CLAUDE.md)
+const showDevMaps =
+    (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
+    (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
 export function createDevMap(recipe: MapRecipe): MapDef {
     const play = recipe.play;
     const source = play && MAPS.find((map) => map.id === play.waveSet);
@@ -481,22 +475,6 @@ export const ALL_MAPS: MapDef[] = [...MAPS, ...RAID_MAPS, ...FUN_MAPS, ...DEV_MA
 
 export const MAP_BY_ID: Map<string, MapDef> = new Map(ALL_MAPS.map((m) => [m.id, m]));
 
-// The Tombs of Amascut and Beneath Cursed Sands are dev maps, only on the list on the dev server.
-// Their enemies are on ENEMIES all the same, for the sims and tests, so what gathers assets for
-// every enemy (what a run bakes and synthesizes, and the slim cache) goes by these: a build leaves
-// theirs out.
-export const TOMBS_LISTED = ALL_MAPS.some((map) => map.tombs !== undefined);
-export const CURSED_SANDS_LISTED = MAP_BY_ID.has(CURSED_SANDS_MAP_ID);
-const UNLISTED_ENEMY_IDS = new Set(
-    [
-        ...(TOMBS_LISTED ? [] : TOMBS_ENEMIES),
-        ...(CURSED_SANDS_LISTED ? [] : CURSED_SANDS_ENEMIES),
-    ].map((enemy) => enemy.id),
-);
-export const LISTED_ENEMIES: EnemyDef[] = ENEMIES.filter(
-    (enemy) => !UNLISTED_ENEMY_IDS.has(enemy.id),
-);
-
 // The map generator's latest map (scaperune/MapGeneratorScreen.tsx). A new object
 // each time, which is how the minimap knows it's another map.
 export function setGeneratedMap(recipe: MapRecipe): void {
@@ -523,8 +501,6 @@ export function isFightMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fight !== undefined;
 }
 
-// The adventurer everyone plays on a map, if it has one (Durial321 in
-// Falador, the Inquisitor against Phosani's Nightmare)
 // Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
 export function isCoopMap(map: MapDef): boolean {
     return map.fight?.solo !== true;
@@ -542,6 +518,8 @@ export function getRunCinematic(map: MapDef, stage: number): CinematicDef | unde
     return (map.stages && map.stages[stage]?.cinematic) ?? map.cinematic;
 }
 
+// The adventurer everyone plays on a map, if it has one (Durial321 in
+// Falador, the Inquisitor against Phosani's Nightmare)
 export function getMapCharacter(map: MapDef): string | undefined {
     return map.fun?.character ?? map.fight?.character;
 }
