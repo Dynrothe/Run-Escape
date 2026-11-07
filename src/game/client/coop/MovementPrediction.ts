@@ -3,6 +3,7 @@ import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "../../core/Sim";
 import type { FrameEvent } from "../../core/lockstep";
 import { moveCircle } from "../../core/world/Collision";
 import { PlayerPose, getPlayerPose } from "../PlayerPose";
+import { PredictionDiagnostics } from "./PredictionDiagnostics";
 
 const TICK_MS = 1000 / TICKS_PER_SECOND;
 // Bound both replay work and how far the picture can run ahead of confirmed play.
@@ -28,7 +29,7 @@ const GLIDE_DISTANCE = 4;
 // Walking again takes it out; a bigger one is taken out all the way.
 const DEAD_ZONE = 0.1;
 
-type Input = { seq: number; at: number; move: [number, number] };
+type Input = { seq: number; at: number; move: [number, number]; sentAt?: number };
 
 function sameMove(a: [number, number], b: [number, number]): boolean {
     return a[0] === b[0] && a[1] === b[1];
@@ -53,6 +54,7 @@ export class MovementPrediction {
     private rules?: MovementRules;
     // Standing still, and taking out an error that's passed DEAD_ZONE
     private settling = false;
+    private diagnostics?: PredictionDiagnostics;
 
     constructor(
         private readonly sim: Sim,
@@ -83,6 +85,24 @@ export class MovementPrediction {
         return this.sequence;
     }
 
+    setDiagnostics(on: boolean): void {
+        this.diagnostics = on ? new PredictionDiagnostics(this.now()) : undefined;
+        for (const input of this.inputs) delete input.sentAt;
+    }
+
+    getDiagnostics() {
+        return this.diagnostics?.snapshot(this.now());
+    }
+
+    sent(seq: number): void {
+        if (!this.diagnostics) return;
+        const input = this.inputs.find((entry) => entry.seq === seq);
+        if (input && input.sentAt === undefined) {
+            input.sentAt = this.now();
+            this.diagnostics.inputToSendMs.add(input.sentAt - input.at);
+        }
+    }
+
     // Called AFTER applying a confirmed frame, not just receiving its packet.
     confirm(events: readonly FrameEvent[]): void {
         const time = this.now();
@@ -99,6 +119,10 @@ export class MovementPrediction {
             }
             const input = this.inputs.find((entry) => entry.seq === event.moveSeq);
             if (input) {
+                if (this.diagnostics && input.sentAt !== undefined) {
+                    this.diagnostics.sendToConfirmMs.add(time - input.sentAt);
+                    this.diagnostics.inputToConfirmMs.add(time - input.at);
+                }
                 // This confirmed step already moved once with that input.
                 const at = input.at + TICK_MS;
                 if (
@@ -126,6 +150,7 @@ export class MovementPrediction {
         }
         const player = this.sim.player;
         if (Math.hypot(player.x - this.lastX, player.y - this.lastY) > SNAP_DISTANCE) {
+            if (this.diagnostics) this.diagnostics.teleports++;
             this.reset(time);
         }
         this.lastTick = this.sim.tick;
@@ -185,6 +210,9 @@ export class MovementPrediction {
         const sim = this.sim;
         const player = sim.player;
         const dt = Math.max(0, time - this.renderedAt);
+        const diagnostics = this.diagnostics;
+        const lead = time - this.confirmedAt;
+        const age = time - this.receivedAt;
         const blend = 1 - Math.exp(-dt / CORRECTION_MS);
         const playing =
             this.confirmed &&
@@ -197,18 +225,26 @@ export class MovementPrediction {
             this.resetTimeline(time);
             this.renderedAt = time;
             const pose = this.pose;
-            if (!pose) return undefined;
+            if (!pose) {
+                diagnostics?.frame(time, dt, lead, age, 0, 0, "fallback");
+                return undefined;
+            }
             if (playing && stalled) {
                 // Nothing's come from the host for a while: stand where we are.
                 // Easing back to the last confirmed spot would walk the hero
                 // backwards, only to rush forward when the frames come back.
                 pose.moving = false;
                 pose.moveTicks = 0;
+                diagnostics?.frame(time, dt, lead, age, 0, 0, "stalled");
                 return pose;
             }
             // Keep the picture while its lead decays. Dropping it immediately
             // would jump both the body and camera back to the confirmed player.
             const target = getPlayerPose(sim, sim.focus, alpha);
+            if (diagnostics) {
+                const error = Math.hypot(target.x - pose.x, target.y - pose.y);
+                diagnostics.frame(time, dt, lead, age, error, error * blend, "fallback");
+            }
             pose.x += (target.x - pose.x) * blend;
             pose.y += (target.y - pose.y) * blend;
             pose.yaw = target.yaw;
@@ -255,23 +291,29 @@ export class MovementPrediction {
         const halted = capped && time - this.receivedAt > QUIET_MS;
         const pose = this.pose ?? { ...target };
         const wasMoving = pose.moving;
+        const latest = this.inputs[this.inputs.length - 1];
+        const still = latest.move[0] === 0 && latest.move[1] === 0;
+        const stopping = still && latest.seq > this.acknowledged;
+        let error = 0;
+        let correction = 0;
         if (this.pose && !halted) {
             this.replay(pose, Math.max(this.renderedAt, time - PREDICTION_MS), time);
             const dx = target.x - pose.x;
             const dy = target.y - pose.y;
-            const error = Math.hypot(dx, dy);
-            const [moveX, moveY] = this.inputs[this.inputs.length - 1].move;
-            const still = moveX === 0 && moveY === 0;
+            error = Math.hypot(dx, dy);
             // Stopped, but the host's frames don't have the stop yet. With a
             // lead past the budget the target's window slides over the stop
             // and falls short of where it'll leave us: pulling back to it would
             // walk the hero backwards, then forwards again. Hold until it's in.
-            const stopping = still && !sameMove(this.applied, [0, 0]);
+            // The host may not have echoed even the start of a short tap yet.
+            // Its old zero input isn't proof that it has applied our stop.
             this.settling =
                 still && !stopping && (error >= DEAD_ZONE || (this.settling && error > 0.001));
             if (error > GLIDE_DISTANCE) {
                 pose.x = target.x;
                 pose.y = target.y;
+                correction = error;
+                if (diagnostics) diagnostics.distanceSnaps++;
             } else if (!still || this.settling) {
                 const beforeX = pose.x;
                 const beforeY = pose.y;
@@ -283,9 +325,20 @@ export class MovementPrediction {
                 if (progress + 1e-12 < (dx * dx + dy * dy) * blend * 0.5) {
                     pose.x = target.x;
                     pose.y = target.y;
+                    if (diagnostics) diagnostics.wallSnaps++;
                 }
+                if (diagnostics) correction = Math.hypot(pose.x - beforeX, pose.y - beforeY);
             }
         }
+        diagnostics?.frame(
+            time,
+            dt,
+            lead,
+            age,
+            error,
+            correction,
+            halted ? "halted" : stopping ? "pending-stop" : still ? "idle" : "moving",
+        );
         // Facing and animation react even before the next movement tick.
         this.move(pose, this.inputs[this.inputs.length - 1], 0);
         pose.moving &&= !halted;

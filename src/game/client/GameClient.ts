@@ -517,6 +517,7 @@ export class GameClient implements GameFrameHandler {
     // Co-op: the room and its relay, and the run being played with it
     readonly coop: CoopLobby;
     private coopRun?: CoopRun;
+    private movementDiagnostics = false;
     private reportRun?: ReturnType<typeof startRunAnalytics>;
     // The hero the camera follows: this player's, or in co-op while they're
     // down, a teammate's
@@ -1113,6 +1114,26 @@ export class GameClient implements GameFrameHandler {
     toggleMovePrediction(): void {
         this.setDisplay({ movePrediction: !this.display.movePrediction });
         this.coopRun?.setPrediction(this.display.movePrediction);
+        this.coopRun?.prediction?.setDiagnostics(this.movementDiagnostics);
+    }
+
+    // Local opt-in capture, also reachable on release builds with ?movementDiagnostics.
+    setMovementDiagnostics(on: boolean): void {
+        this.movementDiagnostics = on;
+        this.coopRun?.prediction?.setDiagnostics(on);
+    }
+
+    getMovementDiagnostics() {
+        const run = this.coopRun;
+        return {
+            build: __BUILD_ID__,
+            enabled: this.movementDiagnostics,
+            isGuest: !!run && !run.isHost,
+            prediction: !!run?.prediction,
+            frame: run?.frame,
+            queuedFrames: run?.behind,
+            capture: run?.prediction?.getDiagnostics(),
+        };
     }
 
     // The room hears at once, and the rooms list from the next update. An open
@@ -1494,6 +1515,7 @@ export class GameClient implements GameFrameHandler {
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
         run.setPrediction(this.display.movePrediction);
+        run.prediction?.setDiagnostics(this.movementDiagnostics);
         this.coopRun = run;
         this.coopPlayerIds = game.heroes.map((hero) => hero.id);
         const inbox = this.coopInbox ?? [];

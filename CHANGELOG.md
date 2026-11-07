@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Co-op sends stops promptly and handles quick taps and reversals with less sliding after you let go. Fixed by trippy22.
+
 ## 0.28.0 - 2026-11-07
 
 ### Added

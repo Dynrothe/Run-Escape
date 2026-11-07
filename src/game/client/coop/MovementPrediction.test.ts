@@ -192,13 +192,15 @@ test("the newest stop is replayed even when the confirmation lead exceeds the bu
     const before = prediction.render()!.x;
     time(350);
     prediction.sample([0, 0]);
+    const stopped = prediction.render()!.x;
     for (let now = 360; now <= 480; now += 20) {
         time(now);
         // Frames keep coming from a host that hasn't moved us yet
         prediction.confirm([]);
         prediction.render();
     }
-    expect(prediction.render()!.x).toBeLessThan(before - 0.2);
+    expect(stopped).toBeGreaterThanOrEqual(before);
+    expect(prediction.render()!.x).toBe(stopped);
     expect(prediction.render()!.moving).toBe(false);
     expect(sim.player.moving).toBe(false);
 });
@@ -314,6 +316,74 @@ test("a direction changed back inside the send throttle still gets acknowledged"
     expect(messages[1]).toEqual({ move: [127, 0], moveSeq: 3 });
 });
 
+test.each([true, false])("short taps and reversals send promptly (prediction: %s)", (on) => {
+    let now = 0;
+    const messages: { at: number; move?: [number, number] }[] = [];
+    const guest = new CoopRun(
+        makeSim(),
+        false,
+        { sendUp: (message) => messages.push({ at: now, ...message }), sendDown() {} },
+        new Map([
+            ["p0", 0],
+            ["p1", 1],
+        ]),
+        "p0",
+        () => now,
+    );
+    guest.setPrediction(on);
+    guest.setMove(1, 0);
+    now = 20;
+    guest.setMove(0, 0);
+    now = 30;
+    guest.setMove(-1, 0);
+    now = 40;
+    guest.setMove(0, 0);
+    expect(messages.map(({ at, move }) => [at, move])).toEqual([
+        [0, [127, 0]],
+        [20, [0, 0]],
+        [30, [-127, 0]],
+        [40, [0, 0]],
+    ]);
+    now = 300;
+    guest.setMove(1, 0);
+    now = 320;
+    guest.setMove(-1, 0);
+    expect(messages.at(-1)).toMatchObject({ at: 320, move: [-127, 0] });
+});
+
+test.each([true, false])(
+    "rapid taps and reversals stay below the relay limit (prediction: %s)",
+    (on) => {
+        let now = 0;
+        const messages: number[] = [];
+        const guest = new CoopRun(
+            makeSim(),
+            false,
+            { sendUp: () => messages.push(now), sendDown() {} },
+            new Map([
+                ["p0", 0],
+                ["p1", 1],
+            ]),
+            "p0",
+            () => now,
+        );
+        guest.setPrediction(on);
+        for (now = 0; now < 3000; now++) {
+            guest.setMove([1, 0, -1, 0][now % 4], 0);
+        }
+        for (const at of messages) {
+            expect(
+                messages.filter((time) => time >= at && time < at + 1000).length,
+            ).toBeLessThanOrEqual(36);
+        }
+        now = 3000;
+        guest.setMove(0, 0);
+        guest.resumed();
+        guest.setMove(0, 0);
+        expect(messages.at(-1)).toBe(3000);
+    },
+);
+
 test.each([false, true])(
     "delayed starts, stops and reversals preserve confirmed hashes (jitter: %s)",
     (jitter) => {
@@ -402,7 +472,8 @@ function link(delay: (up: boolean) => number, cut = () => false) {
         if (cut()) return;
         const at = Math.max(now + delay(channel === 1), lastDelivery[channel]);
         lastDelivery[channel] = at;
-        deliveries.push({ at, fn });
+        if (at <= now) fn();
+        else deliveries.push({ at, fn });
     };
     const heroes = new Map([
         ["p0", 0],
@@ -425,7 +496,7 @@ function link(delay: (up: boolean) => number, cut = () => false) {
         () => now,
     );
     host.receiveUp("p1", { loaded: true });
-    // One 20ms frame: deliveries, the guest's input, a host tick, guest catch-up
+    // One render: deliveries, the guest's input, host ticks, then guest catch-up
     const frame = (at: number, move: number, hostSteps = 1) => {
         now = at;
         for (let i = 0; i < deliveries.length; ) {
@@ -440,6 +511,117 @@ function link(delay: (up: boolean) => number, cut = () => false) {
     };
     return { host, guest, frame };
 }
+
+test.each([0, 60, 120, 250].flatMap((delay) => [0, 10].map((phase) => ({ delay, phase }))))(
+    "a short tap has no idle slide (delay: $delay ms, input phase: $phase ms)",
+    ({ delay, phase }) => {
+        const { guest, frame } = link(() => delay);
+        let stopped = 0;
+        for (let now = 0; now <= 1000; now += 10) {
+            const pose = frame(
+                now,
+                now >= 300 + phase && now < 320 + phase ? 1 : 0,
+                now % 20 === 0 ? 1 : 0,
+            );
+            if (now === 320 + phase) stopped = pose.x;
+            if (now > 320 + phase) {
+                expect(pose.moving).toBe(false);
+                expect(pose.x).toBeCloseTo(stopped, 8);
+            }
+        }
+        expect(Math.abs(stopped - guest.sim.player.x)).toBeLessThan(0.1);
+        expect(guest.desynced).toBe(false);
+    },
+);
+
+test.each([0, 60, 120].flatMap((delay) => [0, 10].map((phase) => ({ delay, phase }))))(
+    "a quick reversal settles without idle sliding (delay: $delay ms, input phase: $phase ms)",
+    ({ delay, phase }) => {
+        const { guest, frame } = link(() => delay);
+        let stopped = 0;
+        let turned = 0;
+        for (let now = 0; now <= 1000; now += 10) {
+            const move =
+                now >= 300 + phase && now < 320 + phase
+                    ? 1
+                    : now >= 320 + phase && now < 400 + phase
+                      ? -1
+                      : 0;
+            const pose = frame(now, move, now % 20 === 0 ? 1 : 0);
+            if (now === 320 + phase) turned = pose.x;
+            if (now === 360 + phase) expect(pose.x).toBeLessThan(turned);
+            if (now === 400 + phase) stopped = pose.x;
+            if (now > 400 + phase) expect(pose.x).toBeCloseTo(stopped, 8);
+        }
+        expect(Math.abs(stopped - guest.sim.player.x)).toBeLessThan(0.1);
+        expect(guest.desynced).toBe(false);
+    },
+);
+
+test("diagnostics separate send delay from confirmation delay, counting each echo once", () => {
+    const { prediction, time } = setup();
+    expect(prediction.getDiagnostics()).toBeUndefined();
+    prediction.setDiagnostics(true);
+    const seq = prediction.sample([127, 0]);
+    time(50);
+    prediction.sent(seq);
+    time(70);
+    prediction.sent(seq);
+    time(150);
+    const echo = { frame: 1, hero: 1, move: [127, 0] as [number, number], moveSeq: seq };
+    prediction.confirm([echo]);
+    prediction.confirm([echo]);
+    const capture = prediction.getDiagnostics()!;
+    expect(capture.inputToSendMs).toEqual({ count: 1, mean: 50, max: 50 });
+    expect(capture.sendToConfirmMs).toEqual({ count: 1, mean: 100, max: 100 });
+    expect(capture.inputToConfirmMs).toEqual({ count: 1, mean: 150, max: 150 });
+    prediction.setDiagnostics(true);
+    expect(prediction.getDiagnostics()!.inputToSendMs.count).toBe(0);
+    prediction.setDiagnostics(false);
+    expect(prediction.getDiagnostics()).toBeUndefined();
+});
+
+test("diagnostic capture is bounded and changes neither poses nor confirmed state", () => {
+    usePortableMath(true);
+    const measured = link(() => 60);
+    const plain = link(() => 60);
+    measured.guest.prediction!.setDiagnostics(true);
+    let first = measured.guest.prediction!.getDiagnostics()!;
+    for (let now = 0; now <= 8000; now += 20) {
+        const move = now % 800 < 200 ? 1 : now % 800 < 400 ? -1 : 0;
+        const pose = measured.frame(now, move);
+        expect(pose).toEqual(plain.frame(now, move));
+        expect(syncHash(measured.guest.sim)).toBe(syncHash(plain.guest.sim));
+        expect(syncHash(measured.host.sim)).toBe(syncHash(plain.host.sim));
+        if (now === 1000) first = measured.guest.prediction!.getDiagnostics()!;
+    }
+    const capture = measured.guest.prediction!.getDiagnostics()!;
+    expect(capture.samples).toHaveLength(64);
+    expect(capture.samples[0].atMs).toBeGreaterThan(1000);
+    expect(first.samples.at(-1)!.atMs).toBe(1000);
+    expect(capture.inputToSendMs.max).toBe(0);
+    expect(capture.sendToConfirmMs.mean).toBe(120);
+    expect(capture.pendingStopFrames).toBeGreaterThan(0);
+    expect(capture.idleCorrectionTiles).toBe(0);
+    expect(capture.longRenderFrames).toBe(0);
+});
+
+test("diagnostics measure actual stationary corrections and render stalls", () => {
+    const { sim, prediction, time } = setup();
+    prediction.setDiagnostics(true);
+    prediction.render();
+    sim.player.x += 0.5;
+    prediction.confirm([]);
+    time(100);
+    const pose = prediction.render()!;
+    const capture = prediction.getDiagnostics()!;
+    expect(capture.errorTiles.max).toBeCloseTo(0.5);
+    expect(capture.idleCorrectionTiles).toBeCloseTo(pose.x - 1033.5);
+    expect(capture.longRenderFrames).toBe(1);
+    time(700);
+    prediction.render();
+    expect(prediction.getDiagnostics()!.stalledFrames).toBe(1);
+});
 
 test("echoes of a held move a tick early or late leave the walk steady", () => {
     let sent = 0;
@@ -499,7 +681,8 @@ test("after a dropped connection, the hero stands, then glides to the resent fra
     // over several frames
     expect(guest.sim.player.x - 1033.5).toBeGreaterThan(5);
     expect(largest).toBeLessThan(1);
-    expect(last).toBeCloseTo(guest.sim.player.x, 1);
+    // An immediate stop may retain the small stationary dead zone.
+    expect(Math.abs(last - guest.sim.player.x)).toBeLessThan(0.1);
     expect(guest.desynced).toBe(false);
 });
 
