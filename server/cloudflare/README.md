@@ -66,10 +66,12 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   Refresh the bundled mapping with `node scripts/update-colo-countries.mjs` in this directory,
   then review and commit the JSON diff. New/unmapped colos stay blank until the next update.
   Only the trace is fetched at runtime; a directory outage cannot interrupt existing mappings.
-  The lookup runs in the background with a three-second timeout, sharing its result for one hour
-  within the executing isolate (failures retry after a minute). Hibernation can reuse that cache;
-  a new isolate measures again. The location isn't stored with the room, and late results cannot
-  bring back a closed room. The existing heartbeat refreshes it, with no new alarm or interval.
+  The lookup runs in the background with a bounded request deadline. `CACHE_MS` in `location.mjs`
+  sets how long the executing isolate shares a result; `RETRY_MS` sets the failure cooldown.
+  Hibernation can reuse that cache; a new isolate measures again. The location isn't stored with
+  the room, and late results cannot bring back a closed room. Changes to an open room's listing
+  and its existing heartbeat check the cache, even when nobody is browsing the lobby. No lookup
+  starts for private rooms or started runs, and there is no new alarm or interval.
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
   (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
   and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
