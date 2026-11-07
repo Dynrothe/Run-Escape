@@ -12,6 +12,8 @@ the version in the corner).
 
 ### Fixed
 
+- Cloud save is in the Windows app and the Android app: 0.28.0's downloads were built without it.
+  On Windows, download this release's zip, as updating from inside the app doesn't add it.
 - Co-op sends stops promptly and handles quick taps and direction changes with less sliding.
   Fixed by trippy22.
 
