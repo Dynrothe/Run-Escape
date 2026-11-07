@@ -1345,6 +1345,11 @@ export type BossDef = {
     // Dharok's set effect: hits get stronger as he loses hitpoints, up to
     // this much more at none left (1 = double)
     wretched?: number;
+    // The Tombs: from raid level `from` up, its hitpoints are multiplied by hp, its hits (and its
+    // poison, and Akkha's hits that take a share) by damage and the seconds between its phases'
+    // ambients by ambients (over one, slower), on top of the raid level's scale. For a boss the
+    // raid level's scale makes a wall from there: it eases off there and nowhere below.
+    raidEase?: { from: number; hp?: number; damage?: number; ambients?: number };
     // Vampyres heal this many hitpoints for each one they hit the player for
     lifesteal?: number;
     // Gets back up this many times, with this fraction of its hitpoints (a

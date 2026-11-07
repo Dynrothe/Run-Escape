@@ -1253,6 +1253,10 @@ const akkhaForm = (
     spawnMessage: "Akkha rises to guard the path of Het!",
     boss: {
         attackInterval: 1.0,
+        // Expert's scale made him a wall there (his shadows outlasting their floods' timer, his
+        // stamp keeping the fire quarter's poison up): from 300, fewer hitpoints, softer hits and
+        // his stamp less often. Normal's as it is.
+        raidEase: { from: 300, hp: 0.7, damage: 0.5, ambients: 1.5 },
         enrage: { message: "Akkha's armour glows: he's furious!" },
         // A lunge or a leap that finds no one leaves him open (opens), his prayer down with his
         // guard (pierce): how a hero of the style he's praying against gets at him

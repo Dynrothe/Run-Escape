@@ -1016,6 +1016,20 @@ design's 3 minutes; and the Expert End-game raid has no wins, alone or as a pair
 pair). Akkha's what stops it: his numbers can't be harder at Normal without being harder at Expert,
 and the raid level's scale between them is the raid's, not his.
 
+So a boss can ease off from a raid level up, nowhere below (`BossDef.raidEase`: hitpoints, hits,
+its phases' ambients), and Akkha does from 300: hitpoints ×0.7, hits ×0.5 (his poison and his
+floods and blasts too), the time between his stamp's rings ×1.5. What made him the wall
+at Expert was his shadows (their hitpoints are his, so at 1.6 they outlasted the flood's 15
+seconds and the floods were most of what each try took) and his fire quarter's poison, kept up by
+every stamp; a slower attack interval didn't help (fewer misses, so fewer openings). Normal is
+as it was (`ROOM=akkha LEVEL=1` at 150, the same seeds: 9/9, no wipes, identical). Expert
+End-game, room: 0/9 and 81 wipes before, 5/9 and 14 now, easier than stage 1's 2/9 there (Mid-game
+0/9 and 240 before, 1/9 and 174 now).
+Whole raid, Expert End-game: alone 1/9 with 532 deaths (stage 1 1/9, 583; seven of the other
+eight got past him and stopped at Kephri's Soldier loop or Zebak); `PARTY=2` 3/9 with
+104 (stage 1 2/9, 119). Max invocations (500) End-game is still 0/9, stopping at Ba-Ba (one gets
+past Akkha in 55 minutes).
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on

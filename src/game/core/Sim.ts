@@ -3736,6 +3736,10 @@ export class Sim {
             hp *= 1 + TOMBS_BOSSES.levelHp * level;
             hitScale *= 1 + TOMBS_BOSSES.levelDamage * level;
         }
+        if (boss) {
+            hp *= this.raidEase(def)?.hp ?? 1;
+            hitScale *= this.raidEase(def)?.damage ?? 1;
+        }
         const enemy: Enemy = {
             uid: this.nextUid++,
             def,
@@ -5301,6 +5305,12 @@ export class Sim {
         return made;
     }
 
+    // A Tombs boss's own ease from a raid level up (BossDef.raidEase), if it's that high
+    private raidEase(def: EnemyDef): BossDef["raidEase"] {
+        const ease = def.boss?.raidEase;
+        return this.map.tombs && ease && this.raidLevel >= ease.from ? ease : undefined;
+    }
+
     // Whether an invocation's on (only ever in the Tombs)
     private invoked(id: string): boolean {
         return this.invocations.includes(id);
@@ -5781,7 +5791,9 @@ export class Sim {
             return;
         }
         const player = this.player;
-        const amount = share ? Math.round(player.maxHp * this.tombsShare(damage)) : damage;
+        // A share's eased as his hits are (BossDef.raidEase); a flat hit's from his damage already
+        const ease = share ? (this.raidEase(boss.def)?.damage ?? 1) : 1;
+        const amount = share ? Math.round(player.maxHp * this.tombsShare(damage) * ease) : damage;
         this.damagePlayer(amount, boss.def.id, false, undefined, share);
         if (!this.runOver && !this.reviving) {
             this.akkhaElement(def, boss);
@@ -12323,7 +12335,8 @@ export class Sim {
         if (!attack?.pattern) {
             return;
         }
-        phase.ambientNext = this.tick + secondsToTicks(ambient.interval);
+        phase.ambientNext =
+            this.tick + secondsToTicks(ambient.interval * (this.raidEase(boss.def)?.ambients ?? 1));
         const target = this.nearestHero(boss.x, boss.y).player;
         const toPlayer = Math.max(0.001, fm.hypot(target.x - boss.x, target.y - boss.y));
         this.startPattern(
@@ -12358,7 +12371,9 @@ export class Sim {
             }
             // Quicker, wider or harder with its invocation on, as when it's picked
             const attack = this.invokedAttack(named);
-            next[i] = this.tick + secondsToTicks(ambient.interval);
+            next[i] =
+                this.tick +
+                secondsToTicks(ambient.interval * (this.raidEase(boss.def)?.ambients ?? 1));
             if (attack.tether) {
                 this.startTether(boss, attack);
                 return;
@@ -16096,11 +16111,18 @@ export class Sim {
                 break;
             case "poison":
                 // A new dose starts the clock again, at the stronger damage (in the Tombs, as the
-                // raid level makes enemies' hits)
+                // raid level makes enemies' hits, and a boss's own ease, BossDef.raidEase)
                 player.poisonDamage = Math.max(
                     player.poisonDamage,
                     this.map.tombs
-                        ? Math.max(1, Math.round(effect.damage * this.hardScale.damage))
+                        ? Math.max(
+                              1,
+                              Math.round(
+                                  effect.damage *
+                                      this.hardScale.damage *
+                                      ((enemy && this.raidEase(enemy.def)?.damage) ?? 1),
+                              ),
+                          )
                         : effect.damage,
                 );
                 player.poisonEnd = this.tick + ticks;
