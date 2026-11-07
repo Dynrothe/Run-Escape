@@ -36,6 +36,18 @@ build**: `bun run build` empties `dist/`. `bun run preview` serves the build wit
 to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
 (`?viewer=1`) needs it.
 
+Most of the full cache is one big file (`main_file_cache.dat2`), which `src/rs/cache/CacheFiles.ts`
+downloads in parts kept in the Cache API. A download that's cut off resumes with
+`Range: bytes=<offset>-<MAX_SAFE_INTEGER>`, and the `Last-Modified` its parts came with as
+`If-Range`. A server that ignores Range sends the whole file, and the download starts again from
+0%, which a phone on a slow or cut-off connection may never get past. `bun run serve`, the
+desktop app and the dev and preview server's `/caches` (`vite.config.ts`) all answer Range with
+206, with the end clamped; only the last checks `If-Range`. A part only counts if it starts where
+the one before it ended and is from the same copy of the file, and the last bytes are kept as a
+part too. Once the whole file's in hand it's kept, and only then are the parts dropped, so a page
+reloaded while a phone's still writing it (or out of room) is put together from the parts: its
+resume asks past the end, and a 416 with the parts' length means every part was there.
+
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
 bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
 full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
@@ -579,14 +591,8 @@ it's on purpose:
 - Every answer needs the COOP and COEP headers, workers included, and a `.wasm` or `.js` needs the
   right type.
 - `CacheFiles.ts` (a full cache, not the slim one's chunks) resumes with
-  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back to what it has. A server
-  that ignores Range sends the whole file, and the download starts again from 0%, which a phone
-  on a slow or cut-off connection may never get past. `gameServer.ts` clamps the end and answers
-  206, with a `Content-Length` of what's left. The dev and preview server's `/caches` (in
-  `vite.config.ts`) does the same with its `parseRange`, and sends the whole file when `If-Range`
-  doesn't match the file's `Last-Modified`. Once it has the whole file it keeps that and only then
-  drops its parts, so a page reloaded while a phone's still writing it (or out of room) resumes from
-  the parts, and a 416 for a resume past the end means every part was there.
+  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` (see Hosting). `gameServer.ts` clamps the end and
+  answers 206, with a `Content-Length` of what's left.
 
 Interception only works reliably for one session per process, so don't add a second.
 

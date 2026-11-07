@@ -63,8 +63,9 @@ export function resolveGamePath(root: string, pathname: string, paths = path): s
 }
 
 // The bytes a Range header asks for, "unsatisfiable", or undefined to send the whole file.
-// CacheFiles.ts resumes with bytes=<offset>-<MAX_SAFE_INTEGER>, and adds what comes back to what
-// it has, so ignoring the header would corrupt the cache, and the end has to be clamped.
+// CacheFiles.ts resumes with bytes=<offset>-<MAX_SAFE_INTEGER>, so the end has to be clamped.
+// Ignoring the header sends the whole file, and its download starts again from 0. The dev server's
+// /caches (vite.config.ts) parses it here too.
 export function parseRange(
     header: string | null,
     size: number,

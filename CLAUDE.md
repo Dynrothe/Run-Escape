@@ -71,6 +71,7 @@ go stale. Add anything that cost you time to work out.
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
 | The slim cache's chunks, and how the game loads them   | `src/rs/cache/ChunkedCache.ts`, `docs/DEVELOPMENT.md` (Hosting)        |
+| The full cache's download: parts, resuming, keeping it | `src/rs/cache/CacheFiles.ts`, `docs/DEVELOPMENT.md` (Hosting)          |
 | What the slim cache loads, and what it reuses          | `scripts/cache/slim-plan.ts`, `docs/DEVELOPMENT.md` (Hosting)          |
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
