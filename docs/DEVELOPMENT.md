@@ -1783,6 +1783,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   The HUD renders after the touch movement zone so its slots receive holds; a run overlay
   disables those slots and dismisses their descriptions. Empty bag slots are dimmed by
   `.ui-inv-slot-empty`, not `:disabled`, so the bag doesn't dim under every overlay.
+  Being after the zone keeps the HUD above it, so nothing in the HUD needs a z-index for that,
+  and one would put it over the run's panels too.
   Releasing a hold never uses the item, and a held finger can drift. Before the hold, moving
   further than `TAP_SLOP` (shared with `SharedTaps`), cancellation or losing focus cancels the tap.
   The click a touch press makes after its `pointerup` is ignored for a moment, but keys and later

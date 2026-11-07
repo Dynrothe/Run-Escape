@@ -94,11 +94,12 @@
         touch-action: none;
     }
 
-    /* Still shown once the quest tracker's title is under the zone */
+    /* No z-index: the HUD comes after the zone, so it's above it already, and
+       a z-index would put these over the run's panels too. The damage panel
+       is placed by .ui-damage. */
     .ui-quest-tracker,
     .ui-damage {
         position: relative;
-        z-index: 1;
     }
 
     /* Big enough to tap */
