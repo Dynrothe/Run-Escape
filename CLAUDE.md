@@ -50,6 +50,7 @@ go stale. Add anything that cost you time to work out.
 | Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
@@ -254,8 +255,6 @@ desktop build.
   folder, so a `caches` symlink gets committed.
 - **Changelog**: written for players, in one-line bullets under Added, Changed or Fixed. Keep it
   short, and never mention secret content (like hidden bosses) in it or in map descriptions.
-- **Change attribution**: when documenting who made a change in logs, refer to `@braiansmarzaro`
-  as **Deivid Smarzaro**.
 - **Comments**: short, and they say why or what something's for. Match what's around them.
 - **Content** is plain data with real cache ids. Look ids up with the scripts, not from memory. OSRS
   names should be spelled as the cache spells them.

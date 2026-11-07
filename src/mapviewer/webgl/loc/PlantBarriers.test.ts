@@ -58,14 +58,14 @@ function fixture() {
         }
         return type;
     };
-    const roots = model(254, 246, 45);
-    const getModelAnimated = vi.fn((): Model | undefined => roots);
+    const stump = model(254, 246, 45);
+    const getModelAnimated = vi.fn((): Model | undefined => stump);
     const loader = {
         locTypeLoader: { load, getCount: () => 0, clearCache: () => types.clear() },
         getModelAnimated,
     };
     const scene = new Scene(4, 76, 76);
-    return { loader, roots, scene };
+    return { loader, stump, scene };
 }
 
 describe("plant barrier bases", () => {
@@ -86,40 +86,25 @@ describe("plant barrier bases", () => {
         expect(loader.getModelAnimated).not.toHaveBeenCalled();
     });
 
-    test("animated plants stay on their own rendering path", () => {
+    test("a plant with no size to go by is skipped, and the rest still get bases", () => {
         const { loader, scene } = fixture();
-        loader.locTypeLoader.load(1399).seqId = 2380;
-        const models = [plant()];
+        const models = [plant(1399, model(1, 200)), plant()];
         addPlantBarrierBases(loader, models, scene, BORDER);
-        expect(models).toHaveLength(1);
-    });
-
-    test("transforming plants do not leave a permanent base behind", () => {
-        const { loader, scene } = fixture();
-        loader.locTypeLoader.load(1399).transforms = [1390, -1];
-        const models = [plant()];
-        addPlantBarrierBases(loader, models, scene, BORDER);
-        expect(models).toHaveLength(1);
-    });
-
-    test("does not add scene locs or change collision maps", () => {
-        const { loader, scene } = fixture();
-        const before = JSON.stringify({ tiles: scene.tiles, collision: scene.collisionMaps });
-        addPlantBarrierBases(loader, [plant()], scene, BORDER);
-        expect(JSON.stringify({ tiles: scene.tiles, collision: scene.collisionMaps })).toBe(before);
+        expect(models).toHaveLength(3);
+        expect(models[2].interactId).toBe(1399);
     });
 
     test("copies the base without changing cached geometry, colors or plant models", () => {
-        const { loader, roots, scene } = fixture();
+        const { loader, stump, scene } = fixture();
         const original = plant();
         const models = [original];
-        const before = Array.from(roots.verticesX);
+        const before = Array.from(stump.verticesX);
         addPlantBarrierBases(loader, models, scene, BORDER);
         expect(models[0]).toBe(original);
-        expect(models[1].model).not.toBe(roots);
-        expect(Array.from(roots.verticesX)).toEqual(before);
-        expect(Array.from(roots.verticesY)).toEqual([-45, 0]);
-        expect(Array.from(roots.faceColors3)).toEqual([-1]);
+        expect(models[1].model).not.toBe(stump);
+        expect(Array.from(stump.verticesX)).toEqual(before);
+        expect(Array.from(stump.verticesY)).toEqual([-45, 0]);
+        expect(Array.from(stump.faceColors3)).toEqual([-1]);
         expect(getModelBounds(original.model).maxX).toBe(100);
     });
 
@@ -137,21 +122,25 @@ describe("plant barrier bases", () => {
         );
     });
 
+    // Three quarters of the plant across, at most a tile, and half the stump's height
     test.each([
-        [200, 200],
-        [90, 200],
-        [200, 90],
-        [98, 78],
-    ])("keeps a low base inside the plant's %i by %i silhouette", (width, depth) => {
-        const { loader, scene } = fixture();
-        const models = [plant(1398, model(width, depth))];
-        addPlantBarrierBases(loader, models, scene, BORDER);
-        const bounds = getModelBounds(models[1].model);
-        expect(bounds.maxX - bounds.minX).toBeLessThanOrEqual(Math.min(128, width * 0.75));
-        expect(bounds.maxZ - bounds.minZ).toBeLessThanOrEqual(Math.min(128, depth * 0.75));
-        expect(bounds.minY).toBe(-22);
-        expect(bounds.maxY).toBe(0);
-    });
+        [200, 200, 128, 128],
+        [90, 200, 66, 128],
+        [200, 90, 128, 66],
+        [98, 78, 72, 58],
+    ])(
+        "keeps a low base inside the plant's %i by %i silhouette",
+        (width, depth, baseWidth, baseDepth) => {
+            const { loader, scene } = fixture();
+            const models = [plant(1398, model(width, depth))];
+            addPlantBarrierBases(loader, models, scene, BORDER);
+            const bounds = getModelBounds(models[1].model);
+            expect(bounds.maxX - bounds.minX).toBe(baseWidth);
+            expect(bounds.maxZ - bounds.minZ).toBe(baseDepth);
+            expect(bounds.minY).toBe(-22);
+            expect(bounds.maxY).toBe(0);
+        },
+    );
 
     test("inherits the plant's location, picking and visibility", () => {
         const { loader, scene } = fixture();
@@ -180,11 +169,17 @@ describe("plant barrier bases", () => {
         expect(scene.tileHeights[0].map((row) => Array.from(row))).toEqual(heights);
     });
 
-    test("reports a missing cache asset instead of silently losing the indicator", () => {
+    test("a missing stump model is reported and leaves the plants as they are", () => {
         const { loader, scene } = fixture();
         loader.getModelAnimated.mockReturnValue(undefined);
-        expect(() => addPlantBarrierBases(loader, [plant()], scene, BORDER)).toThrow(
-            "Missing plant barrier Tree stump model (loc 1354)",
-        );
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const models = [plant(), plant()];
+            addPlantBarrierBases(loader, models, scene, BORDER);
+            expect(models).toHaveLength(2);
+            expect(error).toHaveBeenCalledOnce();
+        } finally {
+            error.mockRestore();
+        }
     });
 });

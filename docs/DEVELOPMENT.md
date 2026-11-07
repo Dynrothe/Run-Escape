@@ -762,13 +762,17 @@ gives a ScapeRune map a loc a different model or size, and two bugs were fixed (
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
 
-Selected blocking jungle plants have low wooden bases, made from the cache's Tree stump
-(loc 1354, model 1635). `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static render
-list in `SdMapDataLoader`, not to the scene or cache definitions: collision, pathfinding and the
-minimap stay unchanged. It copies and scales the model, fits it to the terrain, and reuses matching
-sizes for batching. Similar nonblocking plants, animated jungle and transforming scenery are left
-alone. Keep this decoration separate from `RegionDataLoader`'s footprints and `LocOverrides`.
-The slim-cache map pass uses the same renderer loader, so it collects the base asset automatically.
+Karamja's blocking Jungle plants (the ids in `JUNGLE_PLANTS`) have low wooden bases, made from the
+cache's Tree stump (loc 1354, model 1635), because loc 1398's model also stands there as a "Plant"
+(loc 1390) you can walk through. `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static
+render list in `SdMapDataLoader`, not to the scene or cache definitions: collision, pathfinding and
+the minimap stay unchanged. It copies the model, scales it to sit under the plant's leaves, keeps
+one copy for each size in a map square, and fits each to the terrain. A plant still blocks out to
+its leaves, past the base. Plants with `clipType` 0 get none, and animated or
+transforming plants never reach the list (`getSceneLocs` keeps them as entities). Without the
+stump model it logs an error and draws no bases, rather than failing the map square. Keep this
+decoration separate from `RegionDataLoader`'s footprints and `LocOverrides`. The slim cache's map
+pass runs the same loader, so it collects the stump model by itself.
 
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays
