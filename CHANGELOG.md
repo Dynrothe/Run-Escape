@@ -10,6 +10,11 @@ the version in the corner).
 - Room flags, by trippy22: a room's flag in the co-op list shows where its server is, not where
   its host is.
 
+### Fixed
+
+- Co-op sends stops promptly and handles quick taps and direction changes with less sliding.
+  Fixed by trippy22.
+
 ## 0.28.0 - 2026-11-07
 
 ### Added

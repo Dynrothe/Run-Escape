@@ -24,8 +24,10 @@ const QUIET_FRAMES = 2;
 export const GUEST_BUFFER_FRAMES = 4;
 // The host waits this long at most for everyone's map to load
 const LOAD_WAIT_MS = 20_000;
-// A move goes out this often at most: a touch stick changes nearly every
-// frame, and each one sent is a message from the host to everyone
+// Ordinary stick changes and refreshes stay at about 15 messages a second.
+// Two credits let starts and axis releases/reversals go early; each refills at this interval.
+// Stops spend no credit, so even frantic tapping stays under 36 moves/second,
+// leaving room for actions below the relays' 60 up-messages/second limit.
 const MOVE_INTERVAL_MS = 66;
 // The host keeps what it's sent for this many frames (20 seconds), to send
 // again to a guest that missed some. A gap only comes from a dropped
@@ -124,6 +126,8 @@ export class CoopRun {
     private hashes = new Map<number, number>();
     private lastMove: [number, number] = [0, 0];
     private moveSentAt = -Infinity;
+    private moveCredits = 2;
+    private moveCreditAt = 0;
     private moveSeqSent = 0;
     // The decision the local player last answered, and when
     private sentDecision?: { on: object; step: string | number; at: number };
@@ -210,16 +214,37 @@ export class CoopRun {
         const moveSeq = this.prediction?.sample(move);
         const now = this.now();
         if (
-            (move[0] === this.lastMove[0] &&
-                move[1] === this.lastMove[1] &&
-                (moveSeq === undefined || moveSeq === this.moveSeqSent)) ||
-            now - this.moveSentAt < MOVE_INTERVAL_MS
+            move[0] === this.lastMove[0] &&
+            move[1] === this.lastMove[1] &&
+            (moveSeq === undefined || moveSeq === this.moveSeqSent)
         ) {
             return;
+        }
+        const still = move[0] === 0 && move[1] === 0;
+        const wasStill = this.lastMove[0] === 0 && this.lastMove[1] === 0;
+        const stop = still && !wasStill;
+        // Releasing either axis is a stop on that axis, even while the other
+        // stays held. Delaying it makes a straight run reconcile sideways.
+        const urgent =
+            !still &&
+            (wasStill ||
+                (this.lastMove[0] !== 0 && move[0] * this.lastMove[0] <= 0) ||
+                (this.lastMove[1] !== 0 && move[1] * this.lastMove[1] <= 0));
+        this.moveCredits = Math.min(
+            2,
+            this.moveCredits + Math.max(0, now - this.moveCreditAt) / MOVE_INTERVAL_MS,
+        );
+        this.moveCreditAt = now;
+        if (!stop) {
+            if (this.moveCredits < 1 || (!urgent && now - this.moveSentAt < MOVE_INTERVAL_MS)) {
+                return;
+            }
+            this.moveCredits--;
         }
         this.lastMove = move;
         this.moveSentAt = now;
         this.moveSeqSent = moveSeq ?? 0;
+        if (moveSeq !== undefined) this.prediction?.sent(moveSeq);
         if (this.isHost) {
             this.queue({ frame: 0, hero: this.sim.focus, move });
         } else {
@@ -605,6 +630,8 @@ export class CoopRun {
     resumed(): void {
         this.lastMove = [NaN, NaN];
         this.moveSentAt = -Infinity;
+        this.moveCredits = 2;
+        this.moveCreditAt = this.now();
         for (const { actionSeq, action } of this.unconfirmed) {
             this.link.sendUp({ action, actionSeq });
         }
