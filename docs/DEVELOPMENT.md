@@ -1643,6 +1643,19 @@ skill adds a card, so check the page still fits at 1024x768 and 1280x720. On a p
 one-line help under the title stays, though other panels drop their subtitle there: it says which
 preset an adventurer uses. Keep it to one line at 667 wide.
 
+### Languages
+
+The game speaks English, Português (BR) and Español. Text lives in flat `{"key": "text"}` files at
+`src/game/i18n/locales/<lang>/<namespace>.json`; every `en/` file has an empty `{}` mirror in
+`pt-BR/` and `es/` for translators to fill. `t(key, params)` looks the key up in the active
+language, then English, then the key itself. `tr(key, fallback)` is the same but ends on the English
+literal kept in the code, which is how content (`src/game/content/`) reads its names and
+descriptions. `core/` doesn't import `i18n/`, so `Sim.ts` keeps emitting English, and the drawing
+layer wraps that text in `tl(text)` to translate it. `items.json`, `world.json` and `gen.json` are
+generated from the content by `scripts/i18n/extractors/`; regenerate them after changing content
+with `bun run tsx scripts/i18n/extract.ts`. `ui.json` and `ui-misc.json` are edited by hand. The
+choice is saved under `rune-survivors-language` in localStorage.
+
 ### Notice
 
 Whatever's written in [public/notice.md](../public/notice.md) pops up on the title screen until the
