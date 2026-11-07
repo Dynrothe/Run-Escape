@@ -7,7 +7,7 @@ the version in the corner).
 
 ### Fixed
 
-- Co-op sends stops promptly and handles quick taps and reversals with less sliding after you let go. Fixed by trippy22.
+- Co-op sends stops promptly and handles quick taps and direction changes with less sliding. Fixed by trippy22.
 
 ## 0.28.0 - 2026-11-07
 

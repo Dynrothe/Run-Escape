@@ -1552,8 +1552,10 @@ returns to the last sent direction inside the throttle still sends its new seque
 predicted tap can't remain unacknowledged forever.
 
 `CoopRun.setMove` sends a stop immediately after a sent movement, even inside the 66 ms
-throttle. Starts and reversals (a negative dot product with the sent direction) can spend a
-spare send credit to go early. Two credits refill at one per 66 ms; other changes still obey
+throttle. Starts and turns that release or reverse either sent axis can spend a spare send
+credit to go early. This includes releasing north while continuing east: waiting for the
+throttle would keep the host moving north and later pull the eastward run sideways.
+Two credits refill at one per 66 ms; other changes still obey
 the throttle, and stops spend no credit. This bounds even rapid tapping below 36 movement
 messages in a second, leaving room for actions under the relays' limit of 60. A reconnect
 restores the credits and forces the current input out. The policy applies with prediction
@@ -1580,6 +1582,8 @@ The camera follows the predicted pose, so the picture is kept steady:
   Check the latest input sequence against the acknowledged one, not just whether the last
   echoed direction is zero: the start of a short tap may not have been echoed yet either.
   Errors beyond the snap limit still snap.
+- Inputs sent before the first host frame stay pending until their echoes arrive. Presentation
+  falling back during that initial wait mustn't reset the timeline and acknowledge them itself.
 - When frames stop coming (`QUIET_MS`) with the lead at its budget, the picture holds where it
   is, and from `STALE_MS` it stands still with no walk animation. Easing back to the last
   confirmed spot would walk the hero backwards, then rush forward when a reconnect's resend

@@ -222,7 +222,9 @@ export class MovementPrediction {
             player.frozen <= 0;
         const stalled = time - this.receivedAt > STALE_MS;
         if (!playing || stalled || time < this.renderedAt) {
-            this.resetTimeline(time);
+            // Before the first host frame, inputs can already be in flight.
+            // Resetting would mark them acknowledged without their echoes.
+            if (this.confirmed) this.resetTimeline(time);
             this.renderedAt = time;
             const pose = this.pose;
             if (!pose) {

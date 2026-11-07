@@ -62,6 +62,26 @@ test("moves and turns immediately without writing any confirmed player state", (
     expect(getPlayerPose(sim, 99, 1).x).toBe(sim.player.x);
 });
 
+test("input sent before the first host frame stays pending until its echo", () => {
+    let now = 0;
+    const sim = makeSim();
+    const prediction = new MovementPrediction(sim, () => now);
+    const initialX = sim.player.x;
+    now = 100;
+    const seq = prediction.sample([127, 0]);
+    now = 110;
+    expect(prediction.render()).toBeUndefined();
+    now = 120;
+    sim.tick = 1;
+    prediction.confirm([]);
+    expect(prediction.render()!.x).toBeCloseTo(initialX + PLAYER_SPEED, 8);
+    now = 340;
+    sim.tick = 2;
+    sim.player.x += PLAYER_SPEED;
+    prediction.confirm([{ frame: 2, hero: 1, move: [127, 0], moveSeq: seq }]);
+    expect(prediction.render()!.x).toBeCloseTo(initialX + 12 * PLAYER_SPEED, 8);
+});
+
 test("replays terrain collision, movement speed and cursed controls", () => {
     const { sim, prediction, time } = setup(true);
     sim.heroes[1].stats.moveSpeed = 4;
@@ -306,7 +326,8 @@ test("a direction changed back inside the send throttle still gets acknowledged"
     );
     guest.setMove(1, 0);
     now = 20;
-    guest.setMove(0, 1);
+    // A turn adding an axis is still coalesced by the ordinary throttle.
+    guest.setMove(Math.SQRT1_2, Math.SQRT1_2);
     now = 40;
     guest.setMove(1, 0);
     expect(messages).toHaveLength(1);
@@ -349,6 +370,16 @@ test.each([true, false])("short taps and reversals send promptly (prediction: %s
     now = 320;
     guest.setMove(-1, 0);
     expect(messages.at(-1)).toMatchObject({ at: 320, move: [-127, 0] });
+    now = 500;
+    guest.setMove(1, 0);
+    now = 520;
+    guest.setMove(0, 1);
+    expect(messages.at(-1)).toMatchObject({ at: 520, move: [0, 127] });
+    now = 700;
+    guest.setMove(0.6, 0.8);
+    now = 720;
+    guest.setMove(-0.6, 0.8);
+    expect(messages.at(-1)).toMatchObject({ at: 720, move: [-76, 102] });
 });
 
 test.each([true, false])(
@@ -368,19 +399,26 @@ test.each([true, false])(
             () => now,
         );
         guest.setPrediction(on);
-        for (now = 0; now < 3000; now++) {
-            guest.setMove([1, 0, -1, 0][now % 4], 0);
+        const turns = [
+            [1, 0],
+            [0, 1],
+            [-1, 0],
+            [0, -1],
+        ];
+        for (now = 0; now < 6000; now++) {
+            if (now < 3000) guest.setMove([1, 0, -1, 0][now % 4], 0);
+            else guest.setMove(turns[now % 4][0], turns[now % 4][1]);
         }
         for (const at of messages) {
             expect(
                 messages.filter((time) => time >= at && time < at + 1000).length,
             ).toBeLessThanOrEqual(36);
         }
-        now = 3000;
+        now = 6000;
         guest.setMove(0, 0);
         guest.resumed();
         guest.setMove(0, 0);
-        expect(messages.at(-1)).toBe(3000);
+        expect(messages.at(-1)).toBe(6000);
     },
 );
 
@@ -497,13 +535,14 @@ function link(delay: (up: boolean) => number, cut = () => false) {
     );
     host.receiveUp("p1", { loaded: true });
     // One render: deliveries, the guest's input, host ticks, then guest catch-up
-    const frame = (at: number, move: number, hostSteps = 1) => {
+    const frame = (at: number, move: number | [number, number], hostSteps = 1) => {
         now = at;
         for (let i = 0; i < deliveries.length; ) {
             if (deliveries[i].at <= now) deliveries.splice(i, 1)[0].fn();
             else i++;
         }
-        guest.setMove(move, 0);
+        if (typeof move === "number") guest.setMove(move, 0);
+        else guest.setMove(...move);
         for (let i = 0; i < hostSteps; i++) host.stepFrame();
         host.flush();
         while (guest.canStep()) guest.stepFrame();
@@ -511,6 +550,46 @@ function link(delay: (up: boolean) => number, cut = () => false) {
     };
     return { host, guest, frame };
 }
+
+test.each(
+    [0, 60, 120].flatMap((delay) =>
+        [0, 10].flatMap((phase) =>
+            [
+                { from: [0, 1], to: [1, 0] },
+                { from: [1, 0], to: [0, 1] },
+                { from: [0, -1], to: [-1, 0] },
+                { from: [-1, 0], to: [0, -1] },
+                { from: [Math.SQRT1_2, Math.SQRT1_2], to: [1, 0] },
+                { from: [-Math.SQRT1_2, -Math.SQRT1_2], to: [0, -1] },
+            ].map(({ from, to }) => ({ delay, phase, from, to })),
+        ),
+    ),
+)(
+    "a continuous turn after a held refresh avoids sideways drift ($from -> $to, delay $delay, phase $phase)",
+    ({ delay, phase, from, to }) => {
+        const { guest, frame } = link(() => delay);
+        let across = 0;
+        let lastAcross = 0;
+        let maxDrift = 0;
+        for (let now = 0; now <= 1200; now += 10) {
+            // The held input refresh goes at 300 + phase. Turning just after it
+            // mustn't keep the old axis moving on the host until the throttle ends.
+            const move = now < 100 + phase ? [0, 0] : now < 320 + phase ? from : to;
+            const pose = frame(now, move as [number, number], now % 20 === 0 ? 1 : 0);
+            const perpendicular = pose.x * -to[1] + pose.y * to[0];
+            lastAcross = perpendicular;
+            if (now === 320 + phase) across = perpendicular;
+            if (now > 320 + phase) maxDrift = Math.max(maxDrift, Math.abs(perpendicular - across));
+        }
+        // Host tick quantization can differ by half a tick; the send throttle
+        // mustn't add several ticks of movement on the released axis.
+        expect(maxDrift).toBeLessThanOrEqual(PLAYER_SPEED / 2 + 1e-6);
+        // Still converge to the host's line, rather than hiding a lasting offset.
+        const confirmedAcross = guest.sim.player.x * -to[1] + guest.sim.player.y * to[0];
+        expect(Math.abs(lastAcross - confirmedAcross)).toBeLessThan(0.001);
+        expect(guest.desynced).toBe(false);
+    },
+);
 
 test.each([0, 60, 120, 250].flatMap((delay) => [0, 10].map((phase) => ({ delay, phase }))))(
     "a short tap has no idle slide (delay: $delay ms, input phase: $phase ms)",

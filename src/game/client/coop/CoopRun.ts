@@ -25,7 +25,7 @@ export const GUEST_BUFFER_FRAMES = 4;
 // The host waits this long at most for everyone's map to load
 const LOAD_WAIT_MS = 20_000;
 // Ordinary stick changes and refreshes stay at about 15 messages a second.
-// Two credits let a start/reversal go early; each refills at this interval.
+// Two credits let starts and axis releases/reversals go early; each refills at this interval.
 // Stops spend no credit, so even frantic tapping stays under 36 moves/second,
 // leaving room for actions below the relays' 60 up-messages/second limit.
 const MOVE_INTERVAL_MS = 66;
@@ -223,8 +223,13 @@ export class CoopRun {
         const still = move[0] === 0 && move[1] === 0;
         const wasStill = this.lastMove[0] === 0 && this.lastMove[1] === 0;
         const stop = still && !wasStill;
+        // Releasing either axis is a stop on that axis, even while the other
+        // stays held. Delaying it makes a straight run reconcile sideways.
         const urgent =
-            !still && (wasStill || move[0] * this.lastMove[0] + move[1] * this.lastMove[1] < 0);
+            !still &&
+            (wasStill ||
+                (this.lastMove[0] !== 0 && move[0] * this.lastMove[0] <= 0) ||
+                (this.lastMove[1] !== 0 && move[1] * this.lastMove[1] <= 0));
         this.moveCredits = Math.min(
             2,
             this.moveCredits + Math.max(0, now - this.moveCreditAt) / MOVE_INTERVAL_MS,
