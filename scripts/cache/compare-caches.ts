@@ -1,9 +1,14 @@
 // Compares the game's cache (GAME_CACHE_NAME) with an older one, over the groups the game reads:
-// the ones a checked slim-cache run kept (caches/slim/ by default). Config archives go file by
-// file, and the types the game decodes are compared decoded, so a new encoding of the same thing
-// doesn't count as a change. Run it before moving the game to a newer cache.
+// the ones a checked slim-cache run kept (caches/slim/ by default), or a slim-cache out dir's.
+// Config archives go file by file, and the types the game decodes are compared decoded, so a new
+// encoding of the same thing doesn't count as a change. Run it before moving the game to a newer
+// cache.
 //
-//   bun run tsx scripts/cache/compare-caches.ts <older cache name> [slim store dir]
+//   bun run tsx scripts/cache/compare-caches.ts <older cache name> [slim store or out dir]
+//
+// A build leaves the dev maps out, so caches/slim/ doesn't have their groups. For theirs, run
+// DEV_MAPS=1 SLIM_CHECK=0 bun run tsx scripts/cache/slim-cache.ts caches/slim-dev/ on the older
+// cache, and pass caches/slim-dev/ here.
 import fs from "node:fs";
 import path from "node:path";
 
@@ -27,7 +32,17 @@ import { loadCache, loadCacheInfos } from "./load-util";
 const oldName = process.argv[2];
 const storeDir = process.argv[3] ?? "caches/slim/";
 if (!oldName) {
-    throw new Error("Usage: compare-caches.ts <older cache name> [slim store dir]");
+    throw new Error("Usage: compare-caches.ts <older cache name> [slim store or out dir]");
+}
+
+// The run a store dir kept (slim.json), or the one an out dir has (caches.json)
+function readSlimInfo(dir: string): CacheInfo {
+    const storeFile = path.join(dir, "slim.json");
+    if (fs.existsSync(storeFile)) {
+        return JSON.parse(fs.readFileSync(storeFile, "utf8")).info;
+    }
+    const [info] = JSON.parse(fs.readFileSync(path.join(dir, "caches.json"), "utf8"));
+    return info;
 }
 
 function open(name: string): { info: CacheInfo; system: CacheSystem } {
@@ -43,9 +58,9 @@ const before = open(oldName);
 const after = open(GAME_CACHE_NAME);
 
 // The groups the game reads, by index
-const stored = JSON.parse(fs.readFileSync(path.join(storeDir, "slim.json"), "utf8"));
+const slimInfo = readSlimInfo(storeDir);
 const read = new Map<number, number[]>();
-for (const { file } of stored.info.chunks as { file: string }[]) {
+for (const { file } of slimInfo.chunks!) {
     const bytes = new Uint8Array(fs.readFileSync(path.join(storeDir, CHUNK_DIR, file)));
     for (const group of readChunk(bytes)) {
         if (group.indexId === 255) {
@@ -74,7 +89,7 @@ function groupName(indexId: number, archiveId: number): string {
     return String(archiveId);
 }
 
-console.log(`${oldName} -> ${GAME_CACHE_NAME}, over ${stored.info.name}'s groups\n`);
+console.log(`${oldName} -> ${GAME_CACHE_NAME}, over ${slimInfo.name}'s groups\n`);
 
 // Every index but configs: by each group's crc in the index's table
 for (const [indexId, ids] of [...read].sort((a, b) => a[0] - b[0])) {
