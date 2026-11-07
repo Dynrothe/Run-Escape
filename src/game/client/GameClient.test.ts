@@ -2,7 +2,7 @@
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
-import { Sim } from "../core/Sim";
+import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -1819,5 +1819,64 @@ describe("the opening cinematic", () => {
         chosen.stage = 2;
         client.retry();
         expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", false);
+    });
+});
+
+describe("the fight button's hint", () => {
+    // Just what the button reads of a run: its ability, the clock, and the boss on the bar
+    function createFight() {
+        const sim = {
+            ability: { name: "Smite", iconObjId: 1, cooldown: 4 },
+            tick: 0,
+            shownBoss: undefined as { dead: boolean; risingEnd: number } | undefined,
+            abilityTarget: () => undefined,
+            abilitySecondsLeft: () => 0,
+            isExposed: () => false,
+        };
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, { abilityUsed: false });
+        const hint = (seconds: number): boolean => {
+            sim.tick = seconds * TICKS_PER_SECOND;
+            const view = (
+                client as unknown as { getAbilityView(sim: unknown): { hint: boolean } }
+            ).getAbilityView(sim);
+            return view.hint;
+        };
+        return { sim, client, hint };
+    }
+
+    test("goes by when the boss came up, not the run's clock, as the Tombs' Nexus comes first", () => {
+        const { sim, hint } = createFight();
+        // The Nexus: no boss, however long it takes
+        expect(hint(5)).toBe(false);
+        expect(hint(40)).toBe(false);
+        // The room's boss, rising till 62 s: not yet
+        sim.shownBoss = { dead: false, risingEnd: 62 * TICKS_PER_SECOND };
+        expect(hint(60)).toBe(false);
+        expect(hint(62)).toBe(false);
+        // A moment after it's up, and long enough to read
+        expect(hint(66)).toBe(true);
+        expect(hint(76)).toBe(true);
+        expect(hint(80)).toBe(false);
+        // Beaten, and the next room's boss: from that one's start again
+        sim.shownBoss = { dead: true, risingEnd: 0 };
+        expect(hint(100)).toBe(false);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(101)).toBe(false);
+        expect(hint(105)).toBe(true);
+    });
+
+    test("isn't shown again once the button's been used this session", () => {
+        const { sim, client, hint } = createFight();
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(0)).toBe(false);
+        expect(hint(5)).toBe(true);
+        Object.assign(client, { abilityUsed: true });
+        expect(hint(6)).toBe(false);
+        sim.shownBoss = undefined;
+        hint(20);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        hint(21);
+        expect(hint(25)).toBe(false);
     });
 });

@@ -140,8 +140,8 @@ import { saveFile } from "./saveFile";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
-// Seconds into a fight a fight's own button says what it's for, until it's first used: from as the
-// boss's intro's done, for long enough to read (AbilityView.hint)
+// Seconds into a boss's fight a fight's own button says what it's for, until it's first used: from
+// a moment after the boss is up (risen from its intro), for long enough to read (AbilityView.hint)
 const ABILITY_HINT_FROM = 3;
 const ABILITY_HINT_UNTIL = 15;
 const MAX_TICKS_PER_FRAME = 10;
@@ -573,6 +573,9 @@ export class GameClient implements GameFrameHandler {
     // A fight's own button's been used this session (MapDef.fight.ability): its hint's no longer
     // shown (AbilityView.hint)
     private abilityUsed = false;
+    // The tick the boss on the bar was first up, in this sim, since there was none: the ability
+    // hint's clock. A fight's start, not the run's: the Tombs' Nexus comes before each boss.
+    private bossUp?: { sim: Sim; tick: number };
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
     private attractTick = 0;
@@ -2407,15 +2410,36 @@ export class GameClient implements GameFrameHandler {
         }
         const boss = sim.abilityTarget() ?? sim.shownBoss;
         const left = sim.abilitySecondsLeft();
-        const seconds = sim.tick / TICKS_PER_SECOND;
+        const seconds = this.secondsSinceBossUp(sim);
         return {
             name: ability.name,
             iconObjId: ability.iconObjId,
             charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
             inReach: sim.abilityTarget() !== undefined,
             opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
-            hint: !this.abilityUsed && seconds >= ABILITY_HINT_FROM && seconds < ABILITY_HINT_UNTIL,
+            hint:
+                !this.abilityUsed &&
+                seconds !== undefined &&
+                seconds >= ABILITY_HINT_FROM &&
+                seconds < ABILITY_HINT_UNTIL,
         };
+    }
+
+    // Seconds since the boss on the bar was up (bossUp), or undefined with none living. Another
+    // boss coming on while one's shown (a co-op copy, the next phase) doesn't start it again.
+    private secondsSinceBossUp(sim: Sim): number | undefined {
+        const boss = sim.shownBoss;
+        if (!boss || boss.dead) {
+            this.bossUp = undefined;
+            return undefined;
+        }
+        if (this.bossUp?.sim !== sim) {
+            if (boss.risingEnd > sim.tick) {
+                return undefined;
+            }
+            this.bossUp = { sim, tick: sim.tick };
+        }
+        return (sim.tick - this.bossUp.tick) / TICKS_PER_SECOND;
     }
 
     // A blow at (x, y) shakes the camera, less the further off the player it is, and not at
