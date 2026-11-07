@@ -292,6 +292,8 @@ export type AbilityView = {
     charge: number;
     inReach: boolean;
     opened: boolean;
+    // Say what it's for (it's not been used yet this session, early in a fight)
+    hint: boolean;
 };
 
 // One player's own numbers for the results screen (a teammate who fell or

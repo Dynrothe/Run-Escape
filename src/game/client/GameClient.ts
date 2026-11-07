@@ -139,6 +139,10 @@ import { saveFile } from "./saveFile";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
+// Seconds into a fight a fight's own button says what it's for, until it's first used: from as the
+// boss's intro's done, for long enough to read (AbilityView.hint)
+const ABILITY_HINT_FROM = 3;
+const ABILITY_HINT_UNTIL = 15;
 const MAX_TICKS_PER_FRAME = 10;
 // A solo run makes up a late frame's ticks this many a frame at most, rather than
 // all in the next one, so one slow frame doesn't make the next slow too. Every
@@ -563,6 +567,9 @@ export class GameClient implements GameFrameHandler {
     // meanwhile)
     private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
+    // A fight's own button's been used this session (MapDef.fight.ability): its hint's no longer
+    // shown (AbilityView.hint)
+    private abilityUsed = false;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
     private attractTick = 0;
@@ -1861,6 +1868,7 @@ export class GameClient implements GameFrameHandler {
         if (!sim?.ability || (this.paused && !this.coopRun)) {
             return;
         }
+        this.abilityUsed = true;
         this.act({ kind: "ability" });
     }
 
@@ -2366,12 +2374,14 @@ export class GameClient implements GameFrameHandler {
         }
         const boss = sim.abilityTarget() ?? sim.shownBoss;
         const left = sim.abilitySecondsLeft();
+        const seconds = sim.tick / TICKS_PER_SECOND;
         return {
             name: ability.name,
             iconObjId: ability.iconObjId,
             charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
             inReach: sim.abilityTarget() !== undefined,
             opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
+            hint: !this.abilityUsed && seconds >= ABILITY_HINT_FROM && seconds < ABILITY_HINT_UNTIL,
         };
     }
 
