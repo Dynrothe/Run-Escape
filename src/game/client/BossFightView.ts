@@ -1046,10 +1046,13 @@ export class BossFightView {
         const attack = windup.attack;
         const radius = attack.radius ?? 2;
         const cone = attack.cone!;
+        // Two rules, not one scale: with coneAlpha unset (Phosani's cones) the wedge and the
+        // circle under her are as faint as any warning (WARNING_ALPHA, a tenth). Set at all, even
+        // to 1, they're drawn at full strength, as a lunge's strip is, and coneAlpha multiplies
+        // both: no multiplier alone could lift them past that tenth.
+        const plain = attack.coneAlpha !== undefined;
         const solid = attack.coneAlpha ?? 1;
-        // A cone asked to be plainer is drawn at full strength, as a lunge's strip is, not
-        // through the warnings' faintness (WARNING_ALPHA), which no multiplier could lift
-        if (attack.coneAlpha !== undefined) {
+        if (plain) {
             ctx.globalAlpha = 1;
         }
         const base = Math.atan2(windup.dirY, windup.dirX);
@@ -1075,7 +1078,7 @@ export class BossFightView {
         ctx.fillStyle = `rgba(255, 40, 20, ${Math.min(1, 0.28 * t * solid)})`;
         ctx.fill();
         this.traceCircle(overlay, sim, enemy.x, enemy.y, attack.underRadius ?? 0);
-        ctx.fillStyle = `rgba(255, 40, 20, ${0.16 + 0.16 * t})`;
+        ctx.fillStyle = `rgba(255, 40, 20, ${Math.min(1, (0.16 + 0.16 * t) * solid)})`;
         ctx.fill();
         ctx.stroke();
     }
