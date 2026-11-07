@@ -82,6 +82,7 @@ import {
     getCinematicCamera,
     getCinematicSquares,
 } from "./Cinematic";
+import { CLOUD_SAVE_URL, CloudSync } from "./CloudSave";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -234,16 +235,16 @@ const CAMERA_REACH: CameraReach = {
     around: getGroundReach(ATTRACT_PITCH, ATTRACT_DISTANCE),
 };
 
-// The world fades out past the arena's edge. A ScapeRune map's world carries on: it
-// has scenery there (scaperune/CLAUDE.md).
-// What to build a map's collision from: its arena, and on a lit map where its glowing scenery is
-// (LightingDef.locs)
+// What a map's region data is built from: its arena, and on a map with glowing scenery the loc
+// ids to find (LightingDef.locs)
 function getRegionInput(map: MapDef): RegionDataInput {
     const locs = map.lighting?.locs;
     const region = getArenaRegion(map);
     return locs ? { ...region, glowLocs: Object.keys(locs).map(Number) } : region;
 }
 
+// The world fades out past the arena's edge. A ScapeRune map's world carries on: it
+// has scenery there (scaperune/CLAUDE.md).
 function setPlayArea(
     renderer: GameWebGLRenderer,
     arena: { baseX: number; baseY: number; sizeX: number; sizeY: number },
@@ -522,6 +523,8 @@ export class GameClient implements GameFrameHandler {
     // stays as it is
     private saveNoRoom = false;
     private stopSaveLock?: () => void;
+    // Cloud save, where the build has a Worker for it
+    readonly cloud?: CloudSync;
     // Co-op: the room and its relay, and the run being played with it
     readonly coop: CoopLobby;
     private coopRun?: CoopRun;
@@ -658,6 +661,16 @@ export class GameClient implements GameFrameHandler {
         // Co-op's offered only where there's a relay to play it through
         this.coop.checkAvailable();
         document.addEventListener("visibilitychange", this.onVisibilityChange);
+        if (CLOUD_SAVE_URL) {
+            this.cloud = new CloudSync(CLOUD_SAVE_URL, {
+                gameVersion: this.saveStore.gameVersion,
+                save: () => this.save,
+                canWrite: () => this.canPersist(),
+                apply: (save) => this.replaceSave(save),
+                onView: (cloud) => this.store.set({ cloud }),
+            });
+            this.cloud.start();
+        }
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
         // Before a run starts, so it's with the save as it is now
@@ -681,6 +694,7 @@ export class GameClient implements GameFrameHandler {
 
     dispose(): void {
         this.stopSaveLock?.();
+        this.cloud?.stop();
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
         this.stopBackgroundTicker();
         this.coop.close();
@@ -694,7 +708,12 @@ export class GameClient implements GameFrameHandler {
     // ---- UI actions ----
 
     showScreen(screen: Screen): void {
+        const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
+        // Done shopping: a save point for cloud save
+        if ((was === "shop" || was === "armoury") && screen !== was) {
+            this.cloud?.savePoint();
+        }
     }
 
     // The adventurer the game starts on (or none, to start on the first again)
@@ -1265,6 +1284,8 @@ export class GameClient implements GameFrameHandler {
     private onSaveLock(held: boolean): void {
         if (held) {
             this.reloadSave();
+            // With the save as it is now, to find one from another device
+            this.cloud?.check();
         } else {
             this.updateSaveBlock();
         }
@@ -1313,6 +1334,8 @@ export class GameClient implements GameFrameHandler {
     replaceSave(save: SaveData): void {
         this.useSave(save, true);
         this.persist();
+        // An import's a save point; a download from the cloud is in step already
+        this.cloud?.savePoint();
     }
 
     // Plays on with this save. toFavourite: go to its favourite, as it would
@@ -1341,9 +1364,15 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // Whether the save's written here: this tab has the lock, and the save isn't a newer game's or
+    // one there was no room to keep a copy of. Cloud save goes by it too.
+    private canPersist(): boolean {
+        return this.saveLock.held === true && !this.newerSave && !this.saveNoRoom;
+    }
+
     private persist(): void {
         // Played without saving, it carries on in memory
-        if (this.saveLock.held && !this.newerSave && !this.saveNoRoom) {
+        if (this.canPersist()) {
             this.saveStore.save(this.save);
         }
         // A fresh object so React sees the change
@@ -1555,7 +1584,8 @@ export class GameClient implements GameFrameHandler {
             deliver(run);
         }
         this.enterRun(sim, pets, true);
-        if (!this.coop.isHost) {
+        // Or once the opening cinematic's squares are in, if it's loading them (cinematicLoaded)
+        if (!this.coop.isHost && this.cinematicLoading === undefined) {
             this.coop.sendUp({ loaded: true });
         }
         // Hidden while it loaded: it keeps up from the start
@@ -2048,6 +2078,8 @@ export class GameClient implements GameFrameHandler {
         // and a NaN in a solo one's would come back from the save as 0 coins
         const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
         this.persist();
+        // A run's results: a save point for cloud save
+        this.cloud?.savePoint();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -2329,6 +2361,7 @@ export class GameClient implements GameFrameHandler {
         }
         const lighting = sim.map.lighting;
         if (lighting) {
+            // Lit round the view's middle, which a cinematic takes away from the player
             this.sceneLights.update(
                 this.renderer,
                 sim,
@@ -2336,8 +2369,8 @@ export class GameClient implements GameFrameHandler {
                 alpha,
                 this.viewHero,
                 this.view.localPlayerPose,
-                px,
-                py,
+                cinematic ? cinematic.x : px,
+                cinematic ? cinematic.y : py,
                 deltaTimeMs / 1000,
                 this.grid.data.glowLocs,
                 this.view.getCinematicLights(),
@@ -2452,9 +2485,24 @@ export class GameClient implements GameFrameHandler {
             }
             return true;
         }
-        this.cinematicLoading = undefined;
-        this.store.set({ screen: "run" });
+        this.cinematicLoaded();
         return false;
+    }
+
+    // What the cinematic sees is in, or it's stopped waiting (the time's up, or it was skipped):
+    // the run's screen, and a co-op guest tells the host it's ready, as the host's run waits for
+    // everyone's (CoopRun.waitingForLoad)
+    private cinematicLoaded(): void {
+        if (this.cinematicLoading === undefined) {
+            return;
+        }
+        this.cinematicLoading = undefined;
+        if (this.store.getSnapshot().screen === "loading") {
+            this.store.set({ screen: "run" });
+        }
+        if (this.coopRun && !this.coop.isHost) {
+            this.coop.sendUp({ loaded: true });
+        }
     }
 
     // The opening cinematic on by a frame (MapDef.cinematic): its sounds as their cues go by,
@@ -2487,9 +2535,12 @@ export class GameClient implements GameFrameHandler {
         return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
     }
 
-    // Any key, click, tap or button during the opening cinematic: straight to the run
+    // Any key, click, tap or button during the opening cinematic: straight to the run. On the
+    // loading screen before it, that skips the wait too.
     skipCinematic(): void {
-        if (this.cinematic?.skip()) {
+        const loading = this.cinematicLoading;
+        const waited = loading === undefined ? 0 : (performance.now() - loading) / 1000;
+        if (this.cinematic?.skip(waited)) {
             this.endCinematic();
         }
     }
@@ -2502,12 +2553,7 @@ export class GameClient implements GameFrameHandler {
         this.view.cinematic = undefined;
         // What it saw goes back to loading and unloading with the camera
         this.renderer.mapManager.setPinned([]);
-        if (this.cinematicLoading !== undefined) {
-            this.cinematicLoading = undefined;
-            if (this.store.getSnapshot().screen === "loading") {
-                this.store.set({ screen: "run" });
-            }
-        }
+        this.cinematicLoaded();
         // The solo run's clock starts from here: nothing banked while it was held
         this.accumulator = Math.min(this.accumulator, TICK_MS);
         if (this.store.getSnapshot().cinematic) {
@@ -2632,10 +2678,12 @@ export class GameClient implements GameFrameHandler {
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
         const started = performance.now();
+        // The host waits for its own opening cinematic's squares, as for the guests'
+        const loading = run.isHost && this.cinematicLoading !== undefined;
         let steps = 0;
         let threw = true;
         try {
-            while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
+            while (!loading && run.canStep() && steps < MAX_CATCH_UP_TICKS) {
                 if (this.accumulator >= TICK_MS) {
                     this.accumulator -= TICK_MS;
                 } else if (steps >= catchUp || performance.now() - started > CATCH_UP_BUDGET_MS) {
@@ -2658,7 +2706,7 @@ export class GameClient implements GameFrameHandler {
             }
             threw = false;
         } finally {
-            if (threw || !run.canStep()) {
+            if (threw || loading || !run.canStep()) {
                 // Waiting on the host, or stopped by an error after a step: no
                 // time to make up (an error every frame would otherwise bank
                 // it, for a rush of frames once it stops)
@@ -2715,6 +2763,7 @@ export class GameClient implements GameFrameHandler {
     // minutes to catch up on when they're back
     private onVisibilityChange = (): void => {
         this.stopBackgroundTicker();
+        this.cloud?.onVisibility(document.hidden);
         if (document.hidden && this.coopRun) {
             this.backgroundTime = performance.now();
             const source = `setInterval(() => postMessage(0), ${TICK_MS});`;
@@ -3247,6 +3296,8 @@ export class GameClient implements GameFrameHandler {
                 Math.max(0, (sim.xp - thisLevel) / Math.max(1, nextLevel - thisLevel)),
             ),
             seconds: Math.floor(sim.seconds),
+            // None once a run's ended early: its sim can stop mid-choice
+            decisionSeconds: this.coopStopped ? undefined : this.coopRun?.decisionSeconds,
             kills: sim.kills,
             coins: sim.coins,
             dps: this.shownDps,

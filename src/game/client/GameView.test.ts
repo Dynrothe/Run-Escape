@@ -73,6 +73,7 @@ test.each([
                 expect.any(Number),
                 projectile.y,
                 (projectile.yaw + (look?.yawOffset ?? 0)) & 2047,
+                // Seen in the dark on a map with lighting (ActorDrawOptions.unlit)
                 { scale: look?.scale ?? 1, unlit: 1 },
             );
             expect(projectile).toEqual(before);

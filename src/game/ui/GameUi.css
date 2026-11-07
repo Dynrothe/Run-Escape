@@ -436,6 +436,42 @@
     flex-shrink: 0;
 }
 
+/* A box to type in (cloud save's code): it goes under the label when there isn't room beside it,
+   and shrinks to what's left */
+.ui-setting-wide {
+    flex-wrap: wrap;
+}
+
+.ui-setting-wide .ui-setting-control {
+    flex: 1 1 260px;
+    min-width: 0;
+    justify-content: flex-end;
+}
+
+.ui-cloud-link {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    max-width: 340px;
+}
+
+/* Grows from nothing, so its own width never counts towards the panel's and scrolls it sideways */
+.ui-cloud-code-input {
+    width: 0;
+    font-family: "OSRS Bold", sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.ui-cloud-code {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--ui-yellow);
+    user-select: all;
+}
+
 .ui-toggle {
     min-width: 52px;
     color: #e04040;
@@ -522,6 +558,23 @@
 
 .ui-title-settings:hover {
     background: var(--ui-card-hover);
+}
+
+/* Cloud save's button: faded while it's off, with its "!" or "no" sign in the corner */
+.ui-title-cloud {
+    position: relative;
+}
+
+.ui-title-cloud-off .ui-icon {
+    opacity: 0.55;
+}
+
+.ui-title-cloud-badge {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    display: flex;
+    pointer-events: none;
 }
 
 .ui-discord {
@@ -1149,6 +1202,63 @@
     touch-action: none;
 }
 
+.ui-choice-countdown {
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 5px 12px;
+    background: var(--ui-panel-dark);
+    box-shadow:
+        0 0 0 1px var(--ui-edge-light),
+        0 2px 4px #0008;
+    color: var(--ui-text);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ui-choice-countdown-time {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
+    font-variant-numeric: tabular-nums;
+}
+
+.ui-choice-countdown-soon .ui-choice-countdown-time {
+    color: #ff6050;
+}
+
+.ui-choice-countdown ~ .ui-hud-top .ui-timer {
+    visibility: hidden;
+}
+
+.ui-choice-countdown ~ .ui-modal {
+    padding-top: 64px;
+    box-sizing: border-box;
+}
+
+/* A panel too tall for what's left under it scrolls, rather than spilling out of its frame. Its
+   padding and border (28px and 12px) are outside its max-height, with 6px to spare each side. */
+.ui-choice-countdown ~ .ui-modal > .ui-panel {
+    max-height: calc(100% - 52px);
+    overflow-y: auto;
+}
+
+/* The casket's card has its border inside its size */
+.ui-choice-countdown ~ .ui-modal > .ui-chest-card {
+    max-height: calc(100% - 12px);
+}
+
+/* A narrow window has room between six slots and the minimap for the time alone */
+@media (max-width: 860px) {
+    .ui-choice-countdown-label {
+        display: none;
+    }
+}
+
 .ui-xp {
     position: absolute;
     left: 0;
@@ -1621,6 +1731,20 @@
 
 .ui-gear-slot-empty {
     background: var(--ui-card);
+}
+
+/* Stat line with an OSRS icon, or spacer when there is none. Its text wraps
+   beside the icon where there's no room (a phone's level up cards) */
+.ui-stat-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ui-stat-line .ui-icon,
+.ui-stat-spacer {
+    display: inline-block;
+    flex-shrink: 0;
 }
 
 /* Buffs, inventory and hitpoints, bottom middle */
@@ -2151,9 +2275,15 @@
 .ui-choice-stats {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 12px;
+    gap: 4px 12px;
     font-size: 14px;
     color: var(--ui-white);
+}
+
+.ui-choice-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .ui-choice-stat-label {
@@ -2294,12 +2424,19 @@
     gap: 10px;
 }
 
-.ui-pause-item span:nth-child(2) {
+.ui-pause-item > span:nth-child(2) {
     flex: 1;
 }
 
 .ui-pause-detail {
     color: var(--ui-white);
+}
+
+.ui-pause-item .ui-pause-detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 10px;
 }
 
 .ui-pause-level {
@@ -2330,6 +2467,7 @@
 /* A worn set piece's progress, under its stats; green once the bonus is on */
 .ui-pause-set {
     display: block;
+    width: 100%;
     color: var(--ui-cyan);
 }
 
@@ -2805,4 +2943,13 @@
     flex-wrap: wrap;
     gap: 6px;
     margin: 6px 0;
+}
+
+/* An adventurer's bonuses under their description, a stat to a line */
+.ui-select-bonus {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+    color: var(--ui-white);
 }

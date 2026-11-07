@@ -54,6 +54,9 @@ export class LightBudget {
     private readonly slots: (Slot | undefined)[];
     private readonly byKey = new Map<number, Candidate>();
     private readonly order: Candidate[] = [];
+    // The keys in slots, and the keys picked this frame (end)
+    private readonly held = new Set<number>();
+    private readonly wanted = new Set<number>();
 
     constructor(readonly size: number) {
         this.slots = new Array(size).fill(undefined);
@@ -106,7 +109,8 @@ export class LightBudget {
         byKey.clear();
         const order = this.order;
         order.length = 0;
-        const held = new Set<number>();
+        const held = this.held;
+        held.clear();
         for (const slot of this.slots) {
             if (slot) {
                 held.add(slot.key);
@@ -126,7 +130,8 @@ export class LightBudget {
             order.push(c);
         }
         order.sort((a, b) => b.score - a.score);
-        const wanted = new Set<number>();
+        const wanted = this.wanted;
+        wanted.clear();
         for (let i = 0; i < order.length && wanted.size < this.size; i++) {
             if (order[i].score > 0) {
                 wanted.add(order[i].key);

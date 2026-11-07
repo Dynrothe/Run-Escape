@@ -119,11 +119,13 @@ jobs:
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+                  VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
             - run: bun run slim-cache
             - run: bun run desktop:dist
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+                  VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
@@ -150,6 +152,7 @@ jobs:
         env:
             COOP_URL: ${{ vars.COOP_URL }}
             RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+            CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
             VERSION: ${{ needs.check.outputs.version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -191,7 +194,7 @@ jobs:
               working-directory: android
               run: >-
                   gradle --no-daemon test :app:assembleRelease -PcoopUrl="$COOP_URL"
-                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL"
+                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL" -PcloudSaveUrl="$CLOUD_SAVE_URL"
 
             - name: Sign and verify the APK
               env:
@@ -201,7 +204,7 @@ jobs:
                   ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
               run: python3 scripts/android/sign-apk.py --version "$VERSION"
 
-            # How to install it and update it, for the release's notes: the app never updates itself
+            # How to install it and use in-app updates, for the release's notes
             - run: sed "s/<version>/$VERSION/g" android/release-notes.md > release/android-notes.md
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

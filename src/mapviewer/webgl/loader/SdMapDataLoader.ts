@@ -38,6 +38,7 @@ import {
     isModelFaceTransparent,
 } from "../buffer/SceneBuffer";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
+import { addPlantBarrierBases } from "../loc/PlantBarriers";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
 import { getSceneLocs, isLowDetail } from "../loc/SceneLocs";
 import { createNpcDatas } from "../npc/NpcData";
@@ -763,6 +764,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         const sceneLocs = getSceneLocs(locTypeLoader, scene, borderSize, minLevel, maxLevel);
         const sceneModels = sceneLocs.locs;
+        addPlantBarrierBases(locModelLoader, sceneModels, scene, borderSize);
 
         // Create loc animated groups and add transformed locs
         const locAnimatedGroups = addLocEntities(

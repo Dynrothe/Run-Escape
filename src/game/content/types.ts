@@ -1892,8 +1892,8 @@ export type MapDef = {
     plane?: number;
     // Where the player starts (moved to the nearest free spot if it's blocked)
     spawn: { x: number; y: number };
-    // The way the player faces as the run starts (x east, y north), south when unset: the way an
-    // opening cinematic's camera ends looking (MapDef.cinematic)
+    // The way the player faces as the run starts (x east, y north, any length), south when unset:
+    // the way an opening cinematic's camera ends looking (MapDef.cinematic)
     spawnFacing?: { x: number; y: number };
     // A ditch two tiles deep, its south row at y, across the arena (the
     // Wilderness Ditch): the player can't cross it, enemies jump it
@@ -2468,7 +2468,9 @@ export type CinematicCueDef = {
 // Where a cinematic's camera is at seconds in: looking at x, y (world tiles), lift tiles above the
 // ground there, from distance tiles away, at pitch and yaw (RS angle units, as CameraRig's: pitch
 // -512 straight down and 0 level, yaw 0 facing north). Between shots it moves smoothly through
-// them (a monotone curve, so it never overshoots one); hold eases it to a stop on that shot.
+// them (a monotone curve, so it never overshoots one); hold eases it to a stop on that shot. It
+// turns the short way round from one shot's yaw to the next, so a turn of half a circle or more
+// needs a shot on the way.
 // player: the run's own camera, behind the player, as the cinematic ends there.
 export type CinematicShotDef =
     | {

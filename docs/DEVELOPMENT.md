@@ -36,6 +36,18 @@ build**: `bun run build` empties `dist/`. `bun run preview` serves the build wit
 to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
 (`?viewer=1`) needs it.
 
+Most of the full cache is one big file (`main_file_cache.dat2`), which `src/rs/cache/CacheFiles.ts`
+downloads in parts kept in the Cache API. A download that's cut off resumes with
+`Range: bytes=<offset>-<MAX_SAFE_INTEGER>`, and the `Last-Modified` its parts came with as
+`If-Range`. A server that ignores Range sends the whole file, and the download starts again from
+0%, which a phone on a slow or cut-off connection may never get past. `bun run serve`, the
+desktop app and the dev and preview server's `/caches` (`vite.config.ts`) all answer Range with
+206, with the end clamped; only the last checks `If-Range`. A part only counts if it starts where
+the one before it ended and is from the same copy of the file, and the last bytes are kept as a
+part too. Once the whole file's in hand it's kept, and only then are the parts dropped, so a page
+reloaded while a phone's still writing it (or out of room) is put together from the parts: its
+resume asks past the end, and a 416 with the parts' length means every part was there.
+
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
 bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
 full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
@@ -405,16 +417,18 @@ chunk it lists.
 
 ### Online and offline play
 
-The web build and the app each need the relay and the run collector, and they must match: the
-build as `VITE_COOP_URL` and `VITE_RUN_ANALYTICS_URL`, the app as `-PcoopUrl` and
-`-PrunAnalyticsUrl` (the `COOP_URL` and `RUN_ANALYTICS_URL` repository variables in the workflows).
-Empty means solo only, or no run stats, as on desktop. Android, desktop and the website share rooms
+The web build and the app each need the relay, the run collector and the cloud-save Worker, and
+they must match: the build as `VITE_COOP_URL`, `VITE_RUN_ANALYTICS_URL` and `VITE_CLOUD_SAVE_URL`,
+the app as `-PcoopUrl`, `-PrunAnalyticsUrl` and `-PcloudSaveUrl` (the `COOP_URL`,
+`RUN_ANALYTICS_URL` and `CLOUD_SAVE_URL` repository variables in the workflows). Empty means solo
+only, no run stats, or no cloud save, as on desktop. Android, desktop and the website share rooms
 only on the same game build.
 
 The game runs at `https://appassets.androidplatform.net/assets/game/index.html`, answered inside
 the app. **Never change that address or the application ID, `io.jere.run_escape`**: Android
 players' saves belong to them. `RelayPolicy.java` lets out what the desktop app does, and nothing
-else: the relay's https address (GET only), and the collector's one URL by POST and its preflight.
+else: the relay's https address (GET only), the collector's one URL by POST and its preflight, and
+the cloud-save Worker's `/v1/` (GET, PUT, POST, DELETE and preflights, no query).
 Its `connect-src` says the same, as WebSockets skip the app's request handling; workers get it too.
 
 Shared memory needs cross-origin isolation, which COOP and COEP headers alone don't give a WebView:
@@ -462,18 +476,48 @@ job fails, there's no draft at all, rather than one without the APK. Without the
 are as they were. To sign a local build, set `ANDROID_KEYSTORE_PATH` and the other three as
 environment variables.
 
-**Only on GitHub, and no updates.** The APK is only ever published on this repository's releases,
-never in an app store, and the app never checks for, downloads or installs a new version. That's
-by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
-first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
-job adds to the draft when the APK's built, and a line beside the APK's link at the top), and so do
-the app's About and Save help, whose New versions button opens the releases page. Unlike desktop
-players, whose launcher updates the game, Android players on an older APK can't join rooms on the
-current build until they install it.
+**Updates from GitHub.** The APK is only published on this repository's releases, never in an app
+store. `AppUpdater.java` checks the public GitHub releases API once when the app opens, off the UI
+thread, without delaying the game. `UpdateRelease.java` selects the exact Android APK of a newer
+stable release; a draft, prerelease, missing APK, offline connection or failed check leaves the
+installed game running without an error dialog. There is no token or extra update menu.
+
+The player chooses Download update. Android's DownloadManager handles progress and cancellation
+in its notification and keeps downloading if the app closes. The app remembers the download ID
+and checks it on returning, validates the APK's size, package, version and minimum Android version,
+then asks whether to install it now or later: installing closes the game, and a download often
+ends mid-run, so the installer is never opened without asking. It hands the APK to Android's
+installer through a FileProvider limited to the app's download folder. Android verifies the
+signature and asks for install consent; the first update may need Allow from this source in
+settings. Declining or a failed download leaves the current version installed. These native
+requests don't change the bundled game's `RelayPolicy` or Content-Security-Policy.
+
+What it remembers between launches, and what that leads to, is `UpdatePlan.java`'s, tested
+without a device. Later on the offer, or cancelling the download, puts that version off for a
+while (`SNOOZE_MS`). A downloaded APK whose install was put off is offered again on the next
+launch, not downloaded again. A newer release replaces a download that's waiting, and one whose
+version is installed is removed. An APK that can't be installed (its minimum Android version, or
+the wrong package or version) is never offered again, so a phone doesn't download it on every
+launch, though a newer release is offered. The activity made again by Try again or Reopen is the
+same visit: it doesn't check again.
+
+The About menu still links to releases for manual downloads. Older copies need a manual install
+of an APK with the updater first. Install over the old app: uninstalling deletes its save.
+Android players need the current game build to join its co-op rooms.
+
+For releases this changes nothing, but a few things matter more now. Every release has to be
+signed with the same key, or every in-app update fails at Android's installer. The app only reads
+GitHub's latest release, so a release without the APK offers nothing, and an older patch marked as
+latest hides the newer one. The first update anyone gets in the app is from the release after the
+one that brought the updater, so try the whole flow on a phone before that: build this code signed
+with the release key, with a lower version in `package.json`, on a phone without the app, and it's
+offered the current release. A debug build can't finish: its key differs, so the installer refuses.
 
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
 `-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
 won't install an older APK over a newer one.
+The startup check compares game versions; an Android-only rebuild of the same game version still
+needs a manual install from releases.
 
 **Google's developer verification** applies outside app stores too. Certified Android phones are
 starting to refuse new installs and updates of apps whose developer hasn't registered with Google:
@@ -488,8 +532,10 @@ first.
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
 into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
 `wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
-has to be `wss://`. The app lets out only that relay and, if the `RUN_ANALYTICS_URL` variable is
-set, POSTs to that one collector URL: `protocol.handle` in `main.ts` answers every other https
+has to be `wss://`. The app lets out only that relay, POSTs to that one collector URL if the
+`RUN_ANALYTICS_URL` variable is set, and requests to the cloud-save Worker's `/v1/` if
+`CLOUD_SAVE_URL` is (an https origin, `isCloudSaveRequest` in `src/util/cloudSaveUrl.ts`):
+`protocol.handle` in `main.ts` answers every other https
 request itself, and WebSockets are kept to the relay by the `Content-Security-Policy` header
 `gameServer.ts` sends (`connect-src`). Without `COOP_URL` there's no Multiplayer.
 
@@ -549,12 +595,8 @@ it's on purpose:
 - Every answer needs the COOP and COEP headers, workers included, and a `.wasm` or `.js` needs the
   right type.
 - `CacheFiles.ts` (a full cache, not the slim one's chunks) resumes with
-  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back to what it has. A server
-  that ignores Range sends the whole file, and the download starts again from 0%, which a phone
-  on a slow or cut-off connection may never get past. `gameServer.ts` clamps the end and answers
-  206, with a `Content-Length` of what's left. The dev and preview server's `/caches` (in
-  `vite.config.ts`) does the same with its `parseRange`, and sends the whole file when `If-Range`
-  doesn't match the file's `Last-Modified`.
+  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` (see Hosting). `gameServer.ts` clamps the end and
+  answers 206, with a `Content-Length` of what's left.
 
 Interception only works reliably for one session per process, so don't add a second.
 
@@ -718,11 +760,23 @@ deployment's slim cache cover them too. Equipped slots still show their item's m
 still hide the gear row.
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
-learned the rev 241 opcodes, the map loader can take extra map squares as plain data
+learned the rev 241 and 242 opcodes, the map loader can take extra map squares as plain data
 (`src/rs/map/CustomMapFileLoader.ts`, from ScapeRune), `src/rs/config/loctype/LocOverrides.ts`
 gives a ScapeRune map a loc a different model or size, and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
+
+Karamja's blocking Jungle plants (the ids in `JUNGLE_PLANTS`) have low wooden bases, made from the
+cache's Tree stump (loc 1354, model 1635), because loc 1398's model also stands there as a "Plant"
+(loc 1390) you can walk through. `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static
+render list in `SdMapDataLoader`, not to the scene or cache definitions: collision, pathfinding and
+the minimap stay unchanged. It copies the model, scales it to sit under the plant's leaves, keeps
+one copy for each size in a map square, and fits each to the terrain. A plant still blocks out to
+its leaves, past the base. Plants with `clipType` 0 get none, and animated or
+transforming plants never reach the list (`getSceneLocs` keeps them as entities). Without the
+stump model it logs an error and draws no bases, rather than failing the map square. Keep this
+decoration separate from `RegionDataLoader`'s footprints and `LocOverrides`. The slim cache's map
+pass runs the same loader, so it collects the stump model by itself.
 
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays
@@ -979,7 +1033,8 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 - **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
   on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
   such as a person standing guard (Vardhelm's two knights at the keep's door). They're baked as
-  the map's travelled to (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+  the map's travelled to (`GameAssets.loadProps`), each NPC once, with what every map plays on
+  it, as the slim cache keeps them (with the pets): a model has one key, whichever map baked it.
 - **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
   map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
   NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
@@ -988,7 +1043,8 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
   of which is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out
   everything from the def and a clock: the camera's a monotone cubic through the shots per
   channel (target, height, pitch, yaw, distance), so it never overshoots one, with `hold` easing
-  to a stop; `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms
+  to a stop, and turns the short way round from one shot's yaw to the next; `CinematicPlayer` is
+  the clock, which `GameClient.updateCinematic` moves on (100 ms
   a frame at most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast,
   their spot animations, overhead chat and the bars, and `GameView` hides the props it stands in
   for. The cast is baked with the props (`getPropRequests`, so the slim cache keeps them), its
@@ -1004,8 +1060,11 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
       phone, to the ground or the render distance, with a margin) for the map squares it will
       see, and `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever
       the camera is, never unloaded) and keeps the loading screen up until they're in
-      (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
-      as usual from there.
+      (`getPinnedProgress`, 45 s at most). A key, button, click or tap there skips the wait and
+      the cinematic both. In co-op a guest tells the host it's loaded only then
+      (`cinematicLoaded`), and the host doesn't step until its own are in, so the run starts with
+      everyone watching (the host waits 20 s at most for a guest, as for its map). They're
+      unpinned as it ends or is skipped, and stream as usual from there.
     - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
       isn't its head. `MapDef.spawnFacing` turns the player as the run starts (south if it's left
       out), to face the way the cinematic's camera ends looking.
@@ -1306,7 +1365,9 @@ things are separate, each optional:
   falls.
 - **The rule**: `litTargetsOnly` (the Scar's). Weapons only pick targets within half a tile of a sim
   light's edge (`nearestEnemies`, which every weapon, thrall, cannon and power-up aims with), and
-  the minimap only shows what's lit. Shots carry on and hit whatever they meet. The balance bot
+  the minimap only shows what's lit. Shots carry on and hit whatever they meet, and a chain's
+  hops go to what's near, lit or not. Each enemy's lit or not is worked out once a tick, in
+  `stepLights` (`Enemy.lit`, read through `isEnemyLit`). The balance bot
   only walks at what's lit, and faint arrows show what's coming out of the dark. A dark map without
   it is only dark; a lit one with glowing lights is cheap.
 
@@ -1318,7 +1379,7 @@ hashes: glowing scenery, spells and effects, a floor's tiles, bosses' windups an
 flicker and pulse on any light.
 
 **Drawing them.** Every frame `SceneLights` offers every light there is to `LightBudget`, which
-keeps the `MAX_SHOWN_LIGHTS` (24) that tell most: the shown player's own, then the brightest and
+keeps the `MAX_SHOWN_LIGHTS` that tell most: the shown player's own, then the brightest and
 biggest for how near the middle of the view each is. A light coming in fades in and one leaving fades
 out (a quarter of a second), so a map can have any number and none pops. Those are added into a
 light map on the CPU (`render/LightMap.ts`: two texels a tile, 64 tiles round the view, its corner
@@ -1363,10 +1424,10 @@ usual brightness with glowing scenery, a blue light of its own and the wizard's 
 
 **Cost**: only a map with `lighting` pays, and it pays about the same however many lights it has:
 one texture read a pixel, and the light map's few thousand texels on the CPU. In the headless
-renderer, a lit map's programs took about a tenth longer a frame than the same view without them
-(Lumbridge at 844×390: 94 ms without, 101 with none or 8 lights, 108 with 24), and Lumbridge
-itself, without lighting, took as long as before there were lights. A real phone hasn't been
-measured. Nothing past the lights is culled: the dark has to read as shapes, so a dark map draws as
+renderer, a lit map's programs took about a tenth longer a frame than the same view without them,
+with no lights or the most it draws, and Lumbridge itself, without lighting, took as long as
+before there were lights. A real phone hasn't been measured.
+Nothing past the lights is culled: the dark has to read as shapes, so a dark map draws as
 many triangles as a lit one.
 
 Combat sounds are picked by the server, not the cache, so the ids in `content/` come from the OSRS
@@ -1431,6 +1492,8 @@ scripts/cache/find-npc-seqs.ts 655 1173  animations built on an NPC's skeleton
 scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death animations apart
 scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
+scripts/cache/compare-caches.ts osrs-241_2026-09-30   what changed since an older cache, in what the
+                                         game reads (see A newer cache)
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
@@ -1494,6 +1557,43 @@ URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizar
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed, `?raidtest` (dev only) speeds up a raid (see Raids). F3
 shows collision and stats.
+
+### A newer cache
+
+The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). Moving it on:
+
+1. With no `caches/slim/` (a checked slim-cache run, which step 4 reads), run
+   `bun run build && bun run slim-cache` first, on the old cache. A build leaves the dev maps out,
+   so for theirs run this on the old cache too:
+   `DEV_MAPS=1 SLIM_CHECK=0 bun run tsx scripts/cache/slim-cache.ts caches/slim-dev/`. Then point
+   `GAME_CACHE_NAME` at the new cache's folder name (`osrs-<revision>_<date>`, from the archive's
+   timestamp) and run `bun run download-caches`, which fetches just that one. Keep the old one in
+   `caches/`.
+2. `validate-decoders.ts`. A new revision can move or add opcodes: one type failing on opcodes
+   that don't make sense (255, 253, 63) means an opcode it knows now carries data. Rev 242 moved
+   multilocs from 77 and 92 to 97 and 98, with 3 byte ids. `dump-config.ts` shows the bytes;
+   compare an entry with the same one in the old cache. Gate the fix on the revision.
+3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`, and that again with
+   `DEV_MAPS=1`: rev 242 renumbered the Tombs of Amascut's invocation sprites, which only a dev
+   map used.
+4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
+   kept, the ones the game reads: the map squares, models and so on that changed or went, and each
+   npc, item, animation, spot animation and loc that changed, decoded, with the fields that differ.
+   A type only written a new way doesn't count. Look up the ids that changed in the content; a map
+   square that changed in an arena can move its collision. Then for the dev maps:
+   `compare-caches.ts <old cache> caches/slim-dev/`.
+5. The tests with the cache there. `grid-hash.ts` pins what the ScapeRune maps write, and a map
+   that copies the real world's squares can change with them: re-pin it on purpose.
+6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
+   play exactly as before, run for run, so any difference there is a bug; the ones that changed
+   reshuffle their seeds, so give those 6.
+7. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
+   `slim-cache` makes new chunks only where the groups changed, so returning players download
+   just those.
+
+The browser's copy of the old full cache goes when the game next loads (`deleteOtherGameCaches`).
+So does any other full cache the original map viewer (`?viewer=1`) loaded: the viewer downloads
+it again when it's next opened on it.
 
 ### Co-op
 
@@ -1571,7 +1671,8 @@ throttle), bounding accumulated timing drift when the host loses simulation time
 never steps a second full simulation or rolls back combat. Extreme latency remains visible,
 and a hit can still arrive after the local picture appears to have moved clear.
 
-- **Loading**: the host waits up to 20 seconds for everyone's map. Anything that comes for the run
+- **Loading**: the host waits up to 20 seconds for everyone's map (and an opening cinematic's
+  squares: see Props and opening cinematics). Anything that comes for the run
   while a player's map is still loading is kept and handed over once their copy's made
   (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't
   lost.
@@ -1585,6 +1686,15 @@ and a hit can still arrive after the local picture appears to have moved clear.
 - **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.
+  Everyone sees the time until the next automatic choice at the top center, even while choosing
+  or after answering. It replaces the run clock until the party finishes, and shows the time
+  alone on a phone or a window under 860 pixels wide, so it fits where the clock was. Panels
+  under it make room and scroll if they must: a `.ui-panel` is content-box on a desktop, so its
+  padding and border sit outside a `max-height`, but border-box on a phone.
+  `DownMessage.decisionMs` carries the host's remaining wall-clock time (also on resends);
+  `CoopRun.decisionSeconds` feeds the HUD's numbers store. It never enters the sim or its hash.
+  A guest's deadline only moves later by more than `DEADLINE_SLACK_MS` (for the next wait), so
+  frames arriving unevenly can't make it count back up. A run that ends early drops it.
 - **Hidden tabs**: a co-op player whose tab is hidden keeps stepping off a worker's timer, so the
   host keeps the run going and a guest keeps up.
 
@@ -1807,6 +1917,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   The HUD renders after the touch movement zone so its slots receive holds; a run overlay
   disables those slots and dismisses their descriptions. Empty bag slots are dimmed by
   `.ui-inv-slot-empty`, not `:disabled`, so the bag doesn't dim under every overlay.
+  Being after the zone keeps the HUD above it, so nothing in the HUD needs a z-index for that,
+  and one would put it over the run's panels too.
   Releasing a hold never uses the item, and a held finger can drift. Before the hold, moving
   further than `TAP_SLOP` (shared with `SharedTaps`), cancellation or losing focus cancels the tap.
   The click a touch press makes after its `pointerup` is ignored for a moment, but keys and later
@@ -1917,10 +2029,12 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
-**Exports are the only backup.** Clearing the browser's data (or uninstalling the Android app)
+**Exports are the only backup** unless cloud save has a copy. Clearing the browser's data (or
+uninstalling the Android app)
 loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
 reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
-`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving. It comes after the
+`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving or cloud save has a
+copy (`cloudKeepsCopy`: on, synced, and nothing wrong or waiting). It comes after the
 menu so a controller's highlight still starts on Singleplayer. The file Export gives has
 `SaveData.lastExported` (`Date.now()`) in it, so it says when it was made; a newer game's save goes
 as it's stored, without one. The save itself takes the date, and the reminder goes until tomorrow,
@@ -1931,6 +2045,62 @@ the player's local ones, and an export dated ahead of the clock doesn't count. N
 day in localStorage (`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's
 reminder, it shouldn't travel in an exported file, and it can be put off while another tab holds
 the save.
+
+**Cloud save** (`client/CloudSave.ts`, `ui/CloudSave.tsx`) keeps a copy with the cloud-save
+Worker (`server/cloud-saves/`), in a build with `VITE_CLOUD_SAVE_URL` whose Worker answers
+`/v1/health`. An app that doesn't let requests out to it (an older desktop launcher or APK)
+answers something else, so Settings doesn't offer it there. There's no account: Turn on makes a
+sync code, and typing it on another device links that one. The local save stays the main copy,
+and none of this changes `SaveData`. Its button sits beside Settings on the title screen
+(`CloudSaveButton`): the client's storage chest with an up arrow (`CLOUD_SAVE_SPRITES` in
+`content/titleIcons.ts`), faded while it's off, with a "!" in its corner while a choice is
+waiting and a "no" sign while it can't sync. It opens the choice, or cloud save's own panel
+(`CloudSavePanel`): Settings' rows, on their own.
+
+- **What's kept here.** `rune-survivors-cloud` holds the code, the cloud's revision this save came
+  from or went up as, and the save's `fingerprint` then (a hash of its progress that leaves out
+  `gameVersion`, `lastExported` and key order). A save with a different one has changed. It's
+  apart from the save, so it never goes out in an export. Never rename it.
+- **Uploads happen at save points only** (`CloudSync.savePoint`): a run's results, leaving
+  Skills or the Armoury, an import, and leaving the tab. Not on every write: buying ranks one
+  after another goes up once, on leaving Skills. A save point uploads only if the fingerprint's
+  changed, and only where the save's written at all (`GameClient.canPersist`: the lock, not a
+  newer game's, room to keep it). Uploads are `UPLOAD_COOLDOWN_MS` (2 minutes) apart at least: a
+  save point within it waits for it to pass, and whatever's changed by then goes up once. Leaving
+  the tab doesn't wait: the page may not come back (an app closed, a phone's browser put away),
+  so it sends at once, with `keepalive`. A save that didn't get up is still changed, so the next
+  save point or check sends it. Sync now in Settings sends it at once. A download is in step as
+  it goes in, so it doesn't come back up. A request with no answer after `REQUEST_TIMEOUT_MS`
+  has failed, so one that hangs can't hold up the rest.
+- **A save with no runs never goes up over the cloud's.** One that's changed since it was in
+  step is a save that couldn't be read and was made fresh, so the cloud's goes in instead, as
+  for the player who cleared their browser.
+- **Checks** happen when the tab gets the save lock, and on coming back to the tab (every
+  minute at most). They only read. The cloud's revision being this device's means only local
+  changes are news. A different one is taken silently when nothing changed here and it has at
+  least this save's runs, or when this save has none (the player who cleared their browser).
+  Otherwise, and when an upload's refused as stale, the title screen asks which to keep, over
+  Settings or cloud save's panel if one's open, showing both summaries, unless the two hold the
+  same progress (the same fingerprint). Fewer runs is asked about so that a device that lost
+  its progress can't pass it on silently. Nothing syncs until the player picks: Later puts it in
+  Settings, and it stays put off, though checks go on (one about a newer cloud save updates the
+  choice). Keeping this device's uploads with `force`.
+- **A code that stops working** (New code used elsewhere, or the Worker's `INACTIVE_DAYS` without
+  use) is a 401: Settings says so and offers only Turn off, after which the new code can be
+  typed in or cloud save turned on again.
+- **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
+  Worker refuses an older game's upload over it, so the choice says why, and only Keep this
+  device's (losing what's new) or Later.
+- **Deleting is undoable for a week**, so a leaked code can't wipe every version. The Worker only
+  marks the code, and answers it with a 410 and `restorableUntil` until its saves are removed.
+  The game shows that as the `deleted` problem, with the date and a Restore button
+  (`CloudSync.restore`), on the device that deleted it and on any the code's typed into.
+- **New code** (`CloudSync.newCode`) is what shuts out a leaked code: the same saves get a new
+  one, and the old one stops working everywhere. Deleting can't, as whoever has a code can
+  restore it.
+- **The Worker's answers are untrusted too.** Anything can answer these requests (a captive
+  portal, a proxy), so `readMeta` checks each field before the game shows or acts on it, a 200
+  that isn't JSON is a problem, and a downloaded save goes through `importSave` like a file.
 
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or

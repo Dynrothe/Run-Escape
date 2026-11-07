@@ -2,7 +2,7 @@ import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { SPOT_LIGHTS } from "../content/lights";
 import { LightLook } from "../content/types";
-import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { TICKS_PER_SECOND } from "../core/Sim";
 import { CinematicPlayer, getActorState, getSaying } from "./Cinematic";
 import { GameAssets, getPropKey } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
@@ -19,6 +19,10 @@ export type CinematicLight = { x: number; y: number; look: LightLook };
 // The skip hint fades in after this long and is gone this long before the end
 const HINT_FROM = 0.6;
 const HINT_UNTIL = 1.5;
+
+// The ground's height at x, y (tiles, up negative), as GameView stands the map's props on it (a
+// floor's lift and all), so the cast stands where the props they stand in for do
+type Ground = (x: number, y: number) => number;
 
 // Draws a map's opening cinematic (MapDef.cinematic) as it plays: its cast, their spot animations
 // and overhead chat, and the bars across the screen. client/Cinematic.ts says what's happening.
@@ -54,7 +58,7 @@ export class CinematicView {
         return lights;
     }
 
-    submitActors(actors: ActorRenderer, sim: Sim, player: CinematicPlayer): void {
+    submitActors(actors: ActorRenderer, player: CinematicPlayer, ground: Ground): void {
         const { def, seconds } = player;
         for (const actor of def.cast) {
             const state = getActorState(def, actor, seconds);
@@ -64,13 +68,13 @@ export class CinematicView {
             }
             const anim = model.getAnim(state.seq);
             const ticks = (seconds - state.start) * TICKS_PER_SECOND;
-            const ground = sim.grid.getHeight(actor.x, actor.y) / 128;
+            const at = ground(actor.x, actor.y);
             actors.draw(
                 model,
                 anim,
                 anim.getFrame(ticks, state.loop),
                 actor.x,
-                ground,
+                at,
                 actor.y,
                 actor.yaw ?? 0,
                 { scale: actor.scale ?? 1 },
@@ -91,13 +95,13 @@ export class CinematicView {
             if (ticks >= anim.totalTicks) {
                 continue;
             }
-            const ground = sim.grid.getHeight(actor.x, actor.y) / 128 - (cue.lift ?? 0);
+            const at = ground(actor.x, actor.y) - (cue.lift ?? 0);
             actors.draw(
                 model,
                 anim,
                 anim.getFrame(ticks, false),
                 actor.x,
-                ground,
+                at,
                 actor.y,
                 actor.yaw ?? 0,
                 { scale: cue.scale ?? 1 },
@@ -105,7 +109,7 @@ export class CinematicView {
         }
     }
 
-    drawScreen(overlay: Overlay, sim: Sim, player: CinematicPlayer): void {
+    drawScreen(overlay: Overlay, player: CinematicPlayer, ground: Ground): void {
         const { def, seconds } = player;
         const ctx = overlay.ctx;
         const scale = overlay.uiScale;
@@ -121,7 +125,7 @@ export class CinematicView {
                 continue;
             }
             const height = actor.head ?? ((model?.height ?? 200) * (actor.scale ?? 1)) / 128;
-            const top = sim.grid.getHeight(actor.x, actor.y) / 128 - height;
+            const top = ground(actor.x, actor.y) - height;
             const p = overlay.project(actor.x, top, actor.y, this.screen);
             if (!p.visible) {
                 continue;

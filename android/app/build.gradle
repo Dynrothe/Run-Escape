@@ -52,6 +52,22 @@ if (!runAnalyticsUrl.isEmpty()) {
         throw new GradleException('runAnalyticsUrl must be an https URL ending in /v1/runs, with no credentials, query or fragment.')
     }
 }
+// The cloud-save Worker the web build was given as VITE_CLOUD_SAVE_URL (src/util/cloudSaveUrl.ts)
+def cloudSaveUrl = providers.gradleProperty('cloudSaveUrl').getOrElse('').trim()
+if (!cloudSaveUrl.isEmpty()) {
+    URI saves
+    try {
+        saves = new URI(cloudSaveUrl)
+    } catch (Exception exception) {
+        throw new GradleException('cloudSaveUrl must be an https URL.', exception)
+    }
+    if (saves.scheme != 'https' || !saves.host || saves.userInfo != null
+            || saves.rawQuery != null || saves.rawFragment != null
+            || !(saves.rawPath in [null, '', '/'])
+            || (saves.port != -1 && (saves.port < 1 || saves.port > 65535))) {
+        throw new GradleException('cloudSaveUrl must be an https origin, with no path, credentials, query or fragment.')
+    }
+}
 
 def signingKeys = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD',
                    'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
@@ -75,6 +91,7 @@ android {
         versionName gamePackage.version
         buildConfigField 'String', 'COOP_URL', groovy.json.JsonOutput.toJson(coopUrl)
         buildConfigField 'String', 'RUN_ANALYTICS_URL', groovy.json.JsonOutput.toJson(runAnalyticsUrl)
+        buildConfigField 'String', 'CLOUD_SAVE_URL', groovy.json.JsonOutput.toJson(cloudSaveUrl)
     }
 
     buildFeatures {
@@ -112,6 +129,8 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.core:core:1.17.0'
     implementation 'androidx.webkit:webkit:1.18.0'
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
 }

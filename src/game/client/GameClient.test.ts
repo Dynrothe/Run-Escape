@@ -475,6 +475,22 @@ describe("the HUD", () => {
         expect(numbers).not.toHaveBeenCalled();
         vi.unstubAllGlobals();
     });
+
+    test("drops co-op's countdown when a run ends early while the party's choosing", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        Object.assign(client, { coopRun: { decisionSeconds: 12 }, coopStopped: false });
+        updateHud(client, true);
+        expect(store.getNumbers()!.decisionSeconds).toBe(12);
+        // The host left mid-choice: the results show, and the run stays as it stopped
+        (client as unknown as { endCoopRunEarly(why: string): void }).endCoopRunEarly(
+            "The host left, so the run ended.",
+        );
+        expect(store.getSnapshot().overlay).toBe("dead");
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
+        updateHud(client);
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
+    });
 });
 
 describe("the frame rate setting", () => {
@@ -1706,6 +1722,69 @@ describe("the opening cinematic", () => {
             [0, 0],
             [1, 0],
         ]);
+    });
+
+    test("is skipped from the loading screen before it, once that's been up a moment", () => {
+        const { client, store, state } = cinematicClient();
+        const loading = client as unknown as { cinematicLoading?: number };
+        state.cinematic!.seconds = 0;
+        store.set({ screen: "loading" });
+        loading.cinematicLoading = performance.now();
+        client.skipCinematic();
+        expect(state.cinematic).toBeDefined();
+        loading.cinematicLoading = performance.now() - 1000;
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        expect(loading.cinematicLoading).toBeUndefined();
+        expect(store.getSnapshot().screen).toBe("run");
+    });
+
+    test("in co-op, a guest's ready once its squares are in, and the host waits for its own", () => {
+        const { client, store } = cinematicClient();
+        const progress = { total: 2, left: 2 };
+        const sendUp = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const run = {
+            isHost: false,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            stepFrame,
+            flush() {},
+        };
+        Object.assign(client, {
+            cinematicLoading: performance.now(),
+            renderer: { mapManager: { setPinned: vi.fn(), getPinnedProgress: () => progress } },
+            coop: { isHost: false, sendUp, keepAlive() {} },
+            coopRun: run,
+            coopStopped: false,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+        });
+        store.set({ screen: "loading" });
+        const loading = client as unknown as { isCinematicLoading(): boolean };
+        expect(loading.isCinematicLoading()).toBe(true);
+        expect(sendUp).not.toHaveBeenCalled();
+        progress.left = 0;
+        expect(loading.isCinematicLoading()).toBe(false);
+        expect(sendUp).toHaveBeenCalledWith({ loaded: true });
+        expect(store.getSnapshot().screen).toBe("run");
+
+        // The host: no frames while its own squares load
+        const update = () =>
+            (
+                client as unknown as { updateCoop(ms: number, sim: Sim, run: unknown): void }
+            ).updateCoop(TICK_MS, client.sim!, run);
+        run.isHost = true;
+        Object.assign(client, { cinematicLoading: performance.now(), accumulator: 0 });
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        Object.assign(client, { cinematicLoading: undefined });
+        update();
+        expect(stepFrame).toHaveBeenCalled();
     });
 
     test("isn't played again on a retry", () => {

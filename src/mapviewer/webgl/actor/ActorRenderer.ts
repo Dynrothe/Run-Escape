@@ -289,7 +289,7 @@ export class ActorSegment {
 
     constructor(
         readonly vertexArray: VertexArray,
-        // Made again with the other program as a map goes dark or light (ActorRenderer.setProgram)
+        // Made again with the other program as lights come or go (ActorRenderer.setProgram)
         public drawCall: DrawCall,
         readonly drawCallSilhouette: DrawCall,
         readonly drawCallOutline: DrawCall,
@@ -458,7 +458,7 @@ export class ActorRenderer {
     // A lit map's light map (GameWebGLRenderer), for a program that reads it (setProgram)
     lightMap?: Texture;
 
-    // Draws the actors with another program from now on (a dark map's, with its lights, or back)
+    // Draws the actors with another program from now on (a lit map's, with its lights, or back)
     setProgram(program: Program, lightMap?: Texture): void {
         this.lightMap = lightMap;
         if (program === this.program) {

@@ -671,7 +671,7 @@ export class GameView {
             }
         });
         if (cinematic) {
-            this.cinematicView.submitActors(actors, sim, cinematic);
+            this.cinematicView.submitActors(actors, cinematic, (x, y) => this.ground(sim, x, y));
         }
 
         for (const ring of sim.rings) {
@@ -2008,7 +2008,9 @@ export class GameView {
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
         if (this.cinematic) {
-            this.cinematicView.drawScreen(overlay, sim, this.cinematic);
+            this.cinematicView.drawScreen(overlay, this.cinematic, (x, y) =>
+                this.ground(sim, x, y),
+            );
         }
     }
 
@@ -2839,7 +2841,10 @@ export class GameView {
             }
             const x = Math.min(Math.max(at.x, margin), overlay.width - margin);
             const y = Math.min(Math.max(at.y, margin), overlay.height - margin);
-            const near = 1 - (distance - own.radius) / (DARK_ARROW_RANGE - own.radius);
+            // Never over a span under a tile: a light near DARK_ARROW_RANGE wide, drawn a step
+            // ahead of the sim's, can see one just inside its edge
+            const span = Math.max(1, DARK_ARROW_RANGE - own.radius);
+            const near = 1 - (distance - own.radius) / span;
             ctx.globalAlpha = DARK_ARROW_ALPHA * (0.45 + 0.55 * Math.min(1, Math.max(0, near)));
             const angle = Math.atan2(ahead.y - at.y, ahead.x - at.x);
             drawArrow(ctx, x, y, angle, 11 * scale, DARK_ARROW_COLOR, 0);

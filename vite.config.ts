@@ -146,7 +146,8 @@ function serveCachesPlugin(): Plugin {
                 // A download that was cut off (a phone on a tunnel) resumes from where it got to:
                 // CacheFiles asks for bytes=<offset>-<MAX_SAFE_INTEGER>, and without this got the
                 // whole file again, back to 0% each time. Parsed as the desktop app's server does
-                // (parseRange), and a file that's changed since (If-Range) is sent whole.
+                // (parseRange). CacheFiles sends the Last-Modified its parts came with as If-Range,
+                // so a file that's changed since is sent whole.
                 const ifRange = req.headers["if-range"];
                 const range =
                     ifRange === undefined || ifRange === lastModified
@@ -168,15 +169,10 @@ function serveCachesPlugin(): Plugin {
                     res.end();
                     return;
                 }
-                // Closed with the reply (a phone that drops it), and a read that fails partway
-                // cuts it off rather than leaving it short
-                pipeline(createReadStream(filePath, { start, end }), res, (error) => {
-                    if (error && !res.headersSent) {
-                        notFound();
-                    } else if (error) {
-                        res.destroy(error);
-                    }
-                });
+                // pipeline, not pipe: the file's closed with the reply (a phone that drops it),
+                // and a read that fails cuts the reply off rather than leaving it short. It's
+                // already destroyed by then, so there's nothing left to answer with.
+                pipeline(createReadStream(filePath, { start, end }), res, () => {});
             } catch {
                 notFound();
             }

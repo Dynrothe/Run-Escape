@@ -269,6 +269,25 @@ describe("the dark", () => {
         expect(sim.isEnemyLit(beside)).toBe(false);
     });
 
+    test("a light going out lights nothing past its own size", () => {
+        const sim = createSim();
+        const leech: EnemyDef = {
+            ...getEnemy("goblin"),
+            light: { radius: 2.5, left: { radius: 4, seconds: 20 } },
+        };
+        const carrier = goblin(sim, SPAWN.x + 15, SPAWN.y, leech);
+        run(sim, 0.1, [carrier]);
+        carrier.hp = 1;
+        sim.damageEnemy(carrier, 10, 0, sim.player.x, sim.player.y);
+        // Its last moments: shrunk to under the half tile weapons are let past an edge
+        run(sim, 19.75);
+        const left = sim.lights.find((light) => light.kind === "left")!;
+        expect(left.radius).toBeGreaterThan(0);
+        expect(left.radius).toBeLessThan(0.5);
+        expect(sim.isLit(left.x + left.radius * 1.9, left.y)).toBe(true);
+        expect(sim.isLit(left.x + left.radius * 2.1, left.y)).toBe(false);
+    });
+
     test("a lantern where players have no light: a light of its own", () => {
         const sim = createSim(GLOW_MAP.id);
         sim.usePowerUp(getPowerUp(LANTERN_ID));

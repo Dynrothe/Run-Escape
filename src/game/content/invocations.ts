@@ -64,7 +64,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Attempts: how many times the party can go down and be brought back
     {
         id: "try_again",
-        icon: 4592,
+        icon: 8731,
         name: "Try Again",
         group: "attempts",
         level: 5,
@@ -72,7 +72,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "persistence",
-        icon: 4592,
+        icon: 8731,
         name: "Persistence",
         group: "attempts",
         level: 10,
@@ -80,7 +80,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "softcore_run",
-        icon: 4592,
+        icon: 8731,
         name: "Softcore Run",
         group: "attempts",
         level: 15,
@@ -88,7 +88,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "hardcore_run",
-        icon: 4592,
+        icon: 8731,
         name: "Hardcore Run",
         group: "attempts",
         level: 25,
@@ -97,7 +97,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Time limit: a clock for the whole raid. Running out lowers the loot; it doesn't end the run
     {
         id: "walk_for_it",
-        icon: 4593,
+        icon: 8732,
         name: "Walk for It",
         group: "time",
         level: 10,
@@ -105,7 +105,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "jog_for_it",
-        icon: 4593,
+        icon: 8732,
         name: "Jog for It",
         group: "time",
         level: 15,
@@ -113,7 +113,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "run_for_it",
-        icon: 4593,
+        icon: 8732,
         name: "Run for It",
         group: "time",
         level: 20,
@@ -121,7 +121,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "sprint_for_it",
-        icon: 4593,
+        icon: 8732,
         name: "Sprint for It",
         group: "time",
         level: 25,
@@ -130,7 +130,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // The Helpful Spirit's supplies in the Nexus, after two paths and after all four
     {
         id: "need_some_help",
-        icon: 4594,
+        icon: 8733,
         name: "Need Some Help?",
         group: "helpfulSpirit",
         level: 15,
@@ -138,7 +138,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "need_less_help",
-        icon: 4594,
+        icon: 8733,
         name: "Need Less Help?",
         group: "helpfulSpirit",
         level: 25,
@@ -146,7 +146,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "no_help_needed",
-        icon: 4594,
+        icon: 8733,
         name: "No Help Needed",
         group: "helpfulSpirit",
         level: 40,
@@ -154,7 +154,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "walk_the_path",
-        icon: 4598,
+        icon: 8737,
         name: "Walk the Path",
         group: "paths",
         level: 50,
@@ -163,7 +163,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Path levels: every room harder, with more to its puzzle and faster, denser bullets
     {
         id: "pathseeker",
-        icon: 4599,
+        icon: 8738,
         name: "Pathseeker",
         group: "pathLevel",
         level: 15,
@@ -171,7 +171,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "pathfinder",
-        icon: 4600,
+        icon: 8739,
         name: "Pathfinder",
         group: "pathLevel",
         level: 40,
@@ -179,7 +179,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "pathmaster",
-        icon: 4601,
+        icon: 8740,
         name: "Pathmaster",
         group: "pathLevel",
         level: 50,
@@ -188,7 +188,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Prayer: the bosses' protection, and what a hit costs
     {
         id: "quiet_prayers",
-        icon: 4584,
+        icon: 8723,
         name: "Quiet Prayers",
         group: "prayer",
         level: 20,
@@ -196,7 +196,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "deadly_prayers",
-        icon: 4605,
+        icon: 8744,
         name: "Deadly Prayers",
         group: "prayer",
         level: 20,
@@ -205,7 +205,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Restoration
     {
         id: "on_a_diet",
-        icon: 4603,
+        icon: 8742,
         name: "On a Diet",
         group: "restoration",
         level: 15,
@@ -213,7 +213,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "dehydration",
-        icon: 4597,
+        icon: 8736,
         name: "Dehydration",
         group: "restoration",
         level: 30,
@@ -221,7 +221,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "overly_draining",
-        icon: 4596,
+        icon: 8735,
         name: "Overly Draining",
         group: "restoration",
         level: 15,
@@ -229,7 +229,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "lively_larvae",
-        icon: 4587,
+        icon: 8726,
         name: "Lively Larvae",
         group: "kephri",
         level: 5,
@@ -237,7 +237,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "more_overlords",
-        icon: 4587,
+        icon: 8726,
         name: "More Overlords",
         group: "kephri",
         level: 15,
@@ -245,7 +245,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "blowing_mud",
-        icon: 4587,
+        icon: 8726,
         name: "Blowing Mud",
         group: "kephri",
         level: 10,
@@ -253,7 +253,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "medic",
-        icon: 4587,
+        icon: 8726,
         name: "Medic!",
         group: "kephri",
         level: 15,
@@ -262,7 +262,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "aerial_assault",
-        icon: 4587,
+        icon: 8726,
         name: "Aerial Assault",
         group: "kephri",
         level: 10,
@@ -270,7 +270,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "not_just_a_head",
-        icon: 4590,
+        icon: 8729,
         name: "Not Just a Head",
         group: "zebak",
         level: 15,
@@ -279,7 +279,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "arterial_spray",
-        icon: 4590,
+        icon: 8729,
         name: "Arterial Spray",
         group: "zebak",
         level: 10,
@@ -287,7 +287,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "blood_thinners",
-        icon: 4590,
+        icon: 8729,
         name: "Blood Thinners",
         group: "zebak",
         level: 5,
@@ -295,7 +295,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "upset_stomach",
-        icon: 4590,
+        icon: 8729,
         name: "Upset Stomach",
         group: "zebak",
         level: 15,
@@ -304,7 +304,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Akkha
     {
         id: "double_trouble",
-        icon: 4588,
+        icon: 8727,
         name: "Double Trouble",
         group: "akkha",
         level: 20,
@@ -312,7 +312,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "keep_back",
-        icon: 4588,
+        icon: 8727,
         name: "Keep Back",
         group: "akkha",
         level: 10,
@@ -320,7 +320,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "stay_vigilant",
-        icon: 4588,
+        icon: 8727,
         name: "Stay Vigilant",
         group: "akkha",
         level: 15,
@@ -328,7 +328,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "feeling_special",
-        icon: 4588,
+        icon: 8727,
         name: "Feeling Special?",
         group: "akkha",
         level: 20,
@@ -338,7 +338,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // Ba-Ba
     {
         id: "mind_the_gap",
-        icon: 4589,
+        icon: 8728,
         name: "Mind the Gap!",
         group: "baba",
         level: 10,
@@ -346,7 +346,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "gotta_have_faith",
-        icon: 4589,
+        icon: 8728,
         name: "Gotta Have Faith",
         group: "baba",
         level: 10,
@@ -354,7 +354,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "jungle_japes",
-        icon: 4589,
+        icon: 8728,
         name: "Jungle Japes",
         group: "baba",
         level: 5,
@@ -362,7 +362,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "shaking_things_up",
-        icon: 4589,
+        icon: 8728,
         name: "Shaking Things Up",
         group: "baba",
         level: 10,
@@ -370,7 +370,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "boulderdash",
-        icon: 4589,
+        icon: 8728,
         name: "Boulderdash",
         group: "baba",
         level: 10,
@@ -379,7 +379,7 @@ export const INVOCATIONS: InvocationDef[] = [
     // The Wardens
     {
         id: "ancient_haste",
-        icon: 4591,
+        icon: 8730,
         name: "Ancient Haste",
         group: "wardens",
         level: 10,
@@ -387,7 +387,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "acceleration",
-        icon: 4591,
+        icon: 8730,
         name: "Acceleration",
         group: "wardens",
         level: 10,
@@ -396,7 +396,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "penetration",
-        icon: 4591,
+        icon: 8730,
         name: "Penetration",
         group: "wardens",
         level: 10,
@@ -404,7 +404,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "overclocked",
-        icon: 4591,
+        icon: 8730,
         name: "Overclocked",
         group: "wardens",
         level: 10,
@@ -412,7 +412,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "overclocked_2",
-        icon: 4591,
+        icon: 8730,
         name: "Overclocked 2",
         group: "wardens",
         level: 10,
@@ -420,7 +420,7 @@ export const INVOCATIONS: InvocationDef[] = [
     },
     {
         id: "insanity",
-        icon: 4591,
+        icon: 8730,
         name: "Insanity",
         group: "wardens",
         level: 50,
@@ -431,14 +431,14 @@ export const INVOCATIONS: InvocationDef[] = [
 ];
 
 // The invocation board's icons: each lit one's dark version is this many sprites on
-// (scripts/cache/sprite-sheet.ts 4580 4630)
+// (scripts/cache/sprite-sheet.ts 8719 8769)
 export const OFF_SPRITE = 24;
 
 // Amascut's face on the board, by the raid level's band
 export const RAID_BAND_SPRITES: Record<RaidBand, number> = {
-    Entry: 4660,
-    Normal: 4661,
-    Expert: 4662,
+    Entry: 8799,
+    Normal: 8800,
+    Expert: 8801,
 };
 
 // What the raid's chest can hold, shown on the board, each with the raid level it comes from

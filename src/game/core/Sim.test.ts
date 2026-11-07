@@ -2884,6 +2884,24 @@ describe("enemy mechanics", () => {
 });
 
 describe("maps", () => {
+    test("the player starts facing south, or the map's spawnFacing made a unit vector", () => {
+        const sim = createSim();
+        expect(sim.player).toMatchObject({ facingX: 0, facingY: -1, yaw: 0 });
+        Object.assign(sim, { map: { ...sim.map, spawnFacing: { x: 0, y: 3 } } });
+        const hero = (
+            sim as unknown as {
+                createHero(options: object, index: number, x: number, y: number): Sim["heroes"][0];
+            }
+        ).createHero(
+            { name: "a", characterId: "warrior", metaStats: emptyStats() },
+            0,
+            1036.5,
+            1036.5,
+        );
+        // North, the way Vardhelm's opening ends looking, and as long as any other facing
+        expect(hero.player).toMatchObject({ facingX: 0, facingY: 1, yaw: 1024 });
+    });
+
     test("every map's waves, events and bosses make sense", () => {
         for (const map of MAPS) {
             if (map.fight) {

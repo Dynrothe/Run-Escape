@@ -3,6 +3,7 @@ import {
     ActorBakeInput,
     ActorBakeResult,
     BakeRequest,
+    NpcBakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
@@ -30,7 +31,8 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import {
     AKKHA,
     APMEKEN_BARRIER_LOC,
@@ -177,7 +179,7 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's
-// tabs, empty equipment slots, the skills' refund button, co-op's flags and the
+// tabs and cloud save's button, empty equipment slots, the skills' refund button, co-op's flags and the
 // overhead prayers (every frame comes with the first) and the passives with a
 // sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
@@ -191,9 +193,11 @@ export function getGameSpriteIds(): number[] {
         ...GAME_VIEW_SPRITES,
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
+        ...Object.values(CLOUD_SAVE_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
+        ...STAT_ICON_SPRITE_IDS,
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
@@ -690,7 +694,7 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
-    // Maps' props and cinematic casts baked or being baked, by map id
+    // Maps' props and cinematic casts baked or being baked, by model key (getPropKey)
     private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
@@ -1054,7 +1058,7 @@ export class GameAssets {
 
     // A map's NPCs posed as scenery (MapDef.props), and the cast of its opening cinematic
     // (MapDef.cinematic) with everything they play: baked as the map's travelled to
-    static getPropRequests(maps: readonly MapDef[]): BakeRequest[] {
+    static getPropRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
         const seqs = new Map<number, number[]>();
         const add = (npcId: number, seqIds: number[]) => {
             const list = seqs.get(npcId) ?? [];
@@ -1081,18 +1085,37 @@ export class GameAssets {
         }));
     }
 
-    loadProps(map: MapDef): Promise<void> {
-        if (!map.props?.length && getMapCinematics(map).length === 0) {
+    // Bakes a map's props and cinematics' casts (its opening's and each part's), unless they're
+    // baked already or on their way. Each NPC's baked once, under one key, so it's baked with what
+    // every map plays on it (maps), as the slim cache has it: one map's alone would leave another's
+    // animations out.
+    loadProps(map: MapDef, maps: readonly MapDef[] = ALL_MAPS): Promise<void> {
+        const npcIds = new Set([
+            ...(map.props ?? []).map((prop) => prop.npcId),
+            ...getMapCinematics(map).flatMap((cinematic) =>
+                cinematic.cast.map((actor) => actor.npcId),
+            ),
+        ]);
+        if (npcIds.size === 0) {
             return Promise.resolve();
         }
-        let baking = this.propBakes.get(map.id);
-        if (!baking) {
-            baking = this.bakeInTasks(GameAssets.getPropRequests([map]), this.loadBake).catch((e) =>
+        // This map's own def first: a dev map's is made again for each run
+        const requests = GameAssets.getPropRequests([
+            map,
+            ...maps.filter((other) => other.id !== map.id),
+        ]).filter((request) => npcIds.has(request.npcId));
+        const missing = requests.filter((request) => !this.propBakes.has(request.key));
+        if (missing.length > 0) {
+            const baking = this.bakeInTasks(missing, this.loadBake).catch((e) =>
                 console.error("Couldn't bake", map.id, "props", e),
             );
-            this.propBakes.set(map.id, baking);
+            for (const request of missing) {
+                this.propBakes.set(request.key, baking);
+            }
         }
-        return baking;
+        return Promise.all(requests.map((request) => this.propBakes.get(request.key))).then(
+            () => undefined,
+        );
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready

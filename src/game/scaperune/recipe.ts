@@ -84,10 +84,10 @@ export type MapRecipe = {
             | "tombs"
             | "requires"
             | "floor"
-            | "lighting"
             | "props"
             | "cinematic"
             | "spawnFacing"
+            | "lighting"
         >
     >;
 };

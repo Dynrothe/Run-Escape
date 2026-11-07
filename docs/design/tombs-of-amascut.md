@@ -316,9 +316,9 @@ unlock (section 8), and moving it to the Raids tab.
 
 ## 10. What the cache has
 
-Cache `osrs-241_2026-09-30`. Ids from `scripts/cache/find-npcs.ts`, `find-locs.ts` and
-`dump-square.ts`; the spot animations from a lister of those whose model or animation is in the
-raid's ranges.
+Cache `osrs-242_2026-11-03` (rev 242 moved the invocation board's sprites up 4139 from rev
+241's). Ids from `scripts/cache/find-npcs.ts`, `find-locs.ts` and `dump-square.ts`; the spot
+animations from a lister of those whose model or animation is in the raid's ranges.
 
 - **Rooms** (map squares, all with terrain and readable locs): Nexus 55,80; Scabaras 55,82; Kephri
   55,84; the tomb 57,80; Het 57,82; Akkha 57,84 (plane 1); Wardens' first two phases 59,80;

@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 
 import { ItemView } from "../client/GameStore";
 import { TAP_SLOP } from "../client/GameTouch";
+import { StatLine } from "./StatLine";
 
 const LONG_PRESS_MS = 500;
 // Ignore the browser's and SharedTaps' clicks after handling a touch on release.
@@ -337,12 +338,13 @@ export function ItemDescription({
         <>
             <span style={{ color: item.rarity.color }}>{item.name}</span>
             {item.lines.map((line) => (
-                <span key={line}>{line}</span>
+                <StatLine key={line} text={line} />
             ))}
             {item.set && (
-                <span className={setClassName ?? (item.set.active ? "ui-good" : "ui-subtle")}>
-                    {item.set.text}
-                </span>
+                <StatLine
+                    text={item.set.text}
+                    className={setClassName ?? (item.set.active ? "ui-good" : "ui-subtle")}
+                />
             )}
             {children}
         </>
