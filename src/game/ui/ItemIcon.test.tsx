@@ -69,6 +69,59 @@ describe("ItemIcon", () => {
     });
 });
 
+describe("ItemIcon with a sprite and no item", () => {
+    afterEach(() => {
+        cleanup();
+        vi.restoreAllMocks();
+    });
+
+    test("draws the sprite without asking for an item model", () => {
+        vi.spyOn(iconCache, "getSprite").mockReturnValue(undefined);
+        let loaded: ((url: string) => void) | undefined;
+        const request = vi.spyOn(iconCache, "requestSprite").mockImplementation((_id, callback) => {
+            loaded = callback;
+        });
+        const itemRequest = vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        const { container } = render(<ItemIcon spriteId={156} size={22} />);
+        expect(container.querySelector("img")).toBeNull();
+        expect(request).toHaveBeenCalledWith(156, expect.any(Function));
+        act(() => loaded!("data:image/png;base64,head"));
+        const image = container.querySelector("img");
+        expect(image).toHaveAttribute("src", "data:image/png;base64,head");
+        expect(image).toHaveAttribute("height", "22");
+        expect(image).toHaveAttribute("alt", "");
+        expect(itemRequest).not.toHaveBeenCalled();
+    });
+
+    test("shows nothing, and asks for no item, when the cache hasn't got it", () => {
+        vi.spyOn(iconCache, "getSprite").mockReturnValue("");
+        vi.spyOn(iconCache, "requestSprite").mockImplementation((_id, callback) => callback(""));
+        const itemRequest = vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        const { container } = render(<ItemIcon spriteId={156} size={22} />);
+        expect(container.querySelector("img")).toBeNull();
+        expect(container.querySelector(".ui-icon")).not.toBeNull();
+        expect(itemRequest).not.toHaveBeenCalled();
+    });
+
+    test("changing slots never shows the previous or late-loading sprite", () => {
+        vi.spyOn(iconCache, "getSprite").mockImplementation((id) =>
+            id === 156 ? "data:image/png;base64,head" : undefined,
+        );
+        const callbacks = new Map<number, (url: string) => void>();
+        vi.spyOn(iconCache, "requestSprite").mockImplementation((id, callback) => {
+            callbacks.set(id, callback);
+        });
+        const { container, rerender } = render(<ItemIcon spriteId={156} />);
+        expect(container.querySelector("img")).toHaveAttribute("src", "data:image/png;base64,head");
+        rerender(<ItemIcon spriteId={157} />);
+        expect(container.querySelector("img")).toBeNull();
+        act(() => callbacks.get(156)?.("data:image/png;base64,late-head"));
+        expect(container.querySelector("img")).toBeNull();
+        act(() => callbacks.get(157)!("data:image/png;base64,cape"));
+        expect(container.querySelector("img")).toHaveAttribute("src", "data:image/png;base64,cape");
+    });
+});
+
 describe("IconCache", () => {
     test("icons whose load failed are asked for again next time", async () => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});

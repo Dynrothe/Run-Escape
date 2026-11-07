@@ -45,11 +45,16 @@ go stale. Add anything that cost you time to work out.
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
+| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
+| A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
+| Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
+| Cloud save in the game: syncing, the choice, Settings  | `client/CloudSave.ts`, `ui/CloudSave.tsx`, `docs/DEVELOPMENT.md` Saves |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
@@ -57,19 +62,27 @@ go stale. Add anything that cost you time to work out.
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
+| Hover and hold descriptions: HUD, bag, Armoury         | `src/game/ui/DescriptionButton.tsx`                                    |
 | Weapon stat lines on cards, pause and tooltips         | `src/game/content/weaponStats.ts`                                      |
+| The icon beside each stat line, on every screen        | `content/statIcons.ts`, `ui/StatLine.tsx`                              |
 | How the player stands and runs with each weapon        | `src/game/content/stances.ts`                                          |
 | Stat names and types                                   | `src/game/content/stats.ts`, `types.ts`                                |
 | Balance bot                                            | `scripts/game/simulate-run.ts`                                         |
 | Weapon attack benchmark                                | `scripts/game/measure-weapon-dps.ts`                                   |
 | Co-op: how it works, hosting its relay                 | `docs/DEVELOPMENT.md` (Co-op)                                          |
 | Co-op relay server                                     | `server/coop-relay.mjs`                                                |
+| The relays' checks on a run's frames                   | `server/coop-checks.mjs`                                               |
+| The relays' rows in the collector, for runs they flag  | `server/analytics/README.md` (Run checks)                              |
 | The same relay on Cloudflare, and its setup            | `server/cloudflare/`                                                   |
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
+| Cloud saves' Worker: sync codes, revisions, backups    | `server/cloud-saves/`                                                  |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
+| Moving to a newer cache, and what changed in it        | `docs/DEVELOPMENT.md` (A newer cache), `compare-caches.ts`             |
 | The slim cache's chunks, and how the game loads them   | `src/rs/cache/ChunkedCache.ts`, `docs/DEVELOPMENT.md` (Hosting)        |
+| The full cache's download: parts, resuming, keeping it | `src/rs/cache/CacheFiles.ts`, `docs/DEVELOPMENT.md` (Hosting)          |
+| What the slim cache loads, and what it reuses          | `scripts/cache/slim-plan.ts`, `docs/DEVELOPMENT.md` (Hosting)          |
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
@@ -190,14 +203,18 @@ desktop build.
 - **Never change its application ID (`io.jere.run_escape`) or its page's address**
   (`https://appassets.androidplatform.net/assets/game/`): Android players' saves belong to them. An
   ID can't have a hyphen.
-- **It's only published on GitHub's releases, and never updates itself.** Don't add an update
-  check, a download or an app store build: players install a new APK over the old one, as the
-  release notes (`android/release-notes.md`) and the app's About say.
+- **It's only published on GitHub's releases.** `AppUpdater.java` checks once on open and prompts
+  for a newer APK; Android handles the download and installation consent. A failed check must
+  never block the bundled game, and installing is always asked, never started by itself (it closes
+  the game mid-run). What it remembers between launches is `UpdatePlan.java`'s, which has tests
+  that need no device. See `docs/DEVELOPMENT.md`, Android, for the update flow.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
-- The app lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
-  the relay, and the run collector. A new address the game reaches needs adding to both.
+- The bundled game lets out only what the desktop app does (`RelayPolicy.java`,
+  `desktop/gameServer.ts`): the relay, the run collector, and the cloud-save Worker's `/v1/`. A
+  new address the game reaches needs adding to both. The updater's requests to GitHub are the
+  app's own, like the desktop launcher's.
 - Its generated game files, APKs and keys stay out of Git (`.gitignore`).
 - Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
   there's no Android SDK here. Touch, co-op and airplane mode need a phone with a current WebView:

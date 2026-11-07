@@ -80,6 +80,11 @@ export class MapManager<T extends MapSquare> {
     // outside isn't loaded at all. Unset loads everything in range.
     loadArea?: vec4;
 
+    // Squares (ids) loaded whether or not the camera sees them, and kept until they're unpinned:
+    // all an opening cinematic's camera will see, loaded behind the loading screen so nothing
+    // pops in as it flies (the game's GameClient.enterRun)
+    pinned: ReadonlySet<number> = new Set();
+
     constructor(
         readonly maxQueuedTasks: number,
         readonly loadMapFunction: LoadMapFunction,
@@ -157,6 +162,30 @@ export class MapManager<T extends MapSquare> {
         // What's on its way was asked for with the last area
         this.loadingMapIds.clear();
         this.renderBounds = vec4.fromValues(-1, -1, -1, -1);
+    }
+
+    setPinned(ids: Iterable<number>): void {
+        this.pinned = new Set(ids);
+    }
+
+    // How many of the pinned squares there are to load, and how many are still to come: one
+    // outside the load area or with nothing there is never loaded, and isn't waited for
+    getPinnedProgress(): { total: number; left: number } {
+        let total = 0;
+        let left = 0;
+        for (const mapId of this.pinned) {
+            if (
+                this.invalidMapIds.has(mapId) ||
+                !isSquareTouching(this.loadArea, mapId >> 8, mapId & 0xff)
+            ) {
+                continue;
+            }
+            total++;
+            if (!this.mapSquares.has(mapId)) {
+                left++;
+            }
+        }
+        return { total, left };
     }
 
     getMap(mapX: number, mapY: number): T | undefined {
@@ -246,6 +275,9 @@ export class MapManager<T extends MapSquare> {
 
             for (const map of this.mapSquares.values()) {
                 const { mapX, mapY } = map;
+                if (this.pinned.has(getMapSquareId(mapX, mapY))) {
+                    continue;
+                }
                 if (
                     mapX < mapStartX - unloadDistance ||
                     mapX > mapEndX + unloadDistance ||
@@ -284,6 +316,13 @@ export class MapManager<T extends MapSquare> {
                 }
             } else {
                 this.loadMap(mapX, mapY);
+            }
+        }
+
+        // The pinned ones are loaded wherever the camera is
+        for (const mapId of this.pinned) {
+            if (isSquareTouching(this.loadArea, mapId >> 8, mapId & 0xff)) {
+                this.loadMap(mapId >> 8, mapId & 0xff);
             }
         }
 

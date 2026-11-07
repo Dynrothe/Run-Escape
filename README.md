@@ -51,14 +51,13 @@ has what changed in each version.
 The game is built on one Old School RuneScape cache, and only runs on that one: every NPC, item,
 animation and spot animation id in `src/game/content/` was checked against it.
 
-| Cache                 | Game build        | Date              | OpenRS2 Archive                                                 |
-| --------------------- | ----------------- | ----------------- | --------------------------------------------------------------- |
-| `osrs-241_2026-09-30` | OSRS revision 241 | 30 September 2026 | [cache 2727](https://archive.openrs2.org/caches/runescape/2727) |
+| Cache                 | Game build        | Date            | OpenRS2 Archive                                                 |
+| --------------------- | ----------------- | --------------- | --------------------------------------------------------------- |
+| `osrs-242_2026-11-03` | OSRS revision 242 | 3 November 2026 | [cache 2757](https://archive.openrs2.org/caches/runescape/2757) |
 
 It's set by `GAME_CACHE_NAME` in [`src/game/cache.ts`](src/game/cache.ts), and a test checks this
-table names the same cache. Moving to a newer cache means checking the content against it first
-(`scripts/cache/validate-decoders.ts`, `check-items.ts` and `check-fun-outfits.ts` help), then
-changing both.
+table names the same cache. Moving to a newer cache means checking the content against it first,
+then changing both: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#a-newer-cache) has the steps.
 
 ## Getting started
 
@@ -89,10 +88,13 @@ hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damag
 the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
 **Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
 
-Hover over an item in your bag to read the description shown when you found it.
+Hover over bag items, weapons, passives, worn equipment or Armoury pieces (including their
+upgrades) to read their descriptions.
 
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
 use your items: tap an item to use it, or hold it to read its description without using it.
+Hold weapons, passives and Armoury pieces to inspect them too, without selecting or buying them.
+On small screens, worn equipment and its descriptions are in the pause menu.
 Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 
@@ -141,7 +143,7 @@ off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics)
 There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
 plays offline, and updates the game by itself when it can. Saves are kept apart from a browser's,
-and Export and Import in Settings carry one across.
+and Export and Import in Settings carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#desktop) covers building and releasing it.
 
 ## Android
@@ -149,10 +151,13 @@ and Export and Import in Settings carry one across.
 And an Android one, only here on GitHub: open `Run-Escape-<version>-android.apk` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) on your phone, and let your browser
 install apps when Android asks. The whole game's in it, so it plays offline, even the first time,
-and co-op works when there's a connection. It doesn't update itself: for a new version, install its
-APK over the old one (uninstalling first deletes your progress). It needs a current Android System
+and co-op works when there's a connection. On opening, it checks GitHub for a newer release and
+offers to download its APK, then asks before installing it. Android asks you to allow installs from
+Run Escape, then confirm the update. If the check fails or you're offline, the current game keeps
+working. You can also install a new APK over the old one yourself (uninstalling first deletes your
+progress). It needs a current Android System
 WebView, and says so if the phone's is too old. Its saves are apart from a browser's too, and
-Export and Import carry one across.
+Export and Import carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#android) covers building it and setting up its releases.
 
 ## Contributing

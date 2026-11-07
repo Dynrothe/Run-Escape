@@ -262,6 +262,30 @@ export class PlayerModelLoader {
         return this.animator.animate(model, seqType, frame);
     }
 
+    // An action's frame on the upper body over a movement's on the legs (see
+    // SeqModelAnimator.animateInterleaved)
+    getInterleavedModel(
+        appearance: PlayerAppearance,
+        seqId: number,
+        frame: number,
+        movementSeqId: number,
+        movementFrame: number,
+        movementGroups: number[],
+    ): Model | undefined {
+        const model = this.getBaseModel(appearance);
+        if (!model) {
+            return undefined;
+        }
+        return this.animator.animateInterleaved(
+            model,
+            this.seqTypeLoader.load(seqId),
+            frame,
+            this.seqTypeLoader.load(movementSeqId),
+            movementFrame,
+            movementGroups,
+        );
+    }
+
     clearCache(): void {
         this.modelCache.clear();
     }

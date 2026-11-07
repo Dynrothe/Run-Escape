@@ -24,6 +24,15 @@ import {
     viaProxy,
     watchCloudflareRanges,
 } from "./client-ip.mjs";
+import {
+    RUN_CHECKS,
+    RunWatch,
+    checkReport,
+    checkReporter,
+    endsCaughtRuns,
+    heroIdsOf,
+    runOf,
+} from "./coop-checks.mjs";
 import { playerName, roomName } from "./name-gen.mjs";
 
 export const RELAY_PATH = "/coop";
@@ -629,6 +638,15 @@ export function createRelay(limits = {}) {
         proxy = proxyMode(),
         // Rooms take players without their map (see isAnyMapOn)
         anyMap = isAnyMapOn(),
+        // A run whose host the run checks catch ends (see endsCaughtRuns)
+        endCaughtRuns = endsCaughtRuns(process.env),
+        // Sends a run the checks found anything in to the run analytics
+        // collector (server/analytics), when RUN_CHECKS_URL and its token are set
+        reportCheck = checkReporter({
+            url: process.env.RUN_CHECKS_URL,
+            token: process.env.RUN_CHECKS_TOKEN,
+            fetch: globalThis.fetch,
+        }),
         metrics = isMetricsOn(),
         metricsPort = metricsPortSetting(),
     } = limits;
@@ -637,9 +655,9 @@ export function createRelay(limits = {}) {
     let warnedProxy = false;
     const rooms = new Map();
     const clients = new Set();
-    // For the metrics: only connections, rooms being made and runs starting
-    // update these (counted whether or not they're served). Live counts come
-    // from the rooms when asked, never from game traffic.
+    // For the metrics: only connections, rooms being made, runs starting and
+    // the run checks update these (counted whether or not they're served).
+    // Live counts come from the rooms when asked.
     const counters = {
         startedAt: Date.now(),
         connections: 0,
@@ -647,6 +665,9 @@ export function createRelay(limits = {}) {
         runsStarted: 0,
         peakPlayers: 0,
         peakRooms: 0,
+        // Each kind the run checks logged, and hosts they caught
+        runChecks: {},
+        hostsCaught: 0,
     };
     let metricsServer;
     let stopMetrics = () => {};
@@ -738,6 +759,20 @@ export function createRelay(limits = {}) {
                 counters.peakPlayers,
             ),
             metric("coop_rooms_peak", "Most simultaneous rooms since startup.", counters.peakRooms),
+            ...RUN_CHECKS.map((kind) =>
+                metric(
+                    `coop_run_check_${kind}_total`,
+                    `Times the run checks logged ${kind}.`,
+                    counters.runChecks[kind] ?? 0,
+                    "counter",
+                ),
+            ),
+            metric(
+                "coop_run_check_hosts_caught_total",
+                "Hosts the run checks caught.",
+                counters.hostsCaught,
+                "counter",
+            ),
             metric(
                 "coop_connections_limit",
                 "Maximum simultaneous connections allowed.",
@@ -982,6 +1017,7 @@ export function createRelay(limits = {}) {
         }
         if (room.members.length === 0) {
             rooms.delete(room.code);
+            room.watch?.finish();
             listChanged();
             return;
         }
@@ -1004,6 +1040,8 @@ export function createRelay(limits = {}) {
 
     function disband(room, reason) {
         rooms.delete(room.code);
+        room.watch?.finish();
+        room.watch = undefined;
         listChanged();
         for (const member of room.members) {
             member.room = undefined;
@@ -1131,6 +1169,36 @@ export function createRelay(limits = {}) {
             }
         }
         return undefined;
+    }
+
+    // The run's checks (coop-checks.mjs), for a start every game would play
+    function newWatch(room, game) {
+        const heroIds = heroIdsOf(game, MAX_PARTY);
+        if (!heroIds) {
+            return undefined;
+        }
+        const host = room.members.find((m) => m.id === room.hostId);
+        const watch = new RunWatch(heroIds, room.hostId, {
+            run: { room: room.code, ...runOf(room, game), build: host?.build },
+            names: new Map(room.members.map((m) => [m.id, m.name])),
+            log: (entry) => {
+                if (entry.kind === "caught") {
+                    counters.hostsCaught++;
+                } else if (RUN_CHECKS.includes(entry.kind)) {
+                    counters.runChecks[entry.kind] = (counters.runChecks[entry.kind] ?? 0) + 1;
+                }
+                // One line of JSON, for whatever reads the relay's output
+                console.warn(JSON.stringify(entry));
+                if (entry.kind === "summary") {
+                    const ended = endCaughtRuns && entry.caught !== null;
+                    reportCheck?.(checkReport(entry, "node", ended));
+                }
+            },
+            caught: () => {
+                watch.end = endCaughtRuns;
+            },
+        });
+        return watch;
     }
 
     // Whether a guest's input is the size and rate a game sends
@@ -1401,6 +1469,7 @@ export function createRelay(limits = {}) {
                         return;
                     }
                     room.started = true;
+                    room.watch = newWatch(room, message.game);
                     const start = encodeFrame(
                         0x1,
                         Buffer.from(JSON.stringify({ t: "start", game: message.game }), "utf8"),
@@ -1417,6 +1486,8 @@ export function createRelay(limits = {}) {
                 // The host's back in the lobby: the room is again
                 if (isHost && room.started) {
                     room.started = false;
+                    room.watch?.finish();
+                    room.watch = undefined;
                     roomChanged(room);
                 }
                 return;
@@ -1427,7 +1498,12 @@ export function createRelay(limits = {}) {
                 // A guest's input, for the host, saying who it's from
                 if (room?.started && !isHost && allowUp(client, payload)) {
                     const host = room.members.find((m) => m.id === room.hostId);
-                    host?.connection.write(encodeFrame(0x1, withField(payload, "from", client.id)));
+                    if (host) {
+                        host.connection.write(
+                            encodeFrame(0x1, withField(payload, "from", client.id)),
+                        );
+                        room.watch?.up(client.id, message.d);
+                    }
                 }
                 return;
             case "down":
@@ -1442,6 +1518,13 @@ export function createRelay(limits = {}) {
                         if (member !== client) {
                             member.connection.write(frame);
                         }
+                    }
+                    room.watch?.down(message.d);
+                    if (room.watch?.end) {
+                        // Which ends the run for everyone, as the host leaving does
+                        room.watch.finish();
+                        room.watch = undefined;
+                        client.connection.close(1008);
                     }
                 }
                 return;

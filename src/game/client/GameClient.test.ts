@@ -13,6 +13,8 @@ import {
     getMetaStats,
 } from "../core/save";
 import { makeGrid } from "../core/world/testGrid";
+import { VARDHELM } from "../scaperune/maps/vardhelm";
+import { CinematicCamera, CinematicPlayer } from "./Cinematic";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -199,6 +201,95 @@ describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
 
+    test.each([undefined, 0, 1])(
+        "shows only the focused hero's unspent ring of life (focus %s)",
+        (focus) => {
+            const sim = createSim(focus);
+            const { client, store } = createClient(sim, false);
+            for (const hero of sim.heroes) {
+                hero.revivesLeft = hero.index === sim.focus ? 0 : 1;
+            }
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+            sim.revivesLeft = 1;
+            updateHud(client, true);
+            const buffs = store.getNumbers()!.buffs;
+            expect(buffs).toEqual([
+                { id: "ring_of_life", name: "Ring of life", objId: 2570, harmful: false },
+            ]);
+            sim.tick += 50;
+            updateHud(client);
+            expect(store.getNumbers()!.buffs).toBe(buffs);
+            sim.player.invulnerable = 0;
+            sim["damagePlayer"](99999, "goblin", false);
+            expect(sim.revivesLeft).toBe(0);
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+        },
+    );
+
+    // The Pyromancer's own revive is theirs, not a ring of life, and goes first
+    test.each([0, 1])("shows the Pyromancer's phoenix apart from %s ring of life", (rings) => {
+        const metaStats = emptyStats();
+        metaStats.revival = rings;
+        const party = ["warrior", "pyromancer"].map((characterId) => ({
+            name: characterId,
+            characterId,
+            metaStats,
+        }));
+        const row = ".".repeat(72);
+        const sim = new Sim({
+            grid: makeGrid(Array(72).fill(row), 1000, 1000),
+            mapId: "lumbridge",
+            characterId: "pyromancer",
+            metaStats,
+            seed: 5,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party,
+            focus: 1,
+        });
+        const { client, store } = createClient(sim, false);
+        const handleEvents = (
+            client as unknown as { handleEvents(sim: Sim, events: unknown[]): void }
+        ).handleEvents;
+        const shown = () => store.getNumbers()!.buffs.map((buff) => buff.name);
+        const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
+        const die = (hero: number) => {
+            sim["as"](hero, () => {
+                sim.player.invulnerable = 0;
+                sim["damagePlayer"](99999, "goblin", false);
+            });
+            handleEvents.call(client, sim, sim.takeEvents());
+            updateHud(client, true);
+        };
+        updateHud(client, true);
+        expect(shown()).toEqual(rings ? ["Phoenix", "Ring of life"] : ["Phoenix"]);
+        die(1);
+        expect(shown()).toEqual(rings ? ["Ring of life"] : []);
+        if (rings) {
+            die(1);
+            expect(shown()).toEqual([]);
+        }
+        // A teammate's toast names theirs, and the warrior's ring isn't the HUD's
+        sim.heroes[0].revivesLeft = 1;
+        die(0);
+        expect(shown()).toEqual([]);
+        expect(toasts()).toEqual([
+            "Your phoenix saves you!",
+            ...(rings ? ["Your ring of life saves you!"] : []),
+            "warrior's ring of life saves them!",
+        ]);
+    });
+
+    test("every adventurer with a revive of their own has a look for it", () => {
+        for (const character of CHARACTERS) {
+            if (character.bonus.revival) {
+                expect(character.reviveLook, character.id).toBeDefined();
+            }
+        }
+    });
+
     test.each([
         [0, "boss"],
         [1, "boss"],
@@ -383,6 +474,22 @@ describe("the HUD", () => {
         expect(ui).not.toHaveBeenCalled();
         expect(numbers).not.toHaveBeenCalled();
         vi.unstubAllGlobals();
+    });
+
+    test("drops co-op's countdown when a run ends early while the party's choosing", () => {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        Object.assign(client, { coopRun: { decisionSeconds: 12 }, coopStopped: false });
+        updateHud(client, true);
+        expect(store.getNumbers()!.decisionSeconds).toBe(12);
+        // The host left mid-choice: the results show, and the run stays as it stopped
+        (client as unknown as { endCoopRunEarly(why: string): void }).endCoopRunEarly(
+            "The host left, so the run ended.",
+        );
+        expect(store.getSnapshot().overlay).toBe("dead");
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
+        updateHud(client);
+        expect(store.getNumbers()!.decisionSeconds).toBeUndefined();
     });
 });
 
@@ -822,6 +929,123 @@ describe("auto equip", () => {
         expect(messages).toHaveLength(1);
         expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
         expect(store.getSnapshot().overlay).toBe("chest");
+    });
+});
+
+describe("a co-op run that breaks", () => {
+    // The client mid-run with a stand-in for the run, as updateCoop drives it
+    function coopClient(run: Partial<Record<string, unknown>>) {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const coop = { keepAlive: vi.fn(), leave: vi.fn() };
+        const finishRun = vi.fn();
+        const flush = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const fake = {
+            isHost: true,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            flush,
+            stepFrame,
+            ...run,
+        };
+        Object.assign(client, {
+            coop,
+            coopRun: fake,
+            coopStopped: false,
+            accumulator: 0,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+            finishRun,
+            updateHud() {},
+        });
+        const update = (ms = TICK_MS * 2) =>
+            (
+                client as unknown as {
+                    updateCoop(ms: number, sim: Sim, run: unknown): void;
+                }
+            ).updateCoop(ms, sim, fake);
+        return { client, store, coop, finishRun, flush, stepFrame, update };
+    }
+
+    it("sends the host's frames even when something after a step throws", () => {
+        const { client, flush, stepFrame, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        expect(update).toThrow("a bug in what's drawn");
+        expect(stepFrame).toHaveBeenCalledOnce();
+        expect(flush).toHaveBeenCalledOnce();
+    });
+
+    it("keeps no time back to make up when something after a step throws", () => {
+        const { client, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        // A slow frame's worth of steps due, and only one taken
+        expect(() => update(TICK_MS * 8)).toThrow("a bug in what's drawn");
+        expect((client as unknown as { accumulator: number }).accumulator).toBeLessThanOrEqual(
+            TICK_MS,
+        );
+    });
+
+    it("steps nothing once checking the room's connection has lost it", () => {
+        const { client, coop, stepFrame, flush, update } = coopClient({});
+        // The connection found dead and the room given up on, which ends the run
+        coop.keepAlive.mockImplementation(() =>
+            Object.assign(client, { coopRun: undefined, coopStopped: true }),
+        );
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        expect(flush).not.toHaveBeenCalled();
+    });
+
+    it("checks the room's connection on every update", () => {
+        const { coop, update } = coopClient({ canStep: () => false });
+        update();
+        update();
+        expect(coop.keepAlive).toHaveBeenCalledTimes(2);
+    });
+
+    it("ends a run whose frame won't step, and leaves the room, which ends it for everyone", () => {
+        const { client, coop, finishRun, stepFrame, update } = coopClient({ stuck: true });
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect(finishRun).toHaveBeenCalledWith("Something went wrong in the run, so it ended.");
+        expect(stepFrame).not.toHaveBeenCalled();
+        // And it's over: nothing more's stepped, and it doesn't leave again
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect((client as unknown as { coopStopped: boolean }).coopStopped).toBe(true);
+    });
+
+    it("tells a guest that can't catch up why, on its results or, if they're up, a toast", () => {
+        const behind = coopClient({ isHost: false, cantCatchUp: true });
+        behind.update();
+        expect(behind.coop.leave).toHaveBeenCalledOnce();
+        expect(behind.finishRun).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+        );
+
+        // Their hero's run was over already, so its results are showing
+        const spectating = coopClient({ isHost: false, cantCatchUp: true });
+        Object.assign(spectating.client, { runRecorded: true });
+        const toast = vi.spyOn(spectating.store, "toast");
+        spectating.update();
+        expect(spectating.coop.leave).toHaveBeenCalledOnce();
+        expect(toast).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+            6000,
+        );
     });
 });
 
@@ -1379,5 +1603,199 @@ describe("raid modes", () => {
         client.toggleHard();
         expect(store.getSnapshot().hard).toBe(false);
         expect(store.getSnapshot().expert).toBe(false);
+    });
+});
+
+describe("the opening cinematic", () => {
+    // The client mid-run with Vardhelm's opening playing, a second in
+    function cinematicClient() {
+        const { client, store } = createClient(createSim(), false);
+        const cinematic = new CinematicPlayer(VARDHELM.mapDef!.cinematic!);
+        cinematic.advance(1);
+        const view = { cinematic: cinematic as CinematicPlayer | undefined, onEvents() {} };
+        const useAbility = vi.fn();
+        const play = vi.fn();
+        Object.assign(client, {
+            cinematic,
+            view,
+            useAbility,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned: vi.fn() } },
+        });
+        store.set({ cinematic: true });
+        const state = client as unknown as { cinematic?: CinematicPlayer; paused: boolean };
+        return { client, store, cinematic, view, useAbility, play, state };
+    }
+
+    test.each(["Space", "Escape", "KeyW", "Enter", "Digit1"])(
+        "is skipped by any key (or a controller's button), %s, which does nothing else",
+        (code) => {
+            const { client, store, view, useAbility, state } = cinematicClient();
+            (client as unknown as { pressKey(code: string): void }).pressKey(code);
+            expect(state.cinematic).toBeUndefined();
+            expect(view.cinematic).toBeUndefined();
+            expect(store.getSnapshot().cinematic).toBe(false);
+            expect(useAbility).not.toHaveBeenCalled();
+            expect(state.paused).toBe(false);
+        },
+    );
+
+    test("is skipped by a click or a tap, but not by one as it begins", () => {
+        const { client, store, state } = cinematicClient();
+        state.cinematic!.seconds = 0.1;
+        client.skipCinematic();
+        expect(state.cinematic).toBeDefined();
+        state.cinematic!.seconds = 0.5;
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+    });
+
+    test("plays its sounds as it goes, and hands the camera back to the run's at the end", () => {
+        const { client, store, play, state } = cinematicClient();
+        const update = (ms: number, camera: CinematicCamera) =>
+            (
+                client as unknown as {
+                    updateCinematic(ms: number, sim: Sim, play: CinematicCamera): unknown;
+                }
+            ).updateCinematic(ms, client.sim!, camera);
+        const run: CinematicCamera = {
+            x: 5488.5,
+            y: 5220.5,
+            height: -0.6,
+            pitch: -400,
+            yaw: 0,
+            distance: 18,
+        };
+        // A long first frame moves it on by a frame's worth, not all of it
+        expect(update(20000, run)).toBeDefined();
+        expect(state.cinematic!.seconds).toBeLessThan(1.2);
+        let last: unknown;
+        for (let i = 0; i < 2000 && state.cinematic; i++) {
+            last = update(50, run) ?? last;
+        }
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+        // Merlin's teleport, heard once
+        expect(play.mock.calls.map(([id]) => id)).toEqual([200]);
+        const end = last as CinematicCamera;
+        expect(end.x).toBeCloseTo(run.x, 1);
+        expect(end.y).toBeCloseTo(run.y, 1);
+        expect(end.distance).toBeCloseTo(run.distance, 1);
+        expect(end.pitch).toBeCloseTo(run.pitch, 0);
+    });
+
+    test("keeps a co-op player still while it plays", () => {
+        const { client, state } = cinematicClient();
+        const moves: number[][] = [];
+        const fake = {
+            isHost: true,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => false,
+            setMove: (x: number, y: number) => moves.push([x, y]),
+            flush() {},
+        };
+        Object.assign(client, {
+            coop: { keepAlive() {} },
+            coopRun: fake,
+            coopStopped: false,
+            input: {
+                getMoveVector: (into: { x: number; y: number }) =>
+                    Object.assign(into, { x: 1, y: 0 }),
+            },
+            move: { x: 0, y: 0 },
+        });
+        const update = () =>
+            (
+                client as unknown as { updateCoop(ms: number, sim: Sim, run: unknown): void }
+            ).updateCoop(TICK_MS, client.sim!, fake);
+        update();
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        update();
+        expect(moves).toEqual([
+            [0, 0],
+            [1, 0],
+        ]);
+    });
+
+    test("is skipped from the loading screen before it, once that's been up a moment", () => {
+        const { client, store, state } = cinematicClient();
+        const loading = client as unknown as { cinematicLoading?: number };
+        state.cinematic!.seconds = 0;
+        store.set({ screen: "loading" });
+        loading.cinematicLoading = performance.now();
+        client.skipCinematic();
+        expect(state.cinematic).toBeDefined();
+        loading.cinematicLoading = performance.now() - 1000;
+        client.skipCinematic();
+        expect(state.cinematic).toBeUndefined();
+        expect(loading.cinematicLoading).toBeUndefined();
+        expect(store.getSnapshot().screen).toBe("run");
+    });
+
+    test("in co-op, a guest's ready once its squares are in, and the host waits for its own", () => {
+        const { client, store } = cinematicClient();
+        const progress = { total: 2, left: 2 };
+        const sendUp = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const run = {
+            isHost: false,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            stepFrame,
+            flush() {},
+        };
+        Object.assign(client, {
+            cinematicLoading: performance.now(),
+            renderer: { mapManager: { setPinned: vi.fn(), getPinnedProgress: () => progress } },
+            coop: { isHost: false, sendUp, keepAlive() {} },
+            coopRun: run,
+            coopStopped: false,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+        });
+        store.set({ screen: "loading" });
+        const loading = client as unknown as { isCinematicLoading(): boolean };
+        expect(loading.isCinematicLoading()).toBe(true);
+        expect(sendUp).not.toHaveBeenCalled();
+        progress.left = 0;
+        expect(loading.isCinematicLoading()).toBe(false);
+        expect(sendUp).toHaveBeenCalledWith({ loaded: true });
+        expect(store.getSnapshot().screen).toBe("run");
+
+        // The host: no frames while its own squares load
+        const update = () =>
+            (
+                client as unknown as { updateCoop(ms: number, sim: Sim, run: unknown): void }
+            ).updateCoop(TICK_MS, client.sim!, run);
+        run.isHost = true;
+        Object.assign(client, { cinematicLoading: performance.now(), accumulator: 0 });
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        Object.assign(client, { cinematicLoading: undefined });
+        update();
+        expect(stepFrame).toHaveBeenCalled();
+    });
+
+    test("isn't played again on a retry", () => {
+        const { client } = createClient(createSim(), false);
+        const startRun = vi.fn(async () => {});
+        Object.assign(client, {
+            sim: { map: { id: "zachariah" } },
+            leaveRun: vi.fn(),
+            startRun,
+        });
+        client.retry();
+        expect(startRun).toHaveBeenCalledWith("zachariah", false);
     });
 });

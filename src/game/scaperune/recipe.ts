@@ -82,6 +82,10 @@ export type MapRecipe = {
             | "victoryText"
             | "fun"
             | "floor"
+            | "props"
+            | "cinematic"
+            | "spawnFacing"
+            | "lighting"
         >
     >;
 };
