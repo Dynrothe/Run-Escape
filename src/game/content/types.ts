@@ -829,8 +829,11 @@ export type BossAttackDef = {
     // Projectiles: each one's hit radius (0.35 tiles unless set).
     radius?: number;
     // Swings: hits only a wedge this many radians across, in the way the boss
-    // faced as it began, and under the boss (around it, underRadius tiles)
+    // faced as it began, and under the boss (around it, underRadius tiles).
+    // coneAlpha: how much more solid its wedge is drawn (1 as it is): a big one
+    // over bright ground, or in a dark room, wants to be plainer
     cone?: number;
+    coneAlpha?: number;
     underRadius?: number;
     // Projectiles: tiles per second, how many (fanned out by spread radians),
     // and how fast they turn towards the player (radians per second).

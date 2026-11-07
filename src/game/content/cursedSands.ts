@@ -621,8 +621,11 @@ const SHADOW_FLOOR_SMALL = 1447;
 const NEST_SWARM = 2149;
 const SCARAB_HEAL = 2150;
 const EGG_HATCH = 2166;
-// A cold glow on his marks, so they read in his last phase's dark
-const SHADOW_LIGHT = { radius: 2, color: 0xd0d8ff, intensity: 0.55 };
+// A faint violet glow on his marks, so they show in his last phase's dark without washing the
+// shadow out (a bright one made it look pale)
+const SHADOW_LIGHT = { radius: 2, color: 0x8a70c0, intensity: 0.25 };
+// His marks are shadows on the floor: drawn solid, not the usual faint warning, or they're lost
+const SHADOW_ALPHA = 0.85;
 
 // Out of the shadows near the player, the burst already winding up: 1.85 tiles to clear
 const shadowStep = (name: string, burst: string, phases: number[]): BossAttackDef => ({
@@ -714,6 +717,7 @@ const betrayal = (name: string, more: Partial<BossAttackDef> = {}): BossAttackDe
         radius: 1.2,
         spotAnim: SHADOW_FLOOR,
         light: SHADOW_LIGHT,
+        alpha: SHADOW_ALPHA,
     },
     impact: { spots: [{ spotAnim: SHADOW_BARRAGE, fit: 1.2 }] },
     phases: [3],
@@ -764,6 +768,7 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
             radius: 1.5,
             spotAnim: SHADOW_FLOOR,
             light: SHADOW_LIGHT,
+            alpha: SHADOW_ALPHA,
             lingers: { seconds: 3, interval: 0.5, damage: 0.25 },
         },
         impact: { spots: [{ spotAnim: SHADOW_BARRAGE, fit: 1.5 }] },
@@ -786,6 +791,7 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
             radius: 0.8,
             spotAnim: SHADOW_FLOOR_SMALL,
             light: SHADOW_LIGHT,
+            alpha: SHADOW_ALPHA,
             lingers: { seconds: 2, interval: 0.5, damage: 0.25 },
         },
         impact: { spots: [{ spotAnim: SHADOW_BARRAGE, fit: 0.8 }] },
@@ -949,6 +955,8 @@ const lightningCone = (
     range: 9,
     radius: 10,
     cone: 1,
+    // Ten tiles of it, under its own pale light: drawn plainly, or it's lost on the sand
+    coneAlpha: 2.2,
     weight: 3,
     light: { radius: 3, color: 0xa8c8ff, intensity: 0.7 },
     impact: { spots: [{ spotAnim: LIGHTNING, fit: 2 }], shake: 0.2, flash: "#dfe8ff" },
@@ -972,7 +980,8 @@ const sparks = (
     cooldown: 0,
     range: 30,
     weight: 0,
-    ground: { ...ground, spotAnim: SPARK_SWIRL, light: SPARK_LIGHT },
+    // Solid, not the usual faint mark: they're all there is to read, and phase 3 is dark
+    ground: { ...ground, spotAnim: SPARK_SWIRL, light: SPARK_LIGHT, alpha: 0.65 },
     impact: { spots: [{ spotAnim: LIGHTNING, fit: 1.2 }] },
     // Only ever an ambient, or what follows her cone
     phases: [],

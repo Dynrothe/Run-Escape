@@ -1044,6 +1044,7 @@ export class BossFightView {
         const attack = windup.attack;
         const radius = attack.radius ?? 2;
         const cone = attack.cone!;
+        const solid = attack.coneAlpha ?? 1;
         const base = Math.atan2(windup.dirY, windup.dirX);
         const steps = 8;
         const wedge = (reach: number) => {
@@ -1058,13 +1059,13 @@ export class BossFightView {
             this.traceGround(overlay, sim, points);
         };
         wedge(radius);
-        ctx.fillStyle = `rgba(200, 20, 20, ${0.14 + 0.14 * t})`;
+        ctx.fillStyle = `rgba(200, 20, 20, ${Math.min(1, (0.14 + 0.14 * t) * solid)})`;
         ctx.fill();
-        ctx.lineWidth = Math.max(2, 3 * scale);
-        ctx.strokeStyle = `rgba(255, 70, 50, ${0.6 + 0.4 * t})`;
+        ctx.lineWidth = Math.max(2, 3 * scale * Math.min(solid, 2));
+        ctx.strokeStyle = `rgba(255, 70, 50, ${Math.min(1, (0.6 + 0.4 * t) * solid)})`;
         ctx.stroke();
         wedge(radius * t);
-        ctx.fillStyle = `rgba(255, 40, 20, ${0.28 * t})`;
+        ctx.fillStyle = `rgba(255, 40, 20, ${Math.min(1, 0.28 * t * solid)})`;
         ctx.fill();
         this.traceCircle(overlay, sim, enemy.x, enemy.y, attack.underRadius ?? 0);
         ctx.fillStyle = `rgba(255, 40, 20, ${0.16 + 0.16 * t})`;
