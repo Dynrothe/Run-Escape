@@ -440,6 +440,22 @@
                 <div id="runsBody"></div>
             </section>
 
+            <section class="card" id="checks" style="display: none">
+                <h2>Run checks</h2>
+                <p class="note">
+                    Co-op runs the relays' checks found anything in, one row each, sent by the relay
+                    whatever the host's game reports. Caught: a kind reached its limit. Ended: the
+                    relay ended the run. A desync is a guest's game no longer matching the host's,
+                    which a bug can cause as well as a cheat. The play and version filters don't
+                    apply; the SQL card's examples show the report a row probably goes with.
+                </p>
+                <p class="note" id="checksTotal"></p>
+                <div class="scroll" id="checksByBuild"></div>
+                <h2 style="margin-top: 16px">Latest</h2>
+                <p class="note">The 100 most recently received.</p>
+                <div class="scroll maxh" id="checksLatest"></div>
+            </section>
+
             <section class="card" id="tables">
                 <h2>Tables</h2>
                 <div class="row">
@@ -503,9 +519,13 @@
                 { key: "endless", label: "Endless", column: "endless", values: "endless" },
                 { key: "version", label: "Version", column: "version", values: "version" },
             ];
+            // The filters run_checks has columns for (and daily_stats, by the same names)
+            const CHECK_FILTERS = ["from", "to", "relay", "map", "mode", "party", "endless"];
+            const KINDS = ["ahead", "move", "action", "auto", "desync"];
             const state = {};
             let meta;
             let hasRuns = false;
+            let hasChecks = false;
 
             const $ = (id) => document.getElementById(id);
             const esc = (v) =>
@@ -555,10 +575,11 @@
             }
             const rows = async (sql, params) => (await query(sql, params)).rows;
 
-            function where(extra = []) {
+            function where(extra = [], keys) {
                 const clauses = [],
                     params = [];
                 for (const f of FILTERS) {
+                    if (keys && !keys.includes(f.key)) continue;
                     const v = state[f.key];
                     if (v === undefined || v === "") continue;
                     clauses.push(`${f.column} ${f.op || "="} ?`);
@@ -896,6 +917,94 @@
                 );
 
                 await renderRuns();
+                await renderChecks();
+            }
+
+            async function renderChecks() {
+                $("checks").style.display = hasChecks ? "" : "none";
+                if (!hasChecks) return;
+                // Solo runs have no relay to check them
+                const w = where(state.play === "singleplayer" ? ["0"] : [], CHECK_FILTERS);
+                const [total] = await rows(
+                    `SELECT COUNT(*) AS runs, SUM(caught IS NOT NULL) AS caught, SUM(ended) AS ended,
+        SUM(desync > 0) AS desynced FROM run_checks ${w.sql}`,
+                    w.params,
+                );
+                // From the first day run_checks still has: daily_stats is kept far longer
+                const mw = where(
+                    ["play_type = 'multiplayer'", "day >= (SELECT MIN(day) FROM run_checks)"],
+                    CHECK_FILTERS,
+                );
+                const [reported] = await rows(
+                    `SELECT SUM(runs) AS runs FROM daily_stats ${mw.sql}`,
+                    mw.params,
+                );
+                const many = (n, one, more) => `${num(n || 0)} ${n === 1 ? one : more}`;
+                $("checksTotal").textContent =
+                    `${many(total.runs, "run", "runs")} with findings: ${many(total.caught, "host", "hosts")} caught, ${many(total.ended, "run", "runs")} ended, ${many(total.desynced, "run", "runs")} with a desync. ${many(reported.runs, "co-op run was", "co-op runs were")} reported for the same days and filters; a player who turned off Share run stats doesn't report theirs, but the relay still checks it.`;
+                const byBuild = await rows(
+                    `SELECT build, relay, COUNT(*) AS runs, SUM(caught IS NOT NULL) AS caught, SUM(ended) AS ended,
+        ${KINDS.map((k) => `SUM(${k}) AS ${k}`).join(", ")}
+        FROM run_checks ${w.sql} GROUP BY build, relay ORDER BY build DESC, relay`,
+                    w.params,
+                );
+                const counted = ["runs", "caught", "ended", ...KINDS];
+                $("checksByBuild").innerHTML = table(
+                    [
+                        { key: "build", label: "Build" },
+                        { key: "relay", label: "Relay" },
+                        ...counted.map((k) => ({ key: k, label: nice(k) })),
+                    ],
+                    byBuild,
+                    { numeric: counted, render: { build: (r) => esc(r.build) } },
+                );
+                const latest = await rows(
+                    `SELECT received_at, relay, build, map_id, mode, endless, party_size, characters, run_seconds,
+        ${KINDS.join(", ")}, caught, ended
+        FROM run_checks ${w.sql} ORDER BY received_at DESC LIMIT 100`,
+                    w.params,
+                );
+                $("checksLatest").innerHTML = table(
+                    [
+                        "received_at",
+                        "relay",
+                        "build",
+                        "map_id",
+                        "mode",
+                        "endless",
+                        "party_size",
+                        "characters",
+                        "run_seconds",
+                        "found",
+                        "caught",
+                        "ended",
+                    ].map((k) => ({ key: k, label: nice(k) })),
+                    latest,
+                    {
+                        numeric: ["party_size", "run_seconds"],
+                        render: {
+                            received_at: (r) =>
+                                esc(
+                                    new Date(r.received_at)
+                                        .toISOString()
+                                        .replace("T", " ")
+                                        .slice(0, 19),
+                                ),
+                            map_id: (r) => esc(nice(r.map_id)),
+                            endless: (r) => (r.endless ? "Endless" : "Finite"),
+                            characters: (r) => esc(r.characters.split(",").map(nice).join(", ")),
+                            run_seconds: (r) => time(r.run_seconds),
+                            found: (r) =>
+                                esc(
+                                    KINDS.filter((k) => r[k])
+                                        .map((k) => `${k} ${r[k]}`)
+                                        .join(", "),
+                                ),
+                            caught: (r) => esc(r.caught ?? "—"),
+                            ended: (r) => (r.ended ? "Yes" : "No"),
+                        },
+                    },
+                );
             }
 
             async function renderRuns() {
@@ -1082,6 +1191,22 @@ FROM daily_stats GROUP BY map_id, mode, endless ORDER BY runs DESC;`,
 FROM runs, json_each('["' || REPLACE(characters, ',', '","') || '"]') AS a
 WHERE endless = 0
 GROUP BY a.value ORDER BY runs DESC;`,
+                // The same run's two rows share these, and a run the checks didn't end reaches the
+                // collector from both at about the same time. One the relay ended goes on alone
+                // on the host's game, which reports it later, perhaps on another UTC day.
+                "Run checks with their likely report": `SELECT c.received_at, c.map_id, c.characters, c.run_seconds,
+  c.caught, c.ended, r.run_id, r.outcome, r.duration_seconds, r.players_left,
+  ROUND((r.received_at - c.received_at) / 1000.0) AS seconds_apart
+FROM run_checks c
+LEFT JOIN runs r ON r.play_type = 'multiplayer' AND r.relay = c.relay AND r.build = c.build
+  AND r.map_id = c.map_id AND r.mode = c.mode AND r.endless = c.endless
+  AND r.party_size = c.party_size AND r.characters = c.characters
+  AND CASE WHEN c.ended = 1
+    THEN r.received_at >= c.received_at AND r.received_at < c.received_at + 86400000
+      AND r.duration_seconds >= c.run_seconds - 5
+    ELSE ABS(r.received_at - c.received_at) < 120000
+      AND ABS(r.duration_seconds - c.run_seconds) < 5 END
+ORDER BY c.received_at DESC;`,
             };
             let lastResult;
             async function runSql() {
@@ -1143,6 +1268,7 @@ GROUP BY a.value ORDER BY runs DESC;`,
                 );
                 const count = (name) => meta.tables.find((t) => t.name === name)?.rows || 0;
                 hasRuns = count("runs") > 0;
+                hasChecks = count("run_checks") > 0;
                 document.body.classList.toggle("empty", !count("daily_stats") && !hasRuns);
                 $("loaded").textContent = meta.files.length
                     ? `${meta.files.join(", ")}: ${visible.map((t) => `${t.name} ${t.rows} rows`).join(", ")}`

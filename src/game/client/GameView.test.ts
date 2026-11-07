@@ -1,15 +1,84 @@
 // @vitest-environment jsdom
+import {
+    ActorAnim,
+    ActorModel,
+    ActorPage,
+    ActorRenderer,
+} from "../../mapviewer/webgl/actor/ActorRenderer";
 import { POWER_UP_LIFETIME } from "../content/powerups";
 import { emptyStats } from "../content/types";
+import { PROJECTILE_ITEM_LOOKS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { makeGrid } from "../core/world/testGrid";
 import type { GameAssets } from "./GameAssets";
-import { GameView } from "./GameView";
+import { GameView, RUN_POSE_TICKS, getRunPoseFrame } from "./GameView";
 import type { Overlay } from "./Overlay";
 
 vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
+});
+
+// Bolts, knives and the atlatl's darts are items with a look, and the blowpipe's darts spot
+// animations without one
+test.each([
+    "armadyl_crossbow",
+    "dragon_hunter_crossbow",
+    "eclipse_atlatl",
+    "throwing_knives",
+    "toxic_blowpipe",
+])("%s draws every projectile tier without changing its movement or hit size", (weaponId) => {
+    const sim = new Sim({
+        grid: makeGrid(Array(8).fill("........")),
+        characterId: "ranger",
+        metaStats: emptyStats(),
+        seed: 3,
+        spawnX: 103.5,
+        spawnY: 203.5,
+    });
+    const anim = new ActorAnim(
+        -1,
+        new Int32Array(4),
+        new Uint16Array(1),
+        new Uint16Array([1]),
+        false,
+    );
+    const model = { anims: [anim] } as ActorModel;
+    const assets = {
+        get: vi.fn(() => model),
+        getPlayer: () => undefined,
+    } as unknown as GameAssets;
+    const view = new GameView(assets);
+    const draw = vi.fn<ActorRenderer["draw"]>();
+    const actors = { draw } as unknown as ActorRenderer;
+    const weapon = getWeapon(weaponId);
+    for (const level of weapon.levels) {
+        for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+            sim.projectiles.length = 0;
+            sim["addProjectile"]("spell", weapon, level, undefined, angle);
+            const projectile = sim.projectiles[0];
+            const before = { ...projectile };
+            view.submitActors(actors, sim, 1);
+            const objId = getProjectileObjId(weapon, level);
+            expect(assets.get).toHaveBeenLastCalledWith(
+                objId !== undefined ? "obj:" + objId : "spot:" + level.projectileSpotAnim,
+            );
+            const look = objId !== undefined ? PROJECTILE_ITEM_LOOKS[objId] : undefined;
+            expect(look === undefined).toBe(weaponId === "toxic_blowpipe");
+            expect(draw).toHaveBeenLastCalledWith(
+                model,
+                anim,
+                0,
+                projectile.x,
+                expect.any(Number),
+                projectile.y,
+                (projectile.yaw + (look?.yawOffset ?? 0)) & 2047,
+                { scale: look?.scale ?? 1 },
+            );
+            expect(projectile).toEqual(before);
+            expect(projectile.radius).toBe(0.4);
+        }
+    }
 });
 
 describe("dropped power-up timers", () => {
@@ -231,4 +300,53 @@ test("slashes and auras follow the displayed body without moving confirmed effec
     expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(pose.y);
     expect(sim.player.x).toBe(confirmed.x);
     expect(sim.player.y).toBe(confirmed.y);
+});
+
+describe("a weapon's run pose", () => {
+    const anim = (seqId: number, lengths: number[], runPose = false) =>
+        new ActorAnim(
+            seqId,
+            new Int32Array(lengths.length * 4),
+            new Uint16Array(lengths.length),
+            Uint16Array.from(lengths),
+            true,
+            runPose,
+        );
+    // The Armadyl crossbow's swing, posed over its stance's run
+    const runLengths = [5, 4, 4, 4, 5, 4, 4, 4];
+    const run = anim(4228, runLengths);
+    const runPose = anim(4230, runLengths, true);
+
+    test("is kept apart from the swing it's a frame of", () => {
+        const swing = anim(4230, [3, 3, 3]);
+        for (const anims of [
+            [swing, run, runPose],
+            [runPose, run, swing],
+        ]) {
+            const model = new ActorModel({} as ActorPage, "player", 0, 0, 0, anims);
+            expect(model.getAnim(4230)).toBe(swing);
+            expect(model.getAnim(4228)).toBe(run);
+            expect(model.runPoses.get(4230)).toBe(runPose);
+            expect(model.runPoses.size).toBe(1);
+        }
+    });
+
+    test("keeps the run's legs going as they were, whenever the shot was", () => {
+        for (const moveTicks of [0, 7, 13, 33, 50, 101]) {
+            for (const attackTicks of [0, 9, RUN_POSE_TICKS - 1]) {
+                expect(getRunPoseFrame(runPose, run, attackTicks, moveTicks)).toBe(
+                    run.getFrame(moveTicks),
+                );
+            }
+        }
+    });
+
+    test("lasts a moment after the shot", () => {
+        expect(getRunPoseFrame(runPose, run, RUN_POSE_TICKS, 3)).toBe(-1);
+        expect(getRunPoseFrame(runPose, run, -1, 3)).toBe(-1);
+    });
+
+    test("isn't played over another run", () => {
+        expect(getRunPoseFrame(runPose, anim(824, [4, 4, 4]), 0, 0)).toBe(-1);
+    });
 });

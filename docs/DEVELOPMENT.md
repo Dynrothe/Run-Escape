@@ -36,26 +36,55 @@ build**: `bun run build` empties `dist/`. `bun run preview` serves the build wit
 to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
 (`?viewer=1`) needs it.
 
-It loads in worker threads (`scripts/cache/slim-load.ts`, a map or a batch of bakes at a time),
-each holding the full cache. Which worker loads what doesn't change the result: it's the union of
-what they read, sorted, and each map takes out the ScapeRune squares an earlier one put in. Before
-anything's published, the chunks in the out dir are read back, and every group has to come out of
-them as it went in; the check then loads it all from those same chunks.
+`scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
+bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
+full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
+what making them read, so what it reads doesn't depend on what ran before it in that worker: a warm
+model cache would hide a group an earlier unit read, and a map would keep an earlier map's
+ScapeRune squares. The one exception is the config type loaders made from an archive, which take
+a while to make and read nothing after: a worker makes those once, and every unit gets the reads
+that made them. Before anything's published, the chunks in the out dir are read back, and every
+group has to come out of them as it went in; the check then loads it all from those same chunks.
 
-A checked run is kept in `caches/slim/`, and the next one reuses it in a second or two if nothing it
-reads from has changed: `src/`, `scripts/cache/`, `package.json`, `bun.lock`, `tsconfig.json`,
-and the full cache's `info.json`, `keys.json` and the size of each of its files. Chunks are
-written under a temporary name and renamed into place (tried again for a few seconds while Windows
-holds the new file), so one that stopped partway leaves no broken chunk behind. tsx's loader
-doesn't reach worker threads by itself, so each starts from `slim-cache-boot.mjs`, which
-registers it.
+A checked run is kept in `caches/slim/`, and the next one reuses it if nothing it's made from has
+changed. esbuild traces the runtime imports of `slim-cache.ts`, `slim-cache-worker.ts` and
+`slim-cache-boot.mjs` without running them: their files and what esbuild makes of them count, with
+`tsconfig.json`, `bun.lock` (all of it, so any change to the packages counts), the dependency and
+runtime settings in `package.json`, `DEV_MAPS`, and the full cache's `info.json`, `keys.json` and
+file sizes. UI, CSS, tests and tools the pipeline doesn't import don't count, nor the package's
+version or scripts. A new worker entry point, or a file it reads other than by importing it, has to
+be added to `hashSlimInputs`. If tracing fails, it warns and loads it all, keeping nothing. A
+reused cache still has its chunks' hashes checked and gets the current build. `caches/slim/` isn't
+kept between CI jobs. Chunks are written under a temporary name and renamed into place (tried again
+for a few seconds while Windows holds the new file), so one that stopped partway leaves no broken
+chunk behind. tsx's loader doesn't reach worker threads by itself, so each starts from
+`slim-cache-boot.mjs`, which registers it.
+
+When something it's made from has changed, `caches/slim/units.json` still has what each unit read
+last time, fingerprinted with the unit's inputs and the workers' code, configuration and full
+cache. Only units without a match are loaded from the full cache, so a content change loads again
+only the units whose inputs it changes. Bakes and icons are batched by a hash of their keys, not
+their places in the content, so adding a weapon or an enemy changes only the batch or two it lands
+in. The workers import ScapeRune's recipes by address, so esbuild doesn't trace them into every
+unit: instead each map with a recipe carries the recipes' own fingerprint, and changing a recipe,
+or the waves and bosses one imports, loads only those maps again. A change to a shared loader, a
+package or the full cache loads every unit again.
+
+**Every unit still loads again from the finished slim cache**, so reuse saves loading from the full
+cache, not the check. What each unit read in the check is what's kept for the next run: with
+nothing missing it's the same as from the full one, and it's checked unit by unit, so a read list
+that came up short last time (from a change the fingerprints don't cover) isn't kept. If the check
+finds something missing, or a unit fails on it, and units were reused, it loads those units again
+from the full cache and checks once more, rather than stop. `units.json` is one file, written whole, with a checksum for
+each read list, and has only the current plan's units. A damaged entry, or file, is reported and
+loaded again.
 
 - `SLIM_WORKERS=n`: how many worker threads, each with its own copy of the full cache. The cores
   less one, up to 4, unless it's set.
 - `SLIM_CHECK=0`: skips loading it all again from the slim cache, for trying things locally. The
   chunks are still read back and compared group by group. Leave the check on for anything players
-  get. An unchecked run isn't kept for reuse.
-- `SLIM_REUSE=0`: does it all even when nothing has changed.
+  get. An unchecked run keeps nothing for reuse.
+- `SLIM_REUSE=0`: loads it all, reusing neither the last run nor its units.
 
 - **The same cache and content give the same chunks**, byte for byte, on any machine, and the
   same name in `caches.json`. A chunk's range is fixed by `CHUNK_SPANS`, not by what's in it, so
@@ -334,7 +363,8 @@ Metrics contain aggregate numbers only, with no player names, addresses or room 
 **Run analytics** are separate from relay health metrics. Solo and co-op hosts can submit anonymous
 end-of-run stats to a Cloudflare D1 collector, regardless of relay, when the build has
 `VITE_RUN_ANALYTICS_URL`. Players can turn it off with Share run stats in Settings, which only
-shows in a build that has a collector. See the
+shows in a build that has a collector. A co-op relay set up for it also sends a row of its own for
+a run its checks flag, whatever that setting says (and the setting's text says so). See the
 [collector setup, daily analytics and leaderboard](../server/analytics/README.md). To look
 through an export of its database offline, run `node server/analytics/viewer/serve.mjs` and drop
 the file on the page.
@@ -436,9 +466,10 @@ environment variables.
 never in an app store, and the app never checks for, downloads or installs a new version. That's
 by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
 first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
-job adds to the draft when the APK's built), and so do the app's About and Save help, whose New
-versions button opens the releases page. Unlike desktop players, whose launcher updates the game,
-Android players on an older APK can't join rooms on the current build until they install it.
+job adds to the draft when the APK's built, and a line beside the APK's link at the top), and so do
+the app's About and Save help, whose New versions button opens the releases page. Unlike desktop
+players, whose launcher updates the game, Android players on an older APK can't join rooms on the
+current build until they install it.
 
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
 `-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
@@ -489,7 +520,7 @@ keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
-| `release-files.ts`     | Makes the game zips, the chunks, the manifest and the notes       |
+| `release-files.ts`     | Makes the game zips, chunks, manifest and the changelog's notes   |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
 
 ### Where things are kept
@@ -590,7 +621,11 @@ It builds on Windows, with the OSRS cache kept between runs by `actions/cache` u
 `CHANGELOG.md`, and carries `Run-Escape-<version>-win-x64.zip`, `game-<version>.zip`,
 `game-<version>-lite.zip`, a `cache-<chunk>.bin` for each chunk and `game-manifest.json`, and
 `Run-Escape-<version>-android.apk` once Android releases are set up (see
-[GitHub builds and releases](#github-builds-and-releases)).
+[GitHub builds and releases](#github-builds-and-releases)). The chunks bury the Windows zip and
+the APK in the asset list, and GitHub can't group or reorder assets, so the notes start with a link
+to the zip, and to the APK when it's built. The links only work once the draft is published, so the
+`publish` job links the names it uploads: a renamed file fails the upload rather than leaving a
+dead link.
 **Publishing the draft by hand is what releases it to players**, and the tag only exists from then
 on. A version needs its own section in `CHANGELOG.md`, or the build fails.
 
@@ -621,7 +656,9 @@ src/game/
                       map when anything on it flies (`hasFliers` in content/maps.ts), since
                       making it takes a while
     SpatialHash.ts    enemies (and piles of bones) by cell, for what's near: flat arrays over
-                      the arena, kept from tick to tick
+                      the arena, kept from tick to tick. It goes by middles, so an attack
+                      that hits what it touches uses Sim's queryTouching, which also looks
+                      at the few big enemies (radius over 1) out of the cells it searched
     lockstep.ts       co-op's frame events, applying them, and the check that copies agree
     fmath.ts          trigonometry that every browser works out the same, for co-op
     Upgrades.ts       level up choices
@@ -649,6 +686,7 @@ src/game/
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
 server/     coop-relay.mjs: co-op's rooms, and passes each run's frames between its players
+  coop-checks.mjs  both relays' checks on a run's frames
   cloudflare/  the same relay on Cloudflare Durable Objects, each room near its host (README.md)
 src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhere in the world,
                              any number of them, one multi-draw per segment and pass (without
@@ -660,6 +698,15 @@ src/mapviewer/worker/        RegionDataLoader (collision and heights for the who
 src/rs/audio/               the client's sound effect synth: instruments, envelopes, filters
 src/rs/model/player/         player models from identity kits and worn items
 ```
+
+A loc blocks only the ground its model stands on (below about waist height, from
+`RegionDataLoader`), where that opens no way that couldn't be walked before. `ArenaGrid` shrinks a
+loc that stands on its own to it, a signpost to its post. Locs that share a tile, like the God
+Wars entrance rock and its base, are a stack, and shrink together to the ground they all stand on,
+on the sides of their tiles that face open ground. Either way the open ground round them has to be
+one piece, walls counted, so nobody gets round the end of a fence. A loc with no model to go by
+keeps its tiles, as does a stack with one, or with one that draws nothing; so do a stack's tiles
+with walls or blocked floor on them, or another blocker beside them.
 
 Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.iconSpriteId` in
 `content/items.ts`), drawn by `ItemIcon` given a `spriteId` and no item. They are in
@@ -885,7 +932,11 @@ a hard one. A hall's teleporter (`stepTeleporter`) asks before skipping to its b
 gap between its `RaidRoomDef.at` and the last room's later, or at once when the portal's taken. So a
 quick kill or a portal never lengthens the next room, and a slow boss never shortens it. Enemies'
 hitpoints and damage, and caskets, go by `paceSeconds`: where the room would be in the run with no
-boss time before it, so a long fight doesn't make later rooms tougher either. Raid bosses' hits are
+boss time before it, so a long fight doesn't make later rooms tougher either. A room's waves
+(`roomWaves`) keep Lumbridge's pace for where it is in the raid; the Nylocas hall's are scaled by
+`NYLOCAS_HALL_CROWD` (spawn rate, the numbers alive and its ring), as most of its Nylocas shoot and
+at the full pace it cost a player far more than the halls either side. The hall gives fewer kills
+for it, and so less experience before Sotetseg's. Raid bosses' hits are
 lightened to match a faster `attackInterval` (`oftener` in `theatre.ts`), and their bullets can hit
 again after `BULLET_GRACE` rather than a second. The Maiden, the first boss, is the exception: her
 hits are scaled down by `MAIDEN_HIT_SCALE`, and her `bulletGrace` is a full second. Every one has an
@@ -899,11 +950,12 @@ more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
-exhumed by `stepExhumed`). The raid's green and blue Nylocas are copies that shoot (`RAID_NYLOCAS`,
-`tob_` ids), so Morytania's play as they did; `raidVersion` swaps them in for whatever a raid boss
-calls. A summon that doesn't fit `distance` out (a wall) comes on nearer the boss, so the Maiden's
-healers all come. A room's speed points go by its `par`, the seconds its fight's tuned to take (all
-of them within it, none by `SLOW_PAR` times it). On expert, a weapon's targeting skips an enemy of
+exhumed by `stepExhumed`). The raid's six Nylocas are copies (`RAID_NYLOCAS`, `tob_` ids), slower
+by `RAID_NYLOCAS_SPEED`, the green and blue ones shooting, so Morytania's play as they did;
+`raidVersion` swaps them in for whatever a raid boss calls. A summon that doesn't fit `distance`
+out (a wall) comes on nearer the boss, so the Maiden's healers all come. A room's speed points go
+by its `par`, the seconds its fight's tuned to take (all of them within it, none by `SLOW_PAR`
+times it). On expert, a weapon's targeting skips an enemy of
 another style (`nearestEnemies` takes the weapon's style: thralls, the cannon and power-ups pass
 none and go for any), and `wrongStyle` stops its hits and venom, a venom tick included once Vasilias
 turns (needing all three styles is the design, as in OSRS); a ground spot with `awayFrom` falls back
@@ -1048,6 +1100,27 @@ more isn't baked again: the ones not picked go at the next re-bake. The menus' l
 starting weapon's swings (`setCharacterLook`), so a solo run starts with it baked.
 `getPlayerAttackSeqs` is every weapon's, for the slim cache.
 
+A weapon with a `runPose` (the Armadyl crossbow) shows each shot on the move too: the upper body
+takes that one frame of its swing, its aim, for a moment (`RUN_POSE_TICKS`) after each shot, while
+the legs go on with the run. It's baked over each of the stance's run frames
+(`PlayerBakeRequest.runPoses`, from `getHeldRunPoses`) and played on the run's timing
+(`getRunPoseFrame`), so the legs never jump however often it fires (faster with Tome of fire, and a
+swing starts again at every attack). One frame over the run is the run's few frames more per
+player. The whole swing over the run cost its frames times the run's, about three times a player's
+look for the armadyl ranger, and baking it as one timeline instead, the run from the swing's
+start, made the legs jump back to the start of a stride at every shot. Only the weapon in hand
+gets it. While the player moves, the sim records a swing (`player.attackSeq`, `attackStart`) only
+from the weapon in hand, and only if it has a run pose, so another weapon can't cut it short and
+nothing else changes: any other swing on the move still goes unrecorded, as one would otherwise
+play its end when the player stops. Standing still, every weapon's shows. It's display only, and
+in no hash. The look's weapon (`getHeldRunPoses`) and the sim's (`Sim.getHeldWeapon`) agree as
+long as nothing else is worn in the weapon slot, which a test in `GameAssets.test.ts` checks. The
+cache's attacks have no interleave order of their own (it's what the client uses to play an action
+over a walk), so they borrow eating's (`PLAYER_INTERLEAVE_SEQ`), which lists the groups the walk
+keeps: the legs and the body's root. A skeletal swing or stance, or any run frame that can't be put
+together that way, means no pose is baked and the run shows, and so does an interleave order gone
+from the cache (the swing would take the legs too).
+
 A baked animation is a posed copy of the model per frame, so what an enemy costs is its triangles
 times its frames. A skeletal animation (the Colosseum's bosses, the gryphon, the naguas) has a pose
 for every client tick, and baking each one made Varlamore's enemies several times any other map's,
@@ -1112,6 +1185,11 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   when nothing's changed. Something new that changes often goes in `HudNumbers`, and its numbers
   are rounded as they're shown (whole seconds), so they don't change when nothing on screen does.
   The bars fill with `transform: scaleX`, not `width`, which would lay the page out again.
+  `BuffView` leaves out both timer fields for an effect with no timer: the focused hero's revives
+  left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in
+  `ItemViews.ts` splits it for showing: an adventurer's own (`CharacterDef.reviveLook`, the
+  Pyromancer's phoenix) is used first, then the shop's Ring of life (its `objId`). The "saves you"
+  toast names the one used (`getUsedRevive`).
 - **The minimap** redraws 30 times a second at most, leaves out enemies off it, and draws its
   dots a colour at a time.
 - **The casket's rays** have their fade drawn into them (an SVG gradient), not a `mask-image`, which
@@ -1278,7 +1356,8 @@ and a hit can still arrive after the local picture appears to have moved clear.
   checks the same id (Hosting).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
-  run, rather than everyone waiting on a copy that can't recover.
+  run, rather than everyone waiting on a copy that can't recover. It tells the relay first
+  (`outOfStep`), for the relay's log; the host ignores it.
 - **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.
@@ -1382,6 +1461,14 @@ hard mode goes out in `GameStart`, like endless, so every player's copy plays th
 that map for a player who hadn't got there. With no accounts, a player's maps are their game's word:
 this keeps fair players fair rather than stopping a cheat.
 
+Both relays check a run's frames as they pass (`server/coop-checks.mjs`) and log what they find,
+each entry an object with `event: "coop_run_check"` (the Node relay prints each as a line of JSON).
+A Cloudflare room keeps what's been found with the room, so a restart or a sleep mid-run doesn't
+lose it.
+`MULTIPLAYER_RUN_CHECKS=end` ends a run whose host they catch, as the host leaving does. Set up
+for it, a relay also sends the run analytics collector a row for each run they find anything in
+(`server/analytics/README.md`, Run checks).
+
 A room's map, endless and hard mode are the relay's: the host's game sends `settings` and shows
 what comes back in the room update, never a pick of its own, so a refused one changes nothing. A
 host picking a map keeps endless and hard mode on only where everyone has them for it
@@ -1428,6 +1515,25 @@ each number once. Decisions have their own resend (`DECISION_RESEND_MS`). The ro
 joining or leaving, and the run starting or ending, at once and before telling anyone; other
 changes at most once a second. The Node relay sends no token, so with it a dropped connection
 still ends a guest's run.
+
+A room's connection can also die without closing (a laptop asleep, a network that went away). During
+a run `GameClient` calls `CoopLobby.keepAlive()` on each step, which pings a room that's been quiet
+for `RUN_QUIET_MS` and takes one that hasn't answered within `PONG_WAIT_MS` as dropped, coming back
+as above while the host still has the frames (about 7 seconds are left for that: past them the
+guests' runs end, as below). It doesn't judge after a gap in its own calls (a frozen page), whose
+replies may be unread. It also pings a room it's sent nothing to for `PING_INTERVAL_MS` (a guest
+standing still), since it runs off the hidden tab's worker and the regular ping doesn't. The ping
+every `PING_INTERVAL_MS` checks the connection outside a run. The Cloudflare room lets go of a
+player it's heard nothing from, not even a ping, for `SILENT_MS`, as if their connection had closed
+(the Node relay finds those with its own pings). A guest whose missing frames haven't come for
+`GIVE_UP_GAP_MS` while the host's others do ends its run (the host no longer has them); a break of
+`GAP_LATE_MS` between sightings (a frozen page) starts that wait over. A frame that fails to step
+`MAX_FAILED_STEPS` times in a row ends the run too (an error in the game; the host leaving ends it
+for everyone). A failed step has already changed the sim, so trying it again only keeps the copies
+together when every copy failed alike; the hash check finds one that didn't. The host's frames go
+out even when something after a step throws, and no time is banked for the steps it stopped. Only
+the Cloudflare relay gives a room its own connection to check; the rest is the game's, so it holds
+on either relay.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it

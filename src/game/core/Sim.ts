@@ -168,7 +168,7 @@ import {
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
-import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
@@ -1450,10 +1450,12 @@ export class Sim {
     // Enemy id -> the tick the next of its kind can go (EnemyBlinksDef.gap)
     private readonly blinkGapEnd = new Map<string, number>();
     private readonly enemyHash: SpatialHash<Enemy>;
-    // The enemies in enemyHash more than two tiles across (radius over 1), which a melee swing's
-    // search by reach can miss, their middles further off than their edges. Rebuilt with the hash,
+    // The enemies in enemyHash more than two tiles across (radius over 1), and where each went in
+    // (x then y, in turn). The hash goes by middles, so a search for what an attack touches can
+    // miss one whose edge is in range: queryTouching looks at these too. Rebuilt with the hash,
     // so one that grows mid-tick (a boss rising into a bigger form) joins it the next tick.
-    private bigEnemies: Enemy[] = [];
+    private readonly bigEnemies: Enemy[] = [];
+    private readonly bigEnemyAt: number[] = [];
     private readonly pileHash: SpatialHash<Pickup>;
     private nextUid = 1;
     // Enemies that have died or vanished so far, for Enemy.deathSeq
@@ -2862,13 +2864,18 @@ export class Sim {
     // weapon that has one (the first of them on a tie), so a Twisted bow
     // found later is wielded over the starting knives.
     getHeldObjId(): number {
-        let held = -1;
+        const weapon = this.getHeldWeapon();
+        return weapon ? (this.getLevel(weapon).objId ?? -1) : -1;
+    }
+
+    // The weapon that's in the player's hand (getHeldObjId)
+    getHeldWeapon(): WeaponState | undefined {
+        let held: WeaponState | undefined;
         let heldRarity = -1;
         for (const weapon of this.weapons) {
-            const level = this.getLevel(weapon);
             const rarity = RARITY_ORDER.indexOf(weapon.def.rarity);
-            if (level.objId !== undefined && rarity > heldRarity) {
-                held = level.objId;
+            if (this.getLevel(weapon).objId !== undefined && rarity > heldRarity) {
+                held = weapon;
                 heldRarity = rarity;
             }
         }
@@ -3742,13 +3749,36 @@ export class Sim {
 
     private rebuildEnemyHash(): void {
         this.enemyHash.clear();
-        this.bigEnemies = [];
+        this.bigEnemies.length = 0;
+        this.bigEnemyAt.length = 0;
         for (const enemy of this.enemies) {
             if (!enemy.dead && !enemy.leaving && !enemy.def.unhittable) {
                 this.enemyHash.insert(enemy);
                 if (enemy.radius > 1) {
                     this.bigEnemies.push(enemy);
+                    this.bigEnemyAt.push(enemy.x, enemy.y);
                 }
+            }
+        }
+    }
+
+    // What an attack around (x, y) that counts an enemy's own radius (a swing, an aura, a
+    // projectile) has to look at: the hash's cells out to `search`, then each big enemy in a cell
+    // those missed, whose edge can be in range while its middle is further off. Callers check the
+    // exact distance, as with the hash's own query; nothing changes on a map with no big enemy.
+    private queryTouching(
+        x: number,
+        y: number,
+        search: number,
+        callback: (enemy: Enemy) => void,
+    ): void {
+        this.enemyHash.query(x, y, search, callback);
+        const big = this.bigEnemies;
+        const at = this.bigEnemyAt;
+        for (let i = 0; i < big.length; i++) {
+            // By where it went in, as the hash has it, though it may have moved since
+            if (!this.enemyHash.visits(x, y, search, at[i * 2], at[i * 2 + 1])) {
+                callback(big[i]);
             }
         }
     }
@@ -15779,6 +15809,12 @@ export class Sim {
     }
 
     private stepWeapons(): void {
+        // On the move, only the weapon in hand's attacks are shown, and only
+        // if it has a run pose (WeaponDef.runPose): the view plays them over
+        // the run, and another weapon's would cut it short. Any other attack
+        // on the move goes unshown, as always. Only for show, so in no hash.
+        const held = this.player.moving ? this.getHeldWeapon() : undefined;
+        const posed = held?.def.runPose !== undefined ? held : undefined;
         for (const weapon of this.weapons) {
             if (weapon.cooldown > 0) {
                 weapon.cooldown--;
@@ -15810,7 +15846,7 @@ export class Sim {
                     y: this.player.y,
                 });
             }
-            if (fired && !this.player.moving) {
+            if (fired && (!this.player.moving || weapon === posed)) {
                 this.player.attackSeq = special?.playerSeq ?? weapon.def.playerSeq;
                 this.player.attackStart = this.tick;
             }
@@ -15934,27 +15970,29 @@ export class Sim {
                 arc: SLASH_ARC,
                 weaponId: def.id,
             });
-            const inSlash = (enemy: Enemy) => {
+            this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const along = ox * dirX + oy * dirY;
                 const across = Math.abs(ox * -dirY + oy * dirX);
                 if (
-                    along >= -0.3 &&
-                    along <= reach + enemy.radius &&
-                    across <= width / 2 + enemy.radius &&
-                    !hit.includes(enemy)
+                    along < -0.3 ||
+                    along > reach + enemy.radius ||
+                    across > width / 2 + enemy.radius
                 ) {
-                    hit.push(enemy);
+                    return;
                 }
-            };
-            this.enemyHash.query(player.x, player.y, reach + 1, inSlash);
-            // A big one the search by reach may not have come to (bigEnemies)
-            for (const enemy of this.bigEnemies) {
-                if (!enemy.dead) {
-                    inSlash(enemy);
+                // A big one only if its edge reaches the box: past a corner, the box widened by
+                // its radius takes in what's well clear of it
+                if (enemy.radius > 1) {
+                    const pastEnd = Math.max(0, along - reach);
+                    const pastSide = Math.max(0, across - width / 2);
+                    if (pastEnd * pastEnd + pastSide * pastSide > enemy.radius * enemy.radius) {
+                        return;
+                    }
                 }
-            }
+                hit.push(enemy);
+            });
         }
         this.meleeHits(def, level, hit, special);
     }
@@ -15991,7 +16029,7 @@ export class Sim {
                 arc,
                 weaponId: def.id,
             });
-            const inSweep = (enemy: Enemy) => {
+            this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const dist = fm.hypot(ox, oy);
@@ -16005,13 +16043,19 @@ export class Sim {
                 if (dist > 0.8 && angle > arc + enemy.radius / dist) {
                     return;
                 }
+                // A big one off to the side only if its edge reaches the arc's nearer side, a line
+                // out to reach: past the arc's far corners, the widened angle takes in what's
+                // well clear of it
+                if (enemy.radius > 1 && dist > 0.8 && angle > arc) {
+                    const sideAlong = dist * fm.cos(angle - arc);
+                    const sideOff = dist * fm.sin(angle - arc);
+                    const offLine = sideAlong - Math.max(0, Math.min(reach, sideAlong));
+                    if (offLine * offLine + sideOff * sideOff > enemy.radius * enemy.radius) {
+                        return;
+                    }
+                }
                 hit.add(enemy);
-            };
-            this.enemyHash.query(player.x, player.y, reach + 1, inSweep);
-            // A big one the search by reach may not have come to (bigEnemies)
-            for (const enemy of this.bigEnemies) {
-                inSweep(enemy);
-            }
+            });
         }
         this.meleeHits(def, level, hit, special);
     }
@@ -16038,7 +16082,7 @@ export class Sim {
             weaponId: def.id,
         });
         const hit: Enemy[] = [];
-        this.enemyHash.query(player.x, player.y, radius + 1, (enemy) => {
+        this.queryTouching(player.x, player.y, radius + 1, (enemy) => {
             if (
                 !enemy.dead &&
                 fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
@@ -16318,9 +16362,10 @@ export class Sim {
     // blocked, so aiming at them would waste shots while pests close in.
     // style: a weapon's, which leaves out what it can't hurt (an expert Nylocas of another
     // style). What isn't a weapon (thralls, the cannon, power-ups) hurts any, and passes none.
-    // edge: an enemy more than two tiles across (radius over 1) counts as nearer by its radius past
-    // a tile, as a melee weapon's reach is (fireSlash hits whatever its reach touches, so a big boss
-    // is in reach from beside it). Nothing smaller changes.
+    // edge: an enemy more than two tiles across (radius over 1) goes by a point half a tile in
+    // from its edge (about where a small one's middle is), as a melee weapon's reach does: a slash
+    // or sweep hits whatever its reach touches, so a big boss is in reach from beside it. Nothing
+    // smaller changes.
     private nearestEnemies(
         x: number,
         y: number,
@@ -16345,9 +16390,10 @@ export class Sim {
             const dx = enemy.x - x;
             const dy = enemy.y - y;
             let distSq = dx * dx + dy * dy;
-            // Over two tiles across: what's past a tile of its radius counts as in reach
+            // Over two tiles across: half a tile in from its edge. With a melee weapon's range
+            // (reach + 0.5) that's in reach just when a swing at it lands (reach + radius).
             if (edge && enemy.radius > 1) {
-                const gap = Math.max(0, Math.sqrt(distSq) - (enemy.radius - 1));
+                const gap = Math.max(0, fm.hypot(dx, dy) - (enemy.radius - 0.5));
                 distSq = gap * gap;
             }
             if (distSq <= rangeSq) {
@@ -16574,7 +16620,7 @@ export class Sim {
             spotAnim: level.projectileSpotAnim ?? -1,
             impactSpotAnim: level.impactSpotAnim ?? -1,
             hitSound: level.hitSound ?? def.hitSound,
-            objId: kind === "knife" ? (level.projectileObjId ?? level.objId ?? -1) : -1,
+            objId: getProjectileObjId(def, level) ?? -1,
             startTick: this.tick,
             ...(def.split && { split: def.split }),
         });
@@ -16799,7 +16845,7 @@ export class Sim {
         const radius = level.area * (1 + this.stats.area);
         this.emit({ type: "aura", x: player.x, y: player.y, radius });
         const hit: Enemy[] = [];
-        this.enemyHash.query(player.x, player.y, radius + 0.5, (enemy) => {
+        this.queryTouching(player.x, player.y, radius + 0.5, (enemy) => {
             if (fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
@@ -16894,7 +16940,7 @@ export class Sim {
             fire.nextTick += FIRE_INTERVAL;
             this.useHeroAt(fire.hero);
             this.damageSource = fire.source;
-            this.enemyHash.query(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
+            this.queryTouching(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
                 if (fm.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
                     this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
                 }
@@ -16933,7 +16979,7 @@ export class Sim {
             }
             const tx = target.x;
             const ty = target.y;
-            this.enemyHash.query(tx, ty, radius + 0.5, (enemy) => {
+            this.queryTouching(tx, ty, radius + 0.5, (enemy) => {
                 if (
                     enemy === target ||
                     fm.hypot(enemy.x - tx, enemy.y - ty) <= radius + enemy.radius
@@ -16990,7 +17036,7 @@ export class Sim {
             // Venom darts fly past everything but what they're aimed at, so
             // the venom spreads
             const only = projectile.venom > 0 && target ? target.uid : 0;
-            this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
+            this.queryTouching(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
                 if (
                     bounced ||
                     projectile.life <= 0 ||
@@ -17031,7 +17077,7 @@ export class Sim {
         projectile.x = player.x + fm.cos(angle) * orbit.radius;
         projectile.y = player.y + fm.sin(angle) * orbit.radius;
         projectile.yaw = yawFromVector(-fm.sin(angle), fm.cos(angle));
-        this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
+        this.queryTouching(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
             if (enemy.dead || (orbit.nextHit.get(enemy.uid) ?? 0) > this.tick) {
                 return;
             }
@@ -18026,7 +18072,7 @@ export class Sim {
         this.emit({ type: "powerUpHit", id: rock.powerUpId, x, y });
         this.addEffect(rock.spotAnim, x, y, 0, 60);
         const hit: Enemy[] = [];
-        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+        this.queryTouching(x, y, radius + 1, (enemy) => {
             if (fm.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
@@ -18172,7 +18218,7 @@ export class Sim {
     private pulseRing(ring: FairyRing): void {
         const { x, y, radius } = ring;
         const caught: Enemy[] = [];
-        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+        this.queryTouching(x, y, radius + 1, (enemy) => {
             if (
                 !enemy.boss &&
                 !enemy.def.stationary &&

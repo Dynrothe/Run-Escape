@@ -24,6 +24,7 @@ import {
     ZEBAK,
 } from "../content/tombs";
 import { EnemyDef } from "../content/types";
+import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
     Hero,
@@ -250,6 +251,24 @@ function pushCapped<T>(list: T[], item: T): void {
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
+}
+
+// How long the upper body holds a weapon's run pose after a shot on the move
+export const RUN_POSE_TICKS = 20;
+
+// A run pose's frame `attackTicks` after the shot, `moveTicks` into the run:
+// the run's own frame, so the legs go on as they were. -1 once the moment's
+// past, or if it wasn't baked over this run.
+export function getRunPoseFrame(
+    runPose: ActorAnim,
+    run: ActorAnim,
+    attackTicks: number,
+    moveTicks: number,
+): number {
+    if (attackTicks < 0 || attackTicks >= RUN_POSE_TICKS || runPose.frameCount !== run.frameCount) {
+        return -1;
+    }
+    return runPose.getFrame(moveTicks);
 }
 
 // Draws a run: everything in the sim as 3D actors, and hitsplats, health bars
@@ -544,8 +563,10 @@ export class GameView {
             }
             const anim = model.anims[0];
             const frame = anim.getFrame(tick - projectile.startTick);
-            actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
-                scale: projectile.kind === "rune" ? RUNE_SCALE : 1,
+            const look = PROJECTILE_ITEM_LOOKS[projectile.objId];
+            const yaw = (projectile.yaw + (look?.yawOffset ?? 0)) & 2047;
+            actors.draw(model, anim, frame, x, height, y, yaw, {
+                scale: look?.scale ?? (projectile.kind === "rune" ? RUNE_SCALE : 1),
             });
         }
 
@@ -1601,6 +1622,14 @@ export class GameView {
         let anim: ActorAnim;
         let frame: number;
         const attack = player.attackSeq !== -1 ? model.getAnim(player.attackSeq) : undefined;
+        const attackTicks = tick - player.attackStart;
+        const stance = this.assets.getPlayerStance(hero);
+        const run = model.getAnim(stance.run);
+        // On the move, the held weapon's aim for a moment after each shot
+        const runPose = pose.moving ? model.runPoses.get(player.attackSeq) : undefined;
+        const runPoseFrame = runPose
+            ? getRunPoseFrame(runPose, run, attackTicks, pose.moveTicks)
+            : -1;
         const reviving = sim.heroes.find((downed) => downed.revive?.hero === hero)?.revive?.ticks;
         if (look && lookModel) {
             anim = model.getAnim(pose.moving ? look.moveSeq : look.idleSeq);
@@ -1614,17 +1643,19 @@ export class GameView {
             // long as they stand there
             anim = model.getAnim(REVIVE_SEQ);
             frame = anim.getFrame(reviving);
+        } else if (runPose && runPoseFrame !== -1) {
+            anim = runPose;
+            frame = runPoseFrame;
         } else if (
             attack &&
             attack.seqId === player.attackSeq &&
             !pose.moving &&
-            tick - player.attackStart < attack.totalTicks
+            attackTicks < attack.totalTicks
         ) {
             anim = attack;
-            frame = anim.getFrame(tick - player.attackStart, false);
+            frame = anim.getFrame(attackTicks, false);
         } else {
-            const stance = this.assets.getPlayerStance(hero);
-            anim = model.getAnim(pose.moving ? stance.run : stance.idle);
+            anim = pose.moving ? run : model.getAnim(stance.idle);
             frame = anim.getFrame(pose.moveTicks);
         }
         const { x, y } = pose;

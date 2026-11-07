@@ -133,6 +133,9 @@ never crash or desync another player, or cost the maintainer money.
 - **Resends and abuse.** Who can trigger a broadcast, how often, and how big? An unthrottled resend
   can get the host disconnected and end the run for everyone. A throttle that folds every ask into
   one can let a single bad ask block the honest ones.
+- **The relays check the host's frames** (`server/coop-checks.mjs`). A change to what goes in them,
+  or to when the host sends a guest's moves or decides for them, has to agree with it there, or
+  honest hosts get caught. Its tests hold its copies of `cleanMove` and `cleanAction` to the game's.
 
 ### Cloudflare's relay
 
@@ -149,7 +152,8 @@ never crash or desync another player, or cost the maintainer money.
   waits only with `later()`, on its one alarm, never `setTimeout` or `setInterval`
   (`room.test.ts` checks).
 - **Pings are answered without waking it**, so an idle check never runs for a connection that only
-  pings, and they never reach its rate limit.
+  pings, and they never reach its rate limit. A room that needs to know when one last came (for
+  `SILENT_MS`) asks Cloudflare (`getWebSocketAutoResponseTimestamp`).
 - **Cost from strangers.** Anything an unauthenticated request can start (a Durable Object per
   room address, a call into the lobby) needs a limit or a documented rate limiting rule.
 - `wrangler` needs Node 22. Where it won't run, test the lobby and room with vitest.

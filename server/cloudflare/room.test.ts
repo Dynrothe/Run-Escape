@@ -13,6 +13,8 @@ let sockets: Socket[];
 let alarmAt: number | undefined;
 // How many of the next setAlarm calls fail
 let alarmFails: number;
+// Whether Cloudflare says when it last answered a socket's ping
+let pingTimes: boolean;
 
 // A hibernatable connection, as the room sees one
 class Socket {
@@ -22,6 +24,8 @@ class Socket {
     // Listed by getWebSockets: still so once the room's closed it, until
     // the other end answers (playerCloses), which a dead one never does
     connected = true;
+    // When Cloudflare last answered its ping without waking the room
+    pingedAt: Date | null = null;
     private attachment: any;
     constructor(private readonly who: string) {}
     serializeAttachment(value: unknown) {
@@ -40,7 +44,7 @@ class Socket {
     }
 }
 
-const env = {
+const env: Record<string, any> = {
     MULTIPLAYER_ANY_MAP: "on",
     LOBBY: {
         idFromName: (name: string) => name,
@@ -81,6 +85,9 @@ async function loadRoom(): Promise<any> {
         acceptWebSocket: (socket: Socket) => sockets.push(socket),
         getWebSockets: () => sockets.filter((socket) => socket.connected),
         setWebSocketAutoResponse: () => {},
+        ...(pingTimes && {
+            getWebSocketAutoResponseTimestamp: (socket: Socket) => socket.pingedAt,
+        }),
         blockConcurrencyWhile: (load: () => Promise<unknown>) => (ready = ready.then(load)),
     };
     const room = new Room(ctx, env);
@@ -165,6 +172,7 @@ describe("Cloudflare co-op room", () => {
         sockets = [];
         alarmAt = undefined;
         alarmFails = 0;
+        pingTimes = true;
         saved = undefined;
         writes = 0;
         listings = [];
@@ -391,6 +399,184 @@ describe("Cloudflare co-op room", () => {
         expect(back.sent.map((m: any) => m.t)).not.toContain("gone");
     });
 
+    // Time passing with some players' games pinging (answered without waking
+    // the room) every `every` ms, as a hidden tab's can slow to
+    async function pinging(room: any, ms: number, players: any[], every = 30_000) {
+        for (let t = 0; t < ms; t += every) {
+            for (const player of players) {
+                player.socket && (player.socket.pingedAt = new Date());
+            }
+            await wait(room, Math.min(every, ms - t));
+        }
+    }
+
+    it("lets go of a player it's heard nothing from for five minutes, as if they'd dropped", async () => {
+        const { room, host, guest } = await party();
+        say(room, host, { t: "start", game: {} });
+        const guestSocket = guest.socket;
+        // Their connection died without closing; the host's game pings
+        await pinging(room, 5 * 60_000, [host]);
+        expect(guestSocket.closes).toEqual([]);
+        await pinging(room, 61_000, [host]);
+        expect(guestSocket.closes).toEqual([1001]);
+        // Held for a moment, as for a closed connection, then out
+        expect(room.room.members).toHaveLength(2);
+        await pinging(room, 16_000, [host], 4000);
+        expect(room.room.members.map((m: any) => m.id)).toEqual(["host"]);
+        expect(host.socket.sent.at(-1)).toMatchObject({ t: "room" });
+        expect(host.socket.closes).toEqual([]);
+        // Coming back after that, they're told why, by the room made again too
+        const late = new Socket("guest");
+        resume(await loadRoom(), guest.token, late);
+        expect(late.sent.at(-1).message).toBe("You were away too long, so you're out of the room.");
+    });
+
+    it("doesn't tell a player let go for something else that they were away", async () => {
+        const { room, guest } = await party();
+        const guestSocket = guest.socket;
+        // Far more than the rate limit allows in a second
+        for (let i = 0; i < 500 && guest.socket; i++) {
+            say(room, guest, { t: "me" });
+        }
+        expect(guestSocket.closes).toEqual([1008]);
+        const back = new Socket("guest");
+        resume(room, guest.token, back);
+        expect(back.sent.at(-1).message).toBe("You're no longer in that room.");
+    });
+
+    it("ends the run for everyone when the host's gone quiet, not half an hour later", async () => {
+        const { room, guest } = await party();
+        const guestSocket = guest.socket;
+        await say(room, room.room.members[0], { t: "start", game: {} });
+        await pinging(room, 6 * 60_000 + 16_000, [guest]);
+        expect(guestSocket.sent.at(-1)).toMatchObject({ t: "gone", reason: "hostLeft" });
+        expect(room.room).toBeUndefined();
+    });
+
+    it("keeps players whose games only ping, once a minute, for as long as the room's going", async () => {
+        const { room, host, guest } = await party();
+        say(room, host, { t: "start", game: {} });
+        // A run with nothing sent but pings (only possible from a frozen
+        // host, which then pings too), until just before it's idle
+        await pinging(room, 29 * 60_000, [host, guest], 60_000);
+        expect(room.room.members).toHaveLength(2);
+        expect(host.socket.closes).toEqual([]);
+        expect(guest.socket.closes).toEqual([]);
+    });
+
+    it("counts what players say as hearing from them", async () => {
+        const { room, host, guest } = await party();
+        say(room, host, { t: "start", game: {} });
+        for (let i = 0; i < 12 * 10; i++) {
+            say(room, host, { t: "down", f: i });
+            say(room, guest, { t: "up", i });
+            await wait(room, 5000);
+        }
+        expect(room.room.members).toHaveLength(2);
+        expect(guest.socket.closes).toEqual([]);
+    });
+
+    it("remembers when it last heard from someone through being out of memory", async () => {
+        const { room, host, guest } = await party();
+        const guestSocket = guest.socket;
+        await pinging(room, 3 * 60_000, [host]);
+        // Made again, which mustn't start their quiet over
+        const again = await loadRoom();
+        const [h] = again.room.members;
+        await pinging(again, 2 * 60_000 + 61_000, [h]);
+        expect(guestSocket.closes).toEqual([1001]);
+    });
+
+    it("lets go of nobody for silence when it can't tell when their pings came", async () => {
+        pingTimes = false;
+        const { room, host, guest } = await party();
+        await pinging(room, 20 * 60_000, [host, guest]);
+        expect(room.room.members).toHaveLength(2);
+        expect(guest.socket.closes).toEqual([]);
+    });
+
+    it("keeps when it last heard from a player through being out of memory", async () => {
+        const { room, host, guest } = await party();
+        const guestSocket = guest.socket;
+        // The guest says something, then goes quiet; a heartbeat passes, and
+        // the room's made again
+        await pinging(room, 100_000, [host], 10_000);
+        await say(room, guest, { t: "me", ready: true });
+        await pinging(room, 30_000, [host], 10_000);
+        const again = await loadRoom();
+        const [h] = again.room.members;
+        // Five minutes from when it last heard them, not from when they joined
+        await pinging(again, 280_000, [h], 10_000);
+        expect(guestSocket.closes).toEqual([]);
+        await pinging(again, 20_000, [h], 10_000);
+        expect(guestSocket.closes).toEqual([1001]);
+    });
+
+    describe("its log", () => {
+        // What the room's logged, in order
+        function logged() {
+            return vi
+                .mocked(console.warn)
+                .mock.calls.map(([entry]) => entry)
+                .filter((entry: any) => entry?.event === "coop_room");
+        }
+        beforeEach(() => {
+            vi.spyOn(console, "warn").mockImplementation(() => {});
+        });
+        afterEach(() => {
+            vi.mocked(console.warn).mockRestore();
+        });
+
+        it("logs one line when it closes a room as idle, with what it knew", async () => {
+            const { room, host, guest } = await party();
+            say(room, host, { t: "start", game: {} });
+            room.room.endless = true;
+            // Thrown away: unreadable, and from a connection it's done with
+            await room.webSocketMessage(host.socket, "not json");
+            await room.webSocketMessage(host.socket, "not json either");
+            const old = guest.socket;
+            const back = new Socket("guest");
+            resume(room, guest.token, back);
+            await room.webSocketMessage(old, JSON.stringify({ t: "up", i: 1 }));
+            // Saved within a second, so the room made again still has them
+            await wait(room, 1000);
+            const again = await loadRoom();
+            // Everyone's games ping, and nothing else
+            await pinging(again, 31 * 60_000, [host, guest]);
+            const entries = logged();
+            expect(entries).toHaveLength(1);
+            const [entry] = entries;
+            expect(entry).toMatchObject({
+                kind: "idle",
+                room: "ABCDEFGH",
+                started: true,
+                endless: true,
+                strays: 1,
+            });
+            expect(entry.quietFor).toBeGreaterThan(30 * 60_000);
+            expect(entry.players).toEqual([
+                expect.objectContaining({
+                    id: "host",
+                    host: true,
+                    connected: true,
+                    discarded: { unreadable: 2 },
+                }),
+                expect.objectContaining({ id: "guest", host: false, discarded: null }),
+            ]);
+            expect(entry.players[0].pingedAgo).toBeLessThanOrEqual(30_000);
+            expect(entry.players[0].heardAgo).toBeGreaterThan(30 * 60_000);
+            expect(back.sent.at(-1)).toMatchObject({ t: "gone", reason: "idle" });
+        });
+
+        it("logs nothing for a player let go for silence, nor a busy run", async () => {
+            const { room, host } = await party();
+            say(room, host, { t: "start", game: {} });
+            await pinging(room, 7 * 60_000, [host]);
+            expect(room.room.members).toHaveLength(1);
+            expect(logged()).toEqual([]);
+        });
+    });
+
     it("doesn't take a connection it's closed for its player's, once it's made again", async () => {
         const { room, guest } = await party();
         // Their game comes back while the old connection's open but dead
@@ -439,5 +625,171 @@ describe("Cloudflare co-op room", () => {
         await wait(room, 10_000);
         expect(socket.closes).toEqual([1008]);
         warn.mockRestore();
+    });
+
+    describe("run checks", () => {
+        let warn: any;
+        beforeEach(() => {
+            warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        });
+        afterEach(() => {
+            warn.mockRestore();
+            delete env.MULTIPLAYER_RUN_CHECKS;
+        });
+        // What the run checks logged: an object each, which Workers Logs keeps
+        // field by field
+        const checked = () =>
+            warn.mock.calls
+                .map(([entry]: [any]) => entry)
+                .filter((entry: any) => entry?.event === "coop_run_check");
+        const heroes = [{ id: "host" }, { id: "guest" }];
+        // Frames giving the guest a move they never sent
+        const forged = (room: any, host: any, frame: number) =>
+            say(room, host, {
+                t: "down",
+                d: { upTo: frame, events: [{ frame, hero: 1, move: [127, 0] }] },
+            });
+
+        it("logs a host's frames giving a guest moves they didn't send, and goes on", async () => {
+            const { room, host, guest } = await party();
+            say(room, host, { t: "start", game: { heroes } });
+            say(room, guest, { t: "up", d: { move: [0, 127] } });
+            say(room, host, {
+                t: "down",
+                d: { upTo: 1, events: [{ frame: 1, hero: 1, move: [0, 127] }] },
+            });
+            expect(checked()).toEqual([]);
+            for (let frame = 2; frame <= 5; frame++) {
+                forged(room, host, frame);
+            }
+            expect(checked()[0]).toMatchObject({
+                kind: "move",
+                room: "ABCDEFGH",
+                host: "host",
+                guest: "guest",
+                hero: 1,
+                frame: 2,
+                move: [127, 0],
+                sent: [[0, 127]],
+            });
+            expect(guest.socket.sent.at(-1)).toMatchObject({ t: "down", d: { upTo: 5 } });
+            expect(room.room.started).toBe(true);
+            // And sums it up when the run's over
+            say(room, host, { t: "end" });
+            expect(checked().at(-1)).toMatchObject({
+                kind: "summary",
+                counts: { move: 4 },
+                caught: "move",
+            });
+        });
+
+        it("sends the collector a row for the run, through its binding, after a restart too", async () => {
+            const sent: any[] = [];
+            env.RUN_CHECKS_TOKEN = "a-relay-token-that-is-long-enough-to-use";
+            env.RUN_CHECKS = {
+                fetch: async (url: string, init: any) => {
+                    sent.push({ url, auth: init.headers.Authorization, ...JSON.parse(init.body) });
+                    return { ok: true, status: 200 };
+                },
+            };
+            try {
+                const { room, host } = await party();
+                room.room.mapId = "barrows";
+                room.room.hard = true;
+                // The room's map and mode go in the row, whatever the start says
+                const game = {
+                    mapId: "lumbridge",
+                    hard: false,
+                    endless: false,
+                    heroes: [
+                        { id: "host", characterId: "wizard" },
+                        { id: "guest", characterId: "ranger" },
+                    ],
+                };
+                say(room, host, { t: "start", game });
+                // An honest run sends nothing
+                say(room, host, { t: "end" });
+                expect(sent).toEqual([]);
+                say(room, host, { t: "start", game });
+                // Found before the restart as well as after it
+                forged(room, host, 40);
+                await wait(room, 1000);
+                const again = await restart();
+                const [h, g] = again.room.members;
+                resume(again, h.token, new Socket("host"));
+                resume(again, g.token, new Socket("guest"));
+                // Checked again once the frames since the restart can be
+                say(again, h, { t: "down", d: { upTo: 60, events: [] } });
+                await wait(again, 26_000);
+                forged(again, h, 1360);
+                say(again, h, { t: "end" });
+                await Promise.resolve();
+                expect(sent).toEqual([
+                    expect.objectContaining({
+                        url: expect.stringMatching(/\/v1\/run-checks$/),
+                        auth: `Bearer ${env.RUN_CHECKS_TOKEN}`,
+                        relay: "cloudflare",
+                        mapId: "barrows",
+                        mode: "hard",
+                        partySize: 2,
+                        characters: ["ranger", "wizard"],
+                        counts: { move: 2 },
+                        caught: null,
+                        ended: false,
+                    }),
+                ]);
+                // Neither names nor the room
+                expect(JSON.stringify(sent)).not.toMatch(/ABCDEFGH|"host"|"guest"/);
+            } finally {
+                delete env.RUN_CHECKS;
+                delete env.RUN_CHECKS_TOKEN;
+            }
+        });
+
+        it("ends the run when it's set to", async () => {
+            env.MULTIPLAYER_RUN_CHECKS = "end";
+            const { room, host, guest } = await party();
+            const guestSocket = guest.socket;
+            say(room, host, { t: "start", game: { heroes } });
+            for (let frame = 1; frame <= 3; frame++) {
+                forged(room, host, frame);
+            }
+            expect(guestSocket.sent.at(-1)).toMatchObject({ t: "gone", reason: "hostLeft" });
+        });
+
+        it("doesn't take what it can't know after a restart for the host's word", async () => {
+            const { room, host } = await party();
+            say(room, host, { t: "start", game: { heroes } });
+            await wait(room, 1000);
+            // Cloudflare restarting it, as a deploy does: everyone comes back
+            const again = await restart();
+            const [h, g] = again.room.members;
+            resume(again, h.token, new Socket("host"));
+            resume(again, g.token, new Socket("guest"));
+            // Frames the host held through it carry a move from before
+            forged(again, h, 100);
+            await wait(again, 20_000);
+            forged(again, h, 1100);
+            expect(checked()).toEqual([]);
+            // Then it checks again, as it kept who the heroes are
+            await wait(again, 6000);
+            forged(again, h, 1500);
+            expect(checked()).toHaveLength(1);
+        });
+
+        it("leaves a run that began before the room kept its heroes alone", async () => {
+            const { room, host } = await party();
+            say(room, host, { t: "start", game: { heroes } });
+            // As one saved by the relay before this one was deployed
+            delete saved.heroIds;
+            const again = await loadRoom();
+            const [h, g] = again.room.members;
+            await wait(again, 30_000);
+            for (let frame = 1; frame <= 5; frame++) {
+                forged(again, h, frame);
+            }
+            expect(checked()).toEqual([]);
+            expect(g.socket.sent.at(-1)).toMatchObject({ t: "down", d: { upTo: 5 } });
+        });
     });
 });

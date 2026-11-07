@@ -1,4 +1,4 @@
-import { CombatStyle, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
+import { CombatStyle, ProjectileItemLook, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
 
 // Builds a weapon's level table from its first level and what each later level
 // changes, so each level only states its differences.
@@ -27,6 +27,20 @@ const SHORTBOWS = [841, 843, 849, 853, 857, 861];
 const ARROWS = { bronze: 10, iron: 9, steel: 11, black: 14, mithril: 12, adamant: 13, rune: 15 };
 // Darts in flight: the metals recolour one model, and dragon has its own
 const DART_PROJECTILES = { bronze: 226, steel: 228, mithril: 229, rune: 231, dragon: 1122 };
+// Bolts in flight, as the items: the metals' flight graphic is the same for most of them
+const BOLT_PROJECTILES = { bronze: 877, steel: 9141, mithril: 9142, runite: 9144, dragon: 21905 };
+const ATLATL_DART = 28991;
+
+// Items whose models need help in flight. Bolts and knives point back the way they
+// fly, and the atlatl's dart lies at a slant in its model; bolts are a few pixels
+// across from the game's camera too.
+const BOLT_LOOK: ProjectileItemLook = { scale: 3, yawOffset: 1024 };
+export const PROJECTILE_ITEM_LOOKS: Partial<Record<number, ProjectileItemLook>> = {
+    ...Object.fromEntries(Object.values(BOLT_PROJECTILES).map((objId) => [objId, BOLT_LOOK])),
+    ...Object.fromEntries(KNIVES.map((objId) => [objId, { yawOffset: 1024 }])),
+    [ATLATL_DART]: { yawOffset: 812 },
+};
+
 // Bronze to rune, then dragon
 const THROWNAXES = [800, 801, 802, 803, 804, 805, 20849, 20849];
 // Thrownaxes in flight, spinning: one model the metals recolour, and the
@@ -2029,8 +2043,7 @@ export const WEAPONS: WeaponDef[] = [
                 duration: 0,
                 knockback: 0.5,
                 objId: 21012,
-                // A crossbow bolt
-                projectileSpotAnim: 27,
+                projectileObjId: BOLT_PROJECTILES.dragon,
             },
             { damage: 18, description: "+3 damage." },
             { amount: 2, description: "Fires one more bolt." },
@@ -2046,6 +2059,8 @@ export const WEAPONS: WeaponDef[] = [
             "Fires bolts at the nearest enemy that pass through it. One in five is enchanted: a ruby's takes a fifth of what's left of its hitpoints, a diamond's goes on through more, a dragonstone's burns.",
         iconObjId: 11785,
         playerSeq: 4230,
+        // Aimed, the bolt loosed: the frame that reaches out furthest, and holds longest
+        runPose: 7,
         sound: 2707,
         hitSound: -1,
         rarity: "rare",
@@ -2084,13 +2099,28 @@ export const WEAPONS: WeaponDef[] = [
                 duration: 0,
                 knockback: 0.4,
                 objId: 11785,
-                // A crossbow bolt
-                projectileSpotAnim: 27,
+                projectileObjId: BOLT_PROJECTILES.bronze,
             },
-            { damage: 18, description: "+3 damage." },
-            { amount: 2, description: "Fires one more bolt." },
-            { cooldown: 0.85, description: "Fires a little faster." },
-            { damage: 23, description: "+5 damage." },
+            {
+                projectileObjId: BOLT_PROJECTILES.steel,
+                damage: 18,
+                description: "Steel bolts. +3 damage.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.mithril,
+                amount: 2,
+                description: "Mithril bolts. Fires one more bolt.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.runite,
+                cooldown: 0.85,
+                description: "Runite bolts. Fires a little faster.",
+            },
+            {
+                projectileObjId: BOLT_PROJECTILES.dragon,
+                damage: 23,
+                description: "Dragon bolts. +5 damage.",
+            },
         ),
         unlock: { kind: "killBoss", mapId: "god_wars", enemyId: "kreearra" },
     },
@@ -2183,8 +2213,7 @@ export const WEAPONS: WeaponDef[] = [
                 venom: 2,
                 knockback: 0.2,
                 objId: 29000,
-                // Atlatl darts
-                projectileObjId: 28991,
+                projectileObjId: ATLATL_DART,
             },
             { venom: 3, description: "Burns hotter: 3 damage a second." },
             { amount: 3, description: "Throws one more dart." },
@@ -2677,6 +2706,12 @@ export function getWeapon(id: string): WeaponDef {
         throw new Error("Unknown weapon " + id);
     }
     return weapon;
+}
+
+// The item a weapon's shots fly as at this level, when they're drawn as one: its
+// projectile item, or a knife's the one in hand. Both the sim and what's baked use it.
+export function getProjectileObjId(weapon: WeaponDef, level: WeaponLevel): number | undefined {
+    return level.projectileObjId ?? (weapon.kind === "knives" ? level.objId : undefined);
 }
 
 // The style a weapon's hits count as (see WeaponDef.damageStyle)

@@ -1443,8 +1443,8 @@ export type WeaponLevel = {
     description: string;
     // Item shown in the player's hand at this level
     objId?: number;
-    // Knives: the item that flies when it isn't the one held (the atlatl's
-    // darts)
+    // Item drawn in flight instead of a spot animation (bolts, or the atlatl's darts).
+    // Knives default to the held item when this isn't set.
     projectileObjId?: number;
     // Sounds at this level, overriding the weapon's (spells sound different
     // as they upgrade)
@@ -1457,6 +1457,15 @@ export type WeaponLevel = {
     name?: string;
 };
 
+// How an item is drawn in flight when its cache model needs help, whichever
+// weapon throws it (PROJECTILE_ITEM_LOOKS). Drawing only: hit sizes stay as they are.
+export type ProjectileItemLook = {
+    // Drawn this much bigger, for a model too small to see from the game's camera
+    scale?: number;
+    // Turned this far (2048 is a full turn), for a model that doesn't point the way it flies
+    yawOffset?: number;
+};
+
 export type WeaponDef = {
     id: string;
     name: string;
@@ -1466,6 +1475,11 @@ export type WeaponDef = {
     iconObjId: number;
     // Player animation when used (played while standing still)
     playerSeq: number;
+    // A frame of playerSeq (its aim) that the upper body takes for a moment
+    // after each attack on the move, over the run's legs, while it's the
+    // weapon in hand: so a shot can be seen while kiting. One frame, baked
+    // over each of the run's, rather than the whole swing over all of them.
+    runPose?: number;
     // Cache sound effect when used, and when it hits (-1 for none)
     sound: number;
     hitSound: number;
@@ -1670,6 +1684,9 @@ export type CharacterDef = {
     kits?: number[];
     colors?: number[];
     bonus: Partial<Stats>;
+    // A revive of their own (bonus.revival) as the HUD shows it, beside the
+    // shop's Ring of life: the Pyromancer's phoenix
+    reviveLook?: { name: string; objId: number };
     // Always available when unset
     unlock?: UnlockTask;
     // Played on this map alone (a boss fight's, MapDef.fight.character), and
@@ -1687,6 +1704,8 @@ export type ShopUpgradeDef = {
     perRank: number;
     maxRank: number;
     baseCost: number;
+    // The item it's themed as, for one the HUD shows while it lasts (Ring of life)
+    objId?: number;
 };
 
 export type WaveDef = {

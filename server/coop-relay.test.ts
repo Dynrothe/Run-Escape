@@ -481,6 +481,66 @@ describe("co-op relay", () => {
         expect((await host.next("left")).id).toBe(room.members[1].id);
     });
 
+    it("logs a host's frames the run checks catch, and ends the run only when set to", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            for (const endCaughtRuns of [false, true]) {
+                // What it sends the run analytics collector
+                const rows: any[] = [];
+                await restart({ endCaughtRuns, reportCheck: (row: any) => rows.push(row) });
+                warn.mockClear();
+                const { host, guests } = await party(1);
+                const { room } = await host.room();
+                const heroes = room.members.map((m: any) => ({
+                    id: m.id,
+                    characterId: "wizard",
+                }));
+                // The room's map goes in the row, whatever the start says
+                host.send({ t: "start", game: { mapId: "barrows", hard: true, heroes } });
+                await guests[0].next("start");
+                // Moves the guest never sent
+                for (let frame = 1; frame <= 3; frame++) {
+                    host.send({
+                        t: "down",
+                        d: { upTo: frame, events: [{ frame, hero: 1, move: [127, 0] }] },
+                    });
+                    await guests[0].next("down");
+                }
+                // One line of JSON each
+                const logged = warn.mock.calls.map(([line]: [string]) => JSON.parse(line));
+                expect(logged[0]).toMatchObject({
+                    event: "coop_run_check",
+                    kind: "move",
+                    room: room.code,
+                    hero: 1,
+                    move: [127, 0],
+                });
+                expect(logged.map((entry: any) => entry.kind)).toContain("caught");
+                if (endCaughtRuns) {
+                    expect((await guests[0].next("gone")).reason).toBe("hostLeft");
+                } else {
+                    host.send({ t: "down", d: { upTo: 4, events: [] } });
+                    expect((await guests[0].next("down")).d.upTo).toBe(4);
+                    expect(rows).toEqual([]);
+                    host.send({ t: "end" });
+                }
+                await vi.waitFor(() => expect(rows).toHaveLength(1));
+                expect(rows[0]).toMatchObject({
+                    relay: "node",
+                    mapId: "lumbridge",
+                    mode: "normal",
+                    partySize: 2,
+                    characters: ["wizard", "wizard"],
+                    counts: { move: 3 },
+                    caught: "move",
+                    ended: endCaughtRuns,
+                });
+            }
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it("takes big messages in one piece", async () => {
         const { host, guests } = await party(1);
         const loadout = { items: "x".repeat(70_000) };
@@ -621,6 +681,12 @@ describe("co-op relay", () => {
                 coop_runs_started_total: 0,
                 coop_players_connected_peak: 0,
                 coop_rooms_peak: 0,
+                coop_run_check_ahead_total: 0,
+                coop_run_check_move_total: 0,
+                coop_run_check_action_total: 0,
+                coop_run_check_auto_total: 0,
+                coop_run_check_desync_total: 0,
+                coop_run_check_hosts_caught_total: 0,
                 coop_connections_limit: 800,
                 coop_rooms_limit: 500,
             });
@@ -630,13 +696,7 @@ describe("co-op relay", () => {
             // HELP, TYPE and the sample for each
             expect(lines).toHaveLength(Object.keys(values).length * 3);
             for (const name of Object.keys(values)) {
-                const type = [
-                    "coop_connections_total",
-                    "coop_rooms_created_total",
-                    "coop_runs_started_total",
-                ].includes(name)
-                    ? "counter"
-                    : "gauge";
+                const type = name.endsWith("_total") ? "counter" : "gauge";
                 const sampleLine = lines.indexOf(`${name} ${values[name]}`);
                 expect(lines[sampleLine - 1]).toBe(`# TYPE ${name} ${type}`);
                 expect(lines[sampleLine - 2]).toMatch(new RegExp(`^# HELP ${name} .+$`));

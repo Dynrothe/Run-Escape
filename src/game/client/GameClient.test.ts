@@ -199,6 +199,95 @@ describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
         (client as unknown as { updateHud(force: boolean): void }).updateHud.call(client, force);
 
+    test.each([undefined, 0, 1])(
+        "shows only the focused hero's unspent ring of life (focus %s)",
+        (focus) => {
+            const sim = createSim(focus);
+            const { client, store } = createClient(sim, false);
+            for (const hero of sim.heroes) {
+                hero.revivesLeft = hero.index === sim.focus ? 0 : 1;
+            }
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+            sim.revivesLeft = 1;
+            updateHud(client, true);
+            const buffs = store.getNumbers()!.buffs;
+            expect(buffs).toEqual([
+                { id: "ring_of_life", name: "Ring of life", objId: 2570, harmful: false },
+            ]);
+            sim.tick += 50;
+            updateHud(client);
+            expect(store.getNumbers()!.buffs).toBe(buffs);
+            sim.player.invulnerable = 0;
+            sim["damagePlayer"](99999, "goblin", false);
+            expect(sim.revivesLeft).toBe(0);
+            updateHud(client, true);
+            expect(store.getNumbers()!.buffs).toEqual([]);
+        },
+    );
+
+    // The Pyromancer's own revive is theirs, not a ring of life, and goes first
+    test.each([0, 1])("shows the Pyromancer's phoenix apart from %s ring of life", (rings) => {
+        const metaStats = emptyStats();
+        metaStats.revival = rings;
+        const party = ["warrior", "pyromancer"].map((characterId) => ({
+            name: characterId,
+            characterId,
+            metaStats,
+        }));
+        const row = ".".repeat(72);
+        const sim = new Sim({
+            grid: makeGrid(Array(72).fill(row), 1000, 1000),
+            mapId: "lumbridge",
+            characterId: "pyromancer",
+            metaStats,
+            seed: 5,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party,
+            focus: 1,
+        });
+        const { client, store } = createClient(sim, false);
+        const handleEvents = (
+            client as unknown as { handleEvents(sim: Sim, events: unknown[]): void }
+        ).handleEvents;
+        const shown = () => store.getNumbers()!.buffs.map((buff) => buff.name);
+        const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
+        const die = (hero: number) => {
+            sim["as"](hero, () => {
+                sim.player.invulnerable = 0;
+                sim["damagePlayer"](99999, "goblin", false);
+            });
+            handleEvents.call(client, sim, sim.takeEvents());
+            updateHud(client, true);
+        };
+        updateHud(client, true);
+        expect(shown()).toEqual(rings ? ["Phoenix", "Ring of life"] : ["Phoenix"]);
+        die(1);
+        expect(shown()).toEqual(rings ? ["Ring of life"] : []);
+        if (rings) {
+            die(1);
+            expect(shown()).toEqual([]);
+        }
+        // A teammate's toast names theirs, and the warrior's ring isn't the HUD's
+        sim.heroes[0].revivesLeft = 1;
+        die(0);
+        expect(shown()).toEqual([]);
+        expect(toasts()).toEqual([
+            "Your phoenix saves you!",
+            ...(rings ? ["Your ring of life saves you!"] : []),
+            "warrior's ring of life saves them!",
+        ]);
+    });
+
+    test("every adventurer with a revive of their own has a look for it", () => {
+        for (const character of CHARACTERS) {
+            if (character.bonus.revival) {
+                expect(character.reviveLook, character.id).toBeDefined();
+            }
+        }
+    });
+
     test.each([
         [0, "boss"],
         [1, "boss"],
@@ -822,6 +911,123 @@ describe("auto equip", () => {
         expect(messages).toHaveLength(1);
         expect(store.getSnapshot().chest?.item.id).toBe("climbing_boots");
         expect(store.getSnapshot().overlay).toBe("chest");
+    });
+});
+
+describe("a co-op run that breaks", () => {
+    // The client mid-run with a stand-in for the run, as updateCoop drives it
+    function coopClient(run: Partial<Record<string, unknown>>) {
+        const sim = createSim(0);
+        const { client, store } = createClient(sim, false);
+        const coop = { keepAlive: vi.fn(), leave: vi.fn() };
+        const finishRun = vi.fn();
+        const flush = vi.fn();
+        const stepFrame = vi.fn(() => []);
+        const fake = {
+            isHost: true,
+            behind: 0,
+            stuck: false,
+            cantCatchUp: false,
+            desynced: false,
+            canStep: () => true,
+            setMove() {},
+            flush,
+            stepFrame,
+            ...run,
+        };
+        Object.assign(client, {
+            coop,
+            coopRun: fake,
+            coopStopped: false,
+            accumulator: 0,
+            input: { getMoveVector: (into: { x: number; y: number }) => into },
+            move: { x: 0, y: 0 },
+            finishRun,
+            updateHud() {},
+        });
+        const update = (ms = TICK_MS * 2) =>
+            (
+                client as unknown as {
+                    updateCoop(ms: number, sim: Sim, run: unknown): void;
+                }
+            ).updateCoop(ms, sim, fake);
+        return { client, store, coop, finishRun, flush, stepFrame, update };
+    }
+
+    it("sends the host's frames even when something after a step throws", () => {
+        const { client, flush, stepFrame, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        expect(update).toThrow("a bug in what's drawn");
+        expect(stepFrame).toHaveBeenCalledOnce();
+        expect(flush).toHaveBeenCalledOnce();
+    });
+
+    it("keeps no time back to make up when something after a step throws", () => {
+        const { client, update } = coopClient({});
+        Object.assign(client, {
+            handleEvents() {
+                throw new Error("a bug in what's drawn");
+            },
+        });
+        // A slow frame's worth of steps due, and only one taken
+        expect(() => update(TICK_MS * 8)).toThrow("a bug in what's drawn");
+        expect((client as unknown as { accumulator: number }).accumulator).toBeLessThanOrEqual(
+            TICK_MS,
+        );
+    });
+
+    it("steps nothing once checking the room's connection has lost it", () => {
+        const { client, coop, stepFrame, flush, update } = coopClient({});
+        // The connection found dead and the room given up on, which ends the run
+        coop.keepAlive.mockImplementation(() =>
+            Object.assign(client, { coopRun: undefined, coopStopped: true }),
+        );
+        update();
+        expect(stepFrame).not.toHaveBeenCalled();
+        expect(flush).not.toHaveBeenCalled();
+    });
+
+    it("checks the room's connection on every update", () => {
+        const { coop, update } = coopClient({ canStep: () => false });
+        update();
+        update();
+        expect(coop.keepAlive).toHaveBeenCalledTimes(2);
+    });
+
+    it("ends a run whose frame won't step, and leaves the room, which ends it for everyone", () => {
+        const { client, coop, finishRun, stepFrame, update } = coopClient({ stuck: true });
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect(finishRun).toHaveBeenCalledWith("Something went wrong in the run, so it ended.");
+        expect(stepFrame).not.toHaveBeenCalled();
+        // And it's over: nothing more's stepped, and it doesn't leave again
+        update();
+        expect(coop.leave).toHaveBeenCalledOnce();
+        expect((client as unknown as { coopStopped: boolean }).coopStopped).toBe(true);
+    });
+
+    it("tells a guest that can't catch up why, on its results or, if they're up, a toast", () => {
+        const behind = coopClient({ isHost: false, cantCatchUp: true });
+        behind.update();
+        expect(behind.coop.leave).toHaveBeenCalledOnce();
+        expect(behind.finishRun).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+        );
+
+        // Their hero's run was over already, so its results are showing
+        const spectating = coopClient({ isHost: false, cantCatchUp: true });
+        Object.assign(spectating.client, { runRecorded: true });
+        const toast = vi.spyOn(spectating.store, "toast");
+        spectating.update();
+        expect(spectating.coop.leave).toHaveBeenCalledOnce();
+        expect(toast).toHaveBeenCalledWith(
+            "Your connection dropped for too long to catch up, so your run ended.",
+            6000,
+        );
     });
 });
 

@@ -10,16 +10,47 @@ the version in the corner).
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.
+- Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
+  it saves you, and the Pyromancer's own revive shows as a phoenix.
 
 ### Changed
 
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
+- The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
+  levels.
+- The Dragon hunter crossbow fires the same clearer bolts: dragon bolts.
+- Co-op's out-of-step message, by trippy22: a guest whose game stops matching the host's is now
+  told an integrity check failed.
+- Cheat checks on co-op relays, by trippy22: a relay can note a run its checks flag, with no
+  names, whether or not Share run stats is on. The setting now says so.
+- Preparing game updates, by Deivid Smarzaro: quicker, since only what changed is read from the
+  game's cache again.
+- The release page, by trippy22: the Windows and Android downloads are linked at the top, above
+  the long list of the game's files.
+- Theatre of Blood, by Okaeri: the Nylocas are slower, and half as many come in their hall before
+  Nylocas Vasilias: there were too many to fight through.
 
 ### Fixed
 
+- Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.
+- Co-op could freeze for half an hour when a connection died without closing (a network that
+  dropped, a laptop asleep). Your game now notices within seconds and reconnects, and a player
+  who's gone silent is dropped after about five minutes. Fixed by trippy22.
+- A co-op run that can't go on (a guest too far behind to catch up, or an error in the game) ends
+  with a message instead of freezing everyone. Fixed by trippy22.
+- The Armadyl crossbow shows each shot while you run, not only when you stand still: your
+  adventurer aims it for a moment as the legs keep running. Fixed by trippy22.
 - Melee weapons swing at a big enemy (more than two tiles across) from beside it, as they hit
-  it: they waited for its middle to come into reach. Fixed by Okaeri.
+  it: they waited for its middle to come into reach. Auras, spells, arrows and the rest hit its
+  edge every time too, not only some of the time. Fixed by Okaeri.
+- Scenery made of overlapping pieces, like the God Wars entrance rock, blocks less of the empty
+  ground round its base. Fixed by Deivid Smarzaro.
+- Xarpus's exhumeds are smothered as you step on them, rather than after a second's stand, and one
+  you miss heals him less: in threes, they got through faster than anyone could reach them. Fixed
+  by Okaeri.
+- The results screen and the map screen's Enter button say Expert for a Theatre of Blood run on
+  expert mode, not Hard. Fixed by Okaeri.
 - A casket carried into the next room of the Theatre of Blood could be set down in a wall, out of
   reach. Fixed by Okaeri.
 
@@ -118,18 +149,18 @@ the version in the corner).
   beaten: a trial in the Owl's Court, hung in the Hallowed Sepulchre's dark, where the court
   itself is his weapon. You play the Saradominist, with Saradomin Strike, which only reaches him
   from close by. With its own track, Blade of Forgotten Justice.
-  - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
-    him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
-    for a few seconds after, as he'll tell you).
-  - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
-    a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
-    early still lands.
-  - Each phase has its own full health bar.
-  - His gaze lights up the court, and the pillars' shadows are where it can't see you.
-  - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
-    slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
-    a burst of light as he kneels, and a ring across the court as he rises.
-  - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
+    - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
+      him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
+      for a few seconds after, as he'll tell you).
+    - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
+      a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
+      early still lands.
+    - Each phase has its own full health bar.
+    - His gaze lights up the court, and the pillars' shadows are where it can't see you.
+    - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
+      slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
+      a burst of light as he kneels, and a ring across the court as he rises.
+    - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
 - A Screen shake setting, on unless your system asks for less motion.
 - Retry on a boss fight's results, to go straight into it again.
 
@@ -163,31 +194,31 @@ the version in the corner).
   than every few seconds.
 - The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
 - The Theatre of Blood's bosses, by Okaeri: each one a real fight, with a mechanic of its own.
-  - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
-    Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
-    Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
-  - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
-    bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
-  - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
-    to 1s.
-  - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
-    attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
-    one marked on the ground first.
-  - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
-    round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
-  - Hard and expert mode fire half as many bullets again, with the space between them as wide:
-    spreads fan out wider, and rings with no way through stay as they are.
-  - The raid's green and blue Nylocas shoot from range, Verzik's too.
-  - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
-    fight is worth as much as a quick early one.
-  - The Theatre is brighter, the woods outside Canifis most of all.
+    - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
+      Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
+      Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
+    - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
+      bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
+    - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
+      to 1s.
+    - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
+      attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
+      one marked on the ground first.
+    - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
+      round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
+    - Hard and expert mode fire half as many bullets again, with the space between them as wide:
+      spreads fan out wider, and rings with no way through stay as they are.
+    - The raid's green and blue Nylocas shoot from range, Verzik's too.
+    - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
+      fight is worth as much as a quick early one.
+    - The Theatre is brighter, the woods outside Canifis most of all.
 - Expert mode in the Theatre of Blood, by Okaeri:
-  - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
-    Vasilias turns to a colour its weapon can't hurt.
-  - The Maiden's Nylocas feed her more.
-  - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
-    can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
-  - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
+    - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
+      Vasilias turns to a colour its weapon can't hurt.
+    - The Maiden's Nylocas feed her more.
+    - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
+      can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
+    - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
 - The Theatre of Blood's weapons come from its chest, by Okaeri: a Ghrazi rapier in the chest
   unlocks the rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which
   unlocks the Holy Scythe. Beating the raid no longer unlocks them. Weapons already unlocked stay
@@ -231,16 +262,16 @@ the version in the corner).
 - Raids, by Okaeri: the Theatre of Blood, a new section on the map screen. Six rooms one after
   another, each with its own waves and then its boss in its real room from OSRS, fought as a
   bullet hell. It's a melee raid: its bosses take far less from missiles and magic.
-  - Raid points for each room, more for a fast, clean kill: they pay coins, buy food and potions from
-    a supply chest between rooms, and better your chance of a purple from the chest at the end.
-  - The Theatre's uniques for the Collection log, Lil' Zik, and two weapons: the Ghrazi rapier for
-    beating it, and the Holy Scythe of Vitur for beating it on hard.
-  - The raid runs through Morytania: each room fights its waves in a real place, from the woods
-    outside Canifis to Vampyrium. Bones and coins left on a hall floor go with you to its boss.
-  - Teleporters: once you've killed a room's boss, its hall has a portal straight to it (three a raid),
-    to get back to the boss you're learning quicker.
-  - Beat the raid on hard for expert mode, with more of the real raid's mechanics, twice the coins
-    and Lil' Zik's looks.
+    - Raid points for each room, more for a fast, clean kill: they pay coins, buy food and potions from
+      a supply chest between rooms, and better your chance of a purple from the chest at the end.
+    - The Theatre's uniques for the Collection log, Lil' Zik, and two weapons: the Ghrazi rapier for
+      beating it, and the Holy Scythe of Vitur for beating it on hard.
+    - The raid runs through Morytania: each room fights its waves in a real place, from the woods
+      outside Canifis to Vampyrium. Bones and coins left on a hall floor go with you to its boss.
+    - Teleporters: once you've killed a room's boss, its hall has a portal straight to it (three a raid),
+      to get back to the boss you're learning quicker.
+    - Beat the raid on hard for expert mode, with more of the real raid's mechanics, twice the coins
+      and Lil' Zik's looks.
 - Phosani's Nightmare: a boss fight on its own, open once Hallowed Night's beaten. One fight in
   the Sisterhood Sanctuary under Slepe, with no waves, picks or items: everything The Nightmare
   has, quicker, plus bullet hell patterns, eggs that hatch parasites and husks that hold you where
