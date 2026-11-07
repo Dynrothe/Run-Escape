@@ -2511,9 +2511,9 @@ describe("Kephri", () => {
     const DEF = getEnemy("kephri").boss!.kephri!;
     // Well south of her, out of everything's way
     const SOUTH = { x: 1036.5, y: 1030.5 };
-    function atKephri(invocations: string[] = [], seed = 3): Sim {
+    function atKephri(invocations: string[] = [], seed = 3, rows = field()): Sim {
         const sim = new Sim({
-            grid: makeGrid(field(), 1000, 1000),
+            grid: makeGrid(rows, 1000, 1000),
             mapId: TEST_KEPHRI.id,
             characterId: "warrior",
             metaStats: emptyStats(),
@@ -2706,6 +2706,30 @@ describe("Kephri", () => {
         expect(sim.player.y).toBeLessThan(1038.5 - (DEF.dung.knock - 1));
         expect(sim.player.frozen).toBeGreaterThan(0);
         expect(sim.tombsCover.some((pile) => pile.look === "loc:" + DEF.dung.pileLoc)).toBe(true);
+    });
+
+    it("stops Dung Strike's throw at a wall on a tile's edge, as her arena's sides are", () => {
+        // A wall along the north edge of the tiles at y 1036: between the player and where the
+        // throw would land, with no solid tile in the way
+        const rows = field();
+        const row = rows.length - 1 - 36;
+        rows[row] = rows[row].slice(0, 1) + "_".repeat(70) + rows[row].slice(71);
+        const sim = atKephri([], 3, rows);
+        const fight = sim.tombsKephri!;
+        fight.nextDungTick = sim.tick;
+        seconds(sim, 0.1, { x: 1036.5, y: 1038.5 });
+        expect(fight.dung?.heroes).toEqual([0]);
+        sim.player.x = sim.player.prevX = 1036.5;
+        sim.player.y = sim.player.prevY = 1038.5;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && fight.dung; i++) {
+            sim.player.hp = sim.player.maxHp;
+            sim.player.invulnerable = 0;
+            sim.step();
+        }
+        expect(fight.dung).toBeUndefined();
+        // Thrown back towards it, but not through it
+        expect(sim.player.y).toBeLessThan(1038.5);
+        expect(sim.player.y).toBeGreaterThan(1037);
     });
 
     it("has a light egg go off if it isn't broken, and a dark one hatch", () => {
