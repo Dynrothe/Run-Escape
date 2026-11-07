@@ -460,6 +460,9 @@ export type BulletPatternDef = {
     // much it's lit up against dark ground (0 to 1)
     scale?: number;
     bright?: number;
+    // A glow on the floor under each bullet while it flies, so a dark one reads on dark ground.
+    // Only drawn, on a map with lighting.
+    glow?: LightLook;
     // Seconds the boss stands still firing before it can begin its next attack,
     // instead of until the last volley's out: a slow ring keeps coming while
     // she aims the next thing through it (Phosani's)

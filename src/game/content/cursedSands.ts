@@ -23,6 +23,14 @@ const SHADOW_BURST = 382;
 const SHADOW_BARRAGE = 383;
 // Akkha's darkness orb: solid enough to read as it rolls out, where the burst is see-through
 const DARK_ORB = 2257;
+// How much the quest's bullets are lit up against the tomb's dark floor (BulletPatternDef.bright):
+// a dark orb on dark stone has next to no contrast, so it's lifted as the Theatre's are, and the
+// scarabs' bolts a little less, as they're lighter to start with
+const ORB_BRIGHT = 0.6;
+const BOLT_BRIGHT = 0.45;
+// And a glow on the floor under each orb, pale violet, so its edge stands out from the stone
+// round it whatever the light there
+const ORB_GLOW = { radius: 1.5, color: 0xc8b0ff, intensity: 0.5 };
 // The Tombs' scarabs' magic, and its splash
 const SCARAB_BOLT = 2152;
 const SCARAB_SPLASH = 2154;
@@ -134,6 +142,8 @@ const shockwave = (name: string, volleys: number): BossAttackDef => ({
     range: 30,
     weight: 0,
     pattern: {
+        bright: ORB_BRIGHT,
+        glow: ORB_GLOW,
         shape: "ring",
         count: 18,
         volleys,
@@ -427,6 +437,7 @@ const MAGE_ATTACKS: BossAttackDef[] = [
         range: 14,
         weight: 3,
         pattern: {
+            bright: BOLT_BRIGHT,
             shape: "spread",
             count: 5,
             volleys: 2,
@@ -523,6 +534,7 @@ const noose = (name: string, more: Partial<BossAttackDef>): BossAttackDef => ({
     range: 30,
     weight: 2,
     pattern: {
+        bright: BOLT_BRIGHT,
         shape: "closing",
         count: 22,
         volleys: 1,
@@ -684,6 +696,8 @@ const shadowRing = (name: string, count: number, volleys: number): BossAttackDef
     range: 30,
     weight: 0,
     pattern: {
+        bright: ORB_BRIGHT,
+        glow: ORB_GLOW,
         shape: "ring",
         count,
         volleys,
@@ -861,6 +875,8 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
         weight: 2,
         light: SHADOW_LIGHT,
         pattern: {
+            bright: ORB_BRIGHT,
+            glow: ORB_GLOW,
             shape: "spiral",
             count: 5,
             volleys: 10,

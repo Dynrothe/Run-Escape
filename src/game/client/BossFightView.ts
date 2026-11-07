@@ -367,7 +367,8 @@ export class BossFightView {
         const bullets = sim.bullets;
         const { prevX, prevY, x, y, vx, vy, radius, source, startTick, order } = bullets;
         const tick = sim.tick;
-        const options = { scale: 1, flash: 0 };
+        // Seen in the dark at full strength, as projectiles are: a hazard has to read on any floor
+        const options = { scale: 1, flash: 0, unlit: 1 };
         for (let i = 0; i < bullets.count; i++) {
             const slot = order[i];
             // A bullet in the air keeps its source (Sim.freeBulletSources)

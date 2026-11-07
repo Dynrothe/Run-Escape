@@ -27,6 +27,7 @@ const KIND_WINDUP = 10;
 const KIND_HAZARD = 11;
 const KIND_EXPOSED = 12;
 const KIND_CINEMATIC = 13;
+const KIND_BULLET = 14;
 const SIM_KINDS = { player: KIND_PLAYER, map: KIND_MAP, enemy: KIND_ENEMY, left: KIND_LEFT };
 
 // A floor's tiles further than this from the view's middle aren't offered (tiles)
@@ -181,6 +182,17 @@ export class SceneLights {
             if (look && sim.tick < hazard.endTick) {
                 const key = lightKey(KIND_HAZARD, hazard.uid);
                 this.offer(key, hazard.x, hazard.y, look.radius, look);
+            }
+        }
+        // A glow under each of a pattern's bullets that has one (BulletPatternDef.glow)
+        const bullets = sim.bullets;
+        for (let i = 0; i < bullets.count; i++) {
+            const slot = bullets.order[i];
+            const glow = sim.bulletSources[bullets.source[slot]]?.attack.pattern?.glow;
+            if (glow) {
+                const x = bullets.prevX[slot] + (bullets.x[slot] - bullets.prevX[slot]) * alpha;
+                const y = bullets.prevY[slot] + (bullets.y[slot] - bullets.prevY[slot]) * alpha;
+                this.offer(lightKey(KIND_BULLET, slot), x, y, glow.radius, glow);
             }
         }
         // A cinematic's, while it plays (CinematicView.getLights)
