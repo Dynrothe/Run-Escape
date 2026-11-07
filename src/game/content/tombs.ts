@@ -33,6 +33,10 @@ export const TOMBS_GUARD: NonNullable<NonNullable<EnemyDef["boss"]>["guard"]> = 
 export const TOMBS_EXPOSED = {
     exposedLight: { radius: 2.5, color: 0xffc040, intensity: 0.6 },
 };
+// A danger mark's glow, cool against the tomb's warm floor (a red one loses itself on it)
+const MARK_LIGHT: LightLook = { radius: 1.6, color: 0x9fd0ff, intensity: 0.55 };
+// A glow under a dark bullet as it flies, so it reads on the tomb's floor (BulletPatternDef.glow)
+const BULLET_GLOW: LightLook = { radius: 1.2, color: 0xe8f0ff, intensity: 0.4 };
 
 // The raid's fight button (TombsDef.ability), played with your own character: a share of the
 // boss's hitpoints, so it's worth the same at every raid level and party size, doubled while
@@ -293,15 +297,104 @@ export const TOMBS_ENEMIES: EnemyDef[] = [
 
 // ---- Ba-Ba, the Path of Apmeken's boss ----
 //
-// On the baboons' skeleton too (NPC 11778, size 5: idle 9741, walk 9737). Her attacks are her
-// OSRS ones as bullets: a shockwave in front of her (and a stomp under her for whoever camps
-// there), rockfall where you stand, a boulder that bursts where it lands, her baboons, and at 66%
-// and 33% her rolling stones, rows of boulders across the arena with a way through each.
+// On the baboons' skeleton too (NPC 11778, size 5: idle 9741, walk 9737). The baboon queen as a
+// brawler, in three phases (66% and 33%, where her rolling stones come): knuckle lunges down the
+// arena that leave her open when they miss, a shockwave pounded round her, rocks thrown and falling,
+// her baboons; then her boulder and its avalanche, lunges in pairs and brawlers that copy them; and
+// at the last a blind rampage across the room, which a rubble rock in its way stuns her on.
 
 // A rolling boulder (model 46414, the rolling boulders' own), and a thrown rock
 const BOULDER = 2245;
 // Where a rock lands (a Rockfall's, as the game's others use)
 const ROCK_IMPACT = 451;
+// Dust blown down a lunge's strip (the size the quest's lunges throw it up at)
+const BLOWN_DUST = 2184;
+// The stars round a stunned head (Justiciar Zachariah's)
+const STUN_STARS = 80;
+
+// Her knuckle lunge: down on all fours and along a strip, past you if she misses (opens)
+const BABA_LUNGE: BossAttackDef = {
+    name: "Knuckle lunge",
+    kind: "swing",
+    damage: 5,
+    windup: 1.0,
+    cooldown: 3,
+    range: 8,
+    weight: 4,
+    line: { width: 2.5, length: 7, dash: 6 },
+    opens: 1.5,
+    light: MARK_LIGHT,
+    seq: 9745,
+    sound: 5984,
+    // Dust down the strip, a rock's thud where she stops (unfitted: its spread isn't measured)
+    impact: {
+        trail: { spotAnim: BLOWN_DUST, fit: 1 },
+        spots: [{ spotAnim: ROCK_IMPACT }],
+        shake: 0.25,
+    },
+    phases: [1],
+};
+// Marked on the ground round her before it lands, so it's plain where to step to
+const BABA_SHOCKWAVE: BossAttackDef = {
+    name: "Shockwave",
+    kind: "ground",
+    damage: 5,
+    windup: 1.2,
+    cooldown: 4,
+    range: 4,
+    weight: 4,
+    seq: 9742,
+    sound: 5984,
+    ground: {
+        spots: [{ shape: "under" }],
+        radius: 3.6,
+        spotAnim: ROCK_IMPACT,
+        alpha: 0.55,
+        light: MARK_LIGHT,
+    },
+    invoked: { id: "shaking_things_up", radius: 1.4 },
+    opens: 1,
+};
+// Her boulder: comes down near you (never on you) under its shadow and the debris falling ahead
+// of it, breaks into shards, and stays: the rock to take cover by from the avalanche that follows
+const BABA_BOULDER: BossAttackDef = {
+    name: "Boulder",
+    kind: "blast",
+    damage: 6,
+    windup: 2,
+    cooldown: 14,
+    range: 30,
+    weight: 4,
+    radius: 1.5,
+    beside: { min: 2.5, max: 4.5 },
+    shadow: { debrisSpotAnim: 1727 },
+    light: MARK_LIGHT,
+    leavesCover: {
+        seconds: 25,
+        radius: 1.4,
+        looks: ["ba_ba_rubble_0", "ba_ba_rubble_1", "ba_ba_rubble_2", "ba_ba_rubble_3"],
+    },
+    follow: { attack: "Avalanche", delay: 0.6 },
+    impactSpotAnim: ROCK_IMPACT,
+    // Her dark boulder, not the pale rock, so its shards stand out on the floor
+    spotAnim: BOULDER,
+    falls: { look: "rolling_boulder", height: 12, scale: 1 },
+    // Ten, so there's a way between them in to its side
+    shards: {
+        look: "rolling_boulder",
+        count: 10,
+        speed: 4,
+        range: 9,
+        radius: 0.45,
+        damage: 3,
+        scale: 1.4,
+        bright: 0.6,
+    },
+    seq: 9748,
+    sound: 5962,
+    message: "Ba-Ba hurls a boulder! Mind its shards, then get beside it!",
+    phases: [2],
+};
 
 export const BA_BA: EnemyDef = {
     id: "ba_ba",
@@ -311,7 +404,7 @@ export const BA_BA: EnemyDef = {
     walkSeq: 9737,
     attackSeq: 9745,
     deathSeq: DEATH,
-    // Up from 6,000 with her guard (Shockwave's opens) and the raid's button: no easier for them
+    // Up from 6,000 with her guard and the raid's button: no easier for them
     hp: 7800,
     damage: 0,
     speed: 1.3,
@@ -322,95 +415,145 @@ export const BA_BA: EnemyDef = {
     sounds: { attack: 5967, hit: 5998, death: 5971 },
     spawnMessage: "Ba-Ba rises from her throne!",
     boss: {
-        attackInterval: 2.2,
-        enrage: { message: "Ba-Ba's fur stands on end: she's furious!" },
-        // Her shockwave pounded into empty floor leaves her open (opens)
-        guard: TOMBS_GUARD,
+        attackInterval: 1.5,
+        enrage: { message: "Ba-Ba's furious!" },
+        // Open after a lunge or a shockwave that misses (opens); a lunge or a rampage into one of
+        // her boulder's rocks stuns her, stars round her head, but not twice in 8 seconds
+        guard: {
+            ...TOMBS_GUARD,
+            stun: 2.5,
+            stunGrace: 8,
+            stunSpotAnim: STUN_STARS,
+            stunHeight: 3,
+            exposeSound: 5971,
+            stuck: { spots: [{ spotAnim: ROCK_IMPACT }], shake: 0.5 },
+        },
         look: TOMBS_EXPOSED,
+        // Her rampage runs on her walk (no run of hers is in the cache)
+        surgeSeq: 9737,
         // Camp under her and she stomps, quicker the longer you stay
         stomp: { radius: 1.6, interval: 0.6, damage: 2, max: 8, sound: 5971 },
         rollingStones: {
             at: [0.66, 0.33],
             // Over sooner if someone gets back up to her (TombsPathDef boss.boulders)
-            seconds: 20,
+            seconds: 14,
             attacks: ["Rolling boulders"],
             // A row every this many seconds, each with its way through somewhere new
             interval: 1.3,
             message: "Ba-Ba flees to her altar and boulders come rolling! Get back up to her!",
             endMessage: "The boulders stop rolling. Ba-Ba can be hurt again!",
         },
-        attacks: [
-            {
-                // Marked on the ground round her before it lands, so it's plain where to step to
-                name: "Shockwave",
-                kind: "ground",
-                damage: 6,
-                windup: 1.3,
-                cooldown: 2,
-                range: 5,
-                weight: 8,
-                seq: 9742,
-                sound: 5984,
-                ground: { spots: [{ shape: "under" }], radius: 3.6, spotAnim: ROCK_IMPACT },
-                invoked: { id: "shaking_things_up", radius: 1.4 },
-                opens: 1,
-            },
-            {
-                // Shadows on the floor in a cross on you, a rock coming down into each, as OSRS's
-                name: "Rockfall",
-                kind: "ground",
-                damage: 5,
-                windup: 1.8,
-                cooldown: 4,
-                range: 30,
-                weight: 5,
-                impactSpotAnim: ROCK_IMPACT,
-                falls: { look: "rolling_boulder", height: 12, scale: 0.35 },
-                ground: { spots: [{ shape: "cross", reach: 3 }], radius: 0.5, shadow: true },
-                seq: 9743,
-                sound: 5962,
-                message: "Rocks fall from above! Move off the shadows!",
-            },
-            {
-                // Comes down near you (never on you) under its shadow and the debris falling
-                // ahead of it, breaks into shards, and stays: the rock to take cover by from the
-                // avalanche that follows
-                name: "Boulder",
-                kind: "blast",
-                damage: 6,
-                windup: 2,
-                cooldown: 12,
-                range: 30,
-                weight: 4,
-                radius: 1.5,
-                beside: { min: 2.5, max: 4.5 },
-                shadow: { debrisSpotAnim: 1727 },
-                leavesCover: {
-                    seconds: 25,
-                    radius: 1.4,
-                    looks: ["ba_ba_rubble_0", "ba_ba_rubble_1", "ba_ba_rubble_2", "ba_ba_rubble_3"],
+        // A tick ahead of her rolling stones (the kneel between), quicker by the phase, each
+        // opening on what it brings; her rockfall from the first, sooner each phase
+        phases: {
+            phases: [
+                {
+                    until: 0.67,
+                    status: "Queen of the baboons",
+                    ambients: [{ attack: "Rockfall", interval: 9, delay: 4 }],
                 },
-                follow: { attack: "Avalanche", delay: 0.6 },
+                {
+                    until: 0.34,
+                    tempo: 0.85,
+                    speed: 1.1,
+                    opener: "Boulder",
+                    status: "The ceiling comes down",
+                    ambients: [{ attack: "Rockfall", interval: 7, delay: 3 }],
+                },
+                {
+                    tempo: 0.7,
+                    speed: 1.25,
+                    light: 0.6,
+                    opener: "Rampage",
+                    status: "Ba-Ba's furious!",
+                    ambients: [{ attack: "Rockfall", interval: 5, delay: 3 }],
+                },
+            ],
+            shieldMessage: "",
+            blastMessage: "",
+        },
+        attacks: [
+            BABA_LUNGE,
+            // Her second phase: two, aimed again for the second
+            {
+                ...BABA_LUNGE,
+                name: "Knuckle lunges",
+                chain: { times: 1, windup: 0.8 },
+                phases: [2],
+            },
+            // Then a pound where she stops: sideways off the strip, then away from its end
+            {
+                ...BABA_LUNGE,
+                name: "Lunge, then pound",
+                cooldown: 6,
+                weight: 3,
+                follow: { attack: "Shockwave", delay: 0.3 },
+                phases: [2, 3],
+            },
+            // Her last: three, each strip turning after you a moment, then locked
+            {
+                ...BABA_LUNGE,
+                name: "Lunge flurry",
+                cooldown: 4,
+                line: { width: 2.5, length: 7, dash: 6, track: 0.25 },
+                chain: { times: 2, windup: 0.75 },
+                phases: [3],
+            },
+            BABA_SHOCKWAVE,
+            {
+                // A rock thrown at where you stand: its shadow, then shards out of it
+                name: "Rock throw",
+                kind: "blast",
+                damage: 5,
+                windup: 1.4,
+                cooldown: 5,
+                range: 30,
+                weight: 3,
+                radius: 1.2,
+                shadow: {},
+                light: MARK_LIGHT,
                 impactSpotAnim: ROCK_IMPACT,
-                // Her dark boulder, not the pale rock, so its shards stand out on the floor
                 spotAnim: BOULDER,
-                falls: { look: "rolling_boulder", height: 12, scale: 1 },
+                falls: { look: "rolling_boulder", height: 12, scale: 0.35 },
                 shards: {
                     look: "rolling_boulder",
-                    count: 16,
+                    count: 8,
                     speed: 4,
-                    range: 9,
-                    radius: 0.45,
+                    range: 7,
+                    radius: 0.4,
                     damage: 3,
                     scale: 1.4,
+                    bright: 0.6,
                 },
-                seq: 9748,
+                seq: 9743,
                 sound: 5962,
-                message: "Ba-Ba hurls a boulder! Mind its shards, then get beside it!",
             },
             {
+                // Her ambient (BossPhasesDef ambients): shadows in a cross on you, a rock coming
+                // down into each, as OSRS's
+                name: "Rockfall",
+                kind: "ground",
+                damage: 4,
+                windup: 1.8,
+                cooldown: 0,
+                range: 30,
+                weight: 0,
+                impactSpotAnim: ROCK_IMPACT,
+                falls: { look: "rolling_boulder", height: 12, scale: 0.35 },
+                ground: {
+                    spots: [{ shape: "cross", reach: 3 }],
+                    radius: 0.5,
+                    shadow: true,
+                    light: MARK_LIGHT,
+                },
+                sound: 5962,
+            },
+            BABA_BOULDER,
+            // Sooner in her last phase
+            { ...BABA_BOULDER, cooldown: 10, phases: [3] },
+            {
                 // Only after her boulder (its follow): rocks everywhere but beside a boulder,
-                // nearly all your hitpoints
+                // half your hitpoints
                 name: "Avalanche",
                 kind: "swing",
                 damage: 0,
@@ -418,7 +561,7 @@ export const BA_BA: EnemyDef = {
                 cooldown: 0,
                 range: 60,
                 weight: 0,
-                takeCover: { reach: 1.6, share: 0.8 },
+                takeCover: { reach: 1.6, share: 0.5 },
                 ignoreArmor: true,
                 impactSpotAnim: ROCK_IMPACT,
                 seq: 9743,
@@ -430,7 +573,7 @@ export const BA_BA: EnemyDef = {
                 kind: "summon",
                 damage: 0,
                 windup: 1.2,
-                cooldown: 14,
+                cooldown: 18,
                 range: 30,
                 weight: 2,
                 seq: 9751,
@@ -438,6 +581,44 @@ export const BA_BA: EnemyDef = {
                 // They make for her sarcophagi: kill them before they open one
                 summon: { enemyId: "baboon_thrower", count: 2, distance: 4, sarcophagi: true },
                 message: "Ba-Ba calls her baboons! Stop them reaching the sarcophagi!",
+            },
+            {
+                // Her second phase on: two brawlers, each lunging a strip of its own a beat after
+                // hers (EnemyDef.echoes), so there's a pocket to find between
+                name: "Brawlers",
+                kind: "summon",
+                damage: 0,
+                windup: 1.2,
+                cooldown: 20,
+                range: 30,
+                weight: 2,
+                seq: 9751,
+                sound: 5989,
+                summon: { enemyId: "baba_brawler", count: 2, distance: 4 },
+                message: "Ba-Ba calls her brawlers!",
+                phases: [2, 3],
+            },
+            {
+                // Her last phase: off to the room's edge in line with you, a beat of her chest,
+                // and a charge right across it down a lane. A rubble rock in the lane stops her
+                // dead, stunned (BossDef.guard); across without hitting anyone, she's open.
+                name: "Rampage",
+                kind: "surge",
+                damage: 6,
+                windup: 1.2,
+                cooldown: 12,
+                range: 30,
+                weight: 3,
+                radius: 1.3,
+                speed: 12,
+                chain: { times: 2, windup: 0.8 },
+                opens: 2,
+                light: MARK_LIGHT,
+                seq: 9751,
+                sound: 5967,
+                invoked: { id: "boulderdash", speed: 1.4 },
+                message: "Ba-Ba rampages! Get out of her way, or behind a rock!",
+                phases: [3],
             },
             {
                 name: "Rolling boulders",
@@ -476,7 +657,32 @@ export const BA_BA: EnemyDef = {
     },
 };
 
-TOMBS_ENEMIES.push(BA_BA);
+TOMBS_ENEMIES.push(
+    BA_BA,
+    // Her brawlers (from her second phase): a baboon brawler that lunges a strip of its own at the
+    // nearest hero a beat after each of hers (EnemyDef.echoes), on her skeleton, so her lunge plays
+    baboon({
+        id: "baba_brawler",
+        name: "Baboon Brawler",
+        npcId: 11709,
+        attackSeq: 9742,
+        hp: 120,
+        damage: 2,
+        speed: 2.3,
+        xp: 20,
+        echoes: {
+            boss: "ba_ba",
+            attacks: ["Knuckle lunges", "Lunge flurry", "Lunge, then pound"],
+            name: "Brawler's lunge",
+            damage: 3,
+            seq: 9745,
+            later: 0.25,
+            most: 2,
+            impact: { trail: { spotAnim: BLOWN_DUST, fit: 1 } },
+        },
+        sounds: { attack: 5984, hit: 5998, death: 5971 },
+    }),
+);
 
 // A path's boss, by its path level (Sim.tombsPathLevel: paths done, and Pathseeker and on): its
 // hitpoints and damage go up by these shares a level, so one left till last holds up to a party
@@ -2107,8 +2313,6 @@ export const ZEBAK: ZebakDef = {
     },
 };
 
-// A danger mark's glow, cool against the tomb's warm floor (a red one loses itself on it)
-const MARK_LIGHT: LightLook = { radius: 1.6, color: 0x9fd0ff, intensity: 0.55 };
 // His jaws: a strip from his head down the island (a line counts from his middle, so 12 is about
 // 9 tiles onto it past his body). A miss leaves his head on the island's edge, open (opens).
 // No bite of his own in the cache (find-npc-seqs 11730): his rock spit's head forward is it.

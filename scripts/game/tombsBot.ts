@@ -1538,10 +1538,12 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
             x <= pit.x1 + 0.8 &&
             y >= pit.y0 - 0.8 &&
             y <= pit.y1 + 0.8;
+        // Her rampage with one of her rocks in its lane: behind the rock, where she stops dead
+        const cover = boss.bossState?.ordeal || avalanche ? undefined : rampageCover(sim, boss);
         const chosen =
             boss.bossState?.ordeal || avalanche
                 ? move
-                : dodging(sim, foodMove(sim) ?? punishMove(sim) ?? move, inPit);
+                : (cover ?? dodging(sim, foodMove(sim) ?? punishMove(sim) ?? move, inPit));
         // Whatever it's after, never a step into the gap: north, away from it, instead
         const ahead = { x: player.x + chosen.x * 0.6, y: player.y + chosen.y * 0.6 };
         return inPit(ahead.x, ahead.y) ? { x: 0, y: 1 } : chosen;
@@ -1683,6 +1685,49 @@ function babaMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point 
     return avoid.length > 0
         ? walkAvoiding(sim, anchor.x, anchor.y, avoid, 0)
         : kite(sim, anchor, 2.5);
+}
+
+// Ba-Ba's rampage (a surge) coming down a lane that runs into one of her boulder's rocks: she's
+// stopped dead against it, stunned, so behind the rock is as safe as out of the lane, and the
+// stun's the window (a person baits her into it). Undefined unless the bot's in the lane past the
+// rock and a short walk from behind it (otherwise it steps out of the lane: shapeStep).
+function rampageCover(sim: Sim, boss: Sim["enemies"][number]): Point | undefined {
+    const state = boss.bossState;
+    const lane = state?.windup?.attack.kind === "surge" ? state.windup.lane : state?.surge?.lane;
+    if (!lane) {
+        return undefined;
+    }
+    const player = sim.player;
+    const dx = lane.toX - lane.fromX;
+    const dy = lane.toY - lane.fromY;
+    const length = Math.hypot(dx, dy) || 1;
+    const ux = dx / length;
+    const uy = dy / length;
+    const along = (x: number, y: number) => (x - lane.fromX) * ux + (y - lane.fromY) * uy;
+    const across = (x: number, y: number) => (x - lane.fromX) * uy - (y - lane.fromY) * ux;
+    const from = along(boss.x, boss.y);
+    // The first rock she'd run into, ahead of her
+    const rock = sim.tombsCover
+        .filter(
+            (r) =>
+                r.endTick > sim.tick &&
+                Math.abs(across(r.x, r.y)) < r.radius + boss.radius &&
+                along(r.x, r.y) > from,
+        )
+        .sort((a, b) => along(a.x, a.y) - along(b.x, b.y))[0];
+    if (!rock || Math.abs(across(player.x, player.y)) >= lane.halfWidth + 1) {
+        return undefined;
+    }
+    // Behind it: on the lane's line through the rock, its far side
+    const spot = {
+        x: rock.x + ux * (rock.radius + player.radius + 0.5),
+        y: rock.y + uy * (rock.radius + player.radius + 0.5),
+    };
+    const away = Math.hypot(spot.x - player.x, spot.y - player.y);
+    if (along(player.x, player.y) < along(rock.x, rock.y) - rock.radius || away > 3) {
+        return undefined;
+    }
+    return away < 0.3 ? { x: 0, y: 0 } : walkTo(sim, spot.x, spot.y);
 }
 
 // Akkha: the quadrant his Memory Blast spares at each burst; with his shadows up, the quadrant of

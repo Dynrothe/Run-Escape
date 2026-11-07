@@ -762,6 +762,55 @@ The same after this stage wasn't run to the end: one check, Expert with everythi
 one seed), won in 4:19 with no wipes. Untried in a browser: the strip's and the swell's look on the
 tomb's floor at 0.6, his head down at the edge, and the crocodiles climbing out.
 
+### The boss rework, stage 3: Ba-Ba, "the Brawler"
+
+Ba-Ba reworked to the design (built November 2026), the tuning left for one pass over all five
+bosses at the end: phases, lunges that leave her open, brawlers that copy them, and a rampage a
+rubble rock stops.
+
+- **Three phases** (`BossDef.phases` at 67% and 34%, a tick ahead of her rolling stones at 66% and
+  33%, which stay her kneel between: no `threshold`), `tempo` 1, 0.85, 0.7, `speed` 1, 1.1, 1.25,
+  the last dimming the room to 0.6. Her attack interval is 1.5 seconds (2.2), her rolling stones
+  14 seconds at most (20). A phase's opener waits out an ordeal, and its ambients pause through it
+  (`stepBoss`, `stepPhase`): her boulder doesn't come down on the rows of boulders, nor her rockfall.
+- **Knuckle lunge** (from the first phase): a strip 2.5 wide and 7 long, a dash of 6 down it, 5
+  damage, 1 second, with a cool mark light; a miss leaves her open 1.5 seconds. Two in the second
+  phase (Knuckle lunges), three turning after you a quarter second each in the last (Lunge flurry),
+  and from the second, one followed by her Shockwave where she stops (Lunge, then pound).
+- **Shockwave** 5 (6), 4 seconds apart, its mark lit (`alpha` 0.55, `MARK_LIGHT`); a miss still
+  opens her. **Rock throw** (new): a shadow on you, a rock that bursts into eight shards (3 each).
+  **Rockfall** is her ambient now, every 9, 7 and 5 seconds by phase, 4 damage. **Boulder** and its
+  avalanche from the second phase (the opener), 10 shards (16), every 14 seconds, 10 in the last;
+  the avalanche takes half your hitpoints (four fifths).
+- **Brawlers** (`baba_brawler`, from the second phase, two every 20 seconds): baboon brawlers of 120
+  hitpoints that lunge a strip of their own (3 damage) a beat after each of hers
+  (`echoes`), her own lunge (9745) on their skeleton; the pocket between is the way out.
+- **Rampage** (the last phase's opener, then every 12 seconds): a surge. She goes to the room's
+  edge in line with you, beats her chest (9751) and charges across on her walk, 6 damage, three
+  lanes in a row; across without hitting anyone she's open 2 seconds. **A charge or a lunge into one
+  of her boulders' rocks stops her dead, stunned 2.5 seconds** (Zachariah's stars over her head,
+  `BossGuardDef.stunSpotAnim` 80), not again for 8 seconds (`stunGrace`; a rock then only opens
+  her). Boulderdash makes it 1.4 times as fast.
+- **Engine**: a surge or a lunge's dash into a `leavesCover` rock is stuck, as a lunge into a pillar
+  is (`Sim.inCoverRock`, in `stepSurge` and `dashEnd`; what can't be stunned only stops short). The
+  Tombs have no boss square, so a surge's lane in them runs as far as the floor does along the
+  player's row or column (`Sim.tombsLaneBox`), never back over the fight's line.
+- **The bot**: off her strips sideways and to the pocket between hers and her brawlers' (stage 1's
+  readers); out of a rampage's lane, or behind the rock in it when that's nearer (`rampageCover`),
+  and between her and a rock whenever there is one (as it was for her avalanche), so her lunges and
+  rampages run into it.
+
+Ids: nothing new from the cache. The stun's stars (80) are Zachariah's; the brawlers are the
+Apmeken room's Baboon Brawler (11709), which plays her 9745 (skeleton 2063, `find-npc-seqs.ts`).
+No run of hers is in the cache (`find-npc-seqs.ts 11778`: 9738 and 9740 are unnamed), so she
+rampages on her walk (9737). Her lunge's dust (2184) is fitted at the size the quest uses; her rock
+impact (451) where it stops, and as the stun's stuck impact, is unfitted (its spread isn't measured).
+Unchecked: where in 9745 her blow falls (no `strikeAt` yet), and how any of it looks on the floor.
+
+One check, Expert with everything bought (`ROOM=baba`, warrior, one seed): done 6:06 after the room began,
+the puzzle taking 1:57, with 4 wipes (before this stage, 2:12 with none: she fell in 15 seconds), the bot's damage mostly from her
+rolling boulders as before; her rocks stunned her 5 times, and 7 more times only opened her.
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on
@@ -784,7 +833,8 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
 - **Crondis**: water fetched empty-handed (a band only spills what you carry), filled once a band's
   gone over the fall with time to be ahead of the next, and on past a spear by the corridor's other
   half.
-- **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover; Akkha's spared quadrant (by
+- **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover (between her and it, so she
+  lunges and rampages into it, and behind it when her rampage's lane runs into it); Akkha's spared quadrant (by
   the line it shares with the next, a hop across as each burst lands: Feeling Special's bursts
   come quicker than a walk between corners), round his body (the flow field only knows the walls)
   and his dead shadows' quadrants; Kephri near enough; Zebak's island near him (melee on the row

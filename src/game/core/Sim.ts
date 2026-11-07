@@ -469,6 +469,9 @@ const SUMMON_BESIDE = 1.8;
 const ABSORB_REACH = 2.6;
 // A surge's reach along its lane, either side of the boss's middle
 const SURGE_BODY = 2.5;
+// The Tombs have no boss square: a surge's lane runs this far at most either way from the player,
+// along the floor (Sim.tombsLaneBox)
+const TOMBS_LANE_MOST = 24;
 // Radians a second a lunge's strip turns after the player while it tracks (BossAttackDef line.track)
 const LINE_TRACK_TURN = 2.5;
 // What a curse does to the controls: quarter turns, a half turn, and mirrors.
@@ -11923,7 +11926,7 @@ export class Sim {
     // there's something to step out of
     private pickLane(enemy: Enemy, attack: BossAttackDef): SurgeLane {
         const player = this.player;
-        const arena = this.bossArena;
+        const arena = this.map.tombs ? this.tombsLaneBox(enemy) : this.bossArena;
         const margin = enemy.radius + 1;
         const edge = this.rng.int(4);
         const minX = arena.minX + margin;
@@ -11947,6 +11950,49 @@ export class Sim {
         enemy.vx = enemy.vy = 0;
         enemy.yaw = yawFromVector(lane.toX - lane.fromX, lane.toY - lane.fromY);
         return lane;
+    }
+
+    // The Tombs' rooms have no boss square (MapDef.bossArena), so a surge's edges are where the
+    // floor ends along the player's row and column: as far as the boss fits each way (its own
+    // room's walls, not the map's), and never back over its fight's line
+    private tombsLaneBox(enemy: Enemy): {
+        minX: number;
+        minY: number;
+        maxX: number;
+        maxY: number;
+    } {
+        const player = this.player;
+        const margin = enemy.radius + 1;
+        const line = this.tombsPathRoom?.boss?.line.y;
+        const reach = (dx: number, dy: number): number => {
+            let far = 0;
+            for (let d = 0.5; d <= TOMBS_LANE_MOST; d += 0.5) {
+                const x = player.x + dx * d;
+                const y = player.y + dy * d;
+                if (
+                    !isCircleFree(this.grid, x, y, enemy.radius) ||
+                    (line !== undefined && y < line + enemy.radius)
+                ) {
+                    break;
+                }
+                far = d;
+            }
+            return far;
+        };
+        return {
+            minX: player.x - reach(-1, 0) - margin,
+            maxX: player.x + reach(1, 0) + margin,
+            minY: player.y - reach(0, -1) - margin,
+            maxY: player.y + reach(0, 1) + margin,
+        };
+    }
+
+    // Whether a circle's into one of Ba-Ba's boulders' rocks (BossAttackDef.leavesCover)
+    private inCoverRock(x: number, y: number, radius: number): boolean {
+        return this.tombsCover.some(
+            (rock) =>
+                this.tick < rock.endTick && fm.hypot(x - rock.x, y - rock.y) < rock.radius + radius,
+        );
     }
 
     private startSurge(enemy: Enemy, attack: BossAttackDef, lane: SurgeLane): void {
@@ -11992,6 +12038,30 @@ export class Sim {
                 this.bossHit(enemy.def.id, enemy, attack, this.getBossDamage(enemy, attack));
             }
         });
+        // Into one of her boulder's rocks: stopped dead against it, stunned (BossDef.guard), and
+        // the rest of a chain of them lost
+        const guard = enemy.def.boss?.guard;
+        if (
+            guard &&
+            guard.stun > 0 &&
+            !this.runOver &&
+            this.inCoverRock(enemy.x, enemy.y, enemy.radius)
+        ) {
+            const back = Math.max(0, (this.tick - 1 - surge.startTick) / span);
+            enemy.x = lane.fromX + dx * back;
+            enemy.y = lane.fromY + dy * back;
+            enemy.bossState!.surge = undefined;
+            const length = Math.max(0.001, fm.hypot(dx, dy));
+            this.showImpact(
+                guard.stuck,
+                enemy.x + (dx / length) * enemy.radius,
+                enemy.y + (dy / length) * enemy.radius,
+            );
+            enemy.anim = "walk";
+            enemy.animStart = this.tick;
+            this.dropGuard(enemy, guard.stun, true, "Rubble");
+            return;
+        }
         if (f >= 1) {
             enemy.bossState!.surge = undefined;
             // Across without hitting anyone: its guard's down (BossDef.guard)
@@ -12108,7 +12178,8 @@ export class Sim {
             return;
         }
         const ambients = phase.stage === "finale" ? undefined : phases.phases[phase.index].ambients;
-        if (ambients && !this.intro && !state.leap) {
+        // Not through an ordeal (Ba-Ba's rolling stones): only what it calls for, meanwhile
+        if (ambients && !this.intro && !state.leap && !state.ordeal) {
             this.stepAmbients(boss, phase, ambients);
         }
         const ambient =
@@ -13660,9 +13731,11 @@ export class Sim {
             this.startBossAttack(enemy, first);
             return;
         }
-        const opener = phase?.opener;
+        // Not while an ordeal's on (Ba-Ba's phases change a tick before her rolling stones): it
+        // waits for the ordeal's end
+        const opener = state.ordeal ? undefined : phase?.opener;
         if (opener) {
-            phase.opener = undefined;
+            phase!.opener = undefined;
             this.startBossAttack(enemy, opener);
             return;
         }
@@ -14359,6 +14432,10 @@ export class Sim {
             if (boxCircle(pillars, nx, ny, enemy.radius)) {
                 return { x, y, stuck: true };
             }
+            // One of Ba-Ba's boulders' rocks: stuck in it if it can be stunned, else stopped short
+            if (this.tombsCover.length > 0 && this.inCoverRock(nx, ny, enemy.radius)) {
+                return { x, y, stuck: (enemy.def.boss?.guard?.stun ?? 0) > 0 };
+            }
             const inTheWay = this.heroes.some(
                 (hero) =>
                     this.isUp(hero) &&
@@ -14415,7 +14492,8 @@ export class Sim {
                 enemy.x + (dx / length) * enemy.radius,
                 enemy.y + (dy / length) * enemy.radius,
             );
-            this.dropGuard(enemy, guard.stun, true, "Pillar");
+            // (the Tombs have no pillars: there it's one of Ba-Ba's rocks)
+            this.dropGuard(enemy, guard.stun, true, this.map.tombs ? "Rubble" : "Pillar");
         }
     }
 

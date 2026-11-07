@@ -462,7 +462,16 @@ describe("the Apmeken room", () => {
         seconds(sim, 0.2, { x: 1036.5, y: 1028.5 });
         const baba = sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
         expect(baba).toBeDefined();
-        sim.damageEnemy(baba, 1e9, 0, baba.x, baba.y);
+        // She's fought in phases, her rolling stones at each: hit till she's down
+        for (let i = 0; i < 5000 && !baba.dead; i++) {
+            sim.player.invulnerable = 1e6;
+            sim.damageEnemy(baba, 1e9, 0, baba.x, baba.y);
+            if (sim.state === "levelUp") {
+                sim.choose(0);
+            }
+            sim.step();
+        }
+        expect(baba.dead).toBe(true);
         // Its death plays out, then back to the Nexus (nothing holding the player meanwhile)
         for (let i = 0; i < 400 && sim.tombsPath !== undefined; i++) {
             sim.player.invulnerable = 1e6;
@@ -809,6 +818,90 @@ describe("Ba-Ba", () => {
         expect(Math.hypot(sim.player.x - 1036.5, sim.player.y - 1034.5)).toBeGreaterThanOrEqual(
             1.4,
         );
+    });
+
+    it("goes to her next phase a tick ahead of her stones, its opener held till they're over", () => {
+        const sim = atBaba();
+        const boss = baba(sim);
+        // Into her second phase (a hit's held at its threshold), then on past her stones' share
+        sim.damageEnemy(boss, boss.hp - Math.floor(boss.maxHp * 0.65), 0, boss.x, boss.y);
+        boss.hp = Math.floor(boss.maxHp * 0.65);
+        sim.step();
+        sim.step();
+        const phase = boss.bossState!.phase!;
+        expect(phase.index).toBe(1);
+        expect(boss.bossState!.ordeal).toBeDefined();
+        // Nothing of the phase's own while her boulders roll: no opener, no rockfall
+        for (let i = 0; i < 5 * TICKS_PER_SECOND; i++) {
+            sim.player.invulnerable = 1e6;
+            sim.step();
+        }
+        expect(phase.opener?.name).toBe("Boulder");
+        expect(sim.hazards.some((h) => h.attack.name === "Rockfall")).toBe(false);
+        for (let i = 0; i < 20 * TICKS_PER_SECOND && boss.bossState!.ordeal; i++) {
+            sim.player.invulnerable = 1e6;
+            sim.step();
+        }
+        expect(boss.bossState!.ordeal).toBeUndefined();
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && phase.opener; i++) {
+            sim.player.invulnerable = 1e6;
+            sim.step();
+        }
+        expect(phase.opener).toBeUndefined();
+    });
+
+    it("rampages down a lane in her own room, stunned by one of her rocks in its way", () => {
+        const sim = atBaba();
+        sim.weapons = [];
+        const boss = baba(sim);
+        const rampage = boss.def.boss!.attacks.find((a) => a.name === "Rampage")!;
+        sim["startBossAttack"](boss, { ...rampage, chain: undefined });
+        const lane = boss.bossState!.windup!.lane!;
+        // Never back over her fight's line (the room's walls bound it in a run with the cache's)
+        expect(Math.min(lane.fromY, lane.toY)).toBeGreaterThanOrEqual(
+            sim.tombsPathRoom!.boss!.line.y,
+        );
+        // A rock two fifths of the way along it
+        const rock = {
+            x: lane.fromX + (lane.toX - lane.fromX) * 0.4,
+            y: lane.fromY + (lane.toY - lane.fromY) * 0.4,
+        };
+        sim.tombsCover.push({
+            ...rock,
+            radius: 1.4,
+            endTick: sim.tick + 1e4,
+            look: "ba_ba_rubble_0",
+        });
+        let stunned = false;
+        for (let i = 0; i < 5 * TICKS_PER_SECOND && !stunned; i++) {
+            sim.player.invulnerable = 1e6;
+            sim.step();
+            stunned = sim.isStunned(boss);
+        }
+        expect(stunned).toBe(true);
+        expect(boss.bossState!.surge).toBeUndefined();
+        expect(Math.hypot(boss.x - rock.x, boss.y - rock.y)).toBeGreaterThanOrEqual(
+            1.4 + boss.radius - 0.3,
+        );
+    });
+
+    it("is stunned by a lunge into one of her rocks, but not again for a while", () => {
+        const sim = atBaba();
+        sim.weapons = [];
+        const boss = baba(sim);
+        const lunge = boss.def.boss!.attacks.find((a) => a.name === "Knuckle lunge")!;
+        boss.x = boss.prevX = sim.player.x;
+        boss.y = boss.prevY = sim.player.y + 6;
+        sim.tombsCover.push({
+            x: sim.player.x,
+            y: sim.player.y + 2,
+            radius: 1.4,
+            endTick: sim.tick + 1e4,
+            look: "ba_ba_rubble_0",
+        });
+        sim["startBossAttack"](boss, lunge);
+        seconds(sim, lunge.windup + 0.5, { x: sim.player.x, y: sim.player.y });
+        expect(sim.isStunned(boss)).toBe(true);
     });
 
     it("drops her rockfall in a cross of shadows on the player's tile", () => {
