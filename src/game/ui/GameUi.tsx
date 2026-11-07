@@ -1695,7 +1695,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
     return (
         <div className="ui-fill ui-run">
-            {hud && (
+            {hud && !ui.cinematic && (
                 <Hud
                     hud={hud}
                     client={client}
@@ -1710,7 +1710,17 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
-            {isCoarsePointer && hud && (
+            {ui.cinematic && (
+                // The opening cinematic: no HUD, and a click or tap anywhere skips it
+                <div
+                    className="ui-cinematic"
+                    onPointerDown={(e) => {
+                        e.preventDefault();
+                        client.skipCinematic();
+                    }}
+                />
+            )}
+            {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
                     inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
                     overlay={ui.overlay}

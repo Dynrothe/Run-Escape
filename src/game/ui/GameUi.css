@@ -1141,6 +1141,14 @@
     pointer-events: none;
 }
 
+/* Over the opening cinematic: catches the click or tap that skips it */
+.ui-cinematic {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+    touch-action: none;
+}
+
 .ui-xp {
     position: absolute;
     left: 0;

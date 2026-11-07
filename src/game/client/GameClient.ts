@@ -69,6 +69,12 @@ import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/Camera
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
+import {
+    CinematicCamera,
+    CinematicPlayer,
+    getCinematicCamera,
+    getCinematicSquares,
+} from "./Cinematic";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -202,6 +208,10 @@ const SHAKE_FAR = 24;
 // window does, and the player stays big enough to see
 const PHONE_RUN_DISTANCE = 15;
 const PHONE_MAX_HEIGHT = 520;
+// The most of the opening cinematic a frame moves it on by (ms)
+const CINEMATIC_MAX_FRAME_MS = 100;
+// The longest it waits for what it sees to load before it plays anyway (ms)
+const CINEMATIC_LOAD_MS = 45000;
 
 // How far past the arena the camera can get: a run's is behind the player, zoomed
 // all the way out, and the title screen's circles them
@@ -463,6 +473,12 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
+    // The map's opening cinematic while it plays (MapDef.cinematic), and its own camera, so the
+    // run's (and the player's zoom) is left as it was
+    cinematic?: CinematicPlayer;
+    private readonly cinematicRig = new CameraRig();
+    // While what it sees loads, behind the loading screen: since when (performance.now)
+    private cinematicLoading?: number;
 
     sim?: Sim;
     paused = false;
@@ -553,7 +569,7 @@ export class GameClient implements GameFrameHandler {
         this.minimap = new Minimap(mapViewer);
         this.overlay = new Overlay(overlayCanvas);
         this.input = new GameInput(renderer.canvas);
-        this.input.onPress = this.onKeyPress;
+        this.input.onPress = (code) => this.pressKey(code);
         this.input.takesKey = (code) => code === "Tab" && this.isPlaying();
         this.input.pads.onConnect = (pad) =>
             this.store.toast(
@@ -1264,12 +1280,15 @@ export class GameClient implements GameFrameHandler {
         }
         // A pet that won't bake isn't a reason to stay: loadPets doesn't fail
         const petsBaked = this.assets.loadPets(pets);
+        // And its NPCs posed as scenery (MapDef.props), and its cinematic's cast
+        const propsBaked = this.assets.loadProps(map);
         try {
             this.grid = await this.loadGrid(mapId);
             await this.assets.loadEnemies(enemies, (done, total) => {
                 this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
             });
             await petsBaked;
+            await propsBaked;
             return true;
         } catch (e) {
             console.error("Failed to load map", mapId, e);
@@ -1279,7 +1298,11 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    async startRun(mapId: string = this.store.getSnapshot().mapId): Promise<void> {
+    // cinematic: false to start without the map's opening cinematic (a retry)
+    async startRun(
+        mapId: string = this.store.getSnapshot().mapId,
+        cinematic = true,
+    ): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
         }
@@ -1318,7 +1341,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet]);
+        this.enterRun(sim, [this.save.pet], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -1411,7 +1434,7 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(sim, pets);
+        this.enterRun(sim, pets, true);
         if (!this.coop.isHost) {
             this.coop.sendUp({ loaded: true });
         }
@@ -1422,9 +1445,13 @@ export class GameClient implements GameFrameHandler {
     }
 
     // pets: each hero's pet, in the party's order
-    private enterRun(sim: Sim, pets: (string | undefined)[]): void {
+    // cinematic: play the map's opening cinematic, if it has one
+    private enterRun(sim: Sim, pets: (string | undefined)[], cinematic: boolean): void {
         const map = sim.map;
         this.sim = sim;
+        this.cinematic =
+            cinematic && map.cinematic ? new CinematicPlayer(map.cinematic) : undefined;
+        this.view.cinematic = this.cinematic;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.scaperune === true);
         this.grid.exactGround = map.scaperune === true;
@@ -1482,7 +1509,11 @@ export class GameClient implements GameFrameHandler {
             party: [],
             waitingOn: [],
             revive: undefined,
+            cinematic: this.cinematic !== undefined,
         });
+        if (this.cinematic) {
+            this.preloadCinematic(sim, this.cinematic);
+        }
         this.updateHud(true);
         // A run that begins with picks to make (a boss fight's) shows them now:
         // the loop only steps the sim once they're made
@@ -1784,7 +1815,8 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.leaveRun();
-        void this.startRun(mapId);
+        // The fight again at once, without the map's cinematic
+        void this.startRun(mapId, false);
     }
 
     leaveRun(show = true): void {
@@ -1798,6 +1830,7 @@ export class GameClient implements GameFrameHandler {
         usePortableMath(false);
         this.assets.dropPlayers(1);
         this.sim = undefined;
+        this.endCinematic();
         this.reportRun = undefined;
         this.paused = false;
         this.audio.stopMusic();
@@ -1939,6 +1972,15 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // Any key or controller button skips the opening cinematic, and does nothing else
+    private pressKey(code: string): void {
+        if (this.cinematic) {
+            this.skipCinematic();
+        } else {
+            this.onKeyPress(code);
+        }
+    }
+
     private onKeyPress = (code: string): void => {
         if (code === "F3") {
             this.store.set({ debug: !this.store.getSnapshot().debug });
@@ -2021,7 +2063,11 @@ export class GameClient implements GameFrameHandler {
 
         if (this.coopRun) {
             this.updateCoop(deltaTimeMs, sim, this.coopRun);
-        } else if (!this.paused && (sim.state === "playing" || sim.runOver)) {
+        } else if (
+            !this.paused &&
+            !this.cinematic?.holdsRun &&
+            (sim.state === "playing" || sim.runOver)
+        ) {
             const wasOver = sim.runOver;
             this.accumulator = Math.min(
                 this.accumulator + deltaTimeMs,
@@ -2036,7 +2082,9 @@ export class GameClient implements GameFrameHandler {
                 steps++;
                 this.accumulator -= TICK_MS;
                 const move = this.input.getMoveVector(this.move);
-                sim.step(move.x, move.y);
+                // Stood still while the cinematic plays
+                const held = this.cinematic !== undefined;
+                sim.step(held ? 0 : move.x, held ? 0 : move.y);
                 this.handleEvents(sim, sim.takeEvents());
             }
             if (sim.state !== "playing" && !wasOver) {
@@ -2103,13 +2151,30 @@ export class GameClient implements GameFrameHandler {
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
         const pan = this.getIntroPan(sim, px, py, alpha);
         const shake = this.getShake(now);
-        this.cameraRig.apply(
-            camera,
-            px + this.cameraLean.x + pan.x + shake.x,
-            ground - 0.6,
-            py + this.cameraLean.y + pan.y + shake.y,
-        );
-        this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
+        const cinematic = this.updateCinematic(deltaTimeMs, sim, {
+            x: px + this.cameraLean.x + pan.x,
+            y: py + this.cameraLean.y + pan.y,
+            height: ground - 0.6,
+            pitch: this.cameraRig.pitch,
+            yaw: this.cameraRig.yaw,
+            distance: this.cameraRig.distance,
+        });
+        if (cinematic) {
+            const rig = this.cinematicRig;
+            rig.pitch = cinematic.pitch;
+            rig.yaw = cinematic.yaw;
+            rig.distance = cinematic.distance;
+            rig.apply(camera, cinematic.x, cinematic.height, cinematic.y);
+            this.cameraOffsetY = cinematic.y - py;
+        } else {
+            this.cameraRig.apply(
+                camera,
+                px + this.cameraLean.x + pan.x + shake.x,
+                ground - 0.6,
+                py + this.cameraLean.y + pan.y + shake.y,
+            );
+            this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
+        }
         // A raid hall can be drawn darker than the map, and washed with a colour
         // (RaidRoomDef.hall)
         const hall =
@@ -2177,6 +2242,106 @@ export class GameClient implements GameFrameHandler {
         }
         const reach = left * SHAKE_TILES;
         return { x: Math.sin(now * 0.09) * reach, y: Math.cos(now * 0.077) * reach };
+    }
+
+    // Everything the opening cinematic's camera will see is loaded before it starts, behind the
+    // loading screen, and kept until it's over (MapManager.setPinned), so nothing pops in as it
+    // flies over the map
+    private preloadCinematic(sim: Sim, cinematic: CinematicPlayer): void {
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        const { x, y } = sim.player;
+        const squares = getCinematicSquares(cinematic.def, ground, {
+            x,
+            y,
+            height: ground(x, y) - 0.6,
+            pitch: this.cameraRig.pitch,
+            yaw: this.cameraRig.yaw,
+            distance: this.cameraRig.distance,
+        });
+        this.renderer.mapManager.setPinned(squares);
+        this.cinematicLoading = performance.now();
+        this.store.set({
+            screen: "loading",
+            loadingText: `Travelling to ${sim.map.name}`,
+            loadingProgress: 0,
+        });
+    }
+
+    // Whether the cinematic's still waiting on what it sees to load, showing how far it's got
+    private isCinematicLoading(): boolean {
+        const since = this.cinematicLoading;
+        if (since === undefined) {
+            return false;
+        }
+        const { total, left } = this.renderer.mapManager.getPinnedProgress();
+        if (left > 0 && performance.now() - since < CINEMATIC_LOAD_MS) {
+            const progress = Math.round(((total - left) / Math.max(1, total)) * 100);
+            if (progress !== this.store.getSnapshot().loadingProgress) {
+                this.store.set({ loadingProgress: progress });
+            }
+            return true;
+        }
+        this.cinematicLoading = undefined;
+        this.store.set({ screen: "run" });
+        return false;
+    }
+
+    // The opening cinematic on by a frame (MapDef.cinematic): its sounds as their cues go by,
+    // and where its camera is, or undefined once it's over (or there isn't one). play: the run's
+    // camera now, which it ends on.
+    private updateCinematic(
+        deltaTimeMs: number,
+        sim: Sim,
+        play: CinematicCamera,
+    ): CinematicCamera | undefined {
+        const cinematic = this.cinematic;
+        if (!cinematic) {
+            return undefined;
+        }
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        if (this.isCinematicLoading()) {
+            return getCinematicCamera(cinematic.def, 0, ground, play);
+        }
+        // It plays on behind a menu (a co-op run's pause doesn't stop it either)
+        // (a frame at most: the first after the map loads can be long)
+        for (const cue of cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000)) {
+            if (cue.sound !== undefined) {
+                this.audio.play(cue.sound, { volume: 1, minGap: 0 });
+            }
+        }
+        if (cinematic.done) {
+            this.endCinematic();
+            return undefined;
+        }
+        return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
+    }
+
+    // Any key, click, tap or button during the opening cinematic: straight to the run
+    skipCinematic(): void {
+        if (this.cinematic?.skip()) {
+            this.endCinematic();
+        }
+    }
+
+    private endCinematic(): void {
+        if (!this.cinematic) {
+            return;
+        }
+        this.cinematic = undefined;
+        this.view.cinematic = undefined;
+        // What it saw goes back to loading and unloading with the camera
+        this.renderer.mapManager.setPinned([]);
+        if (this.cinematicLoading !== undefined) {
+            this.cinematicLoading = undefined;
+            if (this.store.getSnapshot().screen === "loading") {
+                this.store.set({ screen: "run" });
+            }
+        }
+        // The solo run's clock starts from here: nothing banked while it was held
+        this.accumulator = Math.min(this.accumulator, TICK_MS);
+        if (this.store.getSnapshot().cinematic) {
+            this.store.set({ cinematic: false });
+        }
     }
 
     // A boss's intro that pans (BossIntroDef.pan): from the player to where it rises, held
@@ -2279,8 +2444,10 @@ export class GameClient implements GameFrameHandler {
         }
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
-        // moving goes on behind it)
-        const deciding = this.store.getSnapshot().overlay !== "none" && !this.paused;
+        // moving goes on behind it), and through the opening cinematic
+        const deciding =
+            (this.store.getSnapshot().overlay !== "none" && !this.paused) ||
+            this.cinematic !== undefined;
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);

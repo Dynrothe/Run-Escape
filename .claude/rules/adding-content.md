@@ -218,6 +218,10 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   the panel it scrolls.
 - `hard` is what hard mode multiplies its enemies' hitpoints and damage by (`hard.ts` has the rest of
   hard mode, and the numbers for a map that doesn't set its own). Sim it against normal with `HARD=1`.
+- People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
+  `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
+  cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
+  one to copy. Check every shot's triangles at a phone's size, as it says.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
   `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.

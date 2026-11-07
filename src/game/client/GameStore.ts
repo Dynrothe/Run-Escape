@@ -391,6 +391,8 @@ export type UiSnapshot = {
     waitingOn: string[];
     // Co-op: a revive you're part of, as the one down or the one reviving
     revive?: ReviveView;
+    // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
+    cinematic?: boolean;
     choices: ChoiceView[];
     chest?: ChestView;
     event?: EventView;

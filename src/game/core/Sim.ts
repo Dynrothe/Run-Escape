@@ -1291,6 +1291,7 @@ export class Sim {
         // Updated with the ground one from the start (getFlight's would be at
         // the same target by the time it's needed)
         const flightField = this.flightGrid && new FlowField(FLOW_FIELD_SIZE);
+        const facing = this.map.spawnFacing ?? { x: 0, y: -1 };
         return {
             index,
             name: options.name,
@@ -1304,9 +1305,9 @@ export class Sim {
                 prevX: start.x,
                 prevY: start.y,
                 radius: PLAYER_RADIUS,
-                facingX: 0,
-                facingY: -1,
-                yaw: 0,
+                facingX: facing.x,
+                facingY: facing.y,
+                yaw: yawFromVector(facing.x, facing.y),
                 moving: false,
                 hp: PLAYER_BASE_HP,
                 maxHp: PLAYER_BASE_HP,
