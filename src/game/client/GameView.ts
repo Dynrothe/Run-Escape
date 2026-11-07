@@ -11,7 +11,7 @@ import { CASKETS } from "../content/items";
 import { POWER_UP_BLINK, POWER_UP_COLOR, POWER_UP_LIFETIME, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
-import { EnemyDef } from "../content/types";
+import { EnemyDef, MapPropDef } from "../content/types";
 import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
@@ -38,6 +38,9 @@ import {
 } from "../core/entities";
 import { formatCompact } from "../ui/formatCompact";
 import { BossFightView } from "./BossFightView";
+import { CinematicPlayer } from "./Cinematic";
+import { CinematicView } from "./CinematicView";
+import { FloorView } from "./FloorView";
 import {
     CANNON_MODEL_KEY,
     GameAssets,
@@ -46,6 +49,7 @@ import {
     getEnemyModelKey,
     getPickupModelKey,
     getPileLook,
+    getPropKey,
     getShieldedModelKey,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
@@ -261,11 +265,17 @@ export class GameView {
     pickupTimers = true;
 
     private readonly fight: BossFightView;
+    private readonly floor: FloorView;
     // The party's pets (GameClient gives them as a run starts)
     readonly pets = new PetFollowers();
+    // The map's opening cinematic while it plays (MapDef.cinematic; GameClient sets it)
+    cinematic?: CinematicPlayer;
+    private readonly cinematicView: CinematicView;
 
     constructor(readonly assets: GameAssets) {
+        this.cinematicView = new CinematicView(assets);
         this.fight = new BossFightView(assets);
+        this.floor = new FloorView(assets);
     }
 
     reset(): void {
@@ -410,8 +420,10 @@ export class GameView {
         return Math.random() * 60;
     }
 
+    // On a floor's raised tiles and ramps (FloorTileRuleDef.height), on them
     private ground(sim: Sim, x: number, y: number): number {
-        return sim.grid.getHeight(x, y) / 128;
+        const lift = sim.floor ? sim.floor.liftAt(x, y) : 0;
+        return sim.grid.getHeight(x, y) / 128 - lift;
     }
 
     // The ground for something big on a ScapeRune map, whose slopes are too steep to stand it by its
@@ -584,6 +596,17 @@ export class GameView {
             this.drawRampage(actors, sim, rampage, alpha);
         }
 
+        // The map's props, and the cinematic's cast (standing in for some of them) while it plays
+        const cinematic = this.cinematic;
+        sim.map.props?.forEach((prop, i) => {
+            if (!cinematic || !this.cinematicView.hidesProp(cinematic, i)) {
+                this.drawProp(actors, sim, prop, alpha);
+            }
+        });
+        if (cinematic) {
+            this.cinematicView.submitActors(actors, sim, cinematic);
+        }
+
         for (const ring of sim.rings) {
             this.drawRing(actors, sim, ring);
         }
@@ -606,6 +629,7 @@ export class GameView {
         }
 
         this.fight.submitActors(actors, sim, alpha);
+        this.floor.submitActors(actors, sim, alpha);
 
         for (const effect of sim.effects) {
             const model = this.assets.get("spot:" + effect.spotAnim);
@@ -646,6 +670,26 @@ export class GameView {
             scale: ROCK_SCALE,
             alpha: Math.max(0, fade),
         });
+    }
+
+    // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock
+    private drawProp(actors: ActorRenderer, sim: Sim, prop: MapPropDef, alpha: number): void {
+        const model = this.assets.get(getPropKey(prop.npcId));
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(prop.seq);
+        const { x, y } = prop;
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick + alpha),
+            x,
+            this.ground(sim, x, y),
+            y,
+            prop.yaw ?? 0,
+            { scale: prop.scale ?? 1 },
+        );
     }
 
     // Black cats are lost on the darker maps, so always with the silhouette and
@@ -1091,6 +1135,9 @@ export class GameView {
         this.drawShouts(overlay, sim, alpha, now, scale);
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
+        if (this.cinematic) {
+            this.cinematicView.drawScreen(overlay, sim, this.cinematic);
+        }
     }
 
     // A RuneLite-style pie over each power-up on the ground, draining clockwise as

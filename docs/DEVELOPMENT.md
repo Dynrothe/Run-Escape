@@ -950,6 +950,52 @@ Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apar
 of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
 2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
 
+### Props and opening cinematics
+
+- **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
+  on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
+  such as a person standing guard (Vardhelm's two knights at the keep's door). They're baked as
+  the map's travelled to (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+- **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
+  map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
+  NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
+  so a prop can act and go back to standing), `cues` at seconds in (a seq played once or looped,
+  overhead chat, a spot animation on someone, a sound, gone), and the camera's `shots`, the last
+  of which is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out
+  everything from the def and a clock: the camera's a monotone cubic through the shots per
+  channel (target, height, pitch, yaw, distance), so it never overshoots one, with `hold` easing
+  to a stop; `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms
+  a frame at most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast,
+  their spot animations, overhead chat and the bars, and `GameView` hides the props it stands in
+  for. The cast is baked with the props (`getPropRequests`, so the slim cache keeps them), its
+  spot animations and sounds with the game's.
+    - It's view only, on each player's own clock, and never in the sim or its hashes, so co-op
+      can't fall out of step over it. Input's held while it plays: any key or controller button
+      (`GameClient.pressKey`) or a click or tap on the run screen (`.ui-cinematic`) skips it, and
+      does nothing else; the HUD and touch controls are hidden. A solo run doesn't step until the
+      last shot begins (`CinematicPlayer.holdsRun`); in co-op the run goes on with the player
+      standing still (`updateCoop` sends no movement).
+    - Nothing pops in as it flies: `getCinematicSquares` follows the camera's path (every
+      quarter second, rays through the screen's middle, corners and edges, wide enough for a
+      phone, to the ground or the render distance, with a margin) for the map squares it will
+      see, and `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever
+      the camera is, never unloaded) and keeps the loading screen up until they're in
+      (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
+      as usual from there.
+    - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
+      isn't its head. `MapDef.spawnFacing` turns the player as the run starts (south if it's left
+      out), to face the way the cinematic's camera ends looking.
+    - **A phone has to draw every shot.** A camera low and level sees much further than the play
+      camera, and a city costs far more than a phone's 69k triangles. Vardhelm's close shots look
+      down at a pitch of 240 to 320, so the city beyond stays out of the picture, and its flight
+      starts 14 tiles out over the city and pulls back to the play camera's 18 once past it. With
+      those, its shots come to 19k to 65k at 844 by 390, but one at 93k, over ground the play
+      camera sees at 94k. With its close shots near level, they were up to 309k.
+    - To watch one on the dev server: `game.selectMap("scaperune_vardhelm"); game.startRun()`. To
+      hold a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`,
+      then `await frameProbe.sample(5)` for its triangles. The page reloads if a source file
+      changes, which ends it.
+
 ### Raids
 
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
@@ -1008,6 +1054,58 @@ clears, not the bot's: it often dies to the Maiden.
 
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
 up's pick at its max; `?raidtest=short` does only the first.
+
+### A floor that fights back (prototype)
+
+`MapDef.floor` (`FloorDef`) makes a rectangle of the floor move: slabs rise under the player in
+waves, and tiles fall away. It's a prototype of the Wardens' third phase in the Tombs of Amascut, on
+one dev map, `scaperune_wardens_floor` (Dev maps on the dev server: the real room, cut from the
+cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.ts`).
+
+- `core/ArenaFloor.ts` runs the script: each pattern works out every tile's warning and rise (or
+  fall) when it starts, into per-tile arrays the client draws from. `Sim.stepFloor` hurts whoever's
+  middle is on a tile while its slab's up, and a tile that's fallen puts whoever was on it on the
+  nearest tile that isn't going (`Hero.drag`, frozen meanwhile), hurt.
+- A fallen tile is blocked floor on the grid (`ArenaGrid.dropTile`): `Steps` is worked out again
+  round it and `ArenaGrid.version` goes up, so each hero's flow field is worked out again too.
+  Flying enemies cross holes. Grids are kept between runs, so `ArenaFloor` puts every tile back as
+  a run starts.
+- `client/FloorView.ts` draws every tile as the rising slab's model (spotanim 2220) at rest, over the
+  hidden floor, so each can move on its own and a fallen one opens onto the pit under it. The
+  warnings are the tiles' own movement and the light under them: a tremor (rattling up off its
+  bed and twisting) before a rise, the same tremor with a sag and a darkening before a fall, and
+  under each such tile the floor's gold light (`FloorDef.glow`), which shows only through the
+  seams the tremor opens and grows as the moment nears. It's the slab again just under the tile,
+  drawn with a negative `flash`, which `actor.vert.glsl` takes as a glow in the tint's colour.
+  The cache's rising slabs (2220 to 2223, seqs 9697 to 9700) are the rise itself, tipped three
+  ways (2223 moves as 2221 does), and there's no tremor among them, so it's in code. Hits are a share of the player's hitpoints, so any
+  adventurer can try it.
+- What it throws up (`FloorDef.effects`) is drawn from the floor's arrays and the clock alone, with
+  no state: dust as slabs rise, grit falling off a tile about to go, and chips and dust with a
+  falling tile. Each is on a share of the tiles, to keep a phone's triangles down. A tile beside a
+  hole has its thickness drawn under it (the slab again, lower and darker each time), so every
+  hole, one tile or most of the floor, has the same cut edge going down into the dark. Under the
+  floor (`FloorDef.under`) is one structure on a grid symmetric about the floor's middle: the
+  Tombs' gold-banded pillars every six tiles both ways, beams between them, the engraved wall
+  going down round the floor's edge, and a dim amber glow far below. Only what's within a few
+  tiles of a hole is drawn.
+  `FloorDef.shake` has the sim shake the camera (`bossImpact`) for a slab beside a player or a
+  tile going near one, which Settings can turn off.
+- The pit is terrain, so it moves under the floor as the camera does: the floor's tiles are a
+  bridge (`TILE_BRIDGE` on level 1) nine tiles over a pit with no floor and nothing of the map's in it, and the
+  player walks the deck (`ArenaGrid.getHeight`'s bridge heights).
+- What else a floor can do is all optional on `FloorDef` (the map-making guide, "Floors that fight
+  back"): tile effects (`Sim.stepFloorEffects`, and `PlayerMovement`'s `floor` rule for haste, slow
+  and ice), tiles that rebuild, pressure plates and actions (`ArenaFloor.act`, `Sim.floorAct`,
+  `BossAttackDef.floor`), phases, raised tiles and ramps (`ArenaGrid.addLedge`, `ArenaFloor.liftAt`,
+  which `GameView` stands actors on), and pillars that stop shots and sight (`ArenaFloor.blocksSight`).
+- Two renderer pieces are the floor's. `ActorDrawOptions.early` draws an actor before the
+  silhouettes (`ActorRenderer.renderEarly`), so the player shows through a floor's pillars and
+  raised tiles as through walls. `ModelBakeRequest.topOnly` bakes a model's upward faces near its top
+  alone: a tile at rest among others is drawn as that. `window.floorWholeTiles = true` (dev) draws
+  them whole, to compare.
+- The floor preview, `?floorpreview` on the dev server (`ui/FloorPreview.tsx`, checks in
+  `core/floorLint.ts`), draws a floor flat and plays its script on a timeline.
 
 ### Pets
 
@@ -1254,6 +1352,13 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
 
 Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
 request (without the game's cache, so `generator.test.ts` skips its long map check there).
+
+The dev server's file watcher leaves out `.claude/`, where Claude Code keeps its worktrees. Each is
+a whole checkout, and watching them all held up the first load after every start by tens of
+seconds. Add anything else big that sits inside the checkout to `server.watch.ignored` in
+`vite.config.ts` (`node_modules` and `dist` are left out already). A package that only a worker
+imports goes in `optimizeDeps.include`, as `threads/worker` and `jszip` do: Vite's startup scan
+doesn't follow workers, so it would find the package mid-load and reload the page.
 
 URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a

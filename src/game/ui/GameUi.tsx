@@ -1720,7 +1720,17 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
-            {isCoarsePointer && hud && (
+            {ui.cinematic && (
+                // The opening cinematic: no HUD, and a click or tap anywhere skips it
+                <div
+                    className="ui-cinematic"
+                    onPointerDown={(e) => {
+                        e.preventDefault();
+                        client.skipCinematic();
+                    }}
+                />
+            )}
+            {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
                     inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
                     overlay={ui.overlay}
@@ -1728,7 +1738,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 />
             )}
             {/* The inspectable HUD slots sit above the touch movement zone. */}
-            {hud && (
+            {hud && !ui.cinematic && (
                 <Hud
                     hud={hud}
                     client={client}

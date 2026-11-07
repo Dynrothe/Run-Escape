@@ -31,11 +31,20 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("bgti
 // loaded when asked for: importing it starts its own render workers.
 const showViewer = new URLSearchParams(window.location.search).has("viewer");
 const MapViewerApp = lazy(() => import("./mapviewer/MapViewerApp"));
+// Dev only: ?floorpreview, the floor preview (a floor's tiles and script, and its checks)
+const showFloorPreview =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).has("floorpreview");
+// (a build leaves it out: DEV is false there, so the import's never made)
+const FloorPreview = import.meta.env.DEV ? lazy(() => import("./game/ui/FloorPreview")) : undefined;
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 root.render(
     // <React.StrictMode>
-    showViewer ? (
+    showFloorPreview && FloorPreview ? (
+        <Suspense>
+            <FloorPreview />
+        </Suspense>
+    ) : showViewer ? (
         <Suspense>
             <MapViewerApp />
         </Suspense>

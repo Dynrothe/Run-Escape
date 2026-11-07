@@ -4,6 +4,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream";
+import { normalizePath } from "vite";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
@@ -11,6 +12,16 @@ import { parseRange } from "./desktop/gameServer";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
+
+// Claude Code keeps its worktrees in .claude/worktrees, whole checkouts inside
+// this one. Watching them all held up the first load after every start. Taken
+// from this checkout's root, so a server started in a worktree still watches it.
+const CLAUDE_DIR = normalizePath(resolve(process.cwd(), ".claude"));
+
+function isInClaudeDir(file: string): boolean {
+    const path = normalizePath(file);
+    return path === CLAUDE_DIR || path.startsWith(`${CLAUDE_DIR}/`);
+}
 
 // Shown on the title screen, beside CHANGELOG.md
 const { version } = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
@@ -304,6 +315,9 @@ export default defineConfig({
         ],
     },
     optimizeDeps: {
+        // Only the render worker imports these, and the startup scan doesn't
+        // follow workers. Found mid-load instead, they made Vite reload the page.
+        include: ["threads/worker", "jszip"],
         // wasm-gzip finds its .wasm via `new URL(..., import.meta.url)`, which
         // breaks once the dep optimizer moves it into node_modules/.vite.
         exclude: ["wasm-gzip"],
@@ -314,6 +328,7 @@ export default defineConfig({
             "Cross-Origin-Opener-Policy": "same-origin",
             "Cross-Origin-Embedder-Policy": "require-corp",
         },
+        watch: { ignored: [isInClaudeDir] },
     },
     worker: {
         // The render data worker is spawned with `{ type: "module" }` and its

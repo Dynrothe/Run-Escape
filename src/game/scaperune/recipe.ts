@@ -81,6 +81,10 @@ export type MapRecipe = {
             | "finalBossWarning"
             | "victoryText"
             | "fun"
+            | "floor"
+            | "props"
+            | "cinematic"
+            | "spawnFacing"
         >
     >;
 };
