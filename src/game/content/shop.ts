@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { ShopUpgradeDef } from "./types";
 
 // Permanent upgrades bought with banked coins, themed as skills.
@@ -223,4 +224,16 @@ export function getPageCost(upgrades: Record<string, number>): number {
 export function getUpgradeCost(upgradeId: string, upgrades: Record<string, number>): number {
     const more = { ...upgrades, [upgradeId]: (upgrades[upgradeId] ?? 0) + 1 };
     return getPageCost(more) - getPageCost(upgrades);
+}
+
+export function shopUpgradeName(upgrade: ShopUpgradeDef): string {
+    return tr(`shop.${upgrade.id}.name`, upgrade.name);
+}
+
+export function shopUpgradeDescription(upgrade: ShopUpgradeDef): string {
+    return tr(`shop.${upgrade.id}.desc`, upgrade.description);
+}
+
+export function shopUpgradeText(upgrade: ShopUpgradeDef) {
+    return { name: shopUpgradeName(upgrade), description: shopUpgradeDescription(upgrade) };
 }

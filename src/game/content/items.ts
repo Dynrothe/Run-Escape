@@ -1,4 +1,5 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { tr } from "../i18n";
 import {
     CasketDef,
     CasketTier,
@@ -1042,3 +1043,19 @@ export const CASKETS: Record<CasketTier, CasketDef> = {
 };
 
 export const CASKET_TIERS: CasketTier[] = ["easy", "medium", "hard", "elite", "master"];
+
+export function gearSlotName(slot: (typeof GEAR_SLOTS)[number]): string {
+    return tr(`slot.${slot.id}.name`, slot.name);
+}
+
+export function itemName(item: ItemDef): string {
+    return tr(`${item.kind === "gear" ? "gear" : "util"}.${item.id}.name`, item.name);
+}
+
+export function utilityDescription(item: UtilityDef): string {
+    return tr(`util.${item.id}.desc`, item.description);
+}
+
+export function casketName(tier: CasketTier): string {
+    return tr(`casket.${tier}.name`, CASKETS[tier].name);
+}

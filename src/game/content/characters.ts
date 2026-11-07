@@ -1,4 +1,5 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
 import { CharacterDef } from "./types";
 
@@ -596,4 +597,16 @@ export function getCharacter(id: string): CharacterDef {
         throw new Error("Unknown character " + id);
     }
     return character;
+}
+
+export function characterName(character: CharacterDef): string {
+    return tr(`char.${character.id}.name`, character.name);
+}
+
+export function characterDescription(character: CharacterDef): string {
+    return tr(`char.${character.id}.desc`, character.description);
+}
+
+export function characterText(character: CharacterDef) {
+    return { name: characterName(character), description: characterDescription(character) };
 }

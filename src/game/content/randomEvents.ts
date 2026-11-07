@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { CASKET_GEAR, UTILITY } from "./items";
 import { SOUNDS } from "./sounds";
 import { ItemDef, RandomEventDef } from "./types";
@@ -171,4 +172,9 @@ export function getQuizGroups(): ItemDef[][] {
         }
     }
     return [...groups.values()].filter((group) => group.length >= 3);
+}
+
+// A random event's name in the language chosen (event.<id>.name)
+export function eventName(event: Pick<RandomEventDef, "id" | "name">): string {
+    return tr(`event.${event.id}.name`, event.name);
 }

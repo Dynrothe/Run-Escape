@@ -1,4 +1,5 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
+import { tr } from "../i18n";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
@@ -8376,4 +8377,9 @@ export function getEnemy(id: string): EnemyDef {
         throw new Error("Unknown enemy " + id);
     }
     return enemy;
+}
+
+// The name to show for an enemy, in the language chosen (enemy.<id>.name)
+export function enemyName(def: Pick<EnemyDef, "id" | "name">): string {
+    return tr(`enemy.${def.id}.name`, def.name);
 }
