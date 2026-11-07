@@ -9,6 +9,9 @@ the version in the corner).
 
 - Android updates, by trippy22: opening the app checks GitHub and offers to download a newer APK,
   then asks before installing it. Offline play still works when the check is unavailable.
+- Cloud save, by trippy22: keep a copy of your progress online, and bring it to another browser,
+  the Windows app or a phone with a code. No account, name or email. Its button beside Settings
+  on the title screen shows whether it's synced and opens it; it's in Settings too.
 - Co-op choice countdown, by Deivid Smarzaro: everyone can see when the next automatic reward
   choice is due while the party is still choosing.
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a

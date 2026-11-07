@@ -54,6 +54,7 @@ go stale. Add anything that cost you time to work out.
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
+| Cloud save in the game: syncing, the choice, Settings  | `client/CloudSave.ts`, `ui/CloudSave.tsx`, `docs/DEVELOPMENT.md` Saves |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
@@ -74,6 +75,7 @@ go stale. Add anything that cost you time to work out.
 | The relays' rows in the collector, for runs they flag  | `server/analytics/README.md` (Run checks)                              |
 | The same relay on Cloudflare, and its setup            | `server/cloudflare/`                                                   |
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
+| Cloud saves' Worker: sync codes, revisions, backups    | `server/cloud-saves/`                                                  |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
@@ -209,8 +211,9 @@ desktop build.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
 - The bundled game lets out only what the desktop app does (`RelayPolicy.java`,
-  `desktop/gameServer.ts`): the relay, and the run collector. A new address the game reaches needs
-  adding to both. The updater's requests to GitHub are the app's own, like the desktop launcher's.
+  `desktop/gameServer.ts`): the relay, the run collector, and the cloud-save Worker's `/v1/`. A
+  new address the game reaches needs adding to both. The updater's requests to GitHub are the
+  app's own, like the desktop launcher's.
 - Its generated game files, APKs and keys stay out of Git (`.gitignore`).
 - Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
   there's no Android SDK here. Touch, co-op and airplane mode need a phone with a current WebView:

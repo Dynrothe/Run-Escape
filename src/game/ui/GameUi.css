@@ -436,6 +436,42 @@
     flex-shrink: 0;
 }
 
+/* A box to type in (cloud save's code): it goes under the label when there isn't room beside it,
+   and shrinks to what's left */
+.ui-setting-wide {
+    flex-wrap: wrap;
+}
+
+.ui-setting-wide .ui-setting-control {
+    flex: 1 1 260px;
+    min-width: 0;
+    justify-content: flex-end;
+}
+
+.ui-cloud-link {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    max-width: 340px;
+}
+
+/* Grows from nothing, so its own width never counts towards the panel's and scrolls it sideways */
+.ui-cloud-code-input {
+    width: 0;
+    font-family: "OSRS Bold", sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.ui-cloud-code {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--ui-yellow);
+    user-select: all;
+}
+
 .ui-toggle {
     min-width: 52px;
     color: #e04040;
@@ -522,6 +558,23 @@
 
 .ui-title-settings:hover {
     background: var(--ui-card-hover);
+}
+
+/* Cloud save's button: faded while it's off, with its "!" or "no" sign in the corner */
+.ui-title-cloud {
+    position: relative;
+}
+
+.ui-title-cloud-off .ui-icon {
+    opacity: 0.55;
+}
+
+.ui-title-cloud-badge {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    display: flex;
+    pointer-events: none;
 }
 
 .ui-discord {

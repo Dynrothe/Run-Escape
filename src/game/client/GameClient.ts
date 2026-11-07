@@ -75,6 +75,7 @@ import {
     getCinematicCamera,
     getCinematicSquares,
 } from "./Cinematic";
+import { CLOUD_SAVE_URL, CloudSync } from "./CloudSave";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -511,6 +512,8 @@ export class GameClient implements GameFrameHandler {
     // stays as it is
     private saveNoRoom = false;
     private stopSaveLock?: () => void;
+    // Cloud save, where the build has a Worker for it
+    readonly cloud?: CloudSync;
     // Co-op: the room and its relay, and the run being played with it
     readonly coop: CoopLobby;
     private coopRun?: CoopRun;
@@ -644,6 +647,17 @@ export class GameClient implements GameFrameHandler {
         // Co-op's offered only where there's a relay to play it through
         this.coop.checkAvailable();
         document.addEventListener("visibilitychange", this.onVisibilityChange);
+        if (CLOUD_SAVE_URL) {
+            this.cloud = new CloudSync(CLOUD_SAVE_URL, {
+                gameVersion: this.saveStore.gameVersion,
+                save: () => this.save,
+                // Where persist() would write
+                canWrite: () => this.saveLock.held === true && !this.newerSave && !this.saveNoRoom,
+                apply: (save) => this.replaceSave(save),
+                onView: (cloud) => this.store.set({ cloud }),
+            });
+            this.cloud.start();
+        }
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
         // Before a run starts, so it's with the save as it is now
@@ -667,6 +681,7 @@ export class GameClient implements GameFrameHandler {
 
     dispose(): void {
         this.stopSaveLock?.();
+        this.cloud?.stop();
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
         this.stopBackgroundTicker();
         this.coop.close();
@@ -680,7 +695,12 @@ export class GameClient implements GameFrameHandler {
     // ---- UI actions ----
 
     showScreen(screen: Screen): void {
+        const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
+        // Done shopping: a save point for cloud save
+        if ((was === "shop" || was === "armoury") && screen !== was) {
+            this.cloud?.savePoint();
+        }
     }
 
     // The adventurer the game starts on (or none, to start on the first again)
@@ -1186,6 +1206,8 @@ export class GameClient implements GameFrameHandler {
     private onSaveLock(held: boolean): void {
         if (held) {
             this.reloadSave();
+            // With the save as it is now, to find one from another device
+            this.cloud?.check();
         } else {
             this.updateSaveBlock();
         }
@@ -1234,6 +1256,8 @@ export class GameClient implements GameFrameHandler {
     replaceSave(save: SaveData): void {
         this.useSave(save, true);
         this.persist();
+        // An import's a save point; a download from the cloud is in step already
+        this.cloud?.savePoint();
     }
 
     // Plays on with this save. toFavourite: go to its favourite, as it would
@@ -1938,6 +1962,8 @@ export class GameClient implements GameFrameHandler {
         // and a NaN in a solo one's would come back from the save as 0 coins
         const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
         this.persist();
+        // A run's results: a save point for cloud save
+        this.cloud?.savePoint();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -2617,6 +2643,7 @@ export class GameClient implements GameFrameHandler {
     // minutes to catch up on when they're back
     private onVisibilityChange = (): void => {
         this.stopBackgroundTicker();
+        this.cloud?.onVisibility(document.hidden);
         if (document.hidden && this.coopRun) {
             this.backgroundTime = performance.now();
             const source = `setInterval(() => postMessage(0), ${TICK_MS});`;

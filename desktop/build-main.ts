@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 
-// Build the launcher with the same relay and analytics addresses as the game.
+// Build the launcher with the same relay, analytics and cloud-save addresses as the game.
 await build({
     entryPoints: ["desktop/main.ts"],
     bundle: true,
@@ -13,5 +13,6 @@ await build({
     define: {
         __COOP_URL__: JSON.stringify(process.env.VITE_COOP_URL ?? ""),
         __RUN_ANALYTICS_URL__: JSON.stringify(process.env.VITE_RUN_ANALYTICS_URL ?? ""),
+        __CLOUD_SAVE_URL__: JSON.stringify(process.env.VITE_CLOUD_SAVE_URL ?? ""),
     },
 });

@@ -417,16 +417,18 @@ chunk it lists.
 
 ### Online and offline play
 
-The web build and the app each need the relay and the run collector, and they must match: the
-build as `VITE_COOP_URL` and `VITE_RUN_ANALYTICS_URL`, the app as `-PcoopUrl` and
-`-PrunAnalyticsUrl` (the `COOP_URL` and `RUN_ANALYTICS_URL` repository variables in the workflows).
-Empty means solo only, or no run stats, as on desktop. Android, desktop and the website share rooms
+The web build and the app each need the relay, the run collector and the cloud-save Worker, and
+they must match: the build as `VITE_COOP_URL`, `VITE_RUN_ANALYTICS_URL` and `VITE_CLOUD_SAVE_URL`,
+the app as `-PcoopUrl`, `-PrunAnalyticsUrl` and `-PcloudSaveUrl` (the `COOP_URL`,
+`RUN_ANALYTICS_URL` and `CLOUD_SAVE_URL` repository variables in the workflows). Empty means solo
+only, no run stats, or no cloud save, as on desktop. Android, desktop and the website share rooms
 only on the same game build.
 
 The game runs at `https://appassets.androidplatform.net/assets/game/index.html`, answered inside
 the app. **Never change that address or the application ID, `io.jere.run_escape`**: Android
 players' saves belong to them. `RelayPolicy.java` lets out what the desktop app does, and nothing
-else: the relay's https address (GET only), and the collector's one URL by POST and its preflight.
+else: the relay's https address (GET only), the collector's one URL by POST and its preflight, and
+the cloud-save Worker's `/v1/` (GET, PUT, POST, DELETE and preflights, no query).
 Its `connect-src` says the same, as WebSockets skip the app's request handling; workers get it too.
 
 Shared memory needs cross-origin isolation, which COOP and COEP headers alone don't give a WebView:
@@ -530,8 +532,10 @@ first.
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
 into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
 `wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
-has to be `wss://`. The app lets out only that relay and, if the `RUN_ANALYTICS_URL` variable is
-set, POSTs to that one collector URL: `protocol.handle` in `main.ts` answers every other https
+has to be `wss://`. The app lets out only that relay, POSTs to that one collector URL if the
+`RUN_ANALYTICS_URL` variable is set, and requests to the cloud-save Worker's `/v1/` if
+`CLOUD_SAVE_URL` is (an https origin, `isCloudSaveRequest` in `src/util/cloudSaveUrl.ts`):
+`protocol.handle` in `main.ts` answers every other https
 request itself, and WebSockets are kept to the relay by the `Content-Security-Policy` header
 `gameServer.ts` sends (`connect-src`). Without `COOP_URL` there's no Multiplayer.
 
@@ -1895,10 +1899,10 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
-**Exports are the only backup.** Clearing the browser's data (or uninstalling the Android app)
+**Exports are the only backup** unless cloud save is on. Clearing the browser's data (or uninstalling the Android app)
 loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
 reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
-`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving. It comes after the
+`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving or cloud save is on. It comes after the
 menu so a controller's highlight still starts on Singleplayer. The file Export gives has
 `SaveData.lastExported` (`Date.now()`) in it, so it says when it was made; a newer game's save goes
 as it's stored, without one. The save itself takes the date, and the reminder goes until tomorrow,
@@ -1909,6 +1913,50 @@ the player's local ones, and an export dated ahead of the clock doesn't count. N
 day in localStorage (`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's
 reminder, it shouldn't travel in an exported file, and it can be put off while another tab holds
 the save.
+
+**Cloud save** (`client/CloudSave.ts`, `ui/CloudSave.tsx`) keeps a copy with the cloud-save
+Worker (`server/cloud-saves/`), in a build with `VITE_CLOUD_SAVE_URL` whose Worker answers
+`/v1/health`. An app that doesn't let requests out to it (an older desktop launcher or APK)
+answers something else, so Settings doesn't offer it there. There's no account: Turn on makes a
+sync code, and typing it on another device links that one. The local save stays the main copy,
+and none of this changes `SaveData`. Its button sits beside Settings on the title screen
+(`CloudSaveButton`): the client's storage chest with an up arrow (`CLOUD_SAVE_SPRITES` in
+`content/titleIcons.ts`), faded while it's off, with a "!" in its corner while a choice is
+waiting and a "no" sign while it can't sync. It opens the choice, or cloud save's own panel
+(`CloudSavePanel`): Settings' rows, on their own.
+
+- **What's kept here.** `rune-survivors-cloud` holds the code, the cloud's revision this save came
+  from or went up as, and the save's `fingerprint` then (a hash of its progress that leaves out
+  `gameVersion`, `lastExported` and key order). A save with a different one has changed. It's
+  apart from the save, so it never goes out in an export. Never rename it.
+- **Uploads happen at save points only** (`CloudSync.savePoint`): a run's results, leaving
+  Skills or the Armoury, an import, and leaving the tab. Not on every write: buying ranks one
+  after another goes up once, on leaving Skills. A save point uploads only if the fingerprint's
+  changed, and only where the save's written at all (the lock, not a newer game's, room to keep
+  it). Uploads are `UPLOAD_COOLDOWN_MS` (2 minutes) apart at least: a save point within it waits
+  for it to pass, and whatever's changed by then goes up once. A save that didn't get up is still
+  changed, so the next save point or check sends it. Sync now in Settings sends it at once. A
+  download is in step as it goes in, so it doesn't come back up.
+- **Checks** happen when the tab gets the save lock, and on coming back to the tab (every
+  minute at most). They only read. The cloud's revision being this device's means only local
+  changes are news. A different one is taken silently when nothing changed here, or the save has
+  no runs (the player who cleared their browser). Otherwise, and when an upload's refused as
+  stale, the title screen asks which to keep, showing both summaries, unless the two hold the
+  same progress (the same fingerprint). Nothing syncs until the player picks (Later puts it in
+  Settings). Keeping this device's uploads with `force`.
+- **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
+  Worker refuses an older game's upload over it, so the choice says why, and only Keep this
+  device's (losing what's new) or Later.
+- **Deleting is undoable for a week**, so a leaked code can't wipe every version. The Worker only
+  marks the code, and answers it with a 410 and `restorableUntil` until its saves are removed.
+  The game shows that as the `deleted` problem, with the date and a Restore button
+  (`CloudSync.restore`), on the device that deleted it and on any the code's typed into.
+- **New code** (`CloudSync.newCode`) is what shuts out a leaked code: the same saves get a new
+  one, and the old one stops working everywhere. Deleting can't, as whoever has a code can
+  restore it.
+- **The Worker's answers are untrusted too.** Anything can answer these requests (a captive
+  portal, a proxy), so `readMeta` checks each field before the game shows or acts on it, a 200
+  that isn't JSON is a problem, and a downloaded save goes through `importSave` like a file.
 
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or

@@ -144,7 +144,7 @@ off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics)
 There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
 plays offline, and updates the game by itself when it can. Saves are kept apart from a browser's,
-and Export and Import in Settings carry one across.
+and Export and Import in Settings carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#desktop) covers building and releasing it.
 
 ## Android
@@ -158,7 +158,7 @@ Run Escape, then confirm the update. If the check fails or you're offline, the c
 working. You can also install a new APK over the old one yourself (uninstalling first deletes your
 progress). It needs a current Android System
 WebView, and says so if the phone's is too old. Its saves are apart from a browser's too, and
-Export and Import carry one across.
+Export and Import carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#android) covers building it and setting up its releases.
 
 ## Contributing
