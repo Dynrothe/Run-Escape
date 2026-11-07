@@ -1512,8 +1512,9 @@ Co-op runs in lockstep. Every player's browser runs the same `Sim`, built from t
 everyone's loadout (`GameStart`), and only what the players do goes over the network. The host
 numbers the ticks (frames) and sends, every frame or two, what happened at each: who changed what
 they're pressing (as whole numbers, so every copy moves the same) and who chose what. Guests step
-only as far as the host has sent, sending their own input to the host to go in a frame, a move
-about 15 times a second at most. The host checks what a guest sends (`cleanMove`,
+only as far as the host has sent, sending their own input to the host to go in a frame: a change
+of move about 15 times a second, sooner for a stop or a key pressed or let go (`CoopRun.setMove`,
+below). The host checks what a guest sends (`cleanMove`,
 `cleanAction` in `core/lockstep.ts`) before it goes in, since every copy applies it. That only
 checks its shape, so whether a player can do it now is the sim's to check: a modified game can
 send anything (a downed player can't choose, reroll or skip, as `isChoosing` says). Nothing
@@ -1551,15 +1552,16 @@ frame, then replays a bounded local input history from the confirmed position. A
 returns to the last sent direction inside the throttle still sends its new sequence, so a brief
 predicted tap can't remain unacknowledged forever.
 
-`CoopRun.setMove` sends a stop immediately after a sent movement, even inside the 66 ms
-throttle. Starts and turns that release or reverse either sent axis can spend a spare send
-credit to go early. This includes releasing north while continuing east: waiting for the
-throttle would keep the host moving north and later pull the eastward run sideways.
-Two credits refill at one per 66 ms; other changes still obey
-the throttle, and stops spend no credit. This bounds even rapid tapping below 36 movement
-messages in a second, leaving room for actions under the relays' limit of 60. A reconnect
-restores the credits and forces the current input out. The policy applies with prediction
-off too, and doesn't change frame rate, protocol, simulation rules or hash checks.
+`CoopRun.setMove` sends a stop immediately after a sent movement, even inside the throttle
+(`MOVE_INTERVAL_MS`). A change that starts, stops or reverses either sent axis (a key pressed,
+let go or turned back, east to northeast as much as north to east) can spend a spare send
+credit to go early: waiting for the throttle would leave the host walking the old line, and
+the picture would reconcile sideways once the echo came. A stick's smaller changes in between
+still wait for the throttle. Two credits refill at one per `MOVE_INTERVAL_MS`, and stops spend
+none, which keeps even rapid tapping well under the relays' `MAX_UPS_PER_SECOND`, with room
+left for actions. A reconnect restores the credits and forces the current input out. The
+policy applies with prediction off too, and doesn't change frame rate, protocol, simulation
+rules or hash checks.
 
 Prediction covers the character's position, facing and movement animation, camera, minimap,
 health bar, attached text, slashes and auras. `PlayerPose` is presentation state: never write it
@@ -1581,9 +1583,12 @@ The camera follows the predicted pose, so the picture is kept steady:
   ordinary correction: with a lead past the budget, the target falls short of where the stop lands.
   Check the latest input sequence against the acknowledged one, not just whether the last
   echoed direction is zero: the start of a short tap may not have been echoed yet either.
-  Errors beyond the snap limit still snap.
+  Errors beyond the snap limit still snap. It waits `STOP_HOLD_MS` at most: frames still coming
+  with no echo that long means the stop was lost (a relay drops what's past its rate limit).
 - Inputs sent before the first host frame stay pending until their echoes arrive. Presentation
-  falling back during that initial wait mustn't reset the timeline and acknowledge them itself.
+  falling back during that initial wait mustn't reset the timeline and acknowledge them itself,
+  but the clock keeps up meanwhile: otherwise the first frame's lead is the whole load, and the
+  picture holds at every late frame until an echo re-times it.
 - When frames stop coming (`QUIET_MS`) with the lead at its budget, the picture holds where it
   is, and from `STALE_MS` it stands still with no walk animation. Easing back to the last
   confirmed spot would walk the hero backwards, then rush forward when a reconnect's resend
@@ -1595,49 +1600,8 @@ frames retain their elapsed animation time and replay movement up to the same sa
 Held movement refreshes its sequence at `MOVE_REFRESH_MS` (still subject to the network send
 throttle), bounding accumulated timing drift when the host loses simulation time. Prediction
 never steps a second full simulation or rolls back combat. Extreme latency remains visible,
-and a hit can still arrive after the local picture appears to have moved clear.
-
-#### Measuring prediction
-
-Open the game with `?movementDiagnostics` (or append `&movementDiagnostics` to an existing
-query), join as a guest with movement prediction on, and reproduce the slide. In the browser
-console, `movementDiagnostics.snapshot()` returns the current capture;
-`copy(JSON.stringify(movementDiagnostics.stop()))` copies it and disables capture in browsers
-with the DevTools `copy` helper. `movementDiagnostics.start()` resets and enables it again.
-Capture before leaving the run; a new run or recreating prediction starts fresh. The flag works
-on release builds too, exposing only these three diagnostic methods. In dev, the equivalent
-methods are `game.setMovementDiagnostics(true)` and `game.getMovementDiagnostics()`.
-
-The snapshot includes the build, applied frame and queued-frame count, plus these measurements:
-
-- `inputToSendMs`: Time from sampling an input to sending it; a high value points to local
-  throttling or a long local frame.
-- `sendToConfirmMs`, `inputToConfirmMs`: Time until its echo is **applied**. Includes relay travel,
-  host scheduling and the guest buffer; it is not a ping measurement. Coalesced inputs without their
-  own echo don't contribute a confirmation sample.
-- `errorTiles`: Distance between the predicted pose after local movement and the replayed
-  authoritative target, before correction. Measured while prediction is active.
-- `correctionTiles`, `idleCorrectionTiles`: Total distance actually moved by reconciliation, with
-  the stationary portion separate from intended movement. Small idle errors can remain inside the
-  dead zone.
-- `fallbackCorrectionTiles`: Correction when returning to confirmed presentation, such as on a
-  freeze or death.
-- `renderGapMs`, `longRenderFrames`: Elapsed time between prediction renders and the number over 50
-  ms; useful for spotting local hitches. These aren't CPU execution times.
-- `leadMs`, `confirmedAgeMs`: Uncapped prediction lead and time since a host frame was applied. A
-  large age can mean network or host delay, or that the guest stopped processing frames.
-- `pendingStopFrames`, `haltedFrames`, `stalledFrames`: Frames waiting for a stop echo or holding
-  the picture at the replay/staleness limits.
-- `distanceSnaps`, `wallSnaps`, `teleports`: Counts of the distinct hard-correction paths.
-
-Measures contain count, mean and maximum. Counters cover every prediction render while enabled;
-`samples` keeps only the latest 64 details, at most 10 per second, so it can miss a short spike
-whose maximum still appears in the counters. Capture is off by default and stays local: no
-automatic upload, storage, timers, console logging or per-frame allocations for diagnostics.
-The sample slots are allocated once and reused; snapshot copying happens only when requested.
-Use the existing `frameProbe.sample(60)` in dev for CPU/render costs with capture off and on.
-These observations narrow the cause but cannot by themselves separate host CPU delay from
-network delay; that needs a matching host capture or external network measurements.
+and a hit can still arrive after the local picture appears to have moved clear. To measure
+it, see Measuring prediction at the end of this section.
 
 - **Loading**: the host waits up to 20 seconds for everyone's map (and an opening cinematic's
   squares: see Props and opening cinematics). Anything that comes for the run
@@ -1870,6 +1834,54 @@ playing from".
 To try it locally, `bun run start` and open the game in two windows (one private, for a
 save of its own), make a room in one and join it from the other. A second ordinary window says the
 game's open in another tab, and Play without saving lets it play (see Saves).
+
+#### Measuring prediction
+
+Open the game with `?movementDiagnostics` (or append `&movementDiagnostics` to an existing
+query), join as a guest with movement prediction on, and reproduce the slide. In the browser
+console, `movementDiagnostics.snapshot()` returns the current capture;
+`copy(JSON.stringify(movementDiagnostics.stop()))` copies it and disables capture in browsers
+with the DevTools `copy` helper. `movementDiagnostics.start()` resets and enables it again.
+Capture before leaving the run; a new run or recreating prediction starts fresh. The flag works
+on release builds too, exposing only these three diagnostic methods, but only in a browser tab:
+the Windows and Android apps can't take the flag, and turn DevTools off in their release builds.
+In dev, the equivalent methods are `game.setMovementDiagnostics(true)` and
+`game.getMovementDiagnostics()`.
+
+The snapshot includes the build, applied frame and queued-frame count, plus these measurements:
+
+- `inputToSendMs`: Time from sampling an input to sending it; a high value points to local
+  throttling or a long local frame. Only inputs sampled during the capture count, each on its
+  first send (a reconnect sends the latest again).
+- `sendToConfirmMs`, `inputToConfirmMs`: Time until its echo is **applied**. Includes relay travel,
+  host scheduling and the guest buffer; it is not a ping measurement. Coalesced inputs without their
+  own echo don't contribute a confirmation sample.
+- `errorTiles`: Distance between the predicted pose after local movement and the replayed
+  authoritative target, before correction. Measured while prediction is active.
+- `correctionTiles`, `idleCorrectionTiles`: Total distance actually moved by reconciliation, with
+  the stationary portion separate from intended movement. Small idle errors can remain inside the
+  dead zone.
+- `fallbackCorrectionTiles`: Correction when returning to confirmed presentation, such as on a
+  freeze or death.
+- `renderGapMs`, `longRenderFrames`: Elapsed time between prediction renders and the number over
+  `LONG_RENDER_MS`; useful for spotting local hitches. These aren't CPU execution times.
+- `leadMs`, `confirmedAgeMs`: Uncapped prediction lead and time since a host frame was applied. A
+  large age can mean network or host delay, or that the guest stopped processing frames.
+- `pendingStopFrames`, `haltedFrames`, `stalledFrames`: Frames waiting for a stop echo or holding
+  the picture at the replay/staleness limits.
+- `distanceSnaps`, `wallSnaps`, `teleports`: Counts of the distinct hard-correction paths.
+
+Measures contain count, mean and maximum. Counters cover every prediction render from the run's
+first host frame while enabled (the wait before it is the run loading, not the link); `samples`
+keeps only the latest `SAMPLES` details, `SAMPLE_MS` apart at least (both in
+`client/coop/PredictionDiagnostics.ts`), so it can miss a short
+spike whose maximum still appears in the counters. Capture is off by default and stays local:
+no automatic upload, storage, timers, console logging or per-frame allocations for diagnostics.
+The sample slots and input timings are allocated once and reused; snapshot copying happens only
+when requested. Use the existing `frameProbe.sample(60)` in dev for CPU/render costs with
+capture off and on. These observations narrow the cause but cannot by themselves separate host
+CPU delay from network delay; that needs a matching host capture or external network
+measurements.
 
 ### Touch screens
 

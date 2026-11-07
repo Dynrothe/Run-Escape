@@ -82,6 +82,48 @@ test("input sent before the first host frame stays pending until its echo", () =
     expect(prediction.render()!.x).toBeCloseTo(initialX + 12 * PLAYER_SPEED, 8);
 });
 
+test("a long wait for the first host frame doesn't hold the picture at a late frame", () => {
+    let now = 0;
+    const sim = makeSim();
+    const prediction = new MovementPrediction(sim, () => now);
+    // The run loading: drawn, but no frames come
+    for (now = 0; now < 5000; now += 10) prediction.render();
+    let tick = 0;
+    let last = 0;
+    for (now = 5000; now <= 5500; now += 10) {
+        if (now === 5200) prediction.sample([127, 0]);
+        // Frames stop for a moment, before the start's echo
+        if (now % 20 === 0 && (now <= 5240 || now >= 5380)) {
+            sim.tick = ++tick;
+            prediction.confirm([]);
+        }
+        const pose = prediction.render()!;
+        if (now > 5200) {
+            expect(pose.moving).toBe(true);
+            expect(pose.x).toBeGreaterThan(last);
+        }
+        last = pose.x;
+    }
+});
+
+test("a stop whose echo never comes is waited for only so long", () => {
+    const { sim, prediction, time } = setup();
+    prediction.sample([127, 0]);
+    time(100);
+    prediction.render();
+    prediction.sample([0, 0]);
+    const stopped = prediction.render()!.x;
+    expect(stopped).toBeGreaterThan(sim.player.x + 0.2);
+    // Frames keep coming, but neither the tap's start nor its stop got there
+    for (let now = 120; now <= 4000; now += 20) {
+        time(now);
+        prediction.confirm([]);
+        const pose = prediction.render()!;
+        if (now < 2000) expect(pose.x).toBe(stopped);
+    }
+    expect(prediction.render()!.x).toBeCloseTo(sim.player.x, 2);
+});
+
 test("replays terrain collision, movement speed and cursed controls", () => {
     const { sim, prediction, time } = setup(true);
     sim.heroes[1].stats.moveSpeed = 4;
@@ -326,8 +368,8 @@ test("a direction changed back inside the send throttle still gets acknowledged"
     );
     guest.setMove(1, 0);
     now = 20;
-    // A turn adding an axis is still coalesced by the ordinary throttle.
-    guest.setMove(Math.SQRT1_2, Math.SQRT1_2);
+    // A stick eased off the same way is still coalesced by the ordinary throttle
+    guest.setMove(0.5, 0);
     now = 40;
     guest.setMove(1, 0);
     expect(messages).toHaveLength(1);
@@ -380,6 +422,12 @@ test.each([true, false])("short taps and reversals send promptly (prediction: %s
     now = 720;
     guest.setMove(-0.6, 0.8);
     expect(messages.at(-1)).toMatchObject({ at: 720, move: [-76, 102] });
+    // Pressing a second key while running (east to northeast)
+    now = 900;
+    guest.setMove(1, 0);
+    now = 920;
+    guest.setMove(Math.SQRT1_2, Math.SQRT1_2);
+    expect(messages.at(-1)).toMatchObject({ at: 920, move: [90, 90] });
 });
 
 test.each([true, false])(
@@ -405,20 +453,27 @@ test.each([true, false])(
             [-1, 0],
             [0, -1],
         ];
-        for (now = 0; now < 6000; now++) {
+        // A second key pressed and let go, then everything let go
+        const keys = [
+            [1, 0],
+            [Math.SQRT1_2, Math.SQRT1_2],
+            [0, 0],
+        ];
+        for (now = 0; now < 9000; now++) {
             if (now < 3000) guest.setMove([1, 0, -1, 0][now % 4], 0);
-            else guest.setMove(turns[now % 4][0], turns[now % 4][1]);
+            else if (now < 6000) guest.setMove(turns[now % 4][0], turns[now % 4][1]);
+            else guest.setMove(keys[now % 3][0], keys[now % 3][1]);
         }
         for (const at of messages) {
             expect(
                 messages.filter((time) => time >= at && time < at + 1000).length,
             ).toBeLessThanOrEqual(36);
         }
-        now = 6000;
+        now = 9000;
         guest.setMove(0, 0);
         guest.resumed();
         guest.setMove(0, 0);
-        expect(messages.at(-1)).toBe(6000);
+        expect(messages.at(-1)).toBe(9000);
     },
 );
 
@@ -561,6 +616,9 @@ test.each(
                 { from: [-1, 0], to: [0, -1] },
                 { from: [Math.SQRT1_2, Math.SQRT1_2], to: [1, 0] },
                 { from: [-Math.SQRT1_2, -Math.SQRT1_2], to: [0, -1] },
+                // A second key pressed while running
+                { from: [1, 0], to: [Math.SQRT1_2, Math.SQRT1_2] },
+                { from: [0, -1], to: [-Math.SQRT1_2, -Math.SQRT1_2] },
             ].map(({ from, to }) => ({ delay, phase, from, to })),
         ),
     ),
@@ -677,7 +735,9 @@ test("diagnostic capture is bounded and changes neither poses nor confirmed stat
     const capture = measured.guest.prediction!.getDiagnostics()!;
     expect(capture.samples).toHaveLength(64);
     expect(capture.samples[0].atMs).toBeGreaterThan(1000);
-    expect(first.samples.at(-1)!.atMs).toBe(1000);
+    // Taken a sample interval apart, from the first host frame
+    expect(first.samples.at(-1)!.atMs).toBeGreaterThan(900);
+    expect(first.samples.at(-1)!.atMs).toBeLessThanOrEqual(1000);
     expect(capture.inputToSendMs.max).toBe(0);
     expect(capture.sendToConfirmMs.mean).toBe(120);
     expect(capture.pendingStopFrames).toBeGreaterThan(0);
@@ -700,6 +760,53 @@ test("diagnostics measure actual stationary corrections and render stalls", () =
     time(700);
     prediction.render();
     expect(prediction.getDiagnostics()!.stalledFrames).toBe(1);
+});
+
+test("diagnostics leave out the wait for the first host frame", () => {
+    let now = 0;
+    const sim = makeSim();
+    const prediction = new MovementPrediction(sim, () => now);
+    prediction.setDiagnostics(true);
+    for (now = 0; now < 5000; now += 10) prediction.render();
+    for (now = 5000; now < 6000; now += 20) {
+        sim.tick++;
+        prediction.confirm([]);
+        prediction.render();
+    }
+    const capture = prediction.getDiagnostics()!;
+    expect(capture.renderGapMs.count).toBe(50);
+    expect(capture.leadMs.max).toBeLessThanOrEqual(20);
+    expect(capture.confirmedAgeMs.max).toBe(0);
+});
+
+test("diagnostics don't count a reconnect's resend as send delay", () => {
+    let now = 0;
+    const guest = new CoopRun(
+        makeSim(),
+        false,
+        { sendUp() {}, sendDown() {} },
+        new Map([
+            ["p0", 0],
+            ["p1", 1],
+        ]),
+        "p0",
+        () => now,
+    );
+    guest.setMove(1, 0);
+    now = 20;
+    guest.setMove(0, 0);
+    now = 5000;
+    guest.prediction!.setDiagnostics(true);
+    // The stop goes again, but it was sampled and sent before the capture
+    guest.resumed();
+    guest.setMove(0, 0);
+    now = 5100;
+    guest.setMove(1, 0);
+    expect(guest.prediction!.getDiagnostics()!.inputToSendMs).toEqual({
+        count: 1,
+        mean: 0,
+        max: 0,
+    });
 });
 
 test("echoes of a held move a tick early or late leave the walk steady", () => {
@@ -740,6 +847,7 @@ test("after a dropped connection, the hero stands, then glides to the resent fra
     );
     let last = 0;
     let largest = 0;
+    let stopped = 0;
     let resumed = false;
     for (now = 0; now <= 3000; now += 20) {
         if (now >= 2000 && !resumed) {
@@ -753,6 +861,9 @@ test("after a dropped connection, the hero stands, then glides to the resent fra
             expect(pose.x).toBe(last);
             expect(pose.moving).toBe(false);
         }
+        if (now === 2600) stopped = pose.x;
+        // And no sliding on after the stop
+        if (now > 2600) expect(pose.x).toBe(stopped);
         if (now > 100) largest = Math.max(largest, pose.x - last);
         last = pose.x;
     }
@@ -760,7 +871,8 @@ test("after a dropped connection, the hero stands, then glides to the resent fra
     // over several frames
     expect(guest.sim.player.x - 1033.5).toBeGreaterThan(5);
     expect(largest).toBeLessThan(1);
-    // An immediate stop may retain the small stationary dead zone.
+    // Walking, the picture can trail the host by a tick or two (an echo only
+    // re-times it past DRIFT_MS). Standing, that stays inside DEAD_ZONE.
     expect(Math.abs(last - guest.sim.player.x)).toBeLessThan(0.1);
     expect(guest.desynced).toBe(false);
 });

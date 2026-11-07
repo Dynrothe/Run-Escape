@@ -28,8 +28,11 @@ const GLIDE_DISTANCE = 4;
 // late) stays, rather than the hero and camera creeping after the stop.
 // Walking again takes it out; a bigger one is taken out all the way.
 const DEAD_ZONE = 0.1;
+// Frames keep coming but a stop's echo hasn't in this long: it was lost (a
+// relay drops what a guest sends past its rate limit), so stop waiting for it
+const STOP_HOLD_MS = 2000;
 
-type Input = { seq: number; at: number; move: [number, number]; sentAt?: number };
+type Input = { seq: number; at: number; move: [number, number] };
 
 function sameMove(a: [number, number], b: [number, number]): boolean {
     return a[0] === b[0] && a[1] === b[1];
@@ -71,12 +74,14 @@ export class MovementPrediction {
     // Called even when the network's move throttle hasn't elapsed yet.
     sample(move: [number, number]): number {
         const last = this.inputs[this.inputs.length - 1];
+        const time = this.now();
         if (
             last.move[0] !== move[0] ||
             last.move[1] !== move[1] ||
-            ((move[0] !== 0 || move[1] !== 0) && this.now() - last.at >= MOVE_REFRESH_MS)
+            ((move[0] !== 0 || move[1] !== 0) && time - last.at >= MOVE_REFRESH_MS)
         ) {
-            this.inputs.push({ seq: ++this.sequence, at: this.now(), move });
+            this.inputs.push({ seq: ++this.sequence, at: time, move });
+            this.diagnostics?.sampled(this.sequence, time);
             if (this.inputs.length > MAX_INPUT_HISTORY) {
                 this.inputs.shift();
                 this.confirmedAt = Math.max(this.confirmedAt, this.inputs[0].at);
@@ -87,20 +92,15 @@ export class MovementPrediction {
 
     setDiagnostics(on: boolean): void {
         this.diagnostics = on ? new PredictionDiagnostics(this.now()) : undefined;
-        for (const input of this.inputs) delete input.sentAt;
     }
 
     getDiagnostics() {
         return this.diagnostics?.snapshot(this.now());
     }
 
+    // CoopRun's: this input has gone to the host
     sent(seq: number): void {
-        if (!this.diagnostics) return;
-        const input = this.inputs.find((entry) => entry.seq === seq);
-        if (input && input.sentAt === undefined) {
-            input.sentAt = this.now();
-            this.diagnostics.inputToSendMs.add(input.sentAt - input.at);
-        }
+        this.diagnostics?.sent(seq, this.now());
     }
 
     // Called AFTER applying a confirmed frame, not just receiving its packet.
@@ -119,10 +119,7 @@ export class MovementPrediction {
             }
             const input = this.inputs.find((entry) => entry.seq === event.moveSeq);
             if (input) {
-                if (this.diagnostics && input.sentAt !== undefined) {
-                    this.diagnostics.sendToConfirmMs.add(time - input.sentAt);
-                    this.diagnostics.inputToConfirmMs.add(time - input.at);
-                }
+                this.diagnostics?.echoed(input.seq, time);
                 // This confirmed step already moved once with that input.
                 const at = input.at + TICK_MS;
                 if (
@@ -210,7 +207,9 @@ export class MovementPrediction {
         const sim = this.sim;
         const player = sim.player;
         const dt = Math.max(0, time - this.renderedAt);
-        const diagnostics = this.diagnostics;
+        // Not measured before the first host frame: that wait is the run
+        // loading, and would swamp the lead and frame ages of the link itself
+        const diagnostics = this.confirmed ? this.diagnostics : undefined;
         const lead = time - this.confirmedAt;
         const age = time - this.receivedAt;
         const blend = 1 - Math.exp(-dt / CORRECTION_MS);
@@ -223,8 +222,11 @@ export class MovementPrediction {
         const stalled = time - this.receivedAt > STALE_MS;
         if (!playing || stalled || time < this.renderedAt) {
             // Before the first host frame, inputs can already be in flight.
-            // Resetting would mark them acknowledged without their echoes.
+            // Resetting would mark them acknowledged without their echoes. The
+            // clock still keeps up, or the first frame's lead would be the
+            // whole load, holding the picture at every late frame until an echo.
             if (this.confirmed) this.resetTimeline(time);
+            else this.confirmedAt = time;
             this.renderedAt = time;
             const pose = this.pose;
             if (!pose) {
@@ -295,7 +297,7 @@ export class MovementPrediction {
         const wasMoving = pose.moving;
         const latest = this.inputs[this.inputs.length - 1];
         const still = latest.move[0] === 0 && latest.move[1] === 0;
-        const stopping = still && latest.seq > this.acknowledged;
+        const stopping = still && latest.seq > this.acknowledged && time - latest.at < STOP_HOLD_MS;
         let error = 0;
         let correction = 0;
         if (this.pose && !halted) {

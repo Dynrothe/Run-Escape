@@ -25,9 +25,10 @@ export const GUEST_BUFFER_FRAMES = 4;
 // The host waits this long at most for everyone's map to load
 const LOAD_WAIT_MS = 20_000;
 // Ordinary stick changes and refreshes stay at about 15 messages a second.
-// Two credits let starts and axis releases/reversals go early; each refills at this interval.
-// Stops spend no credit, so even frantic tapping stays under 36 moves/second,
-// leaving room for actions below the relays' 60 up-messages/second limit.
+// Two credits let a direction pressed, let go or reversed go early; each
+// refills at this interval. Stops spend no credit, so even frantic tapping
+// stays under 36 moves/second, leaving room for actions below the relays'
+// 60 up-messages/second limit (MAX_UPS_PER_SECOND).
 const MOVE_INTERVAL_MS = 66;
 // The host keeps what it's sent for this many frames (20 seconds), to send
 // again to a guest that missed some. A gap only comes from a dropped
@@ -223,13 +224,14 @@ export class CoopRun {
         const still = move[0] === 0 && move[1] === 0;
         const wasStill = this.lastMove[0] === 0 && this.lastMove[1] === 0;
         const stop = still && !wasStill;
-        // Releasing either axis is a stop on that axis, even while the other
-        // stays held. Delaying it makes a straight run reconcile sideways.
+        // Either axis starting, stopping or reversing, even while the other
+        // stays held (east to northeast, or back): delaying it leaves the host
+        // walking the old line, and the picture reconciles sideways. A stick's
+        // smaller changes in between wait.
         const urgent =
             !still &&
-            (wasStill ||
-                (this.lastMove[0] !== 0 && move[0] * this.lastMove[0] <= 0) ||
-                (this.lastMove[1] !== 0 && move[1] * this.lastMove[1] <= 0));
+            (Math.sign(move[0]) !== Math.sign(this.lastMove[0]) ||
+                Math.sign(move[1]) !== Math.sign(this.lastMove[1]));
         this.moveCredits = Math.min(
             2,
             this.moveCredits + Math.max(0, now - this.moveCreditAt) / MOVE_INTERVAL_MS,

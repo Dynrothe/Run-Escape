@@ -1,5 +1,13 @@
 // Opt-in, local measurements. No logging, timers, uploads or per-frame allocations.
-// Summary counters cover every frame; the last 64 detail samples are capped at 10Hz.
+// Summary counters cover every frame; the last SAMPLES detail samples are taken
+// SAMPLE_MS apart at most.
+const SAMPLES = 64;
+const SAMPLE_MS = 100;
+// A render this long after the last is a hitch worth counting
+const LONG_RENDER_MS = 50;
+// Inputs remembered for timing their send and echo, as many as MovementPrediction keeps
+const INPUTS = 128;
+
 class Measure {
     count = 0;
     total = 0;
@@ -47,7 +55,7 @@ export class PredictionDiagnostics {
     distanceSnaps = 0;
     wallSnaps = 0;
     teleports = 0;
-    private readonly samples: Sample[] = Array.from({ length: 64 }, () => ({
+    private readonly samples: Sample[] = Array.from({ length: SAMPLES }, () => ({
         atMs: 0,
         renderGapMs: 0,
         leadMs: 0,
@@ -58,8 +66,37 @@ export class PredictionDiagnostics {
     }));
     private sampleCount = 0;
     private sampledAt = -Infinity;
+    // Only inputs sampled during this capture are timed: one from before it,
+    // sent again after a reconnect, would count its whole age as send delay
+    private readonly inputSeq = new Float64Array(INPUTS).fill(-1);
+    private readonly inputAt = new Float64Array(INPUTS);
+    private readonly inputSentAt = new Float64Array(INPUTS).fill(NaN);
 
     constructor(private readonly startedAt: number) {}
+
+    sampled(seq: number, time: number): void {
+        const i = seq % INPUTS;
+        this.inputSeq[i] = seq;
+        this.inputAt[i] = time;
+        this.inputSentAt[i] = NaN;
+    }
+
+    // Its first send only: a reconnect sends the latest again
+    sent(seq: number, time: number): void {
+        const i = seq % INPUTS;
+        if (this.inputSeq[i] !== seq || !Number.isNaN(this.inputSentAt[i])) return;
+        this.inputSentAt[i] = time;
+        this.inputToSendMs.add(time - this.inputAt[i]);
+    }
+
+    // Each echo counts once. A coalesced input without its own echo counts none.
+    echoed(seq: number, time: number): void {
+        const i = seq % INPUTS;
+        if (this.inputSeq[i] !== seq || Number.isNaN(this.inputSentAt[i])) return;
+        this.inputSeq[i] = -1;
+        this.sendToConfirmMs.add(time - this.inputSentAt[i]);
+        this.inputToConfirmMs.add(time - this.inputAt[i]);
+    }
 
     frame(
         time: number,
@@ -73,7 +110,7 @@ export class PredictionDiagnostics {
         this.renderGapMs.add(dt);
         this.leadMs.add(Math.max(0, lead));
         this.confirmedAgeMs.add(age);
-        if (dt > 50) this.longRenderFrames++;
+        if (dt > LONG_RENDER_MS) this.longRenderFrames++;
         if (mode === "halted") this.haltedFrames++;
         if (mode === "stalled") this.stalledFrames++;
         if (mode === "pending-stop") this.pendingStopFrames++;
@@ -84,7 +121,7 @@ export class PredictionDiagnostics {
             if (mode === "idle" || mode === "pending-stop") this.idleCorrectionTiles += correction;
         }
         if (correction > 1e-9) this.correctedFrames++;
-        if (time - this.sampledAt < 100) return;
+        if (time - this.sampledAt < SAMPLE_MS) return;
         this.sampledAt = time;
         const sample = this.samples[this.sampleCount++ % this.samples.length];
         sample.atMs = time - this.startedAt;
