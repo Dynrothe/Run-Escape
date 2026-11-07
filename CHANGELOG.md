@@ -3,7 +3,7 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## 0.29.0 - 2026-11-07
+## 0.28.1 - 2026-11-07
 
 ### Changed
 
