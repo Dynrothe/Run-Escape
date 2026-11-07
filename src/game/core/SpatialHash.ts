@@ -116,4 +116,16 @@ export class SpatialHash<T extends Positioned> {
             }
         }
     }
+
+    // Whether query(x, y, radius) looks in the cell that has the point (atX, atY)
+    visits(x: number, y: number, radius: number, atX: number, atY: number): boolean {
+        const cellX = Math.floor(atX / this.cellSize);
+        const cellY = Math.floor(atY / this.cellSize);
+        return (
+            cellX >= Math.floor((x - radius) / this.cellSize) &&
+            cellX <= Math.floor((x + radius) / this.cellSize) &&
+            cellY >= Math.floor((y - radius) / this.cellSize) &&
+            cellY <= Math.floor((y + radius) / this.cellSize)
+        );
+    }
 }

@@ -29,11 +29,13 @@ import {
     getCharacterAttackSeqs,
     getEnemyModelKey,
     getGameSpriteIds,
+    getHeldRunPoses,
     getLookKey,
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
     getPowerUpLookRequests,
     getPrayerHeadicon,
+    getRunAppearance,
     getRunAttackSeqs,
     getShieldedModelKey,
     getStatueModelKey,
@@ -310,6 +312,38 @@ describe("player bakes", () => {
         expect(lookHas(undefined, key, [])).toBe(false);
     });
 
+    test("have the run pose of the weapon in hand, and no other's", () => {
+        const crossbow = getWeapon("armadyl_crossbow");
+        const pose = { seqId: crossbow.playerSeq, frame: crossbow.runPose };
+        expect(pose.frame).toBeDefined();
+        // The Inquisitor's, whose crossbow it's for
+        const sim = createRun(1, "inquisitor");
+        expect(getHeldRunPoses(getRunAppearance(sim), getRunAttackSeqs(sim))).toEqual([pose]);
+        const holding = (objId: number) => createAppearance({ [EquipSlot.WEAPON]: objId });
+        const objId = crossbow.levels[0].objId!;
+        expect(getHeldRunPoses(holding(objId), [crossbow.playerSeq])).toEqual([pose]);
+        // Not when the look hasn't its swing
+        expect(getHeldRunPoses(holding(objId), [])).toEqual([]);
+        // Nor with another weapon in hand, even one with the same swing, or none
+        const hunter = getWeapon("dragon_hunter_crossbow");
+        expect(hunter.playerSeq).toBe(crossbow.playerSeq);
+        expect(getHeldRunPoses(holding(hunter.levels[0].objId!), [hunter.playerSeq])).toEqual([]);
+        expect(getHeldRunPoses(createAppearance(), [crossbow.playerSeq])).toEqual([]);
+    });
+
+    // A run pose goes by the look's weapon and the sim by Sim.getHeldWeapon:
+    // the same item, as long as nothing else is worn in the weapon slot
+    test("wear nothing in the weapon slot but the weapon in hand", () => {
+        for (const passive of PASSIVES) {
+            for (const piece of passive.equipment ?? []) {
+                expect(piece.slot, passive.id).not.toBe(EquipSlot.WEAPON);
+            }
+        }
+        for (const slot of GEAR_SLOTS) {
+            expect(slot.equipSlot, slot.id).not.toBe(EquipSlot.WEAPON);
+        }
+    });
+
     test("in co-op have the reviver's emote", () => {
         expect(getRunAttackSeqs(createRun(2), 1)).toContain(REVIVE_SEQ);
     });
@@ -370,6 +404,22 @@ describe("power-ups in the cache", () => {
             }
         }
         expect(keys).toContain("spot:" + VISITOR_SPOTANIM);
+    });
+
+    test("weapons' projectile items are baked at every level, so the slim cache gets them", () => {
+        const requests = GameAssets.getBaseRequests();
+        for (const weapon of WEAPONS) {
+            for (const level of weapon.levels) {
+                if (level.projectileObjId !== undefined) {
+                    expect(requests, weapon.id).toContainEqual({
+                        kind: "obj",
+                        key: "obj:" + level.projectileObjId,
+                        objId: level.projectileObjId,
+                        count: 1,
+                    });
+                }
+            }
+        }
     });
 
     // Every level's, not only the first: the Toxic blowpipe's darts change as it levels

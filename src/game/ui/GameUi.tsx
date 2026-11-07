@@ -382,7 +382,7 @@ function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
     return (
         <Setting
             name="Share run stats"
-            text="When a run ends, send its map, mode, adventurers and result, with no name or save, to help balance the game"
+            text="When a run ends, send its map, mode, adventurers and result, with no name or save, to help balance the game. Co-op relays can still note a run their cheat checks flag."
         >
             <Toggle
                 on={ui.display.runStats}
@@ -898,6 +898,8 @@ function TitleHint(): JSX.Element {
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
     const [board, setBoard] = useState(false);
+    // A raid's expert mode, solo only for now (GameClient.toggleExpert)
+    const expertShown = map.raid !== undefined && ui.coop.status === "offline";
     return (
         <div className="ui-fill ui-select">
             <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(map)} />
@@ -915,9 +917,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                         {/* A raid ends with its last room: no endless */}
                         {!map.raid && <EndlessSwitch ui={ui} client={client} />}
                         <HardSwitch ui={ui} client={client} />
-                        {map.raid && ui.coop.status === "offline" && (
-                            <ExpertSwitch ui={ui} client={client} />
-                        )}
+                        {expertShown && <ExpertSwitch ui={ui} client={client} />}
                     </>
                 )}
                 <button
@@ -925,7 +925,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     onClick={() => client.startRun()}
                 >
                     <KeyHint pad="start" /> Enter {map.name}
-                    {ui.hard && !map.tombs && " hard"}
+                    {ui.hard && !map.tombs && (ui.expert && expertShown ? " expert" : " hard")}
                     {ui.endless && !map.fun && !map.tombs && " endless"}
                 </button>
             </div>
@@ -2275,15 +2275,23 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
             {buffs.map((buff) => (
                 <div
                     key={buff.id}
-                    className={buff.harmful ? "ui-buff ui-buff-harmful" : "ui-buff"}
+                    className={
+                        "ui-buff" +
+                        (buff.harmful ? " ui-buff-harmful" : "") +
+                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
+                    }
                     title={buff.name}
                 >
                     <ItemIcon objId={buff.objId} size={24} />
-                    <span>{buff.secondsLeft}s</span>
-                    <div
-                        className="ui-buff-bar"
-                        style={{ transform: `scaleX(${buff.fraction})` }}
-                    />
+                    {buff.secondsLeft !== undefined && (
+                        <>
+                            <span>{buff.secondsLeft}s</span>
+                            <div
+                                className="ui-buff-bar"
+                                style={{ transform: `scaleX(${buff.fraction})` }}
+                            />
+                        </>
+                    )}
                 </div>
             ))}
         </div>
@@ -3429,7 +3437,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                     {result.hard && (
                                         <tr>
                                             <td>Difficulty</td>
-                                            <td>Hard</td>
+                                            <td>{result.expert ? "Expert" : "Hard"}</td>
                                         </tr>
                                     )}
                                     {result.endless && (

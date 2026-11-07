@@ -8,7 +8,8 @@ import { assembleChunkedCache } from "../../src/mapviewer/Caches";
 import { CacheInfo } from "../../src/rs/cache/CacheInfo";
 import { Hasher } from "../../src/util/Hasher";
 import { loadCache } from "./load-util";
-import { SlimLoader, SlimUnit, takeReads } from "./slim-load";
+import { extractUnit } from "./slim-load";
+import type { SlimUnit } from "./slim-plan";
 
 export type WorkerData = {
     entry: string;
@@ -34,12 +35,9 @@ const cache = chunkDir
           true,
       )
     : loadCache(info);
-const loader = new SlimLoader(cache);
-// What making the loaders read goes with the first unit
 port.on("message", (unit: SlimUnit) => {
-    loader
-        .run(unit)
-        .then(() => reply({ reads: takeReads() }))
+    extractUnit(cache, unit)
+        .then((reads) => reply({ reads }))
         .catch((e) => reply({ error: e instanceof Error ? (e.stack ?? e.message) : String(e) }));
 });
 reply({ ready: true });

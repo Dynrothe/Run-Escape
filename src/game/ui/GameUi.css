@@ -1664,6 +1664,11 @@
     background: #e04040;
 }
 
+/* A revive: the icon alone, with no room kept for seconds or a bar */
+.ui-buff-untimed {
+    padding: 1px 3px;
+}
+
 .ui-inventory {
     display: flex;
     gap: 3px;

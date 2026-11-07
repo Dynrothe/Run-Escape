@@ -66,12 +66,15 @@ go stale. Add anything that cost you time to work out.
 | Weapon attack benchmark                                | `scripts/game/measure-weapon-dps.ts`                                   |
 | Co-op: how it works, hosting its relay                 | `docs/DEVELOPMENT.md` (Co-op)                                          |
 | Co-op relay server                                     | `server/coop-relay.mjs`                                                |
+| The relays' checks on a run's frames                   | `server/coop-checks.mjs`                                               |
+| The relays' rows in the collector, for runs they flag  | `server/analytics/README.md` (Run checks)                              |
 | The same relay on Cloudflare, and its setup            | `server/cloudflare/`                                                   |
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
 | The slim cache's chunks, and how the game loads them   | `src/rs/cache/ChunkedCache.ts`, `docs/DEVELOPMENT.md` (Hosting)        |
+| What the slim cache loads, and what it reuses          | `scripts/cache/slim-plan.ts`, `docs/DEVELOPMENT.md` (Hosting)          |
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |

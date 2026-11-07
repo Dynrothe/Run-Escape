@@ -58,7 +58,7 @@ import {
     ImpactDef,
     WeaponDef,
 } from "../content/types";
-import { WEAPONS, getWeapon } from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
@@ -69,6 +69,12 @@ export const PLAYER_SEQS = {
     run: 824,
     death: 836,
 };
+
+// Eating, whose interleave order is the cache's usual split of a player for
+// doing something while walking: the legs (and the body's root) from the
+// walk, the rest from what's being done. The game's attacks have none of
+// their own, so they're played over the run with this one's.
+export const PLAYER_INTERLEAVE_SEQ = 829;
 
 export const PICKUP_OBJS: Record<"food" | "casket", number> = {
     food: 2140,
@@ -357,16 +363,14 @@ function getSpotAnimIds(): number[] {
     return [...ids];
 }
 
-// Items drawn flying or circling: thrown knives, and orbiting runes
+// Items drawn flying or circling: bolts, thrown knives, and orbiting runes
 function getThrownObjIds(): number[] {
     const ids = new Set<number>();
     for (const weapon of WEAPONS) {
-        if (weapon.kind === "knives") {
-            for (const level of weapon.levels) {
-                const objId = level.projectileObjId ?? level.objId;
-                if (objId !== undefined) {
-                    ids.add(objId);
-                }
+        for (const level of weapon.levels) {
+            const objId = getProjectileObjId(weapon, level);
+            if (objId !== undefined) {
+                ids.add(objId);
             }
         }
         for (const objId of weapon.orbitObjIds ?? []) {
@@ -386,6 +390,28 @@ function getWeaponSeqs(weapons: WeaponDef[]): number[] {
 // reviver performs
 export function getPlayerAttackSeqs(): number[] {
     return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ])];
+}
+
+// The run poses of the weapon in the player's hand (WeaponDef.runPose), of
+// the swings a look is baked with. Only its, since the sim records no other
+// weapon's swing while the player moves. The look's weapon is the sim's
+// (Sim.getHeldWeapon, through getCurrentAppearance) as long as nothing else
+// is worn in the weapon slot, which a test checks.
+export function getHeldRunPoses(
+    appearance: PlayerAppearance,
+    attackSeqs: number[],
+): { seqId: number; frame: number }[] {
+    const held = appearance.equipment[EquipSlot.WEAPON];
+    if (held === undefined || held < 0) {
+        return [];
+    }
+    return WEAPONS.flatMap((weapon) =>
+        weapon.runPose !== undefined &&
+        attackSeqs.includes(weapon.playerSeq) &&
+        weapon.levels.some((level) => level.objId === held)
+            ? [{ seqId: weapon.playerSeq, frame: weapon.runPose }]
+            : [],
+    );
 }
 
 // The attack animations a hero's bake needs: their weapons', and in co-op the
@@ -1287,8 +1313,24 @@ export class GameAssets {
                     PLAYER_SEQS.death,
                     ...attackSeqs,
                 ].filter((id, i, all) => all.indexOf(id) === i);
+                // The held weapon's aim over the run, for a moment after each
+                // shot on the move
+                const poses = getHeldRunPoses(appearance, attackSeqs);
                 const bake = await this.bake([
-                    { kind: "player", key: "player", appearance, seqIds },
+                    {
+                        kind: "player",
+                        key: "player",
+                        appearance,
+                        seqIds,
+                        runPoses:
+                            poses.length > 0
+                                ? {
+                                      poses,
+                                      runSeqId: stance.run,
+                                      maskSeqId: PLAYER_INTERLEAVE_SEQ,
+                                  }
+                                : undefined,
+                    },
                     ...getPowerUpLookRequests(appearance),
                 ]);
                 this.renderer.updateTextureArray(bake.loadedTextures);

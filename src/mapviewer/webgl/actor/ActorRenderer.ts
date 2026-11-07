@@ -35,6 +35,8 @@ export class ActorAnim {
         readonly segments: Uint16Array,
         readonly frameLengths: Uint16Array,
         readonly looping: boolean,
+        // A frame of seqId over the run (BakedAnim.runPose), not seqId
+        readonly runPose: boolean = false,
     ) {
         this.frameCount = frameLengths.length;
         this.frameStarts = new Uint32Array(this.frameCount);
@@ -69,6 +71,8 @@ export class ActorAnim {
 
 export class ActorModel {
     readonly animIndices: Map<number, number> = new Map();
+    // Attacks' poses over the run (BakedAnim.runPose), by the attack's seq
+    readonly runPoses: Map<number, ActorAnim> = new Map();
 
     constructor(
         readonly page: ActorPage,
@@ -81,7 +85,9 @@ export class ActorModel {
         readonly anims: ActorAnim[],
     ) {
         anims.forEach((anim, i) => {
-            if (!this.animIndices.has(anim.seqId)) {
+            if (anim.runPose) {
+                this.runPoses.set(anim.seqId, anim);
+            } else if (!this.animIndices.has(anim.seqId)) {
                 this.animIndices.set(anim.seqId, i);
             }
         });
@@ -425,6 +431,7 @@ export class ActorRenderer {
                         anim.segments,
                         anim.frameLengths,
                         anim.looping,
+                        anim.runPose,
                     ),
             );
             models.set(
