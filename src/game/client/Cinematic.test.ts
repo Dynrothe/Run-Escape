@@ -171,6 +171,9 @@ describe("a cinematic playing", () => {
     });
 });
 
+// Yaw units (2048 a turn) a second a cinematic's camera may turn: about 11 degrees
+const MAX_CINEMATIC_TURN = 64;
+
 // Every cinematic is one that can play, the dev maps' too (only on the dev server): each map's
 // opening, and each part's of a fight in parts
 const CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap), BENEATH_CURSED_SANDS]
@@ -192,6 +195,19 @@ describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
         const last = def.shots[def.shots.length - 1];
         expect("player" in last && last.at).toBe(def.seconds);
         expect(def.shots.slice(0, -1).every((shot) => !("player" in shot))).toBe(true);
+    });
+
+    // Comfort: a camera that swings round fast makes people dizzy. No shot turns it more than
+    // MAX_CINEMATIC_TURN a second from the one before (yaw isn't wrapped between shots, so most
+    // of a circle shows here as one)
+    it("turns the camera gently", () => {
+        def.shots.slice(1).forEach((shot, i) => {
+            const before = def.shots[i];
+            if (!("player" in shot) && !("player" in before)) {
+                const turn = Math.abs(shot.yaw - before.yaw) / (shot.at - before.at);
+                expect(turn).toBeLessThanOrEqual(MAX_CINEMATIC_TURN);
+            }
+        });
     });
 
     it("has cues for its cast alone, within its time", () => {

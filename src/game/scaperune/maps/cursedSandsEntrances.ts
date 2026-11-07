@@ -36,6 +36,9 @@ const LIGHTNING = 2256;
 
 // Facing south, down the arena at the player
 const SOUTH = 0;
+// Shots turn the camera gently: under about 30 degrees a shot, and no faster than
+// MAX_CINEMATIC_TURN (Cinematic.test.ts), as a quick swing round makes people dizzy. Yaw isn't
+// wrapped between shots, so a small turn the other way is negative, never near 2048.
 
 // A light on each boss so it reads in the tomb's dim: torchlight on the people, shadow's violet on
 // the Champion, the storm's blue-white on the Akh
@@ -86,7 +89,7 @@ export function createSandsEntrances(middle: Tile): CinematicDef[] {
             ],
             shots: [
                 { at: 0, ...m, lift: 1.5, pitch: -200, yaw: SOUTH, distance: 4 },
-                { at: 3.2, ...m, lift: 1.2, pitch: -250, yaw: 300, distance: 5.5, hold: true },
+                { at: 3.2, ...m, lift: 1.2, pitch: -250, yaw: 160, distance: 5.5, hold: true },
                 ...closing(m, 7, 9),
             ],
         },
@@ -123,9 +126,9 @@ export function createSandsEntrances(middle: Tile): CinematicDef[] {
                 { at: 8.5, actor: "mage", gone: true },
             ],
             shots: [
-                { at: 0, ...right, lift: 1.5, pitch: -210, yaw: 200, distance: 4.5 },
+                { at: 0, ...right, lift: 1.5, pitch: -210, yaw: 120, distance: 4.5 },
                 { at: 3, ...m, lift: 1.2, pitch: -240, yaw: SOUTH, distance: 5, hold: true },
-                { at: 6, ...right, lift: 1.2, pitch: -260, yaw: 220, distance: 5.5, hold: true },
+                { at: 6, ...right, lift: 1.2, pitch: -260, yaw: 120, distance: 5.5, hold: true },
                 ...closing(m, 8.5, 10.5),
             ],
         },
@@ -143,17 +146,17 @@ export function createSandsEntrances(middle: Tile): CinematicDef[] {
                 },
             ],
             cues: [
-                { at: 0.3, actor: "champion", spotAnim: SHADOW_BARRAGE, scale: 1.5 },
+                { at: 0.3, actor: "champion", spotAnim: SHADOW_BARRAGE },
                 { at: 1.2, actor: "champion", say: "Scabaras chose me.", sayFor: 2.4 },
                 { at: 4, actor: "champion", seq: BURST_SEQ },
-                { at: 4.3, actor: "champion", spotAnim: SHADOW_BURST, scale: 2 },
+                { at: 4.3, actor: "champion", spotAnim: SHADOW_BURST, scale: 1.2 },
                 { at: 4.6, actor: "champion", say: "And Scabaras will judge you.", sayFor: 2.6 },
-                { at: 7.3, actor: "champion", spotAnim: SHADOW_BARRAGE, scale: 2 },
+                { at: 7.3, actor: "champion", spotAnim: SHADOW_BARRAGE, scale: 1.2 },
                 { at: 7.5, actor: "champion", gone: true },
             ],
             shots: [
                 { at: 0, ...m, lift: 0.6, pitch: -120, yaw: SOUTH, distance: 3.5 },
-                { at: 3.6, ...m, lift: 1.2, pitch: -230, yaw: 1748, distance: 5.5, hold: true },
+                { at: 3.6, ...m, lift: 1.2, pitch: -230, yaw: -160, distance: 5.5, hold: true },
                 ...closing(m, 7.5, 9.5),
             ],
         },

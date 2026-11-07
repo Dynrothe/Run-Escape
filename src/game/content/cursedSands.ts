@@ -629,6 +629,10 @@ const ELDER_ATTACKS: BossAttackDef[] = [
 // The Wardens' shadow on the floor (a big one and a small one), Verzik's red swarm charging, the
 // Soldier Scarab's heal, an egg hatching
 const SHADOW_FLOOR = 1446;
+// It starts as a speck (7 units across its first frame, which a mark is scaled by) and spreads to
+// about 55 as it plays (the small one, 1447, too), so a mark of it is fitted by that, or it covers
+// the whole arena
+const SHADOW_FLOOR_FIT = 7 / 55;
 const SHADOW_FLOOR_SMALL = 1447;
 const NEST_SWARM = 2149;
 const SCARAB_HEAL = 2150;
@@ -730,6 +734,7 @@ const betrayal = (name: string, more: Partial<BossAttackDef> = {}): BossAttackDe
         spots: [{ shape: "trail", ago: [0.6, 1.2, 1.8, 2.4] }],
         radius: 1.2,
         spotAnim: SHADOW_FLOOR,
+        fit: SHADOW_FLOOR_FIT,
         light: SHADOW_LIGHT,
         alpha: SHADOW_ALPHA,
     },
@@ -781,6 +786,7 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
             spots: [{ shape: "player" }, { shape: "scatter", count: 2, spread: 3 }],
             radius: 1.5,
             spotAnim: SHADOW_FLOOR,
+            fit: SHADOW_FLOOR_FIT,
             light: SHADOW_LIGHT,
             alpha: SHADOW_ALPHA,
             lingers: { seconds: 3, interval: 0.5, damage: 0.25 },
@@ -804,6 +810,7 @@ const CHAMPION_ATTACKS: BossAttackDef[] = [
             spots: [{ shape: "cross", reach: 3 }],
             radius: 0.8,
             spotAnim: SHADOW_FLOOR_SMALL,
+            fit: SHADOW_FLOOR_FIT,
             light: SHADOW_LIGHT,
             alpha: SHADOW_ALPHA,
             lingers: { seconds: 2, interval: 0.5, damage: 0.25 },
@@ -1556,7 +1563,7 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
             // Two strips at most: with two shadows up, only the nearer copies her
             most: 1,
             impact: {
-                trail: { spotAnim: SHADOW_FLOOR_SMALL, fit: 1 },
+                trail: { spotAnim: SHADOW_FLOOR_SMALL, fit: SHADOW_FLOOR_FIT },
                 spots: [{ spotAnim: DARK_ORB, fit: 1.5 }],
             },
         },
