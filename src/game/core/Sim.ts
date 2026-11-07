@@ -232,6 +232,7 @@ import {
     TYPE_FRAGILE,
 } from "./floorLayout";
 import { fm } from "./fmath";
+import { gazeOccluders, hiddenFrom } from "./gazeSight";
 import { RuleHost, RunRule, createRunRule } from "./rules/RunRule";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
@@ -828,6 +829,7 @@ export type Hero = {
 type KitCast = {
     hero: number;
     ability: HeroAbilityDef;
+    startTick: number;
     landTick: number;
     x: number;
     y: number;
@@ -2625,8 +2627,10 @@ export class Sim {
         } else if (drag && this.tick >= drag.holdEnd) {
             this.hero.drag = undefined;
         }
-        // Watching a boss rise: rooted like a hold, and turning like one
+        // Watching a boss rise: rooted like a hold, and turning like one. Casting one of their own
+        // moves: rooted, facing the way it goes.
         const held = !!this.hold || this.introHolds;
+        const casting = this.kitCasts.length > 0 && this.isCasting();
         const moving = movePlayer(this.grid, player, moveX, moveY, {
             radius: player.radius,
             baseSpeed: PLAYER_SPEED,
@@ -2634,7 +2638,7 @@ export class Sim {
             tick: this.tick,
             sledEndTick: this.sledEndTick,
             sledSpeed: this.sledSpeed,
-            frozen: frozen || this.introHolds,
+            frozen: frozen || this.introHolds || casting,
             held,
             curse: this.curse,
             arena: this.confinedToArena ? this.bossArena : undefined,
@@ -7904,7 +7908,7 @@ export class Sim {
             this.state !== "playing" ||
             !this.isUp(hero) ||
             this.tick < (hero.kitReadyTicks[slot] ?? 0) ||
-            this.kitCasts.some((cast) => cast.hero === hero.index && !cast.landed)
+            this.isCasting(hero)
         ) {
             return false;
         }
@@ -7930,6 +7934,7 @@ export class Sim {
         const cast: KitCast = {
             hero: hero.index,
             ability,
+            startTick: this.tick,
             landTick,
             x: player.x,
             y: player.y,
@@ -7959,6 +7964,26 @@ export class Sim {
         }
         this.kitCasts.push(cast);
         return true;
+    }
+
+    // Whether a hero's casting one of their own moves (CharacterDef.abilities): from the press to
+    // its strike they're rooted where they stand (stepPlayer, and co-op's prediction too). A
+    // lunge's dash after it moves them by itself.
+    isCasting(hero: Hero = this.hero): boolean {
+        return this.kitCasts.some((cast) => cast.hero === hero.index && !cast.landed);
+    }
+
+    // Each hero's gaze winding up (HeroAbilityDef kind "gaze"), for its light: whose, how far it
+    // reaches, and the ticks it was pressed and lands on
+    getKitGazes(): { hero: number; length: number; startTick: number; landTick: number }[] {
+        return this.kitCasts
+            .filter((cast) => cast.ability.kind === "gaze" && !cast.landed)
+            .map((cast) => ({
+                hero: cast.hero,
+                length: cast.ability.length,
+                startTick: cast.startTick,
+                landTick: cast.landTick,
+            }));
     }
 
     // Every size by size cell of the colour he isn't standing on, with its middle within length
@@ -8160,10 +8185,13 @@ export class Sim {
             }
             case "gaze": {
                 this.showImpact(ability.impact, player.x, player.y);
+                // What stands in the way hides what's behind it: its shadow, as drawn, is safe
+                const occluders = gazeOccluders(this.grid, player.x, player.y, ability.length + 1);
                 this.queryTouching(player.x, player.y, ability.length + 1, (enemy) => {
                     if (
                         fm.hypot(enemy.x - player.x, enemy.y - player.y) <=
-                        ability.length + enemy.radius
+                            ability.length + enemy.radius &&
+                        !hiddenFrom(occluders, player.x, player.y, enemy.x, enemy.y)
                     ) {
                         this.kitHit(cast, enemy);
                         if (ability.spotAnim !== undefined) {

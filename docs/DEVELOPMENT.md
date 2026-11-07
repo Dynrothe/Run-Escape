@@ -934,6 +934,18 @@ adventurer can have:
   a pad's bottom button and its four shoulders, and on a touch screen `KitButtons`, the first
   big in the items' corner and the others round it. The HUD's `HudNumbers.abilities` are their
   charge.
+    - From the press to its strike the hero's rooted (`Sim.isCasting`: `stepPlayer` and co-op's
+      prediction take it as frozen), facing the way it goes. A lunge's dash after its windup
+      moves them by itself.
+    - A `gaze` can't see through the map: `core/gazeSight.ts` takes every wall and object that
+      stops a shot (the cache's projectile-blocking collision flags) within its reach as
+      segments, and the sim spares what's hidden behind one (`hiddenFrom`, the enemy's middle).
+      The view lights it from the same segments, per frame: `client/GazeLight.ts`'s shadow map
+      (how far the light gets in each of 1024 directions) shades a blue-white light added to the
+      light map (`LightMap.add`'s `shade`), soft over 0.35 tiles either side of each edge and half
+      on the line the sim uses, with the map's ambient dimmed as it winds up
+      (`SceneLights.updateGaze`). It's drawn on a lit map only (`MapDef.lighting`). Zachariah's
+      boss fight's gaze is unchanged: its arena's pillars (`BossAttackDef.cover`, `inShadow`).
 - **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
   on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be:
   a loc can't play a skeletal animation, so Yama sitting on his throne is one. They're baked as

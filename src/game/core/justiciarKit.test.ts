@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { JUSTICIAR_ABILITIES } from "../content/justiciarKit";
@@ -7,6 +8,7 @@ import { getMap, getMapCharacter } from "../content/maps";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { applyAction, cleanAction, syncHash } from "./lockstep";
+import { ArenaGrid } from "./world/ArenaGrid";
 import { makeGrid } from "./world/testGrid";
 
 // Justiciar Zachariah as the player in the Battle for Varrock (content/justiciarKit.ts): his own
@@ -40,6 +42,26 @@ function run(sim: Sim, seconds: number, moveX = 0, moveY = 0): void {
 }
 
 const slot = (id: string) => JUSTICIAR_ABILITIES.findIndex((a) => a.id === id);
+
+// Its walls and solid tiles stopping shots as well, as the cache's walls and pillars do (makeGrid
+// sets only what stops walking)
+function blockShots(grid: ArenaGrid): void {
+    const flags = (grid as unknown as { flags: Int32Array }).flags;
+    const pairs = [
+        [CollisionFlag.WALL_NORTH, CollisionFlag.WALL_NORTH_PROJECTILE_BLOCKER],
+        [CollisionFlag.WALL_EAST, CollisionFlag.WALL_EAST_PROJECTILE_BLOCKER],
+        [CollisionFlag.WALL_SOUTH, CollisionFlag.WALL_SOUTH_PROJECTILE_BLOCKER],
+        [CollisionFlag.WALL_WEST, CollisionFlag.WALL_WEST_PROJECTILE_BLOCKER],
+        [CollisionFlag.OBJECT, CollisionFlag.OBJECT_PROJECTILE_BLOCKER],
+    ];
+    for (let i = 0; i < flags.length; i++) {
+        for (const [walk, shot] of pairs) {
+            if (flags[i] & walk) {
+                flags[i] |= shot;
+            }
+        }
+    }
+}
 
 describe("the Battle for Varrock's Justiciar Zachariah", () => {
     it("is the map's hero, drawn as his NPC, kept to the map", () => {
@@ -133,6 +155,70 @@ describe("the Battle for Varrock's Justiciar Zachariah", () => {
             return hashes;
         };
         expect(play()).toEqual(play());
+    });
+
+    it("roots him from a spell's press to its strike, and he walks again after", () => {
+        for (const id of ["shock_wave", "ice_barrage", "lightning", "owls_gaze", "lunge"]) {
+            const ability = JUSTICIAR_ABILITIES[slot(id)];
+            const sim = createSim();
+            run(sim, 0.1, 0, -1);
+            const { x, y } = sim.player;
+            expect(sim.useAbility(slot(id))).toBe(true);
+            expect(sim.isCasting()).toBe(true);
+            // Pressing east all through the windup: he stays put, facing the way it goes
+            const windupTicks = Math.round(ability.windup * TICKS_PER_SECOND);
+            for (let i = 0; i < windupTicks - 1; i++) {
+                sim.step(1, 0);
+            }
+            expect(sim.player.x, id).toBe(x);
+            expect(sim.player.y, id).toBe(y);
+            expect(sim.player.facingY, id).toBe(-1);
+            run(sim, 0.1, 1, 0);
+            expect(sim.isCasting(), id).toBe(false);
+            if (id === "lunge") {
+                // The dash takes him on south by itself
+                expect(sim.player.y, id).toBeLessThan(y);
+            }
+            const after = sim.player.x;
+            run(sim, 0.5, 1, 0);
+            expect(sim.player.x, id).toBeGreaterThan(after + 1);
+        }
+    });
+
+    it("judges what the gaze sees, and spares what a wall or a pillar hides", () => {
+        // A wall west to east two tiles north of him, and a pillar three tiles east, both
+        // stopping shots as the cache's walls and pillars do
+        const rows = Array.from({ length: SIZE }, () => ".".repeat(SIZE));
+        const cx = Math.floor(MAP.spawn.x) - BASE_X;
+        const cy = Math.floor(MAP.spawn.y) - BASE_Y;
+        const row = (y: number) => SIZE - 1 - y;
+        rows[row(cy + 1)] =
+            rows[row(cy + 1)].slice(0, cx - 3) + "_".repeat(7) + rows[row(cy + 1)].slice(cx + 4);
+        rows[row(cy)] = rows[row(cy)].slice(0, cx + 3) + "#" + rows[row(cy)].slice(cx + 4);
+        const grid = makeGrid(rows, BASE_X, BASE_Y);
+        blockShots(grid);
+        const sim = new Sim({
+            grid,
+            mapId: MAP.id,
+            characterId: getMapCharacter(MAP)!,
+            metaStats: emptyStats(),
+            seed: 3,
+            spawnX: MAP.spawn.x,
+            spawnY: MAP.spawn.y,
+        });
+        const p = sim.player;
+        const goblin = getEnemy("goblin");
+        const north = sim.spawnEnemy(goblin, "normal", { x: p.x, y: p.y + 4 })!;
+        const east = sim.spawnEnemy(goblin, "normal", { x: p.x + 6, y: p.y })!;
+        const south = sim.spawnEnemy(goblin, "normal", { x: p.x, y: p.y - 4 })!;
+        for (const enemy of [north, east, south]) {
+            enemy.frozen = 1000;
+        }
+        sim.useAbility(slot("owls_gaze"));
+        run(sim, 2);
+        expect(south.dead || south.hp < south.maxHp).toBe(true);
+        expect(north.hp).toBe(north.maxHp);
+        expect(east.hp).toBe(east.maxHp);
     });
 
     it("keeps a fight's own button as it was", () => {

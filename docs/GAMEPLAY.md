@@ -213,6 +213,9 @@ version and how to run it.
   throne at its north end. You start outside the south gate as Justiciar Zachariah, his own model, with the
   moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
   of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
+  He stands still while he casts, from the press to the strike. The Owl's gaze lights everything
+  round him blue-white, and walls, ruins and pillars cast shadows it can't see into: anything in
+  them is spared.
   It opens with a cinematic: close on Yama, who says resistance is futile; the camera pulls back
   to Sir Prysin and four Varrock guards before his throne; Prysin defies him, Yama answers
   "Pathetic." and snaps his fingers, and they burn away in Leagues IV's Trailblazer Reloaded
