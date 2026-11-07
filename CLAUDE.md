@@ -193,12 +193,15 @@ desktop build.
   ID can't have a hyphen.
 - **It's only published on GitHub's releases.** `AppUpdater.java` checks once on open and prompts
   for a newer APK; Android handles the download and installation consent. A failed check must
-  never block the bundled game. See `docs/DEVELOPMENT.md`, Android, for the update flow.
+  never block the bundled game, and installing is always asked, never started by itself (it closes
+  the game mid-run). What it remembers between launches is `UpdatePlan.java`'s, which has tests
+  that need no device. See `docs/DEVELOPMENT.md`, Android, for the update flow.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
-- The bundled game lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
-  the relay, and the run collector. A new address the game reaches needs adding to both.
+- The bundled game lets out only what the desktop app does (`RelayPolicy.java`,
+  `desktop/gameServer.ts`): the relay, and the run collector. A new address the game reaches needs
+  adding to both. The updater's requests to GitHub are the app's own, like the desktop launcher's.
 - Its generated game files, APKs and keys stay out of Git (`.gitignore`).
 - Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
   there's no Android SDK here. Touch, co-op and airplane mode need a phone with a current WebView:

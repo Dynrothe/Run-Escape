@@ -25,7 +25,8 @@ final class UpdateRelease {
         this.size = size;
     }
 
-    String fileName() { return "Run-Escape-" + version + "-android.apk"; }
+    // The APK's name on a release (.github/workflows/release.yml), and in the download folder
+    static String fileName(String version) { return "Run-Escape-" + version + "-android.apk"; }
 
     static UpdateRelease readResponse(HttpURLConnection request, int installedVersionCode)
             throws IOException, JSONException {
@@ -53,7 +54,7 @@ final class UpdateRelease {
         if (!tag.startsWith("v")) return null;
         String version = tag.substring(1);
         if (versionCode(version) <= installedVersionCode) return null;
-        String name = "Run-Escape-" + version + "-android.apk";
+        String name = fileName(version);
         String url = "https://github.com/" + REPOSITORY + "/releases/download/" + tag + "/" + name;
         JSONArray assets = release.optJSONArray("assets");
         if (assets == null) return null;

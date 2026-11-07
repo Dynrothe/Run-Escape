@@ -31,7 +31,7 @@ public class UpdateReleaseTest {
         UpdateRelease update = UpdateRelease.parse(release.toString(), 270000);
         assertNotNull(update);
         assertEquals("0.28.0", update.version);
-        assertEquals("Run-Escape-0.28.0-android.apk", update.fileName());
+        assertEquals("Run-Escape-0.28.0-android.apk", UpdateRelease.fileName(update.version));
         assertEquals(123456, update.size);
     }
 
@@ -97,7 +97,8 @@ public class UpdateReleaseTest {
         }
     }
 
-    @Test public void offlineAndTimeoutErrorsReachTheQuietStartupFailureHandler() throws Exception {
+    // AppUpdater's check logs these and carries on with nothing to offer
+    @Test public void offlineAndTimeoutErrorsReachTheCaller() throws Exception {
         for (IOException error : new IOException[]{new IOException("Offline"), new SocketTimeoutException("Timed out")}) {
             HttpURLConnection request = new StubConnection(200, "") {
                 @Override public int getResponseCode() throws IOException { throw error; }

@@ -471,15 +471,33 @@ installed game running without an error dialog. There is no token or extra updat
 The player chooses Download update. Android's DownloadManager handles progress and cancellation
 in its notification and keeps downloading if the app closes. The app remembers the download ID
 and checks it on returning, validates the APK's size, package, version and minimum Android version,
-then hands it to Android's installer through a FileProvider limited to the app's download folder.
-Android verifies the signature and asks for install consent; the first update may need Allow from
-this source in settings. Declining or a failed download leaves the current version installed. The
-update replaces the APK, so finish a run before installing; saved progress stays in place. These
-native requests don't change the bundled game's `RelayPolicy` or Content-Security-Policy.
+then asks whether to install it now or later: installing closes the game, and a download often
+ends mid-run, so the installer is never opened without asking. It hands the APK to Android's
+installer through a FileProvider limited to the app's download folder. Android verifies the
+signature and asks for install consent; the first update may need Allow from this source in
+settings. Declining or a failed download leaves the current version installed. These native
+requests don't change the bundled game's `RelayPolicy` or Content-Security-Policy.
+
+What it remembers between launches, and what that leads to, is `UpdatePlan.java`'s, tested
+without a device. Later on the offer, or cancelling the download, puts that version off for a
+while (`SNOOZE_MS`). A downloaded APK whose install was put off is offered again on the next
+launch, not downloaded again. A newer release replaces a download that's waiting, and one whose
+version is installed is removed. An APK that can't be installed (its minimum Android version, or
+the wrong package or version) is never offered again, so a phone doesn't download it on every
+launch, though a newer release is offered. The activity made again by Try again or Reopen is the
+same visit: it doesn't check again.
 
 The About menu still links to releases for manual downloads. Older copies need a manual install
 of an APK with the updater first. Install over the old app: uninstalling deletes its save.
 Android players need the current game build to join its co-op rooms.
+
+For releases this changes nothing, but a few things matter more now. Every release has to be
+signed with the same key, or every in-app update fails at Android's installer. The app only reads
+GitHub's latest release, so a release without the APK offers nothing, and an older patch marked as
+latest hides the newer one. The first update anyone gets in the app is from the release after the
+one that brought the updater, so try the whole flow on a phone before that: build this code signed
+with the release key, with a lower version in `package.json`, on a phone without the app, and it's
+offered the current release. A debug build can't finish: its key differs, so the installer refuses.
 
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
 `-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android

@@ -95,7 +95,8 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
         try {
-            updater = new AppUpdater(this);
+            // Saved state means it's only made again (Try again, Reopen), on the same visit
+            updater = new AppUpdater(this, savedInstanceState == null);
         } catch (RuntimeException exception) {
             android.util.Log.i("AppUpdater", "Updates unavailable on this device", exception);
         }
@@ -292,10 +293,11 @@ public final class MainActivity extends Activity {
                             new AlertDialog.Builder(this).setTitle("Your progress")
                                     .setMessage("From the title screen, open Settings, then use Export "
                                             + "to save a copy or Import to restore one.\n\n"
-                                            + "Progress is kept on this device. To update, install the "
-                                            + "new version's APK over this one: uninstalling first "
-                                            + "deletes your progress. Export a copy before uninstalling "
-                                            + "or clearing the app's data.")
+                                            + "Progress is kept on this device, and updates keep it. "
+                                            + "To update by hand, install the new version's APK over "
+                                            + "this one: uninstalling first deletes your progress. "
+                                            + "Export a copy before uninstalling or clearing the app's "
+                                            + "data.")
                                     .setPositiveButton("Close", null).show();
                             break;
                         // The renderer can have gone while this menu was open
@@ -307,8 +309,8 @@ public final class MainActivity extends Activity {
                                             + "Source: github.com/Dynrothe/Run-Escape\n\n"
                                             + "A fan project, not affiliated with Jagex. "
                                             + "Old School RuneScape assets belong to Jagex.\n\n"
-                                            + "The app checks GitHub for updates when opened and asks "
-                                            + "before downloading one. Android asks you to install it. Co-op "
+                                            + "The app checks GitHub for updates when opened, and asks "
+                                            + "before downloading one and before installing it. Co-op "
                                             + "needs everyone on the same version.\n\n"
                                             + "Use Android's Back action to reopen this menu.")
                                     .setNeutralButton("Licenses", (about, action) -> showLicenses())
@@ -322,7 +324,7 @@ public final class MainActivity extends Activity {
                 }).setOnDismissListener(dialog -> hideSystemBars()).show();
     }
 
-    // The release page is also available from About.
+    // About's New versions button: the releases page, to install an APK by hand
     private void openReleases() {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL)));
