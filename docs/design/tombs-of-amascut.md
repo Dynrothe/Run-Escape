@@ -1071,9 +1071,15 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   a tether. **The raid's button**: pressed whenever what it'd land on has its guard down
   (`tombsButton`), and the bot goes in for it while it's ready (`SMITE=0` turns both off).
 - **Kephri**: her overlords first, the Arcane Scarab before the others (the wiki's advice), kept
-  out of the Soldier's reach (it burrows up beside you now: the bot walks back off it, but
-  doesn't read it surfacing); between, a tile and a half from her (she's in the middle, and a Dung
-  Strike from further out threw it against a wall, stunned among the dung).
+  out of the Soldier's reach whichever overlord it's shooting (its touch plus a tile and a half:
+  it walks at half the bot's speed, and at Expert a slash is most of your hitpoints), off it the
+  moment it's nearer (burrowed up beside you, or walked in) by whichever heading has the most
+  room, Kephri's body, the still overlords, her dung and the line behind counting as walls; the
+  Soldier's spot kept clear before an intermission that brings it (it comes in slashing); and off
+  Jungle Japes' peels (a slip roots you a second and a half, two slashes' worth). Between, a tile
+  and a half from her (she's in the middle, and a Dung Strike from further out threw it against a
+  wall, stunned among the dung). What used to loop it: standing still in the Soldier's reach to
+  shoot another overlord, then peels rooting it there.
 - **The Wardens**: phase one soaking the orbs of the side whose Warden its own style can't hurt
   first (a magic hero takes Tumeken's, so Elidinis' wakes open to magic; ranged the other way),
   walking to each orb's next tile along its trough till it holds the most, then a step off every

@@ -2,7 +2,7 @@
 // bot (tombsBot.ts) over seeds, and what happened in it. Puzzle rooms are what the rest of the
 // game hasn't got, so each has its own account: Apmeken's issues fixed and missed, Het's mirror
 // turns, beam pulses and seal openings, Scabaras's boards and wrong steps, Crondis's trips, spills
-// and growth.
+// and growth. Each wipe in the room is put down to the hit that landed it ("wiped by").
 //
 //   DEV_MAPS=1 bun run tsx scripts/game/simulate-tombs.ts                  # the whole raid, warrior, 3 seeds
 //   DEV_MAPS=1 ROOM=scabaras bun run tsx scripts/game/simulate-tombs.ts wizard 10   # one puzzle room
@@ -494,6 +494,7 @@ function runOnce(seed: number): Outcome {
     const watch = new PuzzleWatch();
     const bossWatch = new BossWatch();
     const hits = new Map<string, number>();
+    const killers = new Map<string, number>();
     const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));
     let start = sim.tick;
     let limit = start + minutes * 60 * TICKS_PER_SECOND;
@@ -597,13 +598,22 @@ function runOnce(seed: number): Outcome {
                 sim.setInput(hero.index, moves[hero.index].x, moves[hero.index].y);
             });
         }
+        const deathsBefore = sim.tombsDeaths;
         sim.step();
+        let lastHit: string | undefined;
         for (const event of sim.takeEvents()) {
             if (event.type === "playerHit") {
                 hits.set(event.enemyId, (hits.get(event.enemyId) ?? 0) + event.amount);
+                lastHit = event.enemyId;
             } else if (event.type === "heroDown") {
                 downs++;
             }
+        }
+        // What landed the blow that wiped the party (the last hit in the tick it happened; none
+        // is poison's)
+        if (!leading && sim.tombsDeaths > deathsBefore) {
+            const by = lastHit ?? "poison";
+            killers.set(by, (killers.get(by) ?? 0) + 1);
         }
     }
     log?.report(sim);
@@ -626,6 +636,14 @@ function runOnce(seed: number): Outcome {
                 (done ? ", won" : ""),
             ...watch.notes(sim),
             ...bossWatch.notes(),
+            ...(killers.size > 0
+                ? [
+                      `wiped by: ${[...killers.entries()]
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([k, v]) => `${k} ${v}`)
+                          .join(", ")}`,
+                  ]
+                : []),
             ...attackNotes(sim),
             ...(roomArg === "raid" || roomArg === "wardens" ? boardNotes(sim) : []),
         ],

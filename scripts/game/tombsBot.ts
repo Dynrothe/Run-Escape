@@ -4,10 +4,19 @@
 // dev console can drive a run with it too (see docs/design/tombs-of-amascut.md).
 import { getItem } from "../../src/game/content/items";
 import { getRaidSupply } from "../../src/game/content/raids";
-import { BA_BA, CRONDIS, HET, WARDENS, ZEBAK } from "../../src/game/content/tombs";
+import {
+    BA_BA,
+    CRONDIS,
+    HET,
+    JUNGLE_JAPES,
+    TOMBS_ENEMIES,
+    WARDENS,
+    ZEBAK,
+} from "../../src/game/content/tombs";
 import { getWeaponStyle } from "../../src/game/content/weapons";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim, wardenFrontRow } from "../../src/game/core/Sim";
+import { isCircleFree } from "../../src/game/core/world/Collision";
 import { FlowField, canStep } from "../../src/game/core/world/FlowField";
 import {
     buttonMove,
@@ -1549,7 +1558,22 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
         return inPit(ahead.x, ahead.y) ? { x: 0, y: 1 } : chosen;
     }
     if (sim.tombsKephri) {
-        return dodging(sim, foodMove(sim) ?? punishMove(sim) ?? kephriMove(sim, boss));
+        // Her soldier's reach is ground to keep off, as much as her bullets (at Expert a slash
+        // is most of your hitpoints), and so are Jungle Japes' peels: a slip roots you for a
+        // second and a half, as long as the soldier needs to come up and slash twice
+        const soldiers = soldierThreats(sim, boss);
+        const player = sim.player;
+        const inReach = (x: number, y: number) =>
+            soldiers.some(
+                (e) =>
+                    Math.hypot(e.x - x, e.y - y) <
+                    e.radius + player.radius + 0.1 + SOLDIER_MARGIN / 2,
+            ) || onPeel(sim, x, y);
+        return dodging(
+            sim,
+            foodMove(sim) ?? punishMove(sim) ?? kephriMove(sim, def, boss, soldiers),
+            soldiers.length > 0 || sim.tombsPeels.length > 0 ? inReach : undefined,
+        );
     }
     // Anything else: near enough for every weapon, off what's close
     return dodging(sim, kite(sim, { x: boss.x, y: boss.y - (boss.radius + 3) }, 2.5));
@@ -1587,7 +1611,12 @@ const KEPHRI_KEEP = 1.5;
 
 // Kephri: her overlords while they're up, as near as the weapons need (the soldier's slashes kept
 // at arm's length if they reach further); otherwise close to her, off what's close
-function kephriMove(sim: Sim, boss: Sim["enemies"][number]): Point {
+function kephriMove(
+    sim: Sim,
+    def: PathBoss,
+    boss: Sim["enemies"][number],
+    soldiers: SoldierThreat[],
+): Point {
     const player = sim.player;
     const overlord = sim.enemies
         .filter((e) => !e.dead && KEPHRI_OVERLORDS.includes(e.def.id))
@@ -1597,8 +1626,23 @@ function kephriMove(sim: Sim, boss: Sim["enemies"][number]): Point {
                 Math.hypot(a.x - player.x, a.y - player.y) -
                     Math.hypot(b.x - player.x, b.y - player.y),
         )[0];
+    // The soldier: the nearest, up or about to be (it hits as it comes in)
+    const soldier = soldiers
+        .slice()
+        .sort(
+            (a, b) =>
+                Math.hypot(a.x - player.x, a.y - player.y) -
+                Math.hypot(b.x - player.x, b.y - player.y),
+        )[0];
     if (!overlord) {
-        return kite(sim, { x: boss.x, y: boss.y - (boss.radius + KEPHRI_KEEP) }, 2.5);
+        const wait = { x: boss.x, y: boss.y - (boss.radius + KEPHRI_KEEP) };
+        if (
+            soldier &&
+            Math.hypot(player.x - soldier.x, player.y - soldier.y) < soldierClear(sim, soldier)
+        ) {
+            return offSoldier(sim, def, soldier, wait);
+        }
+        return kite(sim, wait, 2.5);
     }
     const reach = heroReach(sim);
     // Out of the soldier's slashes, whatever the weapons' reach
@@ -1607,10 +1651,121 @@ function kephriMove(sim: Sim, boss: Sim["enemies"][number]): Point {
     const dx = player.x - overlord.x;
     const dy = player.y - overlord.y;
     const away = Math.hypot(dx, dy) || 1;
-    const to = { x: overlord.x + (dx / away) * keep, y: overlord.y + (dy / away) * keep };
+    let to = { x: overlord.x + (dx / away) * keep, y: overlord.y + (dy / away) * keep };
+    // The soldier walks after you and hits whatever it touches, whichever overlord's being shot,
+    // and burrows up beside you: never a spot it can reach, and off it at once when it's close
+    if (soldier) {
+        const clear = soldierClear(sim, soldier);
+        const sx = to.x - soldier.x;
+        const sy = to.y - soldier.y;
+        const sd = Math.hypot(sx, sy) || 1;
+        if (sd < clear + 0.5) {
+            to = {
+                x: soldier.x + (sx / sd) * (clear + 0.5),
+                y: soldier.y + (sy / sd) * (clear + 0.5),
+            };
+        }
+        if (Math.hypot(player.x - soldier.x, player.y - soldier.y) < clear) {
+            return offSoldier(sim, def, soldier, to);
+        }
+    }
     return Math.hypot(to.x - player.x, to.y - player.y) < 1
         ? nudge(sim, to.x, to.y)
         : walkTo(sim, to.x, to.y);
+}
+
+// How much further than its touch the bot keeps from Kephri's Soldier Scarab: it walks at about
+// half the bot's speed, so this is a second's head start on it
+const SOLDIER_MARGIN = 1.5;
+
+// Kephri's Soldier Scarab, up, or where it'll come in when her shield next breaks: it comes in
+// slashing whoever's on its spot, with no warning, so the spot's kept clear before it's there
+type SoldierThreat = { x: number; y: number; radius: number; soldier?: Sim["enemies"][number] };
+
+const SOLDIER_DEF = TOMBS_ENEMIES.find((e) => e.id === "kephri_soldier")!;
+
+function soldierThreats(sim: Sim, boss: Sim["enemies"][number]): SoldierThreat[] {
+    const threats: SoldierThreat[] = sim.enemies
+        .filter((e) => !e.dead && e.def.id === "kephri_soldier")
+        .map((e) => ({ x: e.x, y: e.y, radius: e.radius, soldier: e }));
+    const fight = sim.tombsKephri;
+    const def = boss.def.boss?.kephri;
+    if (fight && def && !fight.final && !fight.intermission) {
+        const which = fight.phase;
+        const coming = [
+            ...(def.intermissions.overlords[which] ?? []),
+            ...(sim.invocations.includes("more_overlords")
+                ? (def.intermissions.moreOverlords[which] ?? [])
+                : []),
+        ];
+        const at = def.overlordAt["kephri_soldier"];
+        if (coming.includes("kephri_soldier") && at) {
+            threats.push({ x: boss.x + at[0], y: boss.y + at[1], radius: SOLDIER_DEF.radius });
+        }
+    }
+    return threats;
+}
+
+// On one of Jungle Japes' peels, or near enough to brush it
+function onPeel(sim: Sim, x: number, y: number): boolean {
+    const reach = JUNGLE_JAPES.radius + sim.player.radius + 0.15;
+    return sim.tombsPeels.some(
+        (peel) => peel.endTick > sim.tick && Math.hypot(peel.x - x, peel.y - y) < reach,
+    );
+}
+
+// How near the soldier's too near
+function soldierClear(sim: Sim, soldier: { radius: number }): number {
+    return soldier.radius + sim.player.radius + 0.1 + SOLDIER_MARGIN;
+}
+
+// Off the soldier: of sixteen headings, the open one that gets furthest from it with the most room
+// beyond (Kephri's body and the overlords that don't move are as much in the way as walls),
+// leaning towards where the bot wants to be, so it isn't run into a corner
+function offSoldier(sim: Sim, def: PathBoss, soldier: SoldierThreat, to: Point): Point {
+    const player = sim.player;
+    const bodies = [
+        ...sim.enemies.filter(
+            (e) => !e.dead && e !== soldier.soldier && (e.def.stationary || e.def.solid),
+        ),
+        // Her dung, while it's down
+        ...sim.tombsCover.filter((c) => c.endTick > sim.tick),
+    ];
+    // Walls go by their edges, not only solid tiles (the arena's sides are edges), the line
+    // behind the bot's a wall once she's up, and a peel's as good as one
+    const blocked = (x: number, y: number) =>
+        !isCircleFree(sim.grid, x, y, player.radius) ||
+        y < def.line.y + player.radius ||
+        onPeel(sim, x, y) ||
+        bodies.some((e) => Math.hypot(e.x - x, e.y - y) < e.radius + player.radius);
+    let best: Point | undefined;
+    let bestScore = -Infinity;
+    for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2;
+        const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+        // How far it's open along this heading, up to four tiles
+        let room = 0;
+        while (
+            room < 4 &&
+            !blocked(player.x + dir.x * (room + 0.5), player.y + dir.y * (room + 0.5))
+        ) {
+            room += 0.5;
+        }
+        if (room < 1) {
+            continue;
+        }
+        const x = player.x + dir.x * 1;
+        const y = player.y + dir.y * 1;
+        const score =
+            Math.hypot(x - soldier.x, y - soldier.y) +
+            0.4 * room -
+            0.3 * Math.hypot(x - to.x, y - to.y);
+        if (score > bestScore) {
+            bestScore = score;
+            best = dir;
+        }
+    }
+    return best ?? walkTo(sim, to.x, to.y);
 }
 
 // Ba-Ba: up to her altar while her stones roll (round the edges, where the gap isn't), beside a

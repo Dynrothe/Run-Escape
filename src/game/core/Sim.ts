@@ -8511,7 +8511,13 @@ export class Sim {
             for (let step = 0.25; step <= def.dung.knock; step += 0.25) {
                 const x = fromX + ux * step;
                 const y = fromY + uy * step;
-                if (!this.grid.contains(x, y) || this.grid.isSolid(x, y)) {
+                // Walls on a tile's edge too (her arena's sides), not only solid tiles: the
+                // throw went through them, out of the arena
+                if (
+                    !this.grid.contains(x, y) ||
+                    this.grid.isSolid(x, y) ||
+                    !isCircleFree(this.grid, x, y, player.radius)
+                ) {
                     break;
                 }
                 gone = step;
