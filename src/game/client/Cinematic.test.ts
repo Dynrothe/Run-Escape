@@ -10,6 +10,7 @@ import {
     getActorState,
     getCinematicCamera,
     getCinematicSeqs,
+    getCinematicSquares,
     getSaying,
     monotoneAt,
 } from "./Cinematic";
@@ -273,5 +274,46 @@ describe("the Battle for Varrock's opening", () => {
         if (!("player" in last)) {
             expect(Math.abs(last.y - map.spawn.y)).toBeLessThan(40);
         }
+    });
+});
+
+describe("what a cinematic's camera sees", () => {
+    const square = (x: number, y: number) => (Math.floor(x / 64) << 8) + Math.floor(y / 64);
+
+    it("is every map square along its way, from Yama's throne to the spawn, and not the world", () => {
+        const map = getMap("battle_for_varrock");
+        const def = map.cinematic!;
+        const { x, y } = map.spawn;
+        const play = { x, y, height: -0.6, pitch: -400, yaw: 0, distance: 18 };
+        const squares = getCinematicSquares(def, () => 0, play);
+        const yama = def.cast.find((actor) => actor.id === "yama")!;
+        expect(squares).toContain(square(yama.x, yama.y));
+        expect(squares).toContain(square(x, y));
+        expect(squares).toContain(square(x, (y + yama.y) / 2));
+        // Seen from close, but no further than the camera's render distance
+        expect(squares.length).toBeLessThanOrEqual(25);
+        for (const id of squares) {
+            expect(Math.abs((id >> 8) - Math.floor(x / 64))).toBeLessThanOrEqual(3);
+        }
+    });
+
+    it("looks along a level camera as far as it sees, and a camera looking down at what's below", () => {
+        const level: CinematicDef = {
+            seconds: 1,
+            cast: [],
+            cues: [],
+            shots: [
+                { at: 0, x: 640, y: 640, lift: 1, pitch: 0, yaw: 0, distance: 5 },
+                { at: 1, player: true },
+            ],
+        };
+        const down = { ...PLAY, x: 640, y: 640, pitch: -512, distance: 10 };
+        const play = { ...down };
+        const far = getCinematicSquares(level, () => 0, play);
+        // Facing north: 128 tiles on, two squares further
+        expect(far).toContain(square(640, 640 + 120));
+        const below = getCinematicSquares({ ...level, shots: [level.shots[1]] }, () => 0, play);
+        expect(below).toContain(square(640, 640));
+        expect(below).not.toContain(square(640, 640 + 120));
     });
 });

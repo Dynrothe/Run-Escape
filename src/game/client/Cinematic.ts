@@ -212,3 +212,88 @@ export class CinematicPlayer {
         return true;
     }
 }
+
+// How often the camera's path is looked along for what it sees (seconds), how far it sees (tiles,
+// the map's render distance), the steps a ray's taken in, and the margin kept round what it sees
+const SEE_EVERY = 0.25;
+const SEE_FAR = 128;
+const SEE_STEP = 4;
+const SEE_MARGIN = 12;
+// Wide enough for a phone held sideways (844 by 390), and the camera's field of view (degrees)
+const SEE_ASPECT = 2.2;
+const SEE_FOV = 45;
+const SQUARE = 64;
+
+// The map squares (getMapSquareId's ids: x << 8 | y) a cinematic's camera sees on its way, with a
+// margin: rays from it through the middle, corners and edges of the screen, every SEE_EVERY
+// seconds, to where they meet the ground or reach SEE_FAR. These are loaded before it starts
+// (MapManager.setPinned), so none pops in as the camera flies.
+export function getCinematicSquares(
+    def: CinematicDef,
+    ground: (x: number, y: number) => number,
+    play: CinematicCamera,
+): number[] {
+    const ids = new Set<number>();
+    const add = (x: number, y: number) => {
+        for (const dx of [-SEE_MARGIN, 0, SEE_MARGIN]) {
+            for (const dy of [-SEE_MARGIN, 0, SEE_MARGIN]) {
+                const mapX = Math.floor((x + dx) / SQUARE);
+                const mapY = Math.floor((y + dy) / SQUARE);
+                if (mapX >= 0 && mapY >= 0 && mapY < 256) {
+                    ids.add((mapX << 8) + mapY);
+                }
+            }
+        }
+    };
+    const tanV = Math.tan(((SEE_FOV / 2) * Math.PI) / 180);
+    const tanH = tanV * SEE_ASPECT;
+    for (let t = 0; t <= def.seconds + SEE_EVERY / 2; t += SEE_EVERY) {
+        const camera = getCinematicCamera(def, Math.min(t, def.seconds), ground, play);
+        // As CameraRig: x east, y up negative, z north
+        const pitch = (camera.pitch * Math.PI) / 1024;
+        const yaw = ((camera.yaw - 1024) * Math.PI) / 1024;
+        const f = [
+            -Math.cos(pitch) * Math.sin(yaw),
+            -Math.sin(pitch),
+            -Math.cos(pitch) * Math.cos(yaw),
+        ];
+        const eye = [
+            camera.x - f[0] * camera.distance,
+            camera.height - f[1] * camera.distance,
+            camera.y - f[2] * camera.distance,
+        ];
+        // Right and up of the screen, against the world's up (y negative)
+        const right = normalize([-f[2], 0, f[0]]);
+        const up = normalize([
+            right[1] * f[2] - right[2] * f[1],
+            right[2] * f[0] - right[0] * f[2],
+            right[0] * f[1] - right[1] * f[0],
+        ]);
+        add(eye[0], eye[2]);
+        for (const sx of [-1, 0, 1]) {
+            for (const sy of [-1, 0, 1]) {
+                const dir = normalize([
+                    f[0] + right[0] * tanH * sx + up[0] * tanV * sy,
+                    f[1] + right[1] * tanH * sx + up[1] * tanV * sy,
+                    f[2] + right[2] * tanH * sx + up[2] * tanV * sy,
+                ]);
+                for (let d = 0; d <= SEE_FAR; d += SEE_STEP) {
+                    const x = eye[0] + dir[0] * d;
+                    const h = eye[1] + dir[1] * d;
+                    const z = eye[2] + dir[2] * d;
+                    add(x, z);
+                    // Into the ground: nothing further along is seen
+                    if (h >= ground(x, z)) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    return [...ids].sort((a, b) => a - b);
+}
+
+function normalize(v: number[]): number[] {
+    const length = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / length, v[1] / length, v[2] / length];
+}

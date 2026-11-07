@@ -70,7 +70,12 @@ import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/Camera
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
-import { CinematicCamera, CinematicPlayer, getCinematicCamera } from "./Cinematic";
+import {
+    CinematicCamera,
+    CinematicPlayer,
+    getCinematicCamera,
+    getCinematicSquares,
+} from "./Cinematic";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -209,6 +214,8 @@ const PHONE_RUN_DISTANCE = 15;
 const PHONE_MAX_HEIGHT = 520;
 // The most of the opening cinematic a frame moves it on by (ms)
 const CINEMATIC_MAX_FRAME_MS = 100;
+// The longest it waits for what it sees to load before it plays anyway (ms)
+const CINEMATIC_LOAD_MS = 45000;
 
 // How far past the arena the camera can get: a run's is behind the player, zoomed
 // all the way out, and the title screen's circles them
@@ -492,6 +499,8 @@ export class GameClient implements GameFrameHandler {
     // run's (and the player's zoom) is left as it was
     cinematic?: CinematicPlayer;
     private readonly cinematicRig = new CameraRig();
+    // While what it sees loads, behind the loading screen: since when (performance.now)
+    private cinematicLoading?: number;
 
     sim?: Sim;
     paused = false;
@@ -1551,6 +1560,9 @@ export class GameClient implements GameFrameHandler {
             revive: undefined,
             cinematic: this.cinematic !== undefined,
         });
+        if (this.cinematic) {
+            this.preloadCinematic(sim, this.cinematic);
+        }
         this.updateHud(true);
         // A run that begins with picks to make (a boss fight's) shows them now:
         // the loop only steps the sim once they're made
@@ -2337,6 +2349,48 @@ export class GameClient implements GameFrameHandler {
         return { x: Math.sin(now * 0.09) * reach, y: Math.cos(now * 0.077) * reach };
     }
 
+    // Everything the opening cinematic's camera will see is loaded before it starts, behind the
+    // loading screen, and kept until it's over (MapManager.setPinned), so nothing pops in as it
+    // flies over the map
+    private preloadCinematic(sim: Sim, cinematic: CinematicPlayer): void {
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        const { x, y } = sim.player;
+        const squares = getCinematicSquares(cinematic.def, ground, {
+            x,
+            y,
+            height: ground(x, y) - 0.6,
+            pitch: this.cameraRig.pitch,
+            yaw: this.cameraRig.yaw,
+            distance: this.cameraRig.distance,
+        });
+        this.renderer.mapManager.setPinned(squares);
+        this.cinematicLoading = performance.now();
+        this.store.set({
+            screen: "loading",
+            loadingText: `Travelling to ${sim.map.name}`,
+            loadingProgress: 0,
+        });
+    }
+
+    // Whether the cinematic's still waiting on what it sees to load, showing how far it's got
+    private isCinematicLoading(): boolean {
+        const since = this.cinematicLoading;
+        if (since === undefined) {
+            return false;
+        }
+        const { total, left } = this.renderer.mapManager.getPinnedProgress();
+        if (left > 0 && performance.now() - since < CINEMATIC_LOAD_MS) {
+            const progress = Math.round(((total - left) / Math.max(1, total)) * 100);
+            if (progress !== this.store.getSnapshot().loadingProgress) {
+                this.store.set({ loadingProgress: progress });
+            }
+            return true;
+        }
+        this.cinematicLoading = undefined;
+        this.store.set({ screen: "run" });
+        return false;
+    }
+
     // The opening cinematic on by a frame (MapDef.cinematic): its sounds as their cues go by,
     // and where its camera is, or undefined once it's over (or there isn't one). play: the run's
     // camera now, which it ends on.
@@ -2349,6 +2403,10 @@ export class GameClient implements GameFrameHandler {
         if (!cinematic) {
             return undefined;
         }
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        if (this.isCinematicLoading()) {
+            return getCinematicCamera(cinematic.def, 0, ground, play);
+        }
         // It plays on behind a menu (a co-op run's pause doesn't stop it either)
         // (a frame at most: the first after the map loads can be long)
         for (const cue of cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000)) {
@@ -2360,7 +2418,6 @@ export class GameClient implements GameFrameHandler {
             this.endCinematic();
             return undefined;
         }
-        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
         return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
     }
 
@@ -2377,6 +2434,14 @@ export class GameClient implements GameFrameHandler {
         }
         this.cinematic = undefined;
         this.view.cinematic = undefined;
+        // What it saw goes back to loading and unloading with the camera
+        this.renderer.mapManager.setPinned([]);
+        if (this.cinematicLoading !== undefined) {
+            this.cinematicLoading = undefined;
+            if (this.store.getSnapshot().screen === "loading") {
+                this.store.set({ screen: "run" });
+            }
+        }
         // The solo run's clock starts from here: nothing banked while it was held
         this.accumulator = Math.min(this.accumulator, TICK_MS);
         if (this.store.getSnapshot().cinematic) {

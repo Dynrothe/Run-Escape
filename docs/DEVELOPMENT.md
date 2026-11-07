@@ -959,7 +959,17 @@ adventurer can have:
       does nothing else; the HUD and touch controls are hidden. A solo run doesn't step until the
       last shot begins (`CinematicPlayer.holdsRun`); in co-op the run goes on with the player
       standing still (`updateCoop` sends no movement).
-    - To see a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`.
+    - Nothing pops in as it flies: `getCinematicSquares` follows the camera's path (every quarter
+    second, rays through the screen's middle, corners and edges, wide enough for a phone, to the
+    ground or the render distance, with a margin) for the map squares it will see, and
+    `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever the camera
+    is, never unloaded) and keeps the loading screen up until they're in
+    (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
+    as usual from there.
+  - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
+    isn't its head (Yama's is his throne's back). `MapDef.spawnFacing` turns the player as the
+    run starts, to face the way the cinematic's camera ends looking.
+  - To see a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`.
       The page reloads if a source file changes, which ends it.
 
 ### Raids

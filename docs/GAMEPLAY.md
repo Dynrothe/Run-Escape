@@ -218,6 +218,7 @@ version and how to run it.
   "Pathetic." and snaps his fingers, and they burn away in Leagues IV's Trailblazer Reloaded
   death; then the camera flies south over the city to Zachariah and the run begins. Any key,
   click, tap or controller button skips it, and it plays each time the map's travelled to.
+  Zachariah starts facing into the city. Its music is Sign Here, Yama's own fight track.
   For now there's nothing to fight: no waves, no bosses, no random events and nothing hurts.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are

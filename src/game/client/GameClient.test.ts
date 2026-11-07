@@ -1606,6 +1606,7 @@ describe("the opening cinematic", () => {
             accumulator: 0,
             audio: { play },
             grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned: vi.fn() } },
         });
         store.set({ cinematic: true });
         const state = client as unknown as { cinematic?: CinematicPlayer; paused: boolean };
