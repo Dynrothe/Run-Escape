@@ -3882,14 +3882,20 @@ TOMBS_ENEMIES.push(
             // Quicker by the phase, each opening on what it adds, the swell from the first
             phases: {
                 phases: [
-                    { until: 0.7, ambients: [{ attack: "Swell", interval: 14, delay: 6 }] },
+                    {
+                        until: 0.7,
+                        status: "Zebak",
+                        ambients: [{ attack: "Swell", interval: 14, delay: 6 }],
+                    },
                     {
                         until: 0.4,
+                        status: "The waters rise",
                         tempo: 0.85,
                         opener: "Twin jaws",
                         ambients: [{ attack: "Swell", interval: 11, delay: 4 }],
                     },
                     {
+                        status: "Zebak's fury",
                         tempo: 0.7,
                         light: 0.6,
                         opener: "Twin swell",
