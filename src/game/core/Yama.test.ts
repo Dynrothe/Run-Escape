@@ -5,7 +5,7 @@ import { JUSTICIAR_ABILITIES } from "../content/justiciarKit";
 import { canRetry, getMap, getMapCharacter } from "../content/maps";
 import { BossAttackDef, emptyStats } from "../content/types";
 import { YAMA_HITPOINTS } from "../content/yama";
-import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent } from "./entities";
 import { makeGrid } from "./world/testGrid";
 
@@ -260,7 +260,170 @@ describe("the gaze otherwise", () => {
     });
 });
 
+// One of his Voidflares, called in now, held where it's put (its drifting is its own test's)
+function callFlare(sim: Sim, boss: Enemy, at?: { x: number; y: number }): Enemy {
+    sim["summonAround"](boss, attackNamed("Voidflare"));
+    const flare = sim.enemies.find((e) => e.def.id === "voidflare" && !e.dead)!;
+    if (at) {
+        flare.x = flare.prevX = at.x;
+        flare.y = flare.prevY = at.y;
+    }
+    flare.speed = 0;
+    return flare;
+}
+
+// The middle of the 3 by 3 lightning cell east of the hero's, which is the other colour, so their
+// Lightning strikes it (HeroAbilityDef kind "checker")
+function nextCell(sim: Sim): { x: number; y: number } {
+    const { x, y } = sim.player;
+    return { x: (Math.floor(x / 3) + 1) * 3 + 1.5, y: Math.floor(y / 3) * 3 + 1.5 };
+}
+
+// Whether a floor tile (world tiles) is to rise
+const rising = (sim: Sim, x: number, y: number) => {
+    const floor = sim.floor!;
+    return floor.riseAt[floor.index(Math.floor(x), Math.floor(y))] !== -1;
+};
+
+describe("his Voidflare", () => {
+    test("is his from the second phase, drifts after them slower than they walk, and nothing hurts it", () => {
+        expect(attackNamed("Voidflare").phases).toEqual([2, 3]);
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 9);
+        const flare = callFlare(sim, boss);
+        // Out of his hands, on their side of him
+        const reach = attackNamed("Voidflare").summon!.distance!;
+        expect(flare.y).toBeLessThan(boss.y - reach * 0.8);
+        expect(Math.hypot(flare.x - boss.x, flare.y - boss.y)).toBeCloseTo(reach, 1);
+        flare.speed = getEnemy("voidflare").speed / T;
+        expect(getEnemy("voidflare").speed).toBeLessThan(PLAYER_SPEED * T);
+        const away = () => Math.hypot(flare.x - sim.player.x, flare.y - sim.player.y);
+        const before = away();
+        run(sim, 1);
+        expect(away()).toBeLessThan(before - 1);
+        expect(sim.damageEnemy(flare, 500, 0, sim.player.x, sim.player.y)).toBe(0);
+        expect(flare.dead).toBe(false);
+    });
+
+    test("bursts in its time where it is, with a plus of the floor from there", () => {
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 9);
+        const at = { x: sim.player.x + 4, y: sim.player.y + 0.5 };
+        const flare = callFlare(sim, boss, at);
+        const hp = sim.player.hp;
+        run(sim, getEnemy("voidflare").bursts!.fuse - 0.2);
+        expect(flare.dead).toBe(false);
+        run(sim, 0.3);
+        expect(flare.dead).toBe(true);
+        // Out of its reach: nothing, but the floor's coming up along its row and column
+        expect(sim.player.hp).toBe(hp);
+        expect(rising(sim, at.x, at.y)).toBe(true);
+        expect(rising(sim, at.x + 3, at.y)).toBe(true);
+        expect(rising(sim, at.x, at.y - 3)).toBe(true);
+        expect(rising(sim, at.x + 1, at.y + 1)).toBe(false);
+        // and it drops nothing
+        expect(sim.pickups).toEqual([]);
+    });
+
+    test("bursts on whoever it touches once it's formed, for 10", () => {
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 9);
+        const flare = callFlare(sim, boss, { x: sim.player.x + 0.8, y: sim.player.y });
+        const hp = sim.player.hp;
+        // Its first second, they can step away
+        const arm = getEnemy("voidflare").bursts!.arm!;
+        run(sim, arm - 0.1);
+        expect(flare.dead).toBe(false);
+        run(sim, 0.2);
+        expect(flare.dead).toBe(true);
+        expect(sim.player.hp).toBe(hp - getEnemy("voidflare").bursts!.damage);
+    });
+
+    test("Ice barrage goes for it before him, and holds it and its fuse", () => {
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 4);
+        const flare = callFlare(sim, boss, nextCell(sim));
+        expect(sim.useAbility(slot("ice_barrage"))).toBe(true);
+        const cast = sim["kitCasts"][0];
+        expect([cast.x, cast.y]).toEqual([flare.x, flare.y]);
+        run(sim, 1);
+        expect(flare.frozen).toBeGreaterThan(0);
+        expect(boss.hp).toBe(YAMA_HITPOINTS);
+        // Held past its fuse, and then it goes on
+        run(sim, getEnemy("voidflare").bursts!.fuse);
+        expect(flare.dead).toBe(false);
+        run(sim, getEnemy("voidflare").bursts!.shatter!.frozen);
+        expect(flare.dead).toBe(true);
+    });
+
+    test("Lightning shatters it only while it's held, leaving 6 hitpoints to pick up", () => {
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 9);
+        const flare = callFlare(sim, boss, nextCell(sim));
+        const lightning = slot("lightning");
+        expect(sim.useAbility(lightning)).toBe(true);
+        run(sim, 1.5);
+        expect(flare.dead).toBe(false);
+        sim.useAbility(slot("ice_barrage"));
+        run(sim, 1);
+        sim.heroes[0].kitReadyTicks[lightning] = 0;
+        expect(sim.useAbility(lightning)).toBe(true);
+        run(sim, 1.5);
+        expect(flare.dead).toBe(true);
+        expect(sim.pickups).toEqual([
+            expect.objectContaining({
+                kind: "food",
+                value: getEnemy("voidflare").bursts!.shatter!.heal,
+            }),
+        ]);
+        // No burst, and nothing counted
+        expect(rising(sim, flare.x, flare.y)).toBe(false);
+        expect(sim.kills).toBe(0);
+        // Hurt, they walk over it and have 6 back
+        sim.player.hp -= 10;
+        const hp = sim.player.hp;
+        const heal = sim.pickups[0];
+        sim.player.x = sim.player.prevX = heal.x + 1;
+        sim.player.y = sim.player.prevY = heal.y;
+        run(sim, 1);
+        expect(sim.player.hp).toBe(hp + 6);
+    });
+
+    test("goes with him when he dies", () => {
+        const sim = createSim(LAIR.start);
+        const boss = startFight(sim);
+        stand(sim, boss, 9);
+        const flare = callFlare(sim, boss, { x: sim.player.x + 4, y: sim.player.y });
+        kill(sim, boss);
+        expect(flare.dead).toBe(true);
+        run(sim, getEnemy("voidflare").bursts!.fuse);
+        expect(rising(sim, flare.x, flare.y)).toBe(false);
+    });
+});
+
 describe("in co-op", () => {
+    test("a Voidflare's burst hits every player it reaches", () => {
+        const sim = createSim(LAIR.start, 2);
+        const boss = startFight(sim);
+        stand(sim, boss, 9, 0);
+        stand(sim, boss, 9, 1);
+        const [one, two] = sim.heroes.map((hero) => hero.player);
+        two.x = two.prevX = one.x + 1.6;
+        const flare = callFlare(sim, boss, { x: one.x + 0.8, y: one.y });
+        const hp = [one.hp, two.hp];
+        run(sim, getEnemy("voidflare").bursts!.arm! + 0.1);
+        expect(flare.dead).toBe(true);
+        // Each as his own attacks hit, harder for a party
+        const hit = Math.round(getEnemy("voidflare").bursts!.damage * boss.damageScale);
+        expect(hit).toBeGreaterThanOrEqual(10);
+        expect([one.hp, two.hp]).toEqual([hp[0] - hit, hp[1] - hit]);
+    });
+
     test("either player's gaze stops the meteor for both", () => {
         const meteor = attackNamed("Meteor");
         const sim = createSim(LAIR.start, 2);

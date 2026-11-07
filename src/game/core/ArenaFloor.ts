@@ -767,6 +767,31 @@ export class ArenaFloor {
                 }
                 break;
             }
+            case "plus": {
+                const step = this.ticks(pattern.tileSeconds);
+                let ox = middle;
+                let oy = Math.floor((minY + maxY) / 2);
+                if (pattern.at === "player") {
+                    const at = origin();
+                    ox = Math.min(Math.max(Math.floor(at.x) - this.x0, minX), maxX);
+                    oy = Math.min(Math.max(Math.floor(at.y) - this.y0, minY), maxY);
+                }
+                this.rise(ox, oy, first, FLOOR_SOUTH, tick);
+                for (let d = 1; d <= pattern.arm; d++) {
+                    // Tipping away from the middle, the way it's going
+                    for (const [x, y, dir] of [
+                        [ox + d, oy, FLOOR_EAST],
+                        [ox - d, oy, FLOOR_WEST],
+                        [ox, oy + d, FLOOR_NORTH],
+                        [ox, oy - d, FLOOR_SOUTH],
+                    ]) {
+                        if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+                            this.rise(x, y, first + d * step, dir, tick);
+                        }
+                    }
+                }
+                break;
+            }
             case "dropRows": {
                 const step = this.ticks(pattern.rowSeconds);
                 const last = maxY - minY + 1 - this.def.drop.keepRows;

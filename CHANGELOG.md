@@ -13,6 +13,7 @@ the version in the corner).
   palace. Explore it as Justiciar Zachariah, with his lunge, shock wave, ice barrage, lightning
   and the Owl's gaze on buttons of your own. Step onto the palace floor and Yama wakes: the
   palace is sealed in fire, the floor rises under you, and only the Owl's gaze stops his meteor.
+  Freeze his void flares with Ice barrage and shatter them with Lightning for food.
   It opens on Yama on his throne, facing the last of the palace guard (any key, click or tap
   skips it).
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four

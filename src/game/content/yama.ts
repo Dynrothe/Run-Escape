@@ -52,6 +52,14 @@ const PORTAL_SOUND = 10271;
 // The Gielinor stone pillar the floor's skins use (floorSkins.ts stonePillar)
 const STONE_PILLAR = 7016;
 
+// His Void Flare, npc 14179: an orb of shadow drifting (12133) and bursting (12134, with its
+// sound). Ice Barrage's ice (369) holds it.
+const FLARE_NPC = 14179;
+const FLARE_SEQ = 12133;
+const FLARE_BURST_SEQ = 12134;
+const FLARE_BURST_SOUND = 10239;
+const ICE = 369;
+
 // What the fight's tuned to: his hitpoints (the lair's), and the hero's 38 hitpoints that his
 // damage is out of (the floor's slabs take 6 of them: MapDef.floor's slam).
 export const YAMA_HITPOINTS = 5400;
@@ -166,6 +174,25 @@ const VOLLEY: BossAttackDef = {
     impact: { shake: 0.15 },
 };
 
+// A Voidflare: an orb of his shadow that drifts after them, slower than they walk, and bursts
+// five seconds on, or as it touches someone, with a plus of the floor rising from where it
+// burst. Nothing hurts it: Ice barrage holds it, and Lightning on it while it's held shatters it,
+// leaving 6 hitpoints to pick up, the only way back up in the fight. From the second phase.
+const VOIDFLARE: BossAttackDef = {
+    name: "Voidflare",
+    kind: "summon",
+    damage: 0,
+    windup: 1,
+    cooldown: 10,
+    range: 999,
+    weight: 3,
+    phases: [2, 3],
+    seq: CAST_SEQ,
+    strikeAt: CAST_AT,
+    // Out of his hands, the way of whoever he's after
+    summon: { enemyId: "voidflare", count: 1, distance: RADIUS + 1.5, toward: true },
+};
+
 // The meteor: he calls it down on them, and it kills whoever it lands on, wherever they are. A
 // gaze cast at him while he does breaks it in the sky and leaves him open. Never picked: it comes
 // on its own clock (BossDef.critical).
@@ -231,6 +258,7 @@ const ATTACKS: BossAttackDef[] = [
         follow: { attack: "Hellfire volley (following)", delay: 0.6 },
     },
     { ...VOLLEY, name: "Hellfire volley (following)", phases: [], weight: 0, minRange: 0 },
+    VOIDFLARE,
     METEOR_ATTACK,
 ];
 
@@ -334,6 +362,46 @@ export const YAMA_ENEMIES: EnemyDef[] = [
                 barPerPhase: true,
                 shieldMessage: "",
                 blastMessage: "",
+            },
+        },
+    },
+    // His Voidflare (VOIDFLARE)
+    {
+        id: "voidflare",
+        name: "Void Flare",
+        npcId: FLARE_NPC,
+        idleSeq: FLARE_SEQ,
+        walkSeq: FLARE_SEQ,
+        attackSeq: FLARE_SEQ,
+        deathSeq: FLARE_BURST_SEQ,
+        // Nothing hurts it (bursts)
+        hp: 1,
+        damage: 0,
+        speed: 1.4,
+        // Its spikes reach about a tile and a half across at this, round a core its radius across
+        scale: 1.1,
+        radius: 0.6,
+        xp: 0,
+        knockbackResist: 1,
+        sounds: { attack: -1, hit: -1, death: FLARE_BURST_SOUND },
+        light: { radius: 2.5, color: 0xa24dff, intensity: 1, pulse: { amount: 0.3, seconds: 1 } },
+        bursts: {
+            fuse: 5,
+            // Turned up beside someone, they've a second to step away
+            arm: 1,
+            damage: 10,
+            radius: 1,
+            // From where it burst ("player" is whoever the floor's aimed at)
+            floor: {
+                kind: "pattern",
+                pattern: { kind: "plus", at: "player", arm: 4, tileSeconds: 0.06 },
+            },
+            shatter: {
+                frozenBy: "ice_barrage",
+                frozen: 4,
+                shatteredBy: "lightning",
+                heal: 6,
+                frozenSpotAnim: ICE,
             },
         },
     },

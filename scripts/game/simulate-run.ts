@@ -639,6 +639,11 @@ function kitChoice(sim: Sim): KitPlan | undefined {
     if (windup?.attack.interruptedBy && gaze >= 0 && gazePlay !== "never") {
         return { move: towards, slot: reaches(gaze) && ready(gaze) ? gaze : -1 };
     }
+    // Away from a loose flare about to reach them (EnemyDef.bursts), its burst worse than a slab
+    const flee = flareDodge(sim, boss);
+    if (flee) {
+        return { move: flee, slot: -1, dodge: true };
+    }
     // Out of reach of a swing he's winding up (his claw): out of its wedge the quickest way
     if (
         windup?.attack.kind === "swing" &&
@@ -650,6 +655,10 @@ function kitChoice(sim: Sim): KitPlan | undefined {
     const dodge = floorDodge(sim) ?? blastDodge(sim);
     if (dodge) {
         return { move: dodge, slot: -1, dodge: true };
+    }
+    const flare = flareChoice(sim, kit);
+    if (flare) {
+        return flare;
     }
     // A cast roots them, so not in reach of his claw, nor a lunge into it, unless his guard's down
     const open = sim.isExposed(boss);
@@ -701,6 +710,151 @@ function kitChoice(sim: Sim): KitPlan | undefined {
     // Round him, one way and then the other
     const side = Math.floor(sim.tick / (6 * TICKS_PER_SECOND)) % 2 === 0 ? 1 : -1;
     return { move: { x: -towards.y * side, y: towards.x * side }, slot: -1 };
+}
+
+// Tiles from a loose flare (EnemyDef.bursts) that it steps away from it, past touching
+const FLARE_KEEP = 1.2;
+
+// The way a step and a half takes it furthest from a loose flare that's nearly on it, minding
+// the slabs coming up and a swing he's winding up; undefined with none that near
+function flareDodge(sim: Sim, boss: Enemy): { x: number; y: number } | undefined {
+    const player = sim.player;
+    const flares = sim.enemies.filter(
+        (e) =>
+            !e.dead &&
+            e.def.bursts &&
+            e.frozen === 0 &&
+            Math.hypot(e.x - player.x, e.y - player.y) < e.radius + player.radius + FLARE_KEEP,
+    );
+    if (flares.length === 0) {
+        return undefined;
+    }
+    const windup = boss.bossState?.windup;
+    const swing = windup?.attack.kind === "swing" ? (windup.attack.radius ?? 0) : 0;
+    let best: { x: number; y: number } | undefined;
+    let bestScore = Infinity;
+    for (let i = 0; i < 8; i++) {
+        const dx = Math.cos((i * Math.PI) / 4);
+        const dy = Math.sin((i * Math.PI) / 4);
+        const x = player.x + dx * 1.5;
+        const y = player.y + dy * 1.5;
+        if (!canWalkStraight(sim.grid, player.x, player.y, x, y)) {
+            continue;
+        }
+        const near = Math.min(...flares.map((f) => Math.hypot(f.x - x, f.y - y)));
+        const slab = floorDanger(sim, x, y, FLOOR_LOOK) ? 1 : 0;
+        const clawed = swing > 0 && Math.hypot(boss.x - x, boss.y - y) < swing + player.radius;
+        const score = -near * 10 + slab * 25 + (clawed ? 40 : 0);
+        if (score < bestScore) {
+            best = { x: dx, y: dy };
+            bestScore = score;
+        }
+    }
+    return best;
+}
+
+// His flares (EnemyDef.bursts), as a careful person deals with them: the heal one leaves picked
+// up while they're hurt, a loose one held with the button that holds it (or kept away from), and
+// a held one broken with the button that breaks it, from a cell of the other colour (a checker's
+// cells, HeroAbilityDef kind "checker"). Undefined with nothing to do about them.
+function flareChoice(sim: Sim, kit: HeroAbilityDef[]): KitPlan | undefined {
+    const player = sim.player;
+    // Pressed where it stands: these don't go by where it faces
+    const press = (slot: number): KitPlan => ({
+        move: { x: player.facingX * 0.01, y: player.facingY * 0.01 },
+        slot,
+    });
+    const heal = sim.pickups.find((pickup) => pickup.kind === "food");
+    if (heal && player.hp < player.maxHp) {
+        const dx = heal.x - player.x;
+        const dy = heal.y - player.y;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        return { move: { x: dx / length, y: dy / length }, slot: -1 };
+    }
+    let flare: Enemy | undefined;
+    let nearest = Infinity;
+    for (const enemy of sim.enemies) {
+        const away = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (!enemy.dead && enemy.def.bursts?.shatter && away < nearest) {
+            flare = enemy;
+            nearest = away;
+        }
+    }
+    if (!flare || sim.isCasting()) {
+        return undefined;
+    }
+    const shatter = flare.def.bursts!.shatter!;
+    const hold = kit.findIndex((ability) => ability.id === shatter.frozenBy);
+    const breaks = kit.findIndex((ability) => ability.id === shatter.shatteredBy);
+    const ready = (slot: number) => slot >= 0 && sim.kitSecondsLeft(slot) === 0;
+    if (flare.frozen === 0) {
+        // Rooted while it lands, so not with the flare about to get there first; and only with
+        // the heal wanted and the button that breaks it ready in time, or those buttons are
+        // better spent on him
+        const lands = (kit[hold]?.windup ?? 0) * flare.def.speed + flare.radius + player.radius;
+        const wanted = player.hp <= player.maxHp - shatter.heal;
+        const inTime =
+            breaks >= 0 &&
+            sim.kitSecondsLeft(breaks) + kit[breaks].windup + 0.5 <
+                (kit[hold]?.windup ?? 0) + shatter.frozen;
+        if (
+            wanted &&
+            inTime &&
+            ready(hold) &&
+            nearest <= kit[hold].length &&
+            nearest > lands + 0.5
+        ) {
+            return press(hold);
+        }
+        // Out of its way, or it bursts on them
+        if (nearest < 3.5) {
+            const length = Math.max(0.001, nearest);
+            return {
+                move: { x: (player.x - flare.x) / length, y: (player.y - flare.y) / length },
+                slot: -1,
+                dodge: true,
+            };
+        }
+        return undefined;
+    }
+    if (breaks < 0) {
+        return undefined;
+    }
+    const ability = kit[breaks];
+    // Too late to break it before it's loose again
+    const left = flare.frozen / TICKS_PER_SECOND;
+    if (left < ability.windup + sim.kitSecondsLeft(breaks) + 0.1) {
+        return undefined;
+    }
+    const size = ability.size ?? 3;
+    const cell = (v: number) => Math.floor(v / size);
+    const colour = (x: number, y: number) => (cell(x) + cell(y)) & 1;
+    const middleX = (cell(flare.x) + 0.5) * size;
+    const middleY = (cell(flare.y) + 0.5) * size;
+    const struck =
+        colour(player.x, player.y) !== colour(flare.x, flare.y) &&
+        Math.hypot(middleX - player.x, middleY - player.y) <= ability.length;
+    if (struck) {
+        return ready(breaks) ? press(breaks) : { move: { x: 0, y: 0 }, slot: -1 };
+    }
+    // Into the nearest cell beside its own, which is the other colour
+    let to = { x: 0, y: 0 };
+    let best = Infinity;
+    for (const [cx, cy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+    ]) {
+        const x = middleX + cx * size;
+        const y = middleY + cy * size;
+        const d = Math.hypot(x - player.x, y - player.y);
+        if (d < best) {
+            best = d;
+            to = { x: (x - player.x) / Math.max(d, 0.001), y: (y - player.y) / Math.max(d, 0.001) };
+        }
+    }
+    return { move: to, slot: -1 };
 }
 
 // The way out of a cone swing's reach (BossAttackDef.cone) that gets out soonest: walked for
@@ -803,6 +957,10 @@ function floorDodge(sim: Sim): { x: number; y: number } | undefined {
     if (!danger(tx, ty)) {
         return undefined;
     }
+    // Nor beside a flare that's loose (EnemyDef.bursts), which bursts on them there
+    const flares = sim.enemies.filter((e) => !e.dead && e.def.bursts && e.frozen === 0);
+    const byFlare = (x: number, y: number) =>
+        flares.some((f) => Math.hypot(f.x - x, f.y - y) < f.radius + player.radius + 0.8);
     let best: { x: number; y: number } | undefined;
     let bestAway = Infinity;
     for (let dy = -3; dy <= 3; dy++) {
@@ -816,6 +974,7 @@ function floorDodge(sim: Sim): { x: number; y: number } | undefined {
                 i < 0 ||
                 !floor.layout.mask[i] ||
                 danger(x, y) ||
+                byFlare(x + 0.5, y + 0.5) ||
                 !canWalkStraight(sim.grid, player.x, player.y, x + 0.5, y + 0.5) ||
                 crossesSlab(sim, x + 0.5, y + 0.5)
             ) {

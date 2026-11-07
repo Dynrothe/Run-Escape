@@ -193,6 +193,28 @@ export type EnemyDef = {
     // into come out where it stood, dropping nothing (Phosani's eggs hatch
     // parasites unless they're broken first)
     hatches?: { seconds: number; into: string; count: number; spotAnim?: number; sound?: number };
+    // Bursts fuse seconds after it turns up, or as it touches someone once it's been about arm
+    // seconds (it's forming), for damage to whoever's within radius tiles of it (damage is like
+    // explodes'), and starts floor where it burst (a plus of the map's floor rising). Nothing
+    // hurts it: frozenBy (a hero's button, by HeroAbilityDef.id) holds it still for frozen
+    // seconds, its fuse with it, and shatteredBy landing on it while it's held breaks it, leaving
+    // heal hitpoints to pick up (the game's food). Yama's Voidflares.
+    bursts?: {
+        fuse: number;
+        arm?: number;
+        damage: number;
+        radius: number;
+        floor?: FloorActionDef;
+        sound?: number;
+        shatter?: {
+            frozenBy: string;
+            frozen: number;
+            shatteredBy: string;
+            heal: number;
+            frozenSpotAnim?: number;
+            sound?: number;
+        };
+    };
     // Its health bar's over it for as long as it's alive, full or not, so what
     // it's got left can be read at a glance (Phosani's eggs, against their time)
     healthBar?: boolean;
@@ -645,6 +667,9 @@ export type BossAttackDef = {
         thrown?: { seconds: number };
         holds?: number;
         walkTo?: { distance: number; perAbsorbed: number };
+        // They turn up on the boss's side towards whoever it's after, distance tiles out, as if
+        // out of its hands (Yama's Voidflares)
+        toward?: boolean;
     };
     // A mark on the player, bursting after seconds for damage (and the attack's
     // hit damage does nothing), leaving enemyId behind. An antidote keeping
@@ -2251,6 +2276,10 @@ export type FloorPatternDef = (
           width: number;
           tileSeconds: number;
       }
+    // A plus: the row and column through a tile (the player's, or the middle), out to arm tiles
+    // each way, the tile first and then a tile further out every tileSeconds. Off a diagonal from
+    // it is safe (a Voidflare's burst).
+    | { kind: "plus"; at: "player" | "middle"; arm: number; tileSeconds: number }
 ) & {
     // Its own cue (FloorCue), over the floor's
     cue?: FloorCue;

@@ -3239,6 +3239,7 @@ export class Sim {
             noDrops: false,
             bonesOnly: false,
             hatchTick: def.hatches ? this.tick + secondsToTicks(def.hatches.seconds) : 0,
+            burstTick: def.bursts ? this.tick + secondsToTicks(def.bursts.fuse) : 0,
             abilities: getAbilities(def, this.tick, this.rng),
         };
         this.enemies.push(enemy);
@@ -3409,6 +3410,25 @@ export class Sim {
             // It goes for whoever's nearest
             this.use(this.nearestHero(enemy.x, enemy.y));
             player = this.player;
+
+            // A flare (EnemyDef.bursts): held, its fuse waits; otherwise it bursts in its time,
+            // or on whoever it touches once it's formed (its fuse is down by its arm)
+            if (enemy.burstTick !== 0) {
+                const bursts = enemy.def.bursts!;
+                if (enemy.frozen > 0) {
+                    enemy.burstTick++;
+                } else if (
+                    this.tick >= enemy.burstTick ||
+                    (enemy.burstTick - this.tick <=
+                        secondsToTicks(bursts.fuse - (bursts.arm ?? 0)) &&
+                        this.isUp(this.hero) &&
+                        fm.hypot(player.x - enemy.x, player.y - enemy.y) <
+                            enemy.radius + player.radius + 0.1)
+                ) {
+                    this.burst(enemy);
+                    continue;
+                }
+            }
 
             if (enemy.jump) {
                 this.stepJump(enemy);
@@ -4150,6 +4170,8 @@ export class Sim {
 
     // One of count enemies turning up in a ring radius tiles around another,
     // trying a few spots before giving up
+    // toward: an angle they turn up round (the way the player is), within a quarter turn either
+    // side of it if there's no room right there
     private spawnNear(
         enemy: Vec2,
         def: EnemyDef,
@@ -4157,12 +4179,18 @@ export class Sim {
         index: number,
         count: number,
         attempts = 1,
+        toward?: number,
     ): Enemy | undefined {
         for (let attempt = 0; attempt < attempts; attempt++) {
             const angle =
-                attempt === 0
-                    ? (index / count) * Math.PI * 2 + this.rng.range(0, 0.5)
-                    : this.rng.range(0, Math.PI * 2);
+                toward !== undefined
+                    ? toward +
+                      (attempt === 0
+                          ? ((index - (count - 1) / 2) / count) * 0.5
+                          : this.rng.range(-Math.PI / 2, Math.PI / 2))
+                    : attempt === 0
+                      ? (index / count) * Math.PI * 2 + this.rng.range(0, 0.5)
+                      : this.rng.range(0, Math.PI * 2);
             const x = enemy.x + fm.cos(angle) * radius;
             const y = enemy.y + fm.sin(angle) * radius;
             if (this.canTurnUpAt(def, x, y)) {
@@ -5663,7 +5691,12 @@ export class Sim {
             return;
         }
         for (const enemy of this.enemies) {
-            if (!enemy.dead && (enemy.totemOf === boss || enemy.walksTo === boss)) {
+            if (
+                !enemy.dead &&
+                (enemy.totemOf === boss ||
+                    enemy.walksTo === boss ||
+                    (enemy.def.bursts && enemy.spawnedBy === boss.uid))
+            ) {
                 this.vanish(enemy);
             }
         }
@@ -8347,8 +8380,11 @@ export class Sim {
         };
         const windupTicks = landTick - this.tick;
         if (ability.kind === "square") {
-            // On the nearest enemy in reach, or halfway out ahead
-            const target = this.nearestEnemies(player.x, player.y, ability.length, 1)[0];
+            // On the nearest flare in reach that it holds (EnemyDef.bursts), or the nearest
+            // enemy, or halfway out ahead
+            const target =
+                this.nearestFlare(player.x, player.y, ability.length, ability.id) ??
+                this.nearestEnemies(player.x, player.y, ability.length, 1)[0];
             cast.x = target ? target.x : player.x + dirX * (ability.length / 2);
             cast.y = target ? target.y : player.y + dirY * (ability.length / 2);
         } else if (ability.kind === "checker") {
@@ -8388,6 +8424,30 @@ export class Sim {
                 startTick: cast.startTick,
                 landTick: cast.landTick,
             }));
+    }
+
+    // The nearest flare (EnemyDef.bursts) within range that a hero's button holds: one that isn't
+    // held yet if there is one, then one that is
+    private nearestFlare(
+        x: number,
+        y: number,
+        range: number,
+        abilityId: string,
+    ): Enemy | undefined {
+        let best: Enemy | undefined;
+        let bestScore = Infinity;
+        for (const enemy of this.enemies) {
+            if (enemy.dead || enemy.def.bursts?.shatter?.frozenBy !== abilityId) {
+                continue;
+            }
+            const distance = fm.hypot(enemy.x - x, enemy.y - y);
+            const score = distance + (enemy.frozen > 0 ? range : 0);
+            if (distance <= range && score < bestScore) {
+                best = enemy;
+                bestScore = score;
+            }
+        }
+        return best;
     }
 
     // Every size by size cell of the colour he isn't standing on, with its middle within length
@@ -8437,6 +8497,10 @@ export class Sim {
         }
         cast.hit.push(enemy.uid);
         const ability = cast.ability;
+        if (enemy.def.bursts) {
+            this.flareHit(ability, enemy);
+            return;
+        }
         // A gaze does nothing to a boss warded against it (BossDef.gazeWard), but stop what it
         // can: then it lands
         if (ability.kind === "gaze" && enemy.def.boss?.gazeWard) {
@@ -8543,7 +8607,7 @@ export class Sim {
                 this.queryTouching(x, y, half + 1, (enemy) => {
                     if (fm.hypot(enemy.x - x, enemy.y - y) <= half + enemy.radius) {
                         this.kitHit(cast, enemy);
-                        if (ability.freeze && !enemy.boss) {
+                        if (ability.freeze && !enemy.boss && !enemy.def.bursts) {
                             this.addEffect(BLUE_BIND_SPOT, enemy.x, enemy.y, 0, 60, enemy.uid);
                         }
                     }
@@ -9248,6 +9312,10 @@ export class Sim {
         const radius =
             summon.walkTo?.distance ?? summon.distance ?? (summon.beside ? SUMMON_BESIDE : 1.5);
         const attempts = summon.beside || summon.walkTo || summon.distance !== undefined ? 6 : 1;
+        // Out of its hands, the way of whoever it's after (summon.toward)
+        const toward = summon.toward
+            ? fm.atan2(this.player.y - enemy.y, this.player.x - enemy.x)
+            : undefined;
         const spawned: Enemy[] = [];
         const also = summon.alsoId !== undefined ? getEnemy(summon.alsoId) : undefined;
         const total = count + (also ? 1 : 0);
@@ -9258,7 +9326,7 @@ export class Sim {
                 ? this.spawnEnemy(which, "normal")
                 : summon.thrown
                   ? this.throwSummon(enemy, which, radius, summon.thrown.seconds)
-                  : this.spawnNear(around, which, radius, i, total, attempts);
+                  : this.spawnNear(around, which, radius, i, total, attempts, toward);
             if (one) {
                 spawned.push(one);
             }
@@ -9268,6 +9336,11 @@ export class Sim {
         for (const one of spawned) {
             one.noDrops = summon.beside === true || summon.thrown !== undefined;
             one.bonesOnly = summon.walkTo !== undefined;
+            // A flare's burst is its boss's attack, and goes with the boss (EnemyDef.bursts)
+            if (one.def.bursts) {
+                one.damageScale = enemy.damageScale;
+                one.spawnedBy = enemy.uid;
+            }
         }
         if (spawned.length === 0) {
             return;
@@ -9843,7 +9916,8 @@ export class Sim {
         }
         // Hit by the player, it's after the player from now on
         enemy.aggro = true;
-        if (enemy.shieldEnd > this.tick) {
+        // and a flare can only be shattered (EnemyDef.bursts)
+        if (enemy.shieldEnd > this.tick || enemy.def.bursts) {
             this.showBlocked(enemy);
             return 0;
         }
@@ -10121,6 +10195,65 @@ export class Sim {
             y: enemy.y,
         });
         this.vanish(enemy);
+    }
+
+    // A flare bursting where it is (EnemyDef.bursts): whoever's in reach is hit, as by its boss,
+    // the floor rises in its shape from there, and it's gone, dropping nothing
+    private burst(enemy: Enemy): void {
+        const bursts = enemy.def.bursts!;
+        this.emit({ type: "blast", x: enemy.x, y: enemy.y, radius: bursts.radius });
+        if (bursts.sound !== undefined) {
+            this.emit({
+                type: "bossAttack",
+                enemyId: enemy.def.id,
+                sound: bursts.sound,
+                x: enemy.x,
+                y: enemy.y,
+            });
+        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                !this.runOver &&
+                !this.reviving &&
+                fm.hypot(player.x - enemy.x, player.y - enemy.y) <= bursts.radius + player.radius
+            ) {
+                this.damagePlayer(bursts.damage * enemy.damageScale, enemy.def.id, false);
+            }
+        });
+        if (bursts.floor) {
+            this.floorAct(bursts.floor, { x: enemy.x, y: enemy.y });
+        }
+        enemy.noDrops = true;
+        this.killEnemy(enemy);
+    }
+
+    // A hero's button on a flare (EnemyDef.bursts): its shatter's frozenBy holds it, and its
+    // shatteredBy breaks it while it's held. Nothing else touches it.
+    private flareHit(ability: HeroAbilityDef, enemy: Enemy): void {
+        const shatter = enemy.def.bursts!.shatter;
+        if (shatter && ability.id === shatter.frozenBy) {
+            const ticks = secondsToTicks(shatter.frozen);
+            enemy.frozen = Math.max(enemy.frozen, ticks);
+            if (shatter.frozenSpotAnim !== undefined) {
+                this.addEffect(shatter.frozenSpotAnim, enemy.x, enemy.y, 0, ticks, enemy.uid);
+            }
+        } else if (shatter && ability.id === shatter.shatteredBy && enemy.frozen > 0) {
+            if (shatter.sound !== undefined) {
+                this.emitKitSound(ability, shatter.sound, enemy.x, enemy.y);
+            }
+            // Its ice goes with it
+            for (const effect of this.effects) {
+                if (effect.enemyUid === enemy.uid && effect.spotAnim === shatter.frozenSpotAnim) {
+                    effect.endTick = this.tick;
+                }
+            }
+            enemy.noDrops = true;
+            this.killEnemy(enemy);
+            this.dropPickup("food", enemy.x, enemy.y, Math.round(shatter.heal * this.healScale));
+        } else {
+            this.showBlocked(enemy);
+        }
     }
 
     // Blows up where it died (EnemyDef.explodes), hurting the player if
@@ -11111,6 +11244,8 @@ export class Sim {
             if (
                 enemy.dead ||
                 enemy.shieldEnd > this.tick ||
+                // Nothing aims at a flare, which only its shatter breaks (EnemyDef.bursts)
+                enemy.def.bursts ||
                 (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style) ||
                 (dark && !this.isEnemyLit(enemy))
             ) {

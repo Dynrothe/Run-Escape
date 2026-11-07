@@ -151,7 +151,8 @@ code (every floor tile beside a way off it), Retry starts on his floor, and once
 fires go out and the map's free roam again with his throne empty (section 8's first two
 questions, answered the simple way for now). The fight's in `content/yama.ts`: Hellstomp,
 Shadow lanes, Hellfire volley, Claw and the Meteor, with the gaze, its pillars and the meteor's
-clock as in section 5. Co-op: either player's gaze stops the meteor for both.
+clock as in section 5, and from phase 2 the Voidflare and its heal. Co-op: either player's gaze
+stops the meteor for both, and a flare's burst hits every player in reach.
 
 **Changed from the plan, and why:**
 
@@ -166,24 +167,35 @@ clock as in section 5. Co-op: either player's gaze stops the meteor for both.
 | Meteor waits for the gaze | 4 s of cooldown left at most | 2.4 s                                       | At 4 a meteor could start that the gaze's 1.6 s windup, and a moment to turn, couldn't stop in its 4.5 |
 | The meteor's cue          | Its shadow, growing          | Its shadow and a glow where it'll land      | In the dark it calls for, the shadow alone didn't show on the burnt stone                              |
 | The arena cinematic       | A second cinematic           | His boss intro: title, rise, camera pan     | Not built yet (below)                                                                                  |
+| Where a flare starts      | Not said                     | Out of his hands, on your side of him       | Round him at random, one could start behind him or right on top of you (`summon.toward`)               |
+| A flare on contact        | Bursts on contact            | Only once it's 1 s old (`arm`)              | Out of his hands beside a hero, it burst before anyone could see it                                    |
+| A flare's plus            | Shadow tiles                 | The floor's `plus`, 4 tiles each way        | His floor's slabs, as his other patterns: 6 a slab, as for any slab (above)                            |
+| Ice barrage on a flare    | Freezes it                   | Holds it 4 s, its fuse too                  | The square aims at a flare before him (`nearestFlare`), so the press goes where it's wanted            |
+| Lightning on a flare      | Shatters it                  | Breaks it only while held                   | The kit's Lightning strikes the cells of the colour you're not on, so stand a cell away from it        |
+| The heal                  | 6                            | 6, as the game's food                       | The game's own pickup, drawn in towards whoever comes near; in co-op it's whoever picks it up          |
 
-**Not built yet:** the arena cinematic and his opening line; the Voidflare (and with it the heal,
-the player's only way back up); the Element floor; the Collapse; the burning rings; fire and
-shadow as colours on the floor; and the pillars blocking his volleys and lanes (they hide him
-from the gaze and block the way, as planned, but don't stop his attacks).
+**Not built yet:** the arena cinematic and his opening line; the Element floor; the Collapse; the
+burning rings; fire and shadow as colours on the floor; and the pillars blocking his volleys and
+lanes (they hide him from the gaze and block the way, as planned, but don't stop his attacks).
 
 **Phone** (740 × 360, landscape, the probe's triangles): at rest 44.7k; at the busiest, Hellstomp
 49.9k, its quick rings 59.1k, Shadow lanes 54.9k, crossed lanes 59.4k, lanes then volley 55.6k,
 and the meteor 61.2k. Drawn as the Wardens' floor is, his patterns on the palace's paving came to
 101k: a moving tile is drawn whole (110 triangles, 38 as its top) and so are the tiles beside it,
 with a glow and a cut edge under them that the ground hides anyway. The palace floor is
-`onGround` now, which draws its tiles as tops unless they're coming up.
+`onGround` now, which draws its tiles as tops unless they're coming up. With the Voidflare, at
+the phone's own camera distance (15): at rest 43.9k, a flare beside you 45.8k, its plus 46.4k,
+crossed lanes 62.4k, and crossed lanes with a plus 62.2k (the plus's tiles are in the lanes'
+peak). A player who zooms out to 18 sees about 10k more everywhere, and crossed lanes at 75k.
 
-**Bot sims** (`MAP=battle_for_varrock`, 6 seeds, `GAZE` as below). The careful bot lasts 51 to
-105 s (71, 105, 51, 54, 52, 89), into phase 2 in four seeds, and never wins: section 7 asked for a
-third at most, and without the Voidflare's heal 38 hitpoints don't last 4 minutes of a bot's
-dodging. Most of what it takes is the floor, then claws and volleys. With `GAZE=never` the first
-meteor kills it in 5 seeds (25 to 41 s); the sixth never got him to 85%. With `GAZE=waste` it lasts
-43 to 89 s, once into phase 3, and no meteor ever kills it: the meteor waits for the gaze to be
-ready, so wasting it costs time between meteors, not a death. Section 7's "dies more" doesn't
+**Bot sims** (`MAP=battle_for_varrock`, 6 seeds, `GAZE` as below). Before the Voidflare, the
+careful bot lasted 51 to 105 s (71, 105, 51, 54, 52, 89), into phase 2 in four seeds. With it,
+it lasts 56 to 146 s (59, 77, 105, 112, 56, 146), into phase 2 in five seeds and phase 3 in one,
+holding and breaking flares for their heal: it took 40 to 56 in all from its 38 hitpoints. It
+still never wins, where section 7 asked for a third at most. Flares from phase 1 didn't help it
+(44, 97, 86, 103, 55, 104), so they start in phase 2 as planned. Most of what it takes is the
+floor, then claws and volleys. Before the Voidflare, with `GAZE=never` the first meteor killed
+it in 5 seeds (25 to 41 s); the sixth never got him to 85%. With `GAZE=waste` it lasted 43 to
+89 s, once into phase 3, and no meteor ever killed it: the meteor waits for the gaze to be ready,
+so wasting it costs time between meteors, not a death. Section 7's "dies more" doesn't
 hold, and that's the fairness rule working.

@@ -207,6 +207,33 @@ describe("its patterns", () => {
         expect(rises.has("5,5")).toBe(false);
     });
 
+    test("a plus comes up through a tile, out arm tiles each way, and off it stays down", () => {
+        const { floor, run, setPlayer } = makeFloor(
+            floorWith({ kind: "plus", at: "player", arm: 3, tileSeconds: 0.1 }),
+        );
+        setPlayer(RECT.x0 + 8.5, RECT.y0 + 9.5);
+        run(T);
+        const rises = riseTicks(floor);
+        // The tile first, then out a tile at a time
+        expect(rises.get("8,9")).toBe(2 * T);
+        for (const [x, y] of [
+            [9, 9],
+            [7, 9],
+            [8, 10],
+            [8, 8],
+        ]) {
+            expect(rises.get(`${x},${y}`)).toBe(2 * T + 0.1 * T);
+        }
+        expect(rises.get("11,9")).toBe(2 * T + 3 * 0.1 * T);
+        expect(rises.get("8,6")).toBe(2 * T + 3 * 0.1 * T);
+        // No further, and nothing off its row and column
+        expect(rises.has("12,9")).toBe(false);
+        expect(rises.has("8,13")).toBe(false);
+        expect(rises.has("9,10")).toBe(false);
+        expect(rises.has("7,8")).toBe(false);
+        expect(rises.size).toBe(13);
+    });
+
     test("an action put off keeps who it was aimed at, not whoever the floor's after now", () => {
         const { floor, run, setPlayer } = makeFloor({
             ...createWardensFloor(RECT),

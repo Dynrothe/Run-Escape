@@ -468,6 +468,8 @@ export type Enemy = {
     bonesOnly: boolean;
     // Hatches at this tick if it's still alive (EnemyDef.hatches); 0 for never
     hatchTick: number;
+    // Bursts at this tick (EnemyDef.bursts), put back a tick for each it's held; 0 for never
+    burstTick: number;
     // Thrown out by a boss (BossAttackDef.summon.thrown): in the air from one
     // spot to the other between these ticks, and nothing to the fight until
     // it lands

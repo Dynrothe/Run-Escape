@@ -1012,6 +1012,15 @@ adventurer can have:
       occluders for the gaze's sight and light. It says one of its `shouts`.
     - `BossAttackDef.floorAt: "boss"` aims its floor action at the boss (a ripple from his stomp).
       `ImpactSpotDef.height` lifts an impact's spot off the ground (the meteor breaking in the sky).
+    - `EnemyDef.bursts` is his Voidflare: a summon nothing hurts (`damageEnemy` blocks it, and
+      `nearestEnemies` and the kit's aims pass it by) that bursts (`Sim.burst`) when its fuse
+      runs out (`Enemy.burstTick`), or on touching a hero once it's `arm` seconds old, hurting
+      whoever's in its radius and starting its floor action where it is (the `plus` pattern).
+      `shatter` is the way to beat it: `kitHit` sends the hero's buttons to `flareHit`, where
+      `frozenBy` holds it (its fuse waits a tick for each it's held) and `shatteredBy` breaks a
+      held one, dropping the game's food for `heal`. The square aims at a flare first
+      (`nearestFlare`). `summon.toward` brings summons out on the boss's side towards the hero
+      it's after, so a flare comes from his hands rather than behind him.
     - The balance bot plays it with the hero's own buttons (`kitPlan` in `simulate-run.ts`).
       `GAZE=never` and `GAZE=waste` check that the meteor is fair.
 
@@ -1119,7 +1128,8 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
   `BossAttackDef.floor`), phases, raised tiles and ramps (`ArenaGrid.addLedge`, `ArenaFloor.liftAt`,
   which `GameView` stands actors on), and pillars that stop shots and sight (`ArenaFloor.blocksSight`).
   The `lanes` pattern raises lanes through the player, down the floor, across it or both: where
-  they cross, the lane down wins (Yama's shadow lanes).
+  they cross, the lane down wins (Yama's shadow lanes). The `plus` pattern raises a tile and then
+  `arm` tiles out from it each way, one step at a time (where a Voidflare bursts).
 - **A floor over the ground** (`FloorDef.onGround`, the Battle for Varrock's palace) is laid a
   whisker over the map's own ground, with no pit. Nothing under it can show, so `FloorView` draws
   no light under its tiles and no cut edge beside what isn't floor. A tile is drawn as its top

@@ -186,8 +186,10 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
 - A boss asleep on a map to walk round (`MapDef.lair`, Yama's) wakes when someone steps onto the
   map's floor, and every way off it burns until it's dead. His fight's fields are any boss's:
   `BossDef.home`, `critical` (an attack on its own clock) and `gazeWard`, and an attack's
-  `meteor`, `interruptedBy` (a hero's button stops it) and `floorAt`. `MapDef.lair` under A hero
-  of their own in `docs/DEVELOPMENT.md` has the lot.
+  `meteor`, `interruptedBy` (a hero's button stops it) and `floorAt`, and his Voidflare's
+  `EnemyDef.bursts` (a summon that bursts unless a hero's buttons hold and break it, for food)
+  with `summon.toward`. `MapDef.lair` under A hero of their own in `docs/DEVELOPMENT.md` has the
+  lot.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 

@@ -933,6 +933,8 @@ tiles: [{ where: { kind: "ellipse", rx: 6, ry: 6 }, slab: [2, 2] }],
 - `side`, `sweep` and `ripple` go by the floor's own extent and middle.
 - `lanes` raises lanes `width` tiles wide, every `spacing` tiles, one through the player (or the middle), down the
   floor, across it or both. Between two is safe, and where they cross, the lane down wins.
+- `plus` raises the tile under the player (or the middle) and `arm` tiles out each way along its row and
+  column, a step at a time; the floor's edge cuts an arm short.
 - A sweep's gap is always on floor: the nearest place it fits in that row. A row with no room for it stays down.
 - `dropRows` falls from the floor's own back row, and `keepRows` counts from there.
 - `holes` are only ever inside the edge.
