@@ -200,7 +200,8 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   `TRAIL_SECONDS`, kept on each `Hero`): the Champion of Scabaras's path that bursts behind you.
 - An enemy with `echoes` (the Menaphite Akh's shadow) copies a boss's lunges: as that boss
   starts one of the named line swings, it winds up its own from where it stands at the nearest
-  player, with its own name, damage, seq (baked with it, so one its rig can play) and impact.
+  player, with its own name, damage, seq (baked with it, so one its rig can play), impact and
+  strip `length` if it's shorter.
   Name only one phase's attacks to keep it to that phase (a finale's need names of their own).
   The bot finds the pocket between two strips (`sharedPocket` in `bossReads.ts`).
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's

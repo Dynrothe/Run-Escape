@@ -10249,6 +10249,10 @@ export class Sim {
         this.tombsDeaths++;
         for (const enemy of this.enemies) {
             if (!enemy.dead) {
+                // A boss in phases takes its phase's light with it (Zebak's last), as at its death
+                if (enemy.boss) {
+                    this.endBossFight(enemy);
+                }
                 this.vanish(enemy);
             }
         }
@@ -12159,11 +12163,13 @@ export class Sim {
             if (this.tick < next[i]) {
                 return;
             }
-            const attack = boss.def.boss!.attacks.find((a) => a.name === ambient.attack);
-            if (!attack || attack.cycle) {
+            const named = boss.def.boss!.attacks.find((a) => a.name === ambient.attack);
+            if (!named || named.cycle) {
                 next[i] = Infinity;
                 return;
             }
+            // Quicker, wider or harder with its invocation on, as when it's picked
+            const attack = this.invokedAttack(named);
             next[i] = this.tick + secondsToTicks(ambient.interval);
             if (attack.tether) {
                 this.startTether(boss, attack);
@@ -14082,7 +14088,8 @@ export class Sim {
     // at the hero nearest it, over the same ticks (and its echo's later): free ones only, the
     // nearest a hero first, up to its most
     private startEchoes(boss: Enemy, attack: BossAttackDef, ticks: number): void {
-        if (attack.kind !== "swing" || !attack.line) {
+        const line = attack.kind === "swing" ? attack.line : undefined;
+        if (!line) {
             return;
         }
         const copiers: { enemy: Enemy; hero: Hero; away: number }[] = [];
@@ -14124,6 +14131,7 @@ export class Sim {
                 seq: echoes.seq,
                 strikeAt: echoes.strikeAt,
                 impact: echoes.impact ?? attack.impact,
+                line: echoes.length !== undefined ? { ...line, length: echoes.length } : line,
                 // Its own: no guard to drop, nothing after it, nothing said
                 opens: undefined,
                 chain: undefined,

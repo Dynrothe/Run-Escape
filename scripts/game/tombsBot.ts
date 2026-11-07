@@ -1097,6 +1097,7 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
         }
     }
     // Out from under a boss's blast as it winds up, straight away from where it'll land
+    let stripsRead = false;
     for (const enemy of sim.enemies) {
         const windup = enemy.bossState?.windup;
         if (enemy.dead || !windup) {
@@ -1114,6 +1115,7 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
             const longCone =
                 windup.attack.cone !== undefined && (windup.attack.radius ?? 2) > LONG_CONE;
             if (windup.attack.line || longCone) {
+                stripsRead ||= windup.attack.line !== undefined;
                 const side = windup.attack.line
                     ? lungeStep(sim, enemy, open)
                     : coneStep(sim, enemy, windup, LONG_CONE, open);
@@ -1147,6 +1149,17 @@ export function dodge(sim: Sim, withBullets = true): Point | undefined {
             const out = blastEscape(sim, under, reach);
             awayX += out.x * 4;
             awayY += out.y * 4;
+        }
+    }
+    // What copies a lunge still winding up after the boss's own has landed (an echo's later):
+    // off its strip too (Zebak's crocodiles snap a beat after his jaws)
+    const echo = stripsRead ? undefined : sim.enemies.find((e) => !e.dead && e.echo);
+    if (echo) {
+        const open = (x: number, y: number) => !sim.grid.isSolid(Math.floor(x), Math.floor(y));
+        const side = lungeStep(sim, echo, open);
+        if (side) {
+            awayX += side.x * 4;
+            awayY += side.y * 4;
         }
     }
     // And out from under what's about to land (a ground mark), straight away from its middle
@@ -1218,10 +1231,18 @@ function blastEscape(sim: Sim, marks: Point[], reach: number): Point {
 
 // A move with a sidestep from what's coming mixed in, if anything is: out from under a boss's
 // blast, swing or ground mark, then whichever way (that, or round it) the bullets miss
-function dodging(sim: Sim, move: Point, avoid?: (x: number, y: number) => boolean): Point {
+function dodging(
+    sim: Sim,
+    move: Point,
+    avoid?: (x: number, y: number) => boolean,
+    strips?: LandingStrip[],
+): Point {
     // A shape with one way out first, as the quest's bot reads them (bossReads): out of a
-    // charge's lane, to a wall's gap or a closing ring's, to its side of a tether
-    const shape = shapeStep(sim);
+    // charge's lane, to a wall's gap or a closing ring's, to its side of a tether. Not while
+    // it's in a lunge's strip about to land (Zebak's jaws): the look ahead below weighs the two
+    const player = sim.player;
+    const inStrip = strips?.some((strip) => stripHas(strip, player.x, player.y, 0.3)) ?? false;
+    const shape = inStrip ? undefined : shapeStep(sim);
     if (shape) {
         return shape;
     }
@@ -1233,7 +1254,50 @@ function dodging(sim: Sim, move: Point, avoid?: (x: number, y: number) => boolea
         const length = Math.hypot(x, y) || 1;
         want = { x: x / length, y: y / length };
     }
-    return clearOfBullets(sim, want, avoid);
+    return clearOfBullets(sim, want, avoid, strips);
+}
+
+// A lunge's strip winding up, and the tick it lands
+type LandingStrip = {
+    x: number;
+    y: number;
+    dirX: number;
+    dirY: number;
+    half: number;
+    length: number;
+    land: number;
+};
+
+// Every lunge's strip winding up: the boss's (a chain's next link too, once it's begun) and what
+// copies it (EnemyDef.echoes)
+function landingStrips(sim: Sim): LandingStrip[] {
+    const strips: LandingStrip[] = [];
+    for (const enemy of sim.enemies) {
+        const windup = enemy.dead ? undefined : (enemy.bossState?.windup ?? enemy.echo);
+        const line = windup?.attack.kind === "swing" ? windup.attack.line : undefined;
+        if (windup && line) {
+            strips.push({
+                x: enemy.x,
+                y: enemy.y,
+                dirX: windup.dirX,
+                dirY: windup.dirY,
+                half: line.width / 2,
+                length: line.length,
+                land: windup.landTick,
+            });
+        }
+    }
+    return strips;
+}
+
+function stripHas(strip: LandingStrip, x: number, y: number, margin: number): boolean {
+    const along = (x - strip.x) * strip.dirX + (y - strip.y) * strip.dirY;
+    const side = (x - strip.x) * -strip.dirY + (y - strip.y) * strip.dirX;
+    return (
+        along > -0.5 &&
+        along < strip.length + 0.35 + margin &&
+        Math.abs(side) < strip.half + 0.35 + margin
+    );
 }
 
 // The one way out of a shape a boss is making (bossReads), or undefined with none coming
@@ -1260,7 +1324,12 @@ const AVOID_COST = 2.5;
 // The move (the one wanted if nothing it'd walk into is coming, or the nearest way to it that's
 // clear: sixteen headings and standing still) that the bullets about now miss, played forward:
 // each bullet on its line (and its turn), the bot at its speed, stopped by walls
-function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) => boolean): Point {
+function clearOfBullets(
+    sim: Sim,
+    want: Point,
+    avoid?: (x: number, y: number) => boolean,
+    strips: LandingStrip[] = [],
+): Point {
     const player = sim.player;
     const { bullets } = sim;
     // What's coming: the bullets, and a boss's projectiles (the Wardens' skulls, played forward
@@ -1316,7 +1385,7 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
             }
         }
     }
-    if (near.length === 0 && marks.length === 0 && !avoid) {
+    if (near.length === 0 && marks.length === 0 && strips.length === 0 && !avoid) {
         return want;
     }
     const speed = PLAYER_SPEED * (1 + (sim.stats.moveSpeed ?? 0));
@@ -1340,6 +1409,17 @@ function clearOfBullets(sim: Sim, want: Point, avoid?: (x: number, y: number) =>
             const away = Math.hypot(last.x - mark.x, last.y - mark.y);
             if (away < mark.reach) {
                 total += 1 + (mark.reach - away) / mark.reach;
+            }
+        }
+        // Still in a lunge's strip as it lands (where the look has it then, or at its end): worse
+        // than acid, as a jaw's a heavy hit and a pool can be stepped back out of
+        for (const strip of strips) {
+            const at = Math.min(
+                positions.length - 1,
+                Math.max(0, Math.ceil((strip.land - sim.tick) / LOOK_STEP) - 1),
+            );
+            if (stripHas(strip, positions[at].x, positions[at].y, 0.15)) {
+                total += 3;
             }
         }
         // Ground to keep off (Zebak's acid, the Wardens' floor as it slams): a step on it costs
@@ -1435,7 +1515,10 @@ function bossMove(sim: Sim, def: PathBoss, uid: number): Point | undefined {
             fight.acid.some(
                 (a) => Math.abs(a.x - x) <= a.half + margin && Math.abs(a.y - y) <= a.half + margin,
             );
-        return roaring ? move : dodging(sim, foodMove(sim) ?? punishMove(sim) ?? move, inAcid);
+        // Behind a boulder for his roar, but through a swell's gap if one's on it first
+        return roaring
+            ? (shapeStep(sim) ?? move)
+            : dodging(sim, foodMove(sim) ?? punishMove(sim) ?? move, inAcid, landingStrips(sim));
     }
     if (sim.tombsAkkha) {
         const remembering = sim.tombsAkkha.memory !== undefined;
@@ -1931,6 +2014,17 @@ function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
         !boulders.some((b) => Math.hypot(b.x - x, b.y - y) < b.radius + player.radius + 0.4) &&
         !inAcid(x, y, 0.5 + player.radius + 0.2);
     const within = boss.radius + heroReach(sim) - 0.3;
+    // His jaws missed and his head's down at the island's edge: melee straight back in under it,
+    // as close as his body lets (off the acid), for as long as it's down
+    if (melee && sim.isExposed(boss)) {
+        const close = boss.y - boss.radius - player.radius - 0.4;
+        for (const dx of [0, -1, 1, -2, 2]) {
+            const x = boss.x + dx;
+            if (clear(x, close)) {
+                return go({ x, y: close });
+            }
+        }
+    }
     if (melee) {
         for (const dx of [0, -1, 1, -2, 2, -3, 3, -4, 4]) {
             const x = boss.x + dx;

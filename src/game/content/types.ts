@@ -1137,6 +1137,8 @@ export type EchoDef = {
     impact?: ImpactDef;
     // Only so many copy each attack, the nearest the hero first (all of them when unset)
     most?: number;
+    // Its strip this long, in place of the boss's (a crocodile's snap is shorter than his jaws)
+    length?: number;
 };
 
 // A boss whose guard drops (Justiciar Zachariah's). An attack with `opens` that misses everyone

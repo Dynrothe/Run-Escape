@@ -2030,7 +2030,9 @@ export const CRONDIS = {
 // he never moves. His magic is a pot that splits into red orbs (2176, 2181), his ranged a rock
 // that splinters (2178, 2182), and he sprays acid (2194). At 85, 70, 55 and 40% he does a special,
 // turn about: his Great Roar or his Tidal Waves, each with acid and jugs spat over the island
-// (ZebakDef; Sim.stepZebak). Below 25% he's enraged and attacks quicker, with no more specials.
+// (ZebakDef; Sim.stepZebak). Over all of it: his jaws down a strip of the island, open when they
+// miss, his swells rolling down it with a gap, and in three phases, each quicker and with more
+// (his crocodiles from the second, his enraged roar and a flurry of jaws in the dark of the last).
 const ZEBAK_SOUNDS = { attack: -1, hit: -1, death: -1 };
 
 export const ZEBAK: ZebakDef = {
@@ -2105,53 +2107,133 @@ export const ZEBAK: ZebakDef = {
     },
 };
 
-const ZEBAK_ATTACKS: BossAttackDef[] = [
-    {
-        // A pot up into the air and down on where you stood, splitting into red orbs
-        name: "Magic pot",
-        kind: "blast",
-        damage: 6,
-        windup: 1.6,
-        cooldown: 0,
-        range: 40,
-        weight: 4,
-        radius: 1.1,
-        shadow: {},
-        spotAnim: 2176,
-        impactSpotAnim: 2186,
-        shards: { count: 8, speed: 4, range: 8, radius: 0.4, damage: 4, spotAnim: 2181 },
-        seq: 9624,
+// A danger mark's glow, cool against the tomb's warm floor (a red one loses itself on it)
+const MARK_LIGHT: LightLook = { radius: 1.6, color: 0x9fd0ff, intensity: 0.55 };
+// His jaws: a strip from his head down the island (a line counts from his middle, so 12 is about
+// 9 tiles onto it past his body). A miss leaves his head on the island's edge, open (opens).
+// No bite of his own in the cache (find-npc-seqs 11730): his rock spit's head forward is it.
+const ZEBAK_JAWS: BossAttackDef = {
+    name: "Jaws",
+    kind: "swing",
+    damage: 7,
+    windup: 1.2,
+    cooldown: 5,
+    range: 40,
+    weight: 4,
+    line: { width: 3, length: 12 },
+    opens: 2,
+    light: MARK_LIGHT,
+    seq: 9620,
+    // The water thrown up down his strip, his jug's splash where his jaws come down
+    impact: { trail: { spotAnim: 2184, fit: 1 }, spots: [{ spotAnim: 2193 }], shake: 0.3 },
+    phases: [1],
+};
+const ZEBAK_POT: BossAttackDef = {
+    // A pot up into the air and down on where you stood, splitting into red orbs
+    name: "Magic pot",
+    kind: "blast",
+    damage: 5,
+    windup: 1.6,
+    cooldown: 0,
+    range: 40,
+    weight: 4,
+    radius: 1.1,
+    shadow: {},
+    light: MARK_LIGHT,
+    spotAnim: 2176,
+    impactSpotAnim: 2186,
+    shards: { count: 6, speed: 4, range: 8, radius: 0.4, damage: 3, spotAnim: 2181, bright: 0.5 },
+    seq: 9624,
+    phases: [1],
+};
+// The Swell: a wall of his waves down the island from its top edge, with a way through, rolling
+// on through everything (an ambient: BossPhasesDef ambients). Its crest rises a moment first.
+const ZEBAK_SWELL: BossAttackDef = {
+    name: "Swell",
+    kind: "pattern",
+    damage: 4,
+    windup: 0.6,
+    cooldown: 0,
+    range: 40,
+    weight: 0,
+    seq: 9630,
+    invoked: { id: "upset_stomach", speed: 1.25 },
+    pattern: {
+        shape: "wall",
+        heading: "south",
+        count: 11,
+        spacing: 1.8,
+        gap: 1,
+        volleys: 1,
+        interval: 2,
+        speed: 3,
+        range: 22,
+        radius: 0.7,
+        from: 2.5,
+        look: "zebak_wave",
+        knockback: 1.5,
+        bright: 0.5,
+        delay: 1.2,
     },
+};
+
+const ZEBAK_ATTACKS: BossAttackDef[] = [
+    ZEBAK_JAWS,
+    // Then (his second phase on): a shadow where you stepped to
+    { ...ZEBAK_JAWS, follow: { attack: "Rock spit", delay: 0.4 }, phases: [2, 3] },
+    // His second phase's opener: twice, aimed again for the second
+    {
+        ...ZEBAK_JAWS,
+        name: "Twin jaws",
+        cooldown: 6,
+        weight: 3,
+        chain: { times: 1, windup: 1.0 },
+        phases: [2, 3],
+    },
+    // His last phase's: three, each strip turning after you a moment, then locked
+    {
+        ...ZEBAK_JAWS,
+        name: "Jaw flurry",
+        cooldown: 7,
+        weight: 3,
+        line: { width: 3, length: 12, track: 0.3 },
+        chain: { times: 2, windup: 0.9 },
+        phases: [3],
+    },
+    ZEBAK_POT,
+    // Then (his second phase on): his acid at where you went
+    { ...ZEBAK_POT, follow: { attack: "Acid spray", delay: 0.6 }, phases: [2, 3] },
     {
         // A rock spat at you that splinters where it lands
         name: "Rock spit",
         kind: "blast",
-        damage: 7,
+        damage: 5,
         windup: 1.4,
         cooldown: 0,
         range: 40,
         weight: 4,
         radius: 1.2,
-        opens: 1,
         shadow: {},
+        light: MARK_LIGHT,
         spotAnim: 2178,
         impactSpotAnim: 2185,
         shards: {
-            count: 10,
+            count: 6,
             speed: 4.5,
             range: 8,
             radius: 0.4,
             damage: 3,
             spotAnim: 2182,
             scale: 3,
+            bright: 0.6,
         },
         seq: 9620,
     },
     {
-        // Acid sprayed across the island in a fan, aimed at you
+        // Acid sprayed across the island in a fan, aimed where you are: two volleys, the same way
         name: "Acid spray",
         kind: "pattern",
-        damage: 4,
+        damage: 3,
         windup: 0.9,
         cooldown: 4,
         range: 40,
@@ -2161,25 +2243,39 @@ const ZEBAK_ATTACKS: BossAttackDef[] = [
         pattern: {
             shape: "spread",
             count: 7,
-            volleys: 3,
+            volleys: 2,
             interval: 0.4,
             speed: 6,
             range: 30,
             radius: 0.45,
             arc: 1.2,
-            track: true,
+            bright: 0.5,
         },
     },
     {
-        // Enraged: his roar's dust all round, a way through
+        // His second phase on: crocodiles up out of the water onto the island (ringed round him,
+        // so only where it's dry), each snapping down a strip of its own as his jaws come
+        name: "Crocodiles",
+        kind: "summon",
+        damage: 0,
+        windup: 1.2,
+        cooldown: 22,
+        range: 40,
+        weight: 2,
+        seq: 9622,
+        summon: { enemyId: "zebak_croc", count: 2, distance: 7 },
+        message: "Crocodiles climb onto the island!",
+        phases: [2, 3],
+    },
+    {
+        // His last phase: his roar's dust all round, a way through
         name: "Roar",
         kind: "pattern",
-        damage: 5,
+        damage: 3,
         windup: 0.8,
         cooldown: 3,
         range: 40,
         weight: 3,
-        enraged: true,
         seq: 9628,
         spotAnim: 2181,
         pattern: {
@@ -2190,9 +2286,18 @@ const ZEBAK_ATTACKS: BossAttackDef[] = [
             speed: 5,
             range: 30,
             radius: 0.45,
-            gap: 0.6,
+            gap: 0.8,
             gapAt: "player",
+            bright: 0.5,
         },
+        phases: [3],
+    },
+    ZEBAK_SWELL,
+    // His last phase's swell, two ranks a gap each
+    {
+        ...ZEBAK_SWELL,
+        name: "Twin swell",
+        pattern: { ...ZEBAK_SWELL.pattern!, volleys: 2 },
     },
 ];
 
@@ -3040,7 +3145,7 @@ TOMBS_ENEMIES.push(
         walkSeq: 9618,
         attackSeq: 9624,
         deathSeq: 9634,
-        // Up from 7,000 with his guard (Rock spit's opens) and the raid's button
+        // Up from 7,000 with his guard (his jaws' opens) and the raid's button
         hp: 8400,
         damage: 0,
         speed: 0,
@@ -3052,13 +3157,67 @@ TOMBS_ENEMIES.push(
         sounds: ZEBAK_SOUNDS,
         spawnMessage: "Zebak rises from the water to guard the path of Crondis!",
         boss: {
-            attackInterval: 2.6,
+            attackInterval: 1.8,
+            // His phases are his enrage (a fight in phases has no other): this is only where his
+            // specials stop
             enrage: { message: "Zebak is enraged!", at: 0.25 },
-            // A rock spat that misses leaves his head down at the water's edge (opens)
+            // Jaws that miss leave his head down at the island's edge (opens)
             guard: TOMBS_GUARD,
             look: TOMBS_EXPOSED,
             zebak: ZEBAK,
             attacks: ZEBAK_ATTACKS,
+            // Quicker by the phase, each opening on what it adds, the swell from the first
+            phases: {
+                phases: [
+                    { until: 0.7, ambients: [{ attack: "Swell", interval: 14, delay: 6 }] },
+                    {
+                        until: 0.4,
+                        tempo: 0.85,
+                        opener: "Twin jaws",
+                        ambients: [{ attack: "Swell", interval: 11, delay: 4 }],
+                    },
+                    {
+                        tempo: 0.7,
+                        light: 0.6,
+                        opener: "Twin swell",
+                        message: "Zebak is enraged!",
+                        ambients: [
+                            { attack: "Twin swell", interval: 8, delay: 8 },
+                            { attack: "Acid spray", interval: 10, delay: 5 },
+                        ],
+                    },
+                ],
+                shieldMessage: "",
+                blastMessage: "",
+            },
+        },
+    },
+    {
+        // Up out of the water in his second phase: snaps a strip of its own at the nearest hero as
+        // his jaws come down (EnemyDef.echoes), and bites as a crocodile does between
+        id: "zebak_croc",
+        name: "Crocodile",
+        npcId: 11705,
+        idleSeq: 2037,
+        walkSeq: 2036,
+        attackSeq: 2039,
+        deathSeq: 2038,
+        hp: 150,
+        damage: 4,
+        speed: 1.9,
+        radius: 0.9,
+        xp: 22,
+        sounds: { attack: -1, hit: -1, death: -1 },
+        echoes: {
+            boss: "zebak",
+            attacks: ["Jaws", "Twin jaws", "Jaw flurry"],
+            name: "Crocodile's snap",
+            damage: 4,
+            seq: 2039,
+            later: 0.25,
+            most: 2,
+            length: 6,
+            impact: { trail: { spotAnim: 2184, fit: 0.8 }, shake: 0.1 },
         },
     },
     {

@@ -3043,15 +3043,109 @@ describe("Zebak", () => {
         expect(boss.hp).toBeGreaterThan(boss.maxHp / 2);
     });
 
-    it("stops his specials once he's enraged at a quarter", () => {
+    // Hit down to that share of his hitpoints, his phases passed as a hit passes them
+    function hurt(sim: Sim, share: number): void {
+        const boss = zebak(sim);
+        boss.hp = Math.floor(boss.maxHp * share) + 20;
+        sim["damageSource"] = "weapon:scythe_of_vitur";
+        sim.damageEnemy(boss, 40, 0, boss.x, boss.y);
+    }
+
+    it("does no specials under a quarter, in his last phase", () => {
         const sim = atZebak();
         const boss = zebak(sim);
+        hurt(sim, 0.7);
+        hurt(sim, 0.4);
+        expect(boss.bossState!.phase!.index).toBe(2);
         sim.tombsZebak!.special = DEF.specials.length - 1;
+        sim.tombsZebak!.acid = [];
         boss.hp = Math.floor(boss.maxHp * 0.2);
         at(sim, SOUTH);
-        at(sim, SOUTH);
-        expect(boss.bossState!.enraged).toBe(true);
         expect(sim.tombsZebak!.acid).toHaveLength(0);
+    });
+
+    const attack = (name: string) => zebak0().def.boss!.attacks.find((a) => a.name === name)!;
+    const zebak0 = () => ({ def: getEnemy("zebak") });
+    // His jaws (or whatever's named) started at the player, landed with them kept at where
+    function jaws(sim: Sim, where: { x: number; y: number }, name = "Jaws"): void {
+        const boss = zebak(sim);
+        sim.player.x = sim.player.prevX = where.x;
+        sim.player.y = sim.player.prevY = where.y;
+        sim["startBossAttack"](boss, attack(name));
+        for (let i = 0; i < 3 * TICKS_PER_SECOND && boss.bossState!.windup; i++) {
+            at(sim, where);
+        }
+    }
+
+    it("brings his jaws down a strip from his middle, and a miss leaves his head open", () => {
+        const line = attack("Jaws").line!;
+        // In the strip, its length counted from his middle
+        const hit = atZebak();
+        const boss = zebak(hit);
+        hit.player.hp = hit.player.maxHp;
+        jaws(hit, { x: boss.x, y: boss.y - line.length + 0.5 });
+        expect(hit.player.hp).toBeLessThan(hit.player.maxHp);
+        expect(hit.isExposed(boss)).toBe(false);
+        // Past its end: missed, and his guard's down
+        const missed = atZebak();
+        const far = zebak(missed);
+        missed.player.hp = missed.player.maxHp;
+        jaws(missed, { x: far.x, y: far.y - line.length - 1.5 });
+        expect(missed.player.hp).toBe(missed.player.maxHp);
+        expect(missed.isExposed(far)).toBe(true);
+    });
+
+    it("has his crocodiles snap down shorter strips of their own as his jaws come", () => {
+        const sim = atZebak();
+        const croc = sim.spawnEnemy(getEnemy("zebak_croc"), "normal", { x: 1040.5, y: 1036.5 })!;
+        const boss = zebak(sim);
+        sim["startBossAttack"](boss, attack("Jaws"));
+        expect(croc.echo).toBeDefined();
+        expect(croc.echo!.attack.line!.length).toBe(getEnemy("zebak_croc").echoes!.length);
+        expect(croc.echo!.landTick).toBeGreaterThan(boss.bossState!.windup!.landTick);
+    });
+
+    it("goes quicker by the phase, each opening on what it brings", () => {
+        const sim = atZebak();
+        const boss = zebak(sim);
+        expect(boss.bossState!.phase!.index).toBe(0);
+        // No specials in the way
+        sim.tombsZebak!.special = DEF.specials.length;
+        hurt(sim, 0.7);
+        expect(boss.bossState!.phase!.index).toBe(1);
+        // After whatever it was already winding up
+        const names: string[] = [];
+        for (let i = 0; i < 5 * TICKS_PER_SECOND; i++) {
+            seconds(sim, 1 / TICKS_PER_SECOND, SOUTH);
+            const name = boss.bossState!.windup?.attack.name;
+            if (name && names[names.length - 1] !== name) {
+                names.push(name);
+            }
+        }
+        expect(names.slice(0, 2)).toContain("Twin jaws");
+        hurt(sim, 0.4);
+        expect(boss.bossState!.phase!.index).toBe(2);
+    });
+
+    it("rolls his swell down the island from the first phase, a gap in it", () => {
+        const sim = atZebak();
+        const swell = attack("Swell");
+        const walls = () => {
+            const out: { vy: number }[] = [];
+            for (let i = 0; i < sim.bullets.count; i++) {
+                const slot = sim.bullets.order[i];
+                if (sim.bulletSources[sim.bullets.source[slot]]?.attack.name === "Swell") {
+                    out.push({ vy: sim.bullets.vy[slot] });
+                }
+            }
+            return out;
+        };
+        for (let i = 0; i < 9 * TICKS_PER_SECOND && walls().length === 0; i++) {
+            at(sim, SOUTH);
+        }
+        const wall = walls();
+        expect(wall.length).toBe(swell.pattern!.count - swell.pattern!.gap!);
+        expect(wall.every((b) => b.vy < 0)).toBe(true);
     });
 });
 

@@ -705,6 +705,63 @@ the hitpoints went up by more than the guards give a strong kit, as a share-of-h
 is worth more to a weak one. The next stages put each boss's own punish windows in (lunges,
 leaps, jaws, channels) and are tuned the same way.
 
+### The boss rework, stage 2: Zebak, "the Tide"
+
+Zebak reworked to the design (built November 2026): phases, a punish window of his own, adds that
+lunge, and no tracking streams. His roar, his tidal waves, his acid and his jugs are as they were.
+
+- **Three phases** (`BossDef.phases` on his hitpoints: 70% and 40%), each quicker (`tempo` 1, 0.85,
+  0.7) with an opener that shows what it brings: Twin jaws for the second, a two-rank swell for the
+  last, which also dims the room to 0.6 and is his enrage (a fight in phases has no other; his
+  `enrage.at` is only where his specials stop now). His attack interval is 1.8 seconds (2.6).
+- **Jaws**: a strip from his head down the island (`line` 3 wide, 12 long, no dash: a line counts
+  from his middle, so that's about 9 tiles onto the island past his body), 7 damage, 1.2 seconds,
+  with a cool mark light. A miss drops his guard for 2 seconds (`opens`), his head down at the
+  island's edge; it replaces stage 1's Rock spit stand-in. From the second phase it's followed by a
+  Rock spit where you stepped to, and there's Twin jaws (two strips, re-aimed); in the last, Jaw
+  flurry (three, each turning after you for 0.3 seconds, then locked).
+- **The Swell**, from the first second: an ambient wall of his waves (`zebak_wave`) rolling south
+  down the island from its top edge, 11 across with one left out for the way through, knocking back
+  1.5. Every 14 seconds (from 6 in), 11 in the second phase, two ranks every 8 in the last, with an
+  Acid spray every 10 on top. Upset Stomach makes it a quarter quicker (ambients now take their
+  attack's `invoked`, as picked attacks do).
+- **Crocodiles** (`zebak_croc`, from the second phase, two every 22 seconds): Crondis's crocodile,
+  150 hitpoints, biting as one does, and snapping a strip of its own a beat after each of his jaws
+  (`echoes`, with `EchoDef.length` 6: a strip shorter than his). They're summoned in a ring 7 tiles
+  round him, and only where it's walkable, so they land on the island; when a try lands in the
+  water it tries again, up to six times, so now and then fewer than two come.
+- **Bullets** are chip damage: shards 3 (the pot's were 4), six of each (8 and 10), Acid spray 3
+  in two volleys aimed once (it was 4, three volleys re-aimed at you), his last phase's roar ring 3
+  (5) with a wider gap. Magic pot and Rock spit are 5 (6 and 7). Every bullet is lit (`bright`), and
+  the pot's and the rock's shadows and his jaws' strip have a cool mark light (`MARK_LIGHT`).
+- **A wipe** takes a phased boss's light with it (`endBossFight`), so a wipe in his last phase
+  doesn't leave the room dim for the next try.
+- **The bot**: off his jaws' strip sideways, and off a crocodile's still winding up after his has
+  landed; its look ahead counts standing in a strip as it lands as worse than acid (it had stepped
+  back in to keep off a pool); in a swell's gap (and through one during his roar); and a melee hero
+  goes straight back in under his head while his guard's down.
+
+Ids: nothing new from the cache. No bite of his own is in it (`find-npc-seqs.ts 11730`: 9632 and
+9636 are unnamed, neither reaches further forward than his rock spit's 9620), so his jaws use 9620;
+the crocodiles are Crondis's (11705, attack 2039); the strip's trail is the blown dust (2184) at the
+size the quest already uses it, and his jug's splash (2193) unfitted where his jaws come down.
+
+Hitpoints are still stage 1's 8,400 (the design's 6,000 was a first guess); the five bosses get one
+tuning pass together at the end. Zebak alone after his puzzle room, before this stage (wins of the
+runs that reached him, deaths at him, median winning time; three characters, three seeds; many runs
+stall in the Crondis room first, and the same seeds do so either way; at 500 none got through it):
+
+| Invo Difficulty | Fresh Account    | Mid-game         | End-game         |
+| --------------- | ---------------- | ---------------- | ---------------- |
+| Entry (0-149)   | 4/4, 4, 1:28     | 7/7, 0, 0:43     | 5/5, 0, 0:43     |
+| Normal (150+)   | 3/3, 3, 1:49     | 7/7, 0, 2:16     | 6/6, 0, 1:08     |
+| Expert (300+)   | 1/1, 3, 5:50     | 2/6, 68, 5:11    | 6/7, 11, 3:38    |
+| Max invo (500)  | none reached him | none reached him | none reached him |
+
+The same after this stage wasn't run to the end: one check, Expert with everything bought (warrior,
+one seed), won in 4:19 with no wipes. Untried in a browser: the strip's and the swell's look on the
+tomb's floor at 0.6, his head down at the edge, and the crocodiles climbing out.
+
 ## 12. The bot, and the Tombs' own sim
 
 The balance bot plays the whole raid (`scripts/game/tombsBot.ts`), and `simulate-run.ts` uses it on
@@ -731,7 +788,9 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   the line it shares with the next, a hop across as each burst lands: Feeling Special's bursts
   come quicker than a walk between corners), round his body (the flow field only knows the walls)
   and his dead shadows' quadrants; Kephri near enough; Zebak's island near him (melee on the row
-  along its north edge, a thrower at any dry spot in reach), straight out of a pool it's in or
+  along its north edge, and in under his head while his guard's down, a thrower at any dry spot in
+  reach), off his jaws' strip and his crocodiles' (worse than acid as they land), through a swell's
+  gap, straight out of a pool it's in or
   brushing (each step in is a dose of poison), behind a boulder for the roar at a spot off the
   acid, in a wave's gap at a dry tile in its column, away from his blood clouds (they're slower,
   and die following), and, with every spot in reach acid, rolling a jug at rest to break by the
