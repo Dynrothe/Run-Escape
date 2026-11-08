@@ -301,14 +301,14 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         }
         // A pair of bosses fought together (enrage.partner: the Scarab Mages): the beam between
         // them, the other's blasts, the elder's sinking sand, the bolts they aim. A caster on its
-        // own that keeps its distance (the Champion): the bolts it aims.
+        // own that keeps its distance in the quest (the Champion): the bolts it aims.
         const clear = boss.def.boss?.enrage.partner
             ? (offTether(sim) ??
               offMarks(sim, inSquare(sim)) ??
               otherBlasts(sim) ??
               outOfPool(sim) ??
               dodgeShots(sim))
-            : boss.def.boss?.keepDistance !== undefined
+            : boss.def.boss?.keepDistance !== undefined && !(sim.map.fight && !sim.map.stages)
               ? dodgeShots(sim)
               : undefined;
         if (clear) {
@@ -326,11 +326,19 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // that's into the square's edge
         const windup = state.windup;
         const square = sim.map.bossArena;
-        const room = inSquare(sim);
+        // Phosani's and Zachariah's fights (one-fight maps, not the quest's) are read as they
+        // always were: bullets before a lunge, no orbs of their own, and the near side of a strip
+        // whatever the square says (their squares are smaller than the floor they're fought on)
+        const older = sim.map.fight !== undefined && !sim.map.stages;
+        const room = older ? () => true : inSquare(sim);
         const across = (x: number, y: number, dirX: number, dirY: number, half: number) =>
             stripStep(sim, x, y, dirX, dirY, half, room);
         // A lunge or a thrown line first: they hit harder than a bullet. With a copy of it coming
         // too (EnemyDef.echoes: the Akh's shadow), two strips at once: to where neither reaches
+        const early = older ? sidestepBullets(sim) : undefined;
+        if (early) {
+            return early;
+        }
         const lunge = lungeStep(sim, boss, room);
         if (lunge) {
             return lunge;
@@ -353,7 +361,7 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 }
             }
         }
-        const sidestep = dodgeOrbs(sim) ?? sidestepBullets(sim);
+        const sidestep = (older ? undefined : dodgeOrbs(sim)) ?? sidestepBullets(sim);
         if (sidestep) {
             return sidestep;
         }
@@ -370,7 +378,7 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             }
         }
         // Out of a long wedge sideways, not back down it (BossAttackDef.cone)
-        const wedge = coneStep(sim, boss, windup);
+        const wedge = older ? undefined : coneStep(sim, boss, windup);
         if (wedge) {
             return wedge;
         }
@@ -385,7 +393,8 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         }
         // Out of a swing's reach round the boss, and off where a blast's to land, as it winds up:
         // what anyone steps out of
-        if (windup?.attack.kind === "swing") {
+        // (not Phosani's or Zachariah's: older, above)
+        if (!older && windup?.attack.kind === "swing") {
             const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
             const dx = player.x - boss.x;
             const dy = player.y - boss.y;
@@ -394,7 +403,7 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 return openWay(sim, away > 0.001 ? dx / away : 1, away > 0.001 ? dy / away : 0);
             }
         }
-        if (windup?.attack.kind === "blast") {
+        if (!older && windup?.attack.kind === "blast") {
             const reach = (windup.attack.radius ?? 1) + player.radius + 0.5;
             for (const spot of windup.targets) {
                 const dx = player.x - spot.x;
