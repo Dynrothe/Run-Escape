@@ -1171,6 +1171,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ pickupTimers: !this.display.pickupTimers });
     }
 
+    togglePuzzleHelper(): void {
+        this.setDisplay({ puzzleHelper: !this.display.puzzleHelper });
+    }
+
     toggleAutoPause(): void {
         this.setDisplay({ pauseOnBlur: !this.display.pauseOnBlur });
     }
@@ -3500,6 +3504,7 @@ export class GameClient implements GameFrameHandler {
         const sim = this.sim;
         if (sim) {
             this.view.pickupTimers = this.display.pickupTimers;
+            this.view.puzzleHelper = this.display.puzzleHelper;
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
                 this.minimap.draw(

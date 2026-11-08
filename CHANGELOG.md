@@ -10,6 +10,12 @@ the version in the corner).
 - The Tombs of Amascut, by Okaeri: in the Apmeken room, the arrow to a pillar or vent that needs
   fixing is on the floor beside you, not at the edge of the screen.
 
+### Added
+
+- A puzzle helper for the Tombs of Amascut's Scabaras room, by Okaeri, as the ToA plugin has it:
+  the order the Sequence plates lit, the Lights out plates to step on, a way to make the Addition
+  number, and the Matching symbols you've seen. It can be turned off in the settings.
+
 ## 0.29.0 - 2026-11-08
 
 ### Added

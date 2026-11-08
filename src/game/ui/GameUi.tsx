@@ -331,6 +331,21 @@ function PickupTimerSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+function PuzzleHelperSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name="Puzzle helper"
+            text="In the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA plugin does"
+        >
+            <Toggle
+                on={ui.display.puzzleHelper}
+                label="Puzzle helper"
+                onToggle={() => client.togglePuzzleHelper()}
+            />
+        </Setting>
+    );
+}
+
 function AutoAlchSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
         <Setting name="Auto alch" text="High alch every casket as you open it, without stopping">
@@ -629,6 +644,7 @@ function SettingsPanel({
                         />
                     </Setting>
                     <PickupTimerSetting ui={ui} client={client} />
+                    <PuzzleHelperSetting ui={ui} client={client} />
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
                     <AutoEquipSetting ui={ui} client={client} />
@@ -3116,6 +3132,7 @@ function PauseModal({
                             music={getMap(ui.mapId).music !== undefined}
                         />
                         <PickupTimerSetting ui={ui} client={client} />
+                        <PuzzleHelperSetting ui={ui} client={client} />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
                         <AutoEquipSetting ui={ui} client={client} />
