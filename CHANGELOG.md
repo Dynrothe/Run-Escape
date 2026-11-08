@@ -7,8 +7,7 @@ the version in the corner).
 
 ### Added
 
-- Languages: play in English, Português (BR) or Español. Pick one on the title screen (the globe
-  button) or in Settings and the pause menu, and it changes right away.
+- Languages: play in English or Português (BR). Pick one on the title screen (the globe button) or in Settings and the pause menu, and it changes right away.
 
 ## 0.27.0 - 2026-11-05
 

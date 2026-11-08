@@ -16,18 +16,16 @@ describe("LanguageSetting", () => {
         expect(screen.getByText("Language")).toBeDefined();
         expect(screen.getByRole("button", { name: "English" })).toBeDefined();
         expect(screen.getByRole("button", { name: "Português (BR)" })).toBeDefined();
-        expect(screen.getByRole("button", { name: "Español" })).toBeDefined();
+        expect(screen.queryByRole("button", { name: "Español" })).toBeNull();
     });
 
     it("has the current language pressed and switches when clicked", () => {
         render(<LanguageSetting />);
         const enButton = screen.getByRole("button", { name: "English" });
         const ptButton = screen.getByRole("button", { name: "Português (BR)" });
-        const esButton = screen.getByRole("button", { name: "Español" });
 
         expect(enButton.getAttribute("aria-pressed")).toBe("true");
         expect(ptButton.getAttribute("aria-pressed")).toBe("false");
-        expect(esButton.getAttribute("aria-pressed")).toBe("false");
 
         act(() => {
             fireEvent.click(ptButton);
@@ -38,11 +36,11 @@ describe("LanguageSetting", () => {
         expect(ptButton.getAttribute("aria-pressed")).toBe("true");
 
         act(() => {
-            fireEvent.click(esButton);
+            fireEvent.click(enButton);
         });
 
-        expect(getLang()).toBe("es");
-        expect(esButton.getAttribute("aria-pressed")).toBe("true");
+        expect(getLang()).toBe("en");
+        expect(enButton.getAttribute("aria-pressed")).toBe("true");
         expect(ptButton.getAttribute("aria-pressed")).toBe("false");
     });
 

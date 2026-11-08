@@ -1645,9 +1645,10 @@ preset an adventurer uses. Keep it to one line at 667 wide.
 
 ### Languages
 
-The game speaks English, Português (BR) and Español. Text lives in flat `{"key": "text"}` files at
-`src/game/i18n/locales/<lang>/<namespace>.json`; every `en/` file has an empty `{}` mirror in
-`pt-BR/` and `es/` for translators to fill. `t(key, params)` looks the key up in the active
+The game speaks English and Português (BR); Spanish was dropped until it can be translated well.
+Text lives in flat `{"key": "text"}` files at `src/game/i18n/locales/<lang>/<namespace>.json`;
+every `en/` file has a mirror in `pt-BR/`. A new language is a folder of mirrors, an entry in
+`LANGS` and `Lang` (`i18n/types.ts`), and its browser-language match in `i18n/store.ts`. `t(key, params)` looks the key up in the active
 language, then English, then the key itself. `tr(key, fallback)` is the same but ends on the English
 literal kept in the code, which is how content (`src/game/content/`) reads its names and
 descriptions. `core/` doesn't import `i18n/`, so `Sim.ts` keeps emitting English, and the drawing

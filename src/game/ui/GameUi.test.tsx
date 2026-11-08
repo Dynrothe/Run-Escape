@@ -391,6 +391,5 @@ describe("the title's export reminder", () => {
         fireEvent.click(langBtn);
         expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Português (BR)" })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Español" })).toBeInTheDocument();
     });
 });

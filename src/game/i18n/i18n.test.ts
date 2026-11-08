@@ -35,7 +35,7 @@ describe("language files", () => {
     // (b) a translation is of a key that exists, with the placeholders it has
     it("only translates keys that exist in English, with the same placeholders", () => {
         const english: Record<string, string> = Object.assign({}, ...Object.values(files.en));
-        for (const lang of ["pt-BR", "es"] as const) {
+        for (const lang of ["pt-BR"] as const) {
             for (const [ns, messages] of Object.entries(files[lang])) {
                 for (const [key, text] of Object.entries(messages)) {
                     expect(english, `${lang}/${ns}: ${key}`).toHaveProperty(key);
@@ -48,15 +48,14 @@ describe("language files", () => {
     });
 
     // (c) every English file has its mirrors
-    it("has a pt-BR and an es file for every English one", () => {
+    it("has a pt-BR file for every English one", () => {
         for (const ns of namespaces) {
             expect(files["pt-BR"], `pt-BR/${ns}.json`).toHaveProperty(ns);
-            expect(files.es, `es/${ns}.json`).toHaveProperty(ns);
         }
     });
 
-    it("has no keys in pt-BR or es files that English lacks as a file", () => {
-        for (const lang of ["pt-BR", "es"] as const) {
+    it("has no keys in pt-BR files that English lacks as a file", () => {
+        for (const lang of ["pt-BR"] as const) {
             for (const ns of Object.keys(files[lang])) {
                 expect(namespaces, `${lang}/${ns}.json`).toContain(ns);
             }
@@ -87,12 +86,6 @@ describe("translating", () => {
                 "item.count.one": "{n} moeda",
                 "item.count.other": "{n} moedas",
             },
-            es: {
-                "a.hello": "¡Hola, {name}!",
-                "boss.shout": "¡No pasarás!",
-                "item.count.one": "{n} moneda",
-                "item.count.other": "{n} monedas",
-            },
         });
     });
     afterEach(() => {
@@ -116,9 +109,6 @@ describe("translating", () => {
         expect(t("a.hello", { name: "Zezima" })).toBe("Olá, Zezima!");
         expect(t("a.only_en")).toBe("Only English");
         expect(t("a.missing.entirely")).toBe("a.missing.entirely");
-        setLang("es");
-        expect(t("a.hello", { name: "Zezima" })).toBe("¡Hola, Zezima!");
-        expect(t("a.only_en")).toBe("Only English");
     });
 
     it("tr falls back to the English in the code, not the key", () => {
@@ -143,19 +133,10 @@ describe("translating", () => {
         expect(tp("item.count", 2)).toBe("2 moedas");
     });
 
-    it("tp picks the plural form in es", () => {
-        setLang("es");
-        expect(tp("item.count", 1)).toBe("1 moneda");
-        expect(tp("item.count", 0)).toBe("0 monedas");
-        expect(tp("item.count", 5)).toBe("5 monedas");
-        // es has a "many" category for millions, which falls to "other" when there's no .many
-        expect(tp("item.count", 1_000_000)).toBe("1000000 monedas");
-    });
-
     it("tp uses .zero for 0 when there is one, and falls back to English and the key", () => {
         expect(tp("item.zero", 0)).toBe("No gems");
         expect(tp("item.zero", 1)).toBe("1 gem");
-        setLang("es");
+        setLang("pt-BR");
         expect(tp("item.zero", 3)).toBe("3 gems");
         expect(tp("item.nowhere", 3)).toBe("item.nowhere");
     });
@@ -171,8 +152,6 @@ describe("translating", () => {
         expect(list([])).toBe("");
         setLang("pt-BR");
         expect(list(["a", "b", "c"])).toBe("a, b e c");
-        setLang("es");
-        expect(list(["a", "b", "c"])).toBe("a, b y c");
     });
 
     it("fmtNum uses the language's locale", () => {
@@ -186,8 +165,6 @@ describe("translating", () => {
         expect(tl("You will not pass!")).toBe("You will not pass!");
         setLang("pt-BR");
         expect(tl("You will not pass!")).toBe("Você não passará!");
-        setLang("es");
-        expect(tl("You will not pass!")).toBe("¡No pasarás!");
         expect(tl("Something never translated")).toBe("Something never translated");
     });
 
@@ -197,7 +174,7 @@ describe("translating", () => {
     });
 
     it("tl only knows the English values, not those of other languages", () => {
-        setLang("es");
+        setLang("pt-BR");
         expect(tl("Você não passará!")).toBe("Você não passará!");
     });
 });
@@ -223,24 +200,24 @@ describe("the active language", () => {
         vi.resetModules();
     });
 
-    it("lists the three languages", () => {
-        expect(LANGS.map((lang) => lang.id)).toEqual(["en", "pt-BR", "es"]);
-        expect(LANGS.map((lang) => lang.label)).toEqual(["English", "Português (BR)", "Español"]);
+    it("lists the languages", () => {
+        expect(LANGS.map((lang) => lang.id)).toEqual(["en", "pt-BR"]);
+        expect(LANGS.map((lang) => lang.label)).toEqual(["English", "Português (BR)"]);
     });
 
     it("saves the choice, sets <html lang> and tells subscribers", () => {
         const seen: string[] = [];
         const unsubscribe = subscribeLang(() => seen.push(getLang()));
-        setLang("es");
-        expect(getLang()).toBe("es");
-        expect(stored.get("rune-survivors-language")).toBe("es");
-        expect(documentElement.lang).toBe("es");
-        setLang("es");
         setLang("pt-BR");
-        expect(seen).toEqual(["es", "pt-BR"]);
-        unsubscribe();
+        expect(getLang()).toBe("pt-BR");
+        expect(stored.get("rune-survivors-language")).toBe("pt-BR");
+        expect(documentElement.lang).toBe("pt-BR");
+        setLang("pt-BR");
         setLang("en");
-        expect(seen).toEqual(["es", "pt-BR"]);
+        expect(seen).toEqual(["pt-BR", "en"]);
+        unsubscribe();
+        setLang("pt-BR");
+        expect(seen).toEqual(["pt-BR", "en"]);
     });
 
     it("ignores a language it doesn't have", () => {
@@ -260,8 +237,8 @@ describe("the active language", () => {
                 },
             },
         });
-        expect(() => setLang("es")).not.toThrow();
-        expect(getLang()).toBe("es");
+        expect(() => setLang("pt-BR")).not.toThrow();
+        expect(getLang()).toBe("pt-BR");
     });
 
     it("starts from the saved language", async () => {
@@ -279,7 +256,7 @@ describe("the active language", () => {
             return (await import("./index")).getLang();
         };
         expect(await startsAs("pt-PT")).toBe("pt-BR");
-        expect(await startsAs("es-MX")).toBe("es");
+        expect(await startsAs("es-MX")).toBe("en");
         expect(await startsAs("de-DE")).toBe("en");
         expect(await startsAs("en-US")).toBe("en");
     });

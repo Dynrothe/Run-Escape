@@ -8,7 +8,7 @@ export type Messages = Record<string, string>;
 // The files as the bundler read them, by language and then namespace (the file's name
 // without .json). import.meta.glob only exists under Vite and Vitest: in a script run
 // with tsx the catalog is empty, and every lookup falls back to the English in the code.
-export const files: Record<Lang, Record<string, Messages>> = { en: {}, "pt-BR": {}, es: {} };
+export const files: Record<Lang, Record<string, Messages>> = { en: {}, "pt-BR": {} };
 
 function readFiles(): Record<string, Messages> {
     try {
@@ -35,7 +35,6 @@ function merge(lang: Lang): Messages {
 let catalogs: Record<Lang, Messages> = {
     en: merge("en"),
     "pt-BR": merge("pt-BR"),
-    es: merge("es"),
 };
 
 // English text to its key, for tl(). Built the first time it's asked for

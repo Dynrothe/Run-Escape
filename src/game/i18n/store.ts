@@ -37,9 +37,6 @@ function browserLang(): Lang {
     if (language.startsWith("pt")) {
         return "pt-BR";
     }
-    if (language.startsWith("es")) {
-        return "es";
-    }
     return "en";
 }
 
