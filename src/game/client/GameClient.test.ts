@@ -1886,6 +1886,26 @@ describe("the fight button's hint", () => {
         expect(hint(25)).toBe(false);
     });
 
+    test("isn't put away by a press the button says no to", () => {
+        const { sim, client, hint } = createFight();
+        Object.assign(client, { act: () => undefined, paused: false });
+        const press = (target: object | undefined, left: number): void => {
+            Object.assign(client, {
+                sim: { ...sim, abilityTarget: () => target, abilitySecondsLeft: () => left },
+            });
+            client.useAbility();
+        };
+        // In the Nexus, nothing to land on; then not ready
+        press(undefined, 0);
+        press({}, 3);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        hint(0);
+        expect(hint(5)).toBe(true);
+        // One that goes off
+        press({}, 0);
+        expect(hint(6)).toBe(false);
+    });
+
     test("is only for a button that coaches, so Zachariah's Smite stays as it was", () => {
         const { sim, hint } = createFight();
         sim.ability = { name: "Smite", iconObjId: 1, cooldown: 4 };

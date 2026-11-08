@@ -367,7 +367,8 @@ export class BossFightView {
         const bullets = sim.bullets;
         const { prevX, prevY, x, y, vx, vy, radius, source, startTick, order } = bullets;
         const tick = sim.tick;
-        // Seen in the dark at full strength, as projectiles are: a hazard has to read on any floor
+        // Seen in the dark at full strength, as projectiles are: a hazard has to read on any floor.
+        // Only a lit map's dark changes for it (ActorDrawOptions.unlit): the Tombs and its quest.
         const options = { scale: 1, flash: 0, unlit: 1 };
         for (let i = 0; i < bullets.count; i++) {
             const slot = order[i];

@@ -303,7 +303,9 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const raidLevel = map.tombs
         ? getRaidLevel(cleanInvocations(Array.isArray(hostInvocations) ? hostInvocations : []))
         : undefined;
-    const [board, setBoard] = useState(false);
+    // The map the invocation board was opened on: picking another closes it, so it doesn't come
+    // back by itself when the Tombs is picked again
+    const [boardFor, setBoardFor] = useState<string>();
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<number | undefined>(undefined);
     useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
@@ -501,7 +503,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 )}
                 {isHost && map.tombs && (
                     // The Tombs go by the host's invocations instead of endless and hard mode
-                    <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
+                    <InvocationsButton ui={ui} onOpen={() => setBoardFor(room.mapId)} />
                 )}
                 {isHost && !map.fun && !map.tombs && (
                     <div
@@ -573,8 +575,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     </button>
                 )}
             </div>
-            {board && isHost && map.tombs && (
-                <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            {boardFor === room.mapId && isHost && map.tombs && (
+                <InvocationBoard ui={ui} client={client} onClose={() => setBoardFor(undefined)} />
             )}
         </div>
     );

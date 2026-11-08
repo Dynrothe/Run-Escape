@@ -546,8 +546,13 @@ export function getArenaRegion(map: MapDef): {
 
 // Whether anything on the map poisons you (the King Black Dragon's breath) or
 // gives you what stacks up (Slash Bash's disease). Antipoisons are only found
-// where something does.
+// where something does. The Tombs of Amascut poison from their own data, not
+// their enemies' attacks (Akkha's fire quarter, Zebak's acid, the Spitting
+// Scarab's touch), so the raid counts as poisoning.
 export function hasPoison(map: MapDef): boolean {
+    if (map.tombs) {
+        return true;
+    }
     const enemyIds = [
         ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
         ...map.events.map((event) => event.enemyId),

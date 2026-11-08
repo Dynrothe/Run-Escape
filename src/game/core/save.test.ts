@@ -1509,6 +1509,22 @@ describe("a fight in parts, and a map behind another", () => {
         expect(save.mapVictories[fight.id]).toBe(2);
     });
 
+    it("ticks off a quest to beat it only with the last part", () => {
+        const save = createSave();
+        const quest = {
+            id: "test_beat",
+            name: "Test",
+            objective: { kind: "beatMap" as const, mapId: fight.id },
+            coins: 0,
+        };
+        const first = run(fight.id, { victory: true, stage: 0 });
+        expect(getQuestProgress(save, quest, first)).toEqual({ done: 0, of: 1 });
+        recordRun(save, first);
+        expect(getQuestProgress(save, quest)).toEqual({ done: 0, of: 1 });
+        const last = run(fight.id, { victory: true, stage: 1 });
+        expect(getQuestProgress(save, quest, last)).toEqual({ done: 1, of: 1 });
+    });
+
     it("plays the first part for anything odd in the save", () => {
         const save = createSave();
         for (const odd of [1.5, -1, 7, Number.NaN]) {

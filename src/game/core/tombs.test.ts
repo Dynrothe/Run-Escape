@@ -1131,6 +1131,21 @@ describe("Ba-Ba", () => {
         expect(sim.tombsDeaths).toBe(deaths + 1);
     });
 
+    it("says how many deaths are left after a wipe at a boss", () => {
+        const sim = atBaba(["mind_the_gap", "try_again"]);
+        sim.takeEvents();
+        sim.player.invulnerable = 0;
+        sim.player.x = sim.player.prevX = 1036.5;
+        sim.player.y = sim.player.prevY = 1026.4;
+        sim.step();
+        expect(sim.tombsDeaths).toBe(1);
+        expect(
+            sim
+                .takeEvents()
+                .some((e) => e.type === "notice" && e.message.endsWith(" 9 deaths left.")),
+        ).toBe(true);
+    });
+
     it("puts the player back at the foot from the gap in god mode", () => {
         const sim = atBaba(["mind_the_gap"]);
         sim.devGod = true;

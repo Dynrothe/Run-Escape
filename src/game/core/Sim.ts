@@ -7991,7 +7991,8 @@ export class Sim {
         this.tombsCover = this.tombsCover.filter((rock) => rock.look !== def.roar.look);
     }
 
-    // Pushed the way given, as far as the ground goes
+    // Pushed the way given, as far as the ground goes: as far as the whole of them fits, not just
+    // their middle, so they never stop half in a wall at the island's edge
     private zebakShove(player: Player, dx: number, dy: number, tiles: number): void {
         const length = Math.max(0.001, fm.hypot(dx, dy));
         const ux = dx / length;
@@ -8000,7 +8001,7 @@ export class Sim {
         for (let step = 0.25; step <= tiles; step += 0.25) {
             const x = player.x + ux * step;
             const y = player.y + uy * step;
-            if (!this.grid.contains(x, y) || this.grid.isSolid(x, y)) {
+            if (!this.grid.contains(x, y) || !isCircleFree(this.grid, x, y, player.radius)) {
                 break;
             }
             gone = step;
@@ -10347,7 +10348,9 @@ export class Sim {
             room.boss = { uid: -1, beatenTick: undefined };
             this.emit({
                 type: "notice",
-                message: `Oh dear, you are dead! Walk back in to face ${getEnemy(bossDef.enemyId).name} again.`,
+                message:
+                    `Oh dear, you are dead! Walk back in to face ${getEnemy(bossDef.enemyId).name} again.` +
+                    this.tombsDeathsLeftText(),
             });
             return;
         }
@@ -10365,14 +10368,19 @@ export class Sim {
             room.scabaras = undefined;
             room.crondis = undefined;
         }
-        const left = this.tombsDeathsAllowed - this.tombsDeaths;
         this.emit({
             type: "notice",
             message:
                 "Oh dear, you are dead! You're back in the safe corridor: walk through the barrier " +
                 "to start the room again. The waves you'd beaten give nothing this time." +
-                (Number.isFinite(left) ? ` ${left} ${left === 1 ? "death" : "deaths"} left.` : ""),
+                this.tombsDeathsLeftText(),
         });
+    }
+
+    // How many more wipes the raid can take, for a wipe's notice (none said without a limit)
+    private tombsDeathsLeftText(): string {
+        const left = this.tombsDeathsAllowed - this.tombsDeaths;
+        return Number.isFinite(left) ? ` ${left} ${left === 1 ? "death" : "deaths"} left.` : "";
     }
 
     // A wipe in the Tombs: what's out is gone, and everyone's back up on full hitpoints. What
@@ -10416,12 +10424,11 @@ export class Sim {
             this.floor = new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND);
         }
         this.enterWardens();
-        const left = this.tombsDeathsAllowed - this.tombsDeaths;
         this.emit({
             type: "notice",
             message:
                 "Oh dear, you are dead! The Wardens are back where they started." +
-                (Number.isFinite(left) ? ` ${left} ${left === 1 ? "death" : "deaths"} left.` : ""),
+                this.tombsDeathsLeftText(),
         });
     }
 
@@ -16352,7 +16359,7 @@ export class Sim {
         this.partyScale = getPartyScale(up + (this.heroes.length - up) * PLAYER_GONE);
     }
 
-    // Returns the damage done (0 if it was already dead). mightScale
+    // Returns the damage done (0 if it was already dead, or what a clamp let through). mightScale
     // multiplies the player's damage bonus (Tumeken's shadow triples it; 0
     // leaves out the bonuses to damage, bosses' included); poison is for venom's damage, which shows as a poison splat.
     damageEnemy(
@@ -16493,14 +16500,18 @@ export class Sim {
         } else if (two && (enemy.uid === two.wardenUid || enemy.uid === two.kneel?.coreUid)) {
             shown = this.wardenTakes(enemy, damage, two);
         } else if (three && enemy.uid === three.wardenUid) {
+            const before = enemy.hp;
             enemy.hp = this.wardenThreeHp(enemy, three, enemy.hp - damage);
+            shown = Math.max(0, Math.round(before - enemy.hp));
         } else if (wardens?.phase === 1 && enemy.uid === wardens.obeliskUid) {
             // Held till the first pyramids have come and gone
             const held =
                 wardens.pyramidsDone === undefined || this.tick < wardens.pyramidsDone
                     ? Math.round(enemy.maxHp * WARDENS.holdShare)
                     : 0;
+            const before = enemy.hp;
             enemy.hp = Math.max(Math.min(enemy.hp, held), enemy.hp - damage);
+            shown = Math.max(0, Math.round(before - enemy.hp));
         } else if (kephri && enemy.uid === kephri.uid && !kephri.final) {
             // Off her shield: what it took is what's shown, and what the points go by (her three
             // shields come to her hitpoints, so they're worth what those were)
@@ -16570,7 +16581,9 @@ export class Sim {
         } else if (enemy.hp <= 0 && !this.riseAgain(enemy)) {
             this.killEnemy(enemy);
         }
-        return damage;
+        // What it really took, so life steal and heals go by that, not the hit a clamp cut short;
+        // never more than the hit, though (the Wardens' core passes on five times what it takes)
+        return Math.min(damage, shown);
     }
 
     // cause: the player's doing (the bot nuke's too, though what it kills

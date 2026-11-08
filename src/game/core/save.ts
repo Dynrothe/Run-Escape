@@ -494,8 +494,7 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         const next = (run.stage ?? 0) + 1;
         save.fightStages = { ...save.fightStages, [run.mapId]: next >= stages.length ? 0 : next };
     }
-    const beaten = !stages || (run.stage ?? 0) + 1 >= stages.length;
-    if (run.victory && beaten) {
+    if (run.victory && beatsMap(run)) {
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
         if (run.hard) {
@@ -577,9 +576,10 @@ export function getQuestProgress(save: SaveData, quest: QuestDef, run?: RunSumma
             return { done: Math.min(done, objective.count), of: objective.count };
         }
         case "beatMap": {
+            // A fight in parts is beaten by its last part only (as recordRun counts it)
             const won =
                 (save.mapVictories[objective.mapId] ?? 0) > 0 ||
-                (run?.victory === true && run.mapId === objective.mapId);
+                (run?.victory === true && run.mapId === objective.mapId && beatsMap(run));
             return { done: won ? 1 : 0, of: 1 };
         }
     }
@@ -650,6 +650,12 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
     const earned = getEarnedUnlocks(save, run);
     save.unlockedCharacters.push(...earned.characters.map((c) => c.id));
     save.unlockedItems.push(...earned.items.map((i) => i.id));
+}
+
+// Whether a won run beats its map: any win, but in a fight in parts only the last part's
+function beatsMap(run: RunSummary): boolean {
+    const stages = MAP_BY_ID.get(run.mapId)?.stages;
+    return !stages || (run.stage ?? 0) + 1 >= stages.length;
 }
 
 // The part of a fight in parts a run plays next (MapDef.stages): the first not beaten (from the
