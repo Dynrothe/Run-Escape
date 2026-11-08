@@ -197,6 +197,34 @@ describe("Cloudflare co-op room", () => {
         expect(restarted.room.members[1].token).toBe(room.room.members[1].token);
     });
 
+    it("acknowledges numbered selections, rejects stale retries, and keeps the acknowledgement through sleep", async () => {
+        const { room, guest } = await party();
+        say(room, guest, { t: "me", characterId: "wizard", meSeq: 1 });
+        say(room, guest, { t: "me", characterId: "ranger", ready: true, meSeq: 2 });
+        await wait(room, 1000);
+        const again = await loadRoom();
+        const restored = again.room.members.find((m: any) => m.id === "guest");
+        say(again, restored, { t: "me", characterId: "wizard", ready: false, meSeq: 1 });
+        await wait(again, 250);
+        const ack = guest.socket.sent.at(-1);
+        expect(ack).toMatchObject({ t: "room", memberAcks: true, meSeq: 2 });
+        expect(ack.room.members.find((m: any) => m.id === "guest")).toMatchObject({
+            characterId: "ranger",
+            ready: true,
+        });
+    });
+
+    it("flushes lobby changes for everyone on incoming traffic when the alarm is late", async () => {
+        const { room, host, guest } = await party();
+        say(room, guest, { t: "me", characterId: "wizard", meSeq: 1 });
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 2 });
+        expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("wizard");
+        // No alarm delivery: the retry must make progress by itself.
+        vi.setSystemTime(Date.now() + 1000);
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 2 });
+        expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("ranger");
+    });
+
     it("saves the run starting before anyone's told", async () => {
         const { room, host } = await party();
         log = [];

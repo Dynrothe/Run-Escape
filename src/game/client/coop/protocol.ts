@@ -164,7 +164,7 @@ export type ClientMessage =
       }
     | { t: "join"; code: string; me: Partial<Member> }
     | { t: "leave" }
-    | ({ t: "me" } & Partial<Member>)
+    | ({ t: "me"; meSeq?: number } & Partial<Member>)
     // A new name, from the relay (not during a run)
     | { t: "rename" }
     | { t: "settings"; open?: boolean; mapId?: string; endless?: boolean; hard?: boolean }
@@ -204,7 +204,15 @@ export type ServerMessage =
       }
     // token: to come back to the room with, should the connection drop (the
     // Cloudflare relay's; coop/room/<code>?resume=<token>)
-    | { t: "room"; room: RoomView; you: string; token?: string }
+    | {
+          t: "room";
+          room: RoomView;
+          you: string;
+          token?: string;
+          // Supports numbered member changes, acknowledged in room updates.
+          memberAcks?: true;
+          meSeq?: number;
+      }
     // The relay keeps each room on its own connection (the Cloudflare relay,
     // server/cloudflare): make or join it there, at coop/room/<code>, with
     // this ticket. The Node relay never sends it.

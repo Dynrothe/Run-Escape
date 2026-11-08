@@ -173,7 +173,7 @@ describe("a relay that keeps each room on its own connection", () => {
     });
 
     // In a room, with the token the relay gives to come back with
-    async function inRoom() {
+    async function inRoom(memberAcks = false) {
         const { lobby, relay } = await connected();
         const onClosed = vi.fn();
         const onResumed = vi.fn();
@@ -183,7 +183,13 @@ describe("a relay that keeps each room on its own connection", () => {
         relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });
         const room = FakeSocket.all[1];
         await flush();
-        room.receive({ t: "room", room: { ...ROOM, started: true }, you: "p1", token: "secret" });
+        room.receive({
+            t: "room",
+            room: { ...ROOM, started: true },
+            you: "p1",
+            token: "secret",
+            memberAcks,
+        });
         vi.useFakeTimers();
         return { lobby, relay, room, onClosed, onResumed };
     }
@@ -235,6 +241,24 @@ describe("a relay that keeps each room on its own connection", () => {
         expect(FakeSocket.all).toHaveLength(3);
     });
 
+    it("retries a hanging resume handshake after 2.5 seconds and ignores its late response", async () => {
+        const { lobby, room, onResumed } = await inRoom();
+        room.close();
+        await vi.advanceTimersByTimeAsync(0);
+        const hanging = FakeSocket.all[2];
+        await vi.advanceTimersByTimeAsync(2750);
+        const again = FakeSocket.all[3];
+        expect(hanging.readyState).toBe(FakeSocket.CLOSED);
+        expect(again.url).toContain("resume=secret");
+        hanging.receive({ t: "room", room: { ...ROOM, code: "STALE" }, you: "p1" });
+        expect(lobby.room?.code).toBe("ABCDEFGH");
+        expect(onResumed).not.toHaveBeenCalled();
+        again.receive({ t: "room", room: { ...ROOM, started: true }, you: "p1" });
+        expect(onResumed).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(RESUME_WINDOW_MS);
+        expect(FakeSocket.all).toHaveLength(4);
+    });
+
     it("doesn't come back to a room it left", async () => {
         const { lobby, room } = await inRoom();
         lobby.leave();
@@ -283,9 +307,9 @@ describe("a relay that keeps each room on its own connection", () => {
         const { lobby, room, onClosed, onResumed } = await inRoom();
         room.answersPings = false;
         const ms = await playUntilResumed(lobby, room);
-        // Within the 20 seconds the host keeps its frames for, with time to come back
-        expect(ms).toBeGreaterThan(5000);
-        expect(ms).toBeLessThan(15_000);
+        // Five seconds of silence + three for the existing ping, previously 13 seconds.
+        expect(ms).toBeGreaterThanOrEqual(8000);
+        expect(ms).toBeLessThanOrEqual(8200);
         expect(pings(room)).toBe(1);
         expect(room.readyState).toBe(FakeSocket.CLOSED);
         const again = FakeSocket.all[2];
@@ -318,10 +342,10 @@ describe("a relay that keeps each room on its own connection", () => {
         expect(pings(room)).toBe(0);
     });
 
-    it("pings a quiet room every few seconds, and keeps it while it answers", async () => {
+    it("pings a quiet legacy room every five seconds, and keeps it while it answers", async () => {
         const { lobby, room } = await inRoom();
         await playFor(lobby, room, 60_000);
-        expect(pings(room)).toBeGreaterThanOrEqual(10);
+        expect(pings(room)).toBeGreaterThanOrEqual(11);
         expect(pings(room)).toBeLessThanOrEqual(12);
         expect(FakeSocket.all).toHaveLength(2);
     });
@@ -339,6 +363,15 @@ describe("a relay that keeps each room on its own connection", () => {
         room.answersPings = true;
         room.receive({ t: "pong" });
         await playFor(lobby, room, 30_000);
+        expect(FakeSocket.all).toHaveLength(2);
+    });
+
+    it("keeps the existing ping cadence without application probes when frames stop", async () => {
+        const { lobby, room } = await inRoom(true);
+        await playFor(lobby, room, 60_000);
+        expect(room.sent.filter((m) => m.t !== "create" && m.t !== "ping")).toHaveLength(0);
+        expect(pings(room)).toBeGreaterThanOrEqual(11);
+        expect(pings(room)).toBeLessThanOrEqual(12);
         expect(FakeSocket.all).toHaveLength(2);
     });
 
@@ -412,6 +445,115 @@ describe("the lobby's timers", () => {
         const lists = () => relay.sent.filter((m) => m.t === "list").length;
         return { lobby, relay, lists };
     }
+
+    async function selecting() {
+        const { lobby, relay } = await welcomed({ listUpdates: true });
+        lobby.create(true, "lumbridge", false, false);
+        relay.receive({ t: "goto", code: "ABCDEFGH", ticket: "t1" });
+        await vi.advanceTimersByTimeAsync(0);
+        const room = FakeSocket.all[1];
+        room.receive({ t: "room", room: ROOM, you: "p1", token: "secret", memberAcks: true });
+        return { lobby, relay, room };
+    }
+
+    it("keeps an idle lobby at two automatic pings per minute with no application probes or retries", async () => {
+        const { room } = await selecting();
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(room.sent.filter((m) => m.t === "ping")).toHaveLength(2);
+        expect(room.sent.filter((m) => m.t === "sync" || m.t === "me")).toHaveLength(0);
+    });
+
+    it("adds no requests when the normal room update acknowledges a selection", async () => {
+        const { lobby, room } = await selecting();
+        lobby.setMe({ characterId: "ranger" });
+        const selection = room.sent.at(-1)!;
+        await vi.advanceTimersByTimeAsync(250);
+        room.receive({
+            t: "room",
+            room: ROOM,
+            you: "p1",
+            memberAcks: true,
+            meSeq: selection.meSeq,
+        });
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(room.sent).toEqual([expect.objectContaining({ t: "create" }), selection]);
+        expect(FakeSocket.all).toHaveLength(2);
+    });
+
+    it("retries the latest selection once after one second and accepts only its acknowledgement", async () => {
+        const { lobby, room } = await selecting();
+        lobby.setMe({ characterId: "wizard" });
+        const first = room.sent.at(-1)!;
+        await vi.advanceTimersByTimeAsync(500);
+        lobby.setMe({ characterId: "ranger", ready: true });
+        const latest = room.sent.at(-1)!;
+        // The old selection's confirmation must not discard the new one.
+        room.receive({ t: "room", room: ROOM, you: "p1", memberAcks: true, meSeq: first.meSeq });
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(room.sent.filter((m) => m.t === "me").at(-1)).toEqual(latest);
+        room.receive({ t: "room", room: ROOM, you: "p1", memberAcks: true, meSeq: latest.meSeq });
+        const sent = room.sent.filter((m) => m.t === "me").length;
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(room.sent.filter((m) => m.t === "me")).toHaveLength(sent);
+        expect(FakeSocket.all).toHaveLength(2);
+    });
+
+    it("retries a stuck selection only once, then starts reconnecting at 4.5 seconds", async () => {
+        const { lobby, room } = await selecting();
+        lobby.setMe({ characterId: "wizard" });
+        const selection = room.sent.at(-1)!;
+        await vi.advanceTimersByTimeAsync(4000);
+        expect(room.sent.filter((m) => m.t === "me")).toEqual([selection, selection]);
+        expect(FakeSocket.all).toHaveLength(2);
+        await vi.advanceTimersByTimeAsync(501);
+        const again = FakeSocket.all[2];
+        expect(again.url).toContain("resume=secret");
+        again.receive({ t: "room", room: ROOM, you: "p1", memberAcks: true });
+        expect(again.sent).toContainEqual(selection);
+        // Selection changes made during reconnect replace the outstanding
+        // values; they do not depend on the dead socket's send queue.
+        again.receive({
+            t: "room",
+            room: ROOM,
+            you: "p1",
+            memberAcks: true,
+            meSeq: selection.meSeq,
+        });
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(FakeSocket.all).toHaveLength(3);
+    });
+
+    it("keeps the latest selection made while reconnecting and never replays ready after start", async () => {
+        const { lobby, room } = await selecting();
+        lobby.setMe({ characterId: "wizard" });
+        room.close();
+        lobby.setMe({ characterId: "ranger", ready: true });
+        await vi.advanceTimersByTimeAsync(0);
+        const again = FakeSocket.all[2];
+        again.receive({ t: "room", room: ROOM, you: "p1", memberAcks: true });
+        expect(again.sent).toEqual([
+            expect.objectContaining({ t: "me", characterId: "ranger", ready: true }),
+        ]);
+        again.receive({ t: "start", game: {} });
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(again.sent.filter((m) => m.t === "me")).toHaveLength(1);
+        expect(FakeSocket.all).toHaveLength(3);
+    });
+
+    it("does not mistake a suspended lobby tab for a broken connection or keep retries after leaving", async () => {
+        const { lobby, room } = await selecting();
+        lobby.setMe({ characterId: "wizard" });
+        await vi.advanceTimersByTimeAsync(1000);
+        // Jump wall time without running the timers, as a suspended tab does.
+        vi.setSystemTime(Date.now() + 60_000);
+        await vi.advanceTimersByTimeAsync(500);
+        expect(FakeSocket.all).toHaveLength(2);
+        lobby.leave();
+        const sent = room.sent.filter((m) => m.t === "me").length;
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(room.sent.filter((m) => m.t === "me")).toHaveLength(sent);
+        expect(FakeSocket.all).toHaveLength(2);
+    });
 
     it("asks for the list only of a relay that doesn't send it", async () => {
         const pushing = await welcomed({ listUpdates: true });

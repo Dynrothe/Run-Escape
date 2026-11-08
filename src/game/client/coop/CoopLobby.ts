@@ -74,12 +74,20 @@ const IDLE_TEXT = "Disconnected after a while with nothing happening.";
 export const RESUME_WINDOW_MS = 10_000;
 // Waits between tries, the last repeating
 const RESUME_DELAYS_MS = [0, 250, 500, 1000, 2000];
+// A single handshake that hangs must not consume the whole recovery window.
+const RESUME_ATTEMPT_MS = 2500;
 // What's said in the room meanwhile waits, up to this many messages
 const MAX_WAITING_MESSAGES = 2000;
 // A room's connection can die without closing (a network that went away, a
 // laptop asleep), and then nothing says so. One that's sent nothing back for
 // this long after a ping is taken as dropped, and made again as above.
-const PONG_WAIT_MS = 8000;
+const PONG_WAIT_MS = 3000;
+// Local checks only: these do not send periodic application probes.
+const ROOM_CHECK_MS = 500;
+// Retry an unconfirmed selection once per connection, then resume the room
+// if its normal room update still hasn't acknowledged the selection.
+const MEMBER_RETRY_MS = 1000;
+const MEMBER_WAIT_MS = 4000;
 // During a run, a room that's been quiet this long is pinged (keepAlive), so
 // a dead connection's found while the host still has the frames to send
 // again (RESEND_FRAMES in CoopRun). A guest hears the host's frames all the
@@ -206,6 +214,17 @@ export class CoopLobby {
     private lobbyLost = false;
     private listTimer?: number;
     private pingTimer?: number;
+    private roomTimer?: number;
+    private roomCheckedAt = 0;
+    private memberAcks = false;
+    private meSequence = 0;
+    private pendingMe?: {
+        sequence: number;
+        changes: Partial<Member>;
+        since: number;
+        sentAt: number;
+        retried: boolean;
+    };
     // When this player last did anything here, for LOBBY_IDLE_MS
     private activeAt = 0;
     // The room's connection: when anything last came on it, when anything
@@ -379,7 +398,7 @@ export class CoopLobby {
     }
 
     private isRoomPingUnanswered(): boolean {
-        return this.roomPingAt !== undefined && this.roomHeardAt < this.roomPingAt;
+        return this.roomPingAt !== undefined;
     }
 
     // Whether the room's connection has gone PONG_WAIT_MS since a ping with
@@ -393,14 +412,26 @@ export class CoopLobby {
     // back, and not after a gap (late), which starts the check again.
     private checkRoomSocket(late: boolean): WebSocket | undefined {
         const socket = this.roomSocket;
-        if (!socket || this.resuming || socket.readyState !== WebSocket.OPEN) {
+        if (!socket || this.resuming) {
+            return undefined;
+        }
+        if (socket.readyState !== WebSocket.OPEN) {
+            this.roomSocketDead(socket);
             return undefined;
         }
         if (late) {
             this.roomPingAt = undefined;
+            if (this.pendingMe) {
+                this.pendingMe.since = Date.now();
+                this.pendingMe.sentAt = Date.now();
+            }
             return undefined;
         }
-        if (this.isRoomSilent(Date.now())) {
+        const now = Date.now();
+        if (
+            this.isRoomSilent(now) ||
+            (this.pendingMe && now - this.pendingMe.since > MEMBER_WAIT_MS)
+        ) {
             this.roomSocketDead(socket);
             return undefined;
         }
@@ -425,12 +456,28 @@ export class CoopLobby {
         const now = Date.now();
         const late = now - this.keptAliveAt > KEEP_ALIVE_LATE_MS;
         this.keptAliveAt = now;
+        this.maintainRoom(late, true);
+    }
+
+    private maintainRoom(late: boolean, playing: boolean): void {
+        const now = Date.now();
         const socket = this.checkRoomSocket(late);
+        if (!socket) {
+            return;
+        }
         if (
-            socket &&
-            ((!this.isRoomPingUnanswered() &&
+            this.pendingMe &&
+            !this.pendingMe.retried &&
+            now - this.pendingMe.sentAt >= MEMBER_RETRY_MS
+        ) {
+            this.pendingMe.retried = true;
+            this.sendPendingMe();
+        }
+        if (
+            (playing &&
+                !this.isRoomPingUnanswered() &&
                 now - Math.max(this.roomHeardAt, this.roomPingAt ?? 0) >= RUN_QUIET_MS) ||
-                now - this.roomSentAt >= PING_INTERVAL_MS)
+            now - this.roomSentAt >= PING_INTERVAL_MS
         ) {
             this.pingRoom(socket);
         }
@@ -468,6 +515,7 @@ export class CoopLobby {
                 // In: the room before this (if any) is left by closing it
                 const previous = this.roomSocket;
                 this.stopResuming();
+                this.pendingMe = undefined;
                 this.useRoomSocket(socket);
                 this.enteringSocket = undefined;
                 previous?.close();
@@ -492,17 +540,30 @@ export class CoopLobby {
         // The room's just heard from it (the create, join or resume)
         this.roomHeardAt = this.roomSentAt = Date.now();
         this.roomPingAt = undefined;
+        this.roomCheckedAt = Date.now();
+        window.clearInterval(this.roomTimer);
+        this.roomTimer = window.setInterval(() => {
+            const now = Date.now();
+            const late = now - this.roomCheckedAt > KEEP_ALIVE_LATE_MS;
+            this.roomCheckedAt = now;
+            // A running game checks every frame, even when the tab's regular
+            // timers are throttled. Do not reset those checks here.
+            if (now - this.keptAliveAt > KEEP_ALIVE_LATE_MS) {
+                this.maintainRoom(late, false);
+            }
+        }, ROOM_CHECK_MS);
         socket.onmessage = (event) => {
             if (socket !== this.roomSocket) {
                 return;
             }
-            this.roomHeardAt = Date.now();
             let received: ServerMessage;
             try {
                 received = JSON.parse(String(event.data));
             } catch {
                 return;
             }
+            this.roomHeardAt = Date.now();
+            this.roomPingAt = undefined;
             this.receive(received);
         };
         socket.onclose = () => this.roomSocketClosed(socket);
@@ -513,6 +574,8 @@ export class CoopLobby {
             return;
         }
         this.roomSocket = undefined;
+        window.clearInterval(this.roomTimer);
+        this.roomTimer = undefined;
         // Closed by the room after a "gone" (which said why), or lost
         if (!this.view.room) {
             this.outOfRoom();
@@ -565,7 +628,10 @@ export class CoopLobby {
                         this.tryResuming();
                     }
                 },
-                Math.max(0, RESUME_WINDOW_MS - (Date.now() - resuming.since)) + 1,
+                Math.min(
+                    RESUME_ATTEMPT_MS,
+                    Math.max(0, RESUME_WINDOW_MS - (Date.now() - resuming.since)) + 1,
+                ),
             );
             socket.onmessage = (event) => {
                 if (this.resuming !== resuming || resuming.socket !== socket) {
@@ -586,6 +652,11 @@ export class CoopLobby {
                         socket.send(text);
                     }
                     this.receive(received);
+                    if (this.pendingMe) {
+                        this.pendingMe.since = Date.now();
+                        this.pendingMe.retried = false;
+                        this.sendPendingMe();
+                    }
                     this.onResumed?.();
                 } else if (received.t === "error") {
                     resuming.socket = undefined;
@@ -629,6 +700,10 @@ export class CoopLobby {
         if (this.view.room) {
             return;
         }
+        this.pendingMe = undefined;
+        this.memberAcks = false;
+        window.clearInterval(this.roomTimer);
+        this.roomTimer = undefined;
         if (this.lobbyLost) {
             this.lobbyLost = false;
             void this.connect();
@@ -640,6 +715,10 @@ export class CoopLobby {
     private closeRoomSockets(): void {
         this.stopResuming();
         this.resume = undefined;
+        this.pendingMe = undefined;
+        this.memberAcks = false;
+        window.clearInterval(this.roomTimer);
+        this.roomTimer = undefined;
         const sockets = [this.roomSocket, this.enteringSocket];
         this.roomSocket = this.enteringSocket = undefined;
         this.entering = undefined;
@@ -688,6 +767,13 @@ export class CoopLobby {
                 if (message.token) {
                     this.resume = { code: message.room.code, token: message.token };
                 }
+                this.memberAcks = message.memberAcks === true;
+                if (
+                    message.room.started ||
+                    (this.pendingMe && (message.meSeq ?? 0) >= this.pendingMe.sequence)
+                ) {
+                    this.pendingMe = undefined;
+                }
                 this.update({ room: message.room, you: message.you, error: undefined });
                 break;
             case "goto":
@@ -695,6 +781,7 @@ export class CoopLobby {
                 break;
             case "gone":
                 this.resume = undefined;
+                this.pendingMe = undefined;
                 this.update({ room: undefined, error: GONE_TEXT[message.reason] || undefined });
                 // A room on its own connection closes it next, which asks
                 // (outOfRoom)
@@ -713,6 +800,7 @@ export class CoopLobby {
                 }
                 break;
             case "start":
+                this.pendingMe = undefined;
                 this.onStart?.(message.game);
                 break;
             case "up":
@@ -790,8 +878,28 @@ export class CoopLobby {
     setMe(changes: Partial<Member>): void {
         this.me = { ...this.me, ...changes };
         if (this.view.room) {
-            this.send({ t: "me", ...changes });
+            if (this.memberAcks && !this.view.room.started) {
+                this.pendingMe = {
+                    sequence: ++this.meSequence,
+                    changes: { ...this.pendingMe?.changes, ...changes },
+                    since: Date.now(),
+                    sentAt: Date.now(),
+                    retried: false,
+                };
+                this.sendPendingMe();
+            } else {
+                this.send({ t: "me", ...changes });
+            }
         }
+    }
+
+    private sendPendingMe(): void {
+        const pending = this.pendingMe;
+        if (!pending || this.resuming) {
+            return;
+        }
+        pending.sentAt = Date.now();
+        this.send({ t: "me", ...pending.changes, meSeq: pending.sequence });
     }
 
     create(open: boolean, mapId: string, endless: boolean, hard: boolean): void {
@@ -828,6 +936,7 @@ export class CoopLobby {
     leave(): void {
         this.send({ t: "leave" });
         this.resume = undefined;
+        this.pendingMe = undefined;
         this.update({ room: undefined });
         if (this.resuming) {
             // Nothing to come back to

@@ -35,8 +35,8 @@ const MOVE_INTERVAL_MS = 66;
 // connection: the relay gives up on a closed one after RESUME_GRACE_MS
 // (server/cloudflare/src/room.mjs), and the game finds one that died without
 // closing within RUN_QUIET_MS and PONG_WAIT_MS (keepAlive in CoopLobby.ts),
-// about 13 seconds. That leaves about 7 for coming back and asking: a slower
-// return (RESUME_WINDOW_MS allows 10) leaves a gap the host no longer has,
+// about 8 seconds. That leaves about 12 for coming back and asking:
+// a slower return can still leave a gap the host no longer has,
 // and the guests' runs end with a message (GIVE_UP_GAP_MS) rather than
 // freezing. Keeping more would make a resend bigger, and it has to stay well
 // inside the relay's limits.
@@ -634,6 +634,10 @@ export class CoopRun {
         this.moveSentAt = -Infinity;
         this.moveCredits = 2;
         this.moveCreditAt = this.now();
+        if (!this.isHost) {
+            this.askedAt = this.now();
+            this.link.sendUp({ resend: this.upTo });
+        }
         for (const { actionSeq, action } of this.unconfirmed) {
             this.link.sendUp({ action, actionSeq });
         }

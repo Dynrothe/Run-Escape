@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Co-op keeps stepping when the host's browser stops drawing, and retries unconfirmed lobby selections after interruptions. Fixed by trippy22.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed
