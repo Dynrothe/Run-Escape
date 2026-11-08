@@ -37,7 +37,6 @@ import {
     Hero,
     MAX_DEATH_ANIM_TICKS,
     RAMPAGE_FADE_TICKS,
-    ScabarasRoom,
     Sim,
     TICKS_PER_SECOND,
     yawFromVector,
@@ -335,13 +334,6 @@ export class GameView {
     pickupTimers = true;
     // The Scabaras room's puzzle helper (DisplaySettings.puzzleHelper, which GameClient sets)
     puzzleHelper = true;
-    // Matching's symbols as each was turned up, by board and tile, for the helper: this player's
-    // own memory, as the plugin's is, kept for the boards it was seen on
-    private matchingSeen?: {
-        boards: ScabarasRoom["matching"];
-        north: (number | undefined)[];
-        south: (number | undefined)[];
-    };
 
     private readonly fight: BossFightView;
     private readonly floor: FloorView;
@@ -2629,13 +2621,11 @@ export class GameView {
     // The Scabaras room's puzzle helper, as OSRS's ToA plugin: Sequence's plates numbered in the
     // order they've lit (the next to step on brightest), the Lights out plates to step on, the
     // Addition symbols that make the tablet's number from what's been stepped on, and Matching's
-    // symbols named on each tile once this player has seen it turned up. Only for a puzzle that's
-    // open and not yet solved.
+    // tiles named and coloured by symbol. Only for a puzzle that's open and not yet solved.
     private drawScabarasHelper(overlay: Overlay, sim: Sim, now: number, scale: number): void {
         const scabaras = sim.tombsRoom?.scabaras;
         const def = sim.tombsPathRoom?.scabaras;
         if (!this.puzzleHelper || !scabaras || !def || sim.runOver) {
-            this.matchingSeen = undefined;
             return;
         }
         const ctx = overlay.ctx;
@@ -2698,27 +2688,14 @@ export class GameView {
                 }
             }
         }
-        // Matching: what this player's seen turned up, named where it lies
+        // Matching: each tile not matched yet named in its symbol's own colour, so a pair stands
+        // out across the room, as the plugin's tiles do
         const matching = scabaras.matching;
-        if (this.matchingSeen?.boards !== matching) {
-            this.matchingSeen = { boards: matching, north: [], south: [] };
-        }
-        const seen = this.matchingSeen;
-        for (const side of ["north", "south"] as const) {
-            const up = matching.up[side];
-            if (up !== undefined) {
-                seen[side][up] = matching[side][up];
-            }
-        }
         if (!solved("matching") && scabaras.solved.length >= 3) {
             for (const side of ["north", "south"] as const) {
                 def.matching[side].forEach((p, i) => {
-                    const symbol = seen[side][i];
-                    if (
-                        symbol === undefined ||
-                        matching.matched[symbol] ||
-                        matching.up[side] === i
-                    ) {
+                    const symbol = matching[side][i];
+                    if (matching.matched[symbol]) {
                         return;
                     }
                     this.traceGroundTile(overlay, sim, p.x, p.y);
