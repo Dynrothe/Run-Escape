@@ -219,3 +219,20 @@ describe("scarab nests (exhumes with an opener)", () => {
         expect(boss.hp).toBe(hp + Math.round(boss.maxHp * exhumes.leftHeal * exhumes.count));
     });
 });
+
+// The whole quest's (MapDef.hits): twice as hard, through any armour bought
+describe("the quest's hits", () => {
+    test("come through armour, doubled, but poison's ticks don't double", () => {
+        const sim = createSim();
+        sim.stats.armor = 10;
+        sim.player.invulnerable = 0;
+        const hp = sim.player.hp;
+        expect(sim["damagePlayer"](4, CHAMPION.id, false)).toBe(8);
+        expect(sim.player.hp).toBe(hp - 8);
+        sim.player.invulnerable = 0;
+        sim.player.poisonDamage = 2;
+        sim.player.poisonEnd = sim.tick + TICKS_PER_SECOND;
+        sim["stepPoison"]();
+        expect(sim.player.hp).toBe(hp - 10);
+    });
+});

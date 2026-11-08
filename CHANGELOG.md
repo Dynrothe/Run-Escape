@@ -21,6 +21,13 @@ the version in the corner).
   number, and each Matching symbol named in its own colour. It's on at Entry; beat the room once to
   have it at any raid level. It can be turned off in the settings.
 
+## 0.29.1 - 2026-11-08
+
+### Changed
+
+- Beneath Cursed Sands, by Okaeri: the quest's bosses hit twice as hard, and armour doesn't stop
+  their hits.
+
 ## 0.29.0 - 2026-11-08
 
 ### Added

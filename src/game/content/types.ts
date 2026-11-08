@@ -1910,6 +1910,10 @@ export type MapDef = {
     ditch?: { y: number };
     // Enemies' hitpoints and damage (bosses' attacks too) on top of their own
     difficulty: { hp: number; damage: number };
+    // Every hit on the player here, whatever it's from (attacks, the floor's): multiplied by scale,
+    // and through armour as if there were none (Beneath Cursed Sands, which armour bought for the
+    // campaign would otherwise make harmless). Poison's ticks stay as they are.
+    hits?: { scale: number; throughArmor: boolean };
     // What hard mode multiplies those by here (see hard.ts for when it's unset).
     // More on the early maps, which a player with everything bought walks
     // through, and less on the late ones, which are hard enough already.
