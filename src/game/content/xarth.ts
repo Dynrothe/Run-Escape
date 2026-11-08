@@ -49,9 +49,11 @@ const CORPSE_IDLE = 14999;
 const CORPSE_WALK = 15000;
 const CORPSE_DEATH = 15003;
 
-// What his fight's tuned to: his hitpoints (the lair's), and the hero's 38 hitpoints that his
-// damage is out of
-export const XARTH_HITPOINTS = 3800;
+// What his fight's tuned to: his hitpoints (the lair's), for a hero of about eight minutes on the
+// hordes (fifteen, empowered), and the hero's 38 hitpoints that his damage is out of. A fresh
+// hero can't get him to half before the Conflagration's had every pillar, nor stop his dead
+// healing him after: docs/design/varrock-generals.md
+export const XARTH_HITPOINTS = 13300;
 const RADIUS = 1.4;
 const LASH_REACH = 3;
 

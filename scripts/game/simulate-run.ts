@@ -17,7 +17,9 @@
 //   DODGE=1 ...     # also keeps off what any boss marks on the ground, and sidesteps its bullets
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
 //   SAFE_WAVES=1 ... # can't die outside a boss fight: it gets there with what the run earned
-//   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
+//   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds;
+//                    # with LAIR=, how long its fight takes a hero who's never hurt (only Yama's
+//                    # meteor, unstopped, still kills)
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
@@ -1474,8 +1476,10 @@ function runOnce(characterId: string, seed: number) {
             sim.player.hp = sim.player.maxHp;
         }
         if (process.env.GOD === "1") {
-            // Untouchable, as a late endless round's hits are bigger than any health bar
+            // Untouchable, as a late endless round's hits are bigger than any health bar, and
+            // whole, as a rising floor's slabs hurt through that
             sim.player.invulnerable = 1e9;
+            sim.player.hp = sim.player.maxHp;
         }
         useAbility(sim);
         const pressed = uncursed(sim, move);

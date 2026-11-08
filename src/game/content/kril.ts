@@ -32,9 +32,11 @@ const FLAMES_SOUND = 1659;
 // Xarth's bolt bursting
 const BOLT_BURST = 4375;
 
-// What his fight's tuned to: his hitpoints (the lair's), and the hero's 38 hitpoints that his
-// damage is out of
-export const KRIL_HITPOINTS = 4200;
+// What his fight's tuned to: his hitpoints (the lair's), for a hero of about eight minutes on the
+// hordes (fifteen, empowered), and the hero's 38 hitpoints that his damage is out of. His
+// desecration heals and breaks by shares of them, so a fresh hero can't outdo it, and more of
+// them makes him harder quicker than it would another boss: docs/design/varrock-generals.md
+export const KRIL_HITPOINTS = 8400;
 const RADIUS = 1.6;
 const CLAW_REACH = 2.2;
 

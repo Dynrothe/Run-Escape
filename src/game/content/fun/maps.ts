@@ -865,8 +865,8 @@ export const FUN_MAPS: MapDef[] = [
                 },
                 empowered: {
                     by: ["kril"],
-                    hp: 1.3,
-                    damage: 1.25,
+                    hp: 1.5,
+                    damage: 1.3,
                     tempo: 0.85,
                     message: "K'ril Tsutsaroth is dead. Xarth takes up his flames of Zamorak!",
                 },
@@ -903,8 +903,8 @@ export const FUN_MAPS: MapDef[] = [
                 },
                 empowered: {
                     by: ["xarth"],
-                    hp: 1.3,
-                    damage: 1.25,
+                    hp: 1.5,
+                    damage: 1.3,
                     tempo: 0.85,
                     message: "Xarth is dead. K'ril Tsutsaroth's claws burn with his fire!",
                 },

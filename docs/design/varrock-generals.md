@@ -17,6 +17,9 @@ hitboxes are what's drawn, real assets before overlays, and a phone under 69k.
   one on. That's the balance.
 - **The second grows stronger** once the first is beaten.
 - **Unique fights and abilities** for each: ours to design.
+- **When** (asked later that day, once a playtest beat all three at level 1): on average a hero's
+  strong enough for the first general after 8 minutes of the hordes, for the second after 15, and
+  for Yama straight after the second. Section 10, Tuned to the clock, has how.
 
 ## 2. The map becomes a run
 
@@ -63,7 +66,7 @@ beaten on its own, one fought at a time.
   meanwhile, not the run. This is what lets a player test whether they're ready. Only a death to
   the hordes ends it, and Retry then starts at the gate (`getRetryLair` has no lair to start at).
 - **The second grows stronger** (`LairDef.empowered`): once a general's beaten, the other's
-  fights are empowered: 1.3 times the hitpoints, 1.25 times the damage, 0.85 of the time between
+  fights are empowered: 1.5 times the hitpoints, 1.3 times the damage, 0.85 of the time between
   attacks, and attacks of the fallen one's (`BossAttackDef.empowered`), said on screen.
 - **Yama's death wins**, though the map's endless (`LairDef.final`).
 
@@ -146,7 +149,9 @@ throws the hero out to the palace's court rather than ending the run, and his de
 ## 8. Checks
 
 - **Bot sims**: `FARM=<seconds> LAIR=<id>` plays the hordes for that long, kept out of every lair,
-  then fights that lair (`EMPOWERED=1` as if its rival fell first). Section 10 has what it found.
+  then fights that lair (`EMPOWERED=1` as if its rival fell first). With `GOD=1` the bot's never
+  hurt (only an unstopped meteor kills it), so the fight's length is how long the hero's damage
+  takes against the boss's heals: what the fights are tuned by. Section 10 has what it found.
 - **Tests**: `core/VarrockGenerals.test.ts` (lairs wake, seal and beat back; empowerment; burn;
   cover and pillars; fire spreading, doused and out when he dies; corpses healing; the pact; the
   desecration) and `core/Yama.test.ts` (his palace sealed until both are dead, thrown out, the
@@ -160,8 +165,12 @@ throws the hero out to the palace's court rather than ending the run, and his de
 ## 9. Open for Dynny
 
 - **Beaten back** (section 3) is our call: the alternative is that a death anywhere ends the run.
-- **Numbers**: hitpoints, damage and how long to farm are tuned on the bot (section 10), to tune
-  again by playtest.
+- **Numbers**: hitpoints are tuned to the brief's clock on the bot (section 10, Tuned to the
+  clock), to tune again by playtest. A player deals more than the bot, so if 8 and 15 minutes
+  still come early, hitpoints are the knob: K'ril's heal goes with his, so he climbs steeply.
+- **The hordes at 15 minutes**: farming that long was never asked of a player before. They're
+  twice the crowd from the eighth minute and tougher every minute, and the bot can't say whether
+  a player lasts that long (`SAFE_WAVES=1` keeps it alive).
 - **The Exchange on a phone**: its ruins alone are about the whole budget, so Xarth's fight is
   over it. The pad's walls and booths are gone now, but its floor is locs (about 50 triangles a
   tile, a thousand tiles), and slimming that is work of its own.
@@ -289,3 +298,68 @@ it was. The wins take a few seconds longer, with more floor to keep away on. On 
 | Phase 2 at its busiest | 96.9k          | 88.5k         |
 
 Both are over the 69k as before. What's left is the Exchange's ruins and its floor (section 9).
+
+### Tuned to the clock
+
+A playtest beat Xarth, K'ril and Yama at level 1, before a single blessing, so Dynny set the clock
+in section 1: about 8 minutes of the hordes for the first general, 15 for the second, and Yama
+straight after. The bot's no judge of that on its own. It lasts about half a minute against Xarth
+whatever its level, and not much longer against K'ril, where a player who dodges lasts the fight,
+so its wins and losses say how well it dodges. With `GOD=1` it's never hurt, and how long a fight
+takes is then how its damage does against the boss's heals: that's what's tuned. A player deals
+more than the bot (its buttons on cooldown and every swing on the boss, about 41 a second at level
+1 to its 31), so a fight that's long for the bot is shorter for them.
+
+Each boss stops a fresh hero for a reason of its own, and every one of them goes by its hitpoints:
+
+- **Xarth**: the Conflagration takes a pillar every 14 seconds or so, and they're gone about two
+  minutes into his first phase, which ends at half. At level 1 the bot has him at 73% then, and a
+  player who never misses at about 64%; after that each Conflagration is 16 through armour, of 38.
+  In his second phase each of the dead that reaches him heals him 4% of his hitpoints.
+- **K'ril**: his desecration heals 12% unless 6% of his hitpoints land in its five seconds. At
+  8,400, that's 1,008 healed every 16 to 24 seconds, about all a level 1 hero deals in that time
+  at best (and half that while a bodyguard's up), and a break of 504, more than everything on a
+  level 1 hero's buttons and three swings.
+- **Yama** can't be reached until both are dead, so he's tuned to the hero that beat them.
+
+The empowered general had 1.3 times the hitpoints and 1.25 times the damage. The bot's hero gains
+a third to a half again between 8 and 15 minutes, so it's 1.5 and 1.3 now. Past 10 minutes the
+bot's blessings do less (the last ranks of strength and the blade, and Zeal), so a fight there
+shortens less than its levels suggest.
+
+The Justiciar, 3 seeds each, `DODGE=1 SAFE_WAVES=1 GOD=1`, the average time to beat each (its
+level when it went in, in brackets); "stuck" is still up after ten minutes. Yama's third seed
+walks into his palace at 5:28, level 11, and isn't counted.
+
+| Fight                      | Before (3,800, 4,200, 8,400) | After (13,300, 8,400, 25,200) |
+| -------------------------- | ---------------------------- | ----------------------------- |
+| Xarth at level 1           | stuck (73–95%)               | stuck (98–100%)               |
+| Xarth after 5 min (11)     | 53 s                         | 164 s                         |
+| Xarth after 8 min (19–20)  | 36 s                         | 122 s                         |
+| Xarth after 10 min (24–25) | 31 s                         | 100 s                         |
+| K'ril at level 1           | stuck (86–97%)               | stuck (97–100%)               |
+| K'ril after 5 min          | 41 s                         | 229 s (161–332)               |
+| K'ril after 8 min          | 31 s                         | 99 s (63–132)                 |
+| K'ril after 10 min         | 25 s                         | 77 s                          |
+| Xarth empowered, 10 min    | 38 s                         | 157 s                         |
+| Xarth empowered, 13 min    | 41 s                         | 157 s                         |
+| Xarth empowered, 15 min    | 34 s                         | 134 s                         |
+| K'ril empowered, 10 min    | 33 s                         | 207 s (105–278)               |
+| K'ril empowered, 13 min    | 31 s                         | 153 s                         |
+| K'ril empowered, 15 min    | 27 s                         | 135 s (83–201)                |
+| Yama after 10 min (21–24)  | 53 s                         | 127 s                         |
+| Yama after 15 min (32)     | 45 s                         | 97 s                          |
+
+So each fight takes a minute and a half to two and a quarter at its time, half as long again or
+more a few minutes sooner, and can't be won at level 1. K'ril climbs the most steeply: at 9,600
+he was beaten once in three at 5 minutes, in 594 s, and took 93 to 409 s empowered at 15. Yama at
+21,000 took 92 s at 15 minutes and at 25,200 took 97, as his phases and the meteor's clock take
+their time whatever the damage.
+
+The same, mortal (no `GOD`): before, the bot beat K'ril every time from 5 minutes, and Xarth 1 of
+3 at 8 minutes. After, it beats K'ril 1 of 3 at 8 and 10 minutes and empowered at 15, and never
+Xarth or Yama: it's beaten back from Xarth in 19 to 36 s as it was before, and lasts 63 to 114 s
+on Yama's floor.
+
+`GOD=1` used to let Yama's rising floor hurt the bot, so it was beaten back from him even when
+"never hurt". It's kept whole now as well as untouchable, and only an unstopped meteor kills it.
