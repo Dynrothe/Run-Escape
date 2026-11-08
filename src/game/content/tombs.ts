@@ -418,8 +418,9 @@ export const BA_BA: EnemyDef = {
     boss: {
         attackInterval: 1.5,
         enrage: { message: "Ba-Ba's furious!" },
-        // Open after a lunge or a shockwave that misses (opens); a lunge or a rampage into one of
-        // her boulder's rocks stuns her, stars round her head, but not twice in 8 seconds
+        // Open after a lunge or a shockwave that misses (opens); a rampage into one of her
+        // boulder's rocks stuns her, stars round her head, but not twice in 8 seconds (a lunge
+        // only stops short of one)
         guard: {
             ...TOMBS_GUARD,
             stun: 2.5,

@@ -14664,9 +14664,10 @@ export class Sim {
             if (boxCircle(pillars, nx, ny, enemy.radius)) {
                 return { x, y, stuck: true };
             }
-            // One of Ba-Ba's boulders' rocks: stuck in it if it can be stunned, else stopped short
+            // One of Ba-Ba's boulders' rocks: stopped short of it. Only her Rampage is stunned by one
+            // (stepSurge), so hiding behind a rock from her lunges doesn't stun her every time.
             if (this.tombsCover.length > 0 && this.inCoverRock(nx, ny, enemy.radius)) {
-                return { x, y, stuck: (enemy.def.boss?.guard?.stun ?? 0) > 0 };
+                return { x, y, stuck: false };
             }
             const inTheWay = this.heroes.some(
                 (hero) =>

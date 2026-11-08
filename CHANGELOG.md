@@ -11,6 +11,8 @@ the version in the corner).
   button. It's under the button now. Fixed by Okaeri.
 - In the Tombs of Amascut, beating a path's boss only brought back teammates who were down; now
   the whole party's back on full hitpoints for the next path. Fixed by Okaeri.
+- Ba-Ba was stunned every time her lunge ran into one of her boulders, so standing behind one made
+  her fight easy. Only her Rampage is stopped by a boulder now. Fixed by Okaeri.
 
 ## 0.29.1 - 2026-11-08
 

@@ -889,7 +889,7 @@ describe("Ba-Ba", () => {
         );
     });
 
-    it("is stunned by a lunge into one of her rocks, but not again for a while", () => {
+    it("stops a lunge short of one of her rocks, not stunned by it", () => {
         const sim = atBaba();
         sim.weapons = [];
         const boss = baba(sim);
@@ -905,7 +905,10 @@ describe("Ba-Ba", () => {
         });
         sim["startBossAttack"](boss, lunge);
         seconds(sim, lunge.windup + 0.5, { x: sim.player.x, y: sim.player.y });
-        expect(sim.isStunned(boss)).toBe(true);
+        // Hiding behind a rock from her lunges isn't a free stun: only her Rampage is
+        expect(sim.isStunned(boss)).toBe(false);
+        expect(sim.isExposed(boss)).toBe(false);
+        expect(boss.y - (sim.player.y + 2)).toBeGreaterThan(1.4);
     });
 
     it("drops her rockfall in a cross of shadows on the player's tile", () => {
