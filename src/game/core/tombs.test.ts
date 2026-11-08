@@ -2838,7 +2838,8 @@ describe("Kephri", () => {
 // waterfall
 const CRONDIS_DEF = {
     palm: { x: 1036.5, y: 1036.5 },
-    falls: [{ fill: { x: 1036.5, y: 1058.5 }, at: { x: 1036.5, y: 1062.5 }, rotation: 0 }],
+    // The fill spot as far past the corridor's end as the real room's (1.5 tiles)
+    falls: [{ fill: { x: 1036.5, y: 1055.5 }, at: { x: 1036.5, y: 1059.5 }, rotation: 0 }],
     lanes: [
         { x0: 1034, x1: 1039, y0: 1044, y1: 1053, low: 1033, high: 1040, fall: 0, fromLow: false },
     ],
@@ -3024,6 +3025,21 @@ describe("the Crondis room", () => {
         expect(paleSeen).toBe(true);
         expect(room(sim).water[0]).toBe(50);
         expect(cloud.hit).toEqual([0]);
+    });
+
+    it("leaves anyone under a waterfall alone, as OSRS's poison does, running or dry", () => {
+        const sim = crondis();
+        const fall = CRONDIS_DEF.falls[0];
+        room(sim).dryUntil[0] = sim.tick + 1e4;
+        const cloud = { lane: 0, startTick: sim.tick, hit: [] as number[] };
+        room(sim).clouds.push(cloud);
+        const hp = sim.player.maxHp;
+        for (let i = 0; i < 4 * TICKS_PER_SECOND; i++) {
+            sim.player.hp = hp;
+            at(sim, fall.fill);
+            room(sim).clouds = room(sim).clouds.length ? room(sim).clouds : [cloud];
+        }
+        expect(cloud.hit).toEqual([]);
     });
 
     it("has a crocodile's bite spill your water", () => {

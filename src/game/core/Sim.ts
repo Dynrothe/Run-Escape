@@ -8751,9 +8751,7 @@ export class Sim {
                 continue;
             }
             const { x, y } = hero.player;
-            const at = def.falls.findIndex(
-                (fall) => fm.hypot(fall.fill.x - x, fall.fill.y - y) <= 1.5,
-            );
+            const at = this.crondisFallAt(def, x, y);
             if (
                 at !== -1 &&
                 this.tick >= crondis.dryUntil[at] &&
@@ -8898,6 +8896,11 @@ export class Sim {
                 if (cloud.hit.includes(hero.index) || x < lane.x0 || x > lane.x1 + 1) {
                     return;
                 }
+                // Under a waterfall, as OSRS's: the poison doesn't reach them there, running or
+                // dry (filling dries it, so it'd go the moment they'd filled)
+                if (this.crondisFallAt(def, x, y) !== -1) {
+                    return;
+                }
                 // How far along from the waterfall's end
                 const along = lane.fromLow ? y - lane.y0 : lane.y1 + 1 - y;
                 if (along <= dark && along >= dark - CRONDIS.cloudLength) {
@@ -8907,6 +8910,11 @@ export class Sim {
             });
             return true;
         });
+    }
+
+    // The waterfall someone at (x, y) is under (where they fill their water), or -1
+    private crondisFallAt(def: CrondisDef, x: number, y: number): number {
+        return def.falls.findIndex((fall) => fm.hypot(fall.fill.x - x, fall.fill.y - y) <= 1.5);
     }
 
     // How far down its corridor a cloud's pale front and dark front are, in tiles from the
