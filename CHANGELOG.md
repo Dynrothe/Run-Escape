@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The Tombs of Amascut, by Okaeri: in the Apmeken room, the arrow to a pillar or vent that needs
+  fixing is on the floor beside you, not at the edge of the screen.
+
 ## 0.29.0 - 2026-11-08
 
 ### Added
