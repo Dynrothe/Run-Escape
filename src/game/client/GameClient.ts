@@ -789,11 +789,20 @@ export class GameClient implements GameFrameHandler {
     toggleInvocation(id: string): void {
         this.save.invocations = toggleInvocation(this.save.invocations ?? [], id);
         this.persist();
+        this.invocationsChanged();
     }
 
     clearInvocations(): void {
         this.save.invocations = [];
         this.persist();
+        this.invocationsChanged();
+    }
+
+    // In a room, the lobby's told (its raid level goes by the host's: Loadout.invocations)
+    private invocationsChanged(): void {
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
     }
 
     // The pet to take along (one of the trophies found), or none
@@ -988,9 +997,9 @@ export class GameClient implements GameFrameHandler {
     }
 
     private getLoadout(): Loadout {
+        const room = this.coop.room;
         const characterId =
-            (this.coop.room && getMap(this.coop.room.mapId).fun?.character) ??
-            this.store.getSnapshot().characterId;
+            (room && getMap(room.mapId).fun?.character) ?? this.store.getSnapshot().characterId;
         return makeLoadout(
             getMetaStats(this.save, getCharacter(characterId).style),
             [...this.save.unlockedItems],
@@ -998,6 +1007,8 @@ export class GameClient implements GameFrameHandler {
                 ...this.save.armoury,
             },
             this.save.pet,
+            // A Tombs room's lobby shows the host's raid level
+            room && getMap(room.mapId).tombs ? [...(this.save.invocations ?? [])] : undefined,
         );
     }
 

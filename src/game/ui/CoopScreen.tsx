@@ -6,6 +6,7 @@ import { describeMissing, parseRoomCode } from "../client/coop/CoopLobby";
 import { RoomListing, RoomView } from "../client/coop/protocol";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
+import { cleanInvocations, getRaidBand, getRaidLevel } from "../content/invocations";
 import {
     FUN_MAPS,
     MAPS,
@@ -19,6 +20,7 @@ import { isEndlessUnlocked, isHardUnlocked, isMapUnlocked } from "../core/save";
 import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
 import { AdventurerPanel, Toggle, getStartingWeaponIcon } from "./GameUi";
+import { InvocationBoard, InvocationsButton } from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
 
 // Co-op: finding a room or making one, then the room itself, where everyone
@@ -294,6 +296,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     // Who keeps the host from turning endless or hard mode on here
     const withoutEndless = lacking(map.id, true);
     const withoutHard = lacking(map.id, false, true);
+    // The Tombs: the raid level the host's invocations come to (Loadout.invocations), cleaned as
+    // the Sim cleans them; the start carries the same ones
+    const host = room.members.find((m) => m.id === room.hostId);
+    const hostInvocations = isHost ? ui.save.invocations : host?.loadout?.invocations;
+    const raidLevel = map.tombs
+        ? getRaidLevel(cleanInvocations(Array.isArray(hostInvocations) ? hostInvocations : []))
+        : undefined;
+    const [board, setBoard] = useState(false);
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<number | undefined>(undefined);
     useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
@@ -464,6 +474,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                               : "Fifteen minutes and the boss"}
                                 </div>
                                 {room.hard && <div className="ui-card-style">On hard mode</div>}
+                                {raidLevel !== undefined && (
+                                    <div className="ui-card-style">
+                                        Raid level {raidLevel} ({getRaidBand(raidLevel)}), the
+                                        host's invocations
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -483,7 +499,11 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                         Disband
                     </button>
                 )}
-                {isHost && !map.fun && (
+                {isHost && map.tombs && (
+                    // The Tombs go by the host's invocations instead of endless and hard mode
+                    <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
+                )}
+                {isHost && !map.fun && !map.tombs && (
                     <div
                         className={
                             "ui-endless" +
@@ -507,7 +527,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                         )}
                     </div>
                 )}
-                {isHost && (
+                {isHost && !map.tombs && (
                     <div
                         className={
                             "ui-endless" +
@@ -553,6 +573,9 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     </button>
                 )}
             </div>
+            {board && isHost && map.tombs && (
+                <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            )}
         </div>
     );
 }

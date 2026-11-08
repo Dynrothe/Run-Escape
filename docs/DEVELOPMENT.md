@@ -1819,6 +1819,9 @@ without it is told "You need Barrows unlocked to join this room", and the open l
 as locked to them. Each player's game sends the maps it has (`unlocks`), checked by the relay on
 joining, on the host changing the map, endless or hard mode, and at the start. Whether the run's on
 hard mode goes out in `GameStart`, like endless, so every player's copy plays the same.
+The Tombs of Amascut go by the host's invocations instead: the lobby shows them as a raid level
+(the host's `Loadout.invocations`, which the relays pass as they are, so they needed no change),
+the host sets them from the lobby, and `GameStart.invocations` carries them to every copy.
 `MULTIPLAYER_ANY_MAP=on` (or `--any-map`) lets anyone into any room instead, and a win then opens
 that map for a player who hadn't got there. With no accounts, a player's maps are their game's word:
 this keeps fair players fair rather than stopping a cheat.
