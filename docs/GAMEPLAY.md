@@ -401,6 +401,8 @@ version and how to run it.
       level, which scales every enemy and boss and the chest's odds. Entry is for an account
       that's bought little, Normal (150) wants the shop and better gear, Expert (300) more, and
       past that the bosses climb quicker and quicker. In co-op the host's invocations count.
+      Up to five setups save as presets on the board, named or by their raid level, each loaded
+      in one go.
     - **Guards and Amascut's bane**: every boss's guard drops when one of its big attacks misses
       everyone, and the raid's button, Amascut's bane, hits a share of the boss's hitpoints, twice
       as much while its guard's down.

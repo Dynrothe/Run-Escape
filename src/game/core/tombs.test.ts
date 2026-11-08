@@ -4,12 +4,15 @@ import { getEnemy } from "../content/enemies";
 import {
     INVOCATIONS,
     INVOCATION_GROUPS,
+    MAX_INVOCATION_PRESETS,
     RAID_LEVEL_SCALE,
     TOMBS_UNIQUES,
+    cleanInvocationPresets,
     cleanInvocations,
     getRaidBand,
     getRaidLevel,
     getRaidLevelScale,
+    saveInvocationPreset,
     toggleInvocation,
 } from "../content/invocations";
 import { MAP_BY_ID, getMap } from "../content/maps";
@@ -186,6 +189,42 @@ describe("invocations", () => {
             "dehydration",
         ]);
         expect(cleanInvocations(["on_a_diet", "not_one", 4, "on_a_diet"])).toEqual(["on_a_diet"]);
+    });
+
+    it("save as presets by name, or by raid level left blank, over one of the same name", () => {
+        const diet = ["hardcore_run", "on_a_diet", "boulderdash"];
+        let presets = saveInvocationPreset([], "  ", diet);
+        expect(presets).toEqual([{ name: "Raid level 50", invocations: diet }]);
+        presets = saveInvocationPreset(presets, "Speed", ["try_again"]);
+        presets = saveInvocationPreset(presets, "Speed", ["on_a_diet"]);
+        expect(presets.map((p) => p.name)).toEqual(["Raid level 50", "Speed"]);
+        expect(presets[1].invocations).toEqual(["on_a_diet"]);
+        // Full: a new name isn't added, an old one's still saved over
+        for (let i = presets.length; i < MAX_INVOCATION_PRESETS; i++) {
+            presets = saveInvocationPreset(presets, `Set ${i}`, []);
+        }
+        expect(saveInvocationPreset(presets, "One more", [])).toEqual(presets);
+        expect(saveInvocationPreset(presets, "Speed", [])[1].invocations).toEqual([]);
+    });
+
+    it("read presets from a save, leaving out anything odd", () => {
+        expect(cleanInvocationPresets(undefined)).toEqual([]);
+        expect(
+            cleanInvocationPresets([
+                { name: "A", invocations: ["try_again", "hardcore_run", "not_one"] },
+                { name: "A", invocations: [] },
+                { name: 3, invocations: [] },
+                null,
+                { name: "", invocations: ["on_a_diet"] },
+                ...Array.from({ length: 10 }, (_, i) => ({ name: `X${i}`, invocations: [] })),
+            ]),
+        ).toEqual([
+            { name: "A", invocations: ["hardcore_run"] },
+            { name: "Raid level 15", invocations: ["on_a_diet"] },
+            { name: "X0", invocations: [] },
+            { name: "X1", invocations: [] },
+            { name: "X2", invocations: [] },
+        ]);
     });
 
     it("add up to a raid level, in OSRS's bands", () => {
