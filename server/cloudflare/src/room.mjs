@@ -49,7 +49,9 @@ import {
     lobbyStub,
     missingMap,
     parseMessage,
+    pickOf,
     randomToken,
+    repickedText,
 } from "./shared.mjs";
 
 // How often a room tells the lobby it's still there. Each one is a billed
@@ -599,6 +601,7 @@ export class Room extends DurableObject {
                     kind: m.kind,
                     characterId: m.characterId,
                     ready: m.ready,
+                    repicked: m.repicked,
                     loadout: m.loadout,
                     unlocks: m.unlocks,
                     build: m.build,
@@ -865,15 +868,22 @@ export class Room extends DurableObject {
     }
 
     setMember(client, message) {
+        const pick = pickOf(client);
         if (message.characterId !== undefined) {
             client.characterId = cleanId(message.characterId);
-        }
-        if (message.ready !== undefined) {
-            client.ready = message.ready === true;
         }
         if (message.loadout !== undefined) {
             const size = JSON.stringify(message.loadout)?.length ?? 0;
             client.loadout = size <= MAX_LOADOUT_BYTES ? message.loadout : undefined;
+        }
+        if (message.ready !== undefined) {
+            client.ready = message.ready === true;
+            client.repicked = false;
+        } else if (client.ready && pickOf(client) !== pick) {
+            // Ready with another pick: the host's view of them can still
+            // say ready, with the old one, so its start waits (see "start")
+            client.ready = false;
+            client.repicked = true;
         }
         if (message.unlocks !== undefined) {
             client.unlocks = cleanUnlocks(message.unlocks);
@@ -1026,6 +1036,11 @@ export class Room extends DurableObject {
                         );
                         return;
                     }
+                    const repicked = room.members.find((member) => member.repicked);
+                    if (repicked) {
+                        error(repickedText(repicked, client));
+                        return;
+                    }
                     room.started = true;
                     room.heroIds = heroIdsOf(message.game, MAX_PARTY);
                     room.runInfo = room.heroIds && runOf(room, message.game);
@@ -1034,6 +1049,7 @@ export class Room extends DurableObject {
                     this.watch = room.heroIds && this.newWatch(room, false);
                     for (const member of room.members) {
                         member.ready = false;
+                        member.repicked = false;
                     }
                     this.persist(true);
                     for (const member of room.members) {
@@ -1138,6 +1154,7 @@ export class Room extends DurableObject {
         }
         this.setMember(client, message.me ?? {});
         client.ready = false;
+        client.repicked = false;
         client.token = randomToken();
         const now = Date.now();
         this.room = {
@@ -1241,6 +1258,7 @@ export class Room extends DurableObject {
         }
         this.setMember(client, message.me ?? {});
         client.ready = false;
+        client.repicked = false;
         client.token = randomToken();
         this.remember(client);
         room.members.push(client);

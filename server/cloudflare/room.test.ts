@@ -225,6 +225,54 @@ describe("Cloudflare co-op room", () => {
         expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("ranger");
     });
 
+    it("un-readies a player who changes their pick, and holds the host's start until they're ready", async () => {
+        const { room, host, guest } = await party();
+        const loadout = { metaStats: {}, unlockedItems: [], armoury: {} };
+        say(room, host, { t: "me", ready: true });
+        say(room, guest, { t: "me", ready: true, characterId: "warrior", loadout });
+        // The same pick sent again (as on a map change) leaves them ready
+        say(room, guest, { t: "me", characterId: "warrior", loadout });
+        expect(room.room.members[1].ready).toBe(true);
+        // Another, which the host may not have heard of yet when it starts
+        say(room, guest, { t: "me", characterId: "ranger" });
+        expect(room.room.members[1]).toMatchObject({ ready: false, repicked: true });
+        say(room, host, { t: "start", game: {} });
+        expect(room.room.started).toBeFalsy();
+        expect(host.socket.sent.at(-1)).toEqual({
+            t: "error",
+            message: "guest changed their pick, so they need to ready up again.",
+        });
+        // Through a restart too
+        await wait(room, 1000);
+        const again = await loadRoom();
+        expect(again.room.members[1].repicked).toBe(true);
+        // Ready again, with it: the start goes ahead
+        say(room, guest, { t: "me", ready: true, characterId: "ranger" });
+        say(room, host, { t: "start", game: {} });
+        expect(room.room.started).toBe(true);
+        expect(room.room.members.every((m: any) => !m.ready && !m.repicked)).toBe(true);
+    });
+
+    it("keeps the host ready through a change of invocations, which only shows in the lobby", async () => {
+        const { room, host } = await party();
+        const loadout = { metaStats: {}, unlockedItems: [], armoury: {} };
+        say(room, host, { t: "me", ready: true, loadout: { ...loadout, invocations: ["a"] } });
+        say(room, host, { t: "me", loadout: { ...loadout, invocations: ["a", "b"] } });
+        expect(room.room.members[0]).toMatchObject({ ready: true, repicked: false });
+    });
+
+    it("holds the start for the host's own change of pick", async () => {
+        const { room, host } = await party();
+        say(room, host, { t: "me", ready: true });
+        say(room, host, { t: "me", characterId: "wizard" });
+        say(room, host, { t: "start", game: {} });
+        expect(room.room.started).toBeFalsy();
+        expect(host.socket.sent.at(-1)).toEqual({
+            t: "error",
+            message: "You changed your pick, so you need to ready up again.",
+        });
+    });
+
     it("saves the run starting before anyone's told", async () => {
         const { room, host } = await party();
         log = [];

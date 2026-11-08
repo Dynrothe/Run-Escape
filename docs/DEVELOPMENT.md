@@ -1726,10 +1726,8 @@ it, see Measuring prediction at the end of this section.
 - **Background co-op**: `CoopTicker` starts its worker with the run and takes over when rendering
   stops, including when a covered window still reports itself as visible. Rendering and worker
   callbacks share one clock, so returning to the tab cannot count elapsed time twice. A page timer
-  backs it up if the worker is blocked; a fully suspended page cannot keep running. For a manual
-  check with the real host and guest simulations, run `node scripts/check-coop-background.mjs`
-  and open its printed file URL. Try switching tabs and Stop drawing, then compare frame delivery
-  and simulation hashes on return. This check uses no relay or account.
+  backs it up if the worker is blocked. A page the browser freezes (Memory Saver, Edge's sleeping
+  tabs, a phone in the background) stops the worker too, and nothing in the page can help that.
 
 For that every copy has to agree to the bit. The sim only uses its seeded `Rng`, and its
 trigonometry goes through `fm` in `core/fmath.ts`: the browser's own `Math` on your own (so solo
@@ -1891,7 +1889,7 @@ still ends a guest's run.
 A room's connection can also die without closing (a laptop asleep, a network that went away). During
 a run `GameClient` calls `CoopLobby.keepAlive()` on each step, which pings a room that's been quiet
 for `RUN_QUIET_MS` and takes one that hasn't answered within `PONG_WAIT_MS` as dropped, coming back
-as above while the host still has the frames (about 12 seconds are left for that: past them the
+as above while the host still has the frames (about 7 seconds are left for that: past them the
 guests' runs end, as below). It doesn't judge after a gap in its own calls (a frozen page), whose
 replies may be unread. It also pings a room it's sent nothing to for `PING_INTERVAL_MS` (a guest
 standing still), since it runs off the hidden tab's worker and the regular ping doesn't. The ping
@@ -1909,15 +1907,26 @@ the Cloudflare relay gives a room its own connection to check; the rest is the g
 on either relay.
 
 Cloudflare rooms advertise `memberAcks` and acknowledge a player's numbered `me` changes with
-`meSeq` in the existing room update. `CoopLobby` retains the latest unconfirmed changes, retries
-once after `MEMBER_RETRY_MS` per connection, and allows one recovery cycle if `MEMBER_WAIT_MS`
-passes without confirmation. If the selection remains unconfirmed after recovery, retries stop
-and the player is asked to choose again; a responsive socket stays open. A new selection gets a
-fresh recovery allowance. Leaving or starting clears the pending selection. The room persists the
-sequence through sleep and ignores older retries; incoming traffic also flushes overdue alarm jobs so a
-delayed lobby broadcast can make progress. These checks send nothing for confirmed selections
-or idle lobbies. Relays without `memberAcks` keep the existing selection protocol; if support
-disappears on reconnect, the latest pending selection is sent once without waiting for an ack.
+`meSeq` in the existing room update. `CoopLobby` keeps the latest unconfirmed changes (merged, so
+a retry carries all of them) and sends them again once per connection after `MEMBER_RETRY_MS`,
+with a ping: Cloudflare answers pings without waking the room, so only the confirmation shows
+the room itself got it. An unanswered ping makes the connection again as above, and the changes
+go again on the new one. A room that answers but hasn't confirmed within `MEMBER_WAIT_MS` of the
+retry gets no more tries, and the player's told to choose again; that message stays through
+others' room updates until a confirmation or a new choice. Leaving or starting clears what's
+waiting. The room keeps each player's sequence through sleep and ignores older retries, and
+incoming traffic runs alarm jobs that are overdue, so a late alarm can't hold back the members'
+update. Relays without `memberAcks` keep the old messages; if support disappears on reconnect,
+what's waiting is sent once without waiting for a confirmation.
+
+What starts the run is the host's view of everyone's picks (`startCoopRun`), which can be behind
+the relay's. So both relays un-ready a player whose adventurer or loadout changes while they're
+ready (`setMember`, `pickOf`: sending the same pick again, as on a map change, doesn't), and
+refuse the host's start while anyone's been un-readied that way and hasn't readied again
+(`repicked`, kept through the Cloudflare room's sleep). The change reaches the relay before the
+host's start, so a start made from a view that still says ready is turned away with a message.
+`CoopLobby.setReady(true)` sends the player's adventurer and loadout in the same message, so a
+pick that never arrived can't leave them ready with an older one.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it

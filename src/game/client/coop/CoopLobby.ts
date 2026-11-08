@@ -81,13 +81,17 @@ const MAX_WAITING_MESSAGES = 2000;
 // A room's connection can die without closing (a network that went away, a
 // laptop asleep), and then nothing says so. One that's sent nothing back for
 // this long after a ping is taken as dropped, and made again as above.
-const PONG_WAIT_MS = 3000;
+const PONG_WAIT_MS = 8000;
 // Local checks only: these do not send periodic application probes.
 const ROOM_CHECK_MS = 500;
-// Retry an unconfirmed selection once per connection, with at most one
-// recovery cycle for it. A responsive room must not be reopened forever.
+// A selection the room hasn't confirmed is sent again once per connection,
+// after this long, with a ping: a dead connection is then found and made again
+// (PONG_WAIT_MS), and the selection's sent again on the new one
 const MEMBER_RETRY_MS = 1000;
-const MEMBER_WAIT_MS = 4000;
+// A room that answers the ping but still hasn't confirmed it this long after
+// the retry: the player's told (UNCONFIRMED_TEXT)
+const MEMBER_WAIT_MS = 3000;
+const UNCONFIRMED_TEXT = "Couldn't confirm your selection. Please choose it again.";
 // During a run, a room that's been quiet this long is pinged (keepAlive), so
 // a dead connection's found while the host still has the frames to send
 // again (RESEND_FRAMES in CoopRun). A guest hears the host's frames all the
@@ -218,13 +222,15 @@ export class CoopLobby {
     private roomCheckedAt = 0;
     private memberAcks = false;
     private meSequence = 0;
+    // The latest selection the room hasn't confirmed (memberAcks), with every
+    // change since the last it did
     private pendingMe?: {
         sequence: number;
         changes: Partial<Member>;
-        since: number;
         sentAt: number;
         retried: boolean;
-        recoveryUsed: boolean;
+        // Told the player (UNCONFIRMED_TEXT): no more tries on this connection
+        gaveUp: boolean;
     };
     // When this player last did anything here, for LOBBY_IDLE_MS
     private activeAt = 0;
@@ -423,7 +429,6 @@ export class CoopLobby {
         if (late) {
             this.roomPingAt = undefined;
             if (this.pendingMe) {
-                this.pendingMe.since = Date.now();
                 this.pendingMe.sentAt = Date.now();
             }
             return undefined;
@@ -432,15 +437,6 @@ export class CoopLobby {
         if (this.isRoomSilent(now)) {
             this.roomSocketDead(socket);
             return undefined;
-        }
-        if (this.pendingMe && now - this.pendingMe.since > MEMBER_WAIT_MS) {
-            if (!this.pendingMe.recoveryUsed) {
-                this.pendingMe.recoveryUsed = true;
-                this.roomSocketDead(socket);
-                return undefined;
-            }
-            this.pendingMe = undefined;
-            this.update({ error: "Couldn't confirm your selection. Please choose it again." });
         }
         return socket;
     }
@@ -472,13 +468,20 @@ export class CoopLobby {
         if (!socket) {
             return;
         }
-        if (
-            this.pendingMe &&
-            !this.pendingMe.retried &&
-            now - this.pendingMe.sentAt >= MEMBER_RETRY_MS
-        ) {
-            this.pendingMe.retried = true;
-            this.sendPendingMe();
+        const pending = this.pendingMe;
+        if (pending && !pending.gaveUp) {
+            if (!pending.retried && now - pending.sentAt >= MEMBER_RETRY_MS) {
+                pending.retried = true;
+                this.sendPendingMe();
+                this.pingRoom(socket);
+            } else if (
+                pending.retried &&
+                now - pending.sentAt >= MEMBER_WAIT_MS &&
+                !this.isRoomPingUnanswered()
+            ) {
+                pending.gaveUp = true;
+                this.update({ error: UNCONFIRMED_TEXT });
+            }
         }
         if (
             (playing &&
@@ -660,8 +663,8 @@ export class CoopLobby {
                     }
                     this.receive(received);
                     if (this.pendingMe) {
-                        this.pendingMe.since = Date.now();
                         this.pendingMe.retried = false;
+                        this.pendingMe.gaveUp = false;
                         this.sendPendingMe();
                     }
                     this.onResumed?.();
@@ -781,7 +784,12 @@ export class CoopLobby {
                 ) {
                     this.pendingMe = undefined;
                 }
-                this.update({ room: message.room, you: message.you, error: undefined });
+                this.update({
+                    room: message.room,
+                    you: message.you,
+                    // Until it's confirmed or chosen again, as others' updates come
+                    error: this.pendingMe?.gaveUp ? UNCONFIRMED_TEXT : undefined,
+                });
                 break;
             case "goto":
                 this.enterRoom(message.code, message.ticket);
@@ -886,14 +894,15 @@ export class CoopLobby {
         this.me = { ...this.me, ...changes };
         if (this.view.room) {
             if (this.memberAcks && !this.view.room.started) {
-                this.update({ error: undefined });
+                if (this.view.error === UNCONFIRMED_TEXT) {
+                    this.update({ error: undefined });
+                }
                 this.pendingMe = {
                     sequence: ++this.meSequence,
                     changes: { ...this.pendingMe?.changes, ...changes },
-                    since: Date.now(),
                     sentAt: Date.now(),
                     retried: false,
-                    recoveryUsed: false,
+                    gaveUp: false,
                 };
                 this.sendPendingMe();
             } else {
@@ -961,8 +970,20 @@ export class CoopLobby {
         }
     }
 
+    // Ready with the pick this player sees, in the one message: one sent
+    // before that never got there can't leave the room starting them on an
+    // older one (the relays un-ready a player whose pick changes after)
     setReady(ready: boolean): void {
-        this.setMe({ ready });
+        const { characterId, loadout } = this.me;
+        this.setMe(
+            ready
+                ? {
+                      ready,
+                      ...(characterId !== undefined && { characterId }),
+                      ...(loadout !== undefined && { loadout }),
+                  }
+                : { ready },
+        );
     }
 
     // The host's
