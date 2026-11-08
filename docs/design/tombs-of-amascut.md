@@ -581,7 +581,8 @@ animations from a lister of those whose model or animation is in the raid's rang
       the other style. About three times down with the best of everything, standing close.
     - The obelisk (11752, charged, can't be hit) opens every 9 s, its ring round it the special's
       colour (2199, 2200, 2198), and takes its specials in turn: the converging beam (two walls of
-      glowing tiles closing on it from north and south, then east and west, a tile a tick), the
+      glowing tiles closing on it from north and south, then east and west, a tile a tick, each
+      glowing harmless 1.2 s before it's struck, bigger, as the windmill's do), the
       windmill (its five patterns, read off the OSRS Wiki's diagram, `WARDENS_WINDMILL`, each
       glowing 1.8 s before it's struck, twelve of them) and lightning skulls (ten thrown at random
       tiles, the 7 by 7 round each struck but its cross). Unlike OSRS's, it keeps on while the core's

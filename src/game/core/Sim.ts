@@ -7216,6 +7216,7 @@ export class Sim {
             // moment after, from the east and west
             const beam = def.beam;
             const step = secondsToTicks(beam.step);
+            const ahead = secondsToTicks(beam.glowAhead);
             const pairs = [
                 [
                     [ox, floor.y0],
@@ -7237,7 +7238,15 @@ export class Sim {
                                 }
                                 const sideways = p === 0 ? Math.abs(x - ox) : Math.abs(y - oy);
                                 if (sideways <= beam.wide && onFloor(x, y)) {
-                                    strike(x, y, t0 + r * step, beam.spotAnim, 60);
+                                    const at = t0 + r * step;
+                                    glow(
+                                        x,
+                                        y,
+                                        Math.max(this.tick, at - ahead),
+                                        at,
+                                        beam.glowSpotAnim,
+                                    );
+                                    strike(x, y, at, beam.spotAnim, 60);
                                 }
                             }
                         }

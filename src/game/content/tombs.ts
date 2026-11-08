@@ -3047,7 +3047,16 @@ export const WARDENS: WardensDef = {
         // Drawn as the tiles glowing red, as the video of it shows (its own spot animations,
         // 2234 and 2235, barely show from this camera), and the windmill's strike as the
         // Wardens' red lightning
-        beam: { warnSpotAnim: 2199, spotAnim: 2236, step: 0.6, rings: 12, wide: 10, pause: 3.6 },
+        beam: {
+            warnSpotAnim: 2199,
+            spotAnim: 2236,
+            step: 0.6,
+            rings: 12,
+            wide: 10,
+            pause: 3.6,
+            glowAhead: 1.2,
+            glowSpotAnim: 2236,
+        },
         windmill: {
             warnSpotAnim: 2200,
             glowSpotAnim: 2236,

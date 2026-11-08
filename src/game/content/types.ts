@@ -2206,6 +2206,10 @@ export type WardensPhaseTwoDef = {
         rings: number;
         wide: number;
         pause: number;
+        // Each tile glows, harmless, this many seconds before it's struck (glowSpotAnim): the
+        // ring round the obelisk alone left the strikes unseen until they hurt
+        glowAhead: number;
+        glowSpotAnim: number;
     };
     // Four arms that turn: a glow on one of five patterns, struck `strikeAfter` seconds later,
     // a pattern every `every` seconds, rounds of them (WARDENS_WINDMILL, below the def)
