@@ -209,8 +209,6 @@ const THRALL_FADE_TICKS = TICKS_PER_SECOND;
 // The Apmeken room's barrier stands turned a quarter (its loc's rotation 1)
 const TOMBS_GATE_YAW = 512;
 // Jungle Japes's peels: twice a banana's size, to stand out from the bananas on her floor
-// Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
-// (they're a tile across)
 // The Crondis room's poison: the Spitting Scarab's green splash, that much bigger to fill a
 // corridor, pale for the warning and dark for the real thing
 const CRONDIS_CLOUD_SCALE = 1.6;
@@ -218,10 +216,30 @@ const CRONDIS_PALE_TINT = 0xffffff;
 const CRONDIS_DARK_TINT = 0x608040;
 // Kephri's swarm shield, round her while it's up
 const KEPHRI_SHIELD_SPOTANIM = 2141;
+// Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
+// (they're a tile across)
 const AKKHA_SYMBOL_OUT = 1.5;
-const AKKHA_SYMBOL_SCALE = 2.2;
+const AKKHA_SYMBOL_SCALE = 3.2;
+// and how far towards its element's glow colour (a negative flash: lit whatever the light)
+const AKKHA_SYMBOL_GLOW = -0.9;
+// and lifted off the floor that much (tiles, up being less, as heights are): flat on it, the
+// floor's own symbol hides it
+const AKKHA_SYMBOL_LIFT = -0.1;
 // How strongly the quadrant he's showing glows, against a blast's full strength
 const AKKHA_GLOW_ALPHA = 0.45;
+// The funnel of light round a lit symbol, in its colour: darkness's own swirl (already baked
+// with his elements), for every element
+const AKKHA_FUNNEL_SPOTANIM = 2257;
+const AKKHA_FUNNEL_SCALE = 2;
+const AKKHA_FUNNEL_GLOW = -0.7;
+// A blast's spray: so many of its element's orbs out of each quadrant it takes, flying up and
+// out over its first so many seconds, so far (tiles) and so high at most, glowing in its colour
+const AKKHA_SPRAY_ORBS = 14;
+const AKKHA_SPRAY_TICKS = Math.round(1.1 * TICKS_PER_SECOND);
+const AKKHA_SPRAY_REACH = 3.5;
+const AKKHA_SPRAY_HEIGHT = 2.5;
+const AKKHA_SPRAY_SCALE = 1.2;
+const AKKHA_SPRAY_GLOW = -0.7;
 const PEEL_SCALE = 2;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
@@ -1401,19 +1419,29 @@ export class GameView {
             const at = sim.akkhaCorner(lit, AKKHA_SYMBOL_OUT);
             const height = this.ground(sim, at.x, at.y);
             const model = this.assets.get("loc:" + element.symbolLoc);
+            const lifted = height + AKKHA_SYMBOL_LIFT;
             if (model) {
                 const anim = model.anims[0];
-                actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, {
+                actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, lifted, at.y, 0, {
                     scale: AKKHA_SYMBOL_SCALE,
-                    flash: 0.7,
+                    // Glowing in its element's colour: darkness's own model is near black
+                    flash: AKKHA_SYMBOL_GLOW,
+                    tint: element.glow,
                 });
             }
-            const glow = this.assets.get("spot:" + element.spotAnim);
-            if (glow) {
-                const anim = glow.anims[0];
-                actors.draw(glow, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, {
-                    scale: 2,
-                });
+            const funnel = this.assets.get("spot:" + AKKHA_FUNNEL_SPOTANIM);
+            if (funnel) {
+                // Twice, half its loop apart: its animation has gaps with nothing in them
+                const anim = funnel.anims[0];
+                const half = Math.max(1, Math.floor(anim.totalTicks / 2));
+                for (const offset of [0, half]) {
+                    const frame = anim.getFrame(sim.tick + offset, true);
+                    actors.draw(funnel, anim, frame, at.x, height, at.y, 0, {
+                        scale: AKKHA_FUNNEL_SCALE,
+                        flash: AKKHA_FUNNEL_GLOW,
+                        tint: element.glow,
+                    });
+                }
             }
         }
         // A blast or a flood: its element all over each quadrant it took. The one he's showing
@@ -1442,6 +1470,7 @@ export class GameView {
         for (const burst of fight.bursts) {
             for (const quadrant of burst.quadrants) {
                 fill(quadrant, sim.tick - burst.tick, 1);
+                this.drawAkkhaSpray(actors, sim, area, quadrant, burst.tick);
             }
         }
         if (lit !== undefined) {
@@ -1457,6 +1486,54 @@ export class GameView {
             const height = this.ground(sim, orb.x, orb.y);
             actors.draw(model, anim, anim.getFrame(sim.tick, true), orb.x, height, orb.y, 0, {
                 alpha: sim.tick < orb.armTick ? 0.5 : 1,
+            });
+        }
+    }
+
+    // A blast's spray of bright orbs out of a quadrant (AKKHA_SPRAY_*): each from somewhere in
+    // it, up and out in an arc, fading as it falls. Where each goes is from the burst's tick, so
+    // it's the same every frame; drawn only.
+    private drawAkkhaSpray(
+        actors: ActorRenderer,
+        sim: Sim,
+        area: { middle: { x: number; y: number }; half: number },
+        quadrant: number,
+        startTick: number,
+    ): void {
+        const t = (sim.tick - startTick) / AKKHA_SPRAY_TICKS;
+        if (t < 0 || t >= 1) {
+            return;
+        }
+        const element = AKKHA.elements[quadrant];
+        const def = getEnemy(element.orb);
+        const model = this.assets.get(getEnemyModelKey(def, 0));
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(def.idleSeq);
+        const frame = anim.getFrame(sim.tick, true);
+        const east = quadrant === 1 || quadrant === 2;
+        const north = quadrant === 0 || quadrant === 1;
+        // A number from 0 to 1 for each orb's each pick, from the burst
+        const pick = (n: number) => {
+            const v = Math.sin((startTick * 31 + quadrant * 977 + n) * 12.9898) * 43758.5453;
+            return v - Math.floor(v);
+        };
+        for (let i = 0; i < AKKHA_SPRAY_ORBS; i++) {
+            const n = i * 5;
+            const fromX = area.middle.x + (east ? 1 : -1) * (1 + pick(n) * (area.half - 2));
+            const fromY = area.middle.y + (north ? 1 : -1) * (1 + pick(n + 1) * (area.half - 2));
+            const angle = pick(n + 2) * Math.PI * 2;
+            const reach = AKKHA_SPRAY_REACH * (0.4 + 0.6 * pick(n + 3)) * t;
+            const x = fromX + Math.cos(angle) * reach;
+            const y = fromY + Math.sin(angle) * reach;
+            // Up and back down (up being less)
+            const rise = AKKHA_SPRAY_HEIGHT * (0.5 + 0.5 * pick(n + 4)) * 4 * t * (1 - t);
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y) - rise, y, 0, {
+                scale: AKKHA_SPRAY_SCALE,
+                flash: AKKHA_SPRAY_GLOW,
+                tint: element.glow,
+                alpha: 1 - t * t,
             });
         }
     }

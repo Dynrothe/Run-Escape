@@ -19,6 +19,11 @@ the version in the corner).
   shows its symbol now, as in OSRS: find its partner on the other side. Fixed by Okaeri.
 - The Crondis room's spear statues were hard to time. The tiles a spear's about to reach now light
   up on the floor before it thrusts. Fixed by Okaeri.
+- Akkha's Memory Blast was hard to see in his dark room. His room's lit normally now, each
+  symbol lights up bright in its own colour, and a blast throws up a spray of glowing orbs. Fixed
+  by Okaeri.
+- On a phone, the Scabaras room's slate covered the middle of the screen, over the floor you were
+  about to step on. It's a thin row at the top now. Fixed by Okaeri.
 
 ## 0.29.1 - 2026-11-08
 

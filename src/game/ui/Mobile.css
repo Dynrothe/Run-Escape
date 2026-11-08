@@ -299,6 +299,46 @@
     .ui-volume {
         height: 32px;
     }
+
+    /* The Scabaras slate: one thin row along the top, under the clock, not over the floor round
+       the hero. With no zoom, the middle of the screen is the plates you're about to step on. */
+    .ui-scabaras-reading {
+        top: calc(var(--safe-top) + 34px);
+        width: auto;
+        max-width: calc(100vw - var(--safe-left) - var(--safe-right) - 16px);
+        padding: 3px 8px;
+        opacity: 0.92;
+    }
+
+    .ui-scabaras-reading .ui-scabaras-title {
+        display: none;
+    }
+
+    .ui-scabaras-symbols {
+        grid-template-columns: repeat(9, auto);
+        gap: 2px 5px;
+    }
+
+    .ui-scabaras-symbol {
+        gap: 2px;
+    }
+
+    .ui-scabaras-symbol .ui-icon {
+        width: auto;
+        height: 18px;
+    }
+
+    .ui-scabaras-value {
+        font-size: 15px;
+    }
+
+    .ui-scabaras-name {
+        display: none;
+    }
+
+    .ui-scabaras-number {
+        font-size: 28px;
+    }
 }
 
 /* Held upright */

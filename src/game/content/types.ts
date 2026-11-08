@@ -556,13 +556,16 @@ export type GroundPatternDef = {
 };
 
 // One of Akkha's four quadrants' elements: what it does to whoever's hit in it (on top of the
-// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn) and its symbol
+// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn), its symbol,
+// and its colour: its symbol's and the funnel of light round it as it lights up for Memory Blast,
+// and the orbs a blast throws up
 export type AkkhaElementDef = {
     name: string;
     effect: PlayerEffectDef;
     spotAnim: number;
     orb: string;
     symbolLoc: number;
+    glow: number;
 };
 
 // Zebak's fight (BossDef.zebak; Sim.stepZebak), as content/tombs.ts's ZEBAK says
@@ -680,6 +683,8 @@ export type KephriDef = {
 // another style. The floor's four quadrants (TombsPathDef boss.quadrants) each have an element.
 export type AkkhaDef = {
     forms: string[];
+    // How bright his room is for his fight (drawn only), in place of the Tombs' dimmer ambient
+    ambient: number;
     specialEvery: number;
     elements: AkkhaElementDef[];
     // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the

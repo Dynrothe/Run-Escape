@@ -1093,6 +1093,7 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2257,
         orb: "akkha_orb_darkness",
         symbolLoc: 45871,
+        glow: 0x9a50ff,
     },
     {
         // North-east
@@ -1109,6 +1110,7 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2256,
         orb: "akkha_orb_lightning",
         symbolLoc: 45869,
+        glow: 0xffe640,
     },
     {
         // South-east
@@ -1125,6 +1127,7 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2259,
         orb: "akkha_orb_frozen",
         symbolLoc: 45870,
+        glow: 0xf0f8ff,
     },
     {
         // South-west
@@ -1133,11 +1136,14 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2258,
         orb: "akkha_orb_burning",
         symbolLoc: 45868,
+        glow: 0xff3018,
     },
 ];
 
 export const AKKHA: AkkhaDef = {
     forms: ["akkha", "akkha_ranged", "akkha_magic"],
+    // Full light: his floor's symbols and Memory Blast's quadrants are what he's read by
+    ambient: 1,
     specialEvery: 6,
     elements: AKKHA_ELEMENTS,
     memory: {
@@ -1200,7 +1206,7 @@ const AKKHA_LIGHTS: Record<string, LightLook> = {
 };
 
 // His three phases (66% and 33%, where his shadows come), the same on every form: quicker each,
-// opening on a leap, the last in a dimmer room; his stamp's ring out of him from the first second
+// opening on a leap; his stamp's ring out of him from the first second
 const AKKHA_PHASES: NonNullable<NonNullable<EnemyDef["boss"]>["phases"]> = {
     phases: [
         {
@@ -1219,7 +1225,6 @@ const AKKHA_PHASES: NonNullable<NonNullable<EnemyDef["boss"]>["phases"]> = {
         {
             tempo: 0.6,
             speed: 1.2,
-            light: 0.6,
             opener: "Leaps",
             status: "Akkha's fury",
             ambients: [{ attack: "Stamp", interval: 3.5, delay: 3 }],

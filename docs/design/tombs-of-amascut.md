@@ -406,9 +406,13 @@ animations from a lister of those whose model or animation is in the raid's rang
       Melee swings and stamps out a ring; ranged fires fans and a spiral of sand; magic rings and
       streams red sand, which brings the element of the quadrant it hits you in.
     - **Memory Blast**, Simon says: he vanishes to the middle and can't be hurt, the symbols light up
-      one at a time (each beside the last, never across), the quadrant glowing with its element. Then,
+      one at a time (each beside the last, never across), the quadrant glowing with its element and
+      its floor symbol lit in the element's colour (`AkkhaElementDef.glow`) in a funnel of light
+      (darkness's own swirl, 2257, tinted for each). His room's in full light for the fight
+      (`AkkhaDef.ambient`), not the Tombs' dimmer light. Then,
       2.4 seconds apart (1.2 with Feeling Special), every quadrant but the next in the order is
-      blasted for nearly half your hitpoints and its element. Four steps, one more every two path
+      blasted for nearly half your hitpoints and its element, each throwing up a spray of its
+      element's orbs, bright in its colour (drawn only). Four steps, one more every two path
       levels.
     - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
       leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
@@ -447,7 +451,8 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **The slates** by the way in, one on each wall, as OSRS's: stand by one and a screen shows
       Addition's nine symbols, the floor's own models seen from above (`ItemIcon`'s `locId`,
       `ItemIconLoader.renderLocIcon`), each with what it's worth (drawn with the Ancient tablet,
-      45339).
+      45339). On a touch screen it's one thin row along the top instead, with no names, since
+      with no zoom the middle of the screen is the floor you're about to step on.
     - **Sequence** (the east hall, by the way in): OSRS's nine plates in a diamond, and its Ancient
       button (45338) on the wall beside them. Push it (walk up to it) and they light one at a time
       (0.8 s each), 4 steps, one more every two path levels, up to 6; push it again for another

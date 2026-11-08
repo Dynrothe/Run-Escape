@@ -5589,6 +5589,11 @@ export class Sim {
                         };
                     }
                     if (enemy.def.boss?.akkha) {
+                        // His room in full light (AkkhaDef.ambient), so Memory Blast's
+                        // quadrants read; the map's own again once the path's left
+                        if (this.lighting) {
+                            this.dimTo(enemy.def.boss.akkha.ambient, 1);
+                        }
                         this.tombsAkkha = {
                             uid: enemy.uid,
                             attacks: 0,
