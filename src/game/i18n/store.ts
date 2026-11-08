@@ -143,7 +143,104 @@ export function tl(text: string): string {
         return text;
     }
     const key = keyForEnglish(text);
-    return (key !== undefined ? getMessages(current)[key] : undefined) ?? text;
+    return (
+        (key !== undefined ? getMessages(current)[key] : undefined) ??
+        translateDynamic(text) ??
+        text
+    );
+}
+
+function translateDynamic(text: string): string | undefined {
+    let m: RegExpExecArray | null;
+
+    if ((m = /^Evolved:\s*(.+)!$/.exec(text))) {
+        return current === "pt-BR" ? `Evoluído: ${tl(m[1])}!` : text;
+    }
+
+    if ((m = /^(.+?)\s+set bonus:\s*(.+)!$/.exec(text))) {
+        return current === "pt-BR" ? `Bônus do conjunto ${tl(m[1])}: ${tl(m[2])}!` : text;
+    }
+
+    if ((m = /^(.+?)\s+has appeared!$/.exec(text))) {
+        return current === "pt-BR" ? `${tl(m[1])} apareceu!` : text;
+    }
+
+    if ((m = /^Room\s+(\d+)\s+of\s+(\d+):\s*(.+)$/.exec(text))) {
+        return current === "pt-BR" ? `Sala ${m[1]} de ${m[2]}: ${tl(m[3])}` : text;
+    }
+
+    if ((m = /^Teleported to\s+(.+?)\.\s*(\d+)\s+teleports?\s+left\.$/.exec(text))) {
+        const teleWord = m[2] === "1" ? "teletransporte restante" : "teletransportes restantes";
+        return current === "pt-BR" ? `Teleportado para ${tl(m[1])}. ${m[2]} ${teleWord}.` : text;
+    }
+
+    if (
+        (m =
+            /^Room cleared! Boss down in\s*(\d+:\d+):\s*\+(\d+)\s+raid points,\s*\+([0-9,.]+)\s+coins\.$/.exec(
+                text,
+            ))
+    ) {
+        return current === "pt-BR"
+            ? `Sala concluída! Chefe derrotado em ${m[1]}: +${m[2]} pontos de incursão, +${m[3]} moedas.`
+            : text;
+    }
+
+    if ((m = /^(.+?)\s+protects from\s+(.+)!$/.exec(text))) {
+        const styles = m[2]
+            .split(" and ")
+            .map((s) => tl(s))
+            .join(" e ");
+        return current === "pt-BR" ? `${tl(m[1])} protege contra ${styles}!` : text;
+    }
+
+    if ((m = /^New item added to your collection log:\s*(.+)$/.exec(text))) {
+        return current === "pt-BR"
+            ? `Novo item adicionado ao seu registro de coleção: ${tl(m[1])}`
+            : text;
+    }
+
+    if ((m = /^A purple chest!\s*(.+)$/.exec(text))) {
+        return current === "pt-BR" ? `Um baú roxo! ${tl(m[1])}` : text;
+    }
+
+    if ((m = /^The chest holds no unique this time\s*\((\d+)%\s*chance\)\.$/.exec(text))) {
+        return current === "pt-BR"
+            ? `O baú não contém nenhum item único desta vez (${m[1]}% de chance).`
+            : text;
+    }
+
+    if ((m = /^Bot nuke!\s*(\d+)\s+bots?\s+banned\.$/.exec(text))) {
+        const botWord = m[1] === "1" ? "bot banido" : "bots banidos";
+        return current === "pt-BR" ? `Bomba de bots! ${m[1]} ${botWord}.` : text;
+    }
+
+    if ((m = /^(.+?)\s+He'll face\s+(.+)!$/.exec(text))) {
+        const sides: Record<string, string> = {
+            north: "norte",
+            south: "sul",
+            east: "leste",
+            west: "oeste",
+        };
+        const side = sides[m[2].toLowerCase()] ?? m[2];
+        return current === "pt-BR" ? `${tl(m[1])} Ele ficará de frente para o ${side}!` : text;
+    }
+
+    if (
+        (m =
+            /^(.+?)\s+turns\s+(grey|green|blue)!\s*(Only|Mostly)\s+(melee|ranged|magic)\s+hurts it\.$/.exec(
+                text,
+            ))
+    ) {
+        const colors: Record<string, string> = { grey: "cinza", green: "verde", blue: "azul" };
+        const color = colors[m[2]] ?? m[2];
+        const onlyWord = m[3] === "Only" ? "Apenas" : "Principalmente";
+        const style = tl(m[4]);
+        return current === "pt-BR"
+            ? `${tl(m[1])} fica ${color}! ${onlyWord} ${style} causa dano.`
+            : text;
+    }
+
+    return undefined;
 }
 
 export function list(items: string[]): string {

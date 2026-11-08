@@ -43,6 +43,8 @@ import {
     SEASONAL_MAPS,
     getMap,
     getMapCharacter,
+    mapFinalBossWarning,
+    mapName,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
@@ -66,7 +68,7 @@ import {
     isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
-import { fmtNum, list, t, tp, tr, useLang } from "../i18n";
+import { fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
@@ -1059,7 +1061,8 @@ function RaidObjective({
     room: NonNullable<HudNumbers["raidRoom"]>;
     bossIn: number;
 }): JSX.Element {
-    const boss = room.name.replace(/^The /, "the ");
+    const bossName = tl(room.name);
+    const boss = getLang() === "en" ? bossName.replace(/^The /, "the ") : bossName;
     return (
         <div
             className={
@@ -1714,7 +1717,7 @@ function MapTasks({ save, mapId }: { save: SaveData; mapId: string }): JSX.Eleme
                                 spriteId={reward.iconSpriteId}
                                 size={20}
                             />
-                            {reward.name}
+                            {tl(reward.name)}
                         </span>
                     ))}
                 </div>
@@ -2011,17 +2014,22 @@ const Slots = memo(function Slots({
                         key={i}
                         itemId={slot?.id}
                         disabled={!slot || disabled}
-                        aria-label={slot?.name ?? t("ui.hud.empty_slot", { n: i + 1 })}
+                        aria-label={
+                            slot?.name ? tl(slot.name) : t("ui.hud.empty_slot", { n: i + 1 })
+                        }
                         className={"ui-slot" + (slot?.evolution?.ready ? " ui-slot-evolve" : "")}
                         style={slot ? { borderColor: slot.rarityColor } : undefined}
                         description={
                             slot && (
                                 <>
-                                    <div style={{ color: slot.rarityColor }}>{slot.name}</div>
+                                    <div style={{ color: slot.rarityColor }}>{tl(slot.name)}</div>
                                     <div className="ui-slot-tip-level">
                                         {slot.level >= slot.maxLevel
-                                            ? "Max level"
-                                            : `Level ${slot.level} of ${slot.maxLevel}`}
+                                            ? t("ui.hud.max_level")
+                                            : t("ui.hud.level_of", {
+                                                  level: slot.level,
+                                                  max: slot.maxLevel,
+                                              })}
                                     </div>
                                     {slot.stats?.map((line) => (
                                         <StatLine key={line} text={line} />
@@ -2087,7 +2095,11 @@ const GearSlots = memo(function GearSlots({
                     key={slot.slot}
                     itemId={slot.item?.id}
                     disabled={!slot.item || disabled}
-                    aria-label={slot.item?.name ?? t("ui.hud.gear_empty", { name: slot.name })}
+                    aria-label={
+                        slot.item?.name
+                            ? tl(slot.item.name)
+                            : t("ui.hud.gear_empty", { name: tl(slot.name) })
+                    }
                     className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
                     style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
                     description={slot.item && <ItemDescription item={slot.item} />}
@@ -2142,7 +2154,7 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                         (buff.harmful ? " ui-buff-harmful" : "") +
                         (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
                     }
-                    title={buff.name}
+                    title={tl(buff.name)}
                 >
                     <ItemIcon objId={buff.objId} size={24} />
                     {buff.secondsLeft !== undefined && (
@@ -2303,7 +2315,7 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
         return bossIn !== undefined && bossIn <= 60 ? (
             <div className="ui-boss-warning">
                 {t("ui.hud.boss_warning", {
-                    warning: getMap(mapId).finalBossWarning,
+                    warning: mapFinalBossWarning(getMap(mapId)),
                     seconds: bossIn,
                 })}
             </div>
@@ -2312,7 +2324,7 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
     return (
         <div className="ui-boss">
             <div className="ui-boss-name">
-                {boss.name}
+                {tl(boss.name)}
                 {boss.enraged && (
                     <span className="ui-boss-enraged">{t("ui.hud.boss_enraged")}</span>
                 )}
@@ -2360,7 +2372,7 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                           ? t("ui.hud.boss_status.stunned")
                           : boss.fight.guard === "exposed"
                             ? t("ui.hud.boss_status.guard_down")
-                            : (boss.fight.status ??
+                            : ((boss.fight.status ? tl(boss.fight.status) : undefined) ??
                               (boss.fight.stage === "totems"
                                   ? t("ui.hud.boss_status.charge_totems")
                                   : boss.fight.stage === "finale"
@@ -2617,7 +2629,7 @@ function DamagePanel({
                                         className="ui-damage-name"
                                         style={{ color: slot.rarityColor }}
                                     >
-                                        {slot.name}
+                                        {tl(slot.name)}
                                     </span>
                                     <span className="ui-damage-bar">
                                         <span
@@ -2688,8 +2700,8 @@ function QuestTracker({
 // Kept from the last update while its progress is the same (shareUnchanged)
 const QuestTrack = memo(function QuestTrack({ quest }: { quest: QuestTrackView }): JSX.Element {
     return (
-        <div className={"ui-quest-track " + questTrackClass(quest)} title={quest.task}>
-            <span className="ui-quest-track-name">{quest.name}</span>
+        <div className={"ui-quest-track " + questTrackClass(quest)} title={tl(quest.task)}>
+            <span className="ui-quest-track-name">{tl(quest.name)}</span>
             <span className="ui-quest-track-progress">{formatQuestProgress(quest)}</span>
         </div>
     );
@@ -2752,7 +2764,9 @@ function PauseModal({
                                     />
                                     {/* The name, and what it does under it */}
                                     <span className="ui-pause-name">
-                                        <span style={{ color: slot.rarityColor }}>{slot.name}</span>
+                                        <span style={{ color: slot.rarityColor }}>
+                                            {tl(slot.name)}
+                                        </span>
                                         <span className="ui-pause-detail">
                                             {[...(slot.stats ?? []), slot.detail]
                                                 .filter((text): text is string => Boolean(text))
@@ -2795,7 +2809,7 @@ function PauseModal({
                                                     <ItemIcon objId={item.objId} size={28} />
                                                     <span className="ui-pause-name">
                                                         <span style={{ color: item.rarity.color }}>
-                                                            {item.name}
+                                                            {tl(item.name)}
                                                         </span>
                                                         <span className="ui-pause-detail">
                                                             {item.lines.map((line, i) => (
@@ -2834,8 +2848,10 @@ function PauseModal({
                                             key={quest.id}
                                             className={"ui-pause-quest " + questTrackClass(quest)}
                                         >
-                                            <span className="ui-quest-name">{quest.name}</span>
-                                            <span className="ui-pause-detail">{quest.task}</span>
+                                            <span className="ui-quest-name">{tl(quest.name)}</span>
+                                            <span className="ui-pause-detail">
+                                                {tl(quest.task)}
+                                            </span>
                                             <span className="ui-quest-progress">
                                                 {formatQuestProgress(quest)}
                                             </span>
@@ -3018,48 +3034,50 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 {result?.endlessRecord && (
                     <p className="ui-unlocked">
                         {result.hard
-                            ? t("ui.result.endless_record_hard", { map: getMap(result.mapId).name })
-                            : t("ui.result.endless_record", { map: getMap(result.mapId).name })}
+                            ? t("ui.result.endless_record_hard", {
+                                  map: mapName(getMap(result.mapId)),
+                              })
+                            : t("ui.result.endless_record", { map: mapName(getMap(result.mapId)) })}
                     </p>
                 )}
                 {result?.raidChest && <RaidChestView chest={result.raidChest} />}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
-                        {t("ui.result.first_hard_win", { map: getMap(result.mapId).name })}
+                        {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
                     </p>
                 )}
                 {result?.unlockedMap && (
                     <p className="ui-unlocked">
-                        {t("ui.result.unlocked_map", { map: result.unlockedMap })}
+                        {t("ui.result.unlocked_map", { map: tl(result.unlockedMap) })}
                     </p>
                 )}
                 {result?.unlockedCharacters.map((name) => (
                     <p key={name} className="ui-unlocked">
-                        {t("ui.result.unlocked_character", { name })}
+                        {t("ui.result.unlocked_character", { name: tl(name) })}
                     </p>
                 ))}
                 {result?.unlockedItems.map((name) => (
                     <p key={name} className="ui-unlocked">
-                        {t("ui.result.unlocked_item", { name })}
+                        {t("ui.result.unlocked_item", { name: tl(name) })}
                     </p>
                 ))}
                 {result && result.newTrophies.length > 0 && (
                     <p className="ui-unlocked">
                         {t("ui.result.new_trophies", {
-                            trophies: listNames(result.newTrophies),
+                            trophies: listNames(result.newTrophies.map(tl)),
                         })}
                     </p>
                 )}
                 {result && result.newGear.length > 0 && (
                     <p className="ui-unlocked">
                         {t("ui.result.new_gear", {
-                            gear: listNames(result.newGear),
+                            gear: listNames(result.newGear.map(tl)),
                         })}
                     </p>
                 )}
                 {result?.quests.map((quest) => (
                     <p key={quest.name} className="ui-unlocked">
-                        {t("ui.result.quest_complete", { name: quest.name })}{" "}
+                        {t("ui.result.quest_complete", { name: tl(quest.name) })}{" "}
                         <Coins amount={quest.coins} />
                     </p>
                 ))}
@@ -3119,7 +3137,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                 <tbody>
                                     <tr>
                                         <td>{t("ui.result.stat.adventurer")}</td>
-                                        <td>{player.characterName}</td>
+                                        <td>{tl(player.characterName)}</td>
                                     </tr>
                                     <tr>
                                         <td>{t("ui.result.stat.kills")}</td>
@@ -3248,7 +3266,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                         <tbody>
                                             {result.bossKills.map((boss, i) => (
                                                 <tr key={i}>
-                                                    <td>{boss.name}</td>
+                                                    <td>{tl(boss.name)}</td>
                                                     <td>{formatTime(boss.seconds)}</td>
                                                 </tr>
                                             ))}
@@ -3289,9 +3307,9 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                                         <span
                                                             className="ui-result-name"
                                                             style={{ color: row.color }}
-                                                            title={row.name}
+                                                            title={tl(row.name)}
                                                         >
-                                                            {row.name}
+                                                            {tl(row.name)}
                                                         </span>
                                                     </span>
                                                 </td>

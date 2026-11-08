@@ -155,6 +155,8 @@ function raidMessages(): Messages {
 
 function pumpkinMessages(): Messages {
     const messages: Messages = {};
+    put(messages, "pumpkin.shout.treat", "Treat!");
+    put(messages, "pumpkin.shout.trick", "Trick!");
     PUMPKIN_OUTCOMES.forEach((outcome, i) => {
         put(messages, `pumpkin.${i}.message`, outcome.message);
         if (outcome.does.kind === "effect") {

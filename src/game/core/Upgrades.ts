@@ -109,7 +109,7 @@ export function getEvolutionHint(
             return undefined;
         }
         return {
-            text: t("ui.levelup.evolves_with", { name: evolution.passive.name }),
+            text: t("ui.levelup.evolves_with", { name: passiveName(evolution.passive) }),
             held: passives.some((p) => p.id === evolution.passive.id),
         };
     }

@@ -1,4 +1,5 @@
 import { InventorySlotView } from "../client/GameStore";
+import { t, tl } from "../i18n";
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
@@ -26,7 +27,7 @@ export function InventoryItem({
             className={touch ? "ui-touch-item" : "ui-inv-slot" + (slot ? "" : " ui-inv-slot-empty")}
             style={slot ? { borderColor: slot.item.rarity.color } : undefined}
             disabled={!slot || disabled}
-            aria-label={slot?.item.name ?? `Empty item slot ${index + 1}`}
+            aria-label={slot ? tl(slot.item.name) : t("ui.hud.empty_item_slot", { n: index + 1 })}
             onUse={onUse}
             touch={touch}
             description={slot && <ItemDescription item={slot.item} />}

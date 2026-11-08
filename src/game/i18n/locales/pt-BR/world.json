@@ -1183,6 +1183,8 @@
   "raid.supply.divine_ranging.desc": "+25% de dano à distância por 3 minutos.",
   "raid.supply.divine_magic.name": "Poção divina de magia",
   "raid.supply.divine_magic.desc": "+25% de dano mágico por 3 minutos.",
+  "pumpkin.shout.treat": "Doce!",
+  "pumpkin.shout.trick": "Travessura!",
   "pumpkin.0.message": "Doce! Uma fatia de torta de abóbora cura você.",
   "pumpkin.1.message": "Doce! A abóbora está cheia de moedas.",
   "pumpkin.2.message": "Doce! Pico de açúcar: mais velocidade e força por 15 segundos.",

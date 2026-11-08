@@ -1,7 +1,14 @@
 import { getCharacter } from "../content/characters";
 import { EXTRA_REVIVE_ITEM } from "../content/coop";
 import { getGearStats, upgradedName } from "../content/endless";
-import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import {
+    CASKETS,
+    GEAR_SLOTS,
+    GEAR_SLOT_BY_ID,
+    getItem,
+    itemName,
+    utilityDescription,
+} from "../content/items";
 import { getPowerUp } from "../content/powerups";
 import { getRaidSupply } from "../content/raids";
 import { RARITIES } from "../content/rarity";
@@ -11,7 +18,7 @@ import { diffStats } from "../content/stats";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
 import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { t, tl } from "../i18n";
+import { t, tl, tr } from "../i18n";
 import {
     BuffView,
     ChestView,
@@ -37,7 +44,7 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
             item.kind === "gear"
                 ? t("canvas.gear_slot", { slot: tl(GEAR_SLOT_BY_ID.get(item.slot)!.name) })
                 : t("canvas.utility"),
-        lines: describeItem(item, upgrades),
+        lines: item.kind === "gear" ? describeItem(item, upgrades) : [utilityDescription(item)],
         ...(set && {
             set: {
                 text: describeSetProgress(set, setWorn),
@@ -173,20 +180,20 @@ export function getEventView(sim: Sim): EventView | undefined {
     const forPoints = offer.options.some((option) => option.kind === "supply");
     return {
         uid: offer.uid,
-        name: offer.def.name,
-        speech: offer.def.speech ?? "",
-        leaveLabel: effect.leaveLabel,
+        name: tr(`event.${offer.def.id}.name`, offer.def.name),
+        speech: tr(`event.${offer.def.id}.speech`, offer.def.speech ?? ""),
+        leaveLabel: tr(`event.${offer.def.id}.leave_label`, effect.leaveLabel),
         points: forPoints ? sim.raidPoints : undefined,
         options: offer.options.map((option) => {
             if (option.kind === "answer") {
                 const item = getItem(option.itemId);
-                return { title: item.name, iconObjId: item.objId, enabled: true };
+                return { title: itemName(item), iconObjId: item.objId, enabled: true };
             }
             if (option.kind === "revive") {
                 const item = getItem(EXTRA_REVIVE_ITEM);
                 return {
                     title: t("canvas.extra_revive"),
-                    text: item.kind === "utility" ? item.description : "",
+                    text: item.kind === "utility" ? utilityDescription(item) : "",
                     iconObjId: item.objId,
                     price: option.price,
                     sold: option.sold,
@@ -205,8 +212,8 @@ export function getEventView(sim: Sim): EventView | undefined {
             if (option.kind === "supply") {
                 const supply = getRaidSupply(option.supplyId);
                 return {
-                    title: supply.name,
-                    text: supply.description,
+                    title: tr(`raid.supply.${supply.id}.name`, supply.name),
+                    text: tr(`raid.supply.${supply.id}.desc`, supply.description),
                     iconObjId: supply.objId,
                     price: option.price,
                     sold: option.sold,
@@ -215,8 +222,8 @@ export function getEventView(sim: Sim): EventView | undefined {
             }
             const powerUp = getPowerUp(option.powerUpId);
             return {
-                title: powerUp.name,
-                text: powerUp.description,
+                title: tr(`powerup.${powerUp.id}.name`, powerUp.name),
+                text: tr(`powerup.${powerUp.id}.desc`, powerUp.description),
                 iconObjId: powerUp.objId,
                 price: option.price,
                 sold: option.sold,

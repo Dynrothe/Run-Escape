@@ -1183,6 +1183,8 @@
   "raid.supply.divine_ranging.desc": "+25% ranged damage for 3 minutes.",
   "raid.supply.divine_magic.name": "Divine magic potion",
   "raid.supply.divine_magic.desc": "+25% magic damage for 3 minutes.",
+  "pumpkin.shout.treat": "Treat!",
+  "pumpkin.shout.trick": "Trick!",
   "pumpkin.0.message": "Treat! A slice of pumpkin pie heals you.",
   "pumpkin.1.message": "Treat! The pumpkin is stuffed with coins.",
   "pumpkin.2.message": "Treat! A sugar rush: faster and stronger for 15 seconds.",
