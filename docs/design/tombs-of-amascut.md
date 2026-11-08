@@ -422,10 +422,9 @@ animations from a lister of those whose model or animation is in the raid's rang
       middle a tile clear of the lines between them), so you kill one and draw him into its
       quarter. Only one: once a shadow's struck the rest are shielded, as the wiki says to focus
       one, till they're restored at the next threshold. He walks through his own shadows (they
-      don't push him apart as other enemies do): they never move, so one straight between him and
-      the dead one's quarter held him there for good, unhurtable, doing specials on and on. One timer (the HUD counts it down) runs
-      for them all: when it's out, every
-      quadrant whose shadow's still up floods for half your hitpoints and its element, and it
+      don't push him as other enemies do): they never move, so one in his way would hold him off a
+      dead one's quarter. One timer (the HUD counts it down) runs for them all: when it's out,
+      every quadrant whose shadow's still up floods for half your hitpoints and its element, and it
       starts again.
     - **Final stand**: at 0 he rises (`rises`) as `akkha_enraged` with a fifth of his hitpoints, in
       a corner, praying against ranged and magic (mostly, not whole as OSRS's: a hero here keeps to

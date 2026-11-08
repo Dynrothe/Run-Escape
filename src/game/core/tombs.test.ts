@@ -1622,7 +1622,8 @@ describe("Akkha", () => {
 
     it("walks through his own shadows to a dead one's quarter, not held behind a live one", () => {
         // Hit steadily; each time his shadows come, kill one and wait in its quarter. A live
-        // shadow straight between held him for good before, so the fight never went on.
+        // shadow between him and it held him there for good before (on any seed), so the fight
+        // never went on.
         const sim = atAkkha([], 1);
         const boss = akkha(sim);
         let t = 0;
