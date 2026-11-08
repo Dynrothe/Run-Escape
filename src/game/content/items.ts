@@ -21,17 +21,23 @@ import {
 // weapon speed and +10% max hitpoints are each worth about the same, and a
 // Common piece is worth about one Common passive pick.
 
-export const GEAR_SLOTS: { id: GearSlot; name: string; equipSlot?: EquipSlot }[] = [
-    { id: "head", name: "Head", equipSlot: EquipSlot.HEAD },
-    { id: "cape", name: "Cape", equipSlot: EquipSlot.CAPE },
-    { id: "neck", name: "Neck", equipSlot: EquipSlot.AMULET },
-    { id: "body", name: "Body", equipSlot: EquipSlot.TORSO },
-    { id: "shield", name: "Shield", equipSlot: EquipSlot.SHIELD },
-    { id: "legs", name: "Legs", equipSlot: EquipSlot.LEGS },
-    { id: "hands", name: "Hands", equipSlot: EquipSlot.HANDS },
-    { id: "feet", name: "Feet", equipSlot: EquipSlot.FEET },
+// Empty-slot silhouettes from the cache's worn-equipment interface.
+export const GEAR_SLOTS: {
+    id: GearSlot;
+    name: string;
+    equipSlot?: EquipSlot;
+    iconSpriteId: number;
+}[] = [
+    { id: "head", name: "Head", equipSlot: EquipSlot.HEAD, iconSpriteId: 156 },
+    { id: "cape", name: "Cape", equipSlot: EquipSlot.CAPE, iconSpriteId: 157 },
+    { id: "neck", name: "Neck", equipSlot: EquipSlot.AMULET, iconSpriteId: 158 },
+    { id: "body", name: "Body", equipSlot: EquipSlot.TORSO, iconSpriteId: 161 },
+    { id: "shield", name: "Shield", equipSlot: EquipSlot.SHIELD, iconSpriteId: 162 },
+    { id: "legs", name: "Legs", equipSlot: EquipSlot.LEGS, iconSpriteId: 163 },
+    { id: "hands", name: "Hands", equipSlot: EquipSlot.HANDS, iconSpriteId: 164 },
+    { id: "feet", name: "Feet", equipSlot: EquipSlot.FEET, iconSpriteId: 165 },
     // Rings aren't drawn on players
-    { id: "ring", name: "Ring" },
+    { id: "ring", name: "Ring", iconSpriteId: 160 },
 ];
 
 export const GEAR_SLOT_BY_ID: Map<GearSlot, (typeof GEAR_SLOTS)[number]> = new Map(

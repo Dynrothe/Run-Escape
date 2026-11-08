@@ -4,6 +4,7 @@ import { fmtNum, t, tl } from "../i18n";
 import { Coins } from "./Coins";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
+import { StatLine } from "./StatLine";
 
 type Props = { event: EventView; coins: number; client: GameClient };
 
@@ -29,7 +30,9 @@ export function EventModal({ event, coins, client }: Props): JSX.Element {
                             <div className="ui-card-body">
                                 <div className="ui-card-title">{tl(option.title)}</div>
                                 {option.text && (
-                                    <div className="ui-card-text">{tl(option.text)}</div>
+                                    <div className="ui-card-text">
+                                        <StatLine text={tl(option.text)} />
+                                    </div>
                                 )}
                             </div>
                             {option.price !== undefined && (

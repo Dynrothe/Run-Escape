@@ -346,6 +346,108 @@ describe("melee", () => {
         expect(scimitar.cooldown).toBeGreaterThan(10);
     });
 
+    test("a slash goes for a big enemy beside you, whose middle is out of reach", () => {
+        const sim = armed("scimitar");
+        // Its edge a tile off, its middle four: in reach, as the slash's hit counts its size
+        const big = dummy(sim, 4, 0, "boss");
+        big.radius = 3;
+        const events = attackOnce(sim, 1);
+        expect(events.some((e) => e.type === "slash")).toBe(true);
+        expect(hitsOn(events, big).length).toBeGreaterThan(0);
+    });
+
+    test("a sweep reaches a big enemy beside you too", () => {
+        const sim = armed("two_handed_sword");
+        const big = dummy(sim, 4, 0, "boss");
+        big.radius = 3;
+        expect(hitsOn(attackOnce(sim, 1), big).length).toBeGreaterThan(0);
+    });
+
+    test("a slash both ways hits what's right beside you with both sides", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        sim.weapons[0].level = 2;
+        expect(sim["getEffectiveLevel"](sim.weapons[0]).amount).toBe(2);
+        const goblin = dummy(sim, 0.1, 0);
+        goblin.frozen = 1e6;
+        expect(hitsOn(attack(sim), goblin)).toHaveLength(2);
+    });
+
+    test("a slash swings at a big enemy as soon as its edge is in reach", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        const reach = sim["getEffectiveLevel"](sim.weapons[0]).area * (1 + sim.stats.area);
+        // Its edge a fifth of a tile inside reach
+        const big = dummy(sim, reach + 2.8, 0, "boss");
+        big.radius = 3;
+        big.frozen = 1e6;
+        const events = attack(sim);
+        expect(events.some((e) => e.type === "slash")).toBe(true);
+        expect(hitsOn(events, big).length).toBeGreaterThan(0);
+    });
+
+    test("a slash's corners don't reach a big enemy clear of it", () => {
+        const sim = armed("scimitar");
+        sim.enemies = [];
+        const reach = sim["getEffectiveLevel"](sim.weapons[0]).area * (1 + sim.stats.area);
+        // A goblin in front to swing at, and a big one off past the slash's far corner: inside
+        // the slash's box widened by its radius, but over half a tile clear of the box itself
+        const goblin = dummy(sim, 1.5, 0);
+        const big = dummy(sim, reach + 3.4, 3.6, "boss");
+        big.radius = 4;
+        for (const enemy of [goblin, big]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, goblin).length).toBeGreaterThan(0);
+        expect(hitsOn(events, big)).toEqual([]);
+    });
+
+    test("a sweep's far corners don't reach a big enemy clear of it", () => {
+        const sim = armed("two_handed_sword");
+        sim.enemies = [];
+        const level = sim["getEffectiveLevel"](sim.weapons[0]);
+        expect(level.amount).toBe(1);
+        const reach = level.area * (1 + sim.stats.area);
+        // Past the arc's side by more than its radius allows at that distance, but over a third
+        // of a tile clear of the arc's far corner (1.1 is SLASH_ARC)
+        const goblin = dummy(sim, 1.5, 0);
+        const angle = (level.arc ?? 1.1) + 0.55;
+        const dist = reach + 3.8;
+        const big = dummy(sim, dist * Math.cos(angle), dist * Math.sin(angle), "boss");
+        big.radius = 4;
+        for (const enemy of [goblin, big]) {
+            enemy.frozen = 1e6;
+        }
+        const events = attack(sim);
+        expect(hitsOn(events, goblin).length).toBeGreaterThan(0);
+        expect(hitsOn(events, big)).toEqual([]);
+    });
+
+    test("the Thunderclap reaches a big boss whose edge is in reach", () => {
+        const sim = armed("thunder_khopesh");
+        sim.enemies = [];
+        // Its edge a tile and a half off, its middle five and a half
+        const big = dummy(sim, 5.5, 0, "boss");
+        big.radius = 4;
+        big.frozen = 1e6;
+        // The third swing is the special
+        sim.weapons[0].uses = 2;
+        expect(hitsOn(attack(sim), big).length).toBeGreaterThan(0);
+        expect(sim.weapons[0].uses).toBe(3);
+    });
+
+    test("an aura touches a big enemy by its edge", () => {
+        const sim = armed("ice_burst", "wizard");
+        sim.enemies = [];
+        const radius = sim["getEffectiveLevel"](sim.weapons[0]).area * (1 + sim.stats.area);
+        // Its edge a tile inside the aura, its middle three tiles out
+        const big = dummy(sim, radius + 3, 0, "boss");
+        big.radius = 4;
+        big.frozen = 1e6;
+        expect(hitsOn(attack(sim), big).length).toBeGreaterThan(0);
+    });
+
     test("the Thunder khopesh's Thunderclap hits everything around you", () => {
         const sim = createSim();
         sim.enemies = [];
@@ -2782,6 +2884,24 @@ describe("enemy mechanics", () => {
 });
 
 describe("maps", () => {
+    test("the player starts facing south, or the map's spawnFacing made a unit vector", () => {
+        const sim = createSim();
+        expect(sim.player).toMatchObject({ facingX: 0, facingY: -1, yaw: 0 });
+        Object.assign(sim, { map: { ...sim.map, spawnFacing: { x: 0, y: 3 } } });
+        const hero = (
+            sim as unknown as {
+                createHero(options: object, index: number, x: number, y: number): Sim["heroes"][0];
+            }
+        ).createHero(
+            { name: "a", characterId: "warrior", metaStats: emptyStats() },
+            0,
+            1036.5,
+            1036.5,
+        );
+        // North, the way Vardhelm's opening ends looking, and as long as any other facing
+        expect(hero.player).toMatchObject({ facingX: 0, facingY: 1, yaw: 1024 });
+    });
+
     test("every map's waves, events and bosses make sense", () => {
         for (const map of MAPS) {
             if (map.fight) {
@@ -3352,21 +3472,78 @@ describe("class weapons", () => {
         expect(sim.getHeldObjId()).toBe(20997);
     });
 
-    test("the Toxic blowpipe fires a better dart at each level, bronze to dragon", () => {
-        const darts = getWeapon("toxic_blowpipe").levels.map((level, i) => {
-            const sim = armed("toxic_blowpipe", "ranger");
-            sim.weapons[0].level = i + 1;
-            dummy(sim, 5, 0);
-            attack(sim);
-            expect(sim.projectiles.length).toBeGreaterThan(0);
-            // Drawn as the spot animation, not as an item
-            for (const projectile of sim.projectiles) {
-                expect(projectile).toMatchObject({ spotAnim: level.projectileSpotAnim, objId: -1 });
-            }
-            return level.projectileSpotAnim;
-        });
-        expect(new Set(darts).size).toBe(darts.length);
+    // Fires one of the sim's weapons this tick and no other, moving north or
+    // standing still
+    function fireOnly(sim: Sim, weapon: Sim["weapons"][number], moveY: number): void {
+        for (const other of sim.weapons) {
+            other.cooldown = other === weapon ? 0 : 1e9;
+        }
+        sim.step(0, moveY);
+        const fired = sim
+            .takeEvents()
+            .some((e) => e.type === "weapon" && e.weaponId === weapon.def.id);
+        expect(fired).toBe(true);
+        expect(sim.player.moving).toBe(moveY !== 0);
+    }
+
+    // The view plays the held weapon's run pose over the run, and shows no
+    // attack on the move without one
+    test("on the move, the weapon in hand's attacks are shown, and no other's", () => {
+        const sim = armed("armadyl_crossbow", "ranger");
+        sim.addWeapon("shortbow");
+        const [crossbow, bow] = sim.weapons;
+        expect(sim.getHeldWeapon()).toBe(crossbow);
+        dummy(sim, 5, 0);
+        fireOnly(sim, bow, 1);
+        expect(sim.player.attackSeq).toBe(-1);
+        fireOnly(sim, crossbow, 1);
+        expect(sim.player.attackSeq).toBe(crossbow.def.playerSeq);
+        const start = sim.player.attackStart;
+        expect(start).toBeGreaterThanOrEqual(sim.tick - 1);
+        // Another weapon's doesn't cut it off
+        fireOnly(sim, bow, 1);
+        expect(sim.player.attackStart).toBe(start);
+        // Standing still, every weapon's is shown, as before
+        sim.step(0, 0);
+        fireOnly(sim, bow, 0);
+        expect(sim.player.attackSeq).toBe(bow.def.playerSeq);
     });
+
+    test("on the move, a weapon in hand with no run pose shows nothing, as before", () => {
+        const sim = armed("dragon_hunter_crossbow", "ranger");
+        const [crossbow] = sim.weapons;
+        expect(sim.getHeldWeapon()).toBe(crossbow);
+        expect(crossbow.def.runPose).toBeUndefined();
+        dummy(sim, 5, 0);
+        fireOnly(sim, crossbow, 1);
+        expect(sim.player.attackSeq).toBe(-1);
+        sim.step(0, 0);
+        fireOnly(sim, crossbow, 0);
+        expect(sim.player.attackSeq).toBe(crossbow.def.playerSeq);
+    });
+
+    test.each(["toxic_blowpipe", "armadyl_crossbow"])(
+        "%s fires a different projectile at each level, bronze to dragon",
+        (weaponId) => {
+            const projectiles = getWeapon(weaponId).levels.map((level, i) => {
+                const sim = armed(weaponId, "ranger");
+                sim.weapons[0].level = i + 1;
+                dummy(sim, 5, 0);
+                attack(sim);
+                expect(sim.projectiles.length).toBeGreaterThan(0);
+                for (const projectile of sim.projectiles) {
+                    expect(projectile).toMatchObject({
+                        spotAnim: level.projectileSpotAnim ?? -1,
+                        objId: level.projectileObjId ?? -1,
+                    });
+                }
+                expect(sim.getHeldObjId()).toBe(getWeapon(weaponId).iconObjId);
+                return level.projectileObjId ?? level.projectileSpotAnim;
+            });
+            expect(projectiles.every((id) => id !== undefined)).toBe(true);
+            expect(new Set(projectiles).size).toBe(projectiles.length);
+        },
+    );
 
     test("the Toxic blowpipe's venom hurts every second, and spreads", () => {
         const sim = armed("toxic_blowpipe", "ranger");

@@ -46,6 +46,9 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   and the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
   a slash or sweep, and `special.aoe` hits all round.
+- An attack that hits what it touches (its range plus the enemy's `radius`) finds enemies with
+  `queryTouching`, not `enemyHash.query`: the hash goes by middles, so its search alone misses a
+  big enemy whose edge is in range.
 - Every other level of a slash or sweep adds knockback automatically, from the loop after
   `WEAPONS`. Don't add those steps by hand.
 - `burns.locId` is scenery for the flames on burning ground. `getBaseRequests` bakes it with the
@@ -56,8 +59,19 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
 - To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
   projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
+  Use `projectileObjId` for a real item model instead (the crossbows' bolts); these are baked at
+  every level too, without changing the held weapon or the projectile's hit size.
+  `getProjectileObjId` in `weapons.ts` says which item flies (a knife's the one in hand), for the
+  sim and the baking both. An item whose model is too small to see, or doesn't point the way it
+  flies, gets an entry in `PROJECTILE_ITEM_LOOKS` there: bolts are drawn 3x and turned half round,
+  as knives are, and the atlatl's dart lies at a slant. It goes by the item, so every weapon that
+  fires it looks the same, and it's drawing only. Check a new one in the browser, flying both
+  ways: none of these pointed the way they fly as they come from the cache.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
+- `runPose` is a frame of `playerSeq`, the aim, that the upper body holds for a moment after each
+  shot while running, as the Armadyl crossbow's does. It's for a weapon players hold and kite with,
+  and costs a few frames per player: pick the frame in the browser, running.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
   doesn't say which stance an item has, so the file says where to look it up.
 
@@ -77,7 +91,9 @@ as the overhead prayers are), or the slim cache won't have it.
 ## Stat
 
 Add the key to `StatKey` and `emptyStats` in `types.ts`, and to `STAT_INFO` in `stats.ts`.
-TypeScript points out what's missing. A stat does nothing until `Sim.ts` reads it, from `this.stats`
+TypeScript points out what's missing. Give its label an icon in `content/statIcons.ts` (a test
+checks every stat has one), and the slim cache keeps what that file lists.
+A stat does nothing until `Sim.ts` reads it, from `this.stats`
 (everything added up) or `this.metaStats` (the shop's alone, and set before the constructor adds the
 starting weapon).
 
@@ -136,6 +152,8 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
 
 - `ghost` goes through everything, and is only for what's really a spirit. Anything with wings gets
   `flies`: over fences, walls, trees and water, and round terrain (`world/FlightGrid.ts`).
+- A `radius` over 1 (more than two tiles across) makes a big enemy: melee weapons go by its edge
+  for when to swing and where to aim, and attacks find it by its edge too (`Sim.bigEnemies`).
 - A `blinks.surface` seq is baked like `blinks.seq`, and needs to be one the NPC's model can play.
 - `holds` has an enemy pin the player where they stand once it reaches them (Phosani's husks), and
   a boss's `summon.scatter` brings its summons on wherever a wave's enemy would, so there's time to
@@ -218,6 +236,18 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   the panel it scrolls.
 - `hard` is what hard mode multiplies its enemies' hitpoints and damage by (`hard.ts` has the rest of
   hard mode, and the numbers for a map that doesn't set its own). Sim it against normal with `HARD=1`.
+- People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
+  `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
+  cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
+  one to copy. Check every shot's triangles at a phone's size, as it says.
+- Lights: a map opts in with `lighting` (`LightingDef`), and then anything can give off light: the
+  map's own `lights`, glowing scenery by loc id (`locs`), each player's (`player`), an enemy's
+  (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
+  spells by spot animation (`SPOT_LIGHTS` in `content/lights.ts`), a floor's tiles
+  (`FLOOR_LIGHTS`), a boss's windups and marks (`light` on the attack or its ground pattern), and
+  its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
+  for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
+  has an example of each. Off a map with `lighting`, none of it does anything.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
   `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.
@@ -263,7 +293,8 @@ straight off the definition. After adding or renaming content, run
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`
-and usually an `unlock` task.
+and usually an `unlock` task. A `revival` bonus needs a `reviveLook`, the icon the HUD shows for
+it (a test checks).
 
 ## Quest
 

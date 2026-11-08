@@ -9,11 +9,13 @@ import {
 import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
 import { ENEMIES, getEnemy } from "../content/enemies";
+import { GEAR_SLOTS } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
 import { POWER_UPS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import { emptyStats } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
@@ -28,11 +30,13 @@ import {
     getCharacterAttackSeqs,
     getEnemyModelKey,
     getGameSpriteIds,
+    getHeldRunPoses,
     getLookKey,
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
     getPowerUpLookRequests,
     getPrayerHeadicon,
+    getRunAppearance,
     getRunAttackSeqs,
     getShieldedModelKey,
     getStatueModelKey,
@@ -309,6 +313,38 @@ describe("player bakes", () => {
         expect(lookHas(undefined, key, [])).toBe(false);
     });
 
+    test("have the run pose of the weapon in hand, and no other's", () => {
+        const crossbow = getWeapon("armadyl_crossbow");
+        const pose = { seqId: crossbow.playerSeq, frame: crossbow.runPose };
+        expect(pose.frame).toBeDefined();
+        // The Inquisitor's, whose crossbow it's for
+        const sim = createRun(1, "inquisitor");
+        expect(getHeldRunPoses(getRunAppearance(sim), getRunAttackSeqs(sim))).toEqual([pose]);
+        const holding = (objId: number) => createAppearance({ [EquipSlot.WEAPON]: objId });
+        const objId = crossbow.levels[0].objId!;
+        expect(getHeldRunPoses(holding(objId), [crossbow.playerSeq])).toEqual([pose]);
+        // Not when the look hasn't its swing
+        expect(getHeldRunPoses(holding(objId), [])).toEqual([]);
+        // Nor with another weapon in hand, even one with the same swing, or none
+        const hunter = getWeapon("dragon_hunter_crossbow");
+        expect(hunter.playerSeq).toBe(crossbow.playerSeq);
+        expect(getHeldRunPoses(holding(hunter.levels[0].objId!), [hunter.playerSeq])).toEqual([]);
+        expect(getHeldRunPoses(createAppearance(), [crossbow.playerSeq])).toEqual([]);
+    });
+
+    // A run pose goes by the look's weapon and the sim by Sim.getHeldWeapon:
+    // the same item, as long as nothing else is worn in the weapon slot
+    test("wear nothing in the weapon slot but the weapon in hand", () => {
+        for (const passive of PASSIVES) {
+            for (const piece of passive.equipment ?? []) {
+                expect(piece.slot, passive.id).not.toBe(EquipSlot.WEAPON);
+            }
+        }
+        for (const slot of GEAR_SLOTS) {
+            expect(slot.equipSlot, slot.id).not.toBe(EquipSlot.WEAPON);
+        }
+    });
+
     test("in co-op have the reviver's emote", () => {
         expect(getRunAttackSeqs(createRun(2), 1)).toContain(REVIVE_SEQ);
     });
@@ -371,6 +407,22 @@ describe("power-ups in the cache", () => {
         expect(keys).toContain("spot:" + VISITOR_SPOTANIM);
     });
 
+    test("weapons' projectile items are baked at every level, so the slim cache gets them", () => {
+        const requests = GameAssets.getBaseRequests();
+        for (const weapon of WEAPONS) {
+            for (const level of weapon.levels) {
+                if (level.projectileObjId !== undefined) {
+                    expect(requests, weapon.id).toContainEqual({
+                        kind: "obj",
+                        key: "obj:" + level.projectileObjId,
+                        objId: level.projectileObjId,
+                        count: 1,
+                    });
+                }
+            }
+        }
+    });
+
     // Every level's, not only the first: the Toxic blowpipe's darts change as it levels
     test("weapons' spot animations are baked at every level, so the slim cache gets them", () => {
         const keys = new Set(GameAssets.getBaseRequests().map((r) => r.key));
@@ -410,6 +462,24 @@ describe("power-ups in the cache", () => {
 });
 
 describe("sprites", () => {
+    test("the slim cache keeps the matching empty equipment-slot silhouettes", () => {
+        const sprites = getGameSpriteIds();
+        expect(Object.fromEntries(GEAR_SLOTS.map((slot) => [slot.id, slot.iconSpriteId]))).toEqual({
+            head: 156,
+            cape: 157,
+            neck: 158,
+            body: 161,
+            shield: 162,
+            legs: 163,
+            hands: 164,
+            feet: 165,
+            ring: 160,
+        });
+        for (const slot of GEAR_SLOTS) {
+            expect(sprites).toContain(slot.iconSpriteId);
+        }
+    });
+
     test("the slim cache keeps every sprite the game view loads", async () => {
         const asked: { spriteIds: number[]; frames?: number[] }[] = [];
         const workerPool = {
@@ -433,6 +503,11 @@ describe("sprites", () => {
         ]);
         expect(GAME_VIEW_SPRITES).toContain(HINT_ARROW_SPRITE);
         expect(getGameSpriteIds()).toEqual(expect.arrayContaining(asked[0].spriteIds));
+    });
+
+    test("the slim cache keeps every stat icon's sprite", () => {
+        const ids = getGameSpriteIds();
+        expect(ids).toEqual(expect.arrayContaining(STAT_ICON_SPRITE_IDS));
     });
 
     test("the slim cache keeps every passive's icon", () => {

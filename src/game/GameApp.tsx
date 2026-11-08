@@ -125,8 +125,9 @@ export function GameApp(): JSX.Element {
     useEffect(() => {
         const abortController = new AbortController();
         loadViewer(abortController.signal, (progress: DownloadProgress) => {
+            const doing = progress.saving ? "canvas.saving_cache" : "canvas.downloading_cache";
             store.set({
-                loadingText: t("canvas.downloading_cache", { size: formatBytes(progress.total) }),
+                loadingText: t(doing, { size: formatBytes(progress.total) }),
                 loadingProgress: ((progress.current / progress.total) * 100) | 0,
             });
         })
@@ -177,6 +178,18 @@ export function GameApp(): JSX.Element {
                 created = gameClient;
                 loaded.renderer.game = gameClient;
                 setClient(gameClient);
+                if (params.has("movementDiagnostics")) {
+                    gameClient.setMovementDiagnostics(true);
+                    (window as any).movementDiagnostics = {
+                        start: () => gameClient.setMovementDiagnostics(true),
+                        snapshot: () => gameClient.getMovementDiagnostics(),
+                        stop: () => {
+                            const snapshot = gameClient.getMovementDiagnostics();
+                            gameClient.setMovementDiagnostics(false);
+                            return snapshot;
+                        },
+                    };
+                }
                 if (import.meta.env.DEV) {
                     (window as any).game = gameClient;
                     import("./render/FrameProbe").then(({ FrameProbe }) => {
@@ -191,6 +204,7 @@ export function GameApp(): JSX.Element {
         return () => {
             disposed = true;
             created?.dispose();
+            if (params.has("movementDiagnostics")) delete (window as any).movementDiagnostics;
         };
     }, [loaded, store, saveStore]);
 

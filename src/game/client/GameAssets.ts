@@ -3,6 +3,7 @@ import {
     ActorBakeInput,
     ActorBakeResult,
     BakeRequest,
+    NpcBakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
@@ -21,7 +22,7 @@ import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
-import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { ALL_MAPS, MAPS } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
@@ -29,19 +30,22 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import {
     EnemyDef,
     EnemyOutfit,
     FloorSkinDef,
     GearSlot,
     ImpactDef,
+    MapDef,
     WeaponDef,
 } from "../content/types";
-import { WEAPONS, getWeapon } from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { getCinematicSeqs } from "./Cinematic";
 
 export const PLAYER_SEQS = {
     idle: 808,
@@ -49,6 +53,12 @@ export const PLAYER_SEQS = {
     run: 824,
     death: 836,
 };
+
+// Eating, whose interleave order is the cache's usual split of a player for
+// doing something while walking: the legs (and the body's root) from the
+// walk, the rest from what's being done. The game's attacks have none of
+// their own, so they're played over the run with this one's.
+export const PLAYER_INTERLEAVE_SEQ = 829;
 
 export const PICKUP_OBJS: Record<"food" | "casket", number> = {
     food: 2140,
@@ -149,17 +159,20 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's
-// tabs, the skills' refund button, co-op's flags and the overhead prayers
-// (every frame comes with the first) and the passives with a sprite for an
-// icon. The slim cache keeps these and no others, so a sprite the game shows
+// tabs and cloud save's button, empty equipment slots, the skills' refund button, co-op's flags and the
+// overhead prayers (every frame comes with the first) and the passives with a
+// sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
+        ...Object.values(CLOUD_SAVE_SPRITES),
+        ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
+        ...STAT_ICON_SPRITE_IDS,
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
@@ -171,7 +184,7 @@ export function getGameSpriteIds(): number[] {
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
 // Amulet of blood fury's heal, a random event's visitor coming and going, a
 // co-op revive's emote)
-function getSpotAnimIds(): number[] {
+export function getSpotAnimIds(): number[] {
     const ids = new Set<number>([
         53,
         199,
@@ -226,6 +239,8 @@ function getSpotAnimIds(): number[] {
     }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
+        // What plays in its opening cinematic (MapDef.cinematic)
+        add(...(map.cinematic?.cues.map((cue) => cue.spotAnim) ?? []));
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -264,16 +279,14 @@ function getSpotAnimIds(): number[] {
     return [...ids];
 }
 
-// Items drawn flying or circling: thrown knives, and orbiting runes
+// Items drawn flying or circling: bolts, thrown knives, and orbiting runes
 function getThrownObjIds(): number[] {
     const ids = new Set<number>();
     for (const weapon of WEAPONS) {
-        if (weapon.kind === "knives") {
-            for (const level of weapon.levels) {
-                const objId = level.projectileObjId ?? level.objId;
-                if (objId !== undefined) {
-                    ids.add(objId);
-                }
+        for (const level of weapon.levels) {
+            const objId = getProjectileObjId(weapon, level);
+            if (objId !== undefined) {
+                ids.add(objId);
             }
         }
         for (const objId of weapon.orbitObjIds ?? []) {
@@ -293,6 +306,28 @@ function getWeaponSeqs(weapons: WeaponDef[]): number[] {
 // reviver performs
 export function getPlayerAttackSeqs(): number[] {
     return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ])];
+}
+
+// The run poses of the weapon in the player's hand (WeaponDef.runPose), of
+// the swings a look is baked with. Only its, since the sim records no other
+// weapon's swing while the player moves. The look's weapon is the sim's
+// (Sim.getHeldWeapon, through getCurrentAppearance) as long as nothing else
+// is worn in the weapon slot, which a test checks.
+export function getHeldRunPoses(
+    appearance: PlayerAppearance,
+    attackSeqs: number[],
+): { seqId: number; frame: number }[] {
+    const held = appearance.equipment[EquipSlot.WEAPON];
+    if (held === undefined || held < 0) {
+        return [];
+    }
+    return WEAPONS.flatMap((weapon) =>
+        weapon.runPose !== undefined &&
+        attackSeqs.includes(weapon.playerSeq) &&
+        weapon.levels.some((level) => level.objId === held)
+            ? [{ seqId: weapon.playerSeq, frame: weapon.runPose }]
+            : [],
+    );
 }
 
 // The attack animations a hero's bake needs: their weapons', and in co-op the
@@ -391,6 +426,11 @@ export function getEnemyModelKey(def: EnemyDef, variant: number): string {
 // A floor with no skins of its own draws the slam's slab (FloorView); this is it, for its top
 export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): FloorSkinDef {
     return { spotAnim: floor.slam.spotAnim };
+}
+
+// An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
+export function getPropKey(npcId: number): string {
+    return "prop:" + npcId;
 }
 
 // A piece of what's under a floor (FloorDef.under)
@@ -558,6 +598,8 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
+    // Maps' props and cinematic casts baked or being baked, by model key (getPropKey)
+    private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -831,6 +873,67 @@ export class GameAssets {
             waits.push(baking);
         }
         return Promise.all(waits).then(() => undefined);
+    }
+
+    // A map's NPCs posed as scenery (MapDef.props), and the cast of its opening cinematic
+    // (MapDef.cinematic) with everything they play: baked as the map's travelled to
+    static getPropRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
+        const seqs = new Map<number, number[]>();
+        const add = (npcId: number, seqIds: number[]) => {
+            const list = seqs.get(npcId) ?? [];
+            for (const seq of seqIds) {
+                if (!list.includes(seq)) {
+                    list.push(seq);
+                }
+            }
+            seqs.set(npcId, list);
+        };
+        for (const prop of maps.flatMap((map) => map.props ?? [])) {
+            add(prop.npcId, [prop.seq]);
+        }
+        for (const map of maps) {
+            if (map.cinematic) {
+                for (const [npcId, seqIds] of getCinematicSeqs(map.cinematic)) {
+                    add(npcId, seqIds);
+                }
+            }
+        }
+        return [...seqs].map(([npcId, seqIds]) => ({
+            kind: "npc",
+            key: getPropKey(npcId),
+            npcId,
+            seqIds,
+        }));
+    }
+
+    // Bakes a map's props and cinematic cast, unless they're baked already or on their way. Each
+    // NPC's baked once, under one key, so it's baked with what every map plays on it (maps), as
+    // the slim cache has it: one map's alone would leave another's animations out.
+    loadProps(map: MapDef, maps: readonly MapDef[] = ALL_MAPS): Promise<void> {
+        const npcIds = new Set([
+            ...(map.props ?? []).map((prop) => prop.npcId),
+            ...(map.cinematic?.cast ?? []).map((actor) => actor.npcId),
+        ]);
+        if (npcIds.size === 0) {
+            return Promise.resolve();
+        }
+        // This map's own def first: a dev map's is made again for each run
+        const requests = GameAssets.getPropRequests([
+            map,
+            ...maps.filter((other) => other.id !== map.id),
+        ]).filter((request) => npcIds.has(request.npcId));
+        const missing = requests.filter((request) => !this.propBakes.has(request.key));
+        if (missing.length > 0) {
+            const baking = this.bakeInTasks(missing, this.loadBake).catch((e) =>
+                console.error("Couldn't bake", map.id, "props", e),
+            );
+            for (const request of missing) {
+                this.propBakes.set(request.key, baking);
+            }
+        }
+        return Promise.all(requests.map((request) => this.propBakes.get(request.key))).then(
+            () => undefined,
+        );
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready
@@ -1109,8 +1212,24 @@ export class GameAssets {
                     PLAYER_SEQS.death,
                     ...attackSeqs,
                 ].filter((id, i, all) => all.indexOf(id) === i);
+                // The held weapon's aim over the run, for a moment after each
+                // shot on the move
+                const poses = getHeldRunPoses(appearance, attackSeqs);
                 const bake = await this.bake([
-                    { kind: "player", key: "player", appearance, seqIds },
+                    {
+                        kind: "player",
+                        key: "player",
+                        appearance,
+                        seqIds,
+                        runPoses:
+                            poses.length > 0
+                                ? {
+                                      poses,
+                                      runSeqId: stance.run,
+                                      maskSeqId: PLAYER_INTERLEAVE_SEQ,
+                                  }
+                                : undefined,
+                    },
                     ...getPowerUpLookRequests(appearance),
                 ]);
                 this.renderer.updateTextureArray(bake.loadedTextures);

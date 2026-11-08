@@ -4,7 +4,7 @@ import { Sim, TICKS_PER_SECOND } from "../../core/Sim";
 import { fm, usePortableMath } from "../../core/fmath";
 import { cleanFrameEvent, cleanMove, hasBadNumber, syncHash } from "../../core/lockstep";
 import { makeGrid } from "../../core/world/testGrid";
-import { CoopLink, CoopRun, DECIDE_AFTER_MS } from "./CoopRun";
+import { CoopLink, CoopRun, DECIDE_AFTER_MS, GIVE_UP_GAP_MS, MAX_FAILED_STEPS } from "./CoopRun";
 import { DownMessage, UpMessage, isGameStart } from "./protocol";
 
 function openField(): string[] {
@@ -244,6 +244,20 @@ describe("co-op lockstep", () => {
         expect(guest.stepFrame().map((e) => e.frame)).toEqual([4]);
     });
 
+    it("a guest whose run stops matching the host's says so once, for the relay", () => {
+        const ups: UpMessage[] = [];
+        const link: CoopLink = { sendUp: (m) => ups.push(m), sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => 0);
+        guest.receiveDown({ from: 0, upTo: 100, events: [], hash: [50, -1] });
+        guest.receiveDown({ from: 100, upTo: 150, events: [], hash: [100, -1] });
+        while (guest.canStep()) {
+            guest.stepFrame();
+        }
+        expect(guest.desynced).toBe(true);
+        expect(ups).toEqual([{ outOfStep: 50 }]);
+    });
+
     it("a guest takes frames once, and asks for any that went missing", () => {
         const ups: UpMessage[] = [];
         const link: CoopLink = { sendUp: (m) => ups.push(m), sendDown: () => {} };
@@ -268,6 +282,98 @@ describe("co-op lockstep", () => {
         // Then they come, together
         guest.receiveDown({ from: 2, upTo: 10, events: [] });
         expect(guest.behind).toBe(10);
+    });
+
+    it("a guest gives up on frames the host's kept sending without, but not on a short gap", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const clock = { now: 0 };
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => clock.now);
+        guest.receiveDown({ from: 0, upTo: 2, events: [] });
+        // A gap that's filled in a few seconds, as a resend fills one
+        let upTo = 10;
+        for (let ms = 0; ms < 5000; ms += 40, upTo += 2) {
+            clock.now += 40;
+            guest.receiveDown({ from: upTo - 2, upTo, events: [] });
+        }
+        guest.receiveDown({ from: 2, upTo, events: [] });
+        expect(guest.cantCatchUp).toBe(false);
+        // One that's never filled, with the host's frames coming all the while
+        const missingFrom = upTo;
+        upTo += 10;
+        for (let ms = 0; ms <= GIVE_UP_GAP_MS + 40; ms += 40, upTo += 2) {
+            expect(guest.cantCatchUp).toBe(false);
+            clock.now += 40;
+            guest.receiveDown({ from: upTo - 2, upTo, events: [] });
+        }
+        expect(guest.behind).toBe(missingFrom);
+        expect(guest.cantCatchUp).toBe(true);
+    });
+
+    it("a guest doesn't give up on frames while the host's sending nothing", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const clock = { now: 0 };
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => clock.now);
+        guest.receiveDown({ from: 0, upTo: 2, events: [] });
+        guest.receiveDown({ from: 4, upTo: 6, events: [] });
+        // The host's away (reconnecting, say), then its resend comes
+        clock.now += GIVE_UP_GAP_MS * 2;
+        expect(guest.cantCatchUp).toBe(false);
+        guest.receiveDown({ from: 2, upTo: 8, events: [] });
+        expect(guest.cantCatchUp).toBe(false);
+        expect(guest.behind).toBe(8);
+    });
+
+    it("a guest doesn't give up on frames for the time its page was frozen", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const clock = { now: 0 };
+        const guest = new CoopRun(createSim(1), false, link, heroes, "host", () => clock.now);
+        guest.receiveDown({ from: 0, upTo: 2, events: [] });
+        // A gap, and then the page frozen with the resend asked for unread
+        guest.receiveDown({ from: 4, upTo: 6, events: [] });
+        clock.now += GIVE_UP_GAP_MS + 10_000;
+        // Back: the host's later frames are read first
+        let upTo = 6;
+        for (let ms = 0; ms < 1000; ms += 40, upTo += 2) {
+            clock.now += 40;
+            guest.receiveDown({ from: upTo, upTo: upTo + 2, events: [] });
+            expect(guest.cantCatchUp).toBe(false);
+        }
+        guest.receiveDown({ from: 2, upTo, events: [] });
+        expect(guest.cantCatchUp).toBe(false);
+        expect(guest.behind).toBe(upTo);
+    });
+
+    it("says it's stuck on a frame that keeps failing to step, and not on one that fails once", () => {
+        const link: CoopLink = { sendUp: () => {}, sendDown: () => {} };
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const run = new CoopRun(createSim(0), true, link, heroes, "host", () => 0);
+        run.receiveUp("guest1", { loaded: true });
+        run.receiveUp("guest2", { loaded: true });
+        const step = run.sim.step.bind(run.sim);
+        // Thrown before the sim's changed, so trying again is sound here (one
+        // thrown partway through a step is only sound if every copy threw)
+        let failing = 1;
+        run.sim.step = () => {
+            if (failing > 0) {
+                failing--;
+                throw new Error("a bug");
+            }
+            step();
+        };
+        expect(() => run.stepFrame()).toThrow("a bug");
+        run.stepFrame();
+        expect(run.frame).toBe(1);
+        expect(run.stuck).toBe(false);
+        failing = Infinity;
+        for (let i = 0; i < MAX_FAILED_STEPS; i++) {
+            expect(run.stuck).toBe(false);
+            expect(() => run.stepFrame()).toThrow("a bug");
+        }
+        expect(run.stuck).toBe(true);
+        expect(run.frame).toBe(1);
     });
 
     // A host's run, on a clock the test moves, with what it sends kept
@@ -320,6 +426,143 @@ describe("co-op lockstep", () => {
             expect.objectContaining({ hero: 2, action: { kind: "choose", index: 0 }, auto: true }),
         ]);
         expect(sim.heroes[2].pendingLevelUps).toBe(pending - 1);
+    });
+
+    it("shares the host's countdown without depending on a guest's clock or paused sim ticks", () => {
+        const clock = { now: 100 };
+        const { run, sent } = hostRun(clock);
+        let guestNow = 500_000;
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: () => {}, sendDown: () => {} },
+            new Map(IDS.map((id, i) => [id, i])),
+            "host",
+            () => guestNow,
+        );
+        expect(run.decisionSeconds).toBeUndefined();
+        run.sim.xp = guest.sim.xp = 100;
+        run.stepFrame();
+        run.stepFrame();
+        const tick = run.sim.tick;
+        run.flush(true);
+        guest.receiveDown(sent.at(-1)!);
+        while (guest.canStep()) {
+            guest.stepFrame();
+        }
+        expect(run.decisionSeconds).toBe(20);
+        expect(guest.decisionSeconds).toBe(20);
+        clock.now += 6500;
+        guestNow += 6500;
+        expect(run.sim.tick).toBe(tick);
+        expect(run.decisionSeconds).toBe(14);
+        expect(guest.decisionSeconds).toBe(14);
+        // Answering locally does not hide the party's timer or restart anyone else's.
+        run.act({ kind: "choose", index: 0 });
+        run.stepFrame();
+        expect(run.decisionSeconds).toBe(14);
+        clock.now += DECIDE_AFTER_MS;
+        guestNow += DECIDE_AFTER_MS;
+        expect(run.decisionSeconds).toBe(0);
+        expect(guest.decisionSeconds).toBe(0);
+    });
+
+    it("clears the countdown when the party finishes and sends fresh time on a resend", () => {
+        const clock = { now: 0 };
+        const { run, sent } = hostRun(clock);
+        run.sim.xp = 100;
+        run.stepFrame();
+        run.stepFrame();
+        run.flush(true);
+        clock.now = 8000;
+        run.receiveUp("guest1", { resend: 0 });
+        run.flush(true);
+        expect(sent.at(-1)!.decisionMs).toBe(12_000);
+        // Drain the queued level ups for everyone.
+        while (run.sim.waitingOn.length > 0) {
+            for (const hero of run.sim.waitingOn) {
+                run.receiveUp(IDS[hero.index], { action: { kind: "choose", index: 0 } });
+            }
+            run.stepFrame();
+        }
+        expect(run.decisionSeconds).toBeUndefined();
+        run.flush(true);
+        expect(sent.at(-1)!.decisionMs).toBeUndefined();
+    });
+
+    it("counts down a casket for everyone until the last player answers", () => {
+        const clock = { now: 0 };
+        const { run } = hostRun(clock);
+        const { player } = run.sim;
+        run.sim.dropPickup("casket", player.x, player.y, 1, { tier: "easy" });
+        run.stepFrame();
+        expect(run.sim.state).toBe("chest");
+        run.stepFrame();
+        clock.now += 9000;
+        run.act({ kind: "chest", action: "take" });
+        run.receiveUp("guest1", { action: { kind: "chest", action: "take" } });
+        run.stepFrame();
+        expect(run.sim.waitingOn.map((hero) => hero.index)).toEqual([2]);
+        expect(run.decisionSeconds).toBe(11);
+        clock.now += 11_000;
+        expect(run.stepFrame()).toContainEqual(
+            expect.objectContaining({
+                hero: 2,
+                action: { kind: "chest", action: "take" },
+                auto: true,
+            }),
+        );
+        expect(run.decisionSeconds).toBeUndefined();
+    });
+
+    it("does not show invalid countdowns or revive them from duplicate frames", () => {
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: () => {}, sendDown: () => {} },
+            new Map(IDS.map((id, i) => [id, i])),
+            "host",
+            () => 0,
+        );
+        guest.sim.xp = 100;
+        guest.sim.step();
+        for (const [i, decisionMs] of [NaN, Infinity, -1, DECIDE_AFTER_MS + 1].entries()) {
+            guest.receiveDown({ upTo: i + 1, events: [], decisionMs });
+            expect(guest.decisionSeconds).toBeUndefined();
+        }
+        guest.receiveDown({ upTo: 5, events: [], decisionMs: 5000 });
+        expect(guest.decisionSeconds).toBe(5);
+        guest.receiveDown({ upTo: 5, events: [], decisionMs: 20_000 });
+        expect(guest.decisionSeconds).toBe(5);
+        guest.receiveDown({ upTo: 6, events: [] });
+        expect(guest.decisionSeconds).toBeUndefined();
+    });
+
+    it("doesn't count a guest's countdown back up when a frame comes late", () => {
+        let now = 0;
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: () => {}, sendDown: () => {} },
+            new Map(IDS.map((id, i) => [id, i])),
+            "host",
+            () => now,
+        );
+        guest.sim.xp = 100;
+        guest.sim.step();
+        guest.receiveDown({ upTo: 1, events: [], decisionMs: 10_000 });
+        now = 1010;
+        expect(guest.decisionSeconds).toBe(9);
+        // Sent 40 ms after the last, it took 40 ms longer to come
+        guest.receiveDown({ upTo: 2, events: [], decisionMs: 9030 });
+        expect(guest.decisionSeconds).toBe(9);
+        // One that came quicker brings it forward
+        guest.receiveDown({ upTo: 3, events: [], decisionMs: 8900 });
+        now = 1910;
+        expect(guest.decisionSeconds).toBe(8);
+        // Someone decided for, and waited on again: a new wait starts it over
+        guest.receiveDown({ upTo: 4, events: [], decisionMs: DECIDE_AFTER_MS });
+        expect(guest.decisionSeconds).toBe(20);
     });
 
     it("decides for them with a reward they haven't banished", () => {

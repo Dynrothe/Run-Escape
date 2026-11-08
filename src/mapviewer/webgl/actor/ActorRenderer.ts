@@ -9,6 +9,7 @@ import PicoGL, {
 } from "picogl";
 
 import { Frustum } from "../../Frustum";
+import { readsLightMap } from "../shaders/ShaderUtil";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
@@ -34,6 +35,8 @@ export class ActorAnim {
         readonly segments: Uint16Array,
         readonly frameLengths: Uint16Array,
         readonly looping: boolean,
+        // A frame of seqId over the run (BakedAnim.runPose), not seqId
+        readonly runPose: boolean = false,
     ) {
         this.frameCount = frameLengths.length;
         this.frameStarts = new Uint32Array(this.frameCount);
@@ -68,6 +71,8 @@ export class ActorAnim {
 
 export class ActorModel {
     readonly animIndices: Map<number, number> = new Map();
+    // Attacks' poses over the run (BakedAnim.runPose), by the attack's seq
+    readonly runPoses: Map<number, ActorAnim> = new Map();
 
     constructor(
         readonly page: ActorPage,
@@ -80,7 +85,9 @@ export class ActorModel {
         readonly anims: ActorAnim[],
     ) {
         anims.forEach((anim, i) => {
-            if (!this.animIndices.has(anim.seqId)) {
+            if (anim.runPose) {
+                this.runPoses.set(anim.seqId, anim);
+            } else if (!this.animIndices.has(anim.seqId)) {
                 this.animIndices.set(anim.seqId, i);
             }
         });
@@ -116,6 +123,9 @@ export type ActorDrawOptions = {
     // Drawn before the silhouettes (renderEarly), so what's behind it gets one as it would behind
     // the world: a floor's pillars and raised tiles, which hide the player as walls would
     early?: boolean;
+    // On a lit map (MapDef.lighting), how much it's drawn at full brightness whatever the light,
+    // 0 to 1: warnings and spells, which have to be seen in the dark. Elsewhere it does nothing.
+    unlit?: number;
 };
 
 class InstanceList {
@@ -153,6 +163,7 @@ class InstanceList {
         stretchZ: number,
         pitch: number,
         roll: number,
+        unlit: number,
     ): void {
         if (this.count === this.opaqueOffsets.length) {
             this.grow(this.count * 2);
@@ -178,7 +189,7 @@ class InstanceList {
         data[o + 8] = edge;
         data[o + 9] = edgeWidth;
         data[o + 10] = edgeColor;
-        data[o + 11] = 0;
+        data[o + 11] = unlit;
         data[o + 12] = stretchX;
         data[o + 13] = stretchZ;
         data[o + 14] = pitch;
@@ -278,7 +289,8 @@ export class ActorSegment {
 
     constructor(
         readonly vertexArray: VertexArray,
-        readonly drawCall: DrawCall,
+        // Made again with the other program as lights come or go (ActorRenderer.setProgram)
+        public drawCall: DrawCall,
         readonly drawCallSilhouette: DrawCall,
         readonly drawCallOutline: DrawCall,
     ) {}
@@ -339,13 +351,17 @@ export class ActorRenderer {
 
     private frustum?: Frustum;
 
+    // Every draw's unlit (ActorDrawOptions.unlit) is at least this, while a caller's drawing only
+    // warnings (a boss fight's view)
+    unlitAtLeast = 0;
+
     silhouetteColor = new Float32Array([0.85, 0.85, 1.0, 0.45]);
     outlineColor = new Float32Array([1.0, 0.55, 0.1, 1.0]);
 
     constructor(
         readonly app: PicoApp,
         readonly hasMultiDraw: boolean,
-        readonly program: Program,
+        public program: Program,
         readonly silhouetteProgram: Program,
         readonly textureArray: Texture,
         readonly textureMaterials: Texture,
@@ -376,12 +392,7 @@ export class ActorRenderer {
         );
 
         const createDrawCall = (program: Program, vertexArray: VertexArray) =>
-            app
-                .createDrawCall(program, vertexArray)
-                .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
-                .texture("u_textures", this.textureArray)
-                .texture("u_textureMaterials", this.textureMaterials)
-                .texture("u_actorData", this.dataTexture);
+            this.createDrawCall(program, vertexArray);
 
         const segments = Array.from(bake.segmentStarts, (start) => {
             const vertexArray = app
@@ -420,6 +431,7 @@ export class ActorRenderer {
                         anim.segments,
                         anim.frameLengths,
                         anim.looping,
+                        anim.runPose,
                     ),
             );
             models.set(
@@ -428,6 +440,36 @@ export class ActorRenderer {
             );
         }
         return models;
+    }
+
+    private createDrawCall(program: Program, vertexArray: VertexArray): DrawCall {
+        const drawCall = this.app
+            .createDrawCall(program, vertexArray)
+            .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
+            .texture("u_textures", this.textureArray)
+            .texture("u_textureMaterials", this.textureMaterials)
+            .texture("u_actorData", this.dataTexture);
+        if (this.lightMap && readsLightMap(program)) {
+            drawCall.texture("u_lightMap", this.lightMap);
+        }
+        return drawCall;
+    }
+
+    // A lit map's light map (GameWebGLRenderer), for a program that reads it (setProgram)
+    lightMap?: Texture;
+
+    // Draws the actors with another program from now on (a lit map's, with its lights, or back)
+    setProgram(program: Program, lightMap?: Texture): void {
+        this.lightMap = lightMap;
+        if (program === this.program) {
+            return;
+        }
+        this.program = program;
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                segment.drawCall = this.createDrawCall(program, segment.vertexArray);
+            }
+        }
     }
 
     removePage(page: ActorPage): void {
@@ -500,6 +542,7 @@ export class ActorRenderer {
             stretchZ,
             options?.pitch ?? 0,
             options?.roll ?? 0,
+            Math.max(options?.unlit ?? 0, this.unlitAtLeast),
         );
         if (options?.silhouette) {
             segment.silhouettes.push(
@@ -518,6 +561,7 @@ export class ActorRenderer {
                 0,
                 1,
                 1,
+                0,
                 0,
                 0,
             );
@@ -540,6 +584,7 @@ export class ActorRenderer {
                 0,
                 1,
                 1,
+                0,
                 0,
                 0,
             );

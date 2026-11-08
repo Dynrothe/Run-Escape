@@ -68,10 +68,6 @@
         touch-action: none;
     }
 
-    .ui-slot {
-        pointer-events: none;
-    }
-
     /* Keys don't mean anything here */
     .ui-choice-key,
     .ui-inv-key,
@@ -98,11 +94,12 @@
         touch-action: none;
     }
 
-    /* Still shown once the quest tracker's title is under the zone */
+    /* No z-index: the HUD comes after the zone, so it's above it already, and
+       a z-index would put these over the run's panels too. The damage panel
+       is placed by .ui-damage. */
     .ui-quest-tracker,
     .ui-damage {
         position: relative;
-        z-index: 1;
     }
 
     /* Big enough to tap */
@@ -597,6 +594,13 @@
         height: 44px;
     }
 
+    .ui-armoury-step {
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+    }
+
     /* Quests and the collection log */
 
     .ui-quests > .ui-subtle,
@@ -644,6 +648,34 @@
         top: 0;
         transform: translateX(-50%);
         font-size: 24px;
+    }
+
+    /* Co-op's countdown: one line where the clock was, so the boss bar, the
+       waiting note and the toasts keep their places under it */
+    .ui-choice-countdown {
+        top: calc(var(--safe-top) + 16px);
+        padding: 3px 8px;
+        font-size: 14px;
+        line-height: 18px;
+    }
+
+    .ui-choice-countdown-label {
+        display: none;
+    }
+
+    /* The panels under it, and clear of the home bar. Here they have their
+       padding and border inside their size. */
+    .ui-choice-countdown ~ .ui-modal {
+        padding-top: calc(var(--safe-top) + 46px);
+        padding-bottom: var(--safe-bottom);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-panel {
+        max-height: calc(100% - 12px);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-chest-card {
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 58px);
     }
 
     .ui-hud-right {

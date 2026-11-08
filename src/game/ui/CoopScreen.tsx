@@ -20,8 +20,9 @@ import { ItemIcon } from "./ItemIcon";
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
-// An open room shows its host's flag even if they've hidden it (it's where the
-// room is, for whoever's picking one), so making one says so
+// An open room shows its host's flag to its party even if they've hidden it,
+// so making one says so. Cloudflare's list shows the server's country instead
+// (Node relays list the host's).
 function openRoomTitle(ui: UiSnapshot): string {
     return ui.coop.country && !ui.display.coopFlag
         ? t("coop.open_room_title_flag")
@@ -46,8 +47,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
     const canJoin = online;
     // Rooms on maps this game hasn't got (a newer game's) can't be joined
     const rooms = coop.rooms.filter((listing) => MAP_BY_ID.has(listing.mapId));
-    // With a relay that knows where players are, a room without a flag (its
-    // host's hidden it) keeps the space, so the rest stay in line
+    // An unknown location keeps the space when other rooms have flags.
     const flags = rooms.some((listing) => listing.country);
     // Unless the relay takes anyone, a room on a map this player hasn't got
     // can't be joined: what's missing, or nothing
@@ -175,7 +175,11 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                             >
                                 <CountryFlag
                                     country={listing.country}
-                                    label={t("coop.hosted_from")}
+                                    label={
+                                        listing.countrySource === "server"
+                                            ? t("coop.hosted_server")
+                                            : t("coop.hosted_from")
+                                    }
                                     keepSpace={flags}
                                 />
                                 <ItemIcon objId={map.iconObjId} size={20} />

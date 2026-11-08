@@ -4,7 +4,7 @@ import { CacheInfo } from "../rs/cache/CacheInfo";
 // and the decoder fixes were checked against it. Download it into caches/ with
 // bun run download-caches (or copy it in) before starting. The README's Cache
 // version section says which it is; change it there too (a test checks).
-export const GAME_CACHE_NAME = "osrs-241_2026-09-30";
+export const GAME_CACHE_NAME = "osrs-242_2026-11-03";
 
 // The full cache when it's listed (development), or else its slim copy (a
 // hosted build, see scripts/cache/slim-cache.ts)
@@ -18,11 +18,15 @@ export function findGameCache(caches: CacheInfo[]): CacheInfo | undefined {
 // The browser keeps a copy of each cache it loads. A full cache is kept under
 // its own name, and slim caches used to be too, each with a new name (a slim
 // cache's chunks now share one, which keeps itself tidy). Drops the copies
-// other than the one in use, from this cache or an older one.
+// other than the one in use, from this cache or an older one: a full cache the
+// game ran on before is osrs-<revision>_<date>. One the original map viewer
+// (?viewer=1) loaded goes too, and the viewer downloads it again if it's wanted.
 export async function deleteOtherGameCaches(inUse: string): Promise<void> {
     for (const name of await caches.keys()) {
         const isGameCache =
-            name.startsWith(GAME_CACHE_NAME) || /^osrs-.*-slim-[0-9a-f]+$/.test(name);
+            name.startsWith(GAME_CACHE_NAME) ||
+            /^osrs-\d+_\d{4}-\d{2}-\d{2}$/.test(name) ||
+            /^osrs-.*-slim-[0-9a-f]+$/.test(name);
         if (name !== inUse && isGameCache) {
             await caches.delete(name);
         }

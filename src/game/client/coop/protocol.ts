@@ -60,8 +60,10 @@ export type RoomListing = {
     code: string;
     name: string;
     host: string;
-    // The host's, for their flag (see MemberView)
+    // The relay's measured country when countrySource is "server".
+    // Older/Node relays send the host player's country (see MemberView).
     country?: string;
+    countrySource?: "server";
     players: number;
     max: number;
     mapId: string;
@@ -118,7 +120,10 @@ export type UpMessage =
     | { loaded: true }
     // The frames after this one again: some of the host's went missing (a
     // dropped connection)
-    | { resend: number };
+    | { resend: number }
+    // This guest's run stopped matching the host's at this frame, and it's
+    // leaving. For the relay (server/coop-checks.mjs): the host does nothing.
+    | { outOfStep: number };
 
 // The host to everyone: the frames up to `upTo` are out, with what happened
 // at them, and now and then a check that everyone's run still agrees
@@ -129,6 +134,8 @@ export type DownMessage = {
     upTo: number;
     events: FrameEvent[];
     hash?: [number, number];
+    // Wall-clock time until the next automatic choice, for display only.
+    decisionMs?: number;
 };
 
 export type ClientMessage =

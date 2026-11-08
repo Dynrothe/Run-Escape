@@ -995,6 +995,8 @@
   "boss.justiciar_zachariah.phases.threshold.shout": "You will be judged!",
   "enemy.zachariah_sword.name": "Sword",
   "enemy.zachariah_bolt.name": "Bolt",
+  "enemy.tob_nylocas_ischyros.name": "Nylocas Ischyros",
+  "enemy.tob_big_nylocas_ischyros.name": "Nylocas Ischyros",
   "enemy.tob_nylocas_toxobolos.name": "Nylocas Toxobolos",
   "enemy.tob_big_nylocas_toxobolos.name": "Nylocas Toxobolos",
   "enemy.tob_nylocas_hagios.name": "Nylocas Hagios",

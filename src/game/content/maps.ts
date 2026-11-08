@@ -437,7 +437,7 @@ export { RAID_MAPS };
 const showDevMaps =
     (import.meta.env?.DEV && import.meta.env?.MODE !== "test") ||
     (typeof process !== "undefined" && process.env?.DEV_MAPS === "1");
-function createDevMap(recipe: MapRecipe): MapDef {
+export function createDevMap(recipe: MapRecipe): MapDef {
     const play = recipe.play;
     const source = play && MAPS.find((map) => map.id === play.waveSet);
     const density = play?.enemyDensity ?? 1;

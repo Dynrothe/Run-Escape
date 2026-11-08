@@ -177,6 +177,60 @@ function bakeAnim(
     };
 }
 
+// A seq's interleave order as groups, without the end marker it's decoded
+// with (SeqType.masks)
+export function getMovementGroups(masks: number[] | undefined): number[] {
+    return masks?.filter((group) => group < 0x100) ?? [];
+}
+
+// One frame of an attack over the run: a frame for each of the run's, timed
+// as the run, so the legs go on as they were while the upper body holds the
+// pose. getModel poses run frame r. Undefined if any of them can't be put
+// together (a skeletal one, or another skeleton): a frame missing would draw
+// nothing, so the run shows instead.
+export function bakeRunPose(
+    state: Pick<WorkerState, "seqTypeLoader">,
+    segments: Segments,
+    getModel: (runFrame: number) => Model | undefined,
+    seqId: number,
+    runSeqId: number,
+): { anim: BakedAnim; reach: number } | undefined {
+    const runType = state.seqTypeLoader.load(runSeqId);
+    const count = runType.frameIds?.length ?? 0;
+    if (count === 0) {
+        return undefined;
+    }
+    const models: Model[] = [];
+    for (let i = 0; i < count; i++) {
+        const model = getModel(i);
+        if (!model) {
+            return undefined;
+        }
+        models.push(model);
+    }
+    const ranges = new Int32Array(count * 4);
+    const frameSegments = new Uint16Array(count);
+    const frameLengths = new Uint16Array(count);
+    let reach = 0;
+    models.forEach((model, i) => {
+        reach = Math.max(reach, getModelReach(model));
+        ranges.set(segments.addFrame(model, count - i), i * 4);
+        frameSegments[i] = segments.current;
+        frameLengths[i] = runType.frameLengths?.[i] || 1;
+    });
+    return {
+        anim: {
+            seqId,
+            ranges,
+            segments: frameSegments,
+            frameLengths,
+            looping: true,
+            runPose: true,
+        },
+        reach,
+    };
+}
+
 function bakeSet(
     state: WorkerState,
     segments: Segments,
@@ -347,7 +401,38 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const appearance = request.appearance;
                     const getModel: ModelSource = (seqId, frame) =>
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
-                    sets.push(bakeSet(state, segments, request.key, getModel, request.seqIds));
+                    const set = bakeSet(state, segments, request.key, getModel, request.seqIds);
+                    const runPoses = request.runPoses;
+                    // The groups the run keeps, without the order's end
+                    // marker. With none, the swing would take the legs too,
+                    // so no pose is baked and the run shows.
+                    const movementGroups = runPoses
+                        ? getMovementGroups(state.seqTypeLoader.load(runPoses.maskSeqId).masks)
+                        : [];
+                    if (runPoses && movementGroups.length > 0) {
+                        for (const { seqId, frame } of runPoses.poses) {
+                            const baked = bakeRunPose(
+                                state,
+                                segments,
+                                (runFrame) =>
+                                    extra.playerModelLoader.getInterleavedModel(
+                                        appearance,
+                                        seqId,
+                                        frame,
+                                        runPoses.runSeqId,
+                                        runFrame,
+                                        movementGroups,
+                                    ),
+                                seqId,
+                                runPoses.runSeqId,
+                            );
+                            if (baked) {
+                                set.anims.push(baked.anim);
+                                set.reach = Math.max(set.reach, baked.reach);
+                            }
+                        }
+                    }
+                    sets.push(set);
                     break;
                 }
                 case "spotanim": {

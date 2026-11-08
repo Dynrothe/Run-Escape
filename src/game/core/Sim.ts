@@ -42,6 +42,7 @@ import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import {
+    LANTERN_ID,
     POWER_UPS,
     POWER_UP_CHANCE,
     POWER_UP_LIFETIME,
@@ -110,6 +111,8 @@ import {
     GroundPatternDef,
     ImpactDef,
     ImpactSpotDef,
+    LightLook,
+    LightingDef,
     MapDef,
     PlayerEffectDef,
     PowerUpDef,
@@ -126,7 +129,7 @@ import {
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
-import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
@@ -195,6 +198,8 @@ import {
     GroundFire,
     GroundHazard,
     GroundPool,
+    LeftLight,
+    Light,
     PassiveState,
     PendingHit,
     Pickup,
@@ -284,6 +289,12 @@ const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
+// Lights (MapDef.lighting): tiles past a light's edge that weapons can still aim
+// (litTargetsOnly; never more than the light's own radius, so one going out lights nothing), seconds over which a light an enemy left goes out, and over which a boss's
+// phase changes the scene's ambient (and back as it falls)
+const LIGHT_GRACE = 0.5;
+const LEFT_LIGHT_FADE = 3;
+const PHASE_LIGHT_SECONDS = 2;
 // Ticks a fallen rock lies there before it's gone
 const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
 const SPAWN_MIN_DISTANCE = 19;
@@ -803,6 +814,15 @@ export class Sim {
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
+    // A map's lights (MapDef.lighting), and whether weapons only aim at what's lit
+    readonly lighting: LightingDef | undefined;
+    readonly litTargetsOnly: boolean;
+    // On a map with lighting, this tick's sim lights (stepLights): each player's, the map's, and
+    // what enemies carry and leave. Empty on any other map.
+    lights: Light[] = [];
+    private leftLights: LeftLight[] = [];
+    // The scene's ambient as it changes over time (dimTo): from, to, over these ticks
+    private dim = { from: 1, to: 1, startTick: 0, endTick: 0 };
 
     tick = 0;
     // Tick the run ended, -1 while it's going
@@ -934,6 +954,12 @@ export class Sim {
     // Enemy id -> the tick the next of its kind can go (EnemyBlinksDef.gap)
     private readonly blinkGapEnd = new Map<string, number>();
     private readonly enemyHash: SpatialHash<Enemy>;
+    // The enemies in enemyHash more than two tiles across (radius over 1), and where each went in
+    // (x then y, in turn). The hash goes by middles, so a search for what an attack touches can
+    // miss one whose edge is in range: queryTouching looks at these too. Rebuilt with the hash,
+    // so one that grows mid-tick (a boss rising into a bigger form) joins it the next tick.
+    private readonly bigEnemies: Enemy[] = [];
+    private readonly bigEnemyAt: number[] = [];
     private readonly pileHash: SpatialHash<Pickup>;
     private nextUid = 1;
     // Enemies that have died or vanished so far, for Enemy.deathSeq
@@ -1202,6 +1228,9 @@ export class Sim {
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
+        this.lighting = this.map.lighting;
+        this.litTargetsOnly = this.lighting?.litTargetsOnly === true;
+        this.dim.from = this.dim.to = this.lighting?.ambient ?? 1;
         this.rng = new Rng(options.seed);
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
@@ -1274,6 +1303,13 @@ export class Sim {
             this.updateFlowField();
         }
         this.use(this.heroes[this.focus]);
+        if (this.lighting) {
+            for (const at of this.lighting.lanterns ?? []) {
+                const spot = this.walkableSpot(at.x, at.y);
+                this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: LANTERN_ID });
+            }
+            this.stepLights();
+        }
     }
 
     // A hero at the spawn, or for a party's others, around it
@@ -1291,6 +1327,11 @@ export class Sim {
         // Updated with the ground one from the start (getFlight's would be at
         // the same target by the time it's needed)
         const flightField = this.flightGrid && new FlowField(FLOW_FIELD_SIZE);
+        // South, or the map's spawnFacing made a unit vector, as facing always is
+        const turned = this.map.spawnFacing;
+        const length = turned ? fm.hypot(turned.x, turned.y) : 0;
+        const facing =
+            turned && length > 0 ? { x: turned.x / length, y: turned.y / length } : { x: 0, y: -1 };
         return {
             index,
             name: options.name,
@@ -1304,9 +1345,9 @@ export class Sim {
                 prevX: start.x,
                 prevY: start.y,
                 radius: PLAYER_RADIUS,
-                facingX: 0,
-                facingY: -1,
-                yaw: 0,
+                facingX: facing.x,
+                facingY: facing.y,
+                yaw: yawFromVector(facing.x, facing.y),
                 moving: false,
                 hp: PLAYER_BASE_HP,
                 maxHp: PLAYER_BASE_HP,
@@ -2308,13 +2349,18 @@ export class Sim {
     // weapon that has one (the first of them on a tie), so a Twisted bow
     // found later is wielded over the starting knives.
     getHeldObjId(): number {
-        let held = -1;
+        const weapon = this.getHeldWeapon();
+        return weapon ? (this.getLevel(weapon).objId ?? -1) : -1;
+    }
+
+    // The weapon that's in the player's hand (getHeldObjId)
+    getHeldWeapon(): WeaponState | undefined {
+        let held: WeaponState | undefined;
         let heldRarity = -1;
         for (const weapon of this.weapons) {
-            const level = this.getLevel(weapon);
             const rarity = RARITY_ORDER.indexOf(weapon.def.rarity);
-            if (level.objId !== undefined && rarity > heldRarity) {
-                held = level.objId;
+            if (this.getLevel(weapon).objId !== undefined && rarity > heldRarity) {
+                held = weapon;
                 heldRarity = rarity;
             }
         }
@@ -2443,6 +2489,9 @@ export class Sim {
         this.rebuildEnemyHash();
         this.stepEnemies();
         this.stepGlyphs();
+        if (this.lighting) {
+            this.stepLights();
+        }
         for (const hero of this.heroes) {
             // On your own, weapons still fire in the tick the player falls in
             if (this.isUp(hero) || this.heroes.length === 1) {
@@ -3073,6 +3122,10 @@ export class Sim {
             abilities: getAbilities(def, this.tick, this.rng),
         };
         this.enemies.push(enemy);
+        // Lit or not until the next tick's lights (stepLights); one carrying a light is in it
+        if (this.litTargetsOnly) {
+            enemy.lit = def.light !== undefined || this.isLit(enemy.x, enemy.y);
+        }
         if (def.shield) {
             const ticks = Math.round(def.shield.seconds * TICKS_PER_SECOND);
             enemy.shieldEnd = this.tick + ticks;
@@ -3148,9 +3201,36 @@ export class Sim {
 
     private rebuildEnemyHash(): void {
         this.enemyHash.clear();
+        this.bigEnemies.length = 0;
+        this.bigEnemyAt.length = 0;
         for (const enemy of this.enemies) {
             if (!enemy.dead && !enemy.leaving) {
                 this.enemyHash.insert(enemy);
+                if (enemy.radius > 1) {
+                    this.bigEnemies.push(enemy);
+                    this.bigEnemyAt.push(enemy.x, enemy.y);
+                }
+            }
+        }
+    }
+
+    // What an attack around (x, y) that counts an enemy's own radius (a swing, an aura, a
+    // projectile) has to look at: the hash's cells out to `search`, then each big enemy in a cell
+    // those missed, whose edge can be in range while its middle is further off. Callers check the
+    // exact distance, as with the hash's own query; nothing changes on a map with no big enemy.
+    private queryTouching(
+        x: number,
+        y: number,
+        search: number,
+        callback: (enemy: Enemy) => void,
+    ): void {
+        this.enemyHash.query(x, y, search, callback);
+        const big = this.bigEnemies;
+        const at = this.bigEnemyAt;
+        for (let i = 0; i < big.length; i++) {
+            // By where it went in, as the hash has it, though it may have moved since
+            if (!this.enemyHash.visits(x, y, search, at[i * 2], at[i * 2 + 1])) {
+                callback(big[i]);
             }
         }
     }
@@ -5020,9 +5100,17 @@ export class Sim {
         });
     }
 
+    // A phase that changes the scene's light (BossPhasesDef light), on a map with lighting
+    private phaseLight(phase: { light?: number }): void {
+        if (this.lighting && phase.light !== undefined) {
+            this.dimTo(phase.light, PHASE_LIGHT_SECONDS);
+        }
+    }
+
     // Its first shield, and its totems standing idle in the corners; or with no
     // totems, its hitpoints to get through, a phase at a time
     private startPhases(boss: Enemy, phases: BossPhasesDef): void {
+        this.phaseLight(phases.phases[0]);
         const totemsDef = phases.totems;
         if (!totemsDef) {
             boss.speed *= phases.phases[0].speed ?? 1;
@@ -5168,6 +5256,7 @@ export class Sim {
         // Quicker on its feet with each phase (BossPhasesDef speed)
         boss.speed *= (next.speed ?? 1) / (phases.phases[phase.index].speed ?? 1);
         phase.index++;
+        this.phaseLight(next);
         phase.stage = "shield";
         // The new phase's dream from its first tick (the old one's bullets fly on)
         phase.ambientNext = this.tick;
@@ -5208,6 +5297,7 @@ export class Sim {
         const next = phases.phases[index + 1];
         boss.speed *= (next.speed ?? 1) / (phases.phases[index].speed ?? 1);
         phase.index++;
+        this.phaseLight(next);
         phase.startTick = this.tick;
         phase.ambientNext = this.tick;
         phase.ambientsNext = undefined;
@@ -5299,6 +5389,10 @@ export class Sim {
             }
         }
         this.clearBossAttacks();
+        // Its phases' light goes back to the map's
+        if (this.lighting && boss.def.boss?.phases?.phases.some((p) => p.light !== undefined)) {
+            this.dimTo(this.baseAmbient, PHASE_LIGHT_SECONDS);
+        }
     }
 
     // Everything a boss had in the air and on the ground, and on the players
@@ -8943,6 +9037,18 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
+        // A light it carried stays where it fell for a while (EnemyDef.light)
+        const leaves = this.lighting && enemy.def.light?.left;
+        if (leaves) {
+            this.leftLights.push({
+                id: enemy.uid,
+                x: enemy.x,
+                y: enemy.y,
+                look: leaves,
+                startTick: this.tick,
+                endTick: this.tick + Math.round(leaves.seconds * TICKS_PER_SECOND),
+            });
+        }
         const byEnemy = cause === "enemy";
         // Co-op: a boss's copies are one boss, killed when the last one falls
         const lastCopy = !this.encounterLeft(enemy);
@@ -9284,6 +9390,12 @@ export class Sim {
     }
 
     private stepWeapons(): void {
+        // On the move, only the weapon in hand's attacks are shown, and only
+        // if it has a run pose (WeaponDef.runPose): the view plays them over
+        // the run, and another weapon's would cut it short. Any other attack
+        // on the move goes unshown, as always. Only for show, so in no hash.
+        const held = this.player.moving ? this.getHeldWeapon() : undefined;
+        const posed = held?.def.runPose !== undefined ? held : undefined;
         for (const weapon of this.weapons) {
             if (weapon.cooldown > 0) {
                 weapon.cooldown--;
@@ -9315,7 +9427,7 @@ export class Sim {
                     y: this.player.y,
                 });
             }
-            if (fired && !this.player.moving) {
+            if (fired && (!this.player.moving || weapon === posed)) {
                 this.player.attackSeq = special?.playerSeq ?? weapon.def.playerSeq;
                 this.player.attackStart = this.tick;
             }
@@ -9349,7 +9461,8 @@ export class Sim {
         const reach = level.area * (1 + this.stats.area);
         const player = this.player;
         return (
-            this.nearestEnemies(player.x, player.y, reach + 0.5, 1, getWeaponStyle(def)).length > 0
+            this.nearestEnemies(player.x, player.y, reach + 0.5, 1, getWeaponStyle(def), true)
+                .length > 0
         );
     }
 
@@ -9393,6 +9506,7 @@ export class Sim {
             reach + 1.5,
             1,
             getWeaponStyle(def),
+            true,
         )[0];
         if (nearest) {
             const dx = nearest.x - player.x;
@@ -9436,18 +9550,28 @@ export class Sim {
                 arc: SLASH_ARC,
                 weaponId: def.id,
             });
-            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
+            this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const along = ox * dirX + oy * dirY;
                 const across = Math.abs(ox * -dirY + oy * dirX);
                 if (
-                    along >= -0.3 &&
-                    along <= reach + enemy.radius &&
-                    across <= width / 2 + enemy.radius
+                    along < -0.3 ||
+                    along > reach + enemy.radius ||
+                    across > width / 2 + enemy.radius
                 ) {
-                    hit.push(enemy);
+                    return;
                 }
+                // A big one only if its edge reaches the box: past a corner, the box widened by
+                // its radius takes in what's well clear of it
+                if (enemy.radius > 1) {
+                    const pastEnd = Math.max(0, along - reach);
+                    const pastSide = Math.max(0, across - width / 2);
+                    if (pastEnd * pastEnd + pastSide * pastSide > enemy.radius * enemy.radius) {
+                        return;
+                    }
+                }
+                hit.push(enemy);
             });
         }
         this.meleeHits(def, level, hit, special);
@@ -9485,7 +9609,7 @@ export class Sim {
                 arc,
                 weaponId: def.id,
             });
-            this.enemyHash.query(player.x, player.y, reach + 1, (enemy) => {
+            this.queryTouching(player.x, player.y, reach + 1, (enemy) => {
                 const ox = enemy.x - player.x;
                 const oy = enemy.y - player.y;
                 const dist = fm.hypot(ox, oy);
@@ -9498,6 +9622,17 @@ export class Sim {
                 const angle = fm.acos(Math.max(-1, Math.min(1, along)));
                 if (dist > 0.8 && angle > arc + enemy.radius / dist) {
                     return;
+                }
+                // A big one off to the side only if its edge reaches the arc's nearer side, a line
+                // out to reach: past the arc's far corners, the widened angle takes in what's
+                // well clear of it
+                if (enemy.radius > 1 && dist > 0.8 && angle > arc) {
+                    const sideAlong = dist * fm.cos(angle - arc);
+                    const sideOff = dist * fm.sin(angle - arc);
+                    const offLine = sideAlong - Math.max(0, Math.min(reach, sideAlong));
+                    if (offLine * offLine + sideOff * sideOff > enemy.radius * enemy.radius) {
+                        return;
+                    }
                 }
                 hit.add(enemy);
             });
@@ -9527,7 +9662,7 @@ export class Sim {
             weaponId: def.id,
         });
         const hit: Enemy[] = [];
-        this.enemyHash.query(player.x, player.y, radius + 1, (enemy) => {
+        this.queryTouching(player.x, player.y, radius + 1, (enemy) => {
             if (
                 !enemy.dead &&
                 fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
@@ -9630,6 +9765,8 @@ export class Sim {
             if (!hasTag(from, chain.tags)) {
                 continue;
             }
+            // Lit or not (LightingDef.litTargetsOnly): a hop carries on into the dark, as a shot
+            // hits what it meets there
             this.enemyHash.query(from.x, from.y, chain.range + 0.5, (enemy) => {
                 if (
                     left <= 0 ||
@@ -9802,34 +9939,186 @@ export class Sim {
         this.stealLife(def, dealt);
     }
 
+    // ---- Lights (MapDef.lighting) ----
+
+    // This tick's sim lights, from where everything that carries one is now: the players' first,
+    // in the party's order, then the map's, then enemies' and what they left. All in the same
+    // order on every co-op player's copy. Squared distances only, nothing from Math.
+    private stepLights(): void {
+        const lighting = this.lighting!;
+        const lights: Light[] = [];
+        for (const hero of this.heroes) {
+            if (hero.left) {
+                continue;
+            }
+            const own = this.heroLight(hero.index, lighting);
+            if (own) {
+                const { x, y } = hero.player;
+                lights.push({ kind: "player", id: hero.index, x, y, ...own, hero: hero.index });
+            }
+        }
+        (lighting.lights ?? []).forEach((look, id) => {
+            lights.push({ kind: "map", id, x: look.x, y: look.y, radius: look.radius, look });
+        });
+        for (const enemy of this.enemies) {
+            const look = enemy.def.light;
+            if (look && !enemy.dead) {
+                const { x, y } = enemy;
+                lights.push({
+                    kind: "enemy",
+                    id: enemy.uid,
+                    x,
+                    y,
+                    radius: look.radius,
+                    look,
+                    enemy,
+                });
+            }
+        }
+        this.leftLights = this.leftLights.filter((left) => left.endTick > this.tick);
+        for (const left of this.leftLights) {
+            // Going out over its last LEFT_LIGHT_FADE seconds
+            const fade = Math.min(
+                1,
+                (left.endTick - this.tick) / (LEFT_LIGHT_FADE * TICKS_PER_SECOND),
+            );
+            lights.push({
+                kind: "left",
+                id: left.id,
+                x: left.x,
+                y: left.y,
+                radius: left.look.radius * fade,
+                look: left.look,
+            });
+        }
+        this.lights = lights;
+        // What weapons can aim at, worked out once a tick rather than on every search
+        if (this.litTargetsOnly) {
+            for (const enemy of this.enemies) {
+                enemy.lit = this.isLit(enemy.x, enemy.y);
+            }
+        }
+    }
+
+    // A hero's light: the map's round each player, and a light power-up's (the lantern) on top
+    // while it lasts, shrinking back over its last seconds. None if they have neither.
+    private heroLight(
+        heroIndex: number,
+        lighting: LightingDef,
+    ): { radius: number; look: LightLook } | undefined {
+        let bonus = 0;
+        let look = lighting.player;
+        for (const active of this.powerUps) {
+            if (active.hero !== heroIndex) {
+                continue;
+            }
+            const effect = getPowerUp(active.id).effect;
+            if (effect.kind === "light") {
+                const fade = Math.min(
+                    1,
+                    (active.endTick - this.tick) / (effect.fade * TICKS_PER_SECOND),
+                );
+                bonus = Math.max(bonus, effect.bonus * fade);
+                look ??= effect.look ?? { radius: effect.bonus };
+            }
+        }
+        const radius = (lighting.player?.radius ?? 0) + bonus;
+        return look && radius > 0 ? { radius, look } : undefined;
+    }
+
+    // Whether a spot's in a sim light, or near enough to its edge (LIGHT_GRACE): always, on a map
+    // without the rule (LightingDef.litTargetsOnly)
+    isLit(x: number, y: number): boolean {
+        if (!this.litTargetsOnly) {
+            return true;
+        }
+        for (const light of this.lights) {
+            const reach = light.radius + Math.min(LIGHT_GRACE, light.radius);
+            const dx = x - light.x;
+            const dy = y - light.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // What weapons can aim at under the rule: whether it was lit as this tick's lights were made
+    // (stepLights), or as it came
+    isEnemyLit(enemy: Enemy): boolean {
+        return !this.litTargetsOnly || enemy.lit === true;
+    }
+
+    // How bright the scene is (LightingDef.ambient) at a tick, fractions too, as it changes over
+    // time (dimTo). 1 on a map without lighting.
+    ambientAt(tick: number): number {
+        const dim = this.dim;
+        if (tick >= dim.endTick) {
+            return dim.to;
+        }
+        const t = Math.max(0, (tick - dim.startTick) / Math.max(1, dim.endTick - dim.startTick));
+        return dim.from + (dim.to - dim.from) * t;
+    }
+
+    // The scene's ambient to this, over seconds (a boss's phase, an event): from wherever it is
+    // now. Drawn only, and only on a map with lighting.
+    dimTo(ambient: number, seconds: number): void {
+        const from = this.ambientAt(this.tick);
+        this.dim = {
+            from,
+            to: ambient,
+            startTick: this.tick,
+            endTick: this.tick + Math.round(seconds * TICKS_PER_SECOND),
+        };
+    }
+
+    // The map's own ambient, when nothing's changed it
+    get baseAmbient(): number {
+        return this.lighting?.ambient ?? 1;
+    }
+
     // What the player's weapons go for. Shielded enemies (Pest Control's
     // portals, Verzik's first form) are left out: every hit on them is
     // blocked, so aiming at them would waste shots while pests close in.
     // style: a weapon's, which leaves out what it can't hurt (an expert Nylocas of another
     // style). What isn't a weapon (thralls, the cannon, power-ups) hurts any, and passes none.
+    // edge: an enemy more than two tiles across (radius over 1) goes by a point half a tile in
+    // from its edge (about where a small one's middle is), as a melee weapon's reach does: a slash
+    // or sweep hits whatever its reach touches, so a big boss is in reach from beside it. Nothing
+    // smaller changes.
     private nearestEnemies(
         x: number,
         y: number,
         range: number,
         count: number,
         style?: CombatStyle,
+        edge = false,
     ): Enemy[] {
         const found: { enemy: Enemy; distSq: number }[] = [];
         const rangeSq = range * range;
         const styled = style !== undefined && this.expert;
         // Not behind a floor's pillar, which blocks the way and the view
         const pillars = this.floor?.hasPillars ? this.floor : undefined;
+        // Under the rule (LightingDef.litTargetsOnly), only what's lit
+        const dark = this.litTargetsOnly;
         for (const enemy of this.enemies) {
             if (
                 enemy.dead ||
                 enemy.shieldEnd > this.tick ||
-                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style)
+                (styled && enemy.def.onlyStyle !== undefined && enemy.def.onlyStyle !== style) ||
+                (dark && !this.isEnemyLit(enemy))
             ) {
                 continue;
             }
             const dx = enemy.x - x;
             const dy = enemy.y - y;
-            const distSq = dx * dx + dy * dy;
+            let distSq = dx * dx + dy * dy;
+            // Over two tiles across: half a tile in from its edge. With a melee weapon's range
+            // (reach + 0.5) that's in reach just when a swing at it lands (reach + radius).
+            if (edge && enemy.radius > 1) {
+                const gap = Math.max(0, fm.hypot(dx, dy) - (enemy.radius - 0.5));
+                distSq = gap * gap;
+            }
             if (distSq <= rangeSq && !pillars?.blocksSight(x, y, enemy.x, enemy.y)) {
                 found.push({ enemy, distSq });
             }
@@ -10054,7 +10343,7 @@ export class Sim {
             spotAnim: level.projectileSpotAnim ?? -1,
             impactSpotAnim: level.impactSpotAnim ?? -1,
             hitSound: level.hitSound ?? def.hitSound,
-            objId: kind === "knife" ? (level.projectileObjId ?? level.objId ?? -1) : -1,
+            objId: getProjectileObjId(def, level) ?? -1,
             startTick: this.tick,
             ...(def.split && { split: def.split }),
         });
@@ -10279,7 +10568,7 @@ export class Sim {
         const radius = level.area * (1 + this.stats.area);
         this.emit({ type: "aura", x: player.x, y: player.y, radius });
         const hit: Enemy[] = [];
-        this.enemyHash.query(player.x, player.y, radius + 0.5, (enemy) => {
+        this.queryTouching(player.x, player.y, radius + 0.5, (enemy) => {
             if (fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
@@ -10374,7 +10663,7 @@ export class Sim {
             fire.nextTick += FIRE_INTERVAL;
             this.useHeroAt(fire.hero);
             this.damageSource = fire.source;
-            this.enemyHash.query(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
+            this.queryTouching(fire.x, fire.y, fire.radius + 0.5, (enemy) => {
                 if (fm.hypot(enemy.x - fire.x, enemy.y - fire.y) <= fire.radius + enemy.radius) {
                     this.damageEnemy(enemy, fire.damage, 0, fire.x, fire.y);
                 }
@@ -10413,7 +10702,7 @@ export class Sim {
             }
             const tx = target.x;
             const ty = target.y;
-            this.enemyHash.query(tx, ty, radius + 0.5, (enemy) => {
+            this.queryTouching(tx, ty, radius + 0.5, (enemy) => {
                 if (
                     enemy === target ||
                     fm.hypot(enemy.x - tx, enemy.y - ty) <= radius + enemy.radius
@@ -10478,7 +10767,7 @@ export class Sim {
             // Venom darts fly past everything but what they're aimed at, so
             // the venom spreads
             const only = projectile.venom > 0 && target ? target.uid : 0;
-            this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
+            this.queryTouching(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
                 if (
                     bounced ||
                     projectile.life <= 0 ||
@@ -10519,7 +10808,7 @@ export class Sim {
         projectile.x = player.x + fm.cos(angle) * orbit.radius;
         projectile.y = player.y + fm.sin(angle) * orbit.radius;
         projectile.yaw = yawFromVector(-fm.sin(angle), fm.cos(angle));
-        this.enemyHash.query(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
+        this.queryTouching(projectile.x, projectile.y, projectile.radius + 0.5, (enemy) => {
             if (enemy.dead || (orbit.nextHit.get(enemy.uid) ?? 0) > this.tick) {
                 return;
             }
@@ -11322,8 +11611,12 @@ export class Sim {
     }
 
     private rollPowerUpId(): string {
+        // A lantern is the one power-up a map's own weight brings in (LightingDef)
+        const lantern = this.lighting?.lanternWeight ?? 0;
         const index = this.rng.weightedIndex(
-            POWER_UPS.map((p) => (p.id === this.lastPowerUpId ? 0 : p.weight)),
+            POWER_UPS.map((p) =>
+                p.id === this.lastPowerUpId ? 0 : p.id === LANTERN_ID ? lantern : p.weight,
+            ),
         );
         return POWER_UPS[index].id;
     }
@@ -11434,6 +11727,10 @@ export class Sim {
             case "pumpkin":
                 message = this.openPumpkin();
                 break;
+            case "light":
+                endTick = this.tick + this.powerUpTicks(effect.seconds);
+                message = `Your ${def.name.toLowerCase()} lights up the dark!`;
+                break;
             case "laps":
                 endTick = this.tick + this.powerUpTicks(effect.seconds);
                 this.lapsEndTick = endTick;
@@ -11514,7 +11811,7 @@ export class Sim {
         this.emit({ type: "powerUpHit", id: rock.powerUpId, x, y });
         this.addEffect(rock.spotAnim, x, y, 0, 60);
         const hit: Enemy[] = [];
-        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+        this.queryTouching(x, y, radius + 1, (enemy) => {
             if (fm.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.radius) {
                 hit.push(enemy);
             }
@@ -11660,7 +11957,7 @@ export class Sim {
     private pulseRing(ring: FairyRing): void {
         const { x, y, radius } = ring;
         const caught: Enemy[] = [];
-        this.enemyHash.query(x, y, radius + 1, (enemy) => {
+        this.queryTouching(x, y, radius + 1, (enemy) => {
             if (
                 !enemy.boss &&
                 !enemy.def.stationary &&

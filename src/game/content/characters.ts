@@ -254,6 +254,8 @@ export const CHARACTERS: CharacterDef[] = [
             [EquipSlot.FEET]: 20710,
         },
         bonus: { revival: 1 },
+        // The Wintertodt's phoenix
+        reviveLook: { name: "Phoenix", objId: 20693 },
         unlock: { kind: "beatMap", mapId: "kourend" },
     },
     {

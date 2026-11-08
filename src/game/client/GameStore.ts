@@ -4,6 +4,7 @@ import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult } from "../core/Sim";
 import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
+import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
@@ -61,12 +62,16 @@ export type BuffView = {
     id: string;
     name: string;
     objId: number;
-    secondsLeft: number;
-    // Time left, 1 when just drunk
-    fraction: number;
     // A boss attack's drain rather than a potion or power-up
     harmful: boolean;
-};
+} & (
+    | {
+          secondsLeft: number;
+          // Time left, 1 when just drunk
+          fraction: number;
+      }
+    | { secondsLeft?: never; fraction?: never }
+);
 
 // An opened reward casket, for the opening animation and the decision after
 export type ChestView = {
@@ -171,6 +176,8 @@ export type HudNumbers = {
     xpFraction: number;
     // Whole seconds into the run
     seconds: number;
+    // Co-op's next automatic choice, using the host's wall clock rather than sim ticks.
+    decisionSeconds?: number;
     kills: number;
     coins: number;
     // Damage a second just now, every source counted
@@ -374,6 +381,8 @@ export type UiSnapshot = {
     unreadableSave?: string;
     // Saves that couldn't be read, kept to be exported
     unreadableSaves: UnreadableSave[];
+    // Cloud save, where the build has it and its Worker answers
+    cloud?: CloudView;
     characterId: string;
     // The map the next run is on, and whether it's endless and on hard mode
     // (once the map's been beaten)
@@ -391,6 +400,8 @@ export type UiSnapshot = {
     waitingOn: string[];
     // Co-op: a revive you're part of, as the one down or the one reviving
     revive?: ReviveView;
+    // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
+    cinematic?: boolean;
     choices: ChoiceView[];
     chest?: ChestView;
     event?: EventView;

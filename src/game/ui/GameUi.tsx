@@ -14,6 +14,7 @@ import compass from "../../components/rs/minimap/compass.png";
 import minimapFrame from "../../components/rs/minimap/minimap-frame.png";
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { cloudKeepsCopy } from "../client/CloudSave";
 import { FRAME_RATES, FrameRate } from "../client/DisplaySettings";
 import type { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
@@ -31,6 +32,7 @@ import {
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import { CHARACTERS, getCharacter } from "../content/characters";
+import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     CAMPAIGN_MAPS,
     DEV_MAPS,
@@ -45,11 +47,12 @@ import {
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
+import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
-import { WeaponStatLine } from "../content/weaponStats";
+import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import type { RaidChest } from "../core/Sim";
 import {
@@ -70,9 +73,11 @@ import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
+import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
+import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
@@ -84,6 +89,7 @@ import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
+import { StatLine } from "./StatLine";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
@@ -124,7 +130,12 @@ export function GameUi({ store, client }: Props): JSX.Element {
 
     if (ui.screen === "loading" || !client) {
         return (
-            <div className="ui-fill ui-center ui-loading">
+            <div
+                className="ui-fill ui-center ui-loading"
+                // The opening cinematic's squares loading: a click or tap skips it, as it would
+                // once it plays
+                onPointerDown={ui.cinematic && client ? () => client.skipCinematic() : undefined}
+            >
                 <OsrsLoadingBar text={ui.loadingText} progress={ui.loadingProgress} />
             </div>
         );
@@ -629,6 +640,7 @@ function SettingsPanel({
                 <section className="ui-settings-section">
                     <h3>{t("settings.section.save")}</h3>
                     <SaveSetting ui={ui} client={client} />
+                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
                     <UnreadableSaveSettings ui={ui} client={client} />
                 </section>
             </div>
@@ -674,8 +686,12 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     // The panel saying the game isn't saving is over everything, so the title's
     // own wait till it's gone
     const savePanel = ui.saveBlock !== undefined && !ui.saveBlockClosed;
+    // The cloud has a different save, and asks which to keep
+    const cloudChoice = ui.cloud?.choice !== undefined && !ui.cloud.choice.closed;
     const [changelogOpen, setChangelogOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    // Cloud save's own panel, from its button
+    const [cloudOpen, setCloudOpen] = useState(false);
     // The notice, until it's closed (once for each new one)
     const [notice, setNotice] = useState<Notice>();
     useEffect(() => {
@@ -699,6 +715,10 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         const onKey = (e: KeyboardEvent) => {
             if (savePanel) {
                 return;
+            } else if (cloudChoice) {
+                if (e.code === "Escape") {
+                    client.cloud?.later();
+                }
             } else if (ui.unreadableSave) {
                 if (e.code === "Escape") {
                     client.closeUnreadableNotice();
@@ -707,10 +727,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 if (e.code === "Enter" || e.code === "Space" || e.code === "Escape") {
                     closeNotice();
                 }
-            } else if (changelogOpen || settingsOpen) {
+            } else if (changelogOpen || settingsOpen || cloudOpen) {
                 if (e.code === "Escape") {
                     setChangelogOpen(false);
                     setSettingsOpen(false);
+                    setCloudOpen(false);
                 }
             } else if (
                 e.code === "Space" ||
@@ -722,11 +743,28 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [client, changelogOpen, settingsOpen, notice, closeNotice, ui.unreadableSave, savePanel]);
+    }, [
+        client,
+        changelogOpen,
+        settingsOpen,
+        cloudOpen,
+        notice,
+        closeNotice,
+        ui.unreadableSave,
+        savePanel,
+        cloudChoice,
+    ]);
+    // Over the title's own panels too: Sync now or a code linked from Settings or cloud save's
+    // panel can be what asks
+    const choicePanel =
+        !savePanel && cloudChoice && ui.cloud ? (
+            <CloudChoicePanel cloud={ui.cloud} save={save} client={client} />
+        ) : undefined;
     if (changelogOpen) {
         return (
             <div className="ui-fill ui-center">
                 <ChangelogPanel onClose={() => setChangelogOpen(false)} />
+                {choicePanel}
             </div>
         );
     }
@@ -734,6 +772,20 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         return (
             <div className="ui-fill ui-center">
                 <SettingsPanel ui={ui} client={client} onClose={() => setSettingsOpen(false)} />
+                {choicePanel}
+            </div>
+        );
+    }
+    if (cloudOpen) {
+        return (
+            <div className="ui-fill ui-center">
+                <CloudSavePanel
+                    cloud={ui.cloud}
+                    client={client}
+                    saving={!ui.saveBlock}
+                    onClose={() => setCloudOpen(false)}
+                />
+                {choicePanel}
             </div>
         );
     }
@@ -799,7 +851,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 </div>
                 {/* Under the menu, so a controller's highlight still starts on
                     Singleplayer; not while nothing's saving, as that panel comes first */}
-                {!ui.saveBlock && <ExportReminder save={save} client={client} />}
+                {/* Nor while cloud save has a copy: only while it's on, synced, and nothing's
+                    wrong, as a code that's stopped working keeps none */}
+                {!ui.saveBlock && !cloudKeepsCopy(ui.cloud) && (
+                    <ExportReminder save={save} client={client} />
+                )}
                 <TitleHint />
             </div>
             <div className="ui-title-utils">
@@ -816,6 +872,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                     {t("ui.title.whats_new", { version: GAME_VERSION })}
                 </button>
                 <TitleLanguageMenu />
+                <CloudSaveButton
+                    cloud={ui.cloud}
+                    client={client}
+                    onOpen={() => setCloudOpen(true)}
+                />
                 <button
                     className="ui-title-link ui-title-settings"
                     title={t("ui.title.settings")}
@@ -827,7 +888,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <DiscordLink />
                 <GitHubLink />
             </div>
-            {savePanel ? null : ui.unreadableSave ? (
+            {savePanel ? null : choicePanel ? (
+                choicePanel
+            ) : ui.unreadableSave ? (
                 <UnreadableSavePanel keptAs={ui.unreadableSave} client={client} />
             ) : (
                 notice && <NoticePanel notice={notice} onClose={closeNotice} />
@@ -884,15 +947,17 @@ function TitleHint(): JSX.Element {
 // stands in view between them
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const mapName = tr(`map.${ui.mapId}.name`, getMap(ui.mapId).name);
-    const enterKey =
-        ui.hard && ui.endless && !getMap(ui.mapId).fun
-            ? "ui.select.enter.hard_endless"
-            : ui.hard
-              ? "ui.select.enter.hard"
-              : ui.endless && !getMap(ui.mapId).fun
-                ? "ui.select.enter.endless"
-                : "ui.select.enter";
-
+    // A raid's expert mode, solo only for now (GameClient.toggleExpert)
+    const expertShown = getMap(ui.mapId).raid !== undefined && ui.coop.status === "offline";
+    const endlessShown = ui.endless && !getMap(ui.mapId).fun;
+    const mode = ui.hard ? (ui.expert && expertShown ? "expert" : "hard") : undefined;
+    const enterKey = mode
+        ? endlessShown
+            ? `ui.select.enter.${mode}_endless`
+            : `ui.select.enter.${mode}`
+        : endlessShown
+          ? "ui.select.enter.endless"
+          : "ui.select.enter";
     return (
         <div className="ui-fill ui-select">
             <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(getMap(ui.mapId))} />
@@ -905,9 +970,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                 {/* A raid ends with its last room: no endless */}
                 {!getMap(ui.mapId).raid && <EndlessSwitch ui={ui} client={client} />}
                 <HardSwitch ui={ui} client={client} />
-                {getMap(ui.mapId).raid && ui.coop.status === "offline" && (
-                    <ExpertSwitch ui={ui} client={client} />
-                )}
+                {expertShown && <ExpertSwitch ui={ui} client={client} />}
                 <button
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
@@ -1265,6 +1328,7 @@ function AdventurerDetails({
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
     const favourite = save.favouriteCharacter === character.id;
+    const bonus = formatStats(character.bonus);
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
@@ -1298,6 +1362,14 @@ function AdventurerDetails({
             <div className="ui-card-text">
                 {tr(`char.${character.id}.desc`, character.description)}
             </div>
+            {/* What they bring, a stat to a line */}
+            {bonus.length > 0 && (
+                <div className="ui-select-bonus">
+                    {bonus.map((text) => (
+                        <StatLine key={text} text={text} />
+                    ))}
+                </div>
+            )}
             {!unlocked && character.unlock && (
                 <div className="ui-card-cost">
                     {describeUnlockTask(character.unlock)} {t("ui.common.to_unlock")}
@@ -1745,7 +1817,9 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     }}
                                 >
                                     <div className="ui-card-title">{upgradeName}</div>
-                                    <div className="ui-card-text">{upgradeDesc}</div>
+                                    <div className="ui-card-text">
+                                        <StatLine text={upgradeDesc} statKey={upgrade.stat} />
+                                    </div>
                                     <div className="ui-pips">
                                         {Array.from({ length: upgrade.maxRank }, (_, i) => (
                                             <span
@@ -1804,14 +1878,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
     return (
         <div className="ui-fill ui-run">
-            {hud && (
-                <Hud
-                    hud={hud}
-                    client={client}
-                    questTracker={ui.display.questTracker}
-                    damagePanel={ui.display.damagePanel}
-                />
-            )}
+            <ChoiceCountdown client={client} />
             {ui.party.length > 0 && <PartyFrames party={ui.party} />}
             {ui.waitingOn.length > 0 && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <WaitingNote names={ui.waitingOn} />
@@ -1819,11 +1886,31 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
-            {isCoarsePointer && hud && (
+            {ui.cinematic && (
+                // The opening cinematic: no HUD, and a click or tap anywhere skips it
+                <div
+                    className="ui-cinematic"
+                    onPointerDown={(e) => {
+                        e.preventDefault();
+                        client.skipCinematic();
+                    }}
+                />
+            )}
+            {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
                     inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
                     overlay={ui.overlay}
                     client={client}
+                />
+            )}
+            {/* The inspectable HUD slots sit above the touch movement zone. */}
+            {hud && !ui.cinematic && (
+                <Hud
+                    hud={hud}
+                    client={client}
+                    questTracker={ui.display.questTracker}
+                    damagePanel={ui.display.damagePanel}
+                    disabled={ui.overlay !== "none"}
                 />
             )}
             <div className="ui-toasts">
@@ -1865,6 +1952,25 @@ function useHudNumber<T>(client: GameClient, pick: (numbers: HudNumbers) => T): 
     });
 }
 
+function ChoiceCountdown({ client }: { client: GameClient }): JSX.Element | null {
+    const seconds = useHudNumber(client, (n) => n.decisionSeconds);
+    if (seconds === undefined) {
+        return null;
+    }
+    return (
+        <div
+            className={"ui-choice-countdown" + (seconds <= 5 ? " ui-choice-countdown-soon" : "")}
+            role="timer"
+            aria-label={t("ui.run.choice_countdown_aria", { seconds })}
+        >
+            <span className="ui-choice-countdown-label">{t("ui.run.choice_countdown_label")}</span>
+            <span className="ui-choice-countdown-time">
+                {t("ui.run.choice_countdown_time", { seconds })}
+            </span>
+        </div>
+    );
+}
+
 // A random event: what's for sale against the coins carried
 function RunEventModal({
     event,
@@ -1887,16 +1993,44 @@ function formatSlotLevel(slot: SlotView): string {
 
 // A weapon or passive in the HUD, with what it does on a card shown while
 // it's pointed at
-const Slots = memo(function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element {
+const Slots = memo(function Slots({
+    slots,
+    max,
+    disabled,
+}: {
+    slots: SlotView[];
+    max: number;
+    disabled: boolean;
+}): JSX.Element {
     return (
         <div className="ui-slots">
             {Array.from({ length: max }, (_, i) => {
                 const slot = slots[i];
                 return (
-                    <div
+                    <DescriptionButton
                         key={i}
+                        itemId={slot?.id}
+                        disabled={!slot || disabled}
+                        aria-label={slot?.name ?? t("ui.hud.empty_slot", { n: i + 1 })}
                         className={"ui-slot" + (slot?.evolution?.ready ? " ui-slot-evolve" : "")}
                         style={slot ? { borderColor: slot.rarityColor } : undefined}
+                        description={
+                            slot && (
+                                <>
+                                    <div style={{ color: slot.rarityColor }}>{slot.name}</div>
+                                    <div className="ui-slot-tip-level">
+                                        {slot.level >= slot.maxLevel
+                                            ? "Max level"
+                                            : `Level ${slot.level} of ${slot.maxLevel}`}
+                                    </div>
+                                    {slot.stats?.map((line) => (
+                                        <StatLine key={line} text={line} />
+                                    ))}
+                                    {slot.detail && <div>{slot.detail}</div>}
+                                    {slot.evolution && <EvolutionLine {...slot.evolution} />}
+                                </>
+                            )
+                        }
                     >
                         {slot && (
                             <>
@@ -1906,25 +2040,9 @@ const Slots = memo(function Slots({ slots, max }: { slots: SlotView[]; max: numb
                                     size={30}
                                 />
                                 <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
-                                <div className="ui-slot-tip rs-border rs-background">
-                                    <div style={{ color: slot.rarityColor }}>{slot.name}</div>
-                                    <div className="ui-slot-tip-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? t("ui.hud.max_level")
-                                            : t("ui.hud.level_of", {
-                                                  level: slot.level,
-                                                  max: slot.maxLevel,
-                                              })}
-                                    </div>
-                                    {slot.stats?.map((line) => (
-                                        <div key={line}>{line}</div>
-                                    ))}
-                                    {slot.detail && <div>{slot.detail}</div>}
-                                    {slot.evolution && <EvolutionLine {...slot.evolution} />}
-                                </div>
                             </>
                         )}
-                    </div>
+                    </DescriptionButton>
                 );
             })}
         </div>
@@ -1955,27 +2073,34 @@ function EvolutionLine({
 }
 
 // Worn gear, small, under the weapons and passives
-const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): JSX.Element {
+const GearSlots = memo(function GearSlots({
+    gear,
+    disabled,
+}: {
+    gear: GearSlotView[];
+    disabled: boolean;
+}): JSX.Element {
     return (
         <div className="ui-slots ui-gear-slots">
             {gear.map((slot) => (
-                <div
+                <DescriptionButton
                     key={slot.slot}
-                    className="ui-slot ui-gear-slot"
+                    itemId={slot.item?.id}
+                    disabled={!slot.item || disabled}
+                    aria-label={slot.item?.name ?? t("ui.hud.gear_empty", { name: slot.name })}
+                    className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
                     style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
-                    title={
-                        slot.item
-                            ? `${slot.item.name}: ${slot.item.lines.join(", ")}` +
-                              (slot.item.set ? `\n${slot.item.set.text}` : "")
-                            : t("ui.hud.gear_empty", { name: slot.name })
-                    }
+                    description={slot.item && <ItemDescription item={slot.item} />}
                 >
                     {slot.item ? (
                         <ItemIcon objId={slot.item.objId} size={22} />
                     ) : (
-                        <span className="ui-gear-empty">{slot.name[0]}</span>
+                        <ItemIcon
+                            spriteId={GEAR_SLOT_BY_ID.get(slot.slot)!.iconSpriteId}
+                            size={22}
+                        />
                     )}
-                </div>
+                </DescriptionButton>
             ))}
         </div>
     );
@@ -1985,14 +2110,22 @@ const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): J
 const Inventory = memo(function Inventory({
     inventory,
     client,
+    disabled,
 }: {
     inventory: InventorySlotView[];
     client: GameClient;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <div className="ui-inventory">
             {inventory.map((slot, i) => (
-                <InventoryItem key={i} slot={slot} index={i} onUse={() => client.useItem(i)} />
+                <InventoryItem
+                    key={i}
+                    slot={slot}
+                    index={i}
+                    disabled={disabled}
+                    onUse={() => client.useItem(i)}
+                />
             ))}
         </div>
     );
@@ -2004,15 +2137,23 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
             {buffs.map((buff) => (
                 <div
                     key={buff.id}
-                    className={buff.harmful ? "ui-buff ui-buff-harmful" : "ui-buff"}
+                    className={
+                        "ui-buff" +
+                        (buff.harmful ? " ui-buff-harmful" : "") +
+                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
+                    }
                     title={buff.name}
                 >
                     <ItemIcon objId={buff.objId} size={24} />
-                    <span>{buff.secondsLeft}s</span>
-                    <div
-                        className="ui-buff-bar"
-                        style={{ transform: `scaleX(${buff.fraction})` }}
-                    />
+                    {buff.secondsLeft !== undefined && (
+                        <>
+                            <span>{buff.secondsLeft}s</span>
+                            <div
+                                className="ui-buff-bar"
+                                style={{ transform: `scaleX(${buff.fraction})` }}
+                            />
+                        </>
+                    )}
                 </div>
             ))}
         </div>
@@ -2026,20 +2167,22 @@ const Hud = memo(function Hud({
     client,
     questTracker,
     damagePanel,
+    disabled,
 }: {
     hud: HudView;
     client: GameClient;
     questTracker: boolean;
     damagePanel: boolean;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <>
             <XpBar level={hud.level} client={client} />
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={hud.maxWeapons} />
-                    <Slots slots={hud.passives} max={hud.maxPassives} />
-                    <GearSlots gear={hud.gear} />
+                    <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
+                    <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
+                    <GearSlots gear={hud.gear} disabled={disabled} />
                 </div>
                 <RunTimer client={client} />
                 <div className="ui-hud-right">
@@ -2059,7 +2202,7 @@ const Hud = memo(function Hud({
                 <div className="ui-hud-actions">
                     {/* A boss fight has no items, only its own button */}
                     {!getMap(hud.mapId).fight && (
-                        <Inventory inventory={hud.inventory} client={client} />
+                        <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />
                 </div>
@@ -2263,7 +2406,7 @@ function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
     return (
         <div className="ui-choice-stats">
             {stats.map((line) => (
-                <span key={line.label} className="ui-choice-stat">
+                <StatLine key={line.label} text={formatWeaponStat(line)} className="ui-choice-stat">
                     <span className="ui-choice-stat-label">{line.label}</span>{" "}
                     {line.from !== undefined && <>{line.from} → </>}
                     <span
@@ -2277,7 +2420,7 @@ function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
                     >
                         {line.value}
                     </span>
-                </span>
+                </StatLine>
             ))}
         </div>
     );
@@ -2612,8 +2755,10 @@ function PauseModal({
                                         <span style={{ color: slot.rarityColor }}>{slot.name}</span>
                                         <span className="ui-pause-detail">
                                             {[...(slot.stats ?? []), slot.detail]
-                                                .filter((text) => text)
-                                                .join(", ")}
+                                                .filter((text): text is string => Boolean(text))
+                                                .map((text, i) => (
+                                                    <StatLine key={i} text={text} />
+                                                ))}
                                         </span>
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                     </span>
@@ -2632,7 +2777,7 @@ function PauseModal({
                                 </h3>
                                 <div className="ui-pause-stats">
                                     {hud.stats.map((line) => (
-                                        <span key={line}>{line}</span>
+                                        <StatLine key={line} text={line} />
                                     ))}
                                 </div>
                             </>
@@ -2648,23 +2793,29 @@ function PauseModal({
                                             item && (
                                                 <div key={slot} className="ui-pause-item">
                                                     <ItemIcon objId={item.objId} size={28} />
-                                                    <span style={{ color: item.rarity.color }}>
-                                                        {item.name}
-                                                    </span>
-                                                    <span className="ui-pause-detail">
-                                                        {item.lines.join(", ")}
-                                                        {item.set && (
-                                                            <span
-                                                                className={
-                                                                    "ui-pause-set" +
-                                                                    (item.set.active
-                                                                        ? " ui-pause-set-on"
-                                                                        : "")
-                                                                }
-                                                            >
-                                                                {item.set.text}
-                                                            </span>
-                                                        )}
+                                                    <span className="ui-pause-name">
+                                                        <span style={{ color: item.rarity.color }}>
+                                                            {item.name}
+                                                        </span>
+                                                        <span className="ui-pause-detail">
+                                                            {item.lines.map((line, i) => (
+                                                                <StatLine key={i} text={line} />
+                                                            ))}
+                                                            {item.set && (
+                                                                <span
+                                                                    className={
+                                                                        "ui-pause-set" +
+                                                                        (item.set.active
+                                                                            ? " ui-pause-set-on"
+                                                                            : "")
+                                                                    }
+                                                                >
+                                                                    <StatLine
+                                                                        text={item.set.text}
+                                                                    />
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                     </span>
                                                 </div>
                                             ),
@@ -3031,7 +3182,11 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                     {result.hard && (
                                         <tr>
                                             <td>{t("ui.result.stat.difficulty")}</td>
-                                            <td>{t("ui.hard.name")}</td>
+                                            <td>
+                                                {result.expert
+                                                    ? t("ui.expert.name")
+                                                    : t("ui.hard.name")}
+                                            </td>
                                         </tr>
                                     )}
                                     {result.endless && (

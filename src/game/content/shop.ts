@@ -159,6 +159,7 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
         perRank: 1,
         maxRank: 1,
         baseCost: 10000,
+        objId: 2570,
     },
     {
         id: "woodcutting",

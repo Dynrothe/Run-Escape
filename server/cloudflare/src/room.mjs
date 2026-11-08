@@ -21,7 +21,16 @@
 // frames a guest missed meanwhile (see CoopRun).
 import { DurableObject } from "cloudflare:workers";
 
+import {
+    RunWatch,
+    checkReport,
+    checkReporter,
+    endsCaughtRuns,
+    heroIdsOf,
+    runOf,
+} from "../../coop-checks.mjs";
 import { playerName } from "../../name-gen.mjs";
+import { roomLocation } from "./location.mjs";
 import {
     IDLE_MS,
     MAX_LOADOUT_BYTES,
@@ -46,6 +55,8 @@ import {
 // How often a room tells the lobby it's still there. Each one is a billed
 // request to the lobby, whatever it says.
 const ROOM_HEARTBEAT_MS = 60_000;
+// Retry only an unknown location, on existing listing updates or heartbeats.
+const LOCATION_RETRY_MS = 60_000;
 // How long a player whose connection dropped keeps their place: longer than
 // their game keeps trying (RESUME_WINDOW_MS in CoopLobby.ts)
 const RESUME_GRACE_MS = 15_000;
@@ -54,10 +65,25 @@ const RESUME_GRACE_MS = 15_000;
 const ENTER_MS = 10_000;
 // The room's saved, and the lobby told, this often at most
 const SAVE_MS = 1000;
+// A player the room's heard nothing from for this long, not even a ping, is
+// taken as gone, as if their connection had closed: one that died without
+// closing (a laptop asleep, a network that went away) otherwise holds their
+// place, and a host's run for everyone, until the room goes idle. The Node
+// relay finds those with its own pings, which a Durable Object can't send.
+// Games ping every PING_INTERVAL_MS (CoopLobby.ts), and Chrome can slow a
+// hidden tab's timers to once a minute, so this leaves plenty of room. It's
+// checked on the heartbeat, so it can be ROOM_HEARTBEAT_MS more. When the
+// room last heard a player's messages is kept on their socket by each
+// heartbeat, so being out of memory can make it look up to a heartbeat
+// older; their pings' times are Cloudflare's, and exact.
+const SILENT_MS = 5 * 60_000;
+// The players let go for being away too long that a room remembers, to tell
+// their game why if it comes back after (resume)
+const AWAY_KEPT = 16;
 
 // A player's country, for their flag, unless they've hidden it. An open
-// room's host shows theirs anyway: it's where the room is, for whoever's
-// picking one from the list.
+// room's host shows theirs anyway in the party panel.
+// This is the player's IP country when they joined, not the relay's location.
 function shownCountry(member, room) {
     const openHost = room.open && room.hostId === member.id;
     return member.hideCountry && !openHost ? undefined : member.country;
@@ -67,10 +93,21 @@ export class Room extends DurableObject {
     constructor(ctx, env) {
         super(ctx, env);
         this.anyMap = isAnyMapOn(env);
+        this.endsCaught = endsCaughtRuns(env);
+        // The run analytics collector, through a service binding (README)
+        this.reportCheck = checkReporter({
+            url: "https://run-checks/v1/run-checks",
+            token: env.RUN_CHECKS_TOKEN,
+            fetch: env.RUN_CHECKS && ((url, init) => env.RUN_CHECKS.fetch(url, init)),
+        });
+        // The run's checks (coop-checks.mjs), made again from room.heroIds
+        // after a restart
+        this.watch = undefined;
         this.lobby = lobbyStub(env);
         this.code = "";
         // The room, once it's made, until it's empty or closed
         this.room = undefined;
+        this.locationLookup = undefined;
         // Kicked addresses outlast a room's members, for the room's life
         this.kicked = new Set();
         // socket -> the member it's for
@@ -130,6 +167,12 @@ export class Room extends DurableObject {
         const member = this.sockets.get(ws);
         if (member?.socket === ws) {
             this.receive(member, data);
+        } else if (this.room) {
+            // A connection the room's done with can still have a few on the
+            // way: only counted, for the idle log (logIdle), and kept with
+            // the room through its being out of memory
+            this.room.strays = (this.room.strays ?? 0) + 1;
+            this.persist();
         }
     }
 
@@ -174,17 +217,101 @@ export class Room extends DurableObject {
         };
     }
 
-    attach(member, socket) {
+    // heardAt: when the room last heard from them, for SILENT_MS (now, for a
+    // new connection)
+    attach(member, socket, heardAt = Date.now()) {
         this.cancel(`away:${member.serial}`);
         member.awayAt = undefined;
         member.socket = socket;
+        member.heardAt = heardAt;
         this.sockets.set(socket, member);
         this.remember(member);
     }
 
+    // When Cloudflare last answered a player's ping without waking the room
+    // (0 for never, or not known)
+    pingedAt(member) {
+        try {
+            return this.ctx.getWebSocketAutoResponseTimestamp(member.socket)?.getTime() ?? 0;
+        } catch {
+            // Closed, or not known
+            return 0;
+        }
+    }
+
+    // When the room last heard from a player: a message it handled, or a
+    // ping answered without waking it
+    lastHeard(member) {
+        return Math.max(member.heardAt ?? 0, this.pingedAt(member));
+    }
+
+    // The one line the room logs, when it closes as idle, for telling
+    // afterwards why (README, The room's log): an object, which Workers Logs
+    // keeps field by field. Players by their id, which is random, never their
+    // name or address. It's only a log, so it never stops the room closing.
+    logIdle() {
+        try {
+            const room = this.room;
+            const now = Date.now();
+            const ago = (at) => (at ? now - at : null);
+            console.warn({
+                event: "coop_room",
+                kind: "idle",
+                room: this.code,
+                started: room?.started === true,
+                endless: room?.endless === true,
+                hard: room?.hard === true,
+                mapId: room?.mapId ?? null,
+                runFor: ago(room?.runStartedAt),
+                quietFor: ago(room?.lastActive),
+                strays: room?.strays ?? 0,
+                players: (room?.members ?? []).map((member) => ({
+                    id: member.id,
+                    host: member.id === room.hostId,
+                    connected: member.socket !== undefined,
+                    heardAgo: ago(member.heardAt),
+                    pingedAgo: ago(this.pingedAt(member)),
+                    awayFor: ago(member.awayAt),
+                    discarded: member.discarded ?? null,
+                })),
+            });
+        } catch (e) {
+            console.warn("Co-op room: couldn't log closing as idle:", e);
+        }
+    }
+
+    // A player's message the room threw away without a word, counted by
+    // reason for the idle log, and saved with the room (save()) so its being
+    // out of memory doesn't lose them
+    discarded(member, reason) {
+        member.discarded ??= {};
+        member.discarded[reason] = (member.discarded[reason] ?? 0) + 1;
+        if (this.room?.members.includes(member)) {
+            this.persist();
+        }
+    }
+
+    // Players whose connection has gone quiet for good (SILENT_MS) are let go
+    // as if it had closed: held for a moment, in case their game's still
+    // there and comes back, then out
+    dropSilent(now) {
+        // Without the pings' times, a player who only pings would look silent
+        if (typeof this.ctx.getWebSocketAutoResponseTimestamp !== "function") {
+            return;
+        }
+        for (const member of [...(this.room?.members ?? [])]) {
+            const socket = member.socket;
+            if (socket && !member.closed && now - this.lastHeard(member) > SILENT_MS) {
+                this.shut(socket, 1001);
+                this.lost(member, socket);
+            }
+        }
+    }
+
     // What a connection carries through the room being out of memory: who
-    // it's for, the room's code (which isn't saved until it's made), and
-    // when the next heartbeat's due
+    // it's for, the room's code (which isn't saved until it's made), when
+    // the next heartbeat's due, and when the room last heard from them (as
+    // of the last heartbeat)
     remember(member) {
         try {
             member.socket?.serializeAttachment({
@@ -198,6 +325,7 @@ export class Room extends DurableObject {
                 token: member.token,
                 code: this.code,
                 beatAt: this.due.get("heartbeat")?.at,
+                heardAt: member.heardAt,
             });
         } catch {
             // Closed
@@ -237,9 +365,14 @@ export class Room extends DurableObject {
         this.ctx.acceptWebSocket(server);
         const member = this.room?.members.find((m) => m.token === token && !m.closed);
         if (!member) {
-            server.send(
-                JSON.stringify({ t: "error", message: "The room closed while you were away." }),
-            );
+            // Let go after being away (RESUME_GRACE_MS, SILENT_MS), or for
+            // something else (flooding it, a message it couldn't handle)
+            const message = !this.room
+                ? "The room closed while you were away."
+                : this.room.away?.includes(token)
+                  ? "You were away too long, so you're out of the room."
+                  : "You're no longer in that room.";
+            server.send(JSON.stringify({ t: "error", message }));
             server.close(1000);
             return new Response(null, { status: 101, webSocket: client });
         }
@@ -286,6 +419,11 @@ export class Room extends DurableObject {
         member.awayAt = since;
         this.later(`away:${member.serial}`, since + RESUME_GRACE_MS - Date.now(), () => {
             if (!member.socket) {
+                // Saved with the room as they leave it (leaveRoom)
+                const room = this.room;
+                if (room && member.token) {
+                    room.away = [...(room.away ?? []), member.token].slice(-AWAY_KEPT);
+                }
                 this.dropped(member);
             }
         });
@@ -390,7 +528,7 @@ export class Room extends DurableObject {
                 ? room?.members.find((m) => m.token === seen.token && !m.socket)
                 : undefined;
             if (member) {
-                this.attach(member, ws);
+                this.attach(member, ws, seen.heardAt ?? now);
             } else if (seen && !seen.token) {
                 // Still to make or join the room
                 const { id, name, address, country, kind, roomName, at } = seen;
@@ -461,6 +599,7 @@ export class Room extends DurableObject {
                     build: m.build,
                     token: m.token,
                     awayAt: m.awayAt,
+                    discarded: m.discarded,
                 })),
                 kicked: [...this.kicked],
             })
@@ -471,6 +610,7 @@ export class Room extends DurableObject {
         if (member.closed) {
             return;
         }
+        member.heardAt = Date.now();
         if (!member.limit.allow(typeof data === "string" ? data.length : data.byteLength)) {
             this.closeSocket(member, 1008);
             this.dropped(member);
@@ -478,6 +618,7 @@ export class Room extends DurableObject {
         }
         const message = parseMessage(data);
         if (!message) {
+            this.discarded(member, "unreadable");
             return;
         }
         try {
@@ -576,14 +717,47 @@ export class Room extends DurableObject {
         });
     }
 
+    // Cloudflare currently keeps an object's placement. Save the first
+    // successful measurement with this game room, through wakes and restarts.
+    checkLocation() {
+        const room = this.room;
+        if (
+            !room?.open ||
+            room.started ||
+            room.serverCountry ||
+            this.locationLookup ||
+            Date.now() < (room.locationRetryAt ?? 0)
+        )
+            return;
+        room.locationRetryAt = Date.now() + LOCATION_RETRY_MS;
+        const lookup = roomLocation()
+            .then((location) => {
+                // A closed/replaced game room mustn't be advertised again.
+                if (this.room !== room) return;
+                if (location) {
+                    room.serverCountry = location.country;
+                    delete room.locationRetryAt;
+                }
+                // Also keep a failure's cooldown across hibernation/restarts.
+                this.save();
+                if (location) this.tellLobby();
+            })
+            .finally(() => {
+                if (this.locationLookup === lookup) this.locationLookup = undefined;
+            });
+        this.locationLookup = lookup;
+        this.ctx.waitUntil(lookup);
+    }
+
     // What the lobby lists changes far less often than the room (players'
     // loadouts and ready don't show), so it's only told of a change, unless
-    // it's the heartbeat saying the room's still there
+    // it's the heartbeat saying the room's still there.
     tellLobby(heartbeat = false) {
         const room = this.room;
         if (!room) {
             return;
         }
+        this.checkLocation();
         const host = room.members.find((member) => member.id === room.hostId);
         const entry = {
             code: room.code,
@@ -595,7 +769,8 @@ export class Room extends DurableObject {
             endless: room.endless,
             hard: room.hard === true,
             host: host?.name ?? "",
-            country: host ? shownCountry(host, room) : undefined,
+            country: room.serverCountry,
+            countrySource: "server",
             hostAddress: host?.address ?? "",
             order: room.order,
         };
@@ -622,7 +797,10 @@ export class Room extends DurableObject {
         for (const key of ["heartbeat", "update", "save"]) {
             this.cancel(key);
         }
+        this.watch?.finish();
+        this.watch = undefined;
         this.room = undefined;
+        this.locationLookup = undefined;
         this.kicked.clear();
         this.ctx.storage.deleteAll().catch(() => {});
         this.lobby.roomGone(room.code).catch(() => {});
@@ -716,6 +894,7 @@ export class Room extends DurableObject {
         }
         const room = this.room;
         if (!room || !room.members.includes(client)) {
+            this.discarded(client, room ? "not in the room" : "no room");
             return;
         }
         if (message.t !== "me") {
@@ -823,6 +1002,11 @@ export class Room extends DurableObject {
                         return;
                     }
                     room.started = true;
+                    room.heroIds = heroIdsOf(message.game, MAX_PARTY);
+                    room.runInfo = room.heroIds && runOf(room, message.game);
+                    room.runStartedAt = Date.now();
+                    room.found = undefined;
+                    this.watch = room.heroIds && this.newWatch(room, false);
                     for (const member of room.members) {
                         member.ready = false;
                     }
@@ -836,6 +1020,12 @@ export class Room extends DurableObject {
             case "end":
                 if (isHost && room.started) {
                     room.started = false;
+                    room.heroIds = undefined;
+                    room.runInfo = undefined;
+                    room.runStartedAt = undefined;
+                    this.watch?.finish();
+                    this.watch = undefined;
+                    room.found = undefined;
                     this.persist(true);
                     this.broadcastRoom();
                 }
@@ -851,6 +1041,7 @@ export class Room extends DurableObject {
                             host,
                             `${text.slice(0, end)},"from":${JSON.stringify(client.id)}}`,
                         );
+                        this.runWatch()?.up(client.id, message.d, Date.now(), !!host.socket);
                     }
                 }
                 return;
@@ -861,9 +1052,57 @@ export class Room extends DurableObject {
                             this.sendText(member, text);
                         }
                     }
+                    const watch = this.runWatch();
+                    watch?.down(message.d);
+                    if (watch?.end) {
+                        // Which ends the run for everyone, as the host leaving does
+                        this.closeSocket(client, 1008);
+                        this.dropped(client);
+                    }
                 }
                 return;
         }
+    }
+
+    newWatch(room, resumed) {
+        const host = room.members.find((m) => m.id === room.hostId);
+        const watch = new RunWatch(room.heroIds, room.hostId, {
+            resumed,
+            // (unknown for a run started before rooms kept it)
+            startedAt: room.runStartedAt,
+            found: resumed ? room.found : undefined,
+            // (a run started before rooms kept runInfo has no adventurers)
+            run: { room: this.code, ...(room.runInfo ?? runOf(room)), build: host?.build },
+            names: new Map(room.members.map((m) => [m.id, m.name])),
+            log: (entry) => {
+                // An object, which Workers Logs keeps field by field
+                console.warn(entry);
+                if (entry.kind === "summary") {
+                    const ended = this.endsCaught && entry.caught !== null;
+                    this.reportCheck?.(checkReport(entry, "cloudflare", ended));
+                } else {
+                    // Kept with the room, for the watch made again after a
+                    // restart or a sleep (what's found since a kind's last
+                    // entry can be lost with it, but not that it was found)
+                    room.found = { counts: { ...watch.counts }, caught: watch.caughtFor ?? null };
+                    this.persist();
+                }
+            },
+            caught: () => {
+                watch.end = this.endsCaught;
+            },
+        });
+        return watch;
+    }
+
+    // The run's checks, made again for a run already going (one started before
+    // the room kept its heroes isn't checked)
+    runWatch() {
+        const room = this.room;
+        if (!this.watch && room?.started && Array.isArray(room.heroIds)) {
+            this.watch = this.newWatch(room, true);
+        }
+        return this.watch;
     }
 
     create(client, message) {
@@ -901,7 +1140,12 @@ export class Room extends DurableObject {
                 return;
             }
             if (Date.now() - room.lastActive > IDLE_MS) {
+                this.logIdle();
                 this.disband("idle");
+                return;
+            }
+            this.dropSilent(Date.now());
+            if (this.room !== room) {
                 return;
             }
             this.tellLobby(true);
@@ -911,8 +1155,8 @@ export class Room extends DurableObject {
                 this.save();
             }
             this.later("heartbeat", ROOM_HEARTBEAT_MS, beat);
-            // When the next one's due, for the room made again after it's
-            // been out of memory
+            // When the next one's due, and when each player was last heard
+            // from, for the room made again after it's been out of memory
             for (const member of room.members) {
                 this.remember(member);
             }

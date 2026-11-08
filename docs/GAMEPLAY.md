@@ -9,6 +9,9 @@ version and how to run it.
 - On a touch screen, drag anywhere to move: the stick appears under your thumb. Tap the buttons on
   screen to pause and use items, with the thumb still on the stick if you like. Tap the DPS for each
   weapon's damage. Phones play sideways, with gear and quests in the pause menu.
+- Your **revives** show beside your active effects, without a timer: a **Ring of life** from the
+  shop, and the Pyromancer's own as a **Phoenix**. The phoenix is used first, and each icon goes
+  once it's saved you. In co-op they're your own, not a teammate's.
 - Enemies drop **bones**; walk near them to collect their experience. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
   bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather
@@ -145,11 +148,12 @@ version and how to run it.
       venom in what they hit, hurting it every second; it goes for enemies without venom first
       (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
       upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
-      the **Dragon hunter crossbow**, heavy bolts that hit bosses and elites again, and the
+      the **Dragon hunter crossbow**, dragon bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
-      crossbow**'s bolts go through what they hit and one in five is enchanted (a ruby takes a
-      share of what's left of its hitpoints, a diamond pierces more, a dragonstone burns), and
-      the **Crystal bow**'s arrows split into three where they first hit.
+      crossbow**'s bolts upgrade from bronze to steel, mithril, runite, then dragon. They go
+      through what they hit and one in five is enchanted (a ruby takes a share of what's left of
+      its hitpoints, a diamond pierces more, a dragonstone burns), and the **Crystal bow**'s
+      arrows split into three where they first hit.
     - **Magic**: **Tumeken's shadow** fires splashing shadow blasts and triples your damage
       bonus for them. The **Harmonised nightmare staff** casts Fire Surge faster than anything
       else. The **Sanguinesti staff** casts blood blasts, and one hit in six heals you for half
@@ -363,10 +367,11 @@ version and how to run it.
       and feed her unless you kill them on the way; the Bloat only really takes damage while he's
       down; Nylocas Vasilias changes colour, and only its colour's style hurts it much; Sotetseg
       drags you into his shadow realm, where he can't be hurt and there's only his maze to get
-      through; Xarpus sinks into his pool, and can't be hurt until you've stood on his exhumeds to
-      smother them, those left healing him; and Verzik gets up twice, and as the great spider
+      through; Xarpus sinks into his pool, and can't be hurt until you've stepped on his exhumeds
+      to smother them, those left healing him; and Verzik gets up twice, and as the great spider
       throws her yellows, which only miss you in the glowing pool that comes with each. The
-      raid's green and blue Nylocas shoot from range.
+      raid's Nylocas are a little slower than Morytania's, and its green and blue ones shoot from
+      range, so fewer come in their hall than the raid's pace would bring.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.
