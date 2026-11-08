@@ -66,10 +66,22 @@ export function setLang(lang: Lang): void {
     if (lang === current) {
         return;
     }
-    current = lang;
-    applyToDocument(lang);
-    for (const fn of [...listeners]) {
-        fn();
+    const apply = () => {
+        current = lang;
+        applyToDocument(lang);
+        for (const fn of [...listeners]) {
+            fn();
+        }
+    };
+
+    if (
+        typeof document !== "undefined" &&
+        "startViewTransition" in document &&
+        typeof (document as any).startViewTransition === "function"
+    ) {
+        (document as any).startViewTransition(apply);
+    } else {
+        apply();
     }
 }
 

@@ -84,6 +84,7 @@ import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
+import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
@@ -814,37 +815,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <button className="ui-version" onClick={() => setChangelogOpen(true)}>
                     {t("ui.title.whats_new", { version: GAME_VERSION })}
                 </button>
-                <button
-                    className="ui-title-link ui-title-language"
-                    title={t("ui.title.language")}
-                    aria-label={t("ui.title.language")}
-                    onClick={() => setSettingsOpen(true)}
-                >
-                    <svg className="ui-title-link-logo" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                        />
-                        <line
-                            x1="2"
-                            y1="12"
-                            x2="22"
-                            y2="12"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                        />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                        />
-                    </svg>
-                </button>
+                <TitleLanguageMenu />
                 <button
                     className="ui-title-link ui-title-settings"
                     title={t("ui.title.settings")}
