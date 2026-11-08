@@ -469,6 +469,10 @@ const CURSE_SHUFFLES = [
 
 const CANNON_SPOTANIM = 53;
 const LEVEL_UP_SPOTANIM = 199;
+// A heavy blow's spot animation (WeaponDef.heavy) on no more than this many of what it hits
+const HEAVY_HIT_SPOTS = 6;
+// Blessings offered on a level up, on a map with them (MapDef.blessings)
+const BLESSING_CHOICES = 3;
 // Tiles from the player a strike (WeaponDef kind strike) finds its targets within
 const STRIKE_REACH = 12;
 // Ice Barrage's freeze, on a player frozen by a boss
@@ -2057,6 +2061,10 @@ export class Sim {
     }
 
     private roll(): UpgradeChoice[] {
+        const blessings = this.map.blessings;
+        if (blessings) {
+            return this.rollBlessings(blessings);
+        }
         return rollChoices(
             this.rng,
             this.weapons,
@@ -2271,6 +2279,13 @@ export class Sim {
             case "food":
                 this.heal(choice.amount);
                 break;
+            case "blessing": {
+                const blessings = this.map.blessings;
+                if (blessings) {
+                    this.bless(blessings, getBlessing(blessings, choice.blessingId));
+                }
+                break;
+            }
         }
     }
 
@@ -3560,6 +3575,9 @@ export class Sim {
 
             if (enemy.frozen > 0) {
                 enemy.frozen--;
+            } else if (enemy.staggered) {
+                // Staggered by a heavy blow (WeaponDef.heavy): only the knockback moves it
+                enemy.staggered--;
             } else {
                 let dirX = 0;
                 let dirY = 0;
@@ -11072,6 +11090,15 @@ export class Sim {
         return { ...level, damage: level.damage * damage, area: level.area * area };
     }
 
+    // A weapon's own speed bonus, on top of the player's cooldown bonus: the worn sets'
+    // (setBoosts), and for a melee weapon meleeSpeed, the two together
+    private weaponSpeed(def: WeaponDef): number {
+        const sets = this.setBoosts(def).speed;
+        const melee = getWeaponStyle(def) === "melee" ? this.stats.meleeSpeed : 0;
+        // Exactly the sets' with none, to the last bit, so nothing else changes
+        return melee === 0 ? sets : 1 - (1 - sets) * (1 - melee);
+    }
+
     // What the worn sets do for a weapon: damage and area multipliers, and a
     // speed bonus that cooldownTicks caps along with the player's own
     private setBoosts(def: WeaponDef): { damage: number; area: number; speed: number } {
@@ -11127,7 +11154,7 @@ export class Sim {
             const fired = this.fireWeapon(weapon.def, level, special);
             // Nothing to shoot at: try again soon rather than wasting the cooldown
             weapon.cooldown = fired
-                ? this.cooldownTicks(level.cooldown, this.setBoosts(weapon.def).speed)
+                ? this.cooldownTicks(level.cooldown, this.weaponSpeed(weapon.def))
                 : 10;
             if (fired) {
                 this.emit({
@@ -11484,6 +11511,10 @@ export class Sim {
         if (special) {
             this.addEffect(special.spotAnim, player.x, player.y, 0, SPECIAL_SPOTANIM_TICKS);
         }
+        // A heavy blow (WeaponDef.heavy) staggers what it hits, longer as it knocks harder
+        const heavy = def.heavy;
+        const stagger = heavy ? secondsToTicks(heavy.stagger * (1 + this.stats.meleeKnockback)) : 0;
+        let landed = 0;
         let dealt = 0;
         let effects = 0;
         for (const enemy of hit) {
@@ -11510,6 +11541,14 @@ export class Sim {
             });
             dealt += hitDealt;
             this.stealLife(def, hitDealt);
+            if (heavy) {
+                if (landed++ < HEAVY_HIT_SPOTS) {
+                    this.addImpactSpot(heavy.hit, enemy.x, enemy.y, enemy.uid);
+                }
+                if (!enemy.dead && !enemy.boss && !enemy.def.stationary) {
+                    enemy.staggered = Math.max(enemy.staggered ?? 0, stagger);
+                }
+            }
             const effect = special?.effect;
             if (effect?.kind === "freeze" && !enemy.boss && !enemy.dead) {
                 this.freezeEnemy(enemy, effect.seconds);
@@ -11525,6 +11564,10 @@ export class Sim {
                     Math.round(effect.seconds * (1 + this.stats.duration) * TICKS_PER_SECOND),
                 );
             }
+        }
+        // and shakes the camera, once a swing
+        if (heavy && landed > 0) {
+            this.emit({ type: "bossImpact", x: player.x, y: player.y, shake: heavy.shake });
         }
         if (special?.effect?.kind === "heal" && dealt > 0) {
             this.heal(Math.min(Math.round(dealt * special.effect.fraction), special.effect.max));
@@ -14310,26 +14353,18 @@ export class Sim {
         return getItem(itemId).kind === "gear" ? this.gearUpgradesFound : 0;
     }
 
-    // The run's level is shared: each level up gives every hero a pick, or on a map with
-    // blessings (MapDef.blessings) one of those, at once, with nothing to wait for
+    // The run's level is shared: each level up gives every hero a pick (of blessings, on a map
+    // with them: MapDef.blessings)
     private checkLevelUp(): void {
         const level = this.levelForXp();
         if (level > this.level) {
             const gained = level - this.level;
             this.level = level;
-            const blessings = this.map.blessings;
             for (const hero of this.heroes) {
                 if (hero.left) {
                     continue;
                 }
                 this.use(hero);
-                if (blessings) {
-                    for (let i = 0; i < gained; i++) {
-                        this.bless(blessings);
-                    }
-                    this.addEffect(LEVEL_UP_SPOTANIM, this.player.x, this.player.y, 0, 90);
-                    continue;
-                }
                 hero.pendingLevelUps += gained;
                 if (this.stats.levelMight !== 0) {
                     this.updateStats();
@@ -14344,18 +14379,33 @@ export class Sim {
         }
     }
 
-    // The current hero's level up on a map with blessings: one they haven't had its max times, by
-    // weight, on the run's own Rng (co-op's copies grant the same), or the fallback once there's
-    // none. Its stats, weapon level and heal at once, with its god's strike on them.
-    private bless(blessings: BlessingsDef): void {
+    // The current hero's level up on a map with blessings (MapDef.blessings): BLESSING_CHOICES of
+    // them to choose from that they haven't had their max times, none twice, by weight on the
+    // run's own Rng (co-op's copies offer the same), and the fallback once there are fewer
+    private rollBlessings(blessings: BlessingsDef): UpgradeChoice[] {
         const had = this.blessings;
-        const open = blessings.pool.filter(
-            (blessing) => (had.find((h) => h.id === blessing.id)?.count ?? 0) < blessing.max,
-        );
-        const blessing =
-            open.length > 0
-                ? open[this.rng.weightedIndex(open.map((b) => b.weight ?? 1))]
-                : blessings.fallback;
+        const times = (id: string) => had.find((h) => h.id === id)?.count ?? 0;
+        const open = blessings.pool.filter((blessing) => times(blessing.id) < blessing.max);
+        const offered: BlessingDef[] = [];
+        while (offered.length < BLESSING_CHOICES && open.length > 0) {
+            const index = this.rng.weightedIndex(open.map((blessing) => blessing.weight ?? 1));
+            offered.push(open[index]);
+            open.splice(index, 1);
+        }
+        if (offered.length < BLESSING_CHOICES) {
+            offered.push(blessings.fallback);
+        }
+        return offered.map((blessing) => ({
+            kind: "blessing",
+            blessingId: blessing.id,
+            count: times(blessing.id) + 1,
+        }));
+    }
+
+    // The blessing the current hero chose: its stats, weapon level and heal at once, with its
+    // god's strike on them
+    private bless(blessings: BlessingsDef, blessing: BlessingDef): void {
+        const had = this.blessings;
         let entry = had.find((h) => h.id === blessing.id);
         if (!entry) {
             entry = { id: blessing.id, count: 0 };

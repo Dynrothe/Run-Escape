@@ -28,6 +28,7 @@ export const STAT_INFO: Record<StatKey, { label: string; unit: "percent" | "flat
     thorns: { label: "recoil damage", unit: "flat" },
     healChance: { label: "chance to heal on hit", unit: "percent" },
     meleeKnockback: { label: "melee knockback", unit: "percent" },
+    meleeSpeed: { label: "melee attack speed", unit: "percent" },
     weaponSlots: { label: "weapon slots", unit: "flat" },
     passiveSlots: { label: "passive slots", unit: "flat" },
     powerUpRate: { label: "power-up drops", unit: "percent" },

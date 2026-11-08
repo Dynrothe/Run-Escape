@@ -948,10 +948,14 @@ adventurer can have:
       (`SceneLights.updateGaze`). It's drawn on a lit map only (`MapDef.lighting`). Zachariah's
       boss fight's gaze is unchanged: its arena's pillars (`BossAttackDef.cover`, `inShadow`).
 - **`MapDef.blessings`** (`BlessingsDef`, `content/blessings.ts`): a map with no items, and a
-  blessing for each level instead, Saradomin's in Varrock. Each level up grants every hero one
-  at once (`Sim.bless`): no `levelUp` state, no picks, by weight on the run's `rng` (so co-op's
-  copies agree), never past a blessing's `max`, and then the `fallback` as often as it comes.
-  A blessing adds its `stats` times how often it's been had (`updateStats`), a level to the
+  blessing for each level instead, Saradomin's in Varrock. Each level up offers every hero
+  `BLESSING_CHOICES` (three) to choose from in the `levelUp` state, in place of picks
+  (`Sim.rollBlessings`, `blessing` choices, which `describeChoice` and the level up screen show
+  with the map's `BlessingsDef`): none twice, by weight on the run's `rng` (so co-op's copies
+  agree), never past a blessing's `max`, and the `fallback` beside them once fewer are left, as
+  often as it comes. A reroll rolls three more and a skip passes them up; banishes don't reach
+  them. The one taken (`Sim.bless`) adds its `stats` times how often it's been had
+  (`updateStats`), a level to the
   starting weapon (`weaponLevel`), a weapon or a level of it once it's held (`weapon`: the
   staff's Saradomin Strike, Zilyana's Armadyl crossbow), a share of the hitpoints back (`heal`)
   and changes to the hero's buttons (`kit`, for the abilities it names or all of them).
@@ -962,9 +966,19 @@ adventurer can have:
   a power-up, `dropCasketOfTier` drops nothing, and visitors who'd give one stay away
   (`givesItems`, for a blessed map with random events). The HUD has the weapon and a row of
   blessings for passives, gear and the bag (`client/BlessingViews.ts`), the pause menu lists
-  them, and each one's a notice as it comes (the `blessing` event, with the map's `spotAnim` and
-  `sound`, which `getSpotAnimIds` and `getGameSoundIds` collect). Blessings' icons are items,
-  which the slim cache keeps from `ALL_MAPS` as it does any `iconObjId`.
+  them, and taking one plays the `blessing` event, with the map's `spotAnim` and `sound`, which
+  `getSpotAnimIds` and `getGameSoundIds` collect. Blessings' icons are items, which the slim
+  cache keeps from `ALL_MAPS` as it does any `iconObjId`. The bot takes them in the order of
+  `BLESSING_RANK` in `simulate-run.ts`.
+- **`WeaponDef.heavy`**: blows that land heavy, the Saradomin sword's (a sweep's or a slash's,
+  in `meleeHits`). A swing that hits shakes the camera once (a `bossImpact` event, so the
+  Screen shake setting turns it off), plays `hit` (an `ImpactSpotDef`) on the first
+  `HEAVY_HIT_SPOTS` it hits, and staggers the rest of what it hits for `stagger` seconds,
+  longer with `meleeKnockback`: `Enemy.staggered` holds an enemy from walking and striking, as
+  `frozen` does, but its knockback still carries it. Bosses and stationary enemies don't
+  stagger. `getSpotAnimIds` collects `hit`. The `meleeSpeed` stat speeds melee weapons only,
+  on top of the sets' speed (`Sim.weaponSpeed`, capped with the rest in `cooldownTicks`):
+  Saradomin bracers give it, and a Saradomin platebody `meleeKnockback`.
 - **Props and an opening cinematic**: Yama sitting on his throne is a prop (`MapDef.props`),
   as a loc can't play a skeletal animation, and the map opens with a cinematic
   (`fun/varrockOpening.ts`) in which he stands in for it. Both are in Props and opening

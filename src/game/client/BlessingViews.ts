@@ -3,8 +3,7 @@ import { formatStats } from "../content/stats";
 import { BlessingDef, BlessingsDef, StatKey, Stats } from "../content/types";
 import { SlotView } from "./GameStore";
 
-// A map's blessings (MapDef.blessings) as the HUD and the pause menu show them, and the notice as
-// one's granted
+// A map's blessings (MapDef.blessings) as the HUD and the pause menu show them
 
 // Saradomin's blue, for a blessing's border and its name
 export const BLESSING_COLOR = "#8ec5ff";
@@ -52,12 +51,4 @@ export function describeBlessed(slot: SlotView): string {
     return slot.level >= slot.maxLevel
         ? `Blessed ${times}, the most it can be`
         : `Blessed ${times} of ${slot.maxLevel}`;
-}
-
-// The notice as one's granted: "Blessing of Saradomin: Saradomin's strength (2 of 6). +8% damage."
-export function describeBlessing(blessings: BlessingsDef, id: string, count: number): string {
-    const blessing = getBlessing(blessings, id);
-    const of =
-        Number.isFinite(blessing.max) && blessing.max > 1 ? ` (${count} of ${blessing.max})` : "";
-    return `${blessings.name}: ${blessing.name}${of}. ${blessing.description}`;
 }

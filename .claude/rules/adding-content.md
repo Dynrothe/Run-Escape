@@ -45,7 +45,9 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   array for a tuned curve, or a number for the default progression. Recipes in `evolutions.ts`
   and the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
-  a slash or sweep, and `special.aoe` hits all round.
+  a slash or sweep, and `special.aoe` hits all round. `heavy` makes their blows land heavy (the
+  Saradomin sword's): a camera shake, a spot animation on what they hit, and a stagger
+  (`WeaponDef.heavy` in `docs/DEVELOPMENT.md`).
 - An attack that hits what it touches (its range plus the enemy's `radius`) finds enemies with
   `queryTouching`, not `enemyHash.query`: the hash goes by middles, so its search alone misses a
   big enemy whose edge is in range.
@@ -267,12 +269,13 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
   for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
   has an example of each. Off a map with `lighting`, none of it does anything.
-- `blessings` (`BlessingsDef`) takes a map's items away: each level up is a blessing at random,
-  at once, instead of a pick, and nothing drops a casket or a power-up (the Battle for Varrock's,
+- `blessings` (`BlessingsDef`) takes a map's items away: each level up offers three blessings to
+  choose from instead of picks, and nothing drops a casket or a power-up (the Battle for Varrock's,
   `content/blessings.ts`). A blessing can add stats, level the starting weapon, bring a weapon
   and level it, heal and change the hero's own buttons: see A hero of their own in
-  `docs/DEVELOPMENT.md`. Sim it with the bot's lairs (`LAIR=`), as random draws change a boss
-  fight a lot: a run that never draws a ranged weapon can't beat a general. `levelXp` slows its
+  `docs/DEVELOPMENT.md`. A new one needs a place in the bot's `BLESSING_RANK`
+  (`simulate-run.ts`), or it takes it last. Sim it with the bot's lairs (`LAIR=`): a run that
+  never takes a ranged weapon can't beat a general. `levelXp` slows its
   levels after the first few (`LevelXpDef`), and `burns` has scenery that hurts whoever walks
   into it (Varrock's fires, walkable copies from `getWalkableLoc`): teach the bot to walk round a
   new kind, as `firesToAvoid` does.

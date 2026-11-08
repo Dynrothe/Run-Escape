@@ -151,6 +151,11 @@
         z-index: 1;
     }
 
+    /* and under a level up, a casket and the pause menu */
+    .ui-modal {
+        z-index: 2;
+    }
+
     /* Big enough to tap */
     .ui-dps {
         padding: 6px 0 6px 10px;

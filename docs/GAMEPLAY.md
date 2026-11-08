@@ -214,7 +214,9 @@ version and how to run it.
   through armour. The demons walk through them unharmed. The palace's floor is the floor
   system's tiles in an ashen skin, up its burnt front steps from its court, with Yama on his
   throne at its north end, and fires on it too. You start outside the south gate as
-  Justiciar Zachariah, his own model, with his Saradomin sword (the 2h sword's sweep) and the
+  Justiciar Zachariah, his own model, with his Saradomin sword (the 2h sword's sweep, and its
+  blows land heavy: the ground shakes, his blue impact flashes on what it hits, and it's knocked
+  back further than a 2h sword's and staggers, held still a moment, though not a boss) and the
   moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
   of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
   The gaze is his ultimate, back every 30 seconds; the others come back in 5 to 14. He stands
@@ -235,18 +237,22 @@ version and how to run it.
   clock and no random events, and no items: no caskets, gear, power-ups, bag or weapons and
   passives to pick, only bones, coins and food. Kill them for levels for as long as you like,
   though they get tougher by the minute. The first few levels come as anywhere, and then each
-  takes more experience, up to six times as much from level 14: each level brings a blessing of
-  Saradomin at random, there and then, with his strike on you and a notice. Saradomin's strength
+  takes more experience, up to six times as much from level 14: each level offers three blessings
+  of Saradomin to choose from, and his strike comes down on you with the one you take (a reroll
+  offers three more). Saradomin's strength
   (Might, which the Justiciar's buttons hit harder with too), a Saradomin brew (hitpoints, and a
   third of them back), Saradomin's ward (armour), Holy sandals (speed), a Holy elixir
   (regeneration), Saradomin's will (buttons back sooner, and the sword faster), a Holy book
-  (experience), a Blessed blade (the Saradomin sword a level up), a Saradomin staff (Saradomin Strike,
+  (experience), a Blessed blade (the Saradomin sword a level up), Saradomin bracers (the sword
+  swings faster), a Saradomin platebody (its blows knock back further and stagger longer), a
+  Saradomin staff (Saradomin Strike,
   then a level of it) and Zilyana's crossbow (from Saradomin's general, the Armadyl crossbow, then
   a level of it), and blessings on the buttons: Saradomin's light (all of them harder), Zeal (a
   longer, harder lunge), Saradomin's crozier (another shock wave either side), Holy water (a
   bigger ice barrage that holds longer), Saradomin's mjolnir (further, harder lightning) and
-  Saradomin's halo (a wider, harder Owl's gaze). Each comes only so many times; once
-  he's given everything, Saradomin's tears (a little Might, and half your hitpoints back). They
+  Saradomin's halo (a wider, harder Owl's gaze). Each comes only so many times, and none is
+  offered twice at once; once fewer than three are left, Saradomin's tears are offered beside
+  them (a little Might, and half your hitpoints back), and then alone. They
   show in a row under the sword, and on the pause menu. Yama's two
   generals wait in their ruins from the start, to be fought in either order: step into one's ruin
   and it wakes, the demons about run from it every way, every way out bursts into fire, and you
