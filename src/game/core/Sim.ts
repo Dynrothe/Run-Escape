@@ -7973,7 +7973,7 @@ export class Sim {
         this.emit({ type: "notice", message: def.waves.message });
     }
 
-    // Whether a boulder shelters a point from him: between them, and close enough to it
+    // Whether a boulder shelters a point from him: straight behind it (zebakShelters)
     private zebakSheltered(boss: Enemy, x: number, y: number, def: ZebakDef): boolean {
         const rocks = this.tombsCover.filter((rock) => rock.look === def.roar.look);
         return zebakShelters(boss.x, boss.y, x, y, rocks, def.roar.shelter);

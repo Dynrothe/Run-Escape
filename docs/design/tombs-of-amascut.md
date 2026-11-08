@@ -409,8 +409,7 @@ animations from a lister of those whose model or animation is in the raid's rang
       one at a time (each beside the last, never across), the quadrant glowing with its element and
       its floor symbol lit in the element's colour (`AkkhaElementDef.glow`) in a funnel of light
       (darkness's own swirl, 2257, tinted for each). His room's in full light for the fight
-      (`AkkhaDef.ambient`), not the Tombs' dimmer light. Then,
-      2.4 seconds apart (1.2 with Feeling Special), every quadrant but the next in the order is
+      (`AkkhaDef.ambient`), not the Tombs' dimmer light. Then, 2.4 seconds apart (1.2 with Feeling Special), every quadrant but the next in the order is
       blasted for nearly half your hitpoints and its element, each throwing up a spray of its
       element's orbs, bright in its colour (drawn only). Four steps, one more every two path
       levels.
@@ -451,8 +450,9 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **The slates** by the way in, one on each wall, as OSRS's: stand by one and a screen shows
       Addition's nine symbols, the floor's own models seen from above (`ItemIcon`'s `locId`,
       `ItemIconLoader.renderLocIcon`), each with what it's worth (drawn with the Ancient tablet,
-      45339). On a touch screen it's one thin row along the top instead, with no names, since
-      with no zoom the middle of the screen is the floor you're about to step on.
+      45339). On a touch screen the slate's one thin row along the top instead, with no names,
+      since with no zoom the middle of the screen is the floor you're about to step on (the
+      tablet's panel is as it is elsewhere).
     - **Sequence** (the east hall, by the way in): OSRS's nine plates in a diamond, and its Ancient
       button (45338) on the wall beside them. Push it (walk up to it) and they light one at a time
       (0.8 s each), 4 steps, one more every two path levels, up to 6; push it again for another
@@ -535,12 +535,12 @@ animations from a lister of those whose model or animation is in the raid's rang
       the island's edge or at the end of its roll, its water clearing the acid round it. Weapons
       pass them by (`EnemyDef.unhittable`): hit, they broke the moment they were down.
     - **Great Roar**: boulders across the island, then three roars a few seconds later, each a
-      fifth of your hitpoints and a knock back, unless a boulder's between you and him. While it's
-      coming, the ground each boulder shelters glows behind it (Verzik's circle, as the Het room
-      has); as it goes off, blown dust (2184) rolls out from him over the whole island but each
-      boulder's shadow, straight behind it down the island as OSRS's is (`zebakShelters`, the
-      sim's own test), with the boulders
-      drawn on through it, and the camera shakes. Without them a roar read as a big hit from nowhere.
+      fifth of your hitpoints and a knock back, unless you're straight behind a boulder, down the
+      island from him, as OSRS's shelter is (`zebakShelters`; it was a slant on the line from him).
+      While it's coming, that ground glows behind each boulder (Verzik's circle, as the Het room
+      has); as it goes off, blown dust (2184) rolls out from him over the whole island but those
+      shadows, the boulders drawn on through it (gone from the sim already), and the camera
+      shakes. Without them a roar read as a big hit from nowhere.
     - **Tidal Waves**: two waves across the island (11738), up from the south then down from the
       north, each with a gap to stand in, narrower with path levels; they wash away his acid.
     - **Enrage** below 25%: quicker, with no more specials.
@@ -879,7 +879,7 @@ in his quadrants' elements, and a miss drops his guard and his prayer with it. M
 quadrants, the shadows, Detonate and the final stand stay.
 
 - **Three phases** (`BossDef.phases` at 66% and 33%, where his shadows come now: two times, not
-  four, flooding every 15 seconds, not 20), `tempo` 1, 0.85, 0.7, the last dimmed to 0.6, the same
+  four, flooding every 15 seconds, not 20), `tempo` 1, 0.85, 0.7, the same
   on every form (`akkhaForm`; a form's change keeps the phase). His attack interval is 1.4 seconds
   (1.8), a special every 6 attacks (7). Memory Blast is a step longer in the last phase.
 - **His prayer down with his guard** (`BossGuardDef.pierce`, E2): while he's open, his overhead

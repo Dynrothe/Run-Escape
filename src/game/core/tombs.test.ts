@@ -31,7 +31,7 @@ import {
 import { TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
-import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow } from "./Sim";
+import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow, zebakShelters } from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { isCircleFree } from "./world/Collision";
 import { makeGrid } from "./world/testGrid";
@@ -3217,6 +3217,22 @@ describe("Zebak", () => {
         expect(open.hurt).toBeGreaterThan(0);
         expect(open.moved).toBeGreaterThan(0.5);
         expect(roarOn(true).hurt).toBe(0);
+    });
+
+    it("shelters from his roar straight behind a boulder, down the island, not on a slant", () => {
+        // He's at (0, 10), a boulder off to his side at (5, 0)
+        const rock = [{ x: 5, y: 0, radius: 0.8 }];
+        const shelters = (x: number, y: number) =>
+            zebakShelters(0, 10, x, y, rock, DEF.roar.shelter);
+        expect(shelters(5, -3)).toBe(true);
+        expect(shelters(5, 1)).toBe(false);
+        expect(shelters(5, -5)).toBe(false);
+        // On the line from him through it, as far back: off to the side of what it shelters
+        const len = Math.hypot(5, -10);
+        expect(shelters(5 + (5 / len) * 3.2, -(10 / len) * 3.2)).toBe(false);
+        // As wide as it is, and a bit
+        expect(shelters(6.2, -2)).toBe(true);
+        expect(shelters(6.5, -2)).toBe(false);
     });
 
     it("leaves a party his roar kills where the room starts over, not thrown from there", () => {

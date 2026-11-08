@@ -2694,8 +2694,8 @@ export const ZEBAK: ZebakDef = {
     },
     roar: {
         // Boulders across the island, then after seconds the roar: hits times, each hit share of
-        // your hitpoints and a knock back from him, unless a boulder's between you and him within
-        // shelter tiles
+        // your hitpoints and a knock back from him, unless you're straight behind a boulder, down
+        // the island from him, within shelter tiles of it (zebakShelters)
         boulders: 3,
         seconds: 9,
         hits: 3,

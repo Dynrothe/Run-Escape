@@ -1081,11 +1081,15 @@ export class GameView {
         const rocks = going
             ? roared.rocks
             : sim.tombsCover.filter((rock) => rock.look === roar.look);
-        // Straight behind each, down the island from him
+        // Straight behind each, down the island from him, as wide as it shelters (a circle a tile
+        // across each side of its middle too)
         for (const rock of rocks) {
             const away = rock.y >= from.y ? 1 : -1;
-            for (let out = rock.radius + 0.6; out <= roar.shelter + rock.radius; out += 1) {
-                this.drawGlowCircle(actors, sim, rock.x, rock.y + away * out, ZEBAK_SHELTER_SCALE);
+            for (let out = rock.radius + 0.4; out <= roar.shelter + rock.radius; out += 1) {
+                for (const across of [-1, 0, 1]) {
+                    const y = rock.y + away * out;
+                    this.drawGlowCircle(actors, sim, rock.x + across, y, ZEBAK_SHELTER_SCALE);
+                }
             }
         }
         const island = sim.tombsPathRoom?.boss?.island;

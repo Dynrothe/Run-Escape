@@ -301,43 +301,37 @@
     }
 
     /* The Scabaras slate: one thin row along the top, under the clock, not over the floor round
-       the hero. With no zoom, the middle of the screen is the plates you're about to step on. */
-    .ui-scabaras-reading {
+       the hero. With no zoom, the middle of the screen is the plates you're about to step on.
+       (The tablet's panel, with only its number, stays as it is.) */
+    .ui-scabaras-slate {
         top: calc(var(--safe-top) + 34px);
         width: auto;
-        max-width: calc(100vw - var(--safe-left) - var(--safe-right) - 16px);
+        max-width: calc((100vw - var(--safe-left) - var(--safe-right) - 16px) / var(--ui-scale));
         padding: 3px 8px;
         opacity: 0.92;
     }
 
-    .ui-scabaras-reading .ui-scabaras-title {
+    .ui-scabaras-slate .ui-scabaras-title,
+    .ui-scabaras-slate .ui-scabaras-name {
         display: none;
     }
 
-    .ui-scabaras-symbols {
+    .ui-scabaras-slate .ui-scabaras-symbols {
         grid-template-columns: repeat(9, auto);
         gap: 2px 5px;
     }
 
-    .ui-scabaras-symbol {
+    .ui-scabaras-slate .ui-scabaras-symbol {
         gap: 2px;
     }
 
-    .ui-scabaras-symbol .ui-icon {
+    .ui-scabaras-slate .ui-icon {
         width: auto;
         height: 18px;
     }
 
-    .ui-scabaras-value {
+    .ui-scabaras-slate .ui-scabaras-value {
         font-size: 15px;
-    }
-
-    .ui-scabaras-name {
-        display: none;
-    }
-
-    .ui-scabaras-number {
-        font-size: 28px;
     }
 }
 
