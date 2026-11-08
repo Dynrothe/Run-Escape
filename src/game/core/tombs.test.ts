@@ -3140,17 +3140,17 @@ describe("Zebak", () => {
         const until = boss.def.boss!.phases!.phases[0].until!;
         const at = Math.max(1, Math.round(boss.maxHp * until));
         boss.hp = at + 10;
-        const points = sim.hero.tombsPoints;
+        const points = sim.heroes[0].tombsPoints;
         const dealt = sim["damageEnemy"](boss, boss.maxHp, 0, boss.x, boss.y, 0);
         expect(boss.hp).toBe(at);
         expect(dealt).toBe(10);
         // Ten hitpoints' worth, not the whole hit's
-        const perHp = (sim.hero.tombsPoints - points) / 10;
+        const perHp = (sim.heroes[0].tombsPoints - points) / 10;
         boss.hp = at + 10;
         boss.bossState!.phase!.index = 0;
-        const before = sim.hero.tombsPoints;
+        const before = sim.heroes[0].tombsPoints;
         sim["damageEnemy"](boss, 5, 0, boss.x, boss.y, 0);
-        const five = sim.hero.tombsPoints - before;
+        const five = sim.heroes[0].tombsPoints - before;
         expect(perHp).toBeCloseTo(five / (at + 10 - boss.hp), 5);
     });
 
