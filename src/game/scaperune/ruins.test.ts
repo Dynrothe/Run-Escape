@@ -104,3 +104,113 @@ describe("a breach's broken ends", () => {
         expect(breach(range(2, 17), range(6, 6))).toBe("..####,###########......");
     });
 });
+
+// A building's broken walls (RuinRules.crumbled.mirrors): every whole end against a wall standing
+// or another's whole end, as the Wilderness's ruins are laid, never in the open or against a low end
+
+const TOP = 501;
+// Whole at its east end at rotation 1, and the mirror
+const HIGH = 911;
+const MIRROR = 912;
+const STUB = 913;
+
+const CRUMBLED_RULES: RuinRules = {
+    ...RULES,
+    // Every building wall breaks off near its top (the noise never gets halfway to falling), and
+    // the city wall stands
+    fallen: 10,
+    broken: -2,
+    crumbled: {
+        high: { 0: HIGH, 2: HIGH },
+        low: { 0: STUB },
+        mirrors: { [HIGH]: MIRROR },
+    },
+    breaches: undefined,
+    breachEnds: undefined,
+    tops: [TOP],
+};
+
+// Walls along x (turned 1: on their tiles' north sides), a tile a character: # a city wall's face,
+// which stands; t one resting on a wall beside it (`tops`); b a building's wall, which breaks; < a
+// corner turned 0 and > one turned 1, which break too. Each tile of the line after: # a wall
+// standing, / a broken wall whole at its east end, \ whole at its west, s a stub, C a broken
+// corner, . nothing
+function crumble(walls: string): string {
+    const grid = createTileGrid(SIZE, 8);
+    const city = (x: number, y: number) => (grid.levels[1].flags[x + y * SIZE] |= TILE_SHOWN);
+    [...walls].forEach((c, x) => {
+        if (c === "#" || c === "t") {
+            city(x, ROW);
+            grid.locs.push({
+                id: c === "t" ? TOP : FACE,
+                type: 0,
+                rotation: 1,
+                level: 0,
+                x,
+                y: ROW,
+            });
+        } else if (c === "b") {
+            grid.locs.push({ id: FACE, type: 0, rotation: 1, level: 0, x, y: ROW });
+        } else if (c === "<" || c === ">") {
+            grid.locs.push({ id: FACE, type: 2, rotation: c === "<" ? 0 : 1, level: 0, x, y: ROW });
+        }
+    });
+    ruinGrid(
+        grid,
+        () => ({
+            name: "Wall",
+            sizeX: 1,
+            sizeY: 1,
+            clipType: 2,
+            blocksProjectile: true,
+            drawn: true,
+        }),
+        CRUMBLED_RULES,
+    );
+    let line = "";
+    for (let x = 0; x < SIZE; x++) {
+        const [loc] = grid.locs.filter((loc) => loc.x === x && loc.y === ROW);
+        const id = loc?.id;
+        line +=
+            loc === undefined
+                ? "."
+                : id === getCharredLoc(FACE) || id === getCharredLoc(TOP)
+                  ? "#"
+                  : loc.type === 2
+                    ? { [HIGH]: "C" }[id]
+                    : { [HIGH]: "/", [MIRROR]: "\\", [STUB]: "s" }[id];
+    }
+    return line.replace(/\.+$/, "");
+}
+
+describe("a building's broken walls", () => {
+    it("are whole against the wall standing either side", () => {
+        // One alone meets the first
+        expect(crumble("..##b##")).toBe("..##\\##");
+        expect(crumble("..##bb##")).toBe("..##\\/##");
+        expect(crumble("..##bbbbb##")).toBe("..##\\s/\\/##");
+    });
+
+    it("pair up, whole end to whole end, with a stub left over between pairs", () => {
+        expect(crumble("..bb")).toBe("../\\");
+        expect(crumble("..bbbb")).toBe("../\\/\\");
+        expect(crumble("..bbbbb")).toBe("../\\s/\\");
+        expect(crumble("..bbbbbbb")).toBe("../\\s/\\/\\");
+        expect(crumble("..##bbbb")).toBe("..##\\s/\\");
+    });
+
+    it("are a stub alone with nothing to meet", () => {
+        expect(crumble("..b")).toBe("..s");
+        expect(crumble("..b.##")).toBe("..s.##");
+    });
+
+    it("don't count a wall resting on one that broke as standing", () => {
+        expect(crumble("..#tbb")).toBe("..#./\\");
+    });
+
+    it("leave a corner as it broke: its whole ends are against each other at the corner", () => {
+        // So a run beside one meets its low end, and pairs on its own
+        expect(crumble("..<bb")).toBe("..C/\\");
+        expect(crumble("..bb>")).toBe("../\\C");
+    });
+});

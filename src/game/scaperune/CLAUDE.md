@@ -1346,10 +1346,17 @@ by tile and loc by loc:
   fall together) some fall (`fallen`) or are broken down (`broken`): the cache's own broken walls in their place
   (`crumbled`, by loc type and turned as the wall was), broken off near the top (`high`) or down to a stub (`low`)
   as the noise nears `fallen`. Varrock's are the Wilderness's ruins' (14622 to 14627, 14632: the ruin west of the Dark
-  Warriors' Fortress), dark stone that sits with Varrock's grey burnt. A fallen straight wall can leave its stones on
-  the ground (`fallenStones`, floor decorations turned as it was, blocking nothing). A tenth of the fallen straight ones
-  can be a wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is what makes the place
-  read as itself. What rested on or hung from the walls (`tops`: a gateway's deck, a lintel, a shelf) goes where a
+  Warriors' Fortress), dark stone that sits with Varrock's grey burnt. The straight one broken off near its top (14623)
+  is whole at one end and steps down to the other, so it comes with its mirror (14625, `mirrors`), and each run of them
+  along a wall is turned as Jagex lays that ruin (`pairBroken`): the end ones whole against the wall standing beside
+  the run, the rest in pairs, whole end to whole end, and one left over a stub between pairs (the ruin's own `h s H`).
+  One with neither is a stub. So no whole end stands in the open or against a low end: all one way, they read as a
+  sawtooth. A wall resting on another (`tops`) that comes down with it doesn't count as standing. A broken corner needs
+  nothing: a loc can have a model of its own for a corner (`types`), and 14623's (14788) is its straight one mirrored,
+  so both its whole ends meet at the corner. `ruins.test.ts` holds them to all that. A fallen straight wall can leave
+  its stones on the ground (`fallenStones`, floor decorations turned as it was, blocking nothing). A tenth of the
+  fallen straight ones can be a wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is
+  what makes the place read as itself. What rested on or hung from the walls (`tops`: a gateway's deck, a lintel, a shelf) goes where a
   wall beside it fell or broke, as it would float.
 - **Nothing floats** (`unfloat`): a shown upper tile (a walkway's deck) stays only over a wall standing whole on the
   level under it, a city wall's solid middle (level 0 blocked) or another shown tile, and anything upstairs only on a

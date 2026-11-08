@@ -171,6 +171,10 @@ const TILE_INSIDE = 0x4;
 const CRUMBLED = {
     high: { 0: 14623, 1: 14632, 2: 14623, 3: 14624, 9: 14624 },
     low: { 0: 14624, 1: 14632, 2: 14632, 3: 14624, 9: 14624 },
+    // The straight one broken off near its top is whole at its north end at rotation 0 and steps
+    // down to its south; the ruin lays it with 14625, its model mirrored, so each whole end meets
+    // a wall standing or another's whole end (ruins.ts pairBroken)
+    mirrors: { 14623: 14625 },
 };
 // The same ruins' stones on the ground along a wall's foot (blocking nothing), and their pile of
 // stone
