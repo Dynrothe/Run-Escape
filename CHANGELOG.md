@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Co-op room flags show the UK and French flags instead of country-code letters. Fixed by trippy22.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed

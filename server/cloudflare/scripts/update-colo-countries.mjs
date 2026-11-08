@@ -14,7 +14,15 @@ const countries = new Map();
 for (let first = 65; first <= 90; first++) {
     for (let second = 65; second <= 90; second++) {
         const code = String.fromCharCode(first, second);
-        if (countryCode(code) && names.of(code) !== code) countries.set(names.of(code), code);
+        // DisplayNames also accepts aliases: UK names the same country as GB.
+        // Only canonical codes may populate the map, or later aliases win.
+        if (
+            countryCode(code) &&
+            new Intl.Locale(`und-${code}`).region === code &&
+            names.of(code) !== code
+        ) {
+            countries.set(names.of(code), code);
+        }
     }
 }
 // The status page retains these older names; Intl uses their current names.

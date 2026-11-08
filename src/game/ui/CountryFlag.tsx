@@ -27,6 +27,15 @@ type Props = {
 // Where a co-op player's playing from: their country's flag from the world list,
 // or its letters for a country without one
 export function CountryFlag({ country, label, keepSpace }: Props): JSX.Element | null {
+    // Older relay snapshots can contain aliases such as UK or FX. Resolve
+    // them before looking up the sprite, without asking the room to remeasure.
+    if (country) {
+        try {
+            country = new Intl.Locale(`und-${country}`).region ?? country;
+        } catch {
+            // Keep the text fallback for a code the browser can't interpret.
+        }
+    }
     const frame = country !== undefined ? FLAG_FRAMES[country] : undefined;
     const cached = () => (frame !== undefined ? iconCache.getFrame(FLAG_SPRITE, frame) : undefined);
     const [loaded, setLoaded] = useState(() => ({ frame, url: cached() }));

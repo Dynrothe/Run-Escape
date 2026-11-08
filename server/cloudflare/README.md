@@ -60,6 +60,8 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   a new room that reuses the code measures afresh.
 - `colo-countries.json` is made from Cloudflare's status page by
   `node scripts/update-colo-countries.mjs`, run in this directory: review its diff and commit it.
+  The script accepts only canonical region codes: `Intl.DisplayNames` also names aliases such
+  as `UK` and `FX`, which must not overwrite `GB` and `FR` in the generated map.
   A data centre it hasn't got has no flag until then. The status page names a few without a
   country, which the script's `places` lists, and it stops at any new one.
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
