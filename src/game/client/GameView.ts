@@ -1958,6 +1958,7 @@ export class GameView {
 
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
+        this.drawCrondisSpearTells(overlay, sim);
         this.fight.drawGround(overlay, sim, alpha, now, scale);
         this.drawAuras(overlay, sim, alpha, now);
         this.drawBlasts(overlay, sim, now, scale);
@@ -2547,6 +2548,52 @@ export class GameView {
             ctx.strokeStyle = slash.color
                 ? `rgba(${slash.color}, ${0.75 * (1 - t)})`
                 : `rgba(255, 255, 255, ${0.6 * (1 - t)})`;
+            ctx.stroke();
+        }
+    }
+
+    // The Crondis room's spears about to thrust: the tiles each will reach, on the floor through
+    // its tell, filling in as it nears (the spear's own glint is small, and a step out of its
+    // statue): what to time a way past by, in time to read it
+    private drawCrondisSpearTells(overlay: Overlay, sim: Sim): void {
+        const crondis = sim.tombsRoom?.crondis;
+        const def = sim.tombsPathRoom?.crondis;
+        if (!crondis || !def) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const tell = Math.round(CRONDIS.spearTell * TICKS_PER_SECOND);
+        for (const thrust of crondis.thrusts) {
+            const age = sim.tick - thrust.startTick;
+            if (age >= tell) {
+                continue;
+            }
+            const t = Math.min(1, Math.max(0, age / tell));
+            const area = sim.crondisSpearArea(def, thrust);
+            ctx.beginPath();
+            [
+                [area.x0, area.y0],
+                [area.x1, area.y0],
+                [area.x1, area.y1],
+                [area.x0, area.y1],
+            ].forEach(([wx, wy], i) => {
+                const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.05, wy, this.screen2);
+                if (i === 0) {
+                    ctx.moveTo(p.x, p.y);
+                } else {
+                    ctx.lineTo(p.x, p.y);
+                }
+            });
+            ctx.closePath();
+            // Yellow, not red: the room's floor is red already
+            ctx.fillStyle = `rgba(255, 220, 90, ${0.2 + 0.35 * t})`;
+            ctx.fill();
+            // A dark edge under the bright one, to read on any of its floor
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 + 0.3 * t})`;
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(255, 235, 140, ${0.8 + 0.2 * t})`;
             ctx.stroke();
         }
     }

@@ -15,6 +15,8 @@ the version in the corner).
   her fight easy. Only her Rampage is stopped by a boulder now. Fixed by Okaeri.
 - The Crondis room's poison reached you under a waterfall. It's safe there now, as in OSRS. Fixed
   by Okaeri.
+- The Crondis room's spear statues were hard to time. The tiles a spear's about to reach now light
+  up on the floor before it thrusts. Fixed by Okaeri.
 
 ## 0.29.1 - 2026-11-08
 
