@@ -1911,3 +1911,61 @@ describe("the fight button's hint", () => {
         expect(hint(5)).toBe(false);
     });
 });
+
+describe("boss attacks' instructions", () => {
+    function createClient() {
+        const shown: { text: string; ms?: number }[] = [];
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, {
+            instructionsSeen: new Set<string>(),
+            instructions: [],
+            instructionShownAt: -Infinity,
+            isPlaying: () => true,
+            store: { toast: (text: string, ms?: number) => shown.push({ text, ms }) },
+        });
+        const queue = (text: string) =>
+            (client as unknown as { queueInstruction(text: string): void }).queueInstruction(text);
+        const pump = (now: number) =>
+            (client as unknown as { showInstruction(now: number): void }).showInstruction(now);
+        return { shown, queue, pump };
+    }
+
+    test("show once a run, one at a time, each held long enough to read", () => {
+        const now = vi.spyOn(performance, "now");
+        try {
+            const { shown, queue, pump } = createClient();
+            now.mockReturnValue(1000);
+            queue("Dodge the spears!");
+            queue("Hide behind a rock!");
+            queue("Dodge the spears!");
+            expect(shown.map((s) => s.text)).toEqual(["Dodge the spears!"]);
+            expect(shown[0].ms).toBeGreaterThanOrEqual(5000);
+            // Not on top of the first
+            pump(1500);
+            expect(shown).toHaveLength(1);
+            pump(4000);
+            expect(shown.map((s) => s.text)).toEqual(["Dodge the spears!", "Hide behind a rock!"]);
+            // Its attack again later: not said again this run
+            now.mockReturnValue(20000);
+            queue("Dodge the spears!");
+            pump(20000);
+            expect(shown).toHaveLength(2);
+        } finally {
+            now.mockRestore();
+        }
+    });
+
+    test("drop one that waited too long for its turn", () => {
+        const now = vi.spyOn(performance, "now");
+        try {
+            const { shown, queue, pump } = createClient();
+            now.mockReturnValue(0);
+            queue("First");
+            queue("Second");
+            pump(9000);
+            expect(shown.map((s) => s.text)).toEqual(["First"]);
+        } finally {
+            now.mockRestore();
+        }
+    });
+});
