@@ -14,6 +14,7 @@ import compass from "../../components/rs/minimap/compass.png";
 import minimapFrame from "../../components/rs/minimap/minimap-frame.png";
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { describeBlessed } from "../client/BlessingViews";
 import { FRAME_RATES, FrameRate } from "../client/DisplaySettings";
 import { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
@@ -1882,7 +1883,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             )}
             {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
-                    inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
+                    inventory={getMap(hud.mapId).fight || hud.blessings ? [] : hud.inventory}
                     overlay={ui.overlay}
                     client={client}
                 />
@@ -1956,19 +1957,21 @@ function formatSlotLevel(slot: SlotView): string {
     return slot.level === slot.maxLevel ? "max" : String(slot.level);
 }
 
-// A weapon or passive in the HUD, with what it does on a card shown while
-// it's pointed at
+// A weapon, passive or blessing in the HUD, with what it does on a card shown
+// while it's pointed at
 const Slots = memo(function Slots({
     slots,
     max,
     disabled,
+    className,
 }: {
     slots: SlotView[];
     max: number;
     disabled: boolean;
+    className?: string;
 }): JSX.Element {
     return (
-        <div className="ui-slots">
+        <div className={className ? `ui-slots ${className}` : "ui-slots"}>
             {Array.from({ length: max }, (_, i) => {
                 const slot = slots[i];
                 return (
@@ -1984,9 +1987,11 @@ const Slots = memo(function Slots({
                                 <>
                                     <div style={{ color: slot.rarityColor }}>{slot.name}</div>
                                     <div className="ui-slot-tip-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? "Max level"
-                                            : `Level ${slot.level} of ${slot.maxLevel}`}
+                                        {slot.blessing
+                                            ? describeBlessed(slot)
+                                            : slot.level >= slot.maxLevel
+                                              ? "Max level"
+                                              : `Level ${slot.level} of ${slot.maxLevel}`}
                                     </div>
                                     {slot.stats?.map((line) => (
                                         <div key={line}>{line}</div>
@@ -2149,13 +2154,40 @@ const Hud = memo(function Hud({
             {!explore && <XpBar level={hud.level} client={client} />}
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    {!explore && (
-                        <>
-                            <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
-                            <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
-                            <GearSlots gear={hud.gear} disabled={disabled} />
-                        </>
-                    )}
+                    {!explore &&
+                        (hud.blessings ? (
+                            // A map with blessings (MapDef.blessings) has no items: the hero's
+                            // weapon, and what Saradomin's given them
+                            <>
+                                <Slots
+                                    slots={hud.weapons}
+                                    max={hud.weapons.length}
+                                    disabled={disabled}
+                                />
+                                {hud.blessings.length > 0 && (
+                                    <Slots
+                                        slots={hud.blessings}
+                                        max={hud.blessings.length}
+                                        disabled={disabled}
+                                        className="ui-blessing-slots"
+                                    />
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <Slots
+                                    slots={hud.weapons}
+                                    max={hud.maxWeapons}
+                                    disabled={disabled}
+                                />
+                                <Slots
+                                    slots={hud.passives}
+                                    max={hud.maxPassives}
+                                    disabled={disabled}
+                                />
+                                <GearSlots gear={hud.gear} disabled={disabled} />
+                            </>
+                        ))}
                 </div>
                 {!explore && <RunTimer client={client} />}
                 <div className="ui-hud-right">
@@ -2178,8 +2210,9 @@ const Hud = memo(function Hud({
                 <HudBuffs client={client} />
                 <div className="ui-hud-actions">
                     {/* A boss fight has no items, only its own button, and a map to walk round
-                        has none either (isPeaceful), only the hero's own buttons */}
-                    {!getMap(hud.mapId).fight && !explore && (
+                        (isPeaceful) or with blessings has none either, only the hero's own
+                        buttons */}
+                    {!getMap(hud.mapId).fight && !explore && !hud.blessings && (
                         <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />
@@ -2701,7 +2734,8 @@ function PauseModal({
                 <div className="ui-pause-columns">
                     <div className="ui-pause-column">
                         <div className="ui-pause-list">
-                            {[...hud.weapons, ...hud.passives].map((slot) => (
+                            {/* A map with blessings has those in place of passives */}
+                            {[...hud.weapons, ...(hud.blessings ?? hud.passives)].map((slot) => (
                                 <div key={slot.id} className="ui-pause-item">
                                     <ItemIcon
                                         objId={slot.iconObjId}
@@ -2714,14 +2748,17 @@ function PauseModal({
                                         <span className="ui-pause-detail">
                                             {[...(slot.stats ?? []), slot.detail]
                                                 .filter((text) => text)
-                                                .join(", ")}
+                                                // A blessing's line is a sentence
+                                                .join(slot.blessing ? " " : ", ")}
                                         </span>
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                     </span>
                                     <span className="ui-pause-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? "max"
-                                            : `level ${slot.level}`}
+                                        {slot.blessing
+                                            ? `×${slot.level}`
+                                            : slot.level >= slot.maxLevel
+                                              ? "max"
+                                              : `level ${slot.level}`}
                                     </span>
                                 </div>
                             ))}

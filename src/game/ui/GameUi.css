@@ -1519,6 +1519,13 @@
     gap: 2px;
 }
 
+/* A map's blessings (MapDef.blessings): a row for each seven, as they come. A slot's 40 pixels
+   with its border, and room for 42, as a phone's zoom makes the border wider than a pixel. */
+.ui-blessing-slots {
+    flex-wrap: wrap;
+    max-width: calc(7 * 42px + 6 * 2px);
+}
+
 /* A button, to hover, hold or focus for its description, sized as the box it
    was before (a button's border-box would take its border off its size) */
 .ui-slot {

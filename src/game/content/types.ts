@@ -1672,6 +1672,11 @@ export type RunEventDef =
     // map, when they're not its own.
     | { at: number; kind: "boss" | "finalBoss"; enemyId: string; hp?: number };
 
+// Levels past from needing more experience than they would anywhere else, more for each, up to
+// times as much from level to on (stretchedXp in core/xp.ts): the first few come as fast as
+// anywhere, as a run's start needs them, and the later ones far slower
+export type LevelXpDef = { times: number; from: number; to: number };
+
 // A place to play: the part of the world a run happens in, what comes at you
 // there, and which map it opens up when it's beaten
 export type MapDef = {
@@ -1773,6 +1778,66 @@ export type MapDef = {
     lighting?: LightingDef;
     // Bosses asleep in their lairs, each woken by stepping into it (LairDef): one fought at a time
     lairs?: LairDef[];
+    // Level ups here grant a blessing at random, at once, instead of a pick of weapons and
+    // passives, and nothing gives an item: no caskets, gear, utility items or power-ups (bones,
+    // coins and food still drop). The Battle for Varrock's blessings of Saradomin.
+    blessings?: BlessingsDef;
+    // Its levels need more experience than anywhere else: the Battle for Varrock's, where every
+    // level's a blessing and its hordes are thick (LevelXpDef)
+    levelXp?: LevelXpDef;
+    // Scenery that burns whoever walks into it (the Battle for Varrock's fires): its locs by id,
+    // which should block nothing, found where they stand as the map's collision is built
+    // (RegionData.burnTiles). A hero on one of their tiles takes share of their hitpoints at once,
+    // and again every so many seconds while they stay, through armour. Enemies walk through.
+    burns?: { locs: number[]; share: number; every: number };
+};
+
+// A map's blessings (MapDef.blessings): what a level up can grant, and how it looks and sounds as
+// it does
+export type BlessingsDef = {
+    // "Blessing of Saradomin", for the notice
+    name: string;
+    pool: BlessingDef[];
+    // Granted once every blessing in the pool's been had its max times, as often as that comes
+    fallback: BlessingDef;
+    // Played on the hero as one's granted
+    spotAnim?: number;
+    sound?: number;
+};
+
+// One blessing (BlessingsDef.pool), each time it's had adding all of this again: stats, a level
+// of the hero's first weapon, a weapon (or a level of it, once it's held), a share of their
+// hitpoints healed, and changes to their own buttons (BlessingKitDef). A level up picks one the
+// hero hasn't had max times, by weight (1 unset).
+export type BlessingDef = {
+    id: string;
+    name: string;
+    // What one more of it does, for the notice and the HUD
+    description: string;
+    iconObjId: number;
+    max: number;
+    weight?: number;
+    stats?: Partial<Stats>;
+    weaponLevel?: boolean;
+    // A weapon's id: the first time it's had, the weapon at level 1; each time after, a level of it
+    weapon?: string;
+    heal?: number;
+    kit?: BlessingKitDef;
+};
+
+// What a blessing does to a hero's own buttons (CharacterDef.abilities) each time it's had, to the
+// ones named (every one when unset): damage and cooldown as shares (0.2 is 20% more damage, 20%
+// less cooldown), length, width and size added in tiles, freeze in seconds, and for a wave, fan
+// more waves either side of it
+export type BlessingKitDef = {
+    abilities?: string[];
+    damage?: number;
+    cooldown?: number;
+    length?: number;
+    width?: number;
+    size?: number;
+    freeze?: number;
+    fan?: number;
 };
 
 // A rule a map is played by (MapDef.rule), which core/rules runs each tick. A rule only reads the

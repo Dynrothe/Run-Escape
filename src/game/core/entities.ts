@@ -1091,6 +1091,9 @@ type SimEventBody =
     | { type: "aura"; x: number; y: number; radius: number }
     | { type: "pickup"; kind: PickupKind; value: number }
     | { type: "levelUp"; level: number }
+    // A level up's blessing on a map with them (MapDef.blessings): which, and how many of it the
+    // hero has now
+    | { type: "blessing"; blessingId: string; count: number }
     // byEnemy: killed by another faction's enemy, not the player
     | {
           type: "kill";

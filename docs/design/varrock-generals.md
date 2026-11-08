@@ -27,16 +27,21 @@ was the minimap, hitpoints and the hero's buttons. Farming needs a run:
   (`paced`): imps, reanimated demon spawn, hellhounds, lesser demons, revenant demons, greater
   demons and black demons, with an elite a minute from 100 seconds and rings now and then. None
   has a faction (the God Wars' hellhound has one, so the map has its own copy), so they come from
-  every side. The map has no clock, so the last wave goes on, getting tougher by the minute as
-  everywhere (`enemyHpScale`): farming forever isn't free.
-- **Levels**: kills drop XP, level ups offer the usual weapons and passives, caskets drop. The
-  Justiciar's buttons take the run's Might like any hit (`damageEnemy`), so the upgrades make his
-  kit stronger too.
-- **HUD**: the level, XP bar, clock, weapons, kills and bag are back (`isPeaceful` is false). The
-  map still has no end on the clock and no visitors (`fun.explore`): the run ends when Yama dies,
-  or when the hero dies to the hordes.
-- **Nothing comes during a general's or Yama's fight**: the hordes leave as its intro starts
-  (`startIntro`) and the director waits while a lair's on (`Sim.lair`).
+  every side. It's a battle against the hordes of hell, so from the eighth minute there are
+  twice as many as Lumbridge's pace has (`HORDE`, built up from the first wave). The map has
+  no clock, so the last wave goes on, getting tougher by the minute as everywhere
+  (`enemyHpScale`): farming forever isn't free.
+- **Levels**: kills drop XP, and there are no items: each level up is a blessing of Saradomin at
+  random, at once (`MapDef.blessings`, `content/blessings.ts`), in place of weapons, passives and
+  caskets. The Justiciar's buttons take the run's Might like any hit (`damageEnemy`), and some
+  blessings change the buttons themselves (`Sim.kitAbility`), so his kit grows with the levels.
+  The first few levels come as anywhere, and from there each takes more experience, up to six
+  times as much from level 14 (`MapDef.levelXp`, `VARROCK_LEVEL_XP`), so a level means more.
+- **HUD**: the level, XP bar, clock, the sword and its blessings, and kills are back
+  (`isPeaceful` is false). The map still has no end on the clock and no visitors
+  (`fun.explore`): the run ends when Yama dies, or when the hero dies to the hordes.
+- **Nothing comes during a general's or Yama's fight**: the hordes run off every way from the
+  lair as its intro starts (`sendOff`), and the director waits while a lair's on (`Sim.lair`).
 
 ## 3. Lairs, plural
 
@@ -188,3 +193,29 @@ What the sims changed:
 
 The party bot doesn't go into lairs, so co-op only got the hordes: a party of two lasted 8:00,
 6:24 and 6:24 against them, where one hero lasts 4:00 to 7:04.
+
+### Slower levels and thicker hordes
+
+A playtest found the levels came too quickly and the hordes too thin, so levels past the fourth
+take more experience (six times as much from level 14) and the hordes double by the eighth
+minute. The Justiciar's buttons come back two to two and a half times slower, each hitting harder,
+and the gaze is his ultimate at 30 s. The same seeds and settings as above, on the code before and
+after, with the bot as it is now (it had been walking to food the hordes left outside a sealed
+lair, out of its boss's reach, which had stretched its Yama fights to minutes):
+
+| Bot at                 | Before       | After        |
+| ---------------------- | ------------ | ------------ |
+| 3:00                   | level 12–13  | level 7      |
+| 8:00                   | level 28–31  | level 18–20  |
+| 12:00                  | level 38–41  | level 24–29  |
+| No `SAFE_WAVES`, dies  | 4:05 to 8:31 | 3:02 to 3:59 |
+| Xarth after 8 minutes  | 2 (2%)       | 0 (32–56%)   |
+| Xarth after 12 minutes |              | 2 (29%)      |
+| K'ril after 8 minutes  | 3 (19–25 s)  | 2 (48%)      |
+| K'ril after 10 minutes |              | 3 (22–35 s)  |
+| Yama after 10 minutes  | 3 (31–36 s)  | 3 (44–52 s)  |
+
+So each general wants a few more minutes of farming than before, about 10 for K'ril and 12 for
+Xarth, and the hordes are a real danger sooner: the bot without help dies to them a minute or more
+earlier. Yama still goes down to a hero that's beaten both generals. The bot keeps out of the
+fires (`firesToAvoid`) and counts them in its dodges, and its gaze is for his meteor.

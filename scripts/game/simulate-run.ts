@@ -279,6 +279,10 @@ function botMove(sim: Sim): { x: number; y: number } {
             ay += (ry / len) * push;
         }
     }
+    // Round the fires that burn (MapDef.burns), and out of one at once
+    const fire = firesToAvoid(sim);
+    ax += fire.x;
+    ay += fire.y;
     // Out of the lairs it isn't going for yet, as a person keeps out of a fight they aren't
     // ready for
     const keepOut = lairsToAvoid(sim);
@@ -295,6 +299,39 @@ function botMove(sim: Sim): { x: number; y: number } {
         return { x: 0, y: 0 };
     }
     return { x: ax / len, y: ay / len };
+}
+
+// A push away from the burning scenery round the bot (MapDef.burns), the nearer the more, and
+// hard once it's standing in one
+const FIRE_LOOK = 2;
+
+function firesToAvoid(sim: Sim): { x: number; y: number } {
+    if (!sim.map.burns) {
+        return { x: 0, y: 0 };
+    }
+    const player = sim.player;
+    const tx = Math.floor(player.x);
+    const ty = Math.floor(player.y);
+    let x = 0;
+    let y = 0;
+    for (let dy = -FIRE_LOOK; dy <= FIRE_LOOK; dy++) {
+        for (let dx = -FIRE_LOOK; dx <= FIRE_LOOK; dx++) {
+            if (!sim.grid.burnsAt(tx + dx, ty + dy)) {
+                continue;
+            }
+            const ox = player.x - (tx + dx + 0.5);
+            const oy = player.y - (ty + dy + 0.5);
+            const d2 = Math.max(0.25, ox * ox + oy * oy);
+            x += ox / d2;
+            y += oy / d2;
+        }
+    }
+    const len = Math.hypot(x, y);
+    if (len < 1e-6) {
+        return { x: 0, y: 0 };
+    }
+    const push = sim.grid.burnsAt(tx, ty) ? 3 : 0.5;
+    return { x: (x / len) * push, y: (y / len) * push };
 }
 
 // A push away from each lair that's asleep, harder the nearer its edge: from its middle, as far
@@ -669,7 +706,10 @@ function kitPlan(sim: Sim): KitPlan | undefined {
 }
 
 function kitChoice(sim: Sim): KitPlan | undefined {
-    const kit = getCharacter(sim.characterId).abilities;
+    // As the map's blessings have them (MapDef.blessings): longer, wider, sooner
+    const kit = getCharacter(sim.characterId).abilities?.map(
+        (ability, slot) => sim.kitAbility(slot)?.ability ?? ability,
+    );
     const boss = sim.shownBoss;
     if (kit && sim.lair === undefined) {
         return hordeKit(sim, kit);
@@ -876,7 +916,11 @@ function flareChoice(sim: Sim, kit: HeroAbilityDef[]): KitPlan | undefined {
         move: { x: player.facingX * 0.01, y: player.facingY * 0.01 },
         slot,
     });
-    const heal = sim.pickups.find((pickup) => pickup.kind === "food");
+    // Food in the lair: what the hordes dropped outside it is out of reach behind its seal
+    const lair = sim.lair;
+    const heal = sim.pickups.find(
+        (pickup) => pickup.kind === "food" && (lair === undefined || sim.inLair(lair, pickup)),
+    );
     if (heal && player.hp < player.maxHp) {
         const dx = heal.x - player.x;
         const dy = heal.y - player.y;
@@ -1113,8 +1157,12 @@ function blastDodge(sim: Sim): { x: number; y: number } | undefined {
             spots.push(...windup.targets.map((spot) => ({ ...spot, radius })));
         }
     }
+    // and the map's fires that burn (MapDef.burns)
+    const burning = (x: number, y: number) =>
+        sim.map.burns && sim.grid.burnsAt(Math.floor(x), Math.floor(y)) ? 1 : 0;
     const inside = (x: number, y: number) =>
-        spots.filter((s) => Math.hypot(x - s.x, y - s.y) < s.radius + player.radius + 0.3).length;
+        spots.filter((s) => Math.hypot(x - s.x, y - s.y) < s.radius + player.radius + 0.3).length +
+        burning(x, y);
     if (inside(player.x, player.y) === 0) {
         return undefined;
     }
@@ -1432,7 +1480,14 @@ function runOnce(characterId: string, seed: number) {
             nextReport += REPORT_SECONDS;
             const alive = sim.enemies.filter((e) => !e.dead).length;
             const weapons = sim.weapons.map((w) => `${w.def.id}:${w.level}`).join(" ");
-            const passives = sim.passives.map((p) => `${p.id}:${p.level}`).join(" ");
+            // A map with blessings has those for passives
+            const passives = (
+                sim.map.blessings
+                    ? sim.blessings.map((b) => ({ id: b.id, level: b.count }))
+                    : sim.passives
+            )
+                .map((p) => `${p.id}:${p.level}`)
+                .join(" ");
             const gear = Object.values(sim.gear).join(" ");
             console.log(
                 `  ${formatClock(sim.seconds)}${endless ? ` r${sim.round}` : ""}  lvl ${String(sim.level).padStart(2)}  ` +

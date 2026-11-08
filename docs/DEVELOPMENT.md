@@ -947,6 +947,24 @@ adventurer can have:
       on the line the sim uses, with the map's ambient dimmed as it winds up
       (`SceneLights.updateGaze`). It's drawn on a lit map only (`MapDef.lighting`). Zachariah's
       boss fight's gaze is unchanged: its arena's pillars (`BossAttackDef.cover`, `inShadow`).
+- **`MapDef.blessings`** (`BlessingsDef`, `content/blessings.ts`): a map with no items, and a
+  blessing for each level instead, Saradomin's in Varrock. Each level up grants every hero one
+  at once (`Sim.bless`): no `levelUp` state, no picks, by weight on the run's `rng` (so co-op's
+  copies agree), never past a blessing's `max`, and then the `fallback` as often as it comes.
+  A blessing adds its `stats` times how often it's been had (`updateStats`), a level to the
+  starting weapon (`weaponLevel`), a weapon or a level of it once it's held (`weapon`: the
+  staff's Saradomin Strike, Zilyana's Armadyl crossbow), a share of the hitpoints back (`heal`)
+  and changes to the hero's buttons (`kit`, for the abilities it names or all of them).
+  `Sim.kitAbility(slot)` is a button as blessed (`blessAbility`), and `useKitAbility`, the HUD's
+  buttons and the bot all go
+  by it; a wave's `fan` throws more waves either side (`BLESSED_FAN_ANGLE`, `KitCast.fanned`,
+  silent). Nothing gives an item there: `dropLoot` drops bones, coins and food, never a casket or
+  a power-up, `dropCasketOfTier` drops nothing, and visitors who'd give one stay away
+  (`givesItems`, for a blessed map with random events). The HUD has the weapon and a row of
+  blessings for passives, gear and the bag (`client/BlessingViews.ts`), the pause menu lists
+  them, and each one's a notice as it comes (the `blessing` event, with the map's `spotAnim` and
+  `sound`, which `getSpotAnimIds` and `getGameSoundIds` collect). Blessings' icons are items,
+  which the slim cache keeps from `ALL_MAPS` as it does any `iconObjId`.
 - **Props and an opening cinematic**: Yama sitting on his throne is a prop (`MapDef.props`),
   as a loc can't play a skeletal animation, and the map opens with a cinematic
   (`fun/varrockOpening.ts`) in which he stands in for it. Both are in Props and opening
@@ -956,6 +974,21 @@ adventurer can have:
   or bag (`Hud` in `ui/GameUi.tsx`). With waves (the Battle for Varrock's hordes,
   `content/varrockHordes.ts`) it's a run as any, with the run's HUD, still with no clock to end
   it, no boss pool and no random events.
+- **`MapDef.levelXp`** (`LevelXpDef`): levels past `from` need more experience than anywhere
+  else, more for each, up to `times` as much from level `to` on (`stretchedXp` in `core/xp.ts`,
+  for `Sim.xpForLevel` and `levelForXp`, which counts up from the run's level). Varrock's
+  (`VARROCK_LEVEL_XP`) keeps its first few as they are: with nothing but blessings, a hero who
+  got none in the first minutes didn't live through them, in the bot's hands, even with the
+  buttons' old cooldowns. After that a blessing's worth more than a pick, and the hordes are
+  twice the crowd.
+- **`MapDef.burns`**: scenery that burns whoever walks into it. The worker marks every tile of a
+  placed loc in `locs` (`RegionDataInput.burnLocs`, `RegionData.burnTiles`, from
+  `getArenaRegion`), `ArenaGrid.burnsAt` reads it, and `Sim.stepBurningScenery` takes `share`
+  of a hero's hitpoints at once and every `every` seconds while they're in it, through armour
+  and with no grace (`BURN_SOURCE`, `Hero.burnNext`). Enemies walk through unharmed. Varrock's
+  fires, and its dead, are walkable copies of the cache's (`getWalkableLoc` in
+  `rs/config/loctype/LocOverrides.ts`), so they block nothing. The bot walks round them
+  (`firesToAvoid`, and `blastDodge` steps it out of one in a fight).
 - **`MapDef.lairs`** (`LairDef`): bosses asleep on a map to walk round, one fought at a time
   (`Sim.lair`): Yama on his throne (`content/yama.ts`, `docs/design/yama.md`) and his generals,
   Xarth and K'ril Tsutsaroth (`content/xarth.ts`, `content/kril.ts`,
@@ -963,7 +996,9 @@ adventurer can have:
   (`MapDef.floor`), or its own `area` (a box, with `rows` for a shape: the Exchange's octagon).
   `wakeLair` drops every tile beside a way out (`findLairExits`, `ArenaGrid.dropTile`, kept in
   `Lair.sealed` and drawn as fire by `GameView.drawLairSeal`), and the boss's intro plays, rising
-  at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). Beaten, the seal lifts
+  at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). What's about runs straight
+  away from `at` (`sendOff` with `from`, to `SCATTER_REACH` tiles off), not to the map's nearest
+  edge as off a lair, which on a city that goes on round its arena sent everything north. Beaten, the seal lifts
   (`liftSeal`) with the `victory` notice and the `shout`, its pools go out (a pool that
   `spreads` would burn on for good), and any lair `empowered` by it is from
   then on (`Lair.empowered`: its hitpoints, damage and tempo times its own, and its

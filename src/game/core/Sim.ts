@@ -1,6 +1,7 @@
 import { getStepCoins, getStepDifficulty } from "../content/acts";
 import { ArmouryUpgrades, getUpgradedGear } from "../content/armoury";
 import { WeaponDamageBalance } from "../content/balance";
+import { BLESSED_FAN_ANGLE, blessAbility, getBlessing } from "../content/blessings";
 import { getCharacter } from "../content/characters";
 import {
     EXTRA_REVIVE_PRICE,
@@ -77,6 +78,7 @@ import {
     VISITOR_SOUND,
     VISITOR_SPOTANIM,
     getQuizGroups,
+    givesItems,
 } from "../content/randomEvents";
 import { RARITIES, RARITY_ORDER } from "../content/rarity";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
@@ -91,6 +93,8 @@ import {
 import { TROPHIES, TrophyDef } from "../content/trophies";
 import {
     ArenaStatue,
+    BlessingDef,
+    BlessingsDef,
     BoltProcDef,
     BossAmbientDef,
     BossAttackDef,
@@ -124,6 +128,7 @@ import {
     RandomEventDef,
     RandomEventEffect,
     SpecialAttackDef,
+    StatKey,
     Stats,
     UtilityDef,
     WeaponDef,
@@ -241,7 +246,13 @@ import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlightGrid } from "./world/FlightGrid";
 import { FlowField, canStep, canWalkStraight } from "./world/FlowField";
-import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
+import {
+    endlessLevelForXp,
+    endlessXpForLevel,
+    runLevelForXp,
+    runXpForLevel,
+    stretchedXp,
+} from "./xp";
 
 export const TICKS_PER_SECOND = 50;
 
@@ -409,6 +420,8 @@ const ENRAGED_TINT = 0xff7a66;
 const LEAVE_MAX_SPEED = 16;
 const LEAVE_MIN_SCALE = 2;
 const LEAVE_MARGIN_TICKS = 25;
+// Tiles from a lair's boss that what's about runs out to as it wakes: past the screen's edge
+const SCATTER_REACH = 24;
 // Ticks an armed spot takes to go off once it's stepped on
 const HAZARD_FUSE_TICKS = 15;
 // How long a strike's fitted impact plays out (WeaponDef.impactFit): the
@@ -606,6 +619,7 @@ const PERSONAL_EVENTS = new Set<SimEvent["type"]>([
     "extraRevive",
     "playerCursed",
     "ability",
+    "blessing",
 ]);
 
 // levelUp and chest wait for the player to choose
@@ -750,6 +764,9 @@ export type Hero = {
     chests: ChestOffer[];
     pendingLevelUps: number;
     choices: UpgradeChoice[];
+    // On a map with blessings (MapDef.blessings), what their level ups have granted: each
+    // blessing by id with how many times, in the order first had
+    blessings: { id: string; count: number }[];
     // Gear out of caskets this run, rerolled away or not
     gearFound: Set<string>;
     // Sets caskets have stopped bringing the missing pieces of
@@ -822,6 +839,8 @@ export type Hero = {
     // A floor tile's burn or heal (FloorEffect) next acts on them from this tick; and how far they
     // went last tick, kept on ice
     floorEffectNext: number;
+    // The map's burning scenery (MapDef.burns) next burns them from this tick
+    burnNext: number;
     glideX: number;
     glideY: number;
     // The map's rule (MapDef.rule): ticks they've stood on what it hurts on, one after another,
@@ -879,6 +898,9 @@ type KitCast = {
     effect?: Effect;
     // A checker's cells, their middles
     cells?: { x: number; y: number }[];
+    // One of a blessed wave's fan (BlessingKitDef.fan): the first wave sounds and throws up its
+    // impact for all of them
+    fanned?: boolean;
 };
 
 // A player in a co-op run, as SimOptions.party has them
@@ -1185,6 +1207,9 @@ export class Sim {
     set choices(choices: UpgradeChoice[]) {
         this.hero.choices = choices;
     }
+    get blessings(): { id: string; count: number }[] {
+        return this.hero.blessings;
+    }
     get gearFound(): Set<string> {
         return this.hero.gearFound;
     }
@@ -1475,6 +1500,7 @@ export class Sim {
             chests: [],
             pendingLevelUps: 0,
             choices: [],
+            blessings: [],
             gearFound: new Set(),
             declinedSets: new Set(),
             trophies: new Set(),
@@ -1510,6 +1536,7 @@ export class Sim {
             bulletGraceEnd: 0,
             floorGraceEnd: 0,
             floorEffectNext: 0,
+            burnNext: 0,
             glideX: 0,
             glideY: 0,
             ruleTicks: 0,
@@ -1751,7 +1778,25 @@ export class Sim {
     }
 
     private xpForLevel(level: number): number {
-        return this.endless ? endlessXpForLevel(level) : runXpForLevel(level);
+        const xp = this.endless ? endlessXpForLevel(level) : runXpForLevel(level);
+        return stretchedXp(xp, level, this.map.levelXp);
+    }
+
+    // The level the run's experience comes to
+    private levelForXp(): number {
+        if (this.map.levelXp === undefined) {
+            return this.endless ? endlessLevelForXp(this.xp, this.level) : runLevelForXp(this.xp);
+        }
+        // The map's own table (MapDef.levelXp), counted up from where the run is: it stops where
+        // the table does
+        let level = this.level;
+        while (
+            this.xpForLevel(level + 1) <= this.xp &&
+            this.xpForLevel(level + 1) > this.xpForLevel(level)
+        ) {
+            level++;
+        }
+        return level;
     }
 
     getResult(): RunResult {
@@ -1857,6 +1902,15 @@ export class Sim {
         }
         for (const debuff of this.debuffs) {
             addStats(stats, debuff.stats);
+        }
+        const blessings = this.map.blessings;
+        if (blessings) {
+            for (const { id, count } of this.blessings) {
+                const blessed = getBlessing(blessings, id).stats ?? {};
+                for (const [key, value] of Object.entries(blessed)) {
+                    stats[key as StatKey] += value * count;
+                }
+            }
         }
         // Grows with every level gained (the Gauntlet runner starts weak), up
         // to about where a normal run ends, so it doesn't run away in endless
@@ -2628,6 +2682,7 @@ export class Sim {
         this.stepProjectiles();
         this.stepFires();
         this.stepPools();
+        this.stepBurningScenery();
         this.stepEnemyProjectiles();
         this.stepBossFight();
         this.stepFloor();
@@ -5197,7 +5252,7 @@ export class Sim {
                     lair.introTick = this.tick + secondsToTicks(def.opening.introAt);
                     for (const enemy of this.enemies) {
                         if (!enemy.dead && !enemy.leaving) {
-                            this.sendOff(enemy, lair.introTick);
+                            this.sendOff(enemy, lair.introTick, def.at);
                         }
                     }
                 } else {
@@ -5388,7 +5443,7 @@ export class Sim {
         this.updateFlowFields();
         const enemy = getEnemy(def.enemyId);
         const hp = def.hp * (lair.empowered ? def.empowered!.hp : 1);
-        this.startIntro(enemy, def.final ? "finalBoss" : "boss", hp);
+        this.startIntro(enemy, def.final ? "finalBoss" : "boss", hp, def.at);
         this.emit({ type: "notice", message: def.message });
         this.emit({
             type: "lair",
@@ -5551,8 +5606,14 @@ export class Sim {
     }
 
     // The player's safe and everything runs for it (BossDef.intro); the boss
-    // comes up partway through
-    startIntro(def: EnemyDef, type: "boss" | "finalBoss", hp?: number): void {
+    // comes up partway through. A lair's boss (scatter: where it rises) sends what's about
+    // running from it rather than off the map.
+    startIntro(
+        def: EnemyDef,
+        type: "boss" | "finalBoss",
+        hp?: number,
+        scatter?: { x: number; y: number },
+    ): void {
         const intro = def.boss!.intro!;
         const startTick = this.tick;
         const endTick = startTick + secondsToTicks(intro.seconds);
@@ -5566,7 +5627,7 @@ export class Sim {
         };
         for (const enemy of this.enemies) {
             if (!enemy.dead) {
-                this.sendOff(enemy, endTick - LEAVE_MARGIN_TICKS);
+                this.sendOff(enemy, endTick - LEAVE_MARGIN_TICKS, scatter);
             }
         }
         this.clearBossAttacks();
@@ -5575,16 +5636,29 @@ export class Sim {
         this.emit({ type: "bossIntro", enemyId: def.id, sound: intro.darkSound ?? -1 });
     }
 
-    // Off to the nearest edge of the map. It can't be hit, and it's gone by
+    // Off to the nearest edge of the map, or running from a spot (from: a lair's boss waking, on
+    // a map whose edge is a city away) until it's out of sight. It can't be hit, and it's gone by
     // lastTick however far that is.
-    private sendOff(enemy: Enemy, lastTick: number): void {
+    private sendOff(enemy: Enemy, lastTick: number, from?: { x: number; y: number }): void {
         const { x, y } = enemy;
-        const grid = this.grid;
-        const west = x - grid.baseX;
-        const east = grid.baseX + grid.sizeX - x;
-        const south = y - grid.baseY;
-        const north = grid.baseY + grid.sizeY - y;
-        const distance = Math.min(west, east, south, north);
+        let distance: number;
+        let dirX: number;
+        let dirY: number;
+        if (from) {
+            const away = fm.hypot(x - from.x, y - from.y);
+            dirX = away > 0.001 ? (x - from.x) / away : 0;
+            dirY = away > 0.001 ? (y - from.y) / away : -1;
+            distance = Math.max(1, SCATTER_REACH - away);
+        } else {
+            const grid = this.grid;
+            const west = x - grid.baseX;
+            const east = grid.baseX + grid.sizeX - x;
+            const south = y - grid.baseY;
+            const north = grid.baseY + grid.sizeY - y;
+            distance = Math.min(west, east, south, north);
+            dirX = distance === west ? -1 : distance === east ? 1 : 0;
+            dirY = dirX !== 0 ? 0 : distance === south ? -1 : 1;
+        }
         const stays = enemy.def.stationary ?? false;
         const ticks = Math.max(1, lastTick - this.tick);
         const speed = stays
@@ -5593,8 +5667,6 @@ export class Sim {
                   LEAVE_MAX_SPEED / TICKS_PER_SECOND,
                   Math.max(distance / ticks, enemy.speed * LEAVE_MIN_SCALE),
               );
-        const dirX = distance === west ? -1 : distance === east ? 1 : 0;
-        const dirY = dirX !== 0 ? 0 : distance === south ? -1 : 1;
         enemy.leaving = {
             vx: dirX * speed,
             vy: dirY * speed,
@@ -8828,9 +8900,12 @@ export class Sim {
     // Goes off where the current hero faces, anything to hit or not, unless it's still charging or
     // another of theirs is on its way: whether it went
     private useKitAbility(kit: HeroAbilityDef[], slot: number): boolean {
-        const ability = kit[slot];
         const hero = this.hero;
+        // As the map's blessings have made it (MapDef.blessings)
+        const blessed = kit[slot] && this.kitAbility(slot, hero);
+        const ability = blessed?.ability;
         if (
+            !blessed ||
             !ability ||
             this.state !== "playing" ||
             !this.isUp(hero) ||
@@ -8893,6 +8968,21 @@ export class Sim {
             }
         }
         this.kitCasts.push(cast);
+        // A blessed wave's fan (Saradomin's crozier): more of it either side, each its own wave
+        for (let i = 1; i <= blessed.fan; i++) {
+            for (const side of [-1, 1]) {
+                const turn = side * i * BLESSED_FAN_ANGLE;
+                const cos = fm.cos(turn);
+                const sin = fm.sin(turn);
+                this.kitCasts.push({
+                    ...cast,
+                    dirX: dirX * cos - dirY * sin,
+                    dirY: dirX * sin + dirY * cos,
+                    hit: [],
+                    fanned: true,
+                });
+            }
+        }
         if (ability.kind === "gaze") {
             this.wardOff(cast);
         }
@@ -9038,7 +9128,7 @@ export class Sim {
         const player = this.player;
         const first = !cast.landed;
         cast.landed = true;
-        if (first && ability.sound !== undefined) {
+        if (first && ability.sound !== undefined && !cast.fanned) {
             this.emitKitSound(ability, ability.sound, cast.x, cast.y);
         }
         const half = (ability.width ?? 1) / 2;
@@ -9075,7 +9165,9 @@ export class Sim {
             }
             case "wave": {
                 if (first) {
-                    this.showImpact(ability.impact, cast.x, cast.y);
+                    if (!cast.fanned) {
+                        this.showImpact(ability.impact, cast.x, cast.y);
+                    }
                     const flyTicks = Math.ceil(
                         (ability.length / (ability.speed ?? 6)) * TICKS_PER_SECOND,
                     );
@@ -10856,6 +10948,17 @@ export class Sim {
             return;
         }
         const luck = 1 + this.stats.luck;
+        // A map with blessings (MapDef.blessings) has no items: never a casket or a power-up, from
+        // an elite or a boss either, only now and then coins or food
+        if (this.map.blessings) {
+            if (this.rng.chance(0.03 * luck)) {
+                this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
+            } else if (this.rng.chance(FOOD_DROP_CHANCE * luck)) {
+                const heal = Math.round(FOOD_HEAL * this.healScale);
+                this.dropPickup("food", enemy.x - 0.3, enemy.y, heal);
+            }
+            return;
+        }
         const caskets = enemy.def.caskets;
         if (enemy.elite) {
             this.dropCasket(enemy.x + 0.4, enemy.y, true);
@@ -12923,6 +13026,27 @@ export class Sim {
         }
     }
 
+    // The map's burning scenery (MapDef.burns): a hero who walks into it burns at once, and again
+    // every so often while they stay, through armour, and with no grace after it
+    private stepBurningScenery(): void {
+        const burns = this.map.burns;
+        if (!burns) {
+            return;
+        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                this.tick < this.hero.burnNext ||
+                !this.grid.burnsAt(Math.floor(player.x), Math.floor(player.y))
+            ) {
+                return;
+            }
+            this.hero.burnNext = this.tick + Math.max(1, secondsToTicks(burns.every));
+            const damage = Math.max(1, Math.round(player.maxHp * burns.share));
+            this.damagePlayer(damage, BURN_SOURCE, false, -1, true, false);
+        });
+    }
+
     // Fire taking hold beside what's burning (BossAttackDef.pool.spreads): each one, every so
     // often, lights another a step off in a direction of its own, on open ground of the fight's,
     // as long as there are fewer than most of its kind
@@ -13100,6 +13224,10 @@ export class Sim {
 
     // guaranteed: past the chance of a late endless casket, though not its limit
     private dropCasketOfTier(tier: CasketTier, x: number, y: number, guaranteed = false): void {
+        // Nothing gives an item on a map with blessings (MapDef.blessings)
+        if (this.map.blessings) {
+            return;
+        }
         if (this.endless && this.seconds >= LATE_CASKET_SECONDS) {
             if (!guaranteed && !this.rng.chance(LATE_CASKET_CHANCE)) {
                 return;
@@ -13796,7 +13924,8 @@ export class Sim {
             RANDOM_EVENTS.map((event) =>
                 event.id === this.lastRandomEventId ||
                 this.seconds < (event.minSeconds ?? 0) ||
-                (event.effect.kind === "ambush" && bossOut)
+                (event.effect.kind === "ambush" && bossOut) ||
+                (this.map.blessings && givesItems(event))
                     ? 0
                     : event.weight,
             ),
@@ -14181,19 +14310,26 @@ export class Sim {
         return getItem(itemId).kind === "gear" ? this.gearUpgradesFound : 0;
     }
 
-    // The run's level is shared: each level up gives every hero a pick
+    // The run's level is shared: each level up gives every hero a pick, or on a map with
+    // blessings (MapDef.blessings) one of those, at once, with nothing to wait for
     private checkLevelUp(): void {
-        const level = this.endless
-            ? endlessLevelForXp(this.xp, this.level)
-            : runLevelForXp(this.xp);
+        const level = this.levelForXp();
         if (level > this.level) {
             const gained = level - this.level;
             this.level = level;
+            const blessings = this.map.blessings;
             for (const hero of this.heroes) {
                 if (hero.left) {
                     continue;
                 }
                 this.use(hero);
+                if (blessings) {
+                    for (let i = 0; i < gained; i++) {
+                        this.bless(blessings);
+                    }
+                    this.addEffect(LEVEL_UP_SPOTANIM, this.player.x, this.player.y, 0, 90);
+                    continue;
+                }
                 hero.pendingLevelUps += gained;
                 if (this.stats.levelMight !== 0) {
                     this.updateStats();
@@ -14206,6 +14342,74 @@ export class Sim {
             this.state = "levelUp";
             this.rollMissingChoices();
         }
+    }
+
+    // The current hero's level up on a map with blessings: one they haven't had its max times, by
+    // weight, on the run's own Rng (co-op's copies grant the same), or the fallback once there's
+    // none. Its stats, weapon level and heal at once, with its god's strike on them.
+    private bless(blessings: BlessingsDef): void {
+        const had = this.blessings;
+        const open = blessings.pool.filter(
+            (blessing) => (had.find((h) => h.id === blessing.id)?.count ?? 0) < blessing.max,
+        );
+        const blessing =
+            open.length > 0
+                ? open[this.rng.weightedIndex(open.map((b) => b.weight ?? 1))]
+                : blessings.fallback;
+        let entry = had.find((h) => h.id === blessing.id);
+        if (!entry) {
+            entry = { id: blessing.id, count: 0 };
+            had.push(entry);
+        }
+        entry.count++;
+        if (blessing.weaponLevel) {
+            const weapon = this.weapons[0];
+            if (weapon && weapon.level < weapon.def.levels.length) {
+                weapon.level++;
+                this.appearanceVersion++;
+            }
+        }
+        if (blessing.weapon) {
+            const weapon = this.weapons.find((held) => held.def.id === blessing.weapon);
+            if (!weapon) {
+                this.addWeapon(blessing.weapon);
+            } else if (weapon.level < weapon.def.levels.length) {
+                weapon.level++;
+            }
+        }
+        this.updateStats();
+        const player = this.player;
+        if (blessing.heal) {
+            this.heal(Math.round(player.maxHp * blessing.heal));
+        }
+        if (blessings.spotAnim !== undefined) {
+            this.addEffect(blessings.spotAnim, player.x, player.y, 0, 40);
+        }
+        this.emit({ type: "blessing", blessingId: blessing.id, count: entry.count });
+    }
+
+    // A hero's own button (CharacterDef.abilities) as their blessings have made it
+    // (MapDef.blessings: Saradomin's in Varrock), with the extra waves a shock wave fans out, and
+    // which blessings changed it. As it's written when there are none.
+    kitAbility(
+        slot: number,
+        hero: Hero = this.hero,
+    ): { ability: HeroAbilityDef; fan: number; by: BlessingDef[] } | undefined {
+        const ability = getCharacter(hero.characterId).abilities?.[slot];
+        if (!ability) {
+            return undefined;
+        }
+        const blessings = this.map.blessings;
+        if (!blessings || hero.blessings.length === 0) {
+            return { ability, fan: 0, by: [] };
+        }
+        return blessAbility(
+            ability,
+            hero.blessings.map(({ id, count }) => ({
+                blessing: getBlessing(blessings, id),
+                count,
+            })),
+        );
     }
 
     // Rewards for everyone choosing a level up who hasn't any yet

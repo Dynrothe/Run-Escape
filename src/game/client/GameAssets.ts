@@ -245,8 +245,9 @@ export function getSpotAnimIds(): number[] {
     }
     // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
-        // What a cut through a map's roots throws up (MapDef.rule)
-        add(map.rule?.look.cutSpotAnim);
+        // What a cut through a map's roots throws up (MapDef.rule), and what comes down on a hero
+        // as they're blessed (MapDef.blessings)
+        add(map.rule?.look.cutSpotAnim, map.blessings?.spotAnim);
         // What plays in its cinematics (MapDef.cinematic, LairDef.opening)
         for (const cinematic of getMapCinematics(map)) {
             add(...cinematic.cues.map((cue) => cue.spotAnim));

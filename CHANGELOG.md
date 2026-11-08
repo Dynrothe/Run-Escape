@@ -9,15 +9,18 @@ the version in the corner).
 
 - The Battle for Varrock, on the Fun tab: Varrock burnt to ruins, every street and building where it
   stands, broken walls and broken breaches in the city wall, Gypsy Aris's tent ablaze, a crater
-  where the square's fountain was, fires still burning and the dead where they fell, up to Yama on
-  his throne in the palace. Fight Yama's demons in its streets as Justiciar Zachariah, with his
-  lunge, shock wave, ice barrage, lightning and the Owl's gaze on buttons of your own, for as long
-  as you like. Beat both his generals and the palace opens: step onto its floor and Yama
-  speaks from his throne, goes from it in embers and rises before it: the palace is sealed in fire,
-  the floor rises under you, and only the Owl's gaze stops his meteor. Freeze his void flares with
-  Ice barrage and shatter them with Lightning for food. It opens on Yama on his throne, facing the
-  last of the palace guard (any key, click or tap skips it). Lunge through his rising floor
-  unharmed, and keep your gaze out of his reach: up close he swats you away.
+  where the square's fountain was, fires still burning (walk through one and it burns you) and the
+  dead where they fell, up to Yama on his throne in the palace. Fight the hordes of Yama's demons
+  in its streets as Justiciar Zachariah, with his Saradomin sword, and his lunge, shock wave, ice
+  barrage, lightning and the Owl's gaze, his ultimate, on buttons of your own, for as long as you
+  like. There are no items here: each level brings a blessing of Saradomin at random, from his
+  strength to another shock wave either side. Beat both his generals and the palace opens:
+  step onto its floor and Yama speaks from his throne, goes from it in embers and rises before it:
+  the palace is sealed in fire, the floor rises under you, and only the Owl's gaze stops his
+  meteor. Freeze his void flares with Ice barrage and shatter them with Lightning for food. It
+  opens on Yama on his throne, facing the last of the palace guard (any key, click or tap skips
+  it). Lunge through his rising floor unharmed, and keep your gaze out of his reach: up close he
+  swats you away.
 - Yama's generals in the Battle for Varrock, in either order: Xarth in the Grand Exchange, who
   burns you, blasts the ring unless you hide behind a pillar, sets the floor alight and raises the
   dead, and K'ril Tsutsaroth in the church, with his bodyguards and a desecration you must break.

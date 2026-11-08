@@ -1,4 +1,4 @@
-import { BATTLE_FOR_VARROCK, LOW_FIRE } from "../scaperune/maps/battleForVarrock";
+import { BATTLE_FOR_VARROCK, FLAMES } from "../scaperune/maps/battleForVarrock";
 import { BossAttackDef, EnemyDef, ImpactDef, PlayerEffectDef } from "./types";
 
 // Xarth, the tormented demon who mastered his flames, the first of Yama's two generals in the
@@ -40,8 +40,8 @@ const STARS = 80;
 const BLOWN_DUST = 2184;
 const STOMP_RING = 318;
 
-// The fire on the floor: the map's low fire, which blocks nothing (LOW_FIRE)
-const FLOOR_FIRE = LOW_FIRE;
+// The fire on the floor: the map's flames, which block nothing (FLAMES)
+const FLOOR_FIRE = FLAMES;
 // His dead: the Fractured Archive's corpse, npc 16687, getting up out of the floor as it comes
 const CORPSE_NPC = 16687;
 const CORPSE_IDLE = 14999;

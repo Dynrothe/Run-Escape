@@ -71,6 +71,7 @@ import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
+import { describeBlessing, getBlessingViews } from "./BlessingViews";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
     CinematicCamera,
@@ -2292,20 +2293,25 @@ export class GameClient implements GameFrameHandler {
     }
 
     // A hero's own buttons, for the HUD (CharacterDef.abilities): always in reach, as they go
-    // off with or without anything to hit
+    // off with or without anything to hit, as the map's blessings have made them
     private getKitViews(sim: Sim): AbilityView[] | undefined {
         const hero = sim.heroes[sim.focus] ?? sim.heroes[0];
         const kit = getCharacter(hero.characterId).abilities;
-        return kit?.map((ability, slot) => {
+        return kit?.map((written, slot) => {
+            const { ability, by } = sim.kitAbility(slot, hero) ?? { ability: written, by: [] };
             const left = sim.kitSecondsLeft(slot, hero);
             return {
                 name: ability.name,
                 iconObjId: ability.iconObjId,
-                charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
+                // A blessing that shortened it mid-wait can leave more to wait than it now takes
+                charge: Math.max(0, Math.round((1 - left / ability.cooldown) * 20) / 20),
                 inReach: true,
                 opened: false,
                 keyLabel: slot === 0 ? "Space" : String(slot),
-                description: ability.description,
+                description:
+                    by.length > 0
+                        ? `${ability.description} Blessed by ${by.map((b) => b.name).join(", ")}.`
+                        : ability.description,
             };
         });
     }
@@ -2841,6 +2847,14 @@ export class GameClient implements GameFrameHandler {
                 case "notice":
                     this.store.toast(event.message);
                     break;
+                case "blessing":
+                    if (sim.map.blessings) {
+                        this.store.toast(
+                            describeBlessing(sim.map.blessings, event.blessingId, event.count),
+                            5000,
+                        );
+                    }
+                    break;
                 case "heroDown":
                     this.store.toast(
                         sim.canBeRevived(sim.heroes[sim.focus])
@@ -3220,6 +3234,7 @@ export class GameClient implements GameFrameHandler {
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),
+            blessings: sim.map.blessings && getBlessingViews(sim.map.blessings, sim.blessings),
             stats: formatStats(sim.stats),
             gear: getGearViews(sim),
             inventory: getInventoryViews(sim),

@@ -51,6 +51,7 @@ go stale. Add anything that cost you time to work out.
 | Bosses asleep on a map to walk round (`MapDef.lairs`)  | `Sim.stepLair`, `docs/DEVELOPMENT.md` (A hero of their own)            |
 | Burning a real place to ruins (any town)               | `src/game/scaperune/ruins.ts`, `rs/config/loctype/LocOverrides.ts`     |
 | Zachariah as the player: his model and his buttons     | `src/game/content/justiciarKit.ts`, `Sim.useKitAbility`                |
+| Blessings in place of items, level by level (Varrock)  | `content/blessings.ts`, `Sim.bless`, `client/BlessingViews.ts`         |
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | Act II: its maps, steps and its tab on the map screen  | `content/acts.ts`, `ui/GameUi.tsx` (`ActPage`)                         |
 | A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |

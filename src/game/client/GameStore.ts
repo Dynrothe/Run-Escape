@@ -37,6 +37,9 @@ export type SlotView = {
     evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
     // The item's own rarity, for the slot's border
     rarityColor: string;
+    // A blessing (MapDef.blessings) rather than a weapon or passive: level is how many times it's
+    // been had, of maxLevel (Infinity for the fallback's)
+    blessing?: boolean;
 };
 
 export type ItemView = {
@@ -136,6 +139,9 @@ export type HudView = {
     maxPassives: number;
     weapons: SlotView[];
     passives: SlotView[];
+    // On a map with blessings (MapDef.blessings), what level ups have granted, in place of
+    // passives and gear
+    blessings?: SlotView[];
     // The player's stats from passives, gear, potions and their adventurer,
     // the ones that aren't zero: "+18% damage", "+2 armour"
     stats: string[];

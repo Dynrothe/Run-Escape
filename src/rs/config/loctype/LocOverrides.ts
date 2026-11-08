@@ -32,23 +32,47 @@ export type LocOverride = {
 export const CHARRED_LOCS = 1 << 20;
 // Others made from a cache loc go from here, listed in LOC_OVERRIDES with a base
 export const DERIVED_LOCS = CHARRED_LOCS + (1 << 18);
+// WALKABLE_LOCS + id is that cache loc blocking nothing (getWalkableLoc), and
+// WALKABLE_CHARRED_LOCS + id the same burnt: the Battle for Varrock's fires and dead, walked
+// through (scaperune/maps/battleForVarrock.ts)
+export const WALKABLE_LOCS = CHARRED_LOCS + (1 << 19);
+export const WALKABLE_CHARRED_LOCS = WALKABLE_LOCS + (1 << 18);
+const LAST_LOC = (1 << 21) - 1;
+// Every cache loc id is under this, so each range of ours has room for all of them
+const CACHE_LOCS = 1 << 18;
 // A ruined city wall's breach (scaperune/ruins.ts), from Falador's: its west wall's broken gap
 // (the Crumbling wall shortcut, 24222, at 2935, 3355), whose jagged ends (24220) and fallen
 // bricks (24218) are its pale stone burnt to the dark of a burnt grey wall (Varrock's, 23795,
 // comes out at about 15 of 127). The bricks block nothing, so a breach is still a way through.
 export const BROKEN_CITY_WALL = DERIVED_LOCS;
 export const BREACH_BRICKS = DERIVED_LOCS + 1;
-// A fire on its logs (4266) that blocks nothing: burnt Varrock's palace floor, where Yama's
-// fight is, has fires on it that a hero has to be able to run through
-export const WALKABLE_FIRE = DERIVED_LOCS + 2;
 const FALADOR_STONE_BURNT = 0.18;
 
 export function getCharredLoc(id: number): number {
     return CHARRED_LOCS + id;
 }
 
+// A cache loc, or a charred one (getCharredLoc), that blocks nothing
+export function getWalkableLoc(id: number): number {
+    if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
+        return WALKABLE_CHARRED_LOCS + (id - CHARRED_LOCS);
+    }
+    if (id < 0 || id >= CACHE_LOCS) {
+        throw new Error(
+            `Loc ${id} isn't the cache's: give one of our own walkable in LOC_OVERRIDES`,
+        );
+    }
+    return WALKABLE_LOCS + id;
+}
+
 // What a loc id's data is read from: its own, or for a loc of ours, the cache loc it's made from
 export function getLocBase(id: number): number {
+    if (id >= WALKABLE_CHARRED_LOCS && id <= LAST_LOC) {
+        return id - WALKABLE_CHARRED_LOCS;
+    }
+    if (id >= WALKABLE_LOCS && id <= LAST_LOC) {
+        return id - WALKABLE_LOCS;
+    }
     if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
         return id - CHARRED_LOCS;
     }
@@ -56,6 +80,12 @@ export function getLocBase(id: number): number {
 }
 
 export function getLocOverride(id: number): LocOverride | undefined {
+    if (id >= WALKABLE_CHARRED_LOCS && id <= LAST_LOC) {
+        return { base: getLocBase(id), charred: true, walkable: true };
+    }
+    if (id >= WALKABLE_LOCS && id <= LAST_LOC) {
+        return { base: getLocBase(id), walkable: true };
+    }
     if (id >= CHARRED_LOCS && id < DERIVED_LOCS) {
         return { base: getLocBase(id), charred: true };
     }
@@ -94,5 +124,4 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     [38542, { height: 1 }],
     [BROKEN_CITY_WALL, { base: 24220, charred: true, charLight: FALADOR_STONE_BURNT }],
     [BREACH_BRICKS, { base: 24218, charred: true, charLight: FALADOR_STONE_BURNT, walkable: true }],
-    [WALKABLE_FIRE, { base: 4266, walkable: true }],
 ]);

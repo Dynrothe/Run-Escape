@@ -1,4 +1,5 @@
-import { BATTLE_FOR_VARROCK, LOW_FIRE } from "../scaperune/maps/battleForVarrock";
+import { BATTLE_FOR_VARROCK, FLAMES } from "../scaperune/maps/battleForVarrock";
+import { OWLS_GAZE_COOLDOWN } from "./justiciarKit";
 import { BossAttackDef, EnemyDef, FloorActionDef, ImpactDef } from "./types";
 
 // Yama, woken on his throne in burnt Varrock's palace (the Battle for Varrock's lair, MapDef.lair):
@@ -196,7 +197,7 @@ const VOLLEY: BossAttackDef = {
     count: 1,
     chain: { times: 1, windup: 0.45 },
     phases: [1, 2],
-    pool: { seconds: 3, radius: 0.9, damage: 1, interval: 1, locId: LOW_FIRE },
+    pool: { seconds: 3, radius: 0.9, damage: 1, interval: 1, locId: FLAMES },
     impact: { shake: 0.15 },
 };
 
@@ -326,9 +327,15 @@ export const YAMA_ENEMIES: EnemyDef[] = [
             attacks: ATTACKS,
             // His going down through the floor (12161) is 3.6 s
             fallSeconds: 3.6,
-            // Put off while their gaze is more than 2.4 s from ready: its 1.6 s windup and a moment
-            // to turn still land inside the meteor's 4.5
-            critical: { attack: "Meteor", from: 0.85, every: [35, 35, 28], ready: 2.4 },
+            // Never sooner after the last than the Owl's gaze takes to come back (justiciarKit.ts),
+            // so it's always back for the next; and put off while their gaze is more than 2.4 s from
+            // ready: its 1.6 s windup and a moment to turn still land inside the meteor's 4.5
+            critical: {
+                attack: "Meteor",
+                from: 0.85,
+                every: [OWLS_GAZE_COOLDOWN + 6, OWLS_GAZE_COOLDOWN + 3, OWLS_GAZE_COOLDOWN],
+                ready: 2.4,
+            },
             gazeWard: {
                 reach: 12,
                 count: 4,

@@ -24,6 +24,11 @@ const BLOWN_DUST = 2184;
 const BLUE_IMPACT = 1458;
 const BLUE_WAVE = 1515;
 
+// The Owl's gaze is his ultimate, on a long cooldown: the only answer to Yama's meteor, whose
+// clock is never shorter than this (yama.ts), so it's always back in time for the next. His other
+// buttons come back in 5 to 14 seconds.
+export const OWLS_GAZE_COOLDOWN = 30;
+
 export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
     {
         id: "lunge",
@@ -33,8 +38,8 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         kind: "lunge",
         // Justiciar chestguard
         iconObjId: 22327,
-        damage: 40,
-        cooldown: 2.5,
+        damage: 60,
+        cooldown: 5,
         windup: 0.4,
         length: 5.8,
         width: 2,
@@ -56,8 +61,8 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         kind: "wave",
         // Justiciar faceguard
         iconObjId: 22326,
-        damage: 25,
-        cooldown: 4,
+        damage: 40,
+        cooldown: 8,
         windup: 0.6,
         length: 12,
         width: 1.5,
@@ -87,8 +92,8 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         kind: "square",
         // Justiciar legguards
         iconObjId: 22328,
-        damage: 30,
-        cooldown: 5,
+        damage: 45,
+        cooldown: 10,
         windup: 0.6,
         length: 10,
         size: 3,
@@ -109,8 +114,8 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         kind: "checker",
         // Saradomin's light
         iconObjId: 13256,
-        damage: 35,
-        cooldown: 7,
+        damage: 55,
+        cooldown: 14,
         windup: 1.2,
         length: 7,
         size: 3,
@@ -128,12 +133,14 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
     {
         id: "owls_gaze",
         name: "The Owl's gaze",
-        description: "Raises his sword, and everything within eight tiles is judged.",
+        description:
+            "His ultimate: raises his sword, and everything within eight tiles is judged. The only " +
+            "thing that stops Yama's meteor.",
         kind: "gaze",
         // The Justiciar's hand
         iconObjId: 21797,
-        damage: 60,
-        cooldown: 12,
+        damage: 120,
+        cooldown: OWLS_GAZE_COOLDOWN,
         windup: 1.6,
         length: 8,
         spotAnim: BLUE_IMPACT,
@@ -162,7 +169,7 @@ export const JUSTICIAR_ZACHARIAH: CharacterDef = {
         "The Justiciar of the Owl, walking burnt Varrock: his lunge, shock wave, ice barrage, " +
         "lightning and the Owl's gaze, on buttons of his own.",
     style: "melee",
-    startingWeapon: "two_handed_sword",
+    startingWeapon: "saradomin_sword",
     equipment: {},
     bonus: { moveSpeed: 0.2, maxHp: 0.5 },
     only: "battle_for_varrock",

@@ -586,15 +586,17 @@ export function getMap(id: string): MapDef {
 }
 
 // The part of the world a map's collision, heights and scenery come from: its
-// arena, on its plane
+// arena, on its plane, and where what burns stands (MapDef.burns)
 export function getArenaRegion(map: MapDef): {
     baseX: number;
     baseY: number;
     sizeX: number;
     sizeY: number;
     plane: number;
+    burnLocs?: number[];
 } {
-    return { ...map.arena, plane: map.plane ?? 0 };
+    const region = { ...map.arena, plane: map.plane ?? 0 };
+    return map.burns ? { ...region, burnLocs: map.burns.locs } : region;
 }
 
 // Whether anything on the map poisons you (the King Black Dragon's breath) or
