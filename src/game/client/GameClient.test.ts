@@ -1889,20 +1889,17 @@ describe("the fight button's hint", () => {
     test("isn't put away by a press the button says no to", () => {
         const { sim, client, hint } = createFight();
         Object.assign(client, { act: () => undefined, paused: false });
-        const press = (target: object | undefined, left: number): void => {
-            Object.assign(client, {
-                sim: { ...sim, abilityTarget: () => target, abilitySecondsLeft: () => left },
-            });
+        const press = (takes: boolean): void => {
+            Object.assign(client, { sim: { ...sim, abilityPressTakes: () => takes } });
             client.useAbility();
         };
-        // In the Nexus, nothing to land on; then not ready
-        press(undefined, 0);
-        press({}, 3);
+        // Nothing to land on, or not ready: the Sim says no
+        press(false);
         sim.shownBoss = { dead: false, risingEnd: 0 };
         hint(0);
         expect(hint(5)).toBe(true);
-        // One that goes off
-        press({}, 0);
+        // One it takes (going off, or held a moment)
+        press(true);
         expect(hint(6)).toBe(false);
     });
 

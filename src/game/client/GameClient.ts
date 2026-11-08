@@ -1939,7 +1939,7 @@ export class GameClient implements GameFrameHandler {
         }
         // Only a press that goes off counts as having learnt it: one it says no to (out of reach,
         // not ready, no boss up) leaves the hint to come
-        if (sim.abilityTarget() !== undefined && sim.abilitySecondsLeft() <= 0) {
+        if (sim.abilityPressTakes()) {
             this.abilityUsed = true;
         }
         this.act({ kind: "ability" });

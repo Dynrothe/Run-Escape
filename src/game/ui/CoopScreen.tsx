@@ -303,9 +303,14 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const raidLevel = map.tombs
         ? getRaidLevel(cleanInvocations(Array.isArray(hostInvocations) ? hostInvocations : []))
         : undefined;
-    // The map the invocation board was opened on: picking another closes it, so it doesn't come
-    // back by itself when the Tombs is picked again
-    const [boardFor, setBoardFor] = useState<string>();
+    // The invocation board, closed whenever the map changes, so it doesn't come back by itself
+    // when the Tombs is picked again
+    const [board, setBoard] = useState(false);
+    const [boardMap, setBoardMap] = useState(room.mapId);
+    if (boardMap !== room.mapId) {
+        setBoardMap(room.mapId);
+        setBoard(false);
+    }
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<number | undefined>(undefined);
     useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
@@ -503,7 +508,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 )}
                 {isHost && map.tombs && (
                     // The Tombs go by the host's invocations instead of endless and hard mode
-                    <InvocationsButton ui={ui} onOpen={() => setBoardFor(room.mapId)} />
+                    <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
                 )}
                 {isHost && !map.fun && !map.tombs && (
                     <div
@@ -575,8 +580,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     </button>
                 )}
             </div>
-            {boardFor === room.mapId && isHost && map.tombs && (
-                <InvocationBoard ui={ui} client={client} onClose={() => setBoardFor(undefined)} />
+            {board && isHost && map.tombs && (
+                <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
         </div>
     );

@@ -7057,13 +7057,15 @@ export class Sim {
             return dealt;
         }
         if (enemy.uid === two.wardenUid && !two.kneel && two.endTick === undefined) {
-            two.shield += damage;
+            // What its shield had room for, as Kephri's shield counts (kephriTakes)
+            const taken = Math.min(damage, two.shieldMax - two.shield);
+            two.shield += taken;
             if (two.shield >= two.shieldMax) {
-                two.shield = two.shieldMax;
                 this.kneelWarden(two, enemy);
             }
+            return taken;
         }
-        return damage;
+        return 0;
     }
 
     // Its shield full: down on a knee, its attacks stopped
@@ -11623,6 +11625,29 @@ export class Sim {
         this.pushStage(boss, phase, finale.message);
     }
 
+    // The hitpoints a phase in hitpoints (BossPhasesDef) leaves its boss at however hard it's hit
+    // (passThreshold)
+    private phaseThreshold(boss: Enemy, phase: BossPhase): number {
+        const phases = boss.def.boss!.phases!;
+        const count = phases.phases.length;
+        const index = phase.index;
+        const until = phases.phases[index].until ?? (count - 1 - index) / count;
+        return Math.max(1, Math.round(boss.maxHp * until));
+    }
+
+    // How low a hit can take a boss in its phase: its next threshold (passThreshold), 1 in the
+    // last with a finale to come (lastStand), or 0 with nothing to stop it
+    private phaseFloor(boss: Enemy, phase: BossPhase): number {
+        const phases = boss.def.boss?.phases;
+        if (!phases || phase.stage !== "hp") {
+            return 0;
+        }
+        if (phases.by !== "shields" && phase.index < phases.phases.length - 1) {
+            return this.phaseThreshold(boss, phase);
+        }
+        return phases.finale && !phases.totems ? 1 : 0;
+    }
+
     // A boss fought on its hitpoints, with a finale, brought to none: it stays up at 1 for its
     // finale instead of falling (the Menaphite Akh's last stand). False when it's to die now.
     private lastStand(boss: Enemy, phase: BossPhase): boolean {
@@ -11655,8 +11680,7 @@ export class Sim {
         if (index >= count - 1) {
             return false;
         }
-        const until = phases.phases[index].until ?? (count - 1 - index) / count;
-        const at = Math.max(1, Math.round(boss.maxHp * until));
+        const at = this.phaseThreshold(boss, phase);
         if (boss.hp > at) {
             return false;
         }
@@ -14788,6 +14812,29 @@ export class Sim {
             hero.abilityHeldUntil = -1;
             return true;
         }
+        if (this.abilityNearlyReady(ability)) {
+            hero.abilityHeldUntil = this.tick + secondsToTicks(ABILITY_BUFFER_SECONDS);
+            return true;
+        }
+        return false;
+    }
+
+    // Whether a press of the fight's button now would be taken (useAbility), going off or held a
+    // moment, without pressing it: for the client's hint
+    abilityPressTakes(): boolean {
+        const ability = this.ability;
+        if (!ability || this.state !== "playing" || !this.isUp(this.hero)) {
+            return false;
+        }
+        const ready = this.tick >= this.hero.abilityReadyTick;
+        return (
+            (ready && this.abilityTarget(ability) !== undefined) || this.abilityNearlyReady(ability)
+        );
+    }
+
+    // A press a moment early, or a step out of reach: held to go off (ABILITY_BUFFER_SECONDS,
+    // ABILITY_BUFFER_REACH)
+    private abilityNearlyReady(ability: FightAbilityDef): boolean {
         const soon = this.tick + secondsToTicks(ABILITY_BUFFER_SECONDS);
         const player = this.player;
         const near = this.abilityBosses().some(
@@ -14797,11 +14844,7 @@ export class Sim {
                 fm.hypot(boss.x - player.x, boss.y - player.y) <=
                     this.abilityReach(ability, boss) + ABILITY_BUFFER_REACH,
         );
-        if (hero.abilityReadyTick <= soon && near) {
-            hero.abilityHeldUntil = soon;
-            return true;
-        }
-        return false;
+        return this.hero.abilityReadyTick <= soon && near;
     }
 
     // Each hero's held press, tried again each tick till it goes off or runs out
@@ -16495,6 +16538,7 @@ export class Sim {
                 ? this.enemies.find((e) => e.uid === two.wardenUid)
                 : enemy;
         const hpBefore = pointsTo?.hp ?? 0;
+        const enemyBefore = enemy.hp;
         if (shielded) {
             phase.shield -= damage;
         } else if (two && (enemy.uid === two.wardenUid || enemy.uid === two.kneel?.coreUid)) {
@@ -16530,9 +16574,13 @@ export class Sim {
             enemy.hp -= damage;
         }
         enemy.flash = 5;
+        // A Tombs boss's phase stops a hit at its threshold (passThreshold, lastStand, below): what
+        // went past it isn't taken, for its points or for life steal
+        const floor = worth > 0 && phase && !shielded ? this.phaseFloor(enemy, phase) : 0;
         if (worth > 0 && pointsTo) {
             const onShield = kephri && enemy.uid === kephri.uid && hpBefore > 0 && !kephri.final;
-            const taken = onShield ? shown : Math.max(0, hpBefore - Math.max(0, pointsTo.hp));
+            const left = Math.max(pointsTo === enemy ? floor : 0, pointsTo.hp, 0);
+            const taken = onShield ? shown : Math.max(0, hpBefore - left);
             // Shared out by damage in co-op: a fair share of each boss is its whole worth
             const party = this.heroes.filter((hero) => !hero.left).length;
             const points = (taken / pointsTo.maxHp) * worth * party;
@@ -16583,7 +16631,8 @@ export class Sim {
         }
         // What it really took, so life steal and heals go by that, not the hit a clamp cut short;
         // never more than the hit, though (the Wardens' core passes on five times what it takes)
-        return Math.min(damage, shown);
+        const landed = Math.min(damage, shown);
+        return floor > 0 ? Math.min(landed, Math.max(0, Math.round(enemyBefore - floor))) : landed;
     }
 
     // cause: the player's doing (the bot nuke's too, though what it kills

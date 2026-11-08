@@ -33,6 +33,7 @@ import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
 import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow } from "./Sim";
 import { createSave, migrateSave } from "./save";
+import { isCircleFree } from "./world/Collision";
 import { makeGrid } from "./world/testGrid";
 
 // These are tests of the mechanics, at full strength: raid level 0 scaled as Normal is (1 across).
@@ -3121,6 +3122,38 @@ describe("Zebak", () => {
         at(sim, SOUTH);
     }
 
+    it("shoves the player only as far as the whole of them fits", () => {
+        const sim = atZebak();
+        // Beside the field's west wall (its first column), shoved into it
+        sim.player.x = sim.player.prevX = 1003.5;
+        sim.player.y = sim.player.prevY = 1036.5;
+        sim["zebakShove"](sim.player, -1, 0, 4);
+        // Where the game's own collision lets them stand, short of the middle-only stop (1001)
+        expect(isCircleFree(sim.grid, sim.player.x, sim.player.y, sim.player.radius)).toBe(true);
+        expect(sim.player.x).toBeGreaterThan(1001);
+        expect(sim.player.x).toBeLessThan(1003.5);
+    });
+
+    it("counts a hit past his phase's threshold only down to it, for life steal and points", () => {
+        const sim = atZebak();
+        const boss = zebak(sim);
+        const until = boss.def.boss!.phases!.phases[0].until!;
+        const at = Math.max(1, Math.round(boss.maxHp * until));
+        boss.hp = at + 10;
+        const points = sim.hero.tombsPoints;
+        const dealt = sim["damageEnemy"](boss, boss.maxHp, 0, boss.x, boss.y, 0);
+        expect(boss.hp).toBe(at);
+        expect(dealt).toBe(10);
+        // Ten hitpoints' worth, not the whole hit's
+        const perHp = (sim.hero.tombsPoints - points) / 10;
+        boss.hp = at + 10;
+        boss.bossState!.phase!.index = 0;
+        const before = sim.hero.tombsPoints;
+        sim["damageEnemy"](boss, 5, 0, boss.x, boss.y, 0);
+        const five = sim.hero.tombsPoints - before;
+        expect(perHp).toBeCloseTo(five / (at + 10 - boss.hp), 5);
+    });
+
     it("rises when the party walks in, and lies where he is", () => {
         const sim = atZebak();
         const boss = zebak(sim);
@@ -3555,6 +3588,8 @@ describe("the Wardens' first phase", () => {
         sim["damageEnemy"](obelisk, obelisk.maxHp * 10, 0, obelisk.x, obelisk.y);
         expect(obelisk.dead).toBe(false);
         expect(obelisk.hp).toBe(Math.round(obelisk.maxHp * WARDENS.holdShare));
+        // Held, a hit takes nothing, so there's nothing for life steal to go by
+        expect(sim["damageEnemy"](obelisk, 60, 0, obelisk.x, obelisk.y)).toBe(0);
         expect(fight.phase).toBe(1);
         // A Warden charges, throws its pyramids, and once they've gone it can break
         for (
