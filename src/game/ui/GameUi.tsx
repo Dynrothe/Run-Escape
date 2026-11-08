@@ -331,17 +331,27 @@ function PickupTimerSetting({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// Unlocked by beating the Scabaras room once (SaveData.scabarasBeaten); till then it says so
 function PuzzleHelperSetting({ ui, client }: ScreenProps): JSX.Element {
+    const unlocked = ui.save.scabarasBeaten === true;
     return (
         <Setting
             name="Puzzle helper"
-            text="In the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA plugin does"
+            text={
+                unlocked
+                    ? "In the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA plugin does"
+                    : "Beat the Tombs of Amascut's Scabaras room once to unlock it"
+            }
         >
-            <Toggle
-                on={ui.display.puzzleHelper}
-                label="Puzzle helper"
-                onToggle={() => client.togglePuzzleHelper()}
-            />
+            {unlocked ? (
+                <Toggle
+                    on={ui.display.puzzleHelper}
+                    label="Puzzle helper"
+                    onToggle={() => client.togglePuzzleHelper()}
+                />
+            ) : (
+                <span className="ui-subtle">Locked</span>
+            )}
         </Setting>
     );
 }

@@ -3504,7 +3504,8 @@ export class GameClient implements GameFrameHandler {
         const sim = this.sim;
         if (sim) {
             this.view.pickupTimers = this.display.pickupTimers;
-            this.view.puzzleHelper = this.display.puzzleHelper;
+            // Once the room's been beaten, and while it's on
+            this.view.puzzleHelper = this.display.puzzleHelper && this.save.scabarasBeaten === true;
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
                 this.minimap.draw(

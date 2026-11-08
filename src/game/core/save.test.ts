@@ -1488,6 +1488,19 @@ describe("a fight in parts, and a map behind another", () => {
         MAP_BY_ID.delete(behind.id);
     });
 
+    it("unlocks the Scabaras puzzle helper once the room's beaten, won or not", () => {
+        const save = createSave();
+        expect(save.scabarasBeaten).toBeUndefined();
+        recordRun(save, run("tombs_of_amascut", { victory: false }));
+        expect(save.scabarasBeaten).toBeUndefined();
+        recordRun(save, run("tombs_of_amascut", { victory: false, scabarasBeaten: true }));
+        expect(save.scabarasBeaten).toBe(true);
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).scabarasBeaten).toBe(true);
+        expect(migrateSave({ ...createSave(), scabarasBeaten: "yes" }).scabarasBeaten).toBe(
+            undefined,
+        );
+    });
+
     it("keeps each part won, and beats the map only with the last", () => {
         const save = createSave();
         save.mapVictories.desert = 1;

@@ -718,6 +718,8 @@ export type RunResult = {
     raidChest?: RaidChest;
     // The Tombs of Amascut's board
     tombs?: TombsSummary;
+    // The Scabaras room was beaten (Sim.scabarasBeaten)
+    scabarasBeaten?: boolean;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -1452,6 +1454,9 @@ export class Sim {
     devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
+    // The Scabaras room's puzzles all solved this run: what unlocks its puzzle helper
+    // (SaveData.scabarasBeaten)
+    scabarasBeaten = false;
     // The Helpful Spirit's bundles each hero's had, or let go by (of two), and who's stood by it
     private tombsSpiritTaken = new Map<number, number>();
     private tombsSpiritNear = new Set<number>();
@@ -2255,6 +2260,7 @@ export class Sim {
             ...(this.map.stages && { stage: this.stage }),
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
             ...(this.map.tombs && { tombs: this.tombsSummary() }),
+            ...(this.scabarasBeaten && { scabarasBeaten: true }),
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -9362,6 +9368,7 @@ export class Sim {
         scabaras.solved.push(puzzle);
         if (puzzle === "matching") {
             room.doneTick = this.tick;
+            this.scabarasBeaten = true;
             scabaras.rocks = [];
             scabaras.shards = [];
             this.emit({ type: "notice", message: "The way on opens." });

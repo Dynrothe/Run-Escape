@@ -14,7 +14,8 @@ the version in the corner).
 
 - A puzzle helper for the Tombs of Amascut's Scabaras room, by Okaeri, as the ToA plugin has it:
   the order the Sequence plates lit, the Lights out plates to step on, a way to make the Addition
-  number, and the Matching symbols you've seen. It can be turned off in the settings.
+  number, and the Matching symbols you've seen. Beat the room once to unlock it; it can be turned
+  off in the settings.
 
 ## 0.29.0 - 2026-11-08
 

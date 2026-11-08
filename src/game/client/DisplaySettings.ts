@@ -8,7 +8,7 @@ export type DisplaySettings = {
     // A countdown pie over each power-up on the ground (GameView.drawPickupTimers)
     pickupTimers: boolean;
     // The Tombs of Amascut's Scabaras room shows what to step on, as OSRS's ToA plugin does
-    // (GameView.drawScabarasHelper)
+    // (GameView.drawScabarasHelper), once it's been beaten (SaveData.scabarasBeaten)
     puzzleHelper: boolean;
     // A run pauses when the window loses focus or the tab is hidden
     pauseOnBlur: boolean;

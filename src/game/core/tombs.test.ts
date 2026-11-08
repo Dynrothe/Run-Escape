@@ -2475,6 +2475,8 @@ describe("the Scabaras room", () => {
             }
             expect(scabaras_.solved).toContain("matching");
             expect(sim.tombsRoom!.doneTick).toBeDefined();
+            // Beaten: its puzzle helper unlocks, from the run's result
+            expect(sim.getResult().scabarasBeaten).toBe(true);
         });
     });
 
