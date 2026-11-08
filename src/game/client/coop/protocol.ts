@@ -9,6 +9,9 @@ export type Loadout = {
     armoury: Record<string, number>;
     // Their pet (pets.ts), only for looks: the sim never sees it
     pet?: string;
+    // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby. Only
+    // shown: the start carries the party's (GameStart.invocations), and the relay passes it as is
+    invocations?: string[];
 };
 
 // The maps a player has unlocked, and has endless and hard mode for, which
@@ -78,6 +81,10 @@ export type GameStart = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // A fight in parts (MapDef.stages): which, the host's next
+    stage?: number;
+    // The Tombs of Amascut: the host's invocations, the party's raid level (Sim cleans the ids)
+    invocations?: string[];
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -92,6 +99,11 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
         typeof game.mapId === "string" &&
         typeof game.endless === "boolean" &&
         typeof game.hard === "boolean" &&
+        (game.stage === undefined || Number.isSafeInteger(game.stage)) &&
+        (game.invocations === undefined ||
+            (Array.isArray(game.invocations) &&
+                game.invocations.length <= 100 &&
+                game.invocations.every((id) => typeof id === "string" && id.length <= 64))) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&

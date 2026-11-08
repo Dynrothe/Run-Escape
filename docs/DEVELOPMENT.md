@@ -724,9 +724,9 @@ src/game/
               guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
-            offer), ItemIcon (an item's model, or an interface sprite), DescriptionButton (hover,
-            focus and hold descriptions), CountryFlag (a co-op player's flag), CoopScreen (the
-            rooms, the lobby, the party in a run),
+            offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
+            above), DescriptionButton (hover, focus and hold descriptions), CountryFlag (a
+            co-op player's flag), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -865,7 +865,9 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       none; `status` and `message` per phase, `ambients` (more timers, ground marks or cycles too),
       `confine: false` to let the player off the `bossArena` (and `Sim.confinedToArena`, which
       co-op's prediction reads).
-    - Swings: `line` (a strip the way it faced), `cover` (spares whoever's in a pillar's
+    - Swings: `line` (a strip the way it faced; `line.track` turns it after the player for the
+      start of its windup, `Sim.trackLine`, and the view draws it from `BossWindup.dirX` each
+      frame, so it follows), `cover` (spares whoever's in a pillar's
       shadow from where it's cast, `inShadow`; the view lights the arena and draws the shadows'
       soft outlines, `shadowOutline`, the same shapes). Blasts: `square`. Projectiles: `wave` (through everyone, once
       each), `boomerang` (out and back, once each way), `from: "knights"`, `onHit` (drag, bind with
@@ -886,14 +888,14 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
       strike to its targets within that reach, and the boss bar says when it's out of it.
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
-      it misses everyone (`dropGuard`: `BossState.exposedEnd`, every hit doubled in
-      `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
-      does nothing, the stars over it) when its arena's attack with `turns` catches it
-      (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
-      (`BossState.dash`, `stepDash`), with its sounds as it drops; after a stun, `stunGrace`
-      seconds when nothing stuns it (`BossState.stunGraceEnd`). The view tints a boss whose
-      guard's down gold. A phased boss with `barPerPhase` shows each phase as a full bar
-      (`getPhaseBarFraction` in `GameClient`).
+      it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`)
+      (`dropGuard`: `BossState.exposedEnd`, every hit doubled in `damageEnemy`, a reach-limited
+      strike fired at once), and stuns it (`stunEnd`: `stepBoss` does nothing, the stars over
+      it) when its arena's attack with `turns` catches it (`boltsOnBosses`, `landHazard`,
+      `stepThrough`) or a `line.dash` lunge ends in a pillar (`BossState.dash`, `stepDash`), with
+      its sounds as it drops; after a stun, `stunGrace` seconds when nothing stuns it
+      (`BossState.stunGraceEnd`). The view tints a boss whose guard's down gold. A phased boss
+      with `barPerPhase` shows each phase as a full bar (`getPhaseBarFraction` in `GameClient`).
     - A boss attack's `strikeAt` times its animation to land with it: held on its first frame
       (the blow drawn back) until it's that far from landing (`BossWindup.seqTick`,
       `Sim.playWindup`). Players held for an entrance with `BossIntroDef.faces` face the boss
@@ -902,18 +904,77 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       and a `boomerang` with `toEdge` flies to where its line leaves the `bossArena`
       (`Sim.throwReach`, `boxExit`), which the view's line uses too. A boss fight's HUD and
       touch screen have no item bar, and its results a Retry (`GameClient.retry`).
-    - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button: `Sim.useAbility`,
+    - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button, and `TombsDef.ability`
+      the raid's (`Sim.ability` reads either; in the Tombs it lands on the path's boss, or the
+      Wardens' second- and third-phase Warden, and `damageShare` hits for a share of its
+      hitpoints with no bonuses, so it scales with the raid level and the party): `Sim.useAbility`,
       through co-op's actions (`CoopAction` `ability`), on Space, a pad's bottom face button in a
       run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. A press that
       can't go off yet is held a moment (`Hero.abilityHeldUntil`, `stepHeldAbilities`), and
       `openReach` is its reach while the boss's guard is down. Its damage
-      is `ability:<id>` for the run's stats; what the arena did to its boss is `court`.
+      is `ability:<id>` for the run's stats; what the arena did to its boss is `court`. It
+      lands on the boss on the bar, or with two final bosses up (the Scarab Mages) on either
+      (`abilityBosses`): one with its guard down first, then the nearer (`abilityTarget`).
+      `guide` has the button coach (the Tombs' and their quest's): a hint early in a fight, until
+      it's first used, and a pulsing ring with a tag while the guard's down.
+    - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
+      till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
+      its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
+      it meanwhile breaks it (`breakChannel`, from `fireAbility`): the windup, chain and follow
+      are dropped, or the walkers vanish with no blast, and its guard's down `stagger` seconds
+      from then, with a `bossGuard` event whose `cause` ends in ` (broken)` (the sim counts
+      those) and `broken` on screen. A swing with `outside` hits only beyond that many tiles
+      from the boss: `GameView` draws the shelter green and the storm's edge closing in red
+      (`STORM_EDGE`), and the bot heads for the shelter first (`shelter` in `bossReads.ts`).
     - `ImpactDef` (`BossAttackDef.impact`, `guard.stuck`, `leash.jump.land`, `intro.land`,
       `FightAbilityDef.impact`) puts spot animations where a blow lands, scaled to `fit` and
       each played out once (`Effect.once`; a trail's laid along its way, turned with
       `Effect.yaw`), and a `bossImpact` event that `GameClient` shakes the camera by (off with
       the Screen shake setting, `DisplaySettings.screenShake`, and by default for reduced
       motion) and `GameView` flashes the screen by, faintly.
+    - Two bosses fought together (the Scarab Mages, `content/cursedSands.ts`): both are
+      `finalBoss` events, so the run's won when both are down, and the second's event can be
+      later with `inArena` (`RunEventDef`: it turns up inside the `bossArena`, 4 to 9 tiles
+      from the player, `spawnBosses`). The first's intro mustn't have `alone`: `aloneWith`
+      stops every event till it's dead. `BossDef.enrage.partner` enrages a boss when one of its
+      partners dies (`enragePartners`, from `killEnemy`), at its own `tempo`
+      (`BossState.furyTempo`, in place of `ENRAGED_INTERVAL`); an attack with `enraged` and
+      `phases: [1]` is how a phased boss gets its later attacks early that way. A
+      `BossAttackDef.tether` (kind `tether`, used as it lands or as an ambient) is a beam from the
+      boss to the nearest living partner for `seconds`: `Sim.tethers` (`BossTether`, cleared with
+      the rest of a boss's attacks), read each tick between where the two are (`tetherEnds`), it
+      hurts each hero within `width / 2` of it once an `interval` after `warn` (`stepTethers`,
+      `segmentDistanceSq` in `core/arena.ts`, `Hero.tetherHitTick`), and `GameView.drawTether`
+      lays its `spotAnim` along it a tile apart, faint until it's armed. A pattern ambient with
+      `origin: "target"` bursts from where the nearest player stood as it began, so a ground
+      ambient on the player and that pattern on the same timer make marks that burst outwards.
+      One can echo the other's lunge (`EnemyDef.echoes` on a boss, below): the elder copies
+      the first's Crossfire, so two strips come from two ways at once.
+    - A ground attack's `trail` spots (the Champion of Scabaras) land on where the player it's
+      after stood `ago` seconds back: each hero keeps the last `TRAIL_SECONDS` of where they stood
+      (`Hero.trail`, a ring by tick written in `stepPlayer`), read in `markGround`; where
+      nothing's kept for that tick (they weren't stepped, or it's further back), it's on them.
+      It's sim state like any other, so co-op's copies agree, and nothing reads it without the
+      attack. An ordeal's `opener` (`BossOrdealDef`, `BossState.ordeal.opener`) is used once
+      as it begins, before its `attacks`: the Champion's nests, laid all at once rather than
+      coming among them as Xarpus's do. As an exhumes ends, each still up shows its
+      `healSpotAnim` going to the boss.
+    - An enemy that copies a boss's lunges (`EnemyDef.echoes`, an `EchoDef`: the Menaphite
+      Akh's shadow): as that boss starts one of the named line swings (`startBossAttack`), each
+      living enemy with `echoes` that isn't busy (nor, for a boss echoing its partner, winding
+      up, channelling, kneeling, stunned or in the air: `isBusyBoss`) starts its own copy
+      (`startEchoes`): the
+      boss's attack under the echo's `name`, `damage`, `seq` and `impact`, with no `opens`,
+      `chain` or `follow`, from where it stands at the hero nearest it, over the boss's windup
+      plus `later`, the nearest a hero first up to `most`. It's a `BossWindup` on the enemy
+      (`Enemy.echo`), stepped in place of its walking and shooting (`stepEcho`: `trackLine` as
+      the boss's, then the strip through `forEachHeroInReach` and `inStrip`, the trail, and a
+      dash down `line.dash` as `Enemy.echoDash`, with the rest of its impact where it stops).
+      The view draws it as the boss's strip (`drawBossWindups` reads `Enemy.echo` too), and the
+      echo's `seq` is baked with the enemy's model (`GameAssets.getEnemyBakes`), so it must be
+      one its rig can play. Name only a phase's attacks to keep it to that phase. The bot reads
+      every strip winding up (`lungeStrips`), and with two or more steps to the nearest spot
+      none reaches (`sharedPocket`); with one it steps across it as before.
 - A map's `music` names an OSRS track, and its recording (from the OSRS Wiki) goes in
   `src/media/music` as the name in lower case with underscores: `the_bane_of_ashihama.ogg` for
   Phosani's Nightmare. `GameClient` finds the files with a glob, so a track can be named before
@@ -947,10 +1008,13 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
   keeps the boss up for `seconds` after the last blast as a stage of its own (`stage: "finale"`,
   untouchable like the totems stage, the HUD's bar the time left): it opens with `opener`, keeps
   to `attacks` at `interval` like the flowers' `during` (`keepsTo`), doesn't wait for its
-  sleepwalkers (`stepWalkers` doesn't stop it), runs the finale's own `ambient`, and
-  `stepPhase` kills it when the time's up. `Hero.damageByAttack` is what each boss attack did to
-  that player, by name: `sim.damageByAttack` in the console, and the balance bot's `boss attacks
-that hit` line, for tuning a fight.
+  sleepwalkers (`stepWalkers` doesn't stop it), runs the finale's own `ambient` (one pattern, its
+  `delay` not read), and `stepPhase` kills it when the time's up. A boss fought by its hitpoints
+  (no totems) gets one too: at none it's held at 1 behind `shieldEnd` instead of dying
+  (`lastStand`, from `damageEnemy`; both go through `startFinale`), with `shout` over it, and its
+  guard can't drop meanwhile (the Menaphite Akh's last stand). `Hero.damageByAttack` is what each
+  boss attack did to that player, by name: `sim.damageByAttack` in the console, and the balance
+  bot's `boss attacks that hit` line, for tuning a fight.
 - The Theatre of Blood's bosses (`content/theatre.ts`) add: patterns `wall` (a row with a gap
   somewhere new each volley) and `closing` (a ring round the player, coming in), ground marks that
   `lingers` and hurt while you stand in them, and `safe` marks a projectile spares you in;
@@ -1016,8 +1080,24 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
       hold a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`,
       then `await frameProbe.sample(5)` for its triangles. The page reloads if a source file
       changes, which ends it.
+    - **Not only openings.** A fight in parts gives each part its own (`MapDef.stages`'
+      `cinematic`), played in place of the map's as that part's run starts, and not on a retry
+      (`getRunCinematic`; `getMapCinematics` lists every one a map has, for what bakes and loads
+      them). Beneath Cursed Sands' four bosses each have an entrance
+      (`scaperune/maps/cursedSandsEntrances.ts`): the boss stands where it rises and says its
+      piece, and its stand-in goes as the run starts (the last shot's start), with the boss's own
+      intro rising there, so it's never there twice.
+    - **In the dark.** On a map with `lighting`, a cast member's `light` (`CinematicActorDef`) is
+      on them while they're drawn, and a spot animation in `SPOT_LIGHTS` lights them while it
+      plays (`CinematicView.getLights`, offered to `SceneLights` as `KIND_CINEMATIC`).
 
 ### Raids
+
+The Tombs of Amascut (on the Raids tab, behind its quest, Beneath Cursed Sands): its plan, and how
+it was built, are in `docs/design/tombs-of-amascut.md`. Its map is `MapDef.tombs` (a Nexus with a
+door to each path), and its invocations (`content/invocations.ts`) take hard mode's place there:
+the sim's `hardScale` is their raid level's (`getRaidLevelScale`, `RAID_LEVEL_SCALE`), and `hard`
+stays off.
 
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
 where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due, then the party's
@@ -1418,6 +1498,8 @@ scripts/cache/compare-caches.ts osrs-241_2026-09-30   what changed since an olde
                                          game reads (see A newer cache)
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
+scripts/cache/sprite-sheet.ts out.png 5000 5199   a range of sprites on one sheet, each over its id
+scripts/cache/spotanims.ts 2242 2236-2240   spot animations: model, animation, length and size
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
                                          SLIM_WORKERS, SLIM_CHECK, SLIM_REUSE: see Hosting)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
@@ -1446,6 +1528,19 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see
                                                         how damage keeps up with the rounds)
+scripts/game/simulate-tombs.ts [character] [seeds]      the Tombs of Amascut's bot (tombsBot.ts)
+                                                        on one room, boss or the whole raid
+                                                        (ROOM=apmeken, het, scabaras,
+                                                        crondis, baba, akkha, kephri, zebak,
+                                                        wardens or raid; LEVEL=2 the path level;
+                                                        INVOCATIONS=a,b, all or level:300;
+                                                        PARTY=2; KIT=max the dev kit; PATHS=het,
+                                                        apmeken the order; LEADIN=0 straight
+                                                        there at level one; MINUTES; VERBOSE=1),
+                                                        with each puzzle room's own account
+scripts/game/sweep-tombs.sh                             simulate-tombs over rooms, raid levels and
+                                                        kits (ROOMS, LEVELS, KITS=zero shop all
+                                                        dev, CHARACTERS, SEEDS, JOBS), a line each
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and
@@ -1466,7 +1561,8 @@ URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizar
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
-`?raidtest` (dev only) speeds up a raid (see Raids). F3
+`?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
+Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens). F3
 shows collision and stats.
 
 ### A newer cache
@@ -1486,7 +1582,7 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
    compare an entry with the same one in the old cache. Gate the fix on the revision.
 3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`, and that again with
    `DEV_MAPS=1`: rev 242 renumbered the Tombs of Amascut's invocation sprites, which only a dev
-   map used.
+   map used then.
 4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
    kept, the ones the game reads: the map squares, models and so on that changed or went, and each
    npc, item, animation, spot animation and loc that changed, decoded, with the fields that differ.
@@ -1723,6 +1819,9 @@ without it is told "You need Barrows unlocked to join this room", and the open l
 as locked to them. Each player's game sends the maps it has (`unlocks`), checked by the relay on
 joining, on the host changing the map, endless or hard mode, and at the start. Whether the run's on
 hard mode goes out in `GameStart`, like endless, so every player's copy plays the same.
+The Tombs of Amascut go by the host's invocations instead: the lobby shows them as a raid level
+(the host's `Loadout.invocations`, which the relays pass as they are, so they needed no change),
+the host sets them from the lobby, and `GameStart.invocations` carries them to every copy.
 `MULTIPLAYER_ANY_MAP=on` (or `--any-map`) lets anyone into any room instead, and a win then opens
 that map for a player who hadn't got there. With no accounts, a player's maps are their game's word:
 this keeps fair players fair rather than stopping a cheat.

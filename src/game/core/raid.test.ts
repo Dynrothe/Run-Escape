@@ -349,7 +349,8 @@ describe("raids", () => {
     });
 
     it("lists its raids' rooms in order, each with a boss", () => {
-        for (const map of RAID_MAPS) {
+        // The Theatre's rooms; the Tombs of Amascut's paths are its own (MapDef.tombs)
+        for (const map of RAID_MAPS.filter((m) => m.raid)) {
             const rooms = map.raid!.rooms;
             expect(rooms.length).toBeGreaterThan(1);
             const bossEvents = map.events.filter(

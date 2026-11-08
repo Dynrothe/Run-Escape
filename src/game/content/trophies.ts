@@ -11,7 +11,11 @@ export type TrophySource =
     // A raid's chest, once its last boss is down: a purple's one of these by weight (Sim's
     // openRaidChest has the chance), and a hard raid's own are a roll of their own. An expert
     // raid's own: one of them each time it's beaten.
-    | { kind: "raid"; mapId: string; weight: number; hard?: boolean; expert?: boolean };
+    | { kind: "raid"; mapId: string; weight: number; hard?: boolean; expert?: boolean }
+    // The Tombs of Amascut's chest (Sim's openTombsChest), from raid level `level` up: a purple's
+    // one of those with a weight, its chance going by the raid level; the rest (`chance`) a roll
+    // of their own
+    | { kind: "tombs"; level: number; weight?: number; chance?: number };
 
 export type TrophyDef = {
     id: string;
@@ -192,6 +196,71 @@ TROPHIES.push(
             chance: 1 / 10,
             hardChance: 1,
         },
+    },
+);
+
+// The Tombs of Amascut's uniques, weighted as OSRS's are, its pet, the Thread and the jewels
+const TOMBS_PURPLE = "From the Tombs of Amascut's chest, more often the higher the raid level.";
+TROPHIES.push(
+    ...(
+        [
+            // OSRS's: under 150, only the fang and the Lightbearer
+            ["osmumtens_fang", "Osmumten's fang", 26219, 7, 50],
+            ["lightbearer", "Lightbearer", 25975, 7, 50],
+            ["elidinis_ward", "Elidinis' ward", 25985, 3, 150],
+            ["masori_mask", "Masori mask", 27226, 2, 150],
+            ["masori_body", "Masori body", 27229, 2, 150],
+            ["masori_chaps", "Masori chaps", 27232, 2, 150],
+            ["tumekens_shadow", "Tumeken's shadow", 27277, 1, 150],
+        ] as const
+    ).map(([id, name, objId, weight, level]) => ({
+        id,
+        name,
+        objId,
+        how: level > 50 ? `${TOMBS_PURPLE} From raid level ${level}.` : TOMBS_PURPLE,
+        from: { kind: "tombs", level, weight } as const,
+    })),
+    {
+        id: "tumekens_guardian",
+        name: "Tumeken's guardian",
+        objId: 27352,
+        how: "A very rare find in the Tombs of Amascut's chest, at any raid level.",
+        from: { kind: "tombs", level: 0, chance: 1 / 40 },
+    },
+    {
+        id: "thread_of_elidinis",
+        name: "Thread of Elidinis",
+        objId: 27279,
+        how: "Sometimes in the Tombs of Amascut's chest, at any raid level.",
+        from: { kind: "tombs", level: 0, chance: 1 / 10 },
+    },
+    {
+        id: "breach_of_the_scarab",
+        name: "Breach of the Scarab",
+        objId: 27283,
+        how: "Rarely in the Tombs of Amascut's chest, from raid level 150.",
+        from: { kind: "tombs", level: 150, chance: 1 / 25 },
+    },
+    {
+        id: "eye_of_the_corruptor",
+        name: "Eye of the Corruptor",
+        objId: 27285,
+        how: "Rarely in the Tombs of Amascut's chest, from raid level 300.",
+        from: { kind: "tombs", level: 300, chance: 1 / 25 },
+    },
+    {
+        id: "jewel_of_the_sun",
+        name: "Jewel of the Sun",
+        objId: 27289,
+        how: "Rarely in the Tombs of Amascut's chest, from raid level 400.",
+        from: { kind: "tombs", level: 400, chance: 1 / 25 },
+    },
+    {
+        id: "jewel_of_amascut",
+        name: "Jewel of Amascut",
+        objId: 30893,
+        how: "Very rarely in the Tombs of Amascut's chest, at raid level 500.",
+        from: { kind: "tombs", level: 500, chance: 1 / 50 },
     },
 );
 

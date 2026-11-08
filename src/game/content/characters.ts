@@ -589,6 +589,27 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
         only: "zachariah",
     },
+    {
+        id: "sands_delver",
+        name: "Sands Delver",
+        description:
+            "Made for Beneath Cursed Sands, and everyone plays them there, and nowhere else: " +
+            "starts with the Crystal bow, moves 20% faster, has 30% more hitpoints and heals 10 " +
+            "hitpoints a minute.",
+        style: "ranged",
+        startingWeapon: "crystal_bow",
+        // The desert's own robes: the shirt, robe and boots
+        equipment: {
+            [EquipSlot.TORSO]: 1833,
+            [EquipSlot.LEGS]: 1835,
+            [EquipSlot.FEET]: 1837,
+        },
+        // Four long fights in a row, each its own run: feet to dodge, and hitpoints to learn them
+        // on. The damage is the bow's alone, at the level the map says, so the fights are as
+        // long as their hitpoints.
+        bonus: { moveSpeed: 0.2, maxHp: 0.3, regen: 10 },
+        only: "beneath_cursed_sands",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));

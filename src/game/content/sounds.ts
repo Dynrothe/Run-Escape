@@ -13,6 +13,8 @@ export const SOUNDS = {
     cannonSetup: 2876, // mcannon_setup
     cannonFire: 1667, // mcannon_fire
     bossSpawn: 1897, // regular_vampire_appear
+    // The Tombs: Het's barrier chipped at, and a Wardens' siphon turned back
+    tombsChip: 6183,
     revive: 2671, // prayer_boost
     click: 2266, // interface_select1
     denied: 2268, // interface_wrong

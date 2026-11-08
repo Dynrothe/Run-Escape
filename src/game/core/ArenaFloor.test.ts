@@ -93,6 +93,21 @@ describe("its patterns", () => {
         }
     });
 
+    test("outward, a slam goes both ways from the origin's row", () => {
+        const { floor, run, setPlayer } = makeFloor(
+            floorWith({ kind: "side", side: "east", rowSeconds: 0.1, outward: true }),
+        );
+        setPlayer(RECT.x0 + 5.5, RECT.y0 + 10.5);
+        run(T);
+        const rises = riseTicks(floor);
+        const x = MIDDLE_X + 2;
+        expect(rises.get(`${x},10`)).toBe(2 * T);
+        for (const dy of [1, 6]) {
+            expect(rises.get(`${x},${10 + dy}`)).toBe(2 * T + dy * 5);
+            expect(rises.get(`${x},${10 - dy}`)).toBe(2 * T + dy * 5);
+        }
+    });
+
     test("a sweep leaves a gap in every row that moves a tile at most from row to row", () => {
         const { floor, run } = makeFloor(floorWith({ kind: "sweep", rowSeconds: 0.1, gap: 2 }));
         run(T);
@@ -313,6 +328,38 @@ describe("falling away", () => {
         for (let y = 0; y < SIZE_Y; y++) {
             expect(grid.isSolid(RECT.x0 + 4, RECT.y0 + y)).toBe(y < SIZE_Y - keep);
         }
+    });
+
+    test("a fight's own dropRows can take more than the floor keeps", () => {
+        const { floor, grid, run } = makeFloor(
+            floorWith({ kind: "dropRows", rows: 30, rowSeconds: 0.1, keep: 1 }),
+        );
+        run(20 * T);
+        expect(floor.rowsDropped).toBe(SIZE_Y - 1);
+        expect(grid.isSolid(RECT.x0 + 4, RECT.y0 + SIZE_Y - 2)).toBe(true);
+        expect(grid.isSolid(RECT.x0 + 4, RECT.y0 + SIZE_Y - 1)).toBe(false);
+    });
+
+    test("its holes are never floor: no slab, no fall, no coming back, cut once it's opened", () => {
+        const holes = [{ y: RECT.y0 + 12, x0: RECT.x0 + 8, x1: RECT.x0 + 14 }];
+        const { floor, grid, run } = makeFloor({
+            ...floorWith({ kind: "side", side: "both", rowSeconds: 0.05 }, [
+                { at: 3, pattern: { kind: "restore", rowSeconds: 0.05 } },
+            ]),
+            holes,
+        });
+        // Walked on till the fight opens them
+        expect(grid.isSolid(RECT.x0 + 8, RECT.y0 + 12)).toBe(false);
+        floor.openHoles();
+        expect(grid.isSolid(RECT.x0 + 8, RECT.y0 + 12)).toBe(true);
+        run(5 * T);
+        for (let x = 8; x <= 14; x++) {
+            expect(floor.roseAt[x + 12 * SIZE_X]).toBe(-1);
+            expect(floor.isGone(x + 12 * SIZE_X, 5 * T)).toBe(true);
+            expect(floor.restoreAt[x + 12 * SIZE_X]).toBe(-1);
+        }
+        expect(grid.isSolid(RECT.x0 + 14, RECT.y0 + 12)).toBe(true);
+        expect(floor.roseAt[12 * SIZE_X]).not.toBe(-1);
     });
 
     test("no slab rises on a tile that's going", () => {

@@ -9,9 +9,11 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
+    ALL_MAPS,
     FUN_MAPS,
     MAPS,
     MAP_BY_ID,
@@ -19,6 +21,8 @@ import {
     getArenaRegion,
     getMap,
     getMapCharacter,
+    getRunCinematic,
+    isCoopMap,
     isDevMap,
     isFunMap,
 } from "../content/maps";
@@ -31,6 +35,7 @@ import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity, rarityName } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
+import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -50,10 +55,12 @@ import {
     buyUpgrade,
     exportSave,
     getEarnedUnlocks,
+    getFightStage,
     getFinishedQuests,
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
+    getReachedStages,
     getStartingCharacter,
     isEndlessRecord,
     isEndlessUnlocked,
@@ -133,6 +140,10 @@ import { saveFile } from "./saveFile";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
+// Seconds into a boss's fight a fight's own button says what it's for, until it's first used: from
+// a moment after the boss is up (risen from its intro), for long enough to read (AbilityView.hint)
+const ABILITY_HINT_FROM = 3;
+const ABILITY_HINT_UNTIL = 15;
 const MAX_TICKS_PER_FRAME = 10;
 // A solo run makes up a late frame's ticks this many a frame at most, rather than
 // all in the next one, so one slow frame doesn't make the next slow too. Every
@@ -558,6 +569,12 @@ export class GameClient implements GameFrameHandler {
     // meanwhile)
     private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
+    // A fight's own button's been used this session (MapDef.fight.ability): its hint's no longer
+    // shown (AbilityView.hint)
+    private abilityUsed = false;
+    // The tick the boss on the bar was first up, in this sim, since there was none: the ability
+    // hint's clock. A fight's start, not the run's: the Tombs' Nexus comes before each boss.
+    private bossUp?: { sim: Sim; tick: number };
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
     private attractTick = 0;
@@ -722,6 +739,70 @@ export class GameClient implements GameFrameHandler {
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
 
+    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps. Without
+    // it the dev server plays as players will (the Tombs of Amascut, listed with the raids, has none
+    // of its testing buttons), phones on the tunnel included.
+    get devTools(): boolean {
+        return (
+            import.meta.env.DEV &&
+            typeof location !== "undefined" &&
+            new URLSearchParams(location.search).has("devtools")
+        );
+    }
+
+    // Dev only: god mode, nothing hurting the player (Sim.devGod), for watching a fight
+    toggleDevGod(): void {
+        const sim = this.sim;
+        if (this.devTools && !this.coopRun && sim) {
+            sim.devGod = !sim.devGod;
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: to the Wardens, with the best of everything or as the run is (Sim.devToWardens)
+    devToWardens(kit = true): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devToWardens(kit);
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: from the Nexus straight to a path's boss (Sim.devToTombsBoss)
+    devToTombsBoss(pathId: string): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devToTombsBoss(pathId);
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: past the Tombs room to its boss (Sim.devSkipToTombsBoss)
+    devSkipToTombsBoss(): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devSkipToTombsBoss();
+        }
+    }
+
+    // The Tombs of Amascut's invocation board: on if it was off (taking off any it can't be on
+    // with), off if it was on
+    toggleInvocation(id: string): void {
+        this.save.invocations = toggleInvocation(this.save.invocations ?? [], id);
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    clearInvocations(): void {
+        this.save.invocations = [];
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    // In a room, the lobby's told (its raid level goes by the host's: Loadout.invocations)
+    private invocationsChanged(): void {
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
+    }
+
     // The pet to take along (one of the trophies found), or none
     selectPet(petId: string | undefined): void {
         if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
@@ -742,6 +823,10 @@ export class GameClient implements GameFrameHandler {
         }
         const room = this.hostedRoom();
         if (room) {
+            if (!isCoopMap(getMap(mapId))) {
+                this.sounds.denied();
+                return;
+            }
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -853,6 +938,11 @@ export class GameClient implements GameFrameHandler {
     // A room of this player's, for the map picked
     createRoom(open: boolean): void {
         const { mapId, endless, hard } = this.store.getSnapshot();
+        // A solo-only fight picked on your own: the room starts on the first map instead
+        if (!isCoopMap(getMap(mapId))) {
+            this.coop.create(open, MAPS[0].id, false, false);
+            return;
+        }
         this.coop.create(open, mapId, endless, hard);
     }
 
@@ -896,7 +986,7 @@ export class GameClient implements GameFrameHandler {
     // The maps this player has, and has endless and hard mode for, which rooms
     // go by
     private getUnlocks(): Unlocks {
-        const ids = [...MAPS, ...RAID_MAPS, ...FUN_MAPS].map((m) => m.id);
+        const ids = [...MAPS, ...RAID_MAPS, ...FUN_MAPS].filter(isCoopMap).map((m) => m.id);
         return {
             maps: ids.filter((id) => isMapUnlocked(this.save, id)),
             endless: ids.filter((id) => isEndlessUnlocked(this.save, id)),
@@ -905,9 +995,9 @@ export class GameClient implements GameFrameHandler {
     }
 
     private getLoadout(): Loadout {
+        const room = this.coop.room;
         const characterId =
-            (this.coop.room && getMap(this.coop.room.mapId).fun?.character) ??
-            this.store.getSnapshot().characterId;
+            (room && getMap(room.mapId).fun?.character) ?? this.store.getSnapshot().characterId;
         return makeLoadout(
             getMetaStats(this.save, getCharacter(characterId).style),
             [...this.save.unlockedItems],
@@ -915,6 +1005,8 @@ export class GameClient implements GameFrameHandler {
                 ...this.save.armoury,
             },
             this.save.pet,
+            // A Tombs room's lobby shows the host's raid level
+            room && getMap(room.mapId).tombs ? [...(this.save.invocations ?? [])] : undefined,
         );
     }
 
@@ -932,7 +1024,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         const map = getMap(room.mapId);
-        if (!isMapUnlocked(this.save, map.id)) {
+        if (!isMapUnlocked(this.save, map.id) || !isCoopMap(map)) {
             this.sounds.denied();
             return;
         }
@@ -946,6 +1038,9 @@ export class GameClient implements GameFrameHandler {
                 map.fun !== undefined ||
                 (room.endless && (anyMap || isEndlessUnlocked(this.save, map.id))),
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
+            stage: getFightStage(this.save, map.id),
+            // The Tombs' raid level is the host's, as the invocation board set it
+            ...(map.tombs && { invocations: this.save.invocations ?? [] }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1423,6 +1518,8 @@ export class GameClient implements GameFrameHandler {
             raidTeleports: RAID_TELEPORTS,
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
+            invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
+            stage: this.chosenStage(mapId),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -1510,6 +1607,8 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             endless: game.endless,
             hard: game.hard,
+            stage: game.stage,
+            invocations: game.invocations,
             party,
             focus,
         });
@@ -1536,12 +1635,12 @@ export class GameClient implements GameFrameHandler {
     }
 
     // pets: each hero's pet, in the party's order
-    // cinematic: play the map's opening cinematic, if it has one
+    // cinematic: play the map's opening cinematic (or its part's, a fight in parts), if it has one
     private enterRun(sim: Sim, pets: (string | undefined)[], cinematic: boolean): void {
         const map = sim.map;
         this.sim = sim;
-        this.cinematic =
-            cinematic && map.cinematic ? new CinematicPlayer(map.cinematic) : undefined;
+        const runCinematic = getRunCinematic(map, sim.stage);
+        this.cinematic = cinematic && runCinematic ? new CinematicPlayer(runCinematic) : undefined;
         this.view.cinematic = this.cinematic;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.scaperune === true);
@@ -1832,12 +1931,17 @@ export class GameClient implements GameFrameHandler {
         this.act({ kind: "item", index });
     }
 
-    // The fight's own button (MapDef.fight.ability): Space, a pad's bottom button, or the touch
-    // screen's. Out of reach, or not ready, it says no.
+    // The fight's own button (Sim.ability: a fight map's, or the Tombs'): Space, a pad's bottom
+    // button, or the touch screen's. Out of reach, or not ready, it says no.
     useAbility(): void {
         const sim = this.sim;
-        if (!sim?.map.fight?.ability || (this.paused && !this.coopRun)) {
+        if (!sim?.ability || (this.paused && !this.coopRun)) {
             return;
+        }
+        // Only a press that goes off counts as having learnt it: one it says no to (out of reach,
+        // not ready, no boss up) leaves the hint to come
+        if (sim.abilityPressTakes()) {
+            this.abilityUsed = true;
         }
         this.act({ kind: "ability" });
     }
@@ -1903,13 +2007,17 @@ export class GameClient implements GameFrameHandler {
     // to the room. show: false when the next run's starting straight away.
     // The same boss fight again, from its results (MapDef.fight), on your own
     retry(): void {
-        const mapId = this.sim?.map.id;
-        if (!mapId || this.coopRun || !getMap(mapId).fight) {
+        const map = this.sim?.map;
+        const mapId = map?.id;
+        if (!mapId || this.coopRun || !map.fight) {
             return;
         }
+        // A retry of the same part is without its cinematic; "Next fight", on to a part not played
+        // just now, plays that part's entrance
+        const played = this.sim?.stage;
+        const onward = map.stages !== undefined && this.chosenStage(mapId) !== played;
         this.leaveRun();
-        // The fight again at once, without the map's cinematic
-        void this.startRun(mapId, false);
+        void this.startRun(mapId, onward);
     }
 
     leaveRun(show = true): void {
@@ -1957,6 +2065,19 @@ export class GameClient implements GameFrameHandler {
     }
 
     // endedEarly: why a co-op run ended before anyone won or fell
+    // A fight in parts: the part picked (one reached), or the next not beaten
+    private chosenStage(mapId: string): number {
+        const picked = this.store.getSnapshot().fightStage;
+        return picked !== undefined && picked < getReachedStages(this.save, mapId)
+            ? picked
+            : getFightStage(this.save, mapId);
+    }
+
+    // A fight in parts' part to play next, picked on the map screen
+    pickFightStage(stage: number | undefined): void {
+        this.store.set({ fightStage: stage });
+    }
+
     private finishRun(
         endedEarly?: string,
         early: "abandoned" | "disconnected" = endedEarly ? "disconnected" : "abandoned",
@@ -1969,7 +2090,18 @@ export class GameClient implements GameFrameHandler {
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
-        const locked = MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
+        // A fight in parts: Retry plays the part lost again (one replayed, too, not the furthest
+        // reached), and Next fight the one after it. chosenStage falls back to the next not
+        // beaten when that isn't reached yet.
+        this.store.set({
+            fightStage:
+                result.stage === undefined
+                    ? undefined
+                    : result.victory
+                      ? result.stage + 1
+                      : result.stage,
+        });
+        const locked = ALL_MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
         const lockedCharacters = CHARACTERS.filter(
             (c) => !c.only && !this.save.unlockedCharacters.includes(c.id),
         );
@@ -2292,6 +2424,7 @@ export class GameClient implements GameFrameHandler {
                 cinematic ? cinematic.y : py,
                 deltaTimeMs / 1000,
                 this.grid.data.glowLocs,
+                this.view.getCinematicLights(),
             );
         }
         // A raid hall can be drawn darker than the map, and washed with a colour
@@ -2316,21 +2449,48 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // The fight's own button, for the HUD (MapDef.fight.ability)
+    // The fight's own button, for the HUD (Sim.ability): lit as gold while what it'd land on (or
+    // the boss on the bar, out of reach) has its guard down
     private getAbilityView(sim: Sim): AbilityView | undefined {
-        const ability = sim.map.fight?.ability;
+        const ability = sim.ability;
         if (!ability) {
             return undefined;
         }
-        const boss = sim.shownBoss;
+        const boss = sim.abilityTarget() ?? sim.shownBoss;
         const left = sim.abilitySecondsLeft();
+        const seconds = this.secondsSinceBossUp(sim);
         return {
             name: ability.name,
             iconObjId: ability.iconObjId,
             charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
             inReach: sim.abilityTarget() !== undefined,
             opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
+            guide: ability.guide === true,
+            withItems: !sim.map.fight,
+            hint:
+                ability.guide === true &&
+                !this.abilityUsed &&
+                seconds !== undefined &&
+                seconds >= ABILITY_HINT_FROM &&
+                seconds < ABILITY_HINT_UNTIL,
         };
+    }
+
+    // Seconds since the boss on the bar was up (bossUp), or undefined with none living. Another
+    // boss coming on while one's shown (a co-op copy, the next phase) doesn't start it again.
+    private secondsSinceBossUp(sim: Sim): number | undefined {
+        const boss = sim.shownBoss;
+        if (!boss || boss.dead) {
+            this.bossUp = undefined;
+            return undefined;
+        }
+        if (this.bossUp?.sim !== sim) {
+            if (boss.risingEnd > sim.tick) {
+                return undefined;
+            }
+            this.bossUp = { sim, tick: sim.tick };
+        }
+        return (sim.tick - this.bossUp.tick) / TICKS_PER_SECOND;
     }
 
     // A blow at (x, y) shakes the camera, less the further off the player it is, and not at
@@ -3138,6 +3298,19 @@ export class GameClient implements GameFrameHandler {
                         : undefined,
                 };
             }
+            // The Wardens' three phases, Kephri's three shields and her last
+            const tombs = sim.wardensBar(shownBoss) ?? sim.kephriBar(shownBoss);
+            if (tombs) {
+                const kephri = shownBoss.def.boss?.kephri;
+                boss.fraction = tombs.fraction;
+                boss.fight = {
+                    phase: tombs.phase,
+                    phases: kephri ? kephri.shields.count + 1 : 3,
+                    stage: tombs.stage,
+                    status: tombs.status,
+                    totems: [],
+                };
+            }
         }
         if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
             this.shownDps = sim.dps;
@@ -3164,6 +3337,56 @@ export class GameClient implements GameFrameHandler {
                 portal: sim.raidTeleporter !== undefined && sim.raidTeleportsLeft > 0,
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
             },
+            tombsWave:
+                sim.tombsRoom && !sim.tombsRoom.boss
+                    ? sim.tombsRoom.het
+                        ? {
+                              // The Het room counts what's mined of the seal, not waves
+                              label: "Seal mined",
+                              wave: sim.hetSealMined.mined,
+                              of: sim.hetSealMined.of,
+                              waiting: false,
+                              done: sim.tombsRoom.doneTick !== undefined,
+                          }
+                        : sim.tombsPathRoom?.crondis
+                          ? {
+                                // The Crondis room counts the palm's stages
+                                label: "Palm grown",
+                                wave: sim.tombsRoom.crondis?.stage ?? 0,
+                                of: 4,
+                                waiting: !sim.tombsRoom.started,
+                                done: sim.tombsRoom.doneTick !== undefined,
+                            }
+                          : sim.tombsPathRoom?.scabaras
+                            ? {
+                                  // The Scabaras room counts its puzzles
+                                  label: "Puzzles solved",
+                                  wave: sim.tombsRoom.scabaras?.solved.length ?? 0,
+                                  of: 4,
+                                  waiting: !sim.tombsRoom.started,
+                                  done: sim.tombsRoom.doneTick !== undefined,
+                              }
+                            : {
+                                  wave: Math.max(0, sim.tombsRoom.wave) + 1,
+                                  of: APMEKEN_WAVES.length,
+                                  waiting: !sim.tombsRoom.started,
+                                  done: sim.tombsRoom.doneTick !== undefined,
+                              }
+                    : undefined,
+            tombsScabaras: sim.scabarasInfo,
+            tombsHet: sim.hetInfo,
+            tombsCrondis: sim.crondisInfo,
+            tombsRoar:
+                sim.zebakRoarSeconds === undefined ? undefined : Math.ceil(sim.zebakRoarSeconds),
+            tombsShadows: sim.akkhaShadows
+                ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
+                : undefined,
+            devGod: this.devTools ? sim.devGod : undefined,
+            devWardens:
+                this.devTools &&
+                sim.map.tombs?.wardens !== undefined &&
+                !sim.tombsPath &&
+                !sim.tombsWardens,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             poisoned: sim.player.poisonEnd !== -1,
