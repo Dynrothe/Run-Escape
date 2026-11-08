@@ -13,8 +13,9 @@ the version in the corner).
   dead where they fell, up to Yama on his throne in the palace. Fight the hordes of Yama's demons
   in its streets as Justiciar Zachariah, with his Saradomin sword, and his lunge, shock wave, ice
   barrage, lightning and the Owl's gaze, his ultimate, on buttons of your own, for as long as you
-  like. There are no items here: each level brings a blessing of Saradomin at random, from his
-  strength to another shock wave either side. Beat both his generals and the palace opens:
+  like. His sword's blows land heavy, shaking the ground and staggering what they hit. There are
+  no items here: each level offers three blessings of Saradomin to choose from, from his strength
+  to a faster sword or another shock wave either side. Beat both his generals and the palace opens:
   step onto its floor and Yama speaks from his throne, goes from it in embers and rises before it:
   the palace is sealed in fire, the floor rises under you, and only the Owl's gaze stops his
   meteor. Freeze his void flares with Ice barrage and shatter them with Lightning for food. It
@@ -63,6 +64,8 @@ the version in the corner).
 
 ### Fixed
 
+- On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
+  the pause menu.
 - Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.
 - Co-op could freeze for half an hour when a connection died without closing (a network that
   dropped, a laptop asleep). Your game now notices within seconds and reconnects, and a player

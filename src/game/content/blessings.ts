@@ -1,10 +1,10 @@
 import { BlessingDef, BlessingKitDef, BlessingsDef, HeroAbilityDef } from "./types";
 
 // The blessings of Saradomin (MapDef.blessings): burnt Varrock has no items, and every level up
-// grants the Justiciar one of these at random instead of a pick, his god's strike coming down on
-// him as it does (Saradomin Strike's bolt and its sound). Each is a Saradomin item, for its icon.
-// They stand in for everything a run's items and picks would give (weapons, passives, gear and
-// caskets), with no choosing, so one is worth more than a pick. They're for a hero of about 38
+// offers the Justiciar three of these to choose from instead of a pick, his god's strike coming
+// down on him as he takes one (Saradomin Strike's bolt and its sound). Each is a Saradomin item,
+// for its icon. They stand in for everything a run's items and picks would give (weapons,
+// passives, gear and caskets), so one is worth more than a pick. They're for a hero of about 38
 // hitpoints whose buttons are his weapons (justiciarKit.ts), and against a general or Yama alone
 // the buttons are most of the damage. Past every one's max, the tear, as often as that comes.
 
@@ -87,6 +87,24 @@ export const SARADOMIN_BLESSINGS: BlessingsDef = {
             max: 7,
             weight: 1.5,
             weaponLevel: true,
+        },
+        {
+            id: "bracers",
+            name: "Saradomin bracers",
+            description: "Your sword swings 12% faster.",
+            iconObjId: 10384,
+            max: 4,
+            weight: 1.5,
+            stats: { meleeSpeed: 0.12 },
+        },
+        {
+            id: "platebody",
+            name: "Saradomin platebody",
+            description:
+                "Your sword's blows land heavier: they knock back 40% further and stagger longer.",
+            iconObjId: 2661,
+            max: 3,
+            stats: { meleeKnockback: 0.4 },
         },
         {
             id: "staff",

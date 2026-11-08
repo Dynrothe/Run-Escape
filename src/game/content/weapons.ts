@@ -255,6 +255,8 @@ const TWO_HANDED_SWORD_LEVELS = levels(
 );
 // The Saradomin sword
 const SARADOMIN_SWORD = 11838;
+// Justiciar Zachariah's blue impact, from his fight (justiciarKit.ts)
+const JUSTICIAR_IMPACT = 1458;
 
 export const WEAPONS: WeaponDef[] = [
     {
@@ -869,17 +871,22 @@ export const WEAPONS: WeaponDef[] = [
         name: "Saradomin sword",
         kind: "sweep",
         description:
-            "Justiciar Zachariah's heavy sweep in front of him. Blessed blade makes it stronger.",
+            "Justiciar Zachariah's heavy sweep in front of him, which knocks back hard and staggers what it hits. Blessed blade makes it stronger.",
         iconObjId: SARADOMIN_SWORD,
         playerSeq: GODSWORD_SEQ,
         sound: GODSWORD_SOUND,
         hitSound: -1,
         rarity: "common",
         pickOnly: true,
+        // His blows land heavy: the camera shakes, his blue impact from his fight on what it hits,
+        // and it staggers
+        heavy: { shake: 0.2, hit: { spotAnim: JUSTICIAR_IMPACT, fit: 1 }, stagger: 0.3 },
         levels: TWO_HANDED_SWORD_LEVELS.map((level) => ({
             ...level,
             name: "Saradomin sword",
             objId: SARADOMIN_SWORD,
+            // and knock back half as far again as a 2h sword's (before every other level's step)
+            knockback: level.knockback * 1.5,
         })),
     },
     {

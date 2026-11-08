@@ -221,7 +221,7 @@ export function getSpotAnimIds(): number[] {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
         add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim);
+        add(weapon.chain?.spotAnim, weapon.heavy?.hit.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -459,9 +459,14 @@ export function getPropKey(npcId: number): string {
 }
 
 // A lair's seal (MapDef.lair), burning: its own key, as the same loc may be baked still elsewhere
-// (a boss's pool)
 export function getLairSealKey(locId: number): string {
     return "lairSeal:" + locId;
+}
+
+// A boss's pool (BossAttackDef.pool), on its own animation (a fire flickers): its own key, as the
+// same loc may be baked still elsewhere
+export function getPoolKey(locId: number): string {
+    return "pool:" + locId;
 }
 
 // A hero drawn as an NPC (CharacterDef.npcLook)
@@ -870,12 +875,16 @@ export class GameAssets {
         }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
+        const poolLocIds = new Set<number>();
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 if (attack.pool) {
-                    locIds.add(attack.pool.locId);
+                    poolLocIds.add(attack.pool.locId);
                 }
             }
+        }
+        for (const locId of poolLocIds) {
+            requests.push({ kind: "loc", key: getPoolKey(locId), locId, animated: true });
         }
         for (const powerUp of POWER_UPS) {
             if (powerUp.locId !== undefined) {

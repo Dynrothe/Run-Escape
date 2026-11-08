@@ -31,9 +31,11 @@ was the minimap, hitpoints and the hero's buttons. Farming needs a run:
   twice as many as Lumbridge's pace has (`HORDE`, built up from the first wave). The map has
   no clock, so the last wave goes on, getting tougher by the minute as everywhere
   (`enemyHpScale`): farming forever isn't free.
-- **Levels**: kills drop XP, and there are no items: each level up is a blessing of Saradomin at
-  random, at once (`MapDef.blessings`, `content/blessings.ts`), in place of weapons, passives and
-  caskets. The Justiciar's buttons take the run's Might like any hit (`damageEnemy`), and some
+- **Levels**: kills drop XP, and there are no items: each level up offers three blessings of
+  Saradomin to choose from (`MapDef.blessings`, `content/blessings.ts`), in place of weapons,
+  passives and caskets. Two of them are for the sword: Saradomin bracers swing it faster, and a
+  Saradomin platebody makes its heavy blows (`WeaponDef.heavy`) knock back further and stagger
+  longer. The Justiciar's buttons take the run's Might like any hit (`damageEnemy`), and some
   blessings change the buttons themselves (`Sim.kitAbility`), so his kit grows with the levels.
   The first few levels come as anywhere, and from there each takes more experience, up to six
   times as much from level 14 (`MapDef.levelXp`, `VARROCK_LEVEL_XP`), so a level means more.
@@ -219,3 +221,32 @@ So each general wants a few more minutes of farming than before, about 10 for K'
 Xarth, and the hordes are a real danger sooner: the bot without help dies to them a minute or more
 earlier. Yama still goes down to a hero that's beaten both generals. The bot keeps out of the
 fires (`firesToAvoid`) and counts them in its dodges, and its gaze is for his meteor.
+
+### Blessings to choose, and a heavier sword
+
+A playtest asked for upgrades to the sword and for choosing them: each level up now offers three
+blessings, and two of them are the sword's (Saradomin bracers for speed, a Saradomin platebody for
+knockback and a longer stagger). Its blows land heavy: half as much knockback again as a 2h
+sword's, a camera shake, and a stagger that holds what's hit still for 0.3 s. The bot takes
+blessings in a fixed order (`BLESSING_RANK`), where before it got them at random. The same seeds
+and settings as above, on the code before and after:
+
+| Bot at                 | Before (at random) | After        |
+| ---------------------- | ------------------ | ------------ |
+| 3:00                   | level 7            | level 7–8    |
+| 8:00                   | level 18–20        | level 18–19  |
+| 12:00                  | level 24–29        | level 27–28  |
+| No `SAFE_WAVES`, dies  | 3:02 to 3:59       | 1:22 to 3:51 |
+| Xarth after 8 minutes  | 0 (32–56%)         | 1 (33–37%)   |
+| Xarth after 12 minutes | 2 (29%)            | 3 (24–32 s)  |
+| K'ril after 8 minutes  | 2 (48%)            | 3 (28–37 s)  |
+| K'ril after 10 minutes | 3 (23–30 s)        | 3 (21–25 s)  |
+| Yama after 10 minutes  | 3 (44–52 s)        | 1 (28–44%)   |
+
+The order matters more than anything here. Damage first and hitpoints and armour after
+(crossbow, strength, light, blade, bracers, staff, brew) beat Yama 3 of 3 in 29 to 52 s and K'ril
+as above, but lost to Xarth at 12 minutes 3 of 3 and won 1 of 3 at 8: his bolts and arrows need
+armour. Taking brew and ward early, the order the bot has now, wins 11 of the 15 fights to the
+random draws' 10 and damage first's 10. A player can build for the fight in front of them,
+which no fixed order does. The bot that dies at 1:22 met imps and fires with only the sword: no
+crossbow had been offered by then.

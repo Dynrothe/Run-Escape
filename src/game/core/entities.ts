@@ -439,6 +439,8 @@ export type Enemy = {
     attackCooldown: number;
     // Ticks left frozen (Ice spells)
     frozen: number;
+    // Ticks left staggered by a heavy blow (WeaponDef.heavy): standing, and not striking
+    staggered?: number;
     // Jumping a ditch, and nothing else until it lands
     jump?: EnemyJump;
     // Takes this much more damage from everything (0.25 = +25%) until

@@ -119,15 +119,21 @@ describe("the Battle for Varrock's levels", () => {
         expect(stretch).toBe(VARROCK_LEVEL_XP);
         expect(stretch.times).toBeGreaterThan(1);
         const sim = createSim();
+        // Each level's blessing taken, so the next can come
+        const reach = (xp: number) => {
+            sim.xp = xp;
+            sim.step(0, 0);
+            while (sim.state === "levelUp") {
+                sim.choose(0);
+            }
+        };
         // The first few as an endless run's
         for (let level = 2; level <= stretch.from; level++) {
-            sim.xp = endlessXpForLevel(level);
-            sim.step(0, 0);
+            reach(endlessXpForLevel(level));
             expect(sim.level).toBe(level);
         }
         // Then what would be the next level elsewhere isn't here
-        sim.xp = endlessXpForLevel(stretch.from + 1);
-        sim.step(0, 0);
+        reach(endlessXpForLevel(stretch.from + 1));
         expect(sim.level).toBe(stretch.from);
         expect(sim.xpForNextLevel).toBe(
             stretchedXp(endlessXpForLevel(stretch.from + 1), stretch.from + 1, stretch),
@@ -136,8 +142,7 @@ describe("the Battle for Varrock's levels", () => {
         const level = stretch.to + 2;
         const xp = Math.ceil(endlessXpForLevel(level) * stretch.times);
         expect(stretchedXp(endlessXpForLevel(level), level, stretch)).toBe(xp);
-        sim.xp = xp;
-        sim.step(0, 0);
+        reach(xp);
         expect(sim.level).toBe(level);
         expect(sim.xpForThisLevel).toBeLessThanOrEqual(sim.xp);
         expect(sim.xpForNextLevel).toBeGreaterThan(sim.xp);
@@ -145,7 +150,7 @@ describe("the Battle for Varrock's levels", () => {
 });
 
 describe("the Justiciar's Saradomin sword", () => {
-    test("is the 2h sword's sweep as a Saradomin sword, his alone", () => {
+    test("is the 2h sword's sweep as a Saradomin sword, heavier, his alone", () => {
         expect(getCharacter(HERO).startingWeapon).toBe("saradomin_sword");
         const sword = getWeapon("saradomin_sword");
         const twoHanded = getWeapon("two_handed_sword");
@@ -154,13 +159,19 @@ describe("the Justiciar's Saradomin sword", () => {
         // Never a level up's pick on any other map
         expect(sword.pickOnly).toBe(true);
         expect(sword.levels.length).toBe(twoHanded.levels.length);
+        // knocking back further (half as far again, before every other level's step), and its
+        // blows land heavy
         sword.levels.forEach((level, i) => {
             expect(level).toEqual({
                 ...twoHanded.levels[i],
                 name: "Saradomin sword",
                 objId: 11838,
+                knockback: expect.any(Number),
             });
+            expect(level.knockback).toBeGreaterThan(twoHanded.levels[i].knockback);
         });
+        expect(sword.heavy).toBeDefined();
+        expect(twoHanded.heavy).toBeUndefined();
         expect(WEAPONS.filter((weapon) => weapon.id === "saradomin_sword")).toHaveLength(1);
     });
 });

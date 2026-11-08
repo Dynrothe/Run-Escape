@@ -2432,6 +2432,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
+    const blessing = ui.choices.some((choice) => choice.isBlessing);
     const banishes = ui.hud?.banishes ?? 0;
     return (
         <div className="ui-modal">
@@ -2448,7 +2449,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                         ? "It keeps its level, and it's your only burst this run:"
                         : hilt
                           ? "Pick the god whose hilt it takes, and with it its special attack:"
-                          : `You are now level ${ui.hud?.level}. Choose a reward:`}
+                          : `You are now level ${ui.hud?.level}. Choose ${blessing ? "a blessing" : "a reward"}:`}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (

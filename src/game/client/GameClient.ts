@@ -6,6 +6,7 @@ import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { getAct, getActStep } from "../content/acts";
+import { getBlessing } from "../content/blessings";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -35,7 +36,7 @@ import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { TROPHY_BY_ID } from "../content/trophies";
-import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
+import { BlessingsDef, CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
@@ -71,7 +72,7 @@ import { ArenaGrid } from "../core/world/ArenaGrid";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
-import { describeBlessing, getBlessingViews } from "./BlessingViews";
+import { BLESSING_COLOR, getBlessingViews } from "./BlessingViews";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
     CinematicCamera,
@@ -323,21 +324,44 @@ function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
     return `-${Math.round((1 - share) * 100)}% damage to ${bosses}: they pray against ${style}`;
 }
 
+// How many times a blessing on offer will have been had, as its card's corner says it: "2 of 8".
+// Nothing for one that's had only once or as often as it comes (the fallback).
+function blessingCount(
+    blessings: BlessingsDef,
+    choice: { blessingId: string; count: number },
+): string | undefined {
+    const { max } = getBlessing(blessings, choice.blessingId);
+    return Number.isFinite(max) && max > 1 ? `${choice.count} of ${max}` : undefined;
+}
+
 function getChoiceViews(sim: Sim): ChoiceView[] {
     const style = getCharacter(sim.characterId).style;
+    const blessings = sim.map.blessings;
     return sim.choices.map((choice, index) => {
-        const { title, text, iconObjId, iconSpriteId, quality, stats } = describeChoice(choice);
+        const { title, text, iconObjId, iconSpriteId, quality, stats } = describeChoice(
+            choice,
+            blessings,
+        );
         const rarity = quality ? RARITIES[quality] : undefined;
+        const blessed =
+            blessings && choice.kind === "blessing" ? blessingCount(blessings, choice) : undefined;
         return {
             title,
             text,
             iconObjId,
             iconSpriteId,
-            isNew: choice.kind === "newWeapon" || choice.kind === "newPassive",
+            isNew:
+                choice.kind === "newWeapon" ||
+                choice.kind === "newPassive" ||
+                (choice.kind === "blessing" && choice.count === 1 && blessed !== undefined),
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
             isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
-            rarity: rarity && { name: rarity.name, color: rarity.color },
+            isBlessing: choice.kind === "blessing",
+            rarity:
+                choice.kind === "blessing"
+                    ? { name: blessed ?? "Blessing", color: BLESSING_COLOR }
+                    : rarity && { name: rarity.name, color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
             banishable: sim.canBanishChoice(index),
@@ -2846,14 +2870,6 @@ export class GameClient implements GameFrameHandler {
                 case "powerUp":
                 case "notice":
                     this.store.toast(event.message);
-                    break;
-                case "blessing":
-                    if (sim.map.blessings) {
-                        this.store.toast(
-                            describeBlessing(sim.map.blessings, event.blessingId, event.count),
-                            5000,
-                        );
-                    }
                     break;
                 case "heroDown":
                     this.store.toast(

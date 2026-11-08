@@ -133,9 +133,40 @@ const CHOICE_PRIORITY: Record<UpgradeChoice["kind"], number> = {
     passiveLevel: 4,
     food: 5,
     coins: 6,
+    // Only ever offered on their own, ranked by BLESSING_RANK
+    blessing: 0,
 };
 
+// Blessings (MapDef.blessings), as a player might take them: the ranged weapon first (most of the
+// damage against a general alone), hitpoints and armour beside damage (with those last, the bot
+// lost to Xarth at 12 minutes), then the sword and the buttons
+const BLESSING_RANK = [
+    "crossbow",
+    "brew",
+    "strength",
+    "ward",
+    "light",
+    "blade",
+    "bracers",
+    "staff",
+    "will",
+    "elixir",
+    "platebody",
+    "zeal",
+    "halo",
+    "mjolnir",
+    "holy_water",
+    "crozier",
+    "sandals",
+    "wisdom",
+];
+
 function choiceScore(choice: UpgradeChoice): number {
+    if (choice.kind === "blessing") {
+        const rank = BLESSING_RANK.indexOf(choice.blessingId);
+        // The fallback, and one the list hasn't got, last
+        return rank < 0 ? BLESSING_RANK.length : rank;
+    }
     const quality = "quality" in choice ? RARITY_ORDER.indexOf(choice.quality) : 0;
     // A Rare or better roll beats a Common pick of a better kind
     return CHOICE_PRIORITY[choice.kind] * 10 - quality * 15;

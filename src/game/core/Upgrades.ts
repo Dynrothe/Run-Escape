@@ -1,3 +1,4 @@
+import { getBlessing } from "../content/blessings";
 import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
 import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
 import {
@@ -8,7 +9,7 @@ import {
     getPassiveGain,
 } from "../content/passives";
 import { RARITIES, Rarity, atLeast, rollRarity } from "../content/rarity";
-import { CombatStyle, PassiveDef } from "../content/types";
+import { BlessingsDef, CombatStyle, PassiveDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import {
     WeaponStatLine,
@@ -52,7 +53,9 @@ export type UpgradeChoice =
           currentValue: number;
       }
     | { kind: "coins"; amount: number }
-    | { kind: "food"; amount: number };
+    | { kind: "food"; amount: number }
+    // One of the map's blessings (MapDef.blessings), had count times once it's taken
+    | { kind: "blessing"; blessingId: string; count: number };
 
 export type ChoiceDescription = {
     title: string;
@@ -164,7 +167,8 @@ function passiveStat(passive: PassiveDef, value: number, before?: number): Weapo
     };
 }
 
-export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
+// blessings: the map's (MapDef.blessings), for a blessing's card
+export function describeChoice(choice: UpgradeChoice, blessings?: BlessingsDef): ChoiceDescription {
     switch (choice.kind) {
         case "newWeapon": {
             const weapon = getWeapon(choice.weaponId);
@@ -266,6 +270,17 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
             };
         case "food":
             return { title: "Shark", text: `Heals ${choice.amount} hitpoints.`, iconObjId: 385 };
+        case "blessing": {
+            if (!blessings) {
+                throw new Error("A blessing on a map without them: " + choice.blessingId);
+            }
+            const blessing = getBlessing(blessings, choice.blessingId);
+            return {
+                title: blessing.name,
+                text: blessing.description,
+                iconObjId: blessing.iconObjId,
+            };
+        }
     }
 }
 

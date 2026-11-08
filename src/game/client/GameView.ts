@@ -58,6 +58,7 @@ import {
     getLairSealKey,
     getPickupModelKey,
     getPileLook,
+    getPoolKey,
     getPropKey,
     getShieldedModelKey,
 } from "./GameAssets";
@@ -94,6 +95,12 @@ const PLAYER_HIT_TINT = 0xff9090;
 const FLAME_SCALE = 2;
 const FLAME_STEP_TICKS = 7;
 const FLAME_TURN = 683;
+
+// Where scenery's own animation is (a flame's flicker), in ticks: on the clock rather than the
+// run's, as the map's own fires are, so it never stops while the run does (a cinematic, a pause)
+function sceneryTick(): number {
+    return (performance.now() / 1000) * TICKS_PER_SECOND;
+}
 // A lair's seal (MapDef.lairs): each flame comes up over this many ticks, this many ticks a tile
 // further from the boss than the last (so the fire runs along the walls), and all die down over
 // SEAL_LIFT_TICKS once it's beaten
@@ -839,6 +846,7 @@ export class GameView {
             return;
         }
         const anim = model.anims[0];
+        const clock = sceneryTick();
         const { sealed } = lair;
         for (let k = 0; k < sealed.length; k += 2) {
             const x = sealed[k] + 0.5;
@@ -853,7 +861,7 @@ export class GameView {
             actors.draw(
                 model,
                 anim,
-                anim.getFrame(sim.tick + i * FLAME_STEP_TICKS),
+                anim.getFrame(clock + i * FLAME_STEP_TICKS),
                 x,
                 this.ground(sim, x, y),
                 y,
@@ -916,8 +924,9 @@ export class GameView {
             return;
         }
         const anim = model.anims[0];
+        const clock = sceneryTick();
         fire.flames.forEach(({ x, y }, i) => {
-            const frame = anim.getFrame(sim.tick + i * FLAME_STEP_TICKS);
+            const frame = anim.getFrame(clock + i * FLAME_STEP_TICKS);
             actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
                 scale: FLAME_SCALE,
                 unlit: 1,
@@ -937,16 +946,19 @@ export class GameView {
     }
 
     // A boss's pool: the real thing on the ground, spreading as it lands and
-    // fading as it dries up, each one turned its own way
+    // fading as it dries up, each one turned its own way and on its own animation (a fire
+    // flickers), a little out of step with the next
     private drawPool(actors: ActorRenderer, sim: Sim, pool: GroundPool): void {
-        const model = this.assets.get("loc:" + pool.locId);
+        const model = this.assets.get(getPoolKey(pool.locId));
         // The clock runs on past its end when the run's over
         if (!model || sim.tick >= pool.endTick) {
             return;
         }
         const size = Math.min(1, (sim.tick - pool.startTick) / POOL_GROW_TICKS);
         const height = this.ground(sim, pool.x, pool.y);
-        actors.draw(model, model.anims[0], 0, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
+        const anim = model.anims[0];
+        const frame = anim.getFrame(sceneryTick() + pool.uid * FLAME_STEP_TICKS);
+        actors.draw(model, anim, frame, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
             scale: pool.radius * POOL_SCALE * size,
             alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
             unlit: 1,

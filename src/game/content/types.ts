@@ -37,6 +37,8 @@ export type StatKey =
     | "levelMight"
     // Melee weapons' knockback multiplier bonus
     | "meleeKnockback"
+    // Melee weapons' attack speed bonus (0.1 = 10% faster), on top of cooldown and capped with it
+    | "meleeSpeed"
     // Slots on top of the usual ones, bought in the shop
     | "weaponSlots"
     | "passiveSlots"
@@ -73,6 +75,7 @@ export function emptyStats(): Stats {
         bossMight: 0,
         levelMight: 0,
         meleeKnockback: 0,
+        meleeSpeed: 0,
         weaponSlots: 0,
         passiveSlots: 0,
         powerUpRate: 0,
@@ -1360,6 +1363,11 @@ export type WeaponDef = {
     family?: string;
     // Only comes from a pick (hilts) or an adventurer's start, never a level up's offer
     pickOnly?: boolean;
+    // Blows that land heavy (the Saradomin sword's; a sweep's or a slash's): a swing that hits
+    // shakes the camera (ImpactDef.shake, once a swing) and shows hit on each of the first few it
+    // hits, and they stagger for stagger seconds (longer with meleeKnockback): they don't walk or
+    // strike, though the knockback still carries them. Bosses don't stagger.
+    heavy?: { shake: number; hit: ImpactSpotDef; stagger: number };
     // Used in place of every so many attacks (sweeps and slashes)
     special?: SpecialAttackDef;
     // Bosses and elites are hit again for these fractions of the damage (the
