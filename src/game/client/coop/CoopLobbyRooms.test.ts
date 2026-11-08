@@ -540,6 +540,79 @@ describe("the lobby's timers", () => {
         expect(FakeSocket.all).toHaveLength(3);
     });
 
+    it("stops recovering an unacknowledged selection after one reconnect and allows a new choice", async () => {
+        const { lobby, room } = await selecting();
+        const updates = vi.spyOn(lobby.store, "set");
+        lobby.setMe({ characterId: "wizard" });
+        const original = room.sent.at(-1)!;
+        await vi.advanceTimersByTimeAsync(4501);
+        const again = FakeSocket.all[2];
+        again.receive({ t: "room", room: ROOM, you: "p1", memberAcks: true });
+        await vi.advanceTimersByTimeAsync(4501);
+        expect(FakeSocket.all).toHaveLength(3);
+        expect(again.readyState).toBe(FakeSocket.OPEN);
+        expect(updates.mock.calls.at(-1)?.[0].coop?.error).toBe(
+            "Couldn't confirm your selection. Please choose it again.",
+        );
+        expect(again.sent.filter((m) => m.t === "me")).toEqual([original, original]);
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(FakeSocket.all).toHaveLength(3);
+        expect(again.sent.filter((m) => m.t === "me")).toHaveLength(2);
+
+        lobby.setMe({ characterId: "ranger" });
+        const latest = again.sent.at(-1)!;
+        expect(updates.mock.calls.at(-1)?.[0].coop?.error).toBeUndefined();
+        // A delayed confirmation of the abandoned choice cannot stop the new one.
+        again.receive({
+            t: "room",
+            room: ROOM,
+            you: "p1",
+            memberAcks: true,
+            meSeq: original.meSeq,
+        });
+        await vi.advanceTimersByTimeAsync(4501);
+        expect(FakeSocket.all).toHaveLength(4);
+        const next = FakeSocket.all[3];
+        next.receive({ t: "room", room: ROOM, you: "p1", memberAcks: true });
+        expect(next.sent).toContainEqual(latest);
+        next.receive({ t: "room", room: ROOM, you: "p1", memberAcks: true, meSeq: latest.meSeq });
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(FakeSocket.all).toHaveLength(4);
+        updates.mockRestore();
+    });
+
+    it("does not replay a selection already acknowledged by the resumed room", async () => {
+        const { lobby, room } = await selecting();
+        lobby.setMe({ characterId: "wizard" });
+        const selection = room.sent.at(-1)!;
+        room.close();
+        await vi.advanceTimersByTimeAsync(0);
+        const again = FakeSocket.all[2];
+        again.receive({
+            t: "room",
+            room: ROOM,
+            you: "p1",
+            memberAcks: true,
+            meSeq: selection.meSeq,
+        });
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(again.sent.filter((m) => m.t === "me")).toHaveLength(0);
+        expect(FakeSocket.all).toHaveLength(3);
+    });
+
+    it("uses the legacy selection protocol if acknowledgement support disappears on resume", async () => {
+        const { lobby, room } = await selecting();
+        lobby.setMe({ characterId: "wizard" });
+        room.close();
+        await vi.advanceTimersByTimeAsync(0);
+        const again = FakeSocket.all[2];
+        again.receive({ t: "room", room: ROOM, you: "p1" });
+        expect(again.sent).toEqual([{ t: "me", characterId: "wizard" }]);
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(again.sent.filter((m) => m.t === "me")).toHaveLength(1);
+        expect(FakeSocket.all).toHaveLength(3);
+    });
+
     it("does not mistake a suspended lobby tab for a broken connection or keep retries after leaving", async () => {
         const { lobby, room } = await selecting();
         lobby.setMe({ characterId: "wizard" });

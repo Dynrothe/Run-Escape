@@ -1910,11 +1910,14 @@ on either relay.
 
 Cloudflare rooms advertise `memberAcks` and acknowledge a player's numbered `me` changes with
 `meSeq` in the existing room update. `CoopLobby` retains the latest unconfirmed changes, retries
-once after `MEMBER_RETRY_MS` per connection, and reconnects if `MEMBER_WAIT_MS` passes without
-confirmation. Leaving or starting clears the pending selection. The room persists the sequence
-through sleep and ignores older retries; incoming traffic also flushes overdue alarm jobs so a
+once after `MEMBER_RETRY_MS` per connection, and allows one recovery cycle if `MEMBER_WAIT_MS`
+passes without confirmation. If the selection remains unconfirmed after recovery, retries stop
+and the player is asked to choose again; a responsive socket stays open. A new selection gets a
+fresh recovery allowance. Leaving or starting clears the pending selection. The room persists the
+sequence through sleep and ignores older retries; incoming traffic also flushes overdue alarm jobs so a
 delayed lobby broadcast can make progress. These checks send nothing for confirmed selections
-or idle lobbies. Relays without `memberAcks` keep the existing selection protocol.
+or idle lobbies. Relays without `memberAcks` keep the existing selection protocol; if support
+disappears on reconnect, the latest pending selection is sent once without waiting for an ack.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it

@@ -84,8 +84,8 @@ const MAX_WAITING_MESSAGES = 2000;
 const PONG_WAIT_MS = 3000;
 // Local checks only: these do not send periodic application probes.
 const ROOM_CHECK_MS = 500;
-// Retry an unconfirmed selection once per connection, then resume the room
-// if its normal room update still hasn't acknowledged the selection.
+// Retry an unconfirmed selection once per connection, with at most one
+// recovery cycle for it. A responsive room must not be reopened forever.
 const MEMBER_RETRY_MS = 1000;
 const MEMBER_WAIT_MS = 4000;
 // During a run, a room that's been quiet this long is pinged (keepAlive), so
@@ -224,6 +224,7 @@ export class CoopLobby {
         since: number;
         sentAt: number;
         retried: boolean;
+        recoveryUsed: boolean;
     };
     // When this player last did anything here, for LOBBY_IDLE_MS
     private activeAt = 0;
@@ -428,12 +429,18 @@ export class CoopLobby {
             return undefined;
         }
         const now = Date.now();
-        if (
-            this.isRoomSilent(now) ||
-            (this.pendingMe && now - this.pendingMe.since > MEMBER_WAIT_MS)
-        ) {
+        if (this.isRoomSilent(now)) {
             this.roomSocketDead(socket);
             return undefined;
+        }
+        if (this.pendingMe && now - this.pendingMe.since > MEMBER_WAIT_MS) {
+            if (!this.pendingMe.recoveryUsed) {
+                this.pendingMe.recoveryUsed = true;
+                this.roomSocketDead(socket);
+                return undefined;
+            }
+            this.pendingMe = undefined;
+            this.update({ error: "Couldn't confirm your selection. Please choose it again." });
         }
         return socket;
     }
@@ -879,12 +886,14 @@ export class CoopLobby {
         this.me = { ...this.me, ...changes };
         if (this.view.room) {
             if (this.memberAcks && !this.view.room.started) {
+                this.update({ error: undefined });
                 this.pendingMe = {
                     sequence: ++this.meSequence,
                     changes: { ...this.pendingMe?.changes, ...changes },
                     since: Date.now(),
                     sentAt: Date.now(),
                     retried: false,
+                    recoveryUsed: false,
                 };
                 this.sendPendingMe();
             } else {
@@ -896,6 +905,13 @@ export class CoopLobby {
     private sendPendingMe(): void {
         const pending = this.pendingMe;
         if (!pending || this.resuming) {
+            return;
+        }
+        // A relay rollback can remove acknowledgement support on resume.
+        // Send the latest choice once, using that relay's original protocol.
+        if (!this.memberAcks) {
+            this.pendingMe = undefined;
+            this.send({ t: "me", ...pending.changes });
             return;
         }
         pending.sentAt = Date.now();
