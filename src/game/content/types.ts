@@ -1980,8 +1980,10 @@ export type LairDef = {
     // ("#" inside, the north row first, as FloorDef's ascii) only those tiles of the box
     area?: { x0: number; y0: number; x1: number; y1: number; rows?: string[] };
     // What seals each way out: a loc playing its own animation (fire), on every tile it seals,
-    // drawn this much bigger; sound as it's sealed and lifted
-    seal: { locId: number; scale: number; sound?: number };
+    // drawn this much bigger; sound as it's sealed and lifted. spacing: drawn on tiles at least
+    // this far apart instead, every tile still sealed, for a long seal on a phone (bigger, so
+    // they meet: the Grand Exchange's pad is ringed by a hundred tiles of it)
+    seal: { locId: number; scale: number; sound?: number; spacing?: number };
     // On screen as it's sealed, and once the boss is beaten; and what it says as it falls
     message: string;
     victory: string;

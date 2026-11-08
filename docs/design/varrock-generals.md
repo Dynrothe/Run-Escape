@@ -51,7 +51,7 @@ was the minimap, hitpoints and the hero's buttons. Farming needs a run:
 beaten on its own, one fought at a time.
 
 - **Where it's fought**: Yama's on the floor. A general's on an area of its own (`LairDef.area`,
-  a box, with rows for the Exchange's octagon). Stepping inside wakes it, and every way out burns
+  a box, with rows for the Exchange's pad). Stepping inside wakes it, and every way out burns
   until it's beaten, found from the grid as Yama's is.
 - **Standing there from the start**: each general's a map prop (`MapPropDef.lair`), hidden once
   its lair wakes. Its intro then plays where it stood.
@@ -74,25 +74,27 @@ his own animations and spot animations). In OSRS it burns with every spell, blas
 you hide behind a pillar, then sets the floor alight and raises corpses that heal it if they reach
 it. Ours follows that. He doesn't move.
 
-**Arena**: the Exchange's inner ring, an octagon twenty tiles across, its counter gone. Four of
-the Fractured Archive's pillars (62738) stand round him.
+**Arena**: the whole of the Exchange's raised pad, 34 tiles across, its walls, booths and upper
+storey gone (`clearExchange`), and fire right round its rim once he wakes (the seal, a flame every
+other tile). Eight of the Fractured Archive's pillars (62738) stand in a ring round him, where the
+inner ring's walls were, so one's never far whichever side you're on.
 
 **Phase 1, "Mastered flame"** (100–50%):
 
-| Attack        | What happens                                                                       | How you beat it                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Searing bolt  | A bolt at you. Each one that lands adds a stack of burn, up to three.              | Keep moving. Burn is a hitpoint a second a stack, through armour, for three seconds from the last.     |
-| Flame lash    | Up close, a sweep of fire in front of him. Missed, his guard's down.               | Step out of it, then punish.                                                                           |
-| Conflagration | He gathers his flames (3 s) and they burst through the whole ring, through armour. | Get behind a pillar: its shadow, drawn as he gathers, is safe. The pillar that sheltered you crumbles. |
+| Attack        | What happens                                                                   | How you beat it                                                                                        |
+| ------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Searing bolt  | A bolt at you. Each one that lands adds a stack of burn, up to three.          | Keep moving. Burn is a hitpoint a second a stack, through armour, for three seconds from the last.     |
+| Flame lash    | Up close, a sweep of fire in front of him. Missed, his guard's down.           | Step out of it, then punish.                                                                           |
+| Conflagration | He gathers his flames (3 s) and they burst over the whole pad, through armour. | Get behind a pillar: its shadow, drawn as he gathers, is safe. The pillar that sheltered you crumbles. |
 
 **Phase 2, "The Exchange burns"** (50–0%): every pillar that's left comes down, and his flames take
 the floor.
 
-| Attack             | What happens                                                                                                                                               | How you beat it                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| The Exchange burns | Fires take hold on the ring's floor, each lighting another beside it every five seconds.                                                                   | Shock wave puts fire out along its way.                |
-| Reanimate          | Four of the Exchange's dead get up and walk to him; each that reaches him heals him 5%. With the last there or dead, what got there goes up over the ring. | Kill them on the way: Shock wave binds a line of them. |
-| Hellfire arrows    | A fan of five arrows at you.                                                                                                                               | Step across them.                                      |
+| Attack             | What happens                                                                                                                                                                                   | How you beat it                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| The Exchange burns | Fires take hold on the pad's floor, each lighting another beside it every five seconds.                                                                                                        | Shock wave puts fire out along its way.                |
+| Reanimate          | Six of the Exchange's dead get up by the pad's rim, fourteen tiles out, and walk to him; each that reaches him heals him 4%. With the last there or dead, what got there goes up over the pad. | Kill them on the way: Shock wave binds a line of them. |
+| Hellfire arrows    | A fan of five arrows at you.                                                                                                                                                                   | Step across them.                                      |
 
 Shock wave is the button that matters in phase 2: aimed at the fire or the dead.
 
@@ -151,8 +153,9 @@ throws the hero out to the palace's court rather than ending the run, and his de
   win). `scripts/game/check-lairs.ts` (run by `battleForVarrock.test.ts` with the cache): room
   for each boss where it rises, and for K'ril down his nave.
 - **Phone** (844 × 390, `frameProbe`, each fight's busiest moment): K'ril 62.6k, 67.1k with all
-  three bodyguards up; Yama 55.5k to 56.7k. Xarth is 83.5k, over the 69k: the Exchange's ruins
-  are 67.7k on their own, before anything of his (his fires, the dead and him are 15.8k).
+  three bodyguards up; Yama 55.5k to 56.7k. Xarth is 86k to 94k, over the 69k: the Exchange's
+  ruins are about the budget on their own, before anything of his. On the pad (section 10) he's
+  no dearer than he was on the inner ring.
 
 ## 9. Open for Dynny
 
@@ -160,7 +163,8 @@ throws the hero out to the palace's court rather than ending the run, and his de
 - **Numbers**: hitpoints, damage and how long to farm are tuned on the bot (section 10), to tune
   again by playtest.
 - **The Exchange on a phone**: its ruins alone are about the whole budget, so Xarth's fight is
-  over it. Slimming them (the burnt booths, the dressing in the ring) is work of its own.
+  over it. The pad's walls and booths are gone now, but its floor is locs (about 50 triangles a
+  tile, a thousand tiles), and slimming that is work of its own.
 
 ## 10. What the bot found
 
@@ -250,3 +254,38 @@ armour. Taking brew and ward early, the order the bot has now, wins 11 of the 15
 random draws' 10 and damage first's 10. A player can build for the fight in front of them,
 which no fixed order does. The bot that dies at 1:22 met imps and fires with only the sword: no
 crossbow had been offered by then.
+
+### The whole pad
+
+Xarth's fight moved from the Exchange's inner ring to the whole raised pad: every wall, booth and
+the upper storey on it gone, down to the deck's floor, and the seal round its rim. A bigger floor
+needed the rest to grow with it:
+
+- **Pillars**: four round him were too far apart for a hero across a pad 34 tiles wide, so eight
+  stand in a ring where the inner ring's walls were.
+- **The dead**: they rise fourteen tiles out, by the rim, where they rose nine out on the ring, so
+  they walk longer and give Shock wave a longer line. Six of them, healing 4% each, where four
+  healed 5%: at most 24% back, against 20%, for a walk half as long again.
+- **The seal**: fire on every one of the rim's tiles cost 18.8k triangles in a phone's view. Its
+  `spacing` draws one every other tile, at twice the size, for 11k; every tile's still sealed.
+
+The Justiciar, 3 seeds each, as above, on the code before and after. The pad's walls change where
+the hordes go too, so the levels at 12 minutes aren't quite the same (27–28 before, 28 after):
+
+| Xarth, after          | The inner ring | The whole pad |
+| --------------------- | -------------- | ------------- |
+| 8 minutes             | 1 (21%, 31%)   | 1 (18%, 19%)  |
+| 12 minutes            | 3 (24–26 s)    | 2 (9%)        |
+| 12 minutes, empowered | 0 (2–38%)      | 2 (12%)       |
+
+Wins out of nine went from four to five, which is the bot's noise: the fight is about as hard as
+it was. The wins take a few seconds longer, with more floor to keep away on. On a phone
+(844 × 390, distance 18, measured the same way on both):
+
+| Where                  | The inner ring | The whole pad |
+| ---------------------- | -------------- | ------------- |
+| As he wakes            | 92.6k          | 86.3k         |
+| On the pad's south rim | 92.0k          | 93.5k         |
+| Phase 2 at its busiest | 96.9k          | 88.5k         |
+
+Both are over the 69k as before. What's left is the Exchange's ruins and its floor (section 9).

@@ -6,7 +6,13 @@ import {
 } from "../../../rs/config/loctype/LocOverrides";
 import { Ground } from "../Ground";
 import { assertReachable, sealFrom } from "../collision";
-import { MAP_SQUARE_SIZE, type PlacedLoc, TILE_BLOCKED, type TileGrid } from "../format";
+import {
+    MAP_SQUARE_SIZE,
+    type PlacedLoc,
+    TILE_BLOCKED,
+    TILE_BRIDGE,
+    type TileGrid,
+} from "../format";
 import type { GeneratedMap } from "../generator";
 import { createNoise } from "../noise";
 import { cutPrefab } from "../prefab";
@@ -101,38 +107,42 @@ export const YAMA_SCALE = 0.6;
 const YAMA_RISE = { x: YAMA.x + 2, y: YAMA.y - 4 };
 
 // Yama's generals (content/xarth.ts, content/kril.ts), each asleep in a ruin of its own (real
-// tiles). Xarth in the middle of the Grand Exchange's inner ring, inside what's left of its
-// octagonal wall: twenty tiles across with its corners cut six, its counter gone. Four of the
-// Fractured Archive's pillars stand round him, and the party's thrown out to the south.
-export const EXCHANGE_RING_REAL = { x0: 3155, y0: 3480, x1: 3174, y1: 3499 };
-export const EXCHANGE_RING_ROWS = octagonRows(20, 6);
-const XARTH_REAL = { x: 3165, y: 3490 };
-const EXCHANGE_PILLARS_REAL = [
-    { x: 3159, y: 3484 },
-    { x: 3169, y: 3484 },
-    { x: 3159, y: 3494 },
-    { x: 3169, y: 3494 },
+// tiles). Xarth in the middle of the Grand Exchange's pad, where its counter stood, and the whole
+// pad his: the raised deck the Exchange stands on (a bridge's level in the cache), thirty-four
+// tiles across. Everything that stood on it is gone (clearExchange): its inner ring's walls, its
+// booths and the storey over them. Eight of the Fractured Archive's pillars stand where the ring's
+// walls stood, and the party's thrown out south of the pad, by the gap in the city wall.
+export const EXCHANGE_PAD_REAL = { x0: 3148, y0: 3473, x1: 3181, y1: 3506 };
+// The pad's rows, the north row first: how many tiles each is cut in from either side (the
+// deck's tiles in the cache, which buildVarrockDetail holds it to)
+const EXCHANGE_PAD_CUTS = [
+    11, 9, 7, 5, 4, 3, 3, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 7,
+    9, 11,
 ];
-const EXCHANGE_RETREAT_REAL = { x: 3165, y: 3474.5 };
-// The counter in the ring's middle, a blocked deck in the cache, which goes
-const EXCHANGE_COUNTER_REAL = { x0: 3163, y0: 3488, x1: 3166, y1: 3491 };
+export const EXCHANGE_PAD_ROWS = EXCHANGE_PAD_CUTS.map((cut) => {
+    const across = EXCHANGE_PAD_REAL.x1 - EXCHANGE_PAD_REAL.x0 + 1;
+    return ".".repeat(cut) + "#".repeat(across - cut * 2) + ".".repeat(cut);
+});
+const XARTH_REAL = { x: 3165, y: 3490 };
+// South-west tiles, 2 by 2: a ring ten tiles out, each on what was a run of the ring's wall, so
+// a pillar's shadow from him is a short run from anywhere on the pad and reaches its rim
+const EXCHANGE_PILLARS_REAL = [
+    { x: 3160, y: 3480 },
+    { x: 3168, y: 3480 },
+    { x: 3173, y: 3485 },
+    { x: 3173, y: 3493 },
+    { x: 3168, y: 3498 },
+    { x: 3160, y: 3498 },
+    { x: 3155, y: 3493 },
+    { x: 3155, y: 3485 },
+];
+const EXCHANGE_RETREAT_REAL = { x: 3165, y: 3470.5 };
 // K'ril Tsutsaroth before the altar of the church in the north-east of the city, its nave his:
 // eight tiles across from its south door to its altar, eighteen long. Thrown out, the party's
 // outside its door.
 export const CHURCH_NAVE_REAL = { x0: 3252, y0: 3471, x1: 3259, y1: 3488 };
 const KRIL_REAL = { x: 3256, y: 3483 };
 const CHURCH_RETREAT_REAL = { x: 3256, y: 3466.5 };
-
-// A square size tiles across with its corners cut corner tiles, as rows ("#" inside, the north
-// row first)
-function octagonRows(size: number, corner: number): string[] {
-    const rows: string[] = [];
-    for (let r = 0; r < size; r++) {
-        const cut = Math.max(0, corner - r, r - (size - 1 - corner));
-        rows.push(".".repeat(cut) + "#".repeat(size - cut * 2) + ".".repeat(cut));
-    }
-    return rows;
-}
 const YAMA_START = { x: YAMA_RISE.x, y: YAMA_RISE.y - 9 };
 
 // What the conversion leaves standing, by name: the square's fountain, the churches' altars and
@@ -400,10 +410,9 @@ const POINTS: MapPoint[] = [
     { name: "outside the church", ...toGrid(CHURCH_RETREAT_REAL.x, CHURCH_RETREAT_REAL.y) },
 ];
 
-const DECKS_BLOCKED = [
-    { ...toGrid(3161, 3479), x1: 3161 - REAL_X, y1: 3479 - REAL_Y },
-    { ...toGrid(3285, 3468), x1: 3285 - REAL_X, y1: 3469 - REAL_Y },
-].map(({ x, y, x1, y1 }) => ({ x0: x, y0: y, x1, y1 }));
+const DECKS_BLOCKED = [{ ...toGrid(3285, 3468), x1: 3285 - REAL_X, y1: 3469 - REAL_Y }].map(
+    ({ x, y, x1, y1 }) => ({ x0: x, y0: y, x1, y1 }),
+);
 
 const ARENA = {
     x0: MARGIN * MAP_SQUARE_SIZE,
@@ -444,7 +453,6 @@ function isPalaceInside(loc: PlacedLoc): boolean {
 // The palace before the conversion: everything on its floor goes (its rooms' walls, furniture
 // and floor decoration), the floor's laid by the game. Its outer walls stay for the ruin rules.
 function clearPalace(grid: TileGrid): void {
-    clearCounter(grid);
     grid.locs = grid.locs.filter((loc) => {
         if (loc.level !== 0) {
             return true;
@@ -456,22 +464,43 @@ function clearPalace(grid: TileGrid): void {
     });
 }
 
-// The Grand Exchange's counter, where Xarth stands: open, with nothing on it. It's a deck (a
-// bridge's level over the ground), so it's unblocked on both.
-function clearCounter(grid: TileGrid): void {
-    const { x0, y0, x1, y1 } = EXCHANGE_COUNTER_REAL;
+// Whether a grid tile is on the Grand Exchange's pad (EXCHANGE_PAD_ROWS), where Xarth's fought
+function isPad(x: number, y: number): boolean {
+    const { x0, y0, x1, y1 } = EXCHANGE_PAD_REAL;
+    const [rx, ry] = [x + REAL_X, y + REAL_Y];
+    if (rx < x0 || rx > x1 || ry < y0 || ry > y1) {
+        return false;
+    }
+    return EXCHANGE_PAD_ROWS[y1 - ry][rx - x0] === "#";
+}
+
+// The Grand Exchange's pad, Xarth's arena: open, nothing on it but its floor, before the ruin
+// rules see it. It's a deck (a bridge's level over the ground): what stood on it is on the deck's
+// level and over it (its inner ring's walls and pillars, the booths round its counter, the
+// storey over them), and all of that goes; its paving is the ground level's locs under the deck,
+// which stay. Nothing's blocked on either level. Throws unless EXCHANGE_PAD_ROWS are the deck's
+// tiles.
+function clearExchange(grid: TileGrid, locs: (id: number) => LocInfo): void {
+    const { x0, y0, x1, y1 } = EXCHANGE_PAD_REAL;
     for (let y = y0 - REAL_Y; y <= y1 - REAL_Y; y++) {
         for (let x = x0 - REAL_X; x <= x1 - REAL_X; x++) {
-            grid.levels[0].flags[x + y * SIZE] &= ~TILE_BLOCKED;
-            grid.levels[1].flags[x + y * SIZE] &= ~TILE_BLOCKED;
+            const i = x + y * SIZE;
+            const deck = (grid.levels[1].flags[i] & TILE_BRIDGE) !== 0;
+            if (deck !== isPad(x, y)) {
+                throw new Error(
+                    `The Grand Exchange's pad isn't its deck at ${x + REAL_X}, ${y + REAL_Y}`,
+                );
+            }
+            if (deck) {
+                grid.levels[0].flags[i] &= ~TILE_BLOCKED;
+                grid.levels[1].flags[i] &= ~TILE_BLOCKED;
+            }
         }
     }
     grid.locs = grid.locs.filter(
         (loc) =>
-            loc.x < x0 - REAL_X ||
-            loc.x > x1 - REAL_X ||
-            loc.y < y0 - REAL_Y ||
-            loc.y > y1 - REAL_Y,
+            !isPad(loc.x, loc.y) ||
+            (loc.level === 0 && !WALL_TYPES.has(loc.type) && locs(loc.id).clipType === 0),
     );
 }
 
@@ -494,12 +523,6 @@ function clearNave(grid: TileGrid): void {
     grid.locs = grid.locs.filter(
         (loc) => loc.level !== 0 || loc.type !== LOC_NORMAL || !isNave(loc.x, loc.y),
     );
-}
-
-// Whether a grid tile is on the Grand Exchange's counter, where Xarth rises
-function isCounter(x: number, y: number): boolean {
-    const { x0, y0, x1, y1 } = EXCHANGE_COUNTER_REAL;
-    return x >= x0 - REAL_X && x <= x1 - REAL_X && y >= y0 - REAL_Y && y <= y1 - REAL_Y;
 }
 
 // Tiles taken by a loc that blocks, or by a wall, for the dressing to keep off
@@ -584,15 +607,10 @@ function dress(grid: TileGrid, locs: (id: number) => LocInfo, report: VarrockDre
     for (let y = ARENA.y0; y <= ARENA.y1; y++) {
         for (let x = ARENA.x0; x <= ARENA.x1; x++) {
             // The gate's clear for the start, the palace is dressed on its own, and the nave
-            // and the counter are kept clear for K'ril and Xarth
+            // and the Exchange's pad are kept clear for K'ril and Xarth (his fire on the pad is
+            // his own, which Shock wave puts out)
             const nearStart = Math.abs(x - START.x) < 5 && Math.abs(y - START.y) < 5;
-            if (
-                !open(x, y) ||
-                isPalaceFloor(x, y) ||
-                isNave(x, y) ||
-                isCounter(x, y) ||
-                nearStart
-            ) {
+            if (!open(x, y) || isPalaceFloor(x, y) || isNave(x, y) || isPad(x, y) || nearStart) {
                 continue;
             }
             const inside = (level0.flags[x + y * SIZE] & TILE_INSIDE) !== 0;
@@ -832,6 +850,7 @@ export function buildVarrockDetail(context: BuildContext): GeneratedMap & {
     const city = cutPrefab(context.maps, REAL_X, REAL_Y, SIZE, SIZE);
     clearPalace(city);
     clearNave(city);
+    clearExchange(city, context.locs);
     const fabric = takeFabric(city, context.locs);
     const ruins = ruinGrid(city, context.locs, {
         ...RULES,
@@ -869,9 +888,8 @@ export function buildVarrockDetail(context: BuildContext): GeneratedMap & {
         waterfalls: [],
         // All of it is the real world's
         designed: [{ x0: 0, y0: 0, x1: SIZE - 1, y1: SIZE - 1 }],
-        // Decks blocked in OSRS too, which check-maps.ts would hold to being walked like a
-        // bridge's: a tile of the Grand Exchange's and of the bridge east of the palace (its
-        // counter's gone, for Xarth)
+        // A deck blocked in OSRS too, which check-maps.ts would hold to being walked like a
+        // bridge's: the bridge's east of the palace (the Grand Exchange's are open, for Xarth)
         squares: DECKS_BLOCKED,
         dressing,
     };
@@ -935,9 +953,9 @@ export const BATTLE_FOR_VARROCK = {
         x: MAP_X * MAP_SQUARE_SIZE + PALACE_COURT.x + 0.5,
         y: MAP_Y * MAP_SQUARE_SIZE + PALACE_COURT.y + 0.5,
     },
-    // Xarth's ring: its box and rows, where he stands, his pillars' south-west tiles, and outside
+    // Xarth's pad: its box and rows, where he stands, his pillars' south-west tiles, and outside
     xarth: {
-        area: { ...toWorldBox(EXCHANGE_RING_REAL), rows: EXCHANGE_RING_ROWS },
+        area: { ...toWorldBox(EXCHANGE_PAD_REAL), rows: EXCHANGE_PAD_ROWS },
         at: toWorld(XARTH_REAL),
         start: toWorld({ x: XARTH_REAL.x, y: XARTH_REAL.y - 6.5 }),
         pillars: EXCHANGE_PILLARS_REAL.map(toWorld),

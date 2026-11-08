@@ -2,13 +2,14 @@ import { BATTLE_FOR_VARROCK, FLAMES } from "../scaperune/maps/battleForVarrock";
 import { BossAttackDef, EnemyDef, ImpactDef, PlayerEffectDef } from "./types";
 
 // Xarth, the tormented demon who mastered his flames, the first of Yama's two generals in the
-// Battle for Varrock (MapDef.lairs): asleep in the middle of the Grand Exchange's ruined ring
-// until a player steps into it. He stands where he is and burns: his bolts leave you burning, a
-// stack a bolt, and every so often he gathers his flames and they burst through the whole ring,
-// sparing only what's behind one of the four pillars there, which crumbles for it. Halfway down,
-// the pillars that are left come down and the Exchange burns: fire takes the floor and spreads
-// (Shock wave puts it out along its way), and the dead get up at the ring's edge and walk to him,
-// healing him as they reach him; let two through and the Pyre's the worse for it. His fight's
+// Battle for Varrock (MapDef.lairs): asleep in the middle of the Grand Exchange's pad, where its
+// counter stood, until a player steps onto it. The whole pad's his, its walls gone, ringed with
+// fire once he wakes. He stands where he is and burns: his bolts leave you burning, a stack a
+// bolt, and every so often he gathers his flames and they burst over the whole pad, sparing only
+// what's behind one of the eight pillars round him, which crumbles for it. Halfway down, the
+// pillars that are left come down and the Exchange burns: fire takes the floor and spreads (Shock
+// wave puts it out along its way), and the dead get up out by the pad's rim and walk in to him,
+// healing him as they reach him; let a few through and the Pyre's the worse for it. His fight's
 // design and its numbers: docs/design/varrock-generals.md.
 
 // His own animations, npc 16684's (classify-npc-seqs.ts): standing and walking, a hand thrown
@@ -113,8 +114,8 @@ const FLAME_LASH: BossAttackDef = {
     impact: { spots: [{ spotAnim: BLOWN_DUST, fit: 2.5 }], shake: 0.3 },
 };
 
-// He gathers his flames and they burst through the whole ring: only what's behind a pillar's
-// spared, and the pillar crumbles for it
+// He gathers his flames and they burst over the whole pad: only what's behind a pillar's spared,
+// and the pillar crumbles for it
 const CONFLAGRATION: BossAttackDef = {
     name: "Conflagration",
     kind: "swing",
@@ -162,8 +163,11 @@ const FLOOR_ABLAZE: BossAttackDef = {
     },
 };
 
-// The dead get up at the ring's edge and walk to him, each that gets there healing him; when the
-// last's dead or there, what got there goes up as the Pyre, over the whole ring
+// The dead get up all round him, out by the pad's rim, and walk in to him, each that gets there
+// healing him; when the last's dead or there, what got there goes up as the Pyre, over the whole
+// pad. Six from fourteen tiles out: on the old inner ring it was four from nine, so they're
+// longer on their way and there's more of them, a run round the pad to cut them all down, and
+// all six through is no worse than four was.
 const REANIMATE: BossAttackDef = {
     name: "Reanimate",
     kind: "summon",
@@ -180,8 +184,8 @@ const REANIMATE: BossAttackDef = {
     shout: "Rise, and feed the fire.",
     summon: {
         enemyId: "xarth_corpse",
-        count: 4,
-        walkTo: { distance: 9, perAbsorbed: 9, heals: 0.05 },
+        count: 6,
+        walkTo: { distance: 14, perAbsorbed: 6, heals: 0.04 },
     },
     // As one gets to him
     impact: { spots: [{ spotAnim: BOLT_BURST, fit: 3 }] },

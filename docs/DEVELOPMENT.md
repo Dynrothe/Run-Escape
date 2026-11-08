@@ -1007,12 +1007,14 @@ adventurer can have:
   (`Sim.lair`): Yama on his throne (`content/yama.ts`, `docs/design/yama.md`) and his generals,
   Xarth and K'ril Tsutsaroth (`content/xarth.ts`, `content/kril.ts`,
   `docs/design/varrock-generals.md`). `Sim.stepLair` wakes one when a hero's in it: the map's floor
-  (`MapDef.floor`), or its own `area` (a box, with `rows` for a shape: the Exchange's octagon).
+  (`MapDef.floor`), or its own `area` (a box, with `rows` for a shape: the Exchange's pad).
   `wakeLair` drops every tile beside a way out (`findLairExits`, `ArenaGrid.dropTile`, kept in
-  `Lair.sealed` and drawn as fire by `GameView.drawLairSeal`), and the boss's intro plays, rising
-  at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). What's about runs straight
-  away from `at` (`sendOff` with `from`, to `SCATTER_REACH` tiles off), not to the map's nearest
-  edge as off a lair, which on a city that goes on round its arena sent everything north. Beaten, the seal lifts
+  `Lair.sealed` and drawn as fire by `GameView.drawLairSeal`; a seal's `spacing` draws a flame only
+  every so many tiles, for a long rim on a phone, while every tile stays sealed), and the boss's
+  intro plays, rising at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). What's
+  about runs straight away from `at` (`sendOff` with `from`, to `SCATTER_REACH` tiles off), not
+  to the map's nearest edge as off a lair, which on a city that goes on round its arena sent
+  everything north. Beaten, the seal lifts
   (`liftSeal`) with the `victory` notice and the `shout`, its pools go out (a pool that
   `spreads` would burn on for good), and any lair `empowered` by it is from
   then on (`Lair.empowered`: its hitpoints, damage and tempo times its own, and its

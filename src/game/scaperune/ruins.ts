@@ -473,7 +473,6 @@ function ruinLoc(
         // A bridge's deck keeps its walls and rails, burnt; what stood on it in the way is gone,
         // so it's still a way across
         if (loc.level === 1 && (grid.levels[1].flags[i] & TILE_BRIDGE) !== 0) {
-            // (the Grand Exchange's pillars and booths among it)
             const blocks = locs(loc.id).clipType !== 0 && loc.type >= 9;
             return isRoof(loc.type) || blocks || loc.type === LOC_FLOOR_DECORATION
                 ? removed()
