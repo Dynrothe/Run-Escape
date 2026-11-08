@@ -1,7 +1,12 @@
 import { describe, expect, test } from "vitest";
 
 import { TOMBS_OF_AMASCUT_MAP } from "../scaperune/maps/tombsOfAmascut";
-import { solveScabarasAddition, solveScabarasLights } from "./scabarasHelper";
+import {
+    SCABARAS_ADDITION_WAYS,
+    searchScabarasAddition,
+    solveScabarasAddition,
+    solveScabarasLights,
+} from "./scabarasHelper";
 import { SCABARAS } from "./tombs";
 
 const room = TOMBS_OF_AMASCUT_MAP.tombs!.paths.find((p) => p.room?.scabaras)!.room!.scabaras!;
@@ -80,5 +85,29 @@ describe("the Scabaras puzzle helper", () => {
         const on = solveScabarasAddition(plates, values, target, stepped)!;
         expect(on).toContain(other);
         expect(on.reduce((sum, i) => sum + values[i], 0)).toBe(target);
+    });
+
+    test("keeps the board's own way for each number as the search finds it", () => {
+        const values = SCABARAS.additionBoard.map((symbol) => symbol + 1);
+        for (let target = SCABARAS.targetLeast; target <= SCABARAS.targetMost; target++) {
+            expect(SCABARAS_ADDITION_WAYS[target], `${target}`).toEqual(
+                searchScabarasAddition(room.addition, values, target, [], Infinity),
+            );
+        }
+    });
+
+    test("keeps a search off the board's way short enough for a frame", () => {
+        const values = SCABARAS.additionBoard.map((symbol) => symbol + 1);
+        const own = SCABARAS_ADDITION_WAYS[45];
+        // A symbol off the way, at the edge
+        const off = room.addition.findIndex((_, i) => !own.includes(i) && i % 5 === 4);
+        const stepped = room.addition.map((_, i) => i === off);
+        const started = performance.now();
+        const way = solveScabarasAddition(room.addition, values, 45, stepped);
+        expect(performance.now() - started).toBeLessThan(50);
+        if (way) {
+            expect(way).toContain(off);
+            expect(way.reduce((sum, i) => sum + values[i], 0)).toBe(45);
+        }
     });
 });

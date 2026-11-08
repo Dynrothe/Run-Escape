@@ -294,22 +294,22 @@ export function getRunPoseFrame(
     return runPose.getFrame(moveTicks);
 }
 
-// Draws a run: everything in the sim as 3D actors, and hitsplats, health bars
-// and weapon swooshes on the 2D overlay.
 // Matching's nine symbols as the puzzle helper names them (GameView.drawScabarasHelper): each its
 // own colour, all light enough to read with their dark edge on the room's floor
 const MATCHING_COLORS = [
     "#ffffff",
-    "#ff6b6b",
+    "#ff5c5c",
     "#ffd84a",
-    "#6fb8ff",
-    "#e0e0e0",
-    "#ff9de2",
-    "#c58bff",
+    "#5aa9ff",
+    "#4fe0d0",
+    "#ff8fd6",
+    "#a98bff",
     "#7dff8a",
     "#ffa94d",
 ];
 
+// Draws a run: everything in the sim as 3D actors, and hitsplats, health bars
+// and weapon swooshes on the 2D overlay.
 export class GameView {
     localPlayerPose?: PlayerPose;
     private hitsplats: Hitsplat[] = [];
@@ -2024,6 +2024,7 @@ export class GameView {
             this.drawTeammateArrows(overlay, sim, alpha, now, scale);
         }
         this.drawShouts(overlay, sim, alpha, now, scale);
+        this.fight.viewPose = getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose);
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
         if (this.cinematic) {

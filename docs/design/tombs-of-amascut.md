@@ -471,6 +471,15 @@ animations from a lister of those whose model or animation is in the raid's rang
       everyone every 4.5 s (down to 1.8 with levels), shown by 302's falling roof, and every rock
       breaks into shards, bullets out all round. Scarabs (11697, ranged) and Kephri's swarms
       stream in from the passages.
+    - The HUD lists the four (`Sim.scabarasInfo.puzzles`): each done, open, or waiting (Addition on
+      Sequence and Lights out, Matching on the other three), with where it is and what it wants.
+    - **The puzzle helper** (`DisplaySettings.puzzleHelper`, `GameView.drawScabarasHelper`), as
+      OSRS's ToA plugin: Sequence's plates numbered as they light, the next outlined; the fewest
+      Lights out plates to step on (`solveScabarasLights`); Addition's way to the tablet's number,
+      the board's own for each number (`SCABARAS_ADDITION_WAYS`) or a capped search on from what's
+      been stepped on (`searchScabarasAddition`); Matching's tiles named in their symbol's colour.
+      On at Entry, and at any raid level once the room's been beaten (`SaveData.scabarasBeaten`,
+      from `Sim.scabarasBeaten`, a loss included). Client only.
     - Not in yet: the obelisk puzzle (OSRS's random one, which the wiki has solos skip).
     - Matching's room, west, is walled off in OSRS by barriers (45135, 45375 to 45379) that open
       once the other three are solved. Cut with the room they never opened, so nobody could finish
