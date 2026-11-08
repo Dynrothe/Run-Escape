@@ -74,8 +74,12 @@
         right: auto;
         transform: translateX(-50%);
         margin-top: 1px;
+        padding: 0 4px;
         white-space: nowrap;
         pointer-events: none;
+        /* Straight on the floor now, not the button's face: a dark backing to read on any */
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
     }
 
     /* A run with items (the Tombs): above their two rows, in their column */

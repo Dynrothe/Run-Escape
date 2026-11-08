@@ -14733,8 +14733,7 @@ export class Sim {
                 enemy.x + (dx / length) * enemy.radius,
                 enemy.y + (dy / length) * enemy.radius,
             );
-            // (the Tombs have no pillars: there it's one of Ba-Ba's rocks)
-            this.dropGuard(enemy, guard.stun, true, this.map.tombs ? "Rubble" : "Pillar");
+            this.dropGuard(enemy, guard.stun, true, "Pillar");
         }
     }
 

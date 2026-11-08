@@ -12,7 +12,7 @@ the version in the corner).
 - In the Tombs of Amascut, beating a path's boss only brought back teammates who were down; now
   the whole party's back on full hitpoints for the next path. Fixed by Okaeri.
 - Ba-Ba was stunned every time her lunge ran into one of her boulders, so standing behind one made
-  her fight easy. Only her Rampage is stopped by a boulder now. Fixed by Okaeri.
+  her fight easy. Only her Rampage is stunned by one now. Fixed by Okaeri.
 - The Crondis room's poison reached you under a waterfall. It's safe there now, as in OSRS. Fixed
   by Okaeri.
 - The Crondis room's spear statues were hard to time. The tiles a spear's about to reach now light

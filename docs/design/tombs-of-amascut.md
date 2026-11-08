@@ -510,9 +510,12 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **Water**: stand at a running waterfall (out of the map, drawn running or dry by the client) to
       fill your container, 100, and it's dry for 10 s after. Near the palm you pour it.
     - **Spears**: each corridor's crocodile statues thrust their spears out across a pair of rows at
-      a time, down the corridor, the side turning about, then rest; a tell (the spear glinting out
-      a tile) first. **Poison** comes down each corridor from its waterfall's end every 9 s (less
-      with path levels): pale first, the dark cloud a second behind it. It's the Spitting Scarab's
+      a time, down the corridor, the side turning about, then rest; a tell first: the spear
+      glinting out a tile, and the tiles it'll reach marked on the floor (`GameView
+.drawCrondisSpearTells`, yellow, as the floor's red; players found the glint alone too hard
+      to time). **Poison** comes down each corridor from its waterfall's end every 9 s (less
+      with path levels): pale first, the dark cloud a second behind it. Under a waterfall (where
+      you fill) it doesn't reach you, running or dry, as in OSRS. It's the Spitting Scarab's
       green splash (2155), faint for the pale: the room's own spot animations (2129 to 2131) draw
       nothing, and its poison floor tiles' activation can't be baked (a loc bakes with its own
       animation only).
@@ -790,18 +793,19 @@ rubble rock stops.
   (`echoes`), her own lunge (9745) on their skeleton; the pocket between is the way out.
 - **Rampage** (the last phase's opener, then every 12 seconds): a surge. She goes to the room's
   edge in line with you, beats her chest (9751) and charges across on her walk, 6 damage, three
-  lanes in a row; across without hitting anyone she's open 2 seconds. **A charge or a lunge into one
-  of her boulders' rocks stops her dead, stunned 2.5 seconds** (Zachariah's stars over her head,
+  lanes in a row; across without hitting anyone she's open 2 seconds. **A charge into one of her
+  boulders' rocks stops her dead, stunned 2.5 seconds** (Zachariah's stars over her head,
   `BossGuardDef.stunSpotAnim` 80), not again for 8 seconds (`stunGrace`; a rock then only opens
-  her). Boulderdash makes it 1.4 times as fast.
-- **Engine**: a surge or a lunge's dash into a `leavesCover` rock is stuck, as a lunge into a pillar
-  is (`Sim.inCoverRock`, in `stepSurge` and `dashEnd`; what can't be stunned only stops short). The
+  her). Boulderdash makes it 1.4 times as fast. A lunge only stops short of a rock, not stunned
+  (players found standing behind one stunned her every 8 seconds, which made the fight easy).
+- **Engine**: a surge into a `leavesCover` rock is stuck, as a lunge into a pillar is
+  (`Sim.inCoverRock`, in `stepSurge`); a lunge's dash only stops short of one (`dashEnd`). The
   Tombs have no boss square, so a surge's lane in them runs as far as the floor does along the
   player's row or column (`Sim.tombsLaneBox`), never back over the fight's line.
 - **The bot**: off her strips sideways and to the pocket between hers and her brawlers' (stage 1's
   readers); out of a rampage's lane, or behind the rock in it when that's nearer (`rampageCover`),
-  and between her and a rock whenever there is one (as it was for her avalanche), so her lunges and
-  rampages run into it.
+  and between her and a rock whenever there is one (as it was for her avalanche), so her rampages
+  run into it (her lunges now only stop short there).
 
 Ids: nothing new from the cache. The stun's stars (80) are Zachariah's; the brawlers are the
 Apmeken room's Baboon Brawler (11709), which plays her 9745 (skeleton 2063, `find-npc-seqs.ts`).
@@ -1056,7 +1060,7 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   gone over the fall with time to be ahead of the next, and on past a spear by the corridor's other
   half.
 - **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover (between her and it, so she
-  lunges and rampages into it, and behind it when her rampage's lane runs into it); Akkha's spared quadrant (by
+  rampages into it, and behind it when her rampage's lane runs into it); Akkha's spared quadrant (by
   the line it shares with the next, a hop across as each burst lands: Feeling Special's bursts
   come quicker than a walk between corners), round his body (the flow field only knows the walls)
   and his dead shadows' quadrants; Kephri near enough; Zebak's island near him (melee on the row

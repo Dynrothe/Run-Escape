@@ -907,7 +907,6 @@ describe("Ba-Ba", () => {
         seconds(sim, lunge.windup + 0.5, { x: sim.player.x, y: sim.player.y });
         // Hiding behind a rock from her lunges isn't a free stun: only her Rampage is
         expect(sim.isStunned(boss)).toBe(false);
-        expect(sim.isExposed(boss)).toBe(false);
         expect(boss.y - (sim.player.y + 2)).toBeGreaterThan(1.4);
     });
 

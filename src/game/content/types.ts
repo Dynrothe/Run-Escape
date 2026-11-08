@@ -1015,8 +1015,8 @@ export type BossAttackDef = {
     // Swings: a straight strip from the boss, width tiles across and length long,
     // the way it faced as it began, rather than round it (a lunge)
     // dash: the boss goes that far along it as it lands, stopping short at anything in its
-    // way, and stunned if that's one of the map's pillars or a rock left by leavesCover
-    // (BossDef.guard; a surge's stopped and stunned by such a rock too)
+    // way, and stunned if that's one of the map's pillars (BossDef.guard); a rock left by
+    // leavesCover only stops it short (a surge's stopped and stunned by such a rock)
     // track: for this many seconds of its windup the strip turns after the nearest player (no
     // quicker than LINE_TRACK_TURN), then it's locked: a step taken too soon is followed
     line?: { width: number; length: number; dash?: number; track?: number };
