@@ -5,15 +5,6 @@ the version in the corner).
 
 ## Unreleased
 
-### Changed
-
-- The Tombs of Amascut, by Okaeri: in the Apmeken room, the arrow to a pillar or vent that needs
-  fixing is on the floor beside you, not at the edge of the screen.
-- Bosses' instructions, by Okaeri: each attack says what to do the first time it's used in a run,
-  one at a time and long enough to read, instead of every time and all at once.
-- The Tombs of Amascut's Scabaras room, by Okaeri: the HUD lists its four puzzles, where each is,
-  and which are done, open, or waiting on the others.
-
 ### Added
 
 - A puzzle helper for the Tombs of Amascut's Scabaras room, by Okaeri, as the ToA plugin has it:
@@ -21,12 +12,23 @@ the version in the corner).
   number, and each Matching symbol named in its own colour. It's on at Entry; beat the room once to
   have it at any raid level. It can be turned off in the settings.
 
+### Changed
+
+- The Tombs of Amascut, by Okaeri: in the Apmeken room, the arrow to a pillar or vent that needs
+  fixing is on the floor beside you, not at the edge of the screen.
+- The Tombs of Amascut's Scabaras room, by Okaeri: the HUD lists its four puzzles, where each is,
+  and which are done, open, or waiting on the others.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed
 
 - Beneath Cursed Sands, by Okaeri: the quest's bosses hit twice as hard, and armour doesn't stop
   their hits.
+=======
+  number, and each Matching symbol named in its own colour. Beat the room once to unlock it; it can be turned
+  off in the settings.
+>>>>>>> parent of 772212b (Changelog: the bosses' instructions)
 
 ## 0.29.0 - 2026-11-08
 
