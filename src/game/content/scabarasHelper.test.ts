@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { TOMBS_OF_AMASCUT_MAP } from "../scaperune/maps/tombsOfAmascut";
 import {
+    SCABARAS_ADDITION_FROM,
     SCABARAS_ADDITION_WAYS,
     searchScabarasAddition,
     solveScabarasAddition,
@@ -96,18 +97,34 @@ describe("the Scabaras puzzle helper", () => {
         }
     });
 
-    test("keeps a search off the board's way short enough for a frame", () => {
+    test("has a way on from every first step off the board's way, onto an edge symbol", () => {
         const values = SCABARAS.additionBoard.map((symbol) => symbol + 1);
-        const own = SCABARAS_ADDITION_WAYS[45];
-        // A symbol off the way, at the edge
-        const off = room.addition.findIndex((_, i) => !own.includes(i) && i % 5 === 4);
-        const stepped = room.addition.map((_, i) => i === off);
-        const started = performance.now();
-        const way = solveScabarasAddition(room.addition, values, 45, stepped);
-        expect(performance.now() - started).toBeLessThan(50);
-        if (way) {
-            expect(way).toContain(off);
-            expect(way.reduce((sum, i) => sum + values[i], 0)).toBe(45);
+        const plates = room.addition;
+        const near = (a: number, b: number) =>
+            a !== b &&
+            Math.abs(plates[a].x - plates[b].x) <= 1.5 &&
+            Math.abs(plates[a].y - plates[b].y) <= 1.5;
+        const edges = plates.flatMap((_, i) =>
+            plates.filter((_, j) => near(i, j)).length < 8 ? [i] : [],
+        );
+        for (const edge of edges) {
+            for (let target = SCABARAS.targetLeast; target <= SCABARAS.targetMost; target++) {
+                if (SCABARAS_ADDITION_WAYS[target].includes(edge)) {
+                    continue;
+                }
+                const stepped = plates.map((_, i) => i === edge);
+                const way = solveScabarasAddition(plates, values, target, stepped);
+                expect(way, `${edge} for ${target}`).toBeDefined();
+                expect(way).toContain(edge);
+                expect(way!.reduce((sum, i) => sum + values[i], 0)).toBe(target);
+                expect(SCABARAS_ADDITION_FROM[edge][target]).toEqual(way);
+            }
         }
+    });
+
+    test("gives up on a search past its cap rather than hold a frame", () => {
+        const values = SCABARAS.additionBoard.map((symbol) => symbol + 1);
+        // Two off its way, far apart on the board's edge: the capped search, which may find none
+        expect(searchScabarasAddition(room.addition, values, 45, [4, 20], 1)).toBeUndefined();
     });
 });
