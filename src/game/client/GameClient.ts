@@ -457,6 +457,7 @@ export function getPhaseBarFraction(boss: Enemy, index: number): number {
 const INSTRUCTION_MS = 4500;
 const INSTRUCTION_GAP_MS = 3000;
 const INSTRUCTION_STALE_MS = 12000;
+const INSTRUCTION_FRAME_MS = 250;
 
 export class GameClient implements GameFrameHandler {
     static async create(
@@ -599,7 +600,8 @@ export class GameClient implements GameFrameHandler {
     // it's shown, so none is lost behind a pause.
     private showInstruction(now: number): void {
         const playing = this.isPlaying();
-        const since = Math.max(0, now - this.instructionPumpedAt);
+        // At most a moment's worth a frame: back from a hidden tab, the time away isn't waiting
+        const since = Math.min(INSTRUCTION_FRAME_MS, Math.max(0, now - this.instructionPumpedAt));
         this.instructionPumpedAt = now;
         if (playing) {
             for (const waiting of this.instructions) {
