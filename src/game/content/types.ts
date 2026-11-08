@@ -1672,6 +1672,11 @@ export type RunEventDef =
     // map, when they're not its own.
     | { at: number; kind: "boss" | "finalBoss"; enemyId: string; hp?: number };
 
+// Levels past from needing more experience than they would anywhere else, more for each, up to
+// times as much from level to on (stretchedXp in core/xp.ts): the first few come as fast as
+// anywhere, as a run's start needs them, and the later ones far slower
+export type LevelXpDef = { times: number; from: number; to: number };
+
 // A place to play: the part of the world a run happens in, what comes at you
 // there, and which map it opens up when it's beaten
 export type MapDef = {
@@ -1777,6 +1782,14 @@ export type MapDef = {
     // passives, and nothing gives an item: no caskets, gear, utility items or power-ups (bones,
     // coins and food still drop). The Battle for Varrock's blessings of Saradomin.
     blessings?: BlessingsDef;
+    // Its levels need more experience than anywhere else: the Battle for Varrock's, where every
+    // level's a blessing and its hordes are thick (LevelXpDef)
+    levelXp?: LevelXpDef;
+    // Scenery that burns whoever walks into it (the Battle for Varrock's fires): its locs by id,
+    // which should block nothing, found where they stand as the map's collision is built
+    // (RegionData.burnTiles). A hero on one of their tiles takes share of their hitpoints at once,
+    // and again every so many seconds while they stay, through armour. Enemies walk through.
+    burns?: { locs: number[]; share: number; every: number };
 };
 
 // A map's blessings (MapDef.blessings): what a level up can grant, and how it looks and sounds as

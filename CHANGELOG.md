@@ -9,11 +9,12 @@ the version in the corner).
 
 - The Battle for Varrock, on the Fun tab: Varrock burnt to ruins, every street and building where it
   stands, broken walls and broken breaches in the city wall, Gypsy Aris's tent ablaze, a crater
-  where the square's fountain was, fires still burning and the dead where they fell, up to Yama on
-  his throne in the palace. Fight Yama's demons in its streets as Justiciar Zachariah, with his
-  lunge, shock wave, ice barrage, lightning and the Owl's gaze on buttons of your own, for as long
-  as you like. There are no items here: each level brings a blessing of Saradomin at random, from
-  his strength to another shock wave either side. Beat both his generals and the palace opens:
+  where the square's fountain was, fires still burning (walk through one and it burns you) and the
+  dead where they fell, up to Yama on his throne in the palace. Fight the hordes of Yama's demons
+  in its streets as Justiciar Zachariah, with his Saradomin sword, and his lunge, shock wave, ice
+  barrage, lightning and the Owl's gaze, his ultimate, on buttons of your own, for as long as you
+  like. There are no items here: each level brings a blessing of Saradomin at random, from his
+  strength to another shock wave either side. Beat both his generals and the palace opens:
   step onto its floor and Yama speaks from his throne, goes from it in embers and rises before it:
   the palace is sealed in fire, the floor rises under you, and only the Owl's gaze stops his
   meteor. Freeze his void flares with Ice barrage and shatter them with Lightning for food. It

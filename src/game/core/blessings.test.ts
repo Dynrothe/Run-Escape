@@ -11,7 +11,7 @@ import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy } from "./entities";
 import { syncHash } from "./lockstep";
 import { makeGrid } from "./world/testGrid";
-import { runXpForLevel } from "./xp";
+import { endlessXpForLevel, runXpForLevel, stretchedXp } from "./xp";
 
 // The Battle for Varrock's blessings of Saradomin (MapDef.blessings, content/blessings.ts): no
 // items, and a blessing at random on each level up, at once. On the map with its hordes taken
@@ -47,9 +47,10 @@ function createSim(seed = 1, party = 1): Sim {
     });
 }
 
-// Up to a level, as experience picked up would bring it
+// Up to a level, as experience picked up would bring it: the map's own table, an endless run's
+// stretched by its levelXp
 function levelTo(sim: Sim, level: number): void {
-    sim.xp = runXpForLevel(level);
+    sim.xp = stretchedXp(endlessXpForLevel(level), level, MAP.levelXp);
     sim.step(0, 0);
 }
 

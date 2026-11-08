@@ -2,6 +2,7 @@ import {
     BREACH_BRICKS,
     BROKEN_CITY_WALL,
     getCharredLoc,
+    getWalkableLoc,
 } from "../../../rs/config/loctype/LocOverrides";
 import { Ground } from "../Ground";
 import { assertReachable, sealFrom } from "../collision";
@@ -19,8 +20,9 @@ import { type RuinReport, ruinGrid, tileHash } from "../ruins";
 // broken down (the Wilderness's ruined walls), roofs, doors and upstairs gone; its trees burnt,
 // its gardens burnt off, its streets and squares gone to soot and its grass to ash. The city wall
 // stands, burnt, breached and its stone piled in the gaps. Where the square's fountain stood
-// there's a crater, still burning at its heart. Over that: fires, burnt skeletons, rubble, and the
-// dead adventurers of Phosani's Sanctuary and the Theatre of Blood (the Theatre's raiders). The
+// there's a crater, still burning at its heart. Over that: fires, which burn whoever walks into
+// them, burnt skeletons, rubble, and the dead adventurers of Phosani's Sanctuary and the Theatre
+// of Blood (the Theatre's raiders), the fires and the dead blocking nothing. The
 // palace's floor is gone, and the game lays its own in its place (MapDef.floor, the floor system's
 // tiles in an ashen skin) from the top of its front steps, with Yama on his throne at its north
 // end. The run starts just outside the south gate.
@@ -137,16 +139,20 @@ const YAMA_START = { x: YAMA_RISE.x, y: YAMA_RISE.y - 9 };
 // the like are what make it Varrock (the market's stalls burnt: burnFabric)
 const LANDMARK = /fountain|statue|anvil|altar|well|bank booth|staircase|ladder|sign/i;
 
-// Fires: the cache's fire on crossed logs (5249, which blocks nothing) and its flames alone
-// (5499); its big fire (25155, 2 by 2); burning timber (Burning driftwood, 2 by 2); burning
-// bones; and a wall of flame (a wall loc) where a wall burnt down. No fire in a ring of stones
-// (4265, 4266): that's a campfire, someone's camp rather than a city burning.
-export const LOW_FIRE = 5249;
-export const BLAZE = 25155;
-const FIRE = [LOW_FIRE, 5499];
-const BURNING_TIMBER = 31722;
-const BURNING_BONES = 3862;
-export const WALL_OF_FLAME = 4765;
+// Fires: the cache's flames on their own (25156, the big fire's, and 32297); its big fire (25155,
+// 2 by 2); burning timber (Burning driftwood, 2 by 2); burning bones; and a wall of flame (a wall
+// loc) where a wall burnt down. Each blocks nothing (32297 and the bones as the cache has them, the
+// rest walkable copies: LocOverrides.ts), and burns whoever walks into it (MapDef.burns). Nothing on crossed logs or in a ring of stones (5249,
+// 5499's flame, 4265, 4266): those are campfires, someone's camp rather than a city burning.
+export const FLAMES = getWalkableLoc(25156);
+export const TALL_FLAMES = 32297;
+export const BLAZE = getWalkableLoc(25155);
+const FIRE = [FLAMES, TALL_FLAMES];
+export const BURNING_TIMBER = getWalkableLoc(31722);
+export const BURNING_BONES = 3862;
+export const WALL_OF_FLAME = getWalkableLoc(4765);
+// Every fire the map places, for what burns and what's lit
+export const FIRES = [FLAMES, TALL_FLAMES, BLAZE, BURNING_TIMBER, BURNING_BONES, WALL_OF_FLAME];
 // Beside Yama's throne
 export const BRAZIER = 28818;
 
@@ -247,15 +253,16 @@ const RULES = {
 
 // The dressing. Fires that burn on (the cache's, animated), burnt skeletons (the cache's
 // skeletons, charred), Phosani's Sanctuary's and the Theatre's dead raiders (a skeleton in
-// armour, the mercenaries' bodies), rubble and burnt rock underfoot.
-const BURNT_SKELETONS = [getCharredLoc(5358), getCharredLoc(5359), getCharredLoc(5360)];
+// armour, the mercenaries' bodies), rubble and burnt rock underfoot. The dead lie on the ground,
+// so they're walked over (walkable copies).
+const BURNT_SKELETONS = [5358, 5359, 5360].map((id) => getWalkableLoc(getCharredLoc(id)));
 const CHARRED_BONES = 659;
 // [id, tiles across, tiles deep]
 const DEAD_ADVENTURERS: [number, number, number][] = [
-    [32735, 2, 1],
-    [32742, 2, 1],
-    [32741, 2, 1],
-    [32754, 1, 1],
+    [getWalkableLoc(32735), 2, 1],
+    [getWalkableLoc(32742), 2, 1],
+    [getWalkableLoc(32741), 2, 1],
+    [getWalkableLoc(32754), 1, 1],
 ];
 const EXHUMED = 32743;
 const RUBBLE = [12812, 12813, 12814, 12815].map(getCharredLoc);
@@ -679,9 +686,9 @@ function dressPalace(grid: TileGrid, report: VarrockDressing): void {
             }
             const roll = tileHash(x, y, 31);
             if (roll < 0.012) {
-                // One that blocks nothing: his fight's on this floor
+                // Flames on their own, small: his fight's on this floor
                 grid.locs.push({
-                    id: LOW_FIRE,
+                    id: FLAMES,
                     type: LOC_NORMAL,
                     rotation: 0,
                     level: 0,
@@ -729,9 +736,9 @@ const ARIS_FIRE: [number, number, number, number, number][] = [
     [BLAZE, 1, 2, 10, 0],
     [BLAZE, 3, 4, 10, 0],
     [BURNING_TIMBER, 3, 0, 10, 1],
-    [LOW_FIRE, 0, 5, 10, 0],
-    [LOW_FIRE, 5, 2, 10, 0],
-    [LOW_FIRE, 1, 0, 10, 0],
+    [FLAMES, 0, 5, 10, 0],
+    [FLAMES, 5, 2, 10, 0],
+    [FLAMES, 1, 0, 10, 0],
     [BURNING_BONES, 0, 3, 10, 2],
     // Its walls going up on two sides
     [WALL_OF_FLAME, 2, 0, 0, 1],
@@ -798,18 +805,14 @@ function burnFabric(grid: TileGrid, taken: Fabric[], report: VarrockDressing): v
         if (stall) {
             // Its counter along its longer side, and a fire on the rest
             put(getCharredLoc(EMPTY_STALL), x, y, LOC_NORMAL, loc.rotation);
-            put(
-                LOW_FIRE,
-                (loc.rotation & 1) === 1 ? x + 1 : x,
-                (loc.rotation & 1) === 1 ? y : y + 1,
-            );
+            put(FLAMES, (loc.rotation & 1) === 1 ? x + 1 : x, (loc.rotation & 1) === 1 ? y : y + 1);
         } else {
             put(wagon ? BURNING_TIMBER : BLAZE, x, y);
             // What's past a 2 by 2 fire of a longer one
             for (let ty = y; ty < y + sizeY; ty++) {
                 for (let tx = x; tx < x + sizeX; tx++) {
                     if (tx >= x + 2 || ty >= y + 2) {
-                        put(LOW_FIRE, tx, ty);
+                        put(FLAMES, tx, ty);
                     }
                 }
             }

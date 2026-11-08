@@ -246,7 +246,13 @@ import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlightGrid } from "./world/FlightGrid";
 import { FlowField, canStep, canWalkStraight } from "./world/FlowField";
-import { endlessLevelForXp, endlessXpForLevel, runLevelForXp, runXpForLevel } from "./xp";
+import {
+    endlessLevelForXp,
+    endlessXpForLevel,
+    runLevelForXp,
+    runXpForLevel,
+    stretchedXp,
+} from "./xp";
 
 export const TICKS_PER_SECOND = 50;
 
@@ -414,6 +420,8 @@ const ENRAGED_TINT = 0xff7a66;
 const LEAVE_MAX_SPEED = 16;
 const LEAVE_MIN_SCALE = 2;
 const LEAVE_MARGIN_TICKS = 25;
+// Tiles from a lair's boss that what's about runs out to as it wakes: past the screen's edge
+const SCATTER_REACH = 24;
 // Ticks an armed spot takes to go off once it's stepped on
 const HAZARD_FUSE_TICKS = 15;
 // How long a strike's fitted impact plays out (WeaponDef.impactFit): the
@@ -831,6 +839,8 @@ export type Hero = {
     // A floor tile's burn or heal (FloorEffect) next acts on them from this tick; and how far they
     // went last tick, kept on ice
     floorEffectNext: number;
+    // The map's burning scenery (MapDef.burns) next burns them from this tick
+    burnNext: number;
     glideX: number;
     glideY: number;
     // The map's rule (MapDef.rule): ticks they've stood on what it hurts on, one after another,
@@ -1526,6 +1536,7 @@ export class Sim {
             bulletGraceEnd: 0,
             floorGraceEnd: 0,
             floorEffectNext: 0,
+            burnNext: 0,
             glideX: 0,
             glideY: 0,
             ruleTicks: 0,
@@ -1767,7 +1778,25 @@ export class Sim {
     }
 
     private xpForLevel(level: number): number {
-        return this.endless ? endlessXpForLevel(level) : runXpForLevel(level);
+        const xp = this.endless ? endlessXpForLevel(level) : runXpForLevel(level);
+        return stretchedXp(xp, level, this.map.levelXp);
+    }
+
+    // The level the run's experience comes to
+    private levelForXp(): number {
+        if (this.map.levelXp === undefined) {
+            return this.endless ? endlessLevelForXp(this.xp, this.level) : runLevelForXp(this.xp);
+        }
+        // The map's own table (MapDef.levelXp), counted up from where the run is: it stops where
+        // the table does
+        let level = this.level;
+        while (
+            this.xpForLevel(level + 1) <= this.xp &&
+            this.xpForLevel(level + 1) > this.xpForLevel(level)
+        ) {
+            level++;
+        }
+        return level;
     }
 
     getResult(): RunResult {
@@ -2653,6 +2682,7 @@ export class Sim {
         this.stepProjectiles();
         this.stepFires();
         this.stepPools();
+        this.stepBurningScenery();
         this.stepEnemyProjectiles();
         this.stepBossFight();
         this.stepFloor();
@@ -5222,7 +5252,7 @@ export class Sim {
                     lair.introTick = this.tick + secondsToTicks(def.opening.introAt);
                     for (const enemy of this.enemies) {
                         if (!enemy.dead && !enemy.leaving) {
-                            this.sendOff(enemy, lair.introTick);
+                            this.sendOff(enemy, lair.introTick, def.at);
                         }
                     }
                 } else {
@@ -5413,7 +5443,7 @@ export class Sim {
         this.updateFlowFields();
         const enemy = getEnemy(def.enemyId);
         const hp = def.hp * (lair.empowered ? def.empowered!.hp : 1);
-        this.startIntro(enemy, def.final ? "finalBoss" : "boss", hp);
+        this.startIntro(enemy, def.final ? "finalBoss" : "boss", hp, def.at);
         this.emit({ type: "notice", message: def.message });
         this.emit({
             type: "lair",
@@ -5576,8 +5606,14 @@ export class Sim {
     }
 
     // The player's safe and everything runs for it (BossDef.intro); the boss
-    // comes up partway through
-    startIntro(def: EnemyDef, type: "boss" | "finalBoss", hp?: number): void {
+    // comes up partway through. A lair's boss (scatter: where it rises) sends what's about
+    // running from it rather than off the map.
+    startIntro(
+        def: EnemyDef,
+        type: "boss" | "finalBoss",
+        hp?: number,
+        scatter?: { x: number; y: number },
+    ): void {
         const intro = def.boss!.intro!;
         const startTick = this.tick;
         const endTick = startTick + secondsToTicks(intro.seconds);
@@ -5591,7 +5627,7 @@ export class Sim {
         };
         for (const enemy of this.enemies) {
             if (!enemy.dead) {
-                this.sendOff(enemy, endTick - LEAVE_MARGIN_TICKS);
+                this.sendOff(enemy, endTick - LEAVE_MARGIN_TICKS, scatter);
             }
         }
         this.clearBossAttacks();
@@ -5600,16 +5636,29 @@ export class Sim {
         this.emit({ type: "bossIntro", enemyId: def.id, sound: intro.darkSound ?? -1 });
     }
 
-    // Off to the nearest edge of the map. It can't be hit, and it's gone by
+    // Off to the nearest edge of the map, or running from a spot (from: a lair's boss waking, on
+    // a map whose edge is a city away) until it's out of sight. It can't be hit, and it's gone by
     // lastTick however far that is.
-    private sendOff(enemy: Enemy, lastTick: number): void {
+    private sendOff(enemy: Enemy, lastTick: number, from?: { x: number; y: number }): void {
         const { x, y } = enemy;
-        const grid = this.grid;
-        const west = x - grid.baseX;
-        const east = grid.baseX + grid.sizeX - x;
-        const south = y - grid.baseY;
-        const north = grid.baseY + grid.sizeY - y;
-        const distance = Math.min(west, east, south, north);
+        let distance: number;
+        let dirX: number;
+        let dirY: number;
+        if (from) {
+            const away = fm.hypot(x - from.x, y - from.y);
+            dirX = away > 0.001 ? (x - from.x) / away : 0;
+            dirY = away > 0.001 ? (y - from.y) / away : -1;
+            distance = Math.max(1, SCATTER_REACH - away);
+        } else {
+            const grid = this.grid;
+            const west = x - grid.baseX;
+            const east = grid.baseX + grid.sizeX - x;
+            const south = y - grid.baseY;
+            const north = grid.baseY + grid.sizeY - y;
+            distance = Math.min(west, east, south, north);
+            dirX = distance === west ? -1 : distance === east ? 1 : 0;
+            dirY = dirX !== 0 ? 0 : distance === south ? -1 : 1;
+        }
         const stays = enemy.def.stationary ?? false;
         const ticks = Math.max(1, lastTick - this.tick);
         const speed = stays
@@ -5618,8 +5667,6 @@ export class Sim {
                   LEAVE_MAX_SPEED / TICKS_PER_SECOND,
                   Math.max(distance / ticks, enemy.speed * LEAVE_MIN_SCALE),
               );
-        const dirX = distance === west ? -1 : distance === east ? 1 : 0;
-        const dirY = dirX !== 0 ? 0 : distance === south ? -1 : 1;
         enemy.leaving = {
             vx: dirX * speed,
             vy: dirY * speed,
@@ -12979,6 +13026,27 @@ export class Sim {
         }
     }
 
+    // The map's burning scenery (MapDef.burns): a hero who walks into it burns at once, and again
+    // every so often while they stay, through armour, and with no grace after it
+    private stepBurningScenery(): void {
+        const burns = this.map.burns;
+        if (!burns) {
+            return;
+        }
+        this.forEachHeroInReach(() => {
+            const player = this.player;
+            if (
+                this.tick < this.hero.burnNext ||
+                !this.grid.burnsAt(Math.floor(player.x), Math.floor(player.y))
+            ) {
+                return;
+            }
+            this.hero.burnNext = this.tick + Math.max(1, secondsToTicks(burns.every));
+            const damage = Math.max(1, Math.round(player.maxHp * burns.share));
+            this.damagePlayer(damage, BURN_SOURCE, false, -1, true, false);
+        });
+    }
+
     // Fire taking hold beside what's burning (BossAttackDef.pool.spreads): each one, every so
     // often, lights another a step off in a direction of its own, on open ground of the fight's,
     // as long as there are fewer than most of its kind
@@ -14245,9 +14313,7 @@ export class Sim {
     // The run's level is shared: each level up gives every hero a pick, or on a map with
     // blessings (MapDef.blessings) one of those, at once, with nothing to wait for
     private checkLevelUp(): void {
-        const level = this.endless
-            ? endlessLevelForXp(this.xp, this.level)
-            : runLevelForXp(this.xp);
+        const level = this.levelForXp();
         if (level > this.level) {
             const gained = level - this.level;
             this.level = level;

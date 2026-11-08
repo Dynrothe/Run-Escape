@@ -974,6 +974,21 @@ adventurer can have:
   or bag (`Hud` in `ui/GameUi.tsx`). With waves (the Battle for Varrock's hordes,
   `content/varrockHordes.ts`) it's a run as any, with the run's HUD, still with no clock to end
   it, no boss pool and no random events.
+- **`MapDef.levelXp`** (`LevelXpDef`): levels past `from` need more experience than anywhere
+  else, more for each, up to `times` as much from level `to` on (`stretchedXp` in `core/xp.ts`,
+  for `Sim.xpForLevel` and `levelForXp`, which counts up from the run's level). Varrock's
+  (`VARROCK_LEVEL_XP`) keeps its first few as they are: with nothing but blessings, a hero who
+  got none in the first minutes didn't live through them, in the bot's hands, even with the
+  buttons' old cooldowns. After that a blessing's worth more than a pick, and the hordes are
+  twice the crowd.
+- **`MapDef.burns`**: scenery that burns whoever walks into it. The worker marks every tile of a
+  placed loc in `locs` (`RegionDataInput.burnLocs`, `RegionData.burnTiles`, from
+  `getArenaRegion`), `ArenaGrid.burnsAt` reads it, and `Sim.stepBurningScenery` takes `share`
+  of a hero's hitpoints at once and every `every` seconds while they're in it, through armour
+  and with no grace (`BURN_SOURCE`, `Hero.burnNext`). Enemies walk through unharmed. Varrock's
+  fires, and its dead, are walkable copies of the cache's (`getWalkableLoc` in
+  `rs/config/loctype/LocOverrides.ts`), so they block nothing. The bot walks round them
+  (`firesToAvoid`, and `blastDodge` steps it out of one in a fight).
 - **`MapDef.lairs`** (`LairDef`): bosses asleep on a map to walk round, one fought at a time
   (`Sim.lair`): Yama on his throne (`content/yama.ts`, `docs/design/yama.md`) and his generals,
   Xarth and K'ril Tsutsaroth (`content/xarth.ts`, `content/kril.ts`,
@@ -981,7 +996,9 @@ adventurer can have:
   (`MapDef.floor`), or its own `area` (a box, with `rows` for a shape: the Exchange's octagon).
   `wakeLair` drops every tile beside a way out (`findLairExits`, `ArenaGrid.dropTile`, kept in
   `Lair.sealed` and drawn as fire by `GameView.drawLairSeal`), and the boss's intro plays, rising
-  at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). Beaten, the seal lifts
+  at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). What's about runs straight
+  away from `at` (`sendOff` with `from`, to `SCATTER_REACH` tiles off), not to the map's nearest
+  edge as off a lair, which on a city that goes on round its arena sent everything north. Beaten, the seal lifts
   (`liftSeal`) with the `victory` notice and the `shout`, its pools go out (a pool that
   `spreads` would burn on for good), and any lair `empowered` by it is from
   then on (`Lair.empowered`: its hitpoints, damage and tempo times its own, and its

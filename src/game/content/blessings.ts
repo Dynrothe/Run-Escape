@@ -81,7 +81,7 @@ export const SARADOMIN_BLESSINGS: BlessingsDef = {
         {
             id: "blade",
             name: "Blessed blade",
-            description: "Your sword's sweep grows, a metal at a time.",
+            description: "Your Saradomin sword a level up: its sweep grows.",
             // Saradomin's blessed sword
             iconObjId: 12809,
             max: 7,
@@ -157,10 +157,10 @@ export const SARADOMIN_BLESSINGS: BlessingsDef = {
             id: "halo",
             name: "Saradomin halo",
             description:
-                "The Owl's gaze reaches 2 tiles further, hits 40% harder and comes back 15% sooner.",
+                "The Owl's gaze reaches 2 tiles further and hits 40% harder. It's still an ultimate.",
             iconObjId: 12637,
             max: 2,
-            kit: { abilities: ["owls_gaze"], length: 2, cooldown: 0.15, damage: 0.4 },
+            kit: { abilities: ["owls_gaze"], length: 2, damage: 0.4 },
         },
     ],
     fallback: {

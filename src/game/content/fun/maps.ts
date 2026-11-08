@@ -2,9 +2,13 @@ import {
     BATTLE_FOR_VARROCK,
     BLAZE,
     BRAZIER,
+    BURNING_BONES,
+    BURNING_TIMBER,
     CRATER_HEART,
-    LOW_FIRE,
+    FIRES,
+    FLAMES,
     PALACE_FLOOR_ASCII,
+    TALL_FLAMES,
     WALL_OF_FLAME,
     YAMA_SCALE,
 } from "../../scaperune/maps/battleForVarrock";
@@ -12,7 +16,7 @@ import { SARADOMIN_BLESSINGS } from "../blessings";
 import { FLOOR_SKINS } from "../floorSkins";
 import { KRIL_HITPOINTS } from "../kril";
 import { MapDef, RunEventDef } from "../types";
-import { VARROCK_EVENTS, VARROCK_WAVES } from "../varrockHordes";
+import { VARROCK_EVENTS, VARROCK_LEVEL_XP, VARROCK_WAVES } from "../varrockHordes";
 import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
 import { XARTH_HITPOINTS } from "../xarth";
@@ -787,8 +791,12 @@ export const FUN_MAPS: MapDef[] = [
         // Yama's demons, all over the city, for as long as it takes (content/varrockHordes.ts)
         waves: VARROCK_WAVES,
         events: VARROCK_EVENTS,
-        // No items: a level up brings a blessing of Saradomin instead (content/blessings.ts)
+        // No items: a level up brings a blessing of Saradomin instead (content/blessings.ts), and
+        // past the first few each needs more experience than anywhere else (varrockHordes.ts)
         blessings: SARADOMIN_BLESSINGS,
+        levelXp: VARROCK_LEVEL_XP,
+        // Its fires block nothing, and burn whoever walks into one
+        burns: { locs: FIRES, share: 0.05, every: 0.5 },
         finalBossWarning: "",
         victoryText: "Yama is beaten, and Varrock's fires die down at last.",
         scaperune: true,
@@ -846,7 +854,7 @@ export const FUN_MAPS: MapDef[] = [
                 at: BATTLE_FOR_VARROCK.xarth.at,
                 start: BATTLE_FOR_VARROCK.xarth.start,
                 area: BATTLE_FOR_VARROCK.xarth.area,
-                seal: { locId: LOW_FIRE, scale: 1.4, sound: 10271 },
+                seal: { locId: FLAMES, scale: 1.4, sound: 10271 },
                 message: "Xarth wakes! The Grand Exchange is ringed with fire!",
                 victory: "Xarth is beaten. The fires round the Exchange die down.",
                 shout: "The flame... outlives me...",
@@ -883,7 +891,7 @@ export const FUN_MAPS: MapDef[] = [
                 at: BATTLE_FOR_VARROCK.kril.at,
                 start: BATTLE_FOR_VARROCK.kril.start,
                 area: BATTLE_FOR_VARROCK.kril.area,
-                seal: { locId: LOW_FIRE, scale: 1.4, sound: 10271 },
+                seal: { locId: FLAMES, scale: 1.4, sound: 10271 },
                 message: "K'ril Tsutsaroth wakes! The church is sealed in fire!",
                 victory: "K'ril Tsutsaroth is beaten. The fires round the church die down.",
                 shout: "Zamorak... curse... you...",
@@ -905,7 +913,7 @@ export const FUN_MAPS: MapDef[] = [
                 hp: YAMA_HITPOINTS,
                 at: BATTLE_FOR_VARROCK.yamaRise,
                 start: BATTLE_FOR_VARROCK.yamaStart,
-                seal: { locId: LOW_FIRE, scale: 1.4, sound: 10271 },
+                seal: { locId: FLAMES, scale: 1.4, sound: 10271 },
                 message: "Yama wakes! The palace is sealed in fire!",
                 victory: "Yama is beaten. The fires round the palace die down.",
                 shout: "This city... was already... ash...",
@@ -932,17 +940,16 @@ export const FUN_MAPS: MapDef[] = [
             ambient: 0.92,
             ambientColor: 0xf4e4da,
             locs: {
-                5499: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
-                31722: { radius: 4.5, color: 0xff7a2a, intensity: 0.7, flicker: 0.4 },
-                3862: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
+                [TALL_FLAMES]: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                [BURNING_TIMBER]: { radius: 4.5, color: 0xff7a2a, intensity: 0.7, flicker: 0.4 },
+                [BURNING_BONES]: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
                 [WALL_OF_FLAME]: { radius: 3.5, color: 0xff7022, intensity: 0.65, flicker: 0.45 },
                 // Either side of Yama's throne
                 [BRAZIER]: { radius: 5, color: 0xff6a20, intensity: 0.9, flicker: 0.3 },
                 // What was cloth: Gypsy Aris's tent burning down, the tents and the stalls
                 [BLAZE]: { radius: 5.5, color: 0xff6a1a, intensity: 1, flicker: 0.5 },
-                // In the houses, the stalls and the palace, whose fires block nothing as Yama's
-                // fight is on its floor
-                [LOW_FIRE]: { radius: 3, color: 0xff8a3a, intensity: 0.55, flicker: 0.4 },
+                // Flames on their own, in the houses, the stalls and the palace
+                [FLAMES]: { radius: 3, color: 0xff8a3a, intensity: 0.55, flicker: 0.4 },
                 // The crater's molten heart, where the square's fountain stood
                 [CRATER_HEART]: { radius: 6, color: 0xff5a1a, intensity: 0.9, flicker: 0.25 },
             },

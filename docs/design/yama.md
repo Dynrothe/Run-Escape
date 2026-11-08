@@ -94,7 +94,8 @@ Their real shadows cover him, so the gaze does nothing to him. The pillars stay 
 
 - **Side use.** While they're up, the pillars also block his volleys and lanes (they're real
   occluders, as the gaze shadows are). Baiting the pillars gives you cover for a few seconds, but
-  it costs the gaze's 12 s cooldown. If a meteor comes in that time, you're dead.
+  it costs the gaze, his ultimate, for its 30 s cooldown (`OWLS_GAZE_COOLDOWN`), and the fight
+  waits on the meteor that long.
 
 **The meteor.**
 
@@ -107,10 +108,13 @@ Their real shadows cover him, so the gaze does nothing to him. The pillars stay 
   the gaze hits him, he's knocked out of it, and the meteor breaks apart in the sky into harmless
   embers. Then he's guard-down for 6 s.
 - **Fairness:**
-    - The first meteor comes at 85% hitpoints, then one every about 35 s (phase 1–2) and about 28 s
-      (phase 3), and always one at each phase change.
-    - He never starts a meteor while your gaze has more than 4 s of cooldown left, so it's always
-      possible to have it ready. The skill is not wasting it on him, and casting it in time.
+    - The first meteor comes at 85% hitpoints, then one every 36 s, 33 s and 30 s in his three
+      phases, and always one at each phase change. None is ever sooner after the last than the
+      gaze's cooldown, so a gaze that stopped one is always back for the next (the clock is
+      `OWLS_GAZE_COOLDOWN` plus 6, 3 and 0, in `content/yama.ts`).
+    - He never starts a meteor while your gaze has more than 2.4 s of cooldown left, so it's always
+      possible to have it ready, a blessing that brings it back sooner included. The skill is not
+      wasting it on him, and casting it in time.
     - The windup is long enough to finish a spell you're already casting (the root lasts until it
       strikes) and still cast the gaze.
 - **Co-op.** Any player's gaze stops it. Everyone sees the shadow and the line.

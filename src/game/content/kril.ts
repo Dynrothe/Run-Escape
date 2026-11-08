@@ -1,4 +1,4 @@
-import { BATTLE_FOR_VARROCK, LOW_FIRE } from "../scaperune/maps/battleForVarrock";
+import { BATTLE_FOR_VARROCK, FLAMES } from "../scaperune/maps/battleForVarrock";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
 
 // K'ril Tsutsaroth, Zamorak's general, the second of Yama's two in the Battle for Varrock
@@ -28,7 +28,7 @@ const BLOWN_DUST = 2184;
 const ATTACK_SOUND = 534;
 const SMASH_SOUND = 2500;
 const FLAMES_SOUND = 1659;
-// Xarth's fire on the floor, his once Xarth's fallen: the map's low fire (LOW_FIRE)
+// Xarth's fire on the floor, his once Xarth's fallen: the map's flames (FLAMES)
 // Xarth's bolt bursting
 const BOLT_BURST = 4375;
 
@@ -186,7 +186,7 @@ const BURNING_RUSH: BossAttackDef = {
         damage: 2,
         interval: 1,
         effect: BURN,
-        locId: LOW_FIRE,
+        locId: FLAMES,
         dousedBy: "shock_wave",
     },
 };

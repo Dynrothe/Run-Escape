@@ -1386,10 +1386,13 @@ leaves turn scorched brown (33), and other see-through ones (bars, shingles) kee
 holes. They're read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and
 the slim cache keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in
 `LOC_OVERRIDES` with a `base` (the breach's Falador pieces, charred to `charLight`, the bricks `walkable`). Keep every id under 2^21:
-the model caches key a loc by its id << 10. Varrock's fires are the cache's own, none in a ring of stones (4265,
-4266: a campfire is a camp, not a city burning): `LOW_FIRE` on crossed logs (5249) blocks nothing, so it needs no
-walkable copy for the palace floor Yama's fought on. A map's lights go by the placed id (`LightingDef.locs`), so a
-derived loc needs its own entry there to glow.
+the model caches key a loc by its id << 10. `WALKABLE_LOCS + id` (`getWalkableLoc`) is a cache loc that blocks nothing,
+and `WALKABLE_CHARRED_LOCS + id` a charred one: Varrock's fires and its dead, which you walk over and through (the
+fires burn as you do: `MapDef.burns`). Varrock's fires are the cache's own flames, never a campfire (4265, 4266 in their
+rings of stones, 5249 on crossed logs, 5499 the campfire's flame: a campfire is a camp, not a city burning): `FLAMES`
+(25156, the big fire's flames alone) and `TALL_FLAMES` (32297), the big fire (`BLAZE`), burning timber and bones and
+the wall of fire, all of them in `FIRES`. A map's lights go by the placed id (`LightingDef.locs`), so a derived loc
+needs its own entry there to glow.
 
 **A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
 his throne (npc 15645, seq 12153), is a `MapDef.props` entry the game draws instead, and the recipe blocks the ground

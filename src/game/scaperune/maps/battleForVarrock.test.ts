@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
+import { getLocBase, getLocOverride } from "../../../rs/config/loctype/LocOverrides";
 import { GAME_CACHE_NAME } from "../../cache";
 import { getMap, getMapCharacter, isPeaceful } from "../../content/maps";
 import { VARROCK_EVENTS, VARROCK_WAVES } from "../../content/varrockHordes";
@@ -12,7 +13,10 @@ import { getRecipeArena } from "../recipe";
 import {
     BATTLE_FOR_VARROCK,
     BATTLE_FOR_VARROCK_RECIPE,
-    LOW_FIRE,
+    BLAZE,
+    BURNING_TIMBER,
+    FIRES,
+    FLAMES,
     PALACE_FLOOR_ASCII,
     PALACE_FLOOR_RECT_REAL,
 } from "./battleForVarrock";
@@ -103,13 +107,25 @@ describe("the Battle for Varrock", () => {
         expect(lint.triangles.busy).toBeLessThanOrEqual(PHONE_TRIANGLES);
     });
 
-    it("burns with the cache's plain fires, not campfires in their rings of stones", () => {
+    it("burns with the cache's flames, not campfires: every fire lit, blocking nothing, burning", () => {
         const lit = Object.keys(MAP.lighting!.locs!).map(Number);
-        expect(lit).not.toContain(4265);
-        expect(lit).not.toContain(4266);
-        // On crossed logs, which blocks nothing: the palace floor's, where Yama's fought
-        expect(LOW_FIRE).toBe(5249);
-        expect(lit).toContain(LOW_FIRE);
+        // A campfire in its ring of stones, on crossed logs, and the campfire's flame
+        for (const campfire of [4265, 4266, 5249, 5499]) {
+            expect(lit).not.toContain(campfire);
+            expect(FIRES).not.toContain(campfire);
+        }
+        for (const fire of FIRES) {
+            expect(lit).toContain(fire);
+        }
+        // The flames on their own, the big fire's and the burning timber, as copies that block nothing
+        expect(getLocBase(FLAMES)).toBe(25156);
+        expect(getLocBase(BLAZE)).toBe(25155);
+        expect(getLocBase(BURNING_TIMBER)).toBe(31722);
+        for (const fire of [FLAMES, BLAZE, BURNING_TIMBER]) {
+            expect(getLocOverride(fire)?.walkable).toBe(true);
+        }
+        // and every fire burns whoever walks into it
+        expect(MAP.burns?.locs).toBe(FIRES);
     });
 });
 

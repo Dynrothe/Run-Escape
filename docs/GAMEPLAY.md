@@ -207,14 +207,19 @@ version and how to run it.
   roofs, doors and upstairs gone; breaches in the city wall, broken like Falador's crumbling
   wall; trees burnt, every bush and plant gone, the grass gone to ash; Gypsy Aris's tent and the
   market's stalls burning. Where the square's fountain stood is a
-  crater, burning at its heart. Fires still burn, with burnt skeletons and the dead raiders of
-  Phosani's Sanctuary and the Theatre of Blood where they fell. The palace's floor is the floor
+  crater, burning at its heart. Fires still burn, flames on their own and never a campfire, with
+  burnt skeletons and the dead raiders of Phosani's Sanctuary and the Theatre of Blood where they
+  fell. Nothing of them is in the way: you walk over the dead and through the fires, and a fire
+  burns you as you do, a twentieth of your hitpoints at once and every half second you stay,
+  through armour. The demons walk through them unharmed. The palace's floor is the floor
   system's tiles in an ashen skin, up its burnt front steps from its court, with Yama on his
-  throne at its north end, and fires that you can run through. You start outside the south gate as
-  Justiciar Zachariah, his own model, with the moves of his fight on buttons (Space and 1 to 4, a
-  pad's bottom button and shoulders, a cluster of buttons on a touch screen): Lunge, Shock wave, Ice
-  barrage, Lightning and the Owl's gaze. He stands still while he casts, from the press to the
-  strike, and rising floor can't hurt him mid-lunge: a lunge is a way through Yama's slabs. The
+  throne at its north end, and fires on it too. You start outside the south gate as
+  Justiciar Zachariah, his own model, with his Saradomin sword (the 2h sword's sweep) and the
+  moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
+  of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
+  The gaze is his ultimate, back every 30 seconds; the others come back in 5 to 14. He stands
+  still while he casts, from the press to the strike, and rising floor can't hurt him mid-lunge:
+  a lunge is a way through Yama's slabs. The
   Owl's gaze lights everything round him blue-white, and walls, ruins and pillars cast shadows it
   can't see into: anything in them is spared.
   It opens with a cinematic: close on Yama, who says resistance is futile; the camera pulls back
@@ -223,25 +228,29 @@ version and how to run it.
   death; then the camera flies south over the city to Zachariah and the run begins. Any key,
   click, tap or controller button skips it, and it plays each time the map's travelled to.
   Zachariah starts facing into the city. Its music is Sign Here, Yama's own fight track.
-  Yama's demons fill its streets as any map's waves do: imps, reanimated demon spawn, hellhounds,
-  lesser, revenant, greater and black demons, with an elite a minute from 100 seconds and rings of
-  them now and then. There's no clock and no random events, and no items: no caskets, gear,
-  power-ups, bag or weapons and passives to pick, only bones, coins and food. Kill them for levels
-  for as long as you like, though they get tougher by the minute: each level brings a blessing of
+  Yama's demons fill its streets, the hordes of hell: imps at first as any map's first wave, then
+  more and more, until from the eighth minute they're twice the crowd other maps' waves bring,
+  coming twice as fast. Imps, reanimated demon spawn, hellhounds, lesser, revenant, greater and
+  black demons, with an elite a minute from 100 seconds and rings of them now and then. There's no
+  clock and no random events, and no items: no caskets, gear, power-ups, bag or weapons and
+  passives to pick, only bones, coins and food. Kill them for levels for as long as you like,
+  though they get tougher by the minute. The first few levels come as anywhere, and then each
+  takes more experience, up to six times as much from level 14: each level brings a blessing of
   Saradomin at random, there and then, with his strike on you and a notice. Saradomin's strength
   (Might, which the Justiciar's buttons hit harder with too), a Saradomin brew (hitpoints, and a
   third of them back), Saradomin's ward (armour), Holy sandals (speed), a Holy elixir
   (regeneration), Saradomin's will (buttons back sooner, and the sword faster), a Holy book
-  (experience), a Blessed blade (the 2h sword a level up), a Saradomin staff (Saradomin Strike,
+  (experience), a Blessed blade (the Saradomin sword a level up), a Saradomin staff (Saradomin Strike,
   then a level of it) and Zilyana's crossbow (from Saradomin's general, the Armadyl crossbow, then
   a level of it), and blessings on the buttons: Saradomin's light (all of them harder), Zeal (a
   longer, harder lunge), Saradomin's crozier (another shock wave either side), Holy water (a
   bigger ice barrage that holds longer), Saradomin's mjolnir (further, harder lightning) and
-  Saradomin's halo (a wider, harder Owl's gaze, back sooner). Each comes only so many times; once
+  Saradomin's halo (a wider, harder Owl's gaze). Each comes only so many times; once
   he's given everything, Saradomin's tears (a little Might, and half your hitpoints back). They
   show in a row under the sword, and on the pause menu. Yama's two
   generals wait in their ruins from the start, to be fought in either order: step into one's ruin
-  and it wakes, every way out bursts into fire, and you fight it there with nothing else coming.
+  and it wakes, the demons about run from it every way, every way out bursts into fire, and you
+  fight it there with nothing else coming.
   Die there and you're thrown out whole, the general back where it stood with all its hitpoints:
   only a death to the hordes ends the run. Beat one and the other grows stronger: 30% more
   hitpoints, 25% harder hits, attacks sooner, and an attack of the fallen one's.
@@ -273,11 +282,12 @@ version and how to run it.
   one, but Ice barrage holds it still, its time too, and Lightning breaks a held one, leaving food
   behind: the fight's only healing. The Owl's gaze can't touch him: he raises four stone pillars
   against it, and cast within reach of his claw he swats you out of it and well away. From 85% of
-  his hitpoints, at every phase change and every 35 seconds or so (28 in his last phase), he calls
-  down a meteor that kills you wherever you stand. The only answer is the gaze cast at him as he
-  calls it, which breaks it in the sky and leaves him open. He never starts one while your gaze is
-  too far from ready. Killing him wins the run. Dying in his fight throws you out to the palace's
-  court, whole, to come back when you're ready.
+  his hitpoints, at every phase change and every 36 seconds or so (33 and 30 in his later phases,
+  never sooner than the gaze comes back), he calls down a meteor that kills you wherever you
+  stand. The only answer is the gaze cast at him as he calls it, which breaks it in the sky and
+  leaves him open. He never starts one while your gaze is too far from ready. Killing him wins
+  the run. Dying in his fight throws you out to the palace's court, whole, to come back when
+  you're ready.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any

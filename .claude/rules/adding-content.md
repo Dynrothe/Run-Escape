@@ -272,7 +272,10 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   `content/blessings.ts`). A blessing can add stats, level the starting weapon, bring a weapon
   and level it, heal and change the hero's own buttons: see A hero of their own in
   `docs/DEVELOPMENT.md`. Sim it with the bot's lairs (`LAIR=`), as random draws change a boss
-  fight a lot: a run that never draws a ranged weapon can't beat a general.
+  fight a lot: a run that never draws a ranged weapon can't beat a general. `levelXp` slows its
+  levels after the first few (`LevelXpDef`), and `burns` has scenery that hurts whoever walks
+  into it (Varrock's fires, walkable copies from `getWalkableLoc`): teach the bot to walk round a
+  new kind, as `firesToAvoid` does.
 - People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
   `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
   cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
