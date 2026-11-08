@@ -451,6 +451,12 @@ export function getPhaseBarFraction(boss: Enemy, index: number): number {
     return Math.min(1, Math.max(0, (boss.hp - bottom) / Math.max(1, top - bottom)));
 }
 
+// Boss attacks' instructions (GameClient.showInstruction): each up this long, the next no sooner
+// than this after it, and one waiting longer than this is dropped
+const INSTRUCTION_MS = 5000;
+const INSTRUCTION_GAP_MS = 2200;
+const INSTRUCTION_STALE_MS = 7000;
+
 export class GameClient implements GameFrameHandler {
     static async create(
         mapViewer: MapViewer,
@@ -571,6 +577,37 @@ export class GameClient implements GameFrameHandler {
     // meanwhile)
     private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
+    // Boss attacks' instructions (BossAttackDef.message): each shown once a run, and one at a
+    // time, each held long enough to read, as a busy phase can bring several at once. Those
+    // waiting too long are dropped: the attack they were for is long gone.
+    private readonly instructionsSeen = new Set<string>();
+    private instructions: { text: string; at: number }[] = [];
+    private instructionShownAt = -Infinity;
+
+    private queueInstruction(text: string): void {
+        if (this.instructionsSeen.has(text)) {
+            return;
+        }
+        this.instructionsSeen.add(text);
+        this.instructions.push({ text, at: performance.now() });
+        this.showInstruction(performance.now());
+    }
+
+    // The next instruction, once the last has had its time, while the run's being played
+    private showInstruction(now: number): void {
+        this.instructions = this.instructions.filter((i) => now - i.at < INSTRUCTION_STALE_MS);
+        if (
+            this.instructions.length === 0 ||
+            now - this.instructionShownAt < INSTRUCTION_GAP_MS ||
+            !this.isPlaying()
+        ) {
+            return;
+        }
+        const next = this.instructions.shift()!;
+        this.instructionShownAt = now;
+        this.store.toast(next.text, INSTRUCTION_MS);
+    }
+
     // A fight's own button's been used this session (MapDef.fight.ability): its hint's no longer
     // shown (AbilityView.hint)
     private abilityUsed = false;
@@ -1638,6 +1675,9 @@ export class GameClient implements GameFrameHandler {
     private enterRun(sim: Sim, pets: (string | undefined)[], cinematic: boolean): void {
         const map = sim.map;
         this.sim = sim;
+        // A new run's bosses explain themselves again
+        this.instructionsSeen.clear();
+        this.instructions = [];
         const runCinematic = getRunCinematic(map, sim.stage);
         this.cinematic = cinematic && runCinematic ? new CinematicPlayer(runCinematic) : undefined;
         this.view.cinematic = this.cinematic;
@@ -2279,6 +2319,7 @@ export class GameClient implements GameFrameHandler {
             this.cameraRig.zoom(wheel);
         }
         this.store.expireToasts();
+        this.showInstruction(performance.now());
 
         setPlayArea(this.renderer, this.grid, this.sim?.map.scaperune === true);
 
@@ -2970,8 +3011,14 @@ export class GameClient implements GameFrameHandler {
                     this.store.toast(describeRound(sim), 7000);
                     break;
                 case "powerUp":
-                case "notice":
                     this.store.toast(event.message);
+                    break;
+                case "notice":
+                    if (event.instruction) {
+                        this.queueInstruction(event.message);
+                    } else {
+                        this.store.toast(event.message);
+                    }
                     break;
                 case "heroDown":
                     this.store.toast(

@@ -14340,7 +14340,7 @@ export class Sim {
             this.emit({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
         }
         if (attack.message) {
-            this.emit({ type: "notice", message: attack.message });
+            this.emit({ type: "notice", message: attack.message, instruction: true });
         }
     }
 
