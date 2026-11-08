@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { POWER_UPS } from "../content/powerups";
+import { createVardhelmOpening } from "../scaperune/maps/vardhelmOpening";
 import { files, overrideMessages } from "./catalog";
 import { LANGS, fmtNum, getLang, list, setLang, subscribeLang, t, tl, tp, tr } from "./index";
 
@@ -43,6 +45,23 @@ describe("language files", () => {
                         placeholders(english[key]),
                     );
                 }
+            }
+        }
+    });
+
+    // Text the code builds or holds in English reaches the screen through tl, so it needs a key
+    it("has keys for the cinematic lines and the light power-ups' notice", () => {
+        const english = new Set(Object.values(files.en["ui-misc"]));
+        const { cinematic } = createVardhelmOpening(0, 0, { x: 0, y: 0 });
+        for (const cue of cinematic.cues) {
+            if (cue.say !== undefined) {
+                expect(english, cue.say).toContain(cue.say);
+            }
+        }
+        for (const powerUp of POWER_UPS) {
+            if (powerUp.effect.kind === "light") {
+                const notice = `Your ${powerUp.name.toLowerCase()} lights up the dark!`;
+                expect(english, notice).toContain(notice);
             }
         }
     });

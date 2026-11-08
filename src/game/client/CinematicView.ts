@@ -1,6 +1,7 @@
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { TICKS_PER_SECOND } from "../core/Sim";
+import { t, tl } from "../i18n";
 import { CinematicPlayer, getActorState, getSaying } from "./Cinematic";
 import { GameAssets, getPropKey } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
@@ -91,7 +92,8 @@ export class CinematicView {
         ctx.textAlign = "center";
         ctx.textBaseline = "alphabetic";
         for (const actor of def.cast) {
-            const text = getSaying(def, actor.id, seconds);
+            const said = getSaying(def, actor.id, seconds);
+            const text = said === undefined ? undefined : tl(said);
             const model = this.assets.get(getPropKey(actor.npcId));
             if (text === undefined || getActorState(def, actor, seconds).gone) {
                 continue;
@@ -129,7 +131,7 @@ export class CinematicView {
             ctx.textBaseline = "middle";
             ctx.fillStyle = `rgba(200, 190, 170, ${0.6 * hint})`;
             ctx.fillText(
-                isCoarsePointer ? "Tap to skip" : "Press any key to skip",
+                isCoarsePointer ? t("cinematic.skip_tap") : t("cinematic.skip_key"),
                 overlay.width - 12 * pixel,
                 overlay.height - bar / 2,
             );
