@@ -16,7 +16,7 @@ kept: you start in the Nexus, pick any of the four paths, solve its room, then f
 all four are done, the Wardens. Unlike OSRS's rooms, ours roll a variant as you come in and change
 while you're in them, so no two raids play alike.
 
-It was built as a dev map, a piece a pull request, and ships in 0.29.0: `tombs_of_amascut` on the
+It was built as a dev map, a piece a pull request, and now ships: `tombs_of_amascut` on the
 map screen's Raids tab (`RAID_MAPS`), behind its quest, Beneath Cursed Sands, which is in `MAPS`
 with the boss fights. Both recipes are in `maps/shippedMaps.ts`, their grids' hashes pinned.
 
