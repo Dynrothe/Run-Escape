@@ -1061,10 +1061,10 @@ export const HET = {
 // every few attacks does a special instead and changes style: Memory Blast, Simon says, or his
 // trailing orbs. His prayer blocks his style's hits whole, as OSRS's overheads do (the wiki: "Akkha
 // makes use of overhead protection prayers, protecting him from attacks of that style"), so one
-// weapon can't do it all. At 80, 60, 40 and 20% his shadows come (hits stop there, none carried
-// past) and he can't be hurt till one's dispelled and he's drawn into its quarter: only one at a
-// time, the rest shielded once one's struck; at 0 he makes his final stand in a corner, out of
-// reach of everything but melee, sending Unstable Orbs across.
+// weapon can't do it all. At 66 and 33% his shadows come (hits stop there, none carried past;
+// OSRS's come four times) and he can't be hurt till one's dispelled and he's drawn into its
+// quarter: only one at a time, the rest shielded once one's struck; at 0 he makes his final
+// stand in a corner, out of reach of everything but melee, sending Unstable Orbs across.
 
 const AKKHA_IDLE = 9760;
 const AKKHA_WALK = 9764;
@@ -3206,38 +3206,45 @@ export const WARDENS: WardensDef = {
 
 const WARDENS_SOUNDS = { attack: -1, hit: 6595, death: -1 };
 
-// The obelisk's windmill (WardensPhaseTwoDef windmill): which of its five patterns, A to E, strikes
-// each tile round it, read off the OSRS Wiki's diagram of it, west to east and north to south as
-// OSRS has the room; F is the obelisk. The middle column's struck by both C and D.
 // Akkha vanishing (his teleport), for Memory Blast and his final stand's corners
 export const AKKHA_VANISH_SEQ = 9784;
 
 // What the Tombs' fights play on their bosses themselves (Sim.animate), none of it in the enemies'
-// own fields: baked with them, or the model would show its walk instead
+// own fields: baked with the forms that play it (each a copy of the model a frame), or the model
+// would show its walk instead
 export function getTombsFightSeqs(enemyId: string): number[] {
-    if (AKKHA.forms.includes(enemyId)) {
+    const { two, three } = WARDENS;
+    if (AKKHA.forms.includes(enemyId) || enemyId === "akkha_enraged") {
         return [AKKHA_VANISH_SEQ];
     }
-    if (enemyId === WARDENS.obeliskId || enemyId === WARDENS.two.obeliskId) {
-        return [WARDENS.two.obelisk.openSeq, WARDENS.two.obelisk.closeSeq];
+    if (enemyId === WARDENS.obeliskId || enemyId === two.obeliskId) {
+        return [two.obelisk.openSeq, two.obelisk.closeSeq];
     }
-    if (/^(elidinis|tumeken)_warden_/.test(enemyId)) {
-        const { two, three } = WARDENS;
-        return [
-            two.wakeSeq,
-            two.kneelSeq,
-            two.standSeq,
-            two.deathSeq,
-            ...Object.values(three.slamSeqs),
-            three.chargeSeq,
-            three.staggerSeq,
-            three.releaseSeq,
-            three.enrage.seq,
-        ];
+    const warden = /^(elidinis|tumeken)_warden_(\w+)$/.exec(enemyId)?.[2];
+    switch (warden) {
+        // Phase one's, woken as phase two starts
+        case "dormant":
+            return [two.wakeSeq];
+        // Phase two's on its knees: down, up again, and its fall
+        case "exposed":
+            return [two.kneelSeq, two.standSeq, two.deathSeq];
+        // Phase three's
+        case "last":
+        case "charging":
+            return [
+                ...Object.values(three.slamSeqs),
+                three.chargeSeq,
+                three.staggerSeq,
+                three.releaseSeq,
+                three.enrage.seq,
+            ];
     }
     return [];
 }
 
+// The obelisk's windmill (WardensPhaseTwoDef windmill): which of its five patterns, A to E, strikes
+// each tile round it, read off the OSRS Wiki's diagram of it, west to east and north to south as
+// OSRS has the room; F is the obelisk. The middle column's struck by both C and D.
 export const WARDENS_WINDMILL = [
     "AAABBBBCCCCDDDEEEEAAA",
     "AAABBBBCCCCDDDEEEEAAA",

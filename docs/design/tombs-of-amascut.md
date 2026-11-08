@@ -180,8 +180,9 @@ The waves no longer run on a clock, but they're still where experience and caske
   sarcophagi.
 - **Akkha**: prays against your style and swaps (the Theatre's colours already do this); four
   quadrants with their effects (fire burns, shadow drains, lightning blocks prayer, ice slows);
-  shadows to kill before their bars fill (OSRS's at 80/60/40/20%, here at 66 and 33%); Memory Blast's safe quadrants; trailing
-  orbs that come wherever you move, so the answer is to stand still.
+  shadows to kill before their bars fill (OSRS's at 80/60/40/20%, here at 66 and 33%); Memory
+  Blast's safe quadrants; trailing orbs that come wherever you move, so the answer is to stand
+  still.
 - **Kephri**: fireballs on marked tiles; Dung Strike; eggs that burst unless killed; her shield's
   scarab swarms, running at her from six spawns, each one that gets there restoring it, so your
   weapons have to cut them down; spitting, arcane and soldier scarabs.
@@ -412,12 +413,13 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
       leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
       Feeling Special drops one three tiles ahead too.
-    - **His shadows**, at 80, 60, 40 and 20%: no hit carries him past one, so they always come. An
-      Akkha's Shadow in each corner, each 70/400 of his hitpoints as OSRS's are, and he can't be
-      hurt except well inside a quadrant whose shadow is dead (his middle a tile clear of the lines
-      between them), so you kill one and draw him into its quarter. Only one: once a shadow's
-      struck the rest are shielded, as the wiki says to focus one, till they're restored at the
-      next threshold. One timer (the HUD counts it down) runs for them all: when it's out, every
+    - **His shadows**, at 66 and 33% (OSRS's at 80, 60, 40 and 20%): no hit carries him past
+      one, so they always come. An Akkha's Shadow in each corner, each 70/400 of his hitpoints as
+      OSRS's are, and he can't be hurt except well inside a quadrant whose shadow is dead (his
+      middle a tile clear of the lines between them), so you kill one and draw him into its
+      quarter. Only one: once a shadow's struck the rest are shielded, as the wiki says to focus
+      one, till they're restored at the next threshold. One timer (the HUD counts it down) runs
+      for them all: when it's out, every
       quadrant whose shadow's still up floods for half your hitpoints and its element, and it
       starts again.
     - **Final stand**: at 0 he rises (`rises`) as `akkha_enraged` with a fifth of his hitpoints, in

@@ -448,7 +448,6 @@ export const TOMBS_UNIQUES: { name: string; objId: number; minLevel: number }[] 
             : [],
 );
 
-// The highest raid level the board's reward bar goes to
 // The Tombs' Attempts invocations: how many times the party can die before the raid's over
 export const TOMBS_ATTEMPTS: [id: string, deaths: number][] = [
     ["hardcore_run", 0],
@@ -464,6 +463,7 @@ export const DEADLY_PRAYERS = 1.2;
 // and its first sooner too (28 to 36)
 export const ACCELERATION = { obeliskEvery: 0.75, firstOpen: 0.78 };
 
+// The highest raid level the board's reward bar goes to
 export const MAX_RAID_LEVEL = 600;
 
 export const INVOCATION_BY_ID: Map<string, InvocationDef> = new Map(

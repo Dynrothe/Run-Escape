@@ -10074,11 +10074,7 @@ export class Sim {
         const every = secondsToTicks(HET.beamEvery);
         return {
             held: het.mirrors.filter((m) => m.carrier === this.hero.index).length,
-            // In tenths, as the HUD shows it, so it doesn't redraw every tick
-            charge:
-                Math.round(
-                    Math.max(0, Math.min(1, 1 - (het.nextBeamTick - this.tick) / every)) * 10,
-                ) / 10,
+            charge: Math.max(0, Math.min(1, 1 - (het.nextBeamTick - this.tick) / every)),
         };
     }
 
