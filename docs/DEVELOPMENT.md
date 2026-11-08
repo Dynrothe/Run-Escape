@@ -1127,8 +1127,10 @@ and `oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set `BulletPatter
 there's no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the scythe's), and the
 slams are as wide, so there's no ring round a still boss to hit it from untouched. Each has
 something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
-them. Each boss has a mechanic of its own that makes the fight longer by making it harder, not by
-more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
+them. A closing ring stands where it formed for `RING_HOLD` (`BulletPatternDef.hold`, a bullet's
+`wait` in `BulletPool`) before it comes in, hurting whoever walks into it meanwhile. Each boss has
+a mechanic of its own that makes the fight longer by making it harder, not by more hitpoints: the
+Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an

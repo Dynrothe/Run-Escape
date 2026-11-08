@@ -12845,7 +12845,7 @@ export class Sim {
             state.wallGap = gapStart;
         }
         const inGap = (i: number) => (i - gapStart + count) % count < gap;
-        const add = (x: number, y: number, angle: number, ticks: number) => {
+        const add = (x: number, y: number, angle: number, ticks: number, wait = 0) => {
             const vx = fm.cos(angle) * speed;
             const vy = fm.sin(angle) * speed;
             this.bullets.add(
@@ -12859,6 +12859,7 @@ export class Sim {
                 pattern.pillars ? this.cutAtPillars(x, y, vx, vy, ticks) : ticks,
                 emitter.source,
                 this.tick,
+                wait,
             );
         };
         if (pattern.shape === "wall") {
@@ -12906,6 +12907,8 @@ export class Sim {
         const distance = pattern.distance ?? 8;
         // In to where they stood, and no further
         const ticks = Math.min(life, Math.ceil(distance / speed));
+        // Standing where it formed a while first (BulletPatternDef.hold)
+        const wait = secondsToTicks(pattern.hold ?? 0);
         for (let i = 0; i < count; i++) {
             if (inGap(i)) {
                 continue;
@@ -12916,6 +12919,7 @@ export class Sim {
                 target.y + fm.sin(angle) * distance,
                 angle + Math.PI,
                 ticks,
+                wait,
             );
         }
     }

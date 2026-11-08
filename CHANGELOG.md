@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Theatre of Blood's closing rings, by trippy22: a ring of blood, flies or Verzik's blasts that
+  closes in round you waits a second where it forms, so there's time to find the way out.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed
