@@ -1304,8 +1304,8 @@ export class GameView {
     }
 
     // The Scabaras room's boards: Sequence's plates (the one it's showing lit, and those done),
-    // Lights out's ring, Addition's symbols (lit once stepped on), Matching's tiles (hidden, or
-    // their symbol once turned up or matched), and the roof's shards flying
+    // Lights out's ring, Addition's symbols (lit once stepped on), Matching's tiles (each with its
+    // symbol, lit while stepped on, shining once matched), and the roof's shards flying
     private drawScabaras(actors: ActorRenderer, sim: Sim): void {
         const scabaras = sim.tombsRoom?.scabaras;
         const def = sim.tombsPathRoom?.scabaras;
@@ -1354,18 +1354,16 @@ export class GameView {
         }
         put(locs.tablet, def.tablet.x, def.tablet.y);
         put(locs.button, def.button.x, def.button.y);
+        // Matching: every tile's symbol on it from the start, as OSRS's: the puzzle's finding its
+        // partner on the other board. The one stepped on is lit; a matched pair shines.
         const matching = scabaras.matching;
         for (const side of ["north", "south"] as const) {
             def.matching[side].forEach((p, i) => {
                 const symbol = matching[side][i];
                 const matched = matching.matched[symbol];
-                if (matched || matching.up[side] === i) {
-                    put(locs.shown[symbol], p.x, p.y);
-                    if (matched) {
-                        put(locs.matched, p.x, p.y, true);
-                    }
-                } else {
-                    put(locs.hidden, p.x, p.y);
+                put(locs.shown[symbol], p.x, p.y, false, matching.up[side] === i ? 0.5 : 0);
+                if (matched) {
+                    put(locs.matched, p.x, p.y, true);
                 }
             });
         }

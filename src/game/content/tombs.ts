@@ -1794,9 +1794,9 @@ export function getScabarasTrickle(wave: number): WaveDef {
 //    in say which), and the Ancient tablet's number, targetLeast to targetMost, to make exactly by
 //    walking over them, each once. Over it, the roof comes down and they reset. The wiki's chart
 //    of a way across for every number works on it as it does in OSRS.
-//  - Matching, last, once the others are done: two boards of nine hidden symbols, the same nine
-//    on each. Step on one on each board: the same, they stay; not, the roof comes down and they
-//    hide again. Solo, preSolved pairs (fewer with path levels) are done as it starts, as OSRS's
+//  - Matching, last, once the others are done: two boards of the same nine symbols, each tile's
+//    on it from the start as OSRS's are, shuffled apart. Step on one on each board: the same,
+//    they stay; not, the roof comes down. Solo, preSolved pairs (fewer with path levels) are done as it starts, as OSRS's
 //    four are; in a party none.
 // A mistake's rock takes wrongShare of your hitpoints and breaks into shards. Rocks fall on
 // everyone meanwhile, every rockEvery seconds (less with path levels), for rockDamage within
@@ -1862,8 +1862,7 @@ export const SCABARAS = {
         // Addition's symbols, Line (1) to Foot (9), and the glow on one stepped on
         symbols: [45345, 45346, 45347, 45348, 45349, 45350, 45351, 45352, 45353],
         stepped: 45386,
-        // Matching: a hidden tile, the nine symbols shown, and a matched pair's glow
-        hidden: 45356,
+        // Matching: the nine symbols, on their tiles from the start, and a matched pair's glow
         shown: [45365, 45366, 45367, 45368, 45369, 45370, 45371, 45372, 45373],
         matched: 45387,
         tablet: 45339,

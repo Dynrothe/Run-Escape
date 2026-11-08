@@ -15,6 +15,8 @@ the version in the corner).
   her fight easy. Only her Rampage is stunned by one now. Fixed by Okaeri.
 - The Crondis room's poison reached you under a waterfall. It's safe there now, as in OSRS. Fixed
   by Okaeri.
+- The Scabaras room's Matching tiles hid their symbols, so all you could do was guess. Every tile
+  shows its symbol now, as in OSRS: find its partner on the other side. Fixed by Okaeri.
 - The Crondis room's spear statues were hard to time. The tiles a spear's about to reach now light
   up on the floor before it thrusts. Fixed by Okaeri.
 

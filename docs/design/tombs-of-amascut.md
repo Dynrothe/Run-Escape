@@ -463,10 +463,11 @@ animations from a lister of those whose model or animation is in the raid's rang
       corner south-west of it shows its number, 20 to 45, on a screen while you're by it (and the
       HUD keeps it), dark till the two before are solved. Walk over symbols that add up to it, each
       once; past it, the roof comes down and they reset.
-    - **Matching** (the far, north room, last): two boards of the same nine hidden symbols either
-      side of the chasm. A pair that matches stays; one that doesn't drops the roof and hides
-      again. Solo, 4 are done as it starts, as OSRS's are, one fewer each path level; in a party
-      none.
+    - **Matching** (the far, north room, last): two boards of the same nine symbols either side
+      of the chasm, shuffled apart, each tile's symbol on it from the start as OSRS's are (they
+      were hidden at first, which left only guessing): find each one's partner on the other
+      board. A pair that matches stays; one that doesn't drops the roof. Solo, 4 are done as it
+      starts, as OSRS's are, one fewer each path level; in a party none.
     - A mistake takes a quarter of your hitpoints, through armour. Meanwhile rocks fall near
       everyone every 4.5 s (down to 1.8 with levels), shown by 302's falling roof, and every rock
       breaks into shards, bullets out all round. Scarabs (11697, ranged) and Kephri's swarms
@@ -506,22 +507,19 @@ animations from a lister of those whose model or animation is in the raid's rang
 - **The Crondis room** (`CRONDIS` in `content/tombs.ts`, `Sim.stepCrondis`): square 61,82 from local
   x 10, turned half round so it's entered from the east behind its barrier. Grow the Palm of
   Resourcefulness (11700 to 11704, a stage a quarter, never hurt, its bar its growth) with 300 water,
-  more for each of the party and each path level: each stage a casket and the next wave.
-    - **Water**: stand at a running waterfall (out of the map, drawn running or dry by the client) to
-      fill your container, 100, and it's dry for 10 s after. Near the palm you pour it.
-    - **Spears**: each corridor's crocodile statues thrust their spears out across a pair of rows at
-      a time, down the corridor, the side turning about, then rest; a tell first: the spear
-      glinting out a tile, and the tiles it'll reach marked on the floor (`GameView
+  more for each of the party and each path level: each stage a casket and the next wave. - **Water**: stand at a running waterfall (out of the map, drawn running or dry by the client) to
+  fill your container, 100, and it's dry for 10 s after. Near the palm you pour it. - **Spears**: each corridor's crocodile statues thrust their spears out across a pair of rows at
+  a time, down the corridor, the side turning about, then rest; a tell first: the spear
+  glinting out a tile, and the tiles it'll reach marked on the floor (`GameView
 .drawCrondisSpearTells`, yellow, as the floor's red; players found the glint alone too hard
-      to time). **Poison** comes down each corridor from its waterfall's end every 9 s (less
-      with path levels): pale first, the dark cloud a second behind it. Under a waterfall (where
-      you fill) it doesn't reach you, running or dry, as in OSRS. It's the Spitting Scarab's
-      green splash (2155), faint for the pale: the room's own spot animations (2129 to 2131) draw
-      nothing, and its poison floor tiles' activation can't be baked (a loc bakes with its own
-      animation only).
-    - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
-      (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
-      growth, never below the stage it's reached.
+  to time). **Poison** comes down each corridor from its waterfall's end every 9 s (less
+  with path levels): pale first, the dark cloud a second behind it. Under a waterfall (where
+  you fill) it doesn't reach you, running or dry, as in OSRS. It's the Spitting Scarab's
+  green splash (2155), faint for the pale: the room's own spot animations (2129 to 2131) draw
+  nothing, and its poison floor tiles' activation can't be baked (a loc bakes with its own
+  animation only). - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
+  (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
+  growth, never below the stage it's reached.
 - **Zebak** (`ZEBAK` in `content/tombs.ts`, `Sim.stepZebak`), the Crondis path's boss: the great
   crocodile (11730) lying in the water north of his island, never moving. His attacks are a pot
   that splits into red orbs, a rock that splinters, and acid sprayed. At 85, 70, 55 and 40% a
