@@ -1975,9 +1975,29 @@ describe("boss attacks' instructions", () => {
             now.mockReturnValue(33100);
             queue("Third");
             queue("Fourth");
-            pump(33200);
-            pump(46000);
-            expect(shown.map((s) => s.text)).toEqual(["First", "Second", "Third"]);
+            // A frame at a time, as the game pumps it
+            for (let t = 33200; t <= 46000; t += 100) {
+                pump(t);
+            }
+            expect(shown.map((s) => s.text)).toEqual(["First", "Second", "Third", "Fourth"]);
+            // But time away in a hidden tab isn't time waited
+            queue("Fifth");
+            queue("Sixth");
+            pump(46100);
+            pump(200000);
+            pump(203100);
+            expect(shown.map((s) => s.text).slice(-2)).toEqual(["Fifth", "Sixth"]);
+            // Six at once, 3 s apart: the fifth's and sixth's turns come after 12 s of play, too
+            // late, and they go
+            now.mockReturnValue(210000);
+            pump(210000);
+            const six = ["A", "B", "C", "D", "E", "F"];
+            six.forEach(queue);
+            for (let t = 210100; t <= 230000; t += 100) {
+                pump(t);
+            }
+            expect(shown.map((s) => s.text).slice(-4)).toEqual(["A", "B", "C", "D"]);
+            expect(shown.some((s) => s.text === "E" || s.text === "F")).toBe(false);
         } finally {
             now.mockRestore();
         }
