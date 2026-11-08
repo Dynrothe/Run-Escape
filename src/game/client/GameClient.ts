@@ -9,7 +9,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
-import { toggleInvocation } from "../content/invocations";
+import { getRaidBand, toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
@@ -3551,8 +3551,10 @@ export class GameClient implements GameFrameHandler {
         const sim = this.sim;
         if (sim) {
             this.view.pickupTimers = this.display.pickupTimers;
-            // Once the room's been beaten, and while it's on
-            this.view.puzzleHelper = this.display.puzzleHelper && this.save.scabarasBeaten === true;
+            // While it's on, once the room's been beaten, and from the start at Entry
+            this.view.puzzleHelper =
+                this.display.puzzleHelper &&
+                (this.save.scabarasBeaten === true || getRaidBand(sim.raidLevel) === "Entry");
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
                 this.minimap.draw(

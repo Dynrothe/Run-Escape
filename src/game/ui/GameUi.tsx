@@ -56,7 +56,7 @@ import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
-import type { RaidChest, TombsSummary } from "../core/Sim";
+import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
@@ -340,7 +340,7 @@ function PuzzleHelperSetting({ ui, client }: ScreenProps): JSX.Element {
             text={
                 unlocked
                     ? "In the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA plugin does"
-                    : "Beat the Tombs of Amascut's Scabaras room once to unlock it"
+                    : "On at Entry. Beat the Tombs of Amascut's Scabaras room once to unlock it at any raid level"
             }
         >
             {unlocked ? (
@@ -2488,6 +2488,18 @@ function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | nu
     }
     return (
         <>
+            <div className="ui-scabaras-puzzles">
+                {info.puzzles.map(({ puzzle, state }) => (
+                    <div key={puzzle} className={"ui-scabaras-puzzle ui-scabaras-puzzle-" + state}>
+                        {SCABARAS_PUZZLES[puzzle].name}:{" "}
+                        {state === "solved"
+                            ? "done"
+                            : state === "open"
+                              ? SCABARAS_PUZZLES[puzzle].todo
+                              : SCABARAS_PUZZLES[puzzle].after}
+                    </div>
+                ))}
+            </div>
             {info.readable && (
                 <div className="ui-round">
                     The tablet says {info.target}: made {info.sum}
@@ -2496,6 +2508,27 @@ function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | nu
         </>
     );
 }
+
+// The Scabaras room's puzzles as the HUD lists them: each one's name, what it wants and where
+// (the room as it's seen, walked up the screen), and what it waits on
+const SCABARAS_PUZZLES: Record<ScabarasPuzzle, { name: string; todo: string; after: string }> = {
+    sequence: {
+        name: "Sequence",
+        todo: "right hall, push the button and follow the plates",
+        after: "",
+    },
+    lights: { name: "Lights out", todo: "left hall, light the whole ring", after: "" },
+    addition: {
+        name: "Addition",
+        todo: "make the tablet's number",
+        after: "after Sequence and Lights out",
+    },
+    matching: {
+        name: "Matching",
+        todo: "far room, pair the symbols",
+        after: "after the other three",
+    },
+};
 
 // What a slate or the Ancient tablet in the Scabaras room says, on a screen of its own while
 // you're stood by it: the slates' nine symbols (the floor's own, from above) with what each is

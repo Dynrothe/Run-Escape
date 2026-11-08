@@ -1528,6 +1528,30 @@
     text-shadow: 1px 1px 0 #000;
 }
 
+/* The Scabaras room's puzzles: what's done, what's to do now, what's waiting */
+.ui-scabaras-puzzles {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: 300px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    text-align: right;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-scabaras-puzzle-open {
+    color: var(--ui-yellow);
+}
+
+.ui-scabaras-puzzle-solved {
+    color: #5fd35f;
+}
+
+.ui-scabaras-puzzle-waiting {
+    color: #9a9080;
+}
+
 /* The chest at the end of a raid, on the result screen: purple, as the real one is */
 .ui-raid-chest {
     margin: 6px auto 10px;

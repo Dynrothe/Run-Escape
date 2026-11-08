@@ -11,13 +11,15 @@ the version in the corner).
   fixing is on the floor beside you, not at the edge of the screen.
 - Bosses' instructions, by Okaeri: each attack says what to do the first time it's used in a run,
   one at a time and long enough to read, instead of every time and all at once.
+- The Tombs of Amascut's Scabaras room, by Okaeri: the HUD lists its four puzzles, where each is,
+  and which are done, open, or waiting on the others.
 
 ### Added
 
 - A puzzle helper for the Tombs of Amascut's Scabaras room, by Okaeri, as the ToA plugin has it:
   the order the Sequence plates lit, the Lights out plates to step on, a way to make the Addition
-  number, and each Matching symbol named in its own colour. Beat the room once to unlock it; it can
-  be turned off in the settings.
+  number, and each Matching symbol named in its own colour. It's on at Entry; beat the room once to
+  have it at any raid level. It can be turned off in the settings.
 
 ## 0.29.0 - 2026-11-08
 
