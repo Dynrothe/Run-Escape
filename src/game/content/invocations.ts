@@ -32,8 +32,6 @@ export type InvocationDef = {
     // What it adds to the raid level
     level: number;
     description: string;
-    // Not in yet: what it does besides the raid level comes with this part of the raid
-    comes?: string;
 };
 
 export type InvocationGroupDef = {
@@ -451,6 +449,21 @@ export const TOMBS_UNIQUES: { name: string; objId: number; minLevel: number }[] 
 );
 
 // The highest raid level the board's reward bar goes to
+// The Tombs' Attempts invocations: how many times the party can die before the raid's over
+export const TOMBS_ATTEMPTS: [id: string, deaths: number][] = [
+    ["hardcore_run", 0],
+    ["softcore_run", 3],
+    ["persistence", 5],
+    ["try_again", 10],
+];
+// The Tombs' invocations: what armour stops with Quiet Prayers, and what a hit within a second of
+// the last does with Deadly Prayers
+export const QUIET_PRAYERS = 0.9;
+export const DEADLY_PRAYERS = 1.2;
+// Acceleration in the Wardens: the obelisk's specials a quarter sooner (OSRS's 22 ticks to 30),
+// and its first sooner too (28 to 36)
+export const ACCELERATION = { obeliskEvery: 0.75, firstOpen: 0.78 };
+
 export const MAX_RAID_LEVEL = 600;
 
 export const INVOCATION_BY_ID: Map<string, InvocationDef> = new Map(

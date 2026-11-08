@@ -700,7 +700,7 @@ export class GameView {
         this.drawHet(actors, sim);
         this.drawAkkha(actors, sim);
         this.drawScabaras(actors, sim);
-        this.drawKephri(actors, sim);
+        this.drawKephri(actors, sim, alpha);
         this.drawCrondis(actors, sim);
         this.drawZebak(actors, sim);
         this.drawWardens(actors, sim);
@@ -1266,7 +1266,7 @@ export class GameView {
 
     // Kephri: her swarm's shield round her while it's up (2141), and her flies round whoever's
     // about to be thrown back (2146)
-    private drawKephri(actors: ActorRenderer, sim: Sim): void {
+    private drawKephri(actors: ActorRenderer, sim: Sim, alpha: number): void {
         const fight = sim.tombsKephri;
         if (!fight) {
             return;
@@ -1295,9 +1295,10 @@ export class GameView {
             play(KEPHRI_SHIELD_SPOTANIM, boss.x, boss.y, 1.6);
         }
         for (const index of sim.kephriDungHeroes) {
-            const player = sim.heroes[index]?.player;
-            if (player) {
-                play(KEPHRI.dung.spotAnim, player.x, player.y);
+            // Where the player's shown (a guest's own predicted), as their model is
+            if (sim.heroes[index]) {
+                const pose = getPlayerPose(sim, index, alpha, this.localPlayerPose);
+                play(KEPHRI.dung.spotAnim, pose.x, pose.y);
             }
         }
     }

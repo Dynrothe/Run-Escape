@@ -1498,6 +1498,8 @@ scripts/cache/compare-caches.ts osrs-241_2026-09-30   what changed since an olde
                                          game reads (see A newer cache)
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
+scripts/cache/sprite-sheet.ts out.png 5000 5199   a range of sprites on one sheet, each over its id
+scripts/cache/spotanims.ts 2242 2236-2240   spot animations: model, animation, length and size
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
                                          SLIM_WORKERS, SLIM_CHECK, SLIM_REUSE: see Hosting)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
@@ -1559,7 +1561,8 @@ URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizar
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
-`?raidtest` (dev only) speeds up a raid (see Raids). F3
+`?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
+Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens). F3
 shows collision and stats.
 
 ### A newer cache

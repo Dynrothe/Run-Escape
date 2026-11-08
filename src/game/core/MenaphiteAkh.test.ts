@@ -1,7 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { getEnemy } from "../content/enemies";
-import { MAP_BY_ID } from "../content/maps";
 import { emptyStats } from "../content/types";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
@@ -10,7 +9,7 @@ import { makeGrid } from "./world/testGrid";
 
 // The Menaphite Akh (Beneath Cursed Sands' last part, content/cursedSands.ts): her shadow
 // copying her dives in her last phase (EnemyDef.echoes), on open ground where the quest's square
-// is. The quest's a dev map, so it's put in the maps for these tests.
+// is.
 
 const MAP = BENEATH_CURSED_SANDS;
 const SQUARE = MAP.bossArena!;
@@ -23,17 +22,6 @@ const AKH = getEnemy("menaphite_akh");
 const SHADOW = getEnemy("menaphite_shadow");
 const ECHOES = SHADOW.echoes!;
 const attack = (name: string) => AKH.boss!.attacks.find((a) => a.name === name)!;
-
-let listed = false;
-beforeAll(() => {
-    listed = MAP_BY_ID.has(MAP.id);
-    MAP_BY_ID.set(MAP.id, MAP);
-});
-afterAll(() => {
-    if (!listed) {
-        MAP_BY_ID.delete(MAP.id);
-    }
-});
 
 function createSim(party?: number): Sim {
     const sim = new Sim({

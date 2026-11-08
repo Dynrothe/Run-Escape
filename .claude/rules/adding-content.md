@@ -304,6 +304,16 @@ only the attacks they name meanwhile (`stepOrdeal` in `Sim.ts`), after its `open
 only then. The balance bot has to know how to play a new one (`fightMove` in `simulate-run.ts`), or
 its sims can't win the fight.
 
+The Tombs of Amascut (`scaperune/maps/tombsOfAmascut.ts`, to the plan in
+`docs/design/tombs-of-amascut.md`) is on the Raids tab, behind its quest, Beneath Cursed Sands
+(`MapDef.requires`). A new invocation goes in `INVOCATIONS`
+(`content/invocations.ts`), with its raid level and group.
+A new room or boss, or a mechanic in one, needs the Tombs' bot to know it
+(`scripts/game/tombsBot.ts`: the puzzle's steps, where to stand, what to step round), and its sim
+run on it
+(`scripts/game/simulate-tombs.ts`, `ROOM=` the room), solo and with `PARTY=2`: in co-op one player
+works a puzzle two would undo between them.
+
 ## Pet
 
 A pet is a trophy that follows its finder (looks only). Add the trophy to `trophies.ts` with a drop
@@ -312,16 +322,6 @@ animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: u
 script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
 offered once found, with nothing else to add. Pets never go in the sim: see Pets in
 `docs/DEVELOPMENT.md`.
-
-The Tombs of Amascut (`scaperune/maps/tombsOfAmascut.ts`, to the plan in
-`docs/design/tombs-of-amascut.md`) is on the Raids tab, behind its quest, Beneath Cursed Sands
-(`MapDef.requires`). A new invocation goes in `INVOCATIONS`
-(`content/invocations.ts`), with its raid level and group, and `comes` until what it does is in.
-A new room or boss, or a mechanic in one, needs the Tombs' bot to know it
-(`scripts/game/tombsBot.ts`: the puzzle's steps, where to stand, what to step round), and its sim
-run on it
-(`scripts/game/simulate-tombs.ts`, `ROOM=` the room), solo and with `PARTY=2`: in co-op one player
-works a puzzle two would undo between them.
 
 A trophy (`trophies.ts`) shows in the Collection log under the map its `from` names (a pumpkin's
 under the Hallowed Night), with a tab of its own for a new map, and so do weapons whose `unlock`

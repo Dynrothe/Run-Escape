@@ -2886,11 +2886,6 @@
     color: var(--ui-yellow);
 }
 
-.ui-invocation-soon {
-    color: #8a7f6a;
-    font-size: 13px;
-}
-
 .ui-invocations-buttons {
     display: flex;
     justify-content: space-between;

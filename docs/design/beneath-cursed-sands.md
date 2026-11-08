@@ -71,7 +71,7 @@ Every field the first draft named exists (`line`, `opens`, `cone`, `underRadius`
 
 ### Numbers
 
-`STAGE=0 FLAT=1 MAP=beneath_cursed_sands DODGE=1 DEV_MAPS=1 ... simulate-run.ts sands_delver 3`:
+`STAGE=0 FLAT=1 MAP=beneath_cursed_sands DODGE=1 ... simulate-run.ts sands_delver 3`:
 
 | Seed | Before               | After                                 | After, `GOD=1`        |
 | ---- | -------------------- | ------------------------------------- | --------------------- |
@@ -198,7 +198,7 @@ What the player sees, reads, dodges and punishes:
 
 ### Numbers
 
-`STAGE=1 FLAT=1 MAP=beneath_cursed_sands DODGE=1 DEV_MAPS=1 ... simulate-run.ts sands_delver 3`
+`STAGE=1 FLAT=1 MAP=beneath_cursed_sands DODGE=1 ... simulate-run.ts sands_delver 3`
 (the phase line goes by the boss on the bar, so the bosses line is the one to read):
 
 | Seed | Before (3,300 and 3,900)        | After (3,800 and 4,500)        | Before, `GOD=1` | After, `GOD=1` |
@@ -307,7 +307,7 @@ Every field the design named exists (`exhumes`, `smother`, `lingers`, ground `cr
 
 ### Numbers
 
-`STAGE=2 FLAT=1 MAP=beneath_cursed_sands DODGE=1 DEV_MAPS=1 ... simulate-run.ts sands_delver 3`:
+`STAGE=2 FLAT=1 MAP=beneath_cursed_sands DODGE=1 ... simulate-run.ts sands_delver 3`:
 
 | Seed | Before (13,500)              | After (6,500)                         | After, `GOD=1`        |
 | ---- | ---------------------------- | ------------------------------------- | --------------------- |
@@ -414,7 +414,7 @@ Every field the design named exists, with these differences:
 
 ### Numbers
 
-`STAGE=3 FLAT=1 MAP=beneath_cursed_sands DODGE=1 DEV_MAPS=1 ... simulate-run.ts sands_delver 3`:
+`STAGE=3 FLAT=1 MAP=beneath_cursed_sands DODGE=1 ... simulate-run.ts sands_delver 3`:
 
 | Seed | Before (15,000)              | After (8,000)                       | After, `GOD=1`                    |
 | ---- | ---------------------------- | ----------------------------------- | --------------------------------- |

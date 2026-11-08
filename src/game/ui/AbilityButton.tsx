@@ -40,6 +40,7 @@ export function AbilityButton({
             className={[
                 "ui-ability-wrap",
                 touch ? "ui-ability-wrap-touch" : "",
+                touch && ability.withItems ? "ui-ability-wrap-items" : "",
                 // Its pulsing ring, whenever his guard's down, ready or not, so the moment's never
                 // missed
                 ability.guide && ability.opened ? "ui-ability-wrap-alert" : "",

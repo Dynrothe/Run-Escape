@@ -297,6 +297,8 @@ export type AbilityView = {
     opened: boolean;
     // It coaches (FightAbilityDef.guide): the hint, and the guard-down tag and pulse
     guide: boolean;
+    // The run has items (not a one-fight map): on a touch screen it goes above their corner
+    withItems: boolean;
     // Say what it's for (it's not been used yet this session, early in a fight)
     hint: boolean;
 };

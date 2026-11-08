@@ -50,6 +50,7 @@ import {
     TOMBS_SPOTANIMS,
     WARDENS,
     ZEBAK,
+    getTombsFightSeqs,
 } from "../content/tombs";
 import {
     EnemyDef,
@@ -310,10 +311,10 @@ export function getSpotAnimIds(): number[] {
     for (const map of ALL_MAPS) {
         addImpact(map.tombs?.ability?.impact);
     }
-    // A floor's slabs (a dev map's, so they're only there on the dev server)
     for (const map of ALL_MAPS) {
         // What plays in its cinematics (MapDef.cinematic, and a fight's parts')
         add(...getMapCinematics(map).flatMap((def) => def.cues.map((cue) => cue.spotAnim)));
+        // A floor's slabs (the Wardens')
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -705,6 +706,7 @@ export class GameAssets {
             enemy.boss?.leash?.jump?.upSeq ?? -1,
             enemy.boss?.phases?.threshold?.seq ?? -1,
             enemy.boss?.phases?.threshold?.riseSeq ?? -1,
+            ...getTombsFightSeqs(enemy.id),
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(
@@ -810,7 +812,7 @@ export class GameAssets {
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
         }
-        // What's under a floor (a dev map's, as its slabs are)
+        // What's under a floor (the Wardens', as its slabs are)
         for (const map of ALL_MAPS) {
             for (const locId of Object.values(map.floor?.under ?? {})) {
                 requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });

@@ -1,5 +1,5 @@
 // Lists spot animations: their model, animation, how long it runs and its size.
-//   npx tsx scripts/cache/spotanims.ts 2242 2243 1727 [from-to]
+//   bun run tsx scripts/cache/spotanims.ts 2242 2243 1727 [from-to]
 import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";

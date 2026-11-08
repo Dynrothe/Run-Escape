@@ -38,7 +38,15 @@ import {
     HARD_XP,
     getHardScale,
 } from "../content/hard";
-import { cleanInvocations, getRaidLevel, getRaidLevelScale } from "../content/invocations";
+import {
+    ACCELERATION,
+    DEADLY_PRAYERS,
+    QUIET_PRAYERS,
+    TOMBS_ATTEMPTS,
+    cleanInvocations,
+    getRaidLevel,
+    getRaidLevelScale,
+} from "../content/invocations";
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
@@ -83,6 +91,7 @@ import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/se
 import { SHOP_UPGRADES } from "../content/shop";
 import { SOUNDS } from "../content/sounds";
 import {
+    AKKHA_VANISH_SEQ,
     APMEKEN,
     APMEKEN_SPOTANIMS,
     APMEKEN_WAVES,
@@ -102,9 +111,11 @@ import {
     TOMBS_BOSS_FOOD,
     TOMBS_POINTS,
     TOMBS_PUZZLE_LEVELS,
+    TOMBS_ROOM_SPAWNS_PER_LEVEL,
     TOMBS_SPIRIT,
     TOMBS_SPIRIT_BUNDLES,
     TOMBS_SPIRIT_SHARE,
+    TOMBS_SPOTANIMS,
     TOMBS_TIME_LIMITS,
     WARDENS,
     WARDENS_WINDMILL,
@@ -375,17 +386,6 @@ const TELEPORTER_REACH = 2.2;
 // Tiles from the player enemies turn up at in a Tombs room, which is too small for the usual
 const TOMBS_SPAWN_MIN_DISTANCE = 5;
 const TOMBS_SPAWN_MAX_DISTANCE = 14;
-// The Tombs' Attempts invocations: how many times the party can die before the raid's over
-const TOMBS_ATTEMPTS: [id: string, deaths: number][] = [
-    ["hardcore_run", 0],
-    ["softcore_run", 3],
-    ["persistence", 5],
-    ["try_again", 10],
-];
-// The Tombs' invocations: what armour stops with Quiet Prayers, and what a hit within a second of
-// the last does with Deadly Prayers
-const QUIET_PRAYERS = 0.9;
-const DEADLY_PRAYERS = 1.2;
 // How close to a door in the Tombs' Nexus counts as at it (tiles from its middle; doors are 3 by 3
 // at most, and solid)
 const TOMBS_DOOR_REACH = 2.8;
@@ -1251,9 +1251,6 @@ export type KephriFight = {
     medicTick: number;
     arcane: Map<number, { startTick: number; hpAt: number; spot: number }>;
 };
-
-// Akkha vanishing (his teleport), for Memory Blast and his final stand's corners
-const AKKHA_VANISH_SEQ = 9784;
 
 // The Het room: its mirrors, the spots the loose ones go on, its barriers (a worn one's circle to
 // stand in to break it, and the ticks it's been stood in), the seal's ring of circles, and the way
@@ -5414,7 +5411,10 @@ export class Sim {
                 return [
                     {
                         ...trickle,
-                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathWeight) * crowd,
+                        spawnRate:
+                            trickle.spawnRate *
+                            (1 + TOMBS_ROOM_SPAWNS_PER_LEVEL * this.tombsPathWeight) *
+                            crowd,
                         maxAlive: Math.max(2, Math.round(trickle.maxAlive * crowd)),
                     },
                 ];
@@ -5424,7 +5424,9 @@ export class Sim {
                 return [
                     {
                         ...trickle,
-                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathWeight),
+                        spawnRate:
+                            trickle.spawnRate *
+                            (1 + TOMBS_ROOM_SPAWNS_PER_LEVEL * this.tombsPathWeight),
                     },
                 ];
             }
@@ -5433,7 +5435,9 @@ export class Sim {
                 return [
                     {
                         ...trickle,
-                        spawnRate: trickle.spawnRate * (1 + 0.15 * this.tombsPathWeight),
+                        spawnRate:
+                            trickle.spawnRate *
+                            (1 + TOMBS_ROOM_SPAWNS_PER_LEVEL * this.tombsPathWeight),
                     },
                 ];
             }
@@ -5444,7 +5448,7 @@ export class Sim {
 
     private apmekenTrickle(wave: number): WaveDef {
         const trickle = getApmekenTrickle(wave);
-        const quicker = 1 + 0.15 * this.tombsPathWeight;
+        const quicker = 1 + TOMBS_ROOM_SPAWNS_PER_LEVEL * this.tombsPathWeight;
         return { ...trickle, spawnRate: trickle.spawnRate * quicker };
     }
 
@@ -5532,12 +5536,7 @@ export class Sim {
             return;
         }
         if (fight.beatenTick !== undefined) {
-            this.tombsPeels = [];
-            this.tombsAkkha = undefined;
-            this.tombsKephri = undefined;
-            this.tombsZebak = undefined;
-            this.tombsCover = [];
-            this.tombsSarcophagi = [];
+            this.clearTombsBossLeftovers();
             if (this.tick - fight.beatenTick >= secondsToTicks(4)) {
                 this.leaveTombsPath();
             }
@@ -5545,12 +5544,7 @@ export class Sim {
         }
         if (fight.uid === -1) {
             // Not up (yet, or again after a death): nothing of the last fight's left lying about
-            this.tombsPeels = [];
-            this.tombsAkkha = undefined;
-            this.tombsKephri = undefined;
-            this.tombsZebak = undefined;
-            this.tombsCover = [];
-            this.tombsSarcophagi = [];
+            this.clearTombsBossLeftovers();
             // A step past the line and the gap at the arena's foot (Mind the Gap), so it opens
             // behind the party, not under them
             const rise = def.line.y + TOMBS_BOSS_RISE;
@@ -6783,7 +6777,7 @@ export class Sim {
             lost.anim = "attack";
             lost.attackSeq = lost.def.deathSeq;
             lost.animStart = this.tick;
-            this.addEffect(2216, lost.x, lost.y, 0, secondsToTicks(7));
+            this.addEffect(TOMBS_SPOTANIMS.wardenBlowsUp, lost.x, lost.y, 0, secondsToTicks(7));
         }
         this.emit({
             type: "notice",
@@ -6986,7 +6980,7 @@ export class Sim {
     // are to 30)
     private obeliskEvery(): number {
         const every = WARDENS.two.obelisk.every;
-        return this.invoked("acceleration") ? every * 0.75 : every;
+        return this.invoked("acceleration") ? every * ACCELERATION.obeliskEvery : every;
     }
 
     // An enemy's attack animation, from now
@@ -7041,7 +7035,9 @@ export class Sim {
         // Acceleration: sooner, as OSRS's 28 ticks are to 36
         two.nextOpen =
             this.tick +
-            secondsToTicks(def.obelisk.firstOpen * (this.invoked("acceleration") ? 0.78 : 1));
+            secondsToTicks(
+                def.obelisk.firstOpen * (this.invoked("acceleration") ? ACCELERATION.firstOpen : 1),
+            );
         this.emit({
             type: "notice",
             message: `${def.message} Only ${forms.styles[0]} fills its shield now.`,
@@ -7564,7 +7560,7 @@ export class Sim {
             if (stepped) {
                 siphons.reversed.push(uid);
                 this.reform(siphon, def.siphon.reversed);
-                this.emit({ type: "impact", sound: 6183, x: siphon.x, y: siphon.y });
+                this.emit({ type: "impact", sound: SOUNDS.tombsChip, x: siphon.x, y: siphon.y });
             } else if (beam) {
                 this.addEffect(def.siphon.beamSpotAnim, siphon.x, siphon.y, 0, 30);
             }
@@ -8362,7 +8358,7 @@ export class Sim {
                 continue;
             }
             this.restoreKephri(boss, fight, def.swarm.shield, def.swarm.heal);
-            this.addEffect(2144, boss.x, boss.y, 0, 30, boss.uid);
+            this.addEffect(TOMBS_SPOTANIMS.kephriShieldSwarm, boss.x, boss.y, 0, 30, boss.uid);
             this.vanish(enemy);
         }
     }
@@ -10025,7 +10021,12 @@ export class Sim {
             if (up.some((hero) => this.inHetCircle(hero.player, barrier.stand!))) {
                 barrier.mined++;
                 if (barrier.mined % secondsToTicks(HET.mine.every) === 0) {
-                    this.emit({ type: "impact", sound: 6183, x: barrier.x, y: barrier.y });
+                    this.emit({
+                        type: "impact",
+                        sound: SOUNDS.tombsChip,
+                        x: barrier.x,
+                        y: barrier.y,
+                    });
                 }
                 if (barrier.mined >= secondsToTicks(HET.mine.barrier)) {
                     het.barriers = het.barriers.filter((b) => b !== barrier);
@@ -10073,7 +10074,11 @@ export class Sim {
         const every = secondsToTicks(HET.beamEvery);
         return {
             held: het.mirrors.filter((m) => m.carrier === this.hero.index).length,
-            charge: Math.max(0, Math.min(1, 1 - (het.nextBeamTick - this.tick) / every)),
+            // In tenths, as the HUD shows it, so it doesn't redraw every tick
+            charge:
+                Math.round(
+                    Math.max(0, Math.min(1, 1 - (het.nextBeamTick - this.tick) / every)) * 10,
+                ) / 10,
         };
     }
 
@@ -10853,6 +10858,23 @@ export class Sim {
         return Math.max(0, earned - (this.tombsSpiritTaken.get(index) ?? 0));
     }
 
+    // What a path boss's fight leaves lying about, gone. Called every tick while none is up, so
+    // only a list with something in it is replaced.
+    private clearTombsBossLeftovers(): void {
+        if (this.tombsPeels.length) {
+            this.tombsPeels = [];
+        }
+        this.tombsAkkha = undefined;
+        this.tombsKephri = undefined;
+        this.tombsZebak = undefined;
+        if (this.tombsCover.length) {
+            this.tombsCover = [];
+        }
+        if (this.tombsSarcophagi.length) {
+            this.tombsSarcophagi = [];
+        }
+    }
+
     // The Helpful Spirit in the Nexus: walked up to, it offers its bundles to a hero with one to
     // come (or says when they will), once each time they come up to it. True when it's opened.
     private stepTombsSpirit(at: { x: number; y: number }): boolean {
@@ -10876,7 +10898,9 @@ export class Sim {
                     options = this.rollTombsBundles();
                     this.tombsSpiritOffer.set(hero.index, options);
                 }
+                // The offer keeps whose it is
                 this.openOffer(TOMBS_SPIRIT, options);
+                this.use(current);
                 return true;
             }
             const message =

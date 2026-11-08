@@ -1,7 +1,7 @@
 // Draws a range of the cache's sprites side by side, each over its id, to find one by eye: the
 // cache's sprites have no names. Each cell is the first frame, shrunk to fit if it's big.
 //
-//   npx tsx scripts/cache/sprite-sheet.ts out.png 5000 5199
+//   bun run tsx scripts/cache/sprite-sheet.ts out.png 5000 5199
 import fs from "fs";
 
 import { GAME_CACHE_NAME } from "../../src/game/cache";

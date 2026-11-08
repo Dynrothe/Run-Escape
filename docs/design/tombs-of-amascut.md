@@ -180,7 +180,7 @@ The waves no longer run on a clock, but they're still where experience and caske
   sarcophagi.
 - **Akkha**: prays against your style and swaps (the Theatre's colours already do this); four
   quadrants with their effects (fire burns, shadow drains, lightning blocks prayer, ice slows);
-  shadows at 80/60/40/20% to kill before their bars fill; Memory Blast's safe quadrants; trailing
+  shadows to kill before their bars fill (OSRS's at 80/60/40/20%, here at 66 and 33%); Memory Blast's safe quadrants; trailing
   orbs that come wherever you move, so the answer is to stand still.
 - **Kephri**: fireballs on marked tiles; Dung Strike; eggs that burst unless killed; her shield's
   scarab swarms, running at her from six spawns, each one that gets there restoring it, so your

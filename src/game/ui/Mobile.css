@@ -57,13 +57,25 @@
         display: none;
     }
 
-    /* A fight's own button, big, above the items' corner (a fight has no items). Its wrap's placed,
-       so the tag, the hint and the ring go by the button. The hint's above it, clear of the stick
-       (bottom left), the pause button (top) and the HP bar (bottom middle). */
+    /* A fight's own button, big, in the items' corner (a one-fight map has no items). Its wrap's
+       placed, so the tag, the hint and the ring go by the button. The hint's above it, clear of the
+       stick (bottom left), the pause button (top) and the HP bar (bottom middle). */
     .ui-ability-wrap-touch {
         position: absolute;
         right: calc(var(--safe-right) + 16px);
         bottom: calc(var(--safe-bottom) + 16px);
+    }
+
+    /* A run with items (the Tombs): above their two rows, in their column */
+    .ui-ability-wrap-touch.ui-ability-wrap-items {
+        right: calc(
+            var(--safe-right) + var(--touch-items-inset, 12px) +
+                (var(--touch-items-width, 122px) - 76px) / 2
+        );
+        bottom: calc(
+            var(--safe-bottom) + var(--touch-items-inset, 12px) + var(--touch-item-size, 58px) * 2 +
+                var(--touch-items-gap, 6px) + 10px
+        );
     }
 
     .ui-touch-ability {

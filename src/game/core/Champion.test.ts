@@ -1,7 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { getEnemy } from "../content/enemies";
-import { MAP_BY_ID } from "../content/maps";
 import { BossAttackDef, emptyStats } from "../content/types";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
@@ -11,7 +10,7 @@ import { makeGrid } from "./world/testGrid";
 // The Champion of Scabaras (Beneath Cursed Sands' third part, content/cursedSands.ts): his
 // trail of marks on where the player has just been (GroundPatternDef spots "trail"), solo and
 // in co-op, and his nests (BossDef.exhumes with an opener), on open ground where the quest's
-// square is. The quest's a dev map, so it's put in the maps for these tests.
+// square is.
 
 const MAP = BENEATH_CURSED_SANDS;
 const SQUARE = MAP.bossArena!;
@@ -22,17 +21,6 @@ const ROWS = Array.from({ length: SQUARE.size + MARGIN * 2 }, () =>
 const MIDDLE = { x: SQUARE.baseX + SQUARE.size / 2, y: SQUARE.baseY + SQUARE.size / 2 };
 const CHAMPION = getEnemy("champion_of_scabaras");
 const TRAIL = CHAMPION.boss!.attacks.find((a) => a.name === "Your shadow betrays you")!;
-
-let listed = false;
-beforeAll(() => {
-    listed = MAP_BY_ID.has(MAP.id);
-    MAP_BY_ID.set(MAP.id, MAP);
-});
-afterAll(() => {
-    if (!listed) {
-        MAP_BY_ID.delete(MAP.id);
-    }
-});
 
 function createSim(party?: number): Sim {
     const sim = new Sim({

@@ -1031,6 +1031,10 @@ function InvocationBoard({
     const scale = getRaidLevelScale(level);
     const [shown, setShown] = useState<string>();
     const pointed = shown === undefined ? undefined : INVOCATION_BY_ID.get(shown);
+    // A touch screen has no pointing: a tap shows one, and a tap on the one shown switches it.
+    // Decided as it's pressed, before the press focuses it (which shows it)
+    const readOnly = useRef(false);
+    const touch = window.matchMedia?.("(pointer: coarse)").matches ?? false;
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-invocations">
@@ -1050,9 +1054,17 @@ function InvocationBoard({
                                     title={invocation.name}
                                     onMouseEnter={() => setShown(invocation.id)}
                                     onFocus={() => setShown(invocation.id)}
+                                    onPointerDown={(e) => {
+                                        readOnly.current =
+                                            e.pointerType === "touch" && shown !== invocation.id;
+                                    }}
                                     onClick={() => {
+                                        const read = readOnly.current;
+                                        readOnly.current = false;
                                         setShown(invocation.id);
-                                        client.toggleInvocation(invocation.id);
+                                        if (!read) {
+                                            client.toggleInvocation(invocation.id);
+                                        }
                                     }}
                                 >
                                     <ItemIcon
@@ -1122,15 +1134,12 @@ function InvocationBoard({
                                 {INVOCATION_GROUPS.find((g) => g.id === pointed.group)?.one &&
                                     " Only one of its kind can be on."}
                             </span>
-                            {pointed.comes && (
-                                <span className="ui-invocation-soon">
-                                    Not in yet: comes with {pointed.comes}
-                                </span>
-                            )}
                         </>
                     ) : (
                         <span className="ui-subtle">
-                            Point at an invocation to see what it does.
+                            {touch
+                                ? "Tap an invocation to see what it does, and again to switch it."
+                                : "Point at an invocation to see what it does."}
                         </span>
                     )}
                 </div>

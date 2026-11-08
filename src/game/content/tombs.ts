@@ -691,6 +691,8 @@ TOMBS_ENEMIES.push(
 // (gently, as OSRS's do: the raid level's scale does the heavy lifting, and Pathmaster with Walk
 // the Path takes the last path to level 9)
 export const TOMBS_BOSSES = { levelHp: 0.12, levelDamage: 0.05 };
+// A puzzle room's enemies come this much quicker for each path done before it
+export const TOMBS_ROOM_SPAWNS_PER_LEVEL = 0.15;
 
 // The levels a puzzle room's worth as it's done, on top of its waves' experience (Sim.enterTombsBoss)
 export const TOMBS_PUZZLE_LEVELS = 2;
@@ -3207,6 +3209,35 @@ const WARDENS_SOUNDS = { attack: -1, hit: 6595, death: -1 };
 // The obelisk's windmill (WardensPhaseTwoDef windmill): which of its five patterns, A to E, strikes
 // each tile round it, read off the OSRS Wiki's diagram of it, west to east and north to south as
 // OSRS has the room; F is the obelisk. The middle column's struck by both C and D.
+// Akkha vanishing (his teleport), for Memory Blast and his final stand's corners
+export const AKKHA_VANISH_SEQ = 9784;
+
+// What the Tombs' fights play on their bosses themselves (Sim.animate), none of it in the enemies'
+// own fields: baked with them, or the model would show its walk instead
+export function getTombsFightSeqs(enemyId: string): number[] {
+    if (AKKHA.forms.includes(enemyId)) {
+        return [AKKHA_VANISH_SEQ];
+    }
+    if (enemyId === WARDENS.obeliskId || enemyId === WARDENS.two.obeliskId) {
+        return [WARDENS.two.obelisk.openSeq, WARDENS.two.obelisk.closeSeq];
+    }
+    if (/^(elidinis|tumeken)_warden_/.test(enemyId)) {
+        const { two, three } = WARDENS;
+        return [
+            two.wakeSeq,
+            two.kneelSeq,
+            two.standSeq,
+            two.deathSeq,
+            ...Object.values(three.slamSeqs),
+            three.chargeSeq,
+            three.staggerSeq,
+            three.releaseSeq,
+            three.enrage.seq,
+        ];
+    }
+    return [];
+}
+
 export const WARDENS_WINDMILL = [
     "AAABBBBCCCCDDDEEEEAAA",
     "AAABBBBCCCCDDDEEEEAAA",

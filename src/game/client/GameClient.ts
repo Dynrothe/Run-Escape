@@ -2443,6 +2443,7 @@ export class GameClient implements GameFrameHandler {
             inReach: sim.abilityTarget() !== undefined,
             opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
             guide: ability.guide === true,
+            withItems: !sim.map.fight,
             hint:
                 ability.guide === true &&
                 !this.abilityUsed &&

@@ -1832,6 +1832,7 @@ describe("the fight button's hint", () => {
                 cooldown: number;
                 guide?: boolean;
             },
+            map: {},
             tick: 0,
             shownBoss: undefined as { dead: boolean; risingEnd: number } | undefined,
             abilityTarget: () => undefined,
