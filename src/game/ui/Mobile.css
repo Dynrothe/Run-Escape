@@ -63,7 +63,19 @@
     .ui-ability-wrap-touch {
         position: absolute;
         right: calc(var(--safe-right) + 16px);
-        bottom: calc(var(--safe-bottom) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px + var(--touch-ability-name, 14px));
+    }
+
+    /* Its name, under the circle and as wide as it needs ("Point-blank volley") */
+    .ui-ability-name-under {
+        top: 100%;
+        bottom: auto;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        margin-top: 1px;
+        white-space: nowrap;
+        pointer-events: none;
     }
 
     /* A run with items (the Tombs): above their two rows, in their column */
@@ -74,7 +86,7 @@
         );
         bottom: calc(
             var(--safe-bottom) + var(--touch-items-inset, 12px) + var(--touch-item-size, 58px) * 2 +
-                var(--touch-items-gap, 6px) + 10px
+                var(--touch-items-gap, 6px) + 10px + var(--touch-ability-name, 14px)
         );
     }
 

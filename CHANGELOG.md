@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- On a phone, the fight button's name (Point-blank volley, Amascut's bane) was cut off by its round
+  button. It's under the button now. Fixed by Okaeri.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed
