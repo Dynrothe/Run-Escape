@@ -38,7 +38,9 @@ import {
     RAMPAGE_FADE_TICKS,
     Sim,
     TICKS_PER_SECOND,
+    ZebakFight,
     yawFromVector,
+    zebakShelters,
 } from "../core/Sim";
 import {
     Enemy,
@@ -227,6 +229,12 @@ const AKKHA_SYMBOL_GLOW = -0.9;
 const AKKHA_SYMBOL_LIFT = -0.1;
 // How strongly the quadrant he's showing glows, against a blast's full strength
 const AKKHA_GLOW_ALPHA = 0.45;
+// The glowing circles behind Zebak's boulders, where his roar can't reach, a tile across
+const ZEBAK_SHELTER_SCALE = 0.9;
+// His roar's shockwave: its dust that far towards white, to read on his sandy island, a puff
+// every so many tiles
+const ZEBAK_SHOCKWAVE_FLASH = 0.45;
+const ZEBAK_SHOCKWAVE_STEP = 1.5;
 // The funnel of light round a lit symbol, in its colour: darkness's own swirl (already baked
 // with his elements), for every element
 const AKKHA_FUNNEL_SPOTANIM = 2257;
@@ -1025,6 +1033,7 @@ export class GameView {
                 }
             }
         }
+        this.drawZebakRoar(actors, sim, fight);
         const island = sim.tombsPathRoom?.boss?.island;
         const look = getEnemy(ZEBAK.waves.look);
         const crest = this.assets.get(getEnemyModelKey(look, 0));
@@ -1048,6 +1057,61 @@ export class GameView {
                         wave.dir > 0 ? 0 : 1024,
                     );
                 }
+            }
+        }
+    }
+
+    // Zebak's roar: while it's coming and as it goes off, the ground each boulder shelters
+    // glowing behind it (as zebakShelters has it); as it goes off, its shockwave, blown dust
+    // rolling out from him over the whole island but where the boulders shelter, as OSRS's does
+    private drawZebakRoar(actors: ActorRenderer, sim: Sim, fight: ZebakFight): void {
+        const roar = ZEBAK.roar;
+        const wave = roar.shockwave;
+        const ticks = wave.seconds * TICKS_PER_SECOND;
+        const roared = fight.roared;
+        const since = roared ? sim.tick - roared.tick : -1;
+        const going = roared !== undefined && since >= 0 && since < ticks;
+        const boss = sim.enemies.find((e) => e.uid === fight.uid && !e.dead);
+        // Where it's from and what shelters: as it's coming, his boulders now; as it goes, those
+        // it went off over
+        const from = going ? roared : fight.roar && boss;
+        if (!from) {
+            return;
+        }
+        const rocks = going
+            ? roared.rocks
+            : sim.tombsCover.filter((rock) => rock.look === roar.look);
+        // Straight behind each, down the island from him
+        for (const rock of rocks) {
+            const away = rock.y >= from.y ? 1 : -1;
+            for (let out = rock.radius + 0.6; out <= roar.shelter + rock.radius; out += 1) {
+                this.drawGlowCircle(actors, sim, rock.x, rock.y + away * out, ZEBAK_SHELTER_SCALE);
+            }
+        }
+        const island = sim.tombsPathRoom?.boss?.island;
+        const dust = this.assets.get("spot:" + wave.spotAnim);
+        if (!going || !island || !dust) {
+            return;
+        }
+        const anim = dust.anims[0];
+        const t = since / ticks;
+        // Its front, out from him, and fading once it's across
+        const front = wave.reach * Math.min(1, t * 1.6);
+        const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+        const frame = anim.getFrame(since, true);
+        for (let y = island.y0 + 0.5; y <= island.y1 + 0.5; y += ZEBAK_SHOCKWAVE_STEP) {
+            for (let x = island.x0 + 0.5; x <= island.x1 + 0.5; x += ZEBAK_SHOCKWAVE_STEP) {
+                if (Math.hypot(x - from.x, y - from.y) > front) {
+                    continue;
+                }
+                if (zebakShelters(from.x, from.y, x, y, rocks, roar.shelter)) {
+                    continue;
+                }
+                actors.draw(dust, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                    scale: wave.scale,
+                    flash: ZEBAK_SHOCKWAVE_FLASH,
+                    alpha,
+                });
             }
         }
     }

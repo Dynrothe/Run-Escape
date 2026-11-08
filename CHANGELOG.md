@@ -22,6 +22,8 @@ the version in the corner).
 - Akkha's Memory Blast was hard to see in his dark room. His room's lit normally now, each
   symbol lights up bright in its own colour, and a blast throws up a spray of glowing orbs. Fixed
   by Okaeri.
+- Zebak's roar hit hard with nothing to see. Now the ground behind each boulder glows where
+  you're safe from it, and a shockwave rolls out across the island as he roars. Fixed by Okaeri.
 - On a phone, the Scabaras room's slate covered the middle of the screen, over the floor you were
   about to step on. It's a thin row at the top now. Fixed by Okaeri.
 

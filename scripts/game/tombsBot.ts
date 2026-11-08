@@ -2071,20 +2071,19 @@ function zebakMove(sim: Sim, def: PathBoss, boss: Sim["enemies"][number]): Point
         fight.acid.some(
             (a) => Math.abs(a.x - x) <= a.half + margin && Math.abs(a.y - y) <= a.half + margin,
         );
-    // His roar coming: behind a boulder on the line from him (within its shelter), a spot off the
-    // acid if there is one, before anything (the roar's a share of your hitpoints, acid or not)
+    // His roar coming: straight behind a boulder, down the island from him (within its shelter:
+    // zebakShelters), a spot off the acid if there is one, before anything (the roar's a share of
+    // your hitpoints, acid or not)
     if (fight.roar) {
         const spots: (Point & { dry: boolean })[] = [];
         for (const c of sim.tombsCover) {
             if (c.look !== "zebak_boulder" || c.endTick <= sim.tick) {
                 continue;
             }
-            const dx = c.x - boss.x;
-            const dy = c.y - boss.y;
-            const len = Math.hypot(dx, dy) || 1;
+            const away = c.y >= boss.y ? 1 : -1;
             for (const behind of [1.2, 1.9, 2.6]) {
-                const x = c.x + (dx / len) * (c.radius + behind);
-                const y = c.y + (dy / len) * (c.radius + behind);
+                const x = c.x;
+                const y = c.y + away * (c.radius + behind);
                 spots.push({ x, y, dry: !inAcid(x, y) });
             }
         }

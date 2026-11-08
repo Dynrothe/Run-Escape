@@ -535,7 +535,12 @@ animations from a lister of those whose model or animation is in the raid's rang
       the island's edge or at the end of its roll, its water clearing the acid round it. Weapons
       pass them by (`EnemyDef.unhittable`): hit, they broke the moment they were down.
     - **Great Roar**: boulders across the island, then three roars a few seconds later, each a
-      fifth of your hitpoints and a knock back, unless a boulder's between you and him.
+      fifth of your hitpoints and a knock back, unless a boulder's between you and him. While it's
+      coming, the ground each boulder shelters glows behind it (Verzik's circle, as the Het room
+      has); as it goes off, blown dust (2184) rolls out from him over the whole island but each
+      boulder's shadow, straight behind it down the island as OSRS's is (`zebakShelters`, the
+      sim's own test), with the boulders
+      drawn on through it, and the camera shakes. Without them a roar read as a big hit from nowhere.
     - **Tidal Waves**: two waves across the island (11738), up from the south then down from the
       north, each with a gap to stand in, narrower with path levels; they wash away his acid.
     - **Enrage** below 25%: quicker, with no more specials.

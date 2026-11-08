@@ -603,6 +603,15 @@ export type ZebakDef = {
         seq: number;
         message: string;
         roarMessage: string;
+        // Drawn only: the roar's shockwave, spotAnim rolling out from him reach tiles
+        // over seconds, and the camera's shake (0 to 1) as it goes
+        shockwave: {
+            spotAnim: number;
+            seconds: number;
+            reach: number;
+            scale: number;
+            shake: number;
+        };
     };
     waves: {
         count: number;

@@ -2708,6 +2708,8 @@ export const ZEBAK: ZebakDef = {
         seq: 9628,
         message: "Zebak spits boulders onto the island: get behind one before he roars!",
         roarMessage: "Zebak roars!",
+        // Blown dust, as OSRS's roar sends a wave of it across the island
+        shockwave: { spotAnim: 2184, seconds: 1.6, reach: 28, scale: 1.3, shake: 0.5 },
     },
     waves: {
         // Waves across the island, the first up from the south and the second down from the

@@ -1210,6 +1210,14 @@ export type ZebakFight = {
     uid: number;
     special: number;
     roar?: { tick: number };
+    // When his last roar went off, from where, and the boulders that sheltered from it: for its
+    // shockwave (drawn only)
+    roared?: {
+        tick: number;
+        x: number;
+        y: number;
+        rocks: { x: number; y: number; radius: number; look: string }[];
+    };
     waves: {
         y: number;
         dir: 1 | -1;
@@ -1224,6 +1232,29 @@ export type ZebakFight = {
     clouds: { uid: number; x: number; y: number }[];
     nextCloudTick: number;
 };
+
+// Whether a boulder shelters (x, y) from Zebak's roar from (fromX, fromY): straight behind it,
+// down the island away from him (as OSRS's, not slanting off the line from him), within shelter
+// tiles of it and as wide as it is. The sim's (Sim.zebakSheltered) and the shockwave's drawing
+// both go by it.
+export function zebakShelters(
+    fromX: number,
+    fromY: number,
+    x: number,
+    y: number,
+    rocks: readonly { x: number; y: number; radius: number }[],
+    shelter: number,
+): boolean {
+    return rocks.some((rock) => {
+        const away = rock.y >= fromY ? 1 : -1;
+        const behind = (y - rock.y) * away;
+        return (
+            behind > 0 &&
+            behind <= shelter + rock.radius &&
+            Math.abs(x - rock.x) <= rock.radius + 0.5
+        );
+    });
+}
 
 // Kephri's fight (BossDef.kephri), while she's up: how many intermissions she's had, whether
 // she's on her last (her swarm gone), the intermission she's in (its swarms still to send, how
@@ -7944,22 +7975,8 @@ export class Sim {
 
     // Whether a boulder shelters a point from him: between them, and close enough to it
     private zebakSheltered(boss: Enemy, x: number, y: number, def: ZebakDef): boolean {
-        const dx = x - boss.x;
-        const dy = y - boss.y;
-        const length = Math.max(0.001, fm.hypot(dx, dy));
-        return this.tombsCover.some((rock) => {
-            if (rock.look !== def.roar.look) {
-                return false;
-            }
-            // Along the line from him to the point, the boulder short of it, and near the line
-            const along = ((rock.x - boss.x) * dx + (rock.y - boss.y) * dy) / length;
-            const off = Math.abs(((rock.x - boss.x) * dy - (rock.y - boss.y) * dx) / length);
-            return (
-                along < length &&
-                length - along <= def.roar.shelter + rock.radius &&
-                off <= rock.radius + 0.5
-            );
-        });
+        const rocks = this.tombsCover.filter((rock) => rock.look === def.roar.look);
+        return zebakShelters(boss.x, boss.y, x, y, rocks, def.roar.shelter);
     }
 
     // His Great Roar, once its time's up: everyone not behind a boulder is hit, hard, and thrown back
@@ -7969,10 +7986,22 @@ export class Sim {
             return;
         }
         fight.roar = undefined;
+        fight.roared = {
+            tick: this.tick,
+            x: boss.x,
+            y: boss.y,
+            rocks: this.tombsCover.filter((rock) => rock.look === def.roar.look),
+        };
         boss.anim = "attack";
         boss.animStart = this.tick;
         boss.attackSeq = def.roar.seq;
         this.emit({ type: "notice", message: def.roar.roarMessage });
+        this.emit({
+            type: "bossImpact",
+            x: boss.x,
+            y: boss.y,
+            shake: def.roar.shockwave.shake,
+        });
         const current = this.hero;
         for (const hero of this.heroes) {
             if (!this.isUp(hero)) {
