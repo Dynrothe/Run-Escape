@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Bosses' instructions, by Okaeri: each attack says what to do the first time it's used in a run,
+  spaced out and long enough to read, instead of every time and all at once.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed

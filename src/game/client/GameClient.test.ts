@@ -1915,22 +1915,24 @@ describe("the fight button's hint", () => {
 describe("boss attacks' instructions", () => {
     function createClient() {
         const shown: { text: string; ms?: number }[] = [];
+        let playing = true;
         const client: GameClient = Object.create(GameClient.prototype);
         Object.assign(client, {
             instructionsSeen: new Set<string>(),
             instructions: [],
             instructionShownAt: -Infinity,
-            isPlaying: () => true,
+            instructionPumpedAt: 0,
+            isPlaying: () => playing,
             store: { toast: (text: string, ms?: number) => shown.push({ text, ms }) },
         });
         const queue = (text: string) =>
             (client as unknown as { queueInstruction(text: string): void }).queueInstruction(text);
         const pump = (now: number) =>
             (client as unknown as { showInstruction(now: number): void }).showInstruction(now);
-        return { shown, queue, pump };
+        return { shown, queue, pump, pause: (on: boolean) => (playing = !on) };
     }
 
-    test("show once a run, one at a time, each held long enough to read", () => {
+    test("show once a run, one after another, each held long enough to read", () => {
         const now = vi.spyOn(performance, "now");
         try {
             const { shown, queue, pump } = createClient();
@@ -1939,11 +1941,11 @@ describe("boss attacks' instructions", () => {
             queue("Hide behind a rock!");
             queue("Dodge the spears!");
             expect(shown.map((s) => s.text)).toEqual(["Dodge the spears!"]);
-            expect(shown[0].ms).toBeGreaterThanOrEqual(5000);
+            expect(shown[0].ms).toBeGreaterThanOrEqual(4000);
             // Not on top of the first
-            pump(1500);
+            pump(2500);
             expect(shown).toHaveLength(1);
-            pump(4000);
+            pump(4100);
             expect(shown.map((s) => s.text)).toEqual(["Dodge the spears!", "Hide behind a rock!"]);
             // Its attack again later: not said again this run
             now.mockReturnValue(20000);
@@ -1955,15 +1957,27 @@ describe("boss attacks' instructions", () => {
         }
     });
 
-    test("drop one that waited too long for its turn", () => {
+    test("wait out a pause, and drop one that waited too long in play", () => {
         const now = vi.spyOn(performance, "now");
         try {
-            const { shown, queue, pump } = createClient();
+            const { shown, queue, pump, pause } = createClient();
             now.mockReturnValue(0);
+            pump(0);
             queue("First");
             queue("Second");
-            pump(9000);
-            expect(shown.map((s) => s.text)).toEqual(["First"]);
+            // A level up's choice, long: the second's still to come after it
+            pause(true);
+            pump(30000);
+            pause(false);
+            pump(30100);
+            expect(shown.map((s) => s.text)).toEqual(["First", "Second"]);
+            // One that waits too long while it's played is gone
+            now.mockReturnValue(33100);
+            queue("Third");
+            queue("Fourth");
+            pump(33200);
+            pump(46000);
+            expect(shown.map((s) => s.text)).toEqual(["First", "Second", "Third"]);
         } finally {
             now.mockRestore();
         }
