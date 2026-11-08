@@ -132,7 +132,7 @@ export const VARROCK_WAVES: WaveDef[] = paced([
     ],
 ]);
 
-// An elite a minute from 100 seconds (their caskets are what a hero farms for), and rings of
+// An elite a minute from 100 seconds (five times its kind's experience, to level on), and rings of
 // imps, hellhounds and lesser demons closing in now and then
 const ELITES = [
     "imp",

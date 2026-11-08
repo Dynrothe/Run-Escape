@@ -1372,8 +1372,8 @@ by tile and loc by loc:
   with the fire (doors, curtains, banners, torches: `plant`, `gone`; nameless plants by id, `plants`) go, `landmark`
   names stay (a square's fountain, a church's altar), and of the rest `furnitureKept` stay, charred. What was cloth
   is the map's to burn before the rules see it (a tent's walls are walls, and would break into stone): Varrock's
-  `takeFabric` and `burnFabric` make Gypsy Aris's tent a great fire, its stalls bare burnt counters with a fire, its
-  tents fires and its covered wagon burning timber. A loc that
+  `takeFabric` and `burnFabric` make Gypsy Aris's tent a blaze (the cache's big fire, 25155), its stalls bare
+  burnt counters with a fire, its tents fires and its covered wagon burning timber. A loc that
   changes with a var (a farming patch, a STASH's bush, a seasonal one) goes by the name of what it shows
   (`LocInfo.shows`, as the game draws it with its vars at 0): most are null-named, and kept as furniture they were
   bushes with scorched leaves.
@@ -1386,9 +1386,10 @@ leaves turn scorched brown (33), and other see-through ones (bars, shingles) kee
 holes. They're read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and
 the slim cache keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in
 `LOC_OVERRIDES` with a `base` (the breach's Falador pieces, charred to `charLight`, the bricks `walkable`). Keep every id under 2^21:
-the model caches key a loc by its id << 10. `WALKABLE_FIRE` is the fire on its logs (4266) blocking nothing, for the
-palace floor Yama's fought on. A map's lights go by the placed id (`LightingDef.locs`), so a derived loc needs its own
-entry there to glow.
+the model caches key a loc by its id << 10. Varrock's fires are the cache's own, none in a ring of stones (4265,
+4266: a campfire is a camp, not a city burning): `LOW_FIRE` on crossed logs (5249) blocks nothing, so it needs no
+walkable copy for the palace floor Yama's fought on. A map's lights go by the placed id (`LightingDef.locs`), so a
+derived loc needs its own entry there to glow.
 
 **A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
 his throne (npc 15645, seq 12153), is a `MapDef.props` entry the game draws instead, and the recipe blocks the ground

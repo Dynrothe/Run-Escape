@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
-import { WALKABLE_FIRE, getLocOverride } from "../../../rs/config/loctype/LocOverrides";
 import { GAME_CACHE_NAME } from "../../cache";
 import { getMap, getMapCharacter, isPeaceful } from "../../content/maps";
 import { VARROCK_EVENTS, VARROCK_WAVES } from "../../content/varrockHordes";
@@ -13,6 +12,7 @@ import { getRecipeArena } from "../recipe";
 import {
     BATTLE_FOR_VARROCK,
     BATTLE_FOR_VARROCK_RECIPE,
+    LOW_FIRE,
     PALACE_FLOOR_ASCII,
     PALACE_FLOOR_RECT_REAL,
 } from "./battleForVarrock";
@@ -103,9 +103,13 @@ describe("the Battle for Varrock", () => {
         expect(lint.triangles.busy).toBeLessThanOrEqual(PHONE_TRIANGLES);
     });
 
-    it("has fires on the palace floor that block nothing, as Yama's fight is there", () => {
-        // The fire on its logs (4266) that the rest of the city burns with, walked through
-        expect(getLocOverride(WALKABLE_FIRE)).toEqual({ base: 4266, walkable: true });
+    it("burns with the cache's plain fires, not campfires in their rings of stones", () => {
+        const lit = Object.keys(MAP.lighting!.locs!).map(Number);
+        expect(lit).not.toContain(4265);
+        expect(lit).not.toContain(4266);
+        // On crossed logs, which blocks nothing: the palace floor's, where Yama's fought
+        expect(LOW_FIRE).toBe(5249);
+        expect(lit).toContain(LOW_FIRE);
     });
 });
 

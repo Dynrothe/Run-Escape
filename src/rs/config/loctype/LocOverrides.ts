@@ -38,9 +38,6 @@ export const DERIVED_LOCS = CHARRED_LOCS + (1 << 18);
 // comes out at about 15 of 127). The bricks block nothing, so a breach is still a way through.
 export const BROKEN_CITY_WALL = DERIVED_LOCS;
 export const BREACH_BRICKS = DERIVED_LOCS + 1;
-// A fire on its logs (4266) that blocks nothing: burnt Varrock's palace floor, where Yama's
-// fight is, has fires on it that a hero has to be able to run through
-export const WALKABLE_FIRE = DERIVED_LOCS + 2;
 const FALADOR_STONE_BURNT = 0.18;
 
 export function getCharredLoc(id: number): number {
@@ -94,5 +91,4 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     [38542, { height: 1 }],
     [BROKEN_CITY_WALL, { base: 24220, charred: true, charLight: FALADOR_STONE_BURNT }],
     [BREACH_BRICKS, { base: 24218, charred: true, charLight: FALADOR_STONE_BURNT, walkable: true }],
-    [WALKABLE_FIRE, { base: 4266, walkable: true }],
 ]);

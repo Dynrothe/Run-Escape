@@ -66,6 +66,7 @@ export function getGameSoundIds(): number[] {
         ids.push(map.fight?.ability?.sound ?? -1);
     }
     for (const map of ALL_MAPS) {
+        ids.push(map.blessings?.sound ?? -1);
         ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
         for (const cinematic of getMapCinematics(map)) {
             ids.push(...cinematic.cues.map((cue) => cue.sound ?? -1));
@@ -248,6 +249,16 @@ export class GameSounds {
                 case "evolved":
                     audio.play(SOUNDS.evolve, { volume: 1 });
                     break;
+                // A level up on a map with blessings, which has no level up screen to play
+                // the jingle as it opens: that, and the blessing's own sound
+                case "blessing": {
+                    audio.play(SOUNDS.levelUp, { volume: 0.7, minGap: 0 });
+                    const sound = sim.map.blessings?.sound;
+                    if (sound !== undefined) {
+                        audio.play(sound, { volume: 0.8, minGap: 0 });
+                    }
+                    break;
+                }
             }
         }
     }

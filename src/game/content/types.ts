@@ -1773,6 +1773,58 @@ export type MapDef = {
     lighting?: LightingDef;
     // Bosses asleep in their lairs, each woken by stepping into it (LairDef): one fought at a time
     lairs?: LairDef[];
+    // Level ups here grant a blessing at random, at once, instead of a pick of weapons and
+    // passives, and nothing gives an item: no caskets, gear, utility items or power-ups (bones,
+    // coins and food still drop). The Battle for Varrock's blessings of Saradomin.
+    blessings?: BlessingsDef;
+};
+
+// A map's blessings (MapDef.blessings): what a level up can grant, and how it looks and sounds as
+// it does
+export type BlessingsDef = {
+    // "Blessing of Saradomin", for the notice
+    name: string;
+    pool: BlessingDef[];
+    // Granted once every blessing in the pool's been had its max times, as often as that comes
+    fallback: BlessingDef;
+    // Played on the hero as one's granted
+    spotAnim?: number;
+    sound?: number;
+};
+
+// One blessing (BlessingsDef.pool), each time it's had adding all of this again: stats, a level
+// of the hero's first weapon, a weapon (or a level of it, once it's held), a share of their
+// hitpoints healed, and changes to their own buttons (BlessingKitDef). A level up picks one the
+// hero hasn't had max times, by weight (1 unset).
+export type BlessingDef = {
+    id: string;
+    name: string;
+    // What one more of it does, for the notice and the HUD
+    description: string;
+    iconObjId: number;
+    max: number;
+    weight?: number;
+    stats?: Partial<Stats>;
+    weaponLevel?: boolean;
+    // A weapon's id: the first time it's had, the weapon at level 1; each time after, a level of it
+    weapon?: string;
+    heal?: number;
+    kit?: BlessingKitDef;
+};
+
+// What a blessing does to a hero's own buttons (CharacterDef.abilities) each time it's had, to the
+// ones named (every one when unset): damage and cooldown as shares (0.2 is 20% more damage, 20%
+// less cooldown), length, width and size added in tiles, freeze in seconds, and for a wave, fan
+// more waves either side of it
+export type BlessingKitDef = {
+    abilities?: string[];
+    damage?: number;
+    cooldown?: number;
+    length?: number;
+    width?: number;
+    size?: number;
+    freeze?: number;
+    fan?: number;
 };
 
 // A rule a map is played by (MapDef.rule), which core/rules runs each tick. A rule only reads the

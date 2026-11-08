@@ -669,7 +669,10 @@ function kitPlan(sim: Sim): KitPlan | undefined {
 }
 
 function kitChoice(sim: Sim): KitPlan | undefined {
-    const kit = getCharacter(sim.characterId).abilities;
+    // As the map's blessings have them (MapDef.blessings): longer, wider, sooner
+    const kit = getCharacter(sim.characterId).abilities?.map(
+        (ability, slot) => sim.kitAbility(slot)?.ability ?? ability,
+    );
     const boss = sim.shownBoss;
     if (kit && sim.lair === undefined) {
         return hordeKit(sim, kit);
@@ -1432,7 +1435,14 @@ function runOnce(characterId: string, seed: number) {
             nextReport += REPORT_SECONDS;
             const alive = sim.enemies.filter((e) => !e.dead).length;
             const weapons = sim.weapons.map((w) => `${w.def.id}:${w.level}`).join(" ");
-            const passives = sim.passives.map((p) => `${p.id}:${p.level}`).join(" ");
+            // A map with blessings has those for passives
+            const passives = (
+                sim.map.blessings
+                    ? sim.blessings.map((b) => ({ id: b.id, level: b.count }))
+                    : sim.passives
+            )
+                .map((p) => `${p.id}:${p.level}`)
+                .join(" ");
             const gear = Object.values(sim.gear).join(" ");
             console.log(
                 `  ${formatClock(sim.seconds)}${endless ? ` r${sim.round}` : ""}  lvl ${String(sim.level).padStart(2)}  ` +

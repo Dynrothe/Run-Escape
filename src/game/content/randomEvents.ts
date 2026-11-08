@@ -145,6 +145,13 @@ export const RANDOM_EVENT_BY_ID: Map<string, RandomEventDef> = new Map(
     RANDOM_EVENTS.map((event) => [event.id, event]),
 );
 
+// Whether a visitor gives an item: a casket, the old man's wares or a quiz's prize. Never on a map
+// with blessings (MapDef.blessings), which has no items.
+export function givesItems(event: RandomEventDef): boolean {
+    const kind = event.effect.kind;
+    return kind === "casket" || kind === "shop" || kind === "quiz";
+}
+
 export function getRandomEvent(id: string): RandomEventDef {
     const event = RANDOM_EVENT_BY_ID.get(id);
     if (!event) {

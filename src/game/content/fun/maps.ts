@@ -1,15 +1,14 @@
-import { WALKABLE_FIRE } from "../../../rs/config/loctype/LocOverrides";
 import {
     BATTLE_FOR_VARROCK,
     BLAZE,
     BRAZIER,
     CRATER_HEART,
-    GREAT_FIRE,
     LOW_FIRE,
     PALACE_FLOOR_ASCII,
     WALL_OF_FLAME,
     YAMA_SCALE,
 } from "../../scaperune/maps/battleForVarrock";
+import { SARADOMIN_BLESSINGS } from "../blessings";
 import { FLOOR_SKINS } from "../floorSkins";
 import { KRIL_HITPOINTS } from "../kril";
 import { MapDef, RunEventDef } from "../types";
@@ -772,8 +771,9 @@ export const FUN_MAPS: MapDef[] = [
         description:
             "Varrock after the battle, every street and house of it burnt to ruins, fires still " +
             "burning and Yama's demons in its streets. Fight them as Justiciar Zachariah, his " +
-            "lunge, shock wave, ice, lightning and gaze on your buttons, until you're ready for " +
-            "Yama's two generals: Xarth in the Grand Exchange and K'ril Tsutsaroth in the " +
+            "lunge, shock wave, ice, lightning and gaze on your buttons. There are no items " +
+            "here: each level brings a blessing of Saradomin, at random. When you're ready, take " +
+            "on Yama's two generals: Xarth in the Grand Exchange and K'ril Tsutsaroth in the " +
             "church, in either order. Beat both, and Yama waits on his throne in the palace.",
         // Varrock teleport
         iconObjId: 8007,
@@ -787,6 +787,8 @@ export const FUN_MAPS: MapDef[] = [
         // Yama's demons, all over the city, for as long as it takes (content/varrockHordes.ts)
         waves: VARROCK_WAVES,
         events: VARROCK_EVENTS,
+        // No items: a level up brings a blessing of Saradomin instead (content/blessings.ts)
+        blessings: SARADOMIN_BLESSINGS,
         finalBossWarning: "",
         victoryText: "Yama is beaten, and Varrock's fires die down at last.",
         scaperune: true,
@@ -930,9 +932,6 @@ export const FUN_MAPS: MapDef[] = [
             ambient: 0.92,
             ambientColor: 0xf4e4da,
             locs: {
-                4266: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
-                // The same fire, on the palace floor, which blocks nothing
-                [WALKABLE_FIRE]: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
                 5499: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
                 31722: { radius: 4.5, color: 0xff7a2a, intensity: 0.7, flicker: 0.4 },
                 3862: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
@@ -940,9 +939,10 @@ export const FUN_MAPS: MapDef[] = [
                 // Either side of Yama's throne
                 [BRAZIER]: { radius: 5, color: 0xff6a20, intensity: 0.9, flicker: 0.3 },
                 // What was cloth: Gypsy Aris's tent burning down, the tents and the stalls
-                [GREAT_FIRE]: { radius: 5.5, color: 0xff7022, intensity: 1, flicker: 0.45 },
-                [BLAZE]: { radius: 5, color: 0xff6a1a, intensity: 0.9, flicker: 0.5 },
-                [LOW_FIRE]: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
+                [BLAZE]: { radius: 5.5, color: 0xff6a1a, intensity: 1, flicker: 0.5 },
+                // In the houses, the stalls and the palace, whose fires block nothing as Yama's
+                // fight is on its floor
+                [LOW_FIRE]: { radius: 3, color: 0xff8a3a, intensity: 0.55, flicker: 0.4 },
                 // The crater's molten heart, where the square's fountain stood
                 [CRATER_HEART]: { radius: 6, color: 0xff5a1a, intensity: 0.9, flicker: 0.25 },
             },

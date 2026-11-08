@@ -29,12 +29,13 @@ was the minimap, hitpoints and the hero's buttons. Farming needs a run:
   has a faction (the God Wars' hellhound has one, so the map has its own copy), so they come from
   every side. The map has no clock, so the last wave goes on, getting tougher by the minute as
   everywhere (`enemyHpScale`): farming forever isn't free.
-- **Levels**: kills drop XP, level ups offer the usual weapons and passives, caskets drop. The
-  Justiciar's buttons take the run's Might like any hit (`damageEnemy`), so the upgrades make his
-  kit stronger too.
-- **HUD**: the level, XP bar, clock, weapons, kills and bag are back (`isPeaceful` is false). The
-  map still has no end on the clock and no visitors (`fun.explore`): the run ends when Yama dies,
-  or when the hero dies to the hordes.
+- **Levels**: kills drop XP, and there are no items: each level up is a blessing of Saradomin at
+  random, at once (`MapDef.blessings`, `content/blessings.ts`), in place of weapons, passives and
+  caskets. The Justiciar's buttons take the run's Might like any hit (`damageEnemy`), and some
+  blessings change the buttons themselves (`Sim.kitAbility`), so his kit grows with the levels.
+- **HUD**: the level, XP bar, clock, the sword and its blessings, and kills are back
+  (`isPeaceful` is false). The map still has no end on the clock and no visitors
+  (`fun.explore`): the run ends when Yama dies, or when the hero dies to the hordes.
 - **Nothing comes during a general's or Yama's fight**: the hordes leave as its intro starts
   (`startIntro`) and the director waits while a lair's on (`Sim.lair`).
 

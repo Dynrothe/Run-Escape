@@ -267,6 +267,12 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
   for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
   has an example of each. Off a map with `lighting`, none of it does anything.
+- `blessings` (`BlessingsDef`) takes a map's items away: each level up is a blessing at random,
+  at once, instead of a pick, and nothing drops a casket or a power-up (the Battle for Varrock's,
+  `content/blessings.ts`). A blessing can add stats, level the starting weapon, bring a weapon
+  and level it, heal and change the hero's own buttons: see A hero of their own in
+  `docs/DEVELOPMENT.md`. Sim it with the bot's lairs (`LAIR=`), as random draws change a boss
+  fight a lot: a run that never draws a ranged weapon can't beat a general.
 - People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
   `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
   cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the

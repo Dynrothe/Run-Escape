@@ -1,7 +1,6 @@
 import {
     BREACH_BRICKS,
     BROKEN_CITY_WALL,
-    WALKABLE_FIRE,
     getCharredLoc,
 } from "../../../rs/config/loctype/LocOverrides";
 import { Ground } from "../Ground";
@@ -138,9 +137,13 @@ const YAMA_START = { x: YAMA_RISE.x, y: YAMA_RISE.y - 9 };
 // the like are what make it Varrock (the market's stalls burnt: burnFabric)
 const LANDMARK = /fountain|statue|anvil|altar|well|bank booth|staircase|ladder|sign/i;
 
-// Fires: burning timber (Burning driftwood, 2 by 2) and a fire on its logs; burning bones; and
-// a wall of flame (a wall loc) where a wall burnt down
-const FIRE = [4266, 5499];
+// Fires: the cache's fire on crossed logs (5249, which blocks nothing) and its flames alone
+// (5499); its big fire (25155, 2 by 2); burning timber (Burning driftwood, 2 by 2); burning
+// bones; and a wall of flame (a wall loc) where a wall burnt down. No fire in a ring of stones
+// (4265, 4266): that's a campfire, someone's camp rather than a city burning.
+export const LOW_FIRE = 5249;
+export const BLAZE = 25155;
+const FIRE = [LOW_FIRE, 5499];
 const BURNING_TIMBER = 31722;
 const BURNING_BONES = 3862;
 export const WALL_OF_FLAME = 4765;
@@ -242,7 +245,7 @@ const RULES = {
     burning: { wall: WALL_OF_FLAME, share: 0.12 },
 };
 
-// The dressing. Fires that burn on (the cache's fire on its logs, animated), burnt skeletons (the cache's
+// The dressing. Fires that burn on (the cache's, animated), burnt skeletons (the cache's
 // skeletons, charred), Phosani's Sanctuary's and the Theatre's dead raiders (a skeleton in
 // armour, the mercenaries' bodies), rubble and burnt rock underfoot.
 const BURNT_SKELETONS = [getCharredLoc(5358), getCharredLoc(5359), getCharredLoc(5360)];
@@ -678,7 +681,7 @@ function dressPalace(grid: TileGrid, report: VarrockDressing): void {
             if (roll < 0.012) {
                 // One that blocks nothing: his fight's on this floor
                 grid.locs.push({
-                    id: WALKABLE_FIRE,
+                    id: LOW_FIRE,
                     type: LOC_NORMAL,
                     rotation: 0,
                     level: 0,
@@ -715,19 +718,15 @@ function dressPalace(grid: TileGrid, report: VarrockDressing): void {
 // What was made of cloth burnt: Gypsy Aris's tent in the square (its striped walls, 2460 to
 // 2463, its roof and all in it) is a fire as big as it was; the market's stalls are their bare
 // counters (Empty Stall, 6944), burnt, with a fire on what's left of their awnings' tiles; a tent
-// is a great fire on logs (4265, twice a fire's size) and a covered wagon (23615) burning timber.
-// Banners, curtains and cloth are the ruin rules' `gone`.
+// is the cache's big fire (BLAZE) and a covered wagon (23615) burning timber. Banners, curtains
+// and cloth are the ruin rules' `gone`.
 const ARIS_TENT = { ...toGrid(3201, 3421), x1: 3206 - REAL_X, y1: 3427 - REAL_Y };
 const FABRIC = /stall|tent/i;
 const COVERED_WAGON = 23615;
 const EMPTY_STALL = 6944;
-export const GREAT_FIRE = 4265;
-// The cache's big fire (25155, 2 by 2) and a small one that blocks nothing (5249)
-export const BLAZE = 25155;
-export const LOW_FIRE = 5249;
 // Aris's tent burning down, from its south-west corner: [id, dx, dy, type, rotation]
 const ARIS_FIRE: [number, number, number, number, number][] = [
-    [GREAT_FIRE, 1, 2, 10, 0],
+    [BLAZE, 1, 2, 10, 0],
     [BLAZE, 3, 4, 10, 0],
     [BURNING_TIMBER, 3, 0, 10, 1],
     [LOW_FIRE, 0, 5, 10, 0],
@@ -805,7 +804,7 @@ function burnFabric(grid: TileGrid, taken: Fabric[], report: VarrockDressing): v
                 (loc.rotation & 1) === 1 ? y : y + 1,
             );
         } else {
-            put(wagon ? BURNING_TIMBER : GREAT_FIRE, x, y);
+            put(wagon ? BURNING_TIMBER : BLAZE, x, y);
             // What's past a 2 by 2 fire of a longer one
             for (let ty = y; ty < y + sizeY; ty++) {
                 for (let tx = x; tx < x + sizeX; tx++) {

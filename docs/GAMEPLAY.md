@@ -225,14 +225,26 @@ version and how to run it.
   Zachariah starts facing into the city. Its music is Sign Here, Yama's own fight track.
   Yama's demons fill its streets as any map's waves do: imps, reanimated demon spawn, hellhounds,
   lesser, revenant, greater and black demons, with an elite a minute from 100 seconds and rings of
-  them now and then. There's no clock and no random events: kill them for levels, weapons and
-  caskets (the Justiciar's buttons hit harder with Might, like any hit) for as long as you like,
-  though they get tougher by the minute. Yama's two generals wait in their ruins from the start,
-  to be fought in either order: step into one's ruin and it wakes, every way out bursts into
-  fire, and you fight it there with nothing else coming. Die there and you're thrown out whole,
-  the general back where it stood with all its hitpoints: only a death to the hordes ends the
-  run. Beat one and the other grows stronger: 30% more hitpoints, 25% harder hits, attacks
-  sooner, and an attack of the fallen one's.
+  them now and then. There's no clock and no random events, and no items: no caskets, gear,
+  power-ups, bag or weapons and passives to pick, only bones, coins and food. Kill them for levels
+  for as long as you like, though they get tougher by the minute: each level brings a blessing of
+  Saradomin at random, there and then, with his strike on you and a notice. Saradomin's strength
+  (Might, which the Justiciar's buttons hit harder with too), a Saradomin brew (hitpoints, and a
+  third of them back), Saradomin's ward (armour), Holy sandals (speed), a Holy elixir
+  (regeneration), Saradomin's will (buttons back sooner, and the sword faster), a Holy book
+  (experience), a Blessed blade (the 2h sword a level up), a Saradomin staff (Saradomin Strike,
+  then a level of it) and Zilyana's crossbow (from Saradomin's general, the Armadyl crossbow, then
+  a level of it), and blessings on the buttons: Saradomin's light (all of them harder), Zeal (a
+  longer, harder lunge), Saradomin's crozier (another shock wave either side), Holy water (a
+  bigger ice barrage that holds longer), Saradomin's mjolnir (further, harder lightning) and
+  Saradomin's halo (a wider, harder Owl's gaze, back sooner). Each comes only so many times; once
+  he's given everything, Saradomin's tears (a little Might, and half your hitpoints back). They
+  show in a row under the sword, and on the pause menu. Yama's two
+  generals wait in their ruins from the start, to be fought in either order: step into one's ruin
+  and it wakes, every way out bursts into fire, and you fight it there with nothing else coming.
+  Die there and you're thrown out whole, the general back where it stood with all its hitpoints:
+  only a death to the hordes ends the run. Beat one and the other grows stronger: 30% more
+  hitpoints, 25% harder hits, attacks sooner, and an attack of the fallen one's.
   **Xarth** (3,800 hitpoints), in the Grand Exchange's ring, stands where he is and burns. His
   bolts leave you burning, a stack a bolt up to three (a hitpoint a second each, through armour).
   Up close he lashes in front of him, his guard down if he misses. Every so often he gathers his
