@@ -2442,7 +2442,9 @@ export class GameClient implements GameFrameHandler {
             charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
             inReach: sim.abilityTarget() !== undefined,
             opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
+            guide: ability.guide === true,
             hint:
+                ability.guide === true &&
                 !this.abilityUsed &&
                 seconds !== undefined &&
                 seconds >= ABILITY_HINT_FROM &&

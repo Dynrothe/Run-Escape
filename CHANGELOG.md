@@ -16,11 +16,6 @@ the version in the corner).
   fights, open once the desert's beaten. Each part's kept once won, and beating the last opens the
   Tombs of Amascut. Played alone, as the Sands Delver.
 
-### Changed
-
-- Justiciar Zachariah's Smite, by Okaeri: while his guard's down its button pulses with a tag
-  saying so, and early in the fight a hint says what it's for, naming your button.
-
 ### Fixed
 
 - A casket carried into the next room of the Theatre of Blood could be set down in a wall, out of

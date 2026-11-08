@@ -80,6 +80,7 @@ export const POINT_BLANK_VOLLEY: FightAbilityDef = {
     iconObjId: 23983,
     playerSeq: 426,
     sound: 2707,
+    guide: true,
     impact: { spots: [{ spotAnim: BLOWN_DUST, fit: 1.5 }], shake: 0.2 },
 };
 

@@ -1826,7 +1826,12 @@ describe("the fight button's hint", () => {
     // Just what the button reads of a run: its ability, the clock, and the boss on the bar
     function createFight() {
         const sim = {
-            ability: { name: "Smite", iconObjId: 1, cooldown: 4 },
+            ability: { name: "Amascut's bane", iconObjId: 1, cooldown: 4, guide: true } as {
+                name: string;
+                iconObjId: number;
+                cooldown: number;
+                guide?: boolean;
+            },
             tick: 0,
             shownBoss: undefined as { dead: boolean; risingEnd: number } | undefined,
             abilityTarget: () => undefined,
@@ -1878,5 +1883,13 @@ describe("the fight button's hint", () => {
         sim.shownBoss = { dead: false, risingEnd: 0 };
         hint(21);
         expect(hint(25)).toBe(false);
+    });
+
+    test("is only for a button that coaches, so Zachariah's Smite stays as it was", () => {
+        const { sim, hint } = createFight();
+        sim.ability = { name: "Smite", iconObjId: 1, cooldown: 4 };
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(0)).toBe(false);
+        expect(hint(5)).toBe(false);
     });
 });

@@ -295,6 +295,8 @@ export type AbilityView = {
     charge: number;
     inReach: boolean;
     opened: boolean;
+    // It coaches (FightAbilityDef.guide): the hint, and the guard-down tag and pulse
+    guide: boolean;
     // Say what it's for (it's not been used yet this session, early in a fight)
     hint: boolean;
 };

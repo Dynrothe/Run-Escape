@@ -1123,6 +1123,9 @@ export type FightAbilityDef = {
     impact?: ImpactDef;
     sound?: number;
     playerSeq?: number;
+    // Coaches the player (AbilityButton): early in a fight, until it's used, a hint says what it's
+    // for, and while the guard's down it pulses with a tag saying so. The Tombs' and their quest's.
+    guide?: boolean;
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set

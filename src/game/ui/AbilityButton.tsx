@@ -9,9 +9,10 @@ import { KeyHint, PadIcon, usePadKind } from "./PadHint";
 // A fight's own button (MapDef.fight.ability), on the HUD and the touch screen: it fills as it
 // charges, is dim while the boss is out of its reach, and shines while the boss's guard is down
 // and it would land, which is when it's worth most. Space or a pad's bottom button use it too.
-// The touch screen's acts on the press, as its other buttons do (TouchControls). While his guard's
-// down it pulses with a tag over it saying so, and early in a fight, until it's first used, a hint
-// says what it's for, naming the button for the input in use (a tap, a controller's, or Space).
+// The touch screen's acts on the press, as its other buttons do (TouchControls). One that coaches
+// (FightAbilityDef.guide) pulses while his guard's down, with a tag over it saying so, and early in
+// a fight, until it's first used, a hint says what it's for, naming the button for the input in use
+// (a tap, a controller's, or Space).
 export function AbilityButton({
     client,
     touch = false,
@@ -41,12 +42,12 @@ export function AbilityButton({
                 touch ? "ui-ability-wrap-touch" : "",
                 // Its pulsing ring, whenever his guard's down, ready or not, so the moment's never
                 // missed
-                ability.opened ? "ui-ability-wrap-alert" : "",
+                ability.guide && ability.opened ? "ui-ability-wrap-alert" : "",
             ]
                 .filter(Boolean)
                 .join(" ")}
         >
-            {ability.opened ? (
+            {ability.guide && ability.opened ? (
                 // The moment it's for, said plainly: in reach, use it; out of it, get in
                 <span className="ui-ability-tag" role="status">
                     {ability.inReach ? "Guard down! Fire!" : "Guard down! Get close!"}
@@ -88,7 +89,7 @@ function abilityClass(ability: AbilityView, touch: boolean): string {
         ready && ability.inReach ? "ui-ability-near" : "",
         ready && ability.inReach && ability.opened ? "ui-ability-opened" : "",
         // Lit whenever his guard's down, ready or not (its ring pulses: the wrap's)
-        ability.opened ? "ui-ability-alert" : "",
+        ability.guide && ability.opened ? "ui-ability-alert" : "",
     ]
         .filter(Boolean)
         .join(" ");

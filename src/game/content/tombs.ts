@@ -51,6 +51,7 @@ export const TOMBS_STRIKE: FightAbilityDef = {
     openReach: 5.5,
     cooldown: 5,
     iconObjId: 26219,
+    guide: true,
     // Dust thrown up off the boss, as the quest's button does
     impact: { spots: [{ spotAnim: 2184, fit: 1.5 }], shake: 0.2 },
 };

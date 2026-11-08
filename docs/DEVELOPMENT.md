@@ -915,6 +915,8 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       is `ability:<id>` for the run's stats; what the arena did to its boss is `court`. It
       lands on the boss on the bar, or with two final bosses up (the Scarab Mages) on either
       (`abilityBosses`): one with its guard down first, then the nearer (`abilityTarget`).
+      `guide` has the button coach (the Tombs' and their quest's): a hint early in a fight, until
+      it's first used, and a pulsing ring with a tag while the guard's down.
     - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
       till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
       its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
