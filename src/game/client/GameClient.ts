@@ -452,10 +452,11 @@ export function getPhaseBarFraction(boss: Enemy, index: number): number {
 }
 
 // Boss attacks' instructions (GameClient.showInstruction): each up this long, the next no sooner
-// than this after it, and one waiting longer than this is dropped
-const INSTRUCTION_MS = 5000;
-const INSTRUCTION_GAP_MS = 2200;
-const INSTRUCTION_STALE_MS = 7000;
+// than this after it (so two at most are up, the older going), and one that's waited longer than
+// this in play is dropped
+const INSTRUCTION_MS = 4500;
+const INSTRUCTION_GAP_MS = 3000;
+const INSTRUCTION_STALE_MS = 12000;
 
 export class GameClient implements GameFrameHandler {
     static async create(
@@ -581,29 +582,40 @@ export class GameClient implements GameFrameHandler {
     // time, each held long enough to read, as a busy phase can bring several at once. Those
     // waiting too long are dropped: the attack they were for is long gone.
     private readonly instructionsSeen = new Set<string>();
-    private instructions: { text: string; at: number }[] = [];
+    private instructions: { text: string; waited: number }[] = [];
     private instructionShownAt = -Infinity;
+    private instructionPumpedAt = 0;
 
     private queueInstruction(text: string): void {
-        if (this.instructionsSeen.has(text)) {
+        if (this.instructionsSeen.has(text) || this.instructions.some((i) => i.text === text)) {
             return;
         }
-        this.instructionsSeen.add(text);
-        this.instructions.push({ text, at: performance.now() });
+        this.instructions.push({ text, waited: 0 });
         this.showInstruction(performance.now());
     }
 
-    // The next instruction, once the last has had its time, while the run's being played
+    // The next instruction, once the last has had its time, while the run's being played. One
+    // waits only while it's played (not behind a level up or the menu), and counts as seen once
+    // it's shown, so none is lost behind a pause.
     private showInstruction(now: number): void {
-        this.instructions = this.instructions.filter((i) => now - i.at < INSTRUCTION_STALE_MS);
+        const playing = this.isPlaying();
+        const since = Math.max(0, now - this.instructionPumpedAt);
+        this.instructionPumpedAt = now;
+        if (playing) {
+            for (const waiting of this.instructions) {
+                waiting.waited += since;
+            }
+            this.instructions = this.instructions.filter((i) => i.waited < INSTRUCTION_STALE_MS);
+        }
         if (
+            !playing ||
             this.instructions.length === 0 ||
-            now - this.instructionShownAt < INSTRUCTION_GAP_MS ||
-            !this.isPlaying()
+            now - this.instructionShownAt < INSTRUCTION_GAP_MS
         ) {
             return;
         }
         const next = this.instructions.shift()!;
+        this.instructionsSeen.add(next.text);
         this.instructionShownAt = now;
         this.store.toast(next.text, INSTRUCTION_MS);
     }
