@@ -117,7 +117,8 @@ describe("the Battle for Varrock", () => {
         for (const fire of FIRES) {
             expect(lit).toContain(fire);
         }
-        // The flames on their own, the big fire's and the burning timber, as copies that block nothing
+        // The flames on their own, the big fire's and the burning timber, as copies that block
+        // nothing
         expect(getLocBase(FLAMES)).toBe(25156);
         expect(getLocBase(BLAZE)).toBe(25155);
         expect(getLocBase(BURNING_TIMBER)).toBe(31722);

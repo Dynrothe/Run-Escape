@@ -142,8 +142,9 @@ const LANDMARK = /fountain|statue|anvil|altar|well|bank booth|staircase|ladder|s
 // Fires: the cache's flames on their own (25156, the big fire's, and 32297); its big fire (25155,
 // 2 by 2); burning timber (Burning driftwood, 2 by 2); burning bones; and a wall of flame (a wall
 // loc) where a wall burnt down. Each blocks nothing (32297 and the bones as the cache has them, the
-// rest walkable copies: LocOverrides.ts), and burns whoever walks into it (MapDef.burns). Nothing on crossed logs or in a ring of stones (5249,
-// 5499's flame, 4265, 4266): those are campfires, someone's camp rather than a city burning.
+// rest walkable copies: LocOverrides.ts), and burns whoever walks into it (MapDef.burns). Nothing
+// on crossed logs or in a ring of stones (5249, 5499's flame, 4265, 4266): those are campfires,
+// someone's camp rather than a city burning.
 export const FLAMES = getWalkableLoc(25156);
 export const TALL_FLAMES = 32297;
 export const BLAZE = getWalkableLoc(25155);
