@@ -35,7 +35,15 @@ export function TitleLanguageMenu(): JSX.Element {
         }, EXIT_DURATION_MS);
     }, [clearTimers]);
 
+    // After a pick the pointer is still over the button, and the language swap (a view
+    // transition) makes the browser re-fire mouseenter once it's done. That must not
+    // reopen the menu: hover stays off until the pointer has actually left the button.
+    const hoverBlockedRef = useRef(false);
+
     const handleMouseEnter = useCallback(() => {
+        if (hoverBlockedRef.current) {
+            return;
+        }
         clearTimers();
         setClosing(false);
         setOpen(true);
@@ -50,6 +58,7 @@ export function TitleLanguageMenu(): JSX.Element {
 
     const handleToggle = useCallback(() => {
         clearTimers();
+        hoverBlockedRef.current = false;
         if (open && !closing) {
             startExit();
         } else {
@@ -60,11 +69,38 @@ export function TitleLanguageMenu(): JSX.Element {
 
     const handleSelect = useCallback(
         (id: Lang) => {
+            hoverBlockedRef.current = true;
             setLang(id);
             startExit();
         },
         [startExit],
     );
+
+    // Hover works again once the pointer is seen outside the button. It's judged by
+    // position: during the view transition the pointer's events target the page, not us.
+    useEffect(() => {
+        const onPointerMove = (e: PointerEvent) => {
+            if (!hoverBlockedRef.current || !wrapperRef.current) {
+                return;
+            }
+            // The button and the menu both count: the pointer is left on the menu after a pick
+            const parts = [wrapperRef.current, ...wrapperRef.current.querySelectorAll("*")];
+            const inside = parts.some((part) => {
+                const rect = part.getBoundingClientRect();
+                return (
+                    e.clientX >= rect.left &&
+                    e.clientX <= rect.right &&
+                    e.clientY >= rect.top &&
+                    e.clientY <= rect.bottom
+                );
+            });
+            if (!inside) {
+                hoverBlockedRef.current = false;
+            }
+        };
+        window.addEventListener("pointermove", onPointerMove);
+        return () => window.removeEventListener("pointermove", onPointerMove);
+    }, []);
 
     useEffect(() => {
         if (!open) {
@@ -119,14 +155,7 @@ export function TitleLanguageMenu(): JSX.Element {
                         stroke="currentColor"
                         strokeWidth="2"
                     />
-                    <line
-                        x1="2"
-                        y1="12"
-                        x2="22"
-                        y2="12"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                    />
+                    <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="2" />
                     <path
                         d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
                         fill="none"
@@ -144,9 +173,7 @@ export function TitleLanguageMenu(): JSX.Element {
                     }
                     aria-label={t("settings.language.name")}
                 >
-                    <div className="ui-title-language-header">
-                        {t("settings.language.name")}
-                    </div>
+                    <div className="ui-title-language-header">{t("settings.language.name")}</div>
                     <div className="ui-title-language-options">
                         {LANGS.map(({ id, label }) => {
                             const isCurrent = currentLang === id;

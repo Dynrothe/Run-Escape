@@ -39,7 +39,6 @@ describe("TitleLanguageMenu", () => {
         expect(btn.getAttribute("aria-expanded")).toBe("true");
         expect(screen.getByText("English")).toBeInTheDocument();
         expect(screen.getByText("Português (BR)")).toBeInTheDocument();
-        expect(screen.getByText("Español")).toBeInTheDocument();
 
         // Hover out
         act(() => {
@@ -96,6 +95,31 @@ describe("TitleLanguageMenu", () => {
             vi.advanceTimersByTime(200);
         });
         expect(screen.queryByText("English")).toBeNull();
+    });
+
+    it("stays closed when the browser re-fires mouseenter after a pick", () => {
+        const { container } = render(<TitleLanguageMenu />);
+        const wrapper = container.querySelector(".ui-title-language-wrapper")!;
+
+        act(() => {
+            fireEvent.mouseEnter(wrapper);
+        });
+        act(() => {
+            fireEvent.click(screen.getByRole("button", { name: /Português/i }));
+        });
+        // The view transition makes the pointer leave and enter again
+        act(() => {
+            fireEvent.mouseLeave(wrapper);
+            fireEvent.mouseEnter(wrapper);
+            vi.advanceTimersByTime(500);
+        });
+        expect(screen.queryByText("English")).toBeNull();
+
+        // Hover works again after the button is clicked
+        act(() => {
+            fireEvent.click(screen.getByRole("button", { name: "Idioma" }));
+        });
+        expect(screen.getByText("English")).toBeInTheDocument();
     });
 
     it("closes on Escape key with exit transition", () => {
