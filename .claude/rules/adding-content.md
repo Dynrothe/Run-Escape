@@ -183,13 +183,20 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   (and its arena's attacks with `turns` stun it), a fight's own button (`MapDef.fight.ability`)
   and what a blow throws up (`impact`, an `ImpactDef`). Boss fights as data in
   `docs/DEVELOPMENT.md` has the lot.
-- A boss asleep on a map to walk round (`MapDef.lair`, Yama's) wakes when someone steps onto the
-  map's floor, and every way off it burns until it's dead. His fight's fields are any boss's:
+- Bosses asleep on a map to walk round (`MapDef.lairs`: Yama's, and his generals') wake when
+  someone steps onto the map's floor or into a lair's own `area`, and every way out burns until
+  it's dead. A lair can wait on others (`requires`), throw the party out on a death (`retreat`),
+  grow stronger once another's beaten (`empowered`) and win the run (`final`). Give a lair's boss
+  room for its `radius`: the flow field steers by single tiles, so a boss wider than a gap sticks
+  in it, and one whose `at` doesn't fit rises at the nearest spot that does, maybe outside its
+  lair (the church's pews had to go for K'ril). Yama's fight's fields are any boss's:
   `BossDef.home`, `critical` (an attack on its own clock) and `gazeWard`, and an attack's
   `meteor`, `interruptedBy` (a hero's button stops it) and `floorAt`, and his Voidflare's
   `EnemyDef.bursts` (a summon that bursts unless a hero's buttons hold and break it, for food)
   with `summon.toward`. A lair's `opening` is a cinematic as it wakes, on the sim's clock, with
-  the party held. `MapDef.lair` under A hero of their own in `docs/DEVELOPMENT.md` has the lot.
+  the party held. `MapDef.lairs` under A hero of their own in `docs/DEVELOPMENT.md` has the lot,
+  with the generals' pieces (`LairDef.pillars`, a debuff's `burn`, a pool's `spreads` and
+  `dousedBy`, `walkTo.heals`, `BossDef.pact`, `breakable`).
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
@@ -233,9 +240,9 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   dodge as a person does.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
   uses the real collision, so a sim also shows whether a map plays at all.
-- Fun maps don't count towards quests. A fun map with `explore` (the Battle for Varrock) is one to walk round:
-  no waves, an empty boss pool, no random events and nothing hurts, but while its `lair`'s boss
-  is fought.
+- Fun maps don't count towards quests. A fun map with `explore` has no clock, an empty boss pool and
+  no random events. With no waves too it's one to walk round (`isPeaceful`): nothing hurts but
+  while one of its `lairs` is fought. The Battle for Varrock has waves, so it's a run as any.
 - The map screen lists maps by kind, a tab for each (`MAP_TABS` in `ui/GameUi.tsx`): a new list
   like `RAID_MAPS` needs a group there, or it won't be on the screen. Every tab's page is laid out
   at once, one over another, so the list keeps the tallest's height and the details below never

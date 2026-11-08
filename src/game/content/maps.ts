@@ -10,7 +10,7 @@ import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
-import { EnemyDef, MapDef } from "./types";
+import { EnemyDef, LairDef, MapDef } from "./types";
 import {
     BARROWS_EVENTS,
     BARROWS_WAVES,
@@ -551,9 +551,24 @@ export function isFightMap(mapId: string): boolean {
 }
 
 // Whether a death on the map can be retried straight away, on your own: one boss fight
-// (MapDef.fight), or its lair's (MapDef.lair), from its floor
+// (MapDef.fight), or a map with lairs (MapDef.lairs), at its lair if it has one to start at
+// (getRetryLair) and from the start without the map's cinematic if not
 export function canRetry(map: MapDef): boolean {
-    return map.fight !== undefined || map.lair !== undefined;
+    return map.fight !== undefined || map.lairs !== undefined;
+}
+
+// The lair a retry starts in (LairDef.start): the map's only one, as long as it's open from
+// the start and a death there ends the run (with LairDef.retreat it doesn't, so a run that's
+// over didn't end there)
+export function getRetryLair(map: MapDef): LairDef | undefined {
+    const lairs = map.lairs;
+    return lairs?.length === 1 && !lairs[0].retreat && !lairs[0].requires ? lairs[0] : undefined;
+}
+
+// A map to walk round with nothing on it (FunMapDef.explore, and no waves): nothing hurts but a
+// lair's boss, and the HUD's only what it takes to walk it
+export function isPeaceful(map: MapDef): boolean {
+    return map.fun?.explore === true && map.waves.length === 0;
 }
 
 // The adventurer everyone plays on a map, if it has one (Durial321 in

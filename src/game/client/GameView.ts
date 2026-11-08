@@ -94,7 +94,7 @@ const PLAYER_HIT_TINT = 0xff9090;
 const FLAME_SCALE = 2;
 const FLAME_STEP_TICKS = 7;
 const FLAME_TURN = 683;
-// A lair's seal (MapDef.lair): each flame comes up over this many ticks, this many ticks a tile
+// A lair's seal (MapDef.lairs): each flame comes up over this many ticks, this many ticks a tile
 // further from the boss than the last (so the fire runs along the walls), and all die down over
 // SEAL_LIFT_TICKS once it's beaten
 const SEAL_RISE_TICKS = 12;
@@ -669,8 +669,8 @@ export class GameView {
         if (cinematic) {
             this.cinematicView.submitActors(actors, sim, cinematic);
         }
-        if (sim.lair) {
-            this.drawLairSeal(actors, sim, sim.lair, alpha);
+        for (const lair of sim.lairs) {
+            this.drawLairSeal(actors, sim, lair, alpha);
         }
 
         for (const ring of sim.rings) {
@@ -797,8 +797,14 @@ export class GameView {
     // lit up a little
     // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock
     private drawProp(actors: ActorRenderer, sim: Sim, prop: MapPropDef, alpha: number): void {
-        // Its lair's boss up and fighting, or beaten: what's left without it (MapPropDef.awake)
-        const look = prop.awake && sim.lair && sim.lair.state !== "asleep" ? prop.awake : prop;
+        // Its lair's boss up and fighting, or beaten: what's left without it (MapPropDef.awake), or
+        // nothing
+        const lair = prop.lair === undefined ? undefined : sim.lairById(prop.lair);
+        const woken = lair !== undefined && lair.state !== "asleep";
+        if (woken && !prop.awake) {
+            return;
+        }
+        const look = woken ? prop.awake! : prop;
         const model = this.assets.get(getPropKey(look.npcId));
         if (!model) {
             return;
@@ -819,12 +825,12 @@ export class GameView {
         );
     }
 
-    // A lair's seal (MapDef.lair): fire on every way off its floor, running out from the boss as
+    // A lair's seal (MapDef.lairs): fire on every way out of it, running out from the boss as
     // it's sealed, each flame a little out of step with the next, and dying down as it's lifted
     private drawLairSeal(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
-        const def = sim.map.lair!;
+        const def = lair.def;
         const model = this.assets.get(getLairSealKey(def.seal.locId));
-        if (!model || lair.sealTick < 0) {
+        if (!model || lair.sealed.length === 0) {
             return;
         }
         const now = sim.tick + alpha;

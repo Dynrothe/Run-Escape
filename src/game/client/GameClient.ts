@@ -21,6 +21,7 @@ import {
     getArenaRegion,
     getMap,
     getMapCharacter,
+    getRetryLair,
     isDevMap,
     isFunMap,
 } from "../content/maps";
@@ -1347,7 +1348,7 @@ export class GameClient implements GameFrameHandler {
     }
 
     // cinematic: false to start without the map's opening cinematic (a retry). atLair: start at
-    // its lair's start (MapDef.lair), on its floor, so its fight's on again at once (a retry)
+    // its lair's start (getRetryLair), in it, so its fight's on again at once (a retry)
     async startRun(
         mapId: string = this.store.getSnapshot().mapId,
         cinematic = true,
@@ -1369,7 +1370,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         usePortableMath(false);
-        const spawn = (atLair && map.lair?.start) || map.spawn;
+        const spawn = (atLair && getRetryLair(map)?.start) || map.spawn;
         const sim = new Sim({
             grid: this.grid,
             mapId,
@@ -2438,7 +2439,7 @@ export class GameClient implements GameFrameHandler {
     // A lair's opening as it wakes (LairDef.opening), once for each time it does
     private startLairOpening(sim: Sim): void {
         const lair = sim.lair;
-        const opening = sim.map.lair?.opening;
+        const opening = lair?.def.opening;
         if (
             this.cinematic ||
             !opening ||

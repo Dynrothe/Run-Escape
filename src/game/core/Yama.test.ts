@@ -2,20 +2,20 @@ import { describe, expect, test } from "vitest";
 
 import { getEnemy } from "../content/enemies";
 import { JUSTICIAR_ABILITIES } from "../content/justiciarKit";
-import { canRetry, getMap, getMapCharacter } from "../content/maps";
+import { canRetry, getMap, getMapCharacter, getRetryLair } from "../content/maps";
 import { BossAttackDef, emptyStats } from "../content/types";
 import { YAMA_HITPOINTS } from "../content/yama";
 import { METEOR_FIT, PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy, SimEvent } from "./entities";
 import { makeGrid } from "./world/testGrid";
 
-// Yama in burnt Varrock's palace (content/yama.ts, MapDef.lair): asleep on his throne until the
-// Justiciar steps onto the palace floor, then fought there with every way off it burning, and
+// Yama in burnt Varrock's palace (content/yama.ts, MapDef.lairs): asleep on his throne until the
+// Justiciar steps onto the palace floor, his generals beaten (VarrockGenerals.test.ts), then fought there with every way off it burning, and
 // his meteor, which only the Owl's gaze stops (docs/design/yama.md). On open ground round the
 // palace floor, which the floor itself lays out.
 
 const MAP = getMap("battle_for_varrock");
-const LAIR = MAP.lair!;
+const LAIR = MAP.lairs!.find((lair) => lair.id === "yama")!;
 const RECT = MAP.floor!.rect;
 const MARGIN = 6;
 const BASE_X = RECT.x0 - MARGIN;
@@ -28,13 +28,16 @@ const OUTSIDE = { x: LAIR.start!.x, y: RECT.y0 - 2.5 };
 const T = TICKS_PER_SECOND;
 
 const yama = () => getEnemy("yama");
+// His lair (Sim.lair is only the one being fought)
+const yamaLair = (sim: Sim) => sim.lairById("yama")!;
 const slot = (id: string) => JUSTICIAR_ABILITIES.findIndex((a) => a.id === id);
 const attackNamed = (name: string): BossAttackDef =>
     yama().boss!.attacks.find((a) => a.name === name)!;
 
+// With his generals beaten, so his palace has opened at the first step (LairDef.requires)
 function createSim(spawn = OUTSIDE, party?: number): Sim {
     const characterId = getMapCharacter(MAP)!;
-    return new Sim({
+    const sim = new Sim({
         grid: makeGrid(ROWS, BASE_X, BASE_Y),
         mapId: MAP.id,
         characterId,
@@ -51,6 +54,11 @@ function createSim(spawn = OUTSIDE, party?: number): Sim {
                       metaStats: emptyStats(),
                   })),
     });
+    for (const id of LAIR.requires!.lairs) {
+        sim.lairById(id)!.state = "beaten";
+    }
+    sim.step(0, 0);
+    return sim;
 }
 
 function run(sim: Sim, seconds: number, moveX = 0, moveY = 0): void {
@@ -64,7 +72,7 @@ function run(sim: Sim, seconds: number, moveX = 0, moveY = 0): void {
 // Justiciar's hitting him: each test starts what it's about itself
 function startFight(sim: Sim): Enemy {
     run(sim, yama().boss!.intro!.seconds + 0.1);
-    const boss = sim.lair!.boss!;
+    const boss = yamaLair(sim).boss!;
     boss.attackCooldown = 1e9;
     boss.speed = 0;
     boss.bossState!.windup = undefined;
@@ -114,21 +122,48 @@ function events(sim: Sim): SimEvent[] {
 }
 
 describe("his lair", () => {
-    test("he sleeps until someone steps onto the palace floor, and nothing hurts till then", () => {
+    test("his palace is sealed in fire until both his generals are beaten", () => {
+        const sim = new Sim({
+            grid: makeGrid(ROWS, BASE_X, BASE_Y),
+            mapId: MAP.id,
+            characterId: getMapCharacter(MAP)!,
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: OUTSIDE.x,
+            spawnY: OUTSIDE.y,
+        });
+        const lair = yamaLair(sim);
+        expect(lair.locked).toBe(true);
+        expect(lair.sealed.length).toBeGreaterThan(2 * 40);
+        const [first, second] = LAIR.requires!.lairs;
+        sim.lairById(first)!.state = "beaten";
+        run(sim, 0.5, 0, 1);
+        expect(lair.locked).toBe(true);
+        expect(sim.player.y).toBeLessThan(RECT.y0);
+        sim.lairById(second)!.state = "beaten";
+        events(sim);
+        sim.step(0, 0);
+        expect(lair.locked).toBe(false);
+        expect(events(sim)).toContainEqual(
+            expect.objectContaining({ type: "notice", message: LAIR.requires!.message }),
+        );
+        for (let k = 0; k < lair.sealed.length; k += 2) {
+            expect(sim.grid.isDropped(lair.sealed[k], lair.sealed[k + 1])).toBe(false);
+        }
+    });
+
+    test("he sleeps until someone steps onto the palace floor", () => {
         const sim = createSim();
         run(sim, 1);
-        expect(sim.lair!.state).toBe("asleep");
+        expect(yamaLair(sim).state).toBe("asleep");
         expect(sim.enemies.some((e) => e.def.id === "yama")).toBe(false);
-        const before = sim.player.hp;
-        expect(sim["damagePlayer"](10, "test", false)).toBe(0);
-        expect(sim.player.hp).toBe(before);
         // North, onto the floor: his opening first, then his fight
-        for (let i = 0; i < 4 * T && sim.lair!.state === "asleep"; i++) {
+        for (let i = 0; i < 4 * T && yamaLair(sim).state === "asleep"; i++) {
             sim.step(0, 1);
         }
-        expect(sim.lair!.state).toBe("waking");
+        expect(yamaLair(sim).state).toBe("waking");
         run(sim, LAIR.opening!.introAt);
-        expect(sim.lair!.state).toBe("fighting");
+        expect(yamaLair(sim).state).toBe("fighting");
         expect(events(sim)).toContainEqual(
             expect.objectContaining({ type: "notice", message: LAIR.message }),
         );
@@ -137,12 +172,12 @@ describe("his lair", () => {
     test("his opening holds everyone where they stand, turned to where he'll rise, until his intro", () => {
         const sim = createSim(OUTSIDE, 2);
         // The first player north onto the floor; the second presses south throughout
-        for (let i = 0; i < 4 * T && sim.lair!.state === "asleep"; i++) {
+        for (let i = 0; i < 4 * T && yamaLair(sim).state === "asleep"; i++) {
             sim.setInput(0, 0, 1);
             sim.setInput(1, 0, -1);
             sim.step();
         }
-        const lair = sim.lair!;
+        const lair = yamaLair(sim);
         expect(lair.state).toBe("waking");
         expect(lair.introTick - lair.wakeTick).toBe(Math.round(LAIR.opening!.introAt * T));
         const at = sim.heroes.map((hero) => ({ x: hero.player.x, y: hero.player.y }));
@@ -150,8 +185,9 @@ describe("his lair", () => {
             sim.setInput(0, 1, 0);
             sim.setInput(1, 0, -1);
             sim.step();
-            // Nothing sealed, nothing risen and nothing hurts while he speaks
-            expect(lair.sealed.length).toBe(0);
+            // Nothing sealed (its seal from before his generals fell lifted), nothing risen and
+            // nothing hurts while he speaks
+            expect(lair.liftTick).toBeGreaterThan(lair.sealTick);
             expect(sim.intro).toBeUndefined();
         }
         sim.heroes.forEach((hero, i) => {
@@ -168,21 +204,21 @@ describe("his lair", () => {
 
     test("a player on their own who skips it brings him on at the next tick", () => {
         const sim = createSim();
-        for (let i = 0; i < 4 * T && sim.lair!.state === "asleep"; i++) {
+        for (let i = 0; i < 4 * T && yamaLair(sim).state === "asleep"; i++) {
             sim.step(0, 1);
         }
         run(sim, 1);
-        expect(sim.lair!.state).toBe("waking");
+        expect(yamaLair(sim).state).toBe("waking");
         sim.skipLairOpening();
         sim.step(0, 0);
-        expect(sim.lair!.state).toBe("fighting");
+        expect(yamaLair(sim).state).toBe("fighting");
         expect(sim.intro).toBeDefined();
     });
 
     test("every way off the floor burns while he's up, and he rises with his hitpoints", () => {
         const sim = createSim(LAIR.start);
         run(sim, 0.1);
-        const { sealed } = sim.lair!;
+        const { sealed } = yamaLair(sim);
         // The whole edge of the floor, on open ground all round
         expect(sealed.length).toBeGreaterThan(2 * 40);
         for (let k = 0; k < sealed.length; k += 2) {
@@ -207,8 +243,8 @@ describe("his lair", () => {
         expect(boss.dead).toBe(true);
         events(sim);
         run(sim, 0.1);
-        expect(sim.lair!.state).toBe("beaten");
-        const { sealed } = sim.lair!;
+        expect(yamaLair(sim).state).toBe("beaten");
+        const { sealed } = yamaLair(sim);
         for (let k = 0; k < sealed.length; k += 2) {
             expect(sim.grid.isDropped(sealed[k], sealed[k + 1])).toBe(false);
         }
@@ -216,26 +252,29 @@ describe("his lair", () => {
         expect(said).toContainEqual(
             expect.objectContaining({ type: "notice", message: LAIR.victory }),
         );
-        expect(sim.lair!.liftTick).toBeGreaterThan(sim.lair!.sealTick);
+        expect(yamaLair(sim).liftTick).toBeGreaterThan(yamaLair(sim).sealTick);
         expect(said).toContainEqual(
             expect.objectContaining({ type: "bossShout", text: LAIR.shout }),
         );
-        // and the map's one to walk round again, not won
+        // and once he's fallen the run's won, though the map has no end (LairDef.final)
         expect(sim.runOver).toBe(false);
-        expect(sim["damagePlayer"](10, "test", false)).toBe(0);
+        run(sim, yama().boss!.fallSeconds! + 0.5);
+        expect(sim.state).toBe("victory");
     });
 
-    test("a retry starts on his floor, so his fight's on again at once, without his opening", () => {
+    test("a run that starts on his floor has his fight on at once, without his opening", () => {
+        // A retry starts the map over, as his lair throws the party out (getRetryLair)
         expect(canRetry(MAP)).toBe(true);
+        expect(getRetryLair(MAP)).toBeUndefined();
         const sim = createSim(LAIR.start);
         sim.step(0, 0);
-        expect(sim.lair!.state).toBe("fighting");
-        expect(sim.lair!.wakeTick).toBe(-1);
+        expect(yamaLair(sim).state).toBe("fighting");
+        expect(yamaLair(sim).wakeTick).toBe(-1);
     });
 });
 
 describe("his meteor", () => {
-    test("comes on its own clock, never picked, and kills whoever's up", () => {
+    test("comes on its own clock, never picked, and kills whoever's up: they're thrown out", () => {
         const meteor = attackNamed("Meteor");
         expect(meteor.weight).toBe(0);
         expect(yama().boss!.critical!.attack).toBe("Meteor");
@@ -245,7 +284,13 @@ describe("his meteor", () => {
         sim["startBossAttack"](boss, meteor);
         run(sim, meteor.windup + 0.5);
         expect(struck(sim)).toBe(true);
-        expect(sim.runOver).toBe(true);
+        // Out to the palace's court, whole again, and he's back on his throne (LairDef.retreat)
+        expect(sim.runOver).toBe(false);
+        expect(yamaLair(sim).state).toBe("asleep");
+        expect(sim.player.hp).toBe(sim.player.maxHp);
+        const out = Math.hypot(sim.player.x - LAIR.retreat!.x, sim.player.y - LAIR.retreat!.y);
+        expect(out).toBeLessThan(2);
+        expect(sim.enemies.some((e) => !e.dead && e.def.id === "yama")).toBe(false);
     });
 
     test("falls whole and breaks up where it lands, on its animation from where it cracks", () => {

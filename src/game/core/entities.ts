@@ -3,6 +3,7 @@ import {
     BossAttackDef,
     CasketTier,
     EnemyDef,
+    LairDef,
     LightLook,
     PlayerEffectDef,
     RandomEventDef,
@@ -64,6 +65,8 @@ export type BossWindup = {
     // Where it's cast from, where that isn't where the boss is as it begins (toMiddle's leap):
     // a gaze's shadows are from here from the start (BossAttackDef.cover)
     at?: { x: number; y: number };
+    // What the boss has taken while winding it up, towards breaking it (BossAttackDef.breakable)
+    taken?: number;
 };
 
 // Across the arena, from where a surge starts to where it stops; what's within
@@ -133,6 +136,8 @@ export type BossState = {
     enraged: boolean;
     // How many of BossDef.summonsAt have been called in
     summonsDone: number;
+    // Its time between attacks times this, its lair's boss empowered (LairDef.empowered)
+    tempo?: number;
     // Its root heart's been planted (BossAttackDef.rule heart): one a boss
     ruleHeart?: boolean;
     phase?: BossPhase;
@@ -230,20 +235,39 @@ export type WardPillars = {
     sunk: boolean;
 };
 
-// A map's lair (MapDef.lair): asleep until a player steps onto the floor, then its fight, with
-// every way off the floor sealed, then beaten (and the map free to walk round again)
+// One of a map's lairs (MapDef.lairs): asleep until a player steps into it, then its fight, with
+// every way out sealed, then beaten (and the map free to walk round again)
 export type Lair = {
+    // Its def, and where it is in MapDef.lairs
+    def: LairDef;
+    index: number;
     // waking: its opening cinematic (LairDef.opening) from wakeTick, until introTick
     state: "asleep" | "waking" | "fighting" | "beaten";
+    // Sealed off from the start until the lairs it requires are beaten (LairDef.requires)
+    locked: boolean;
+    // Its boss fights empowered, another lair having been beaten first (LairDef.empowered)
+    empowered: boolean;
+    // Its pillars (LairDef.pillars), by index
+    pillars: LairPillar[];
     wakeTick: number;
     introTick: number;
     // Up once it's risen (BossIntro.boss)
     boss?: Enemy;
-    // The tiles sealed while it's fought (world tiles, x then y), from sealTick, and lifted at
-    // liftTick (-1 until then)
+    // The tiles sealed while it's fought or locked (world tiles, x then y), from sealTick, and
+    // lifted at liftTick (-1 until then)
     sealed: number[];
     sealTick: number;
     liftTick: number;
+};
+
+// A lair's pillar (LairDef.pillars): its south-west tile, its tiles (x then y), solid while it
+// stands, and the tick it last crumbled or came back up
+export type LairPillar = {
+    x: number;
+    y: number;
+    tiles: number[];
+    standing: boolean;
+    changeTick: number;
 };
 
 // Off to the edge of the map, as a boss rises (BossDef.intro): it can't be
@@ -678,6 +702,9 @@ export type DisguisedBoss = {
 export type GroundPool = {
     uid: number;
     enemyId: string;
+    // What it is, and when it next lights another beside it (pool.spreads, -1 for never)
+    def: NonNullable<BossAttackDef["pool"]>;
+    nextSpread: number;
     x: number;
     y: number;
     radius: number;
@@ -935,6 +962,8 @@ export type Debuff = {
     id: string;
     // Doses of a debuff that stacks; its stats are all of them added up
     stacks?: number;
+    // Damage a dose every second (a burn)
+    burn?: number;
     name: string;
     iconObjId: number;
     stats: Partial<Stats>;

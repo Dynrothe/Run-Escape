@@ -35,7 +35,7 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
             map.fun?.bosses,
             map.raid,
             map.rule,
-            map.lair,
+            map.lairs,
             pumpkins,
             randomEvents,
         ],

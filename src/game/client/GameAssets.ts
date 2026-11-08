@@ -991,16 +991,26 @@ export class GameAssets {
             npcId,
             seqIds,
         }));
-        // A lair's seal, burning (MapDef.lair), and the pillars its boss raises against a gaze
-        // (BossDef.gazeWard)
+        // A lair's seal, burning (MapDef.lairs), its pillars (LairDef.pillars), and the pillars
+        // its boss raises against a gaze (BossDef.gazeWard)
+        const keys = new Set<string>();
+        const addLoc = (request: (typeof requests)[number]) => {
+            if (!keys.has(request.key)) {
+                keys.add(request.key);
+                requests.push(request);
+            }
+        };
         for (const map of maps) {
-            const lair = map.lair;
-            if (lair) {
+            for (const lair of map.lairs ?? []) {
                 const locId = lair.seal.locId;
-                requests.push({ kind: "loc", key: getLairSealKey(locId), locId, animated: true });
+                addLoc({ kind: "loc", key: getLairSealKey(locId), locId, animated: true });
+                if (lair.pillars) {
+                    const pillar = lair.pillars.locId;
+                    addLoc({ kind: "loc", key: "loc:" + pillar, locId: pillar });
+                }
                 const ward = getEnemy(lair.enemyId).boss?.gazeWard;
                 if (ward) {
-                    requests.push({ kind: "loc", key: "loc:" + ward.locId, locId: ward.locId });
+                    addLoc({ kind: "loc", key: "loc:" + ward.locId, locId: ward.locId });
                 }
             }
         }
@@ -1008,7 +1018,7 @@ export class GameAssets {
     }
 
     loadProps(map: MapDef): Promise<void> {
-        if (!map.props?.length && !map.cinematic && !map.lair) {
+        if (!map.props?.length && !map.cinematic && !map.lairs) {
             return Promise.resolve();
         }
         let baking = this.propBakes.get(map.id);

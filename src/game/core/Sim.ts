@@ -40,7 +40,7 @@ import {
     getHardScale,
 } from "../content/hard";
 import { CASKETS, getGear, getItem } from "../content/items";
-import { getMap, hasFliers, hasPoison } from "../content/maps";
+import { getMap, hasFliers, hasPoison, isPeaceful } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import {
     LANTERN_ID,
@@ -202,6 +202,7 @@ import {
     GroundHazard,
     GroundPool,
     Lair,
+    LairPillar,
     LeftLight,
     Light,
     PassiveState,
@@ -319,6 +320,10 @@ const DISGUISE_TOUCH = 1;
 const DISGUISE_ATTACK_DELAY = 100;
 // Bosses' pools on the ground at once (the oldest dries up)
 const MAX_POOLS = 12;
+// A pool that spreads (BossAttackDef.pool.spreads) lights the next this many of its radii away
+const POOL_SPREAD_STEP = 1.6;
+// Steam where something's put out a pool (BossAttackDef.pool.dousedBy): Ice Barrage's frost
+const DOUSED_SPOTANIM = 369;
 // Enemies left this far behind are brought back near the player
 const RELOCATE_DISTANCE = 34;
 // A raid's room, cleared: seconds to gather what's on the ground before the next
@@ -373,13 +378,18 @@ export function meteorFallen(windup: BossWindup, tick: number): number {
     const c = Math.min(1, Math.max(0, t));
     return c * c;
 }
-// The steps off a lair's floor it seals (MapDef.lair): a diagonal goes by two of these
+// The steps out of a lair it seals (MapDef.lairs): a diagonal goes by two of these
 const LAIR_STEPS = [
     [1, 0],
     [-1, 0],
     [0, 1],
     [0, -1],
 ] as const;
+// What's been so since before the run (a lair locked from the start, its pillars), so the view
+// draws it there already
+const LAIR_LONG_AGO = 10000;
+// Thrown out of a lair (LairDef.retreat): nothing can hurt them, nor come at them, for this long
+const BEATEN_BACK_TICKS = 4 * TICKS_PER_SECOND;
 
 // Enemies are kept this many ticks after dying for their death animation
 const CORPSE_TICKS = MAX_DEATH_ANIM_TICKS + DEATH_SINK_TICKS;
@@ -550,6 +560,8 @@ const FLEE_LOOKAHEAD = 1;
 
 // What a hit from the floor (MapDef.floor) is from, where an enemy's id would be
 export const FLOOR_SOURCE = "floor";
+// And from a burn (a debuff's burn)
+export const BURN_SOURCE = "burn";
 // And from the map's rule (MapDef.rule): its kind, "roots"
 // What a floor's tiles do (FloorEffect), unless the floor says otherwise (FloorDef.tileEffects):
 // burn's share of the player's hitpoints and how often (seconds), and its hit on an enemy; heal's
@@ -961,9 +973,10 @@ export class Sim {
     // (BossIntroDef.alone), for as long as it's up
     intro?: BossIntro;
     private aloneWith?: Enemy;
-    // The map's lair (MapDef.lair): its boss asleep, fought or beaten
-    readonly lair?: Lair;
-    // Whether it wakes with its opening (LairDef.opening)
+    // The map's lairs (MapDef.lairs): each boss asleep, fought or beaten
+    readonly lairs: Lair[] = [];
+    // Whether a lair wakes with its opening (LairDef.opening): not when the run starts in it (a
+    // retry)
     private lairOpens = false;
     // Pillars up between a boss and a gaze (BossDef.gazeWard)
     wardPillars: WardPillars[] = [];
@@ -1320,21 +1333,7 @@ export class Sim {
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
             : undefined;
-        // Its seal's put back with the floor's tiles (ArenaFloor), as the grid's kept between runs
-        if (this.map.lair && this.floor) {
-            this.lair = {
-                state: "asleep",
-                wakeTick: -1,
-                introTick: -1,
-                sealed: [],
-                sealTick: -1,
-                liftTick: -1,
-            };
-            // Its opening plays unless the run starts on its floor (a retry)
-            this.lairOpens =
-                this.map.lair.opening !== undefined &&
-                !this.onLairFloor({ x: options.spawnX, y: options.spawnY });
-        }
+        this.setUpLairs({ x: options.spawnX, y: options.spawnY });
         // On its own Rng, so a map without one plays as it did
         this.rule = this.map.rule
             ? createRunRule(this.map.rule, this.grid, options.seed, TICKS_PER_SECOND)
@@ -2601,8 +2600,8 @@ export class Sim {
             this.nextRound();
         }
         this.stepRaid();
-        if (this.lair) {
-            this.stepLair(this.lair);
+        for (const lair of this.lairs) {
+            this.stepLair(lair);
         }
         this.stepIntro();
         this.stepDirector();
@@ -2740,6 +2739,7 @@ export class Sim {
     // Poison hits once a second until it wears off; armour doesn't help
     private stepPoison(): void {
         const player = this.player;
+        this.stepBurns();
         if (player.poisonEnd === -1) {
             return;
         }
@@ -2755,6 +2755,23 @@ export class Sim {
         if (this.tick >= player.poisonEnd) {
             player.poisonEnd = -1;
             player.poisonDamage = 0;
+        }
+    }
+
+    // A burn (a debuff's burn) hits once a second for each dose, through armour, until it's out
+    private stepBurns(): void {
+        for (const debuff of this.debuffs) {
+            const burn = debuff.burn;
+            if (
+                burn === undefined ||
+                this.tick >= debuff.endTick ||
+                (debuff.endTick - this.tick) % TICKS_PER_SECOND !== 0 ||
+                this.reviving ||
+                this.runOver
+            ) {
+                continue;
+            }
+            this.damagePlayer(burn * (debuff.stacks ?? 1), BURN_SOURCE, false, -1, true, false);
         }
     }
 
@@ -2820,9 +2837,14 @@ export class Sim {
         if (this.aloneWith?.dead) {
             this.aloneWith = undefined;
         }
-        // Nothing else comes while a boss makes its entrance, or fights alone, or in a raid's
-        // boss room
-        if (this.intro || this.aloneWith || (this.map.raid && this.raidStage !== "waves")) {
+        // Nothing else comes while a boss makes its entrance, or fights alone or in its lair, or
+        // in a raid's boss room
+        if (
+            this.intro ||
+            this.aloneWith ||
+            this.lair !== undefined ||
+            (this.map.raid && this.raidStage !== "waves")
+        ) {
             return;
         }
         const seconds = this.directorSeconds;
@@ -3976,8 +3998,10 @@ export class Sim {
         if (this.runOver || this.victoryAt >= 0 || this.hero.down || this.isImmune(this.hero)) {
             return 0;
         }
-        // Nothing hurts on a map to walk round (FunMapDef.explore), but its lair's boss
-        if (this.map.fun?.explore && this.lair?.state !== "fighting") {
+        // Nothing hurts on a map to walk round (isPeaceful) but a lair's boss, and nothing while
+        // a lair's waking (its opening)
+        const lair = this.lair;
+        if (lair?.state === "waking" || (isPeaceful(this.map) && lair?.state !== "fighting")) {
             return 0;
         }
         const armor = ignoreArmor
@@ -4544,15 +4568,11 @@ export class Sim {
                 maxY: square.baseY + square.size,
             };
         }
-        // A lair's fought on its floor (MapDef.lair)
-        const floor = this.lair && this.floor;
-        if (floor) {
-            return {
-                minX: floor.x0,
-                minY: floor.y0,
-                maxX: floor.x0 + floor.sizeX,
-                maxY: floor.y0 + floor.sizeY,
-            };
+        // A lair's fought in its own box (MapDef.lairs)
+        const lair = this.lair;
+        if (lair) {
+            const box = this.lairBox(lair);
+            return { minX: box.x0, minY: box.y0, maxX: box.x1 + 1, maxY: box.y1 + 1 };
         }
         const grid = this.grid;
         return {
@@ -5084,18 +5104,102 @@ export class Sim {
         });
     }
 
-    // ---- A boss's lair (MapDef.lair) ----
+    // ---- Bosses' lairs (MapDef.lairs) ----
 
-    // Asleep until a player's on the floor; fought until it's dead, and then beaten for good
+    // Each of the map's lairs asleep, its pillars standing, and those that wait on others sealed
+    // off already. The grid's kept between runs, so what an earlier run sealed is put back first
+    // (a map's floor does that for every tile, in ArenaFloor).
+    private setUpLairs(spawn: { x: number; y: number }): void {
+        const defs = this.map.lairs;
+        if (!defs) {
+            return;
+        }
+        if (!this.floor) {
+            this.grid.restoreAllTiles();
+        }
+        defs.forEach((def, index) => {
+            const lair: Lair = {
+                def,
+                index,
+                state: "asleep",
+                locked: def.requires !== undefined,
+                empowered: false,
+                pillars: (def.pillars?.at ?? []).map(({ x, y }) => {
+                    const tiles: number[] = [];
+                    const size = def.pillars!.size;
+                    for (let ty = y; ty < y + size; ty++) {
+                        for (let tx = x; tx < x + size; tx++) {
+                            tiles.push(tx, ty);
+                        }
+                    }
+                    return { x, y, tiles, standing: false, changeTick: -LAIR_LONG_AGO };
+                }),
+                wakeTick: -1,
+                introTick: -1,
+                sealed: [],
+                sealTick: -1,
+                liftTick: -1,
+            };
+            this.lairs.push(lair);
+            this.raisePillars(lair, -LAIR_LONG_AGO);
+        });
+        // Sealed from the start, as if it had been for ever
+        for (const lair of this.lairs) {
+            if (lair.locked) {
+                this.sealLair(lair, -LAIR_LONG_AGO);
+            }
+        }
+        // An opening plays unless the run starts in its lair (a retry)
+        this.lairOpens = !this.lairs.some((lair) => this.inLair(lair, spawn));
+    }
+
+    // The lair being woken or fought, if any: one at a time
+    get lair(): Lair | undefined {
+        return this.lairs.find((lair) => lair.state === "waking" || lair.state === "fighting");
+    }
+
+    // A lair by its id (LairDef.id)
+    lairById(id: string): Lair | undefined {
+        return this.lairs.find((lair) => lair.def.id === id);
+    }
+
+    // Asleep until a player's in it; fought until it's dead, and then beaten for good. Locked
+    // until what it requires is beaten.
     private stepLair(lair: Lair): void {
-        const def = this.map.lair!;
+        const def = lair.def;
+        if (lair.locked) {
+            const required = def.requires!.lairs;
+            if (required.every((id) => this.lairById(id)?.state === "beaten")) {
+                lair.locked = false;
+                this.liftSeal(lair);
+                this.emit({ type: "notice", message: def.requires!.message });
+                this.emit({
+                    type: "lair",
+                    woken: false,
+                    sound: def.seal.sound ?? -1,
+                    x: def.at.x,
+                    y: def.at.y,
+                });
+            }
+            return;
+        }
         if (lair.state === "asleep") {
-            if (this.heroes.some((hero) => this.isUp(hero) && this.onLairFloor(hero.player))) {
-                if (this.lairOpens) {
-                    // Its opening first, the party held to watch (LairDef.opening)
+            // One at a time, and not over another boss's entrance
+            if (this.lair || this.intro) {
+                return;
+            }
+            if (this.heroes.some((hero) => this.isUp(hero) && this.inLair(lair, hero.player))) {
+                if (def.opening && this.lairOpens) {
+                    // Its opening first, the party held to watch (LairDef.opening), and what's
+                    // about gone meanwhile
                     lair.state = "waking";
                     lair.wakeTick = this.tick;
-                    lair.introTick = this.tick + secondsToTicks(def.opening!.introAt);
+                    lair.introTick = this.tick + secondsToTicks(def.opening.introAt);
+                    for (const enemy of this.enemies) {
+                        if (!enemy.dead && !enemy.leaving) {
+                            this.sendOff(enemy, lair.introTick);
+                        }
+                    }
                 } else {
                     this.wakeLair(lair);
                 }
@@ -5108,32 +5212,159 @@ export class Sim {
             }
             return;
         }
-        if (lair.state === "fighting" && lair.boss === undefined && this.intro) {
-            lair.boss = this.intro.boss;
+        if (lair.state !== "fighting") {
+            return;
         }
-        if (lair.state === "fighting" && lair.boss?.dead) {
-            lair.state = "beaten";
-            lair.liftTick = this.tick;
-            this.liftSeal(lair);
-            this.emit({ type: "notice", message: def.victory });
-            if (def.shout) {
-                this.emit({ type: "bossShout", enemyUid: lair.boss.uid, text: def.shout });
+        // Up: empowered, it hits harder and sooner (LairDef.empowered)
+        const risen = this.intro?.boss;
+        if (lair.boss === undefined && risen) {
+            lair.boss = risen;
+            const empowered = lair.empowered ? def.empowered : undefined;
+            if (empowered && risen.bossState) {
+                risen.damageScale *= empowered.damage;
+                risen.bossState.tempo = empowered.tempo;
             }
-            this.emit({
-                type: "lair",
-                woken: false,
-                sound: def.seal.sound ?? -1,
-                x: lair.boss.x,
-                y: lair.boss.y,
-            });
+        }
+        const boss = lair.boss;
+        if (!boss) {
+            return;
+        }
+        if (boss.dead) {
+            this.beatLair(lair, boss);
+            return;
+        }
+        // Down to its share, every pillar comes down (LairDef.pillars.crumbleAt)
+        const crumbleAt = def.pillars?.crumbleAt;
+        if (
+            crumbleAt !== undefined &&
+            boss.hp <= boss.maxHp * crumbleAt &&
+            lair.pillars.some((pillar) => pillar.standing)
+        ) {
+            for (const pillar of lair.pillars) {
+                this.crumblePillar(lair, pillar);
+            }
+            this.updateFlowFields();
         }
     }
 
-    // Whether a spot's on the floor its lair's fought on
-    private onLairFloor(at: { x: number; y: number }): boolean {
-        const floor = this.floor!;
-        const i = floor.index(Math.floor(at.x), Math.floor(at.y));
+    // The pillars a boss's cover attacks are hidden from by (BossAttackDef.cover): its lair's
+    // standing ones, if it has any, or the map's
+    coverPillars(enemy: Enemy): { x: number; y: number; size: number }[] | undefined {
+        const lair = this.lairs.find((one) => one.boss === enemy);
+        const pillars = lair?.def.pillars;
+        if (!lair || !pillars) {
+            return this.map.features?.pillars;
+        }
+        return lair.pillars
+            .filter((pillar) => pillar.standing)
+            .map(({ x, y }) => ({ x, y, size: pillars.size }));
+    }
+
+    // Each of its lair's pillars that hid someone from a boss's cover attack crumbles
+    // (BossAttackDef.crumbles)
+    private crumbleShelter(
+        enemy: Enemy,
+        windup: BossWindup,
+        sheltered: { x: number; y: number; radius: number }[],
+    ): void {
+        const lair = this.lairs.find((one) => one.boss === enemy);
+        const pillars = lair?.def.pillars;
+        if (!lair || !pillars) {
+            return;
+        }
+        const fromX = windup.at?.x ?? enemy.x;
+        const fromY = windup.at?.y ?? enemy.y;
+        let changed = false;
+        for (const pillar of lair.pillars) {
+            const one = [{ x: pillar.x, y: pillar.y, size: pillars.size }];
+            if (
+                pillar.standing &&
+                sheltered.some(({ x, y, radius }) => inShadow(one, fromX, fromY, x, y, radius))
+            ) {
+                this.crumblePillar(lair, pillar);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.updateFlowFields();
+        }
+    }
+
+    // While any of its bodyguards is up, a boss takes only its pact's share (BossDef.pact)
+    private pactShare(pact: NonNullable<BossDef["pact"]>): number {
+        const guarded = this.enemies.some(
+            (enemy) => !enemy.dead && !enemy.leaving && pact.enemyIds.includes(enemy.def.id),
+        );
+        return guarded ? pact.taken : 1;
+    }
+
+    // Beaten: its fire dies down, and any lair its rival is empowered by it (LairDef.empowered)
+    private beatLair(lair: Lair, boss: Enemy): void {
+        const def = lair.def;
+        lair.state = "beaten";
+        this.liftSeal(lair);
+        // Its fire on the floor goes out with it: what spreads would burn on for good
+        this.pools = this.pools.filter((pool) => pool.enemyId !== boss.def.id);
+        this.emit({ type: "notice", message: def.victory });
+        if (def.shout) {
+            this.emit({ type: "bossShout", enemyUid: boss.uid, text: def.shout });
+        }
+        this.emit({
+            type: "lair",
+            woken: false,
+            sound: def.seal.sound ?? -1,
+            x: boss.x,
+            y: boss.y,
+        });
+        for (const other of this.lairs) {
+            const empowered = other.def.empowered;
+            if (
+                empowered?.by.includes(def.id) &&
+                !other.empowered &&
+                other.state !== "beaten" &&
+                !other.locked
+            ) {
+                other.empowered = true;
+                this.emit({ type: "notice", message: empowered.message });
+            }
+        }
+    }
+
+    // Whether a spot's where a lair's fought: its area (LairDef.area), or the map's floor
+    inLair(lair: Lair, at: { x: number; y: number }): boolean {
+        return this.inLairTile(lair, Math.floor(at.x), Math.floor(at.y));
+    }
+
+    private inLairTile(lair: Lair, tx: number, ty: number): boolean {
+        const area = lair.def.area;
+        if (area) {
+            if (tx < area.x0 || tx > area.x1 || ty < area.y0 || ty > area.y1) {
+                return false;
+            }
+            const row = area.rows?.[area.y1 - ty];
+            return area.rows === undefined || row?.[tx - area.x0] === "#";
+        }
+        const floor = this.floor;
+        if (!floor) {
+            return false;
+        }
+        const i = floor.index(tx, ty);
         return i >= 0 && floor.layout.mask[i] === 1;
+    }
+
+    // The box a lair's fought in, world tiles
+    private lairBox(lair: Lair): { x0: number; y0: number; x1: number; y1: number } {
+        const area = lair.def.area;
+        if (area) {
+            return area;
+        }
+        const floor = this.floor!;
+        return {
+            x0: floor.x0,
+            y0: floor.y0,
+            x1: floor.x0 + floor.sizeX - 1,
+            y1: floor.y0 + floor.sizeY - 1,
+        };
     }
 
     // A solo player's skipped its opening (LairDef.opening): on to its intro at the next tick
@@ -5144,19 +5375,20 @@ export class Sim {
         }
     }
 
-    // Its fight begins: every way off the floor sealed, and its intro, which brings the party
-    // onto the floor in front of it
+    // Its fight begins: every way out sealed, and its intro, which brings the party in front of it.
+    // Empowered (LairDef.empowered), it's that much tougher.
     private wakeLair(lair: Lair): void {
-        const def = this.map.lair!;
+        const def = lair.def;
         lair.state = "fighting";
-        lair.sealTick = this.tick;
-        lair.sealed = this.findLairExits();
-        for (let k = 0; k < lair.sealed.length; k += 2) {
-            this.grid.dropTile(lair.sealed[k], lair.sealed[k + 1]);
-        }
+        lair.boss = undefined;
+        // Its opening's once a run: a fight that's begun again after the party's been thrown out
+        // starts with its intro
+        this.lairOpens = this.lairOpens && !def.opening;
+        this.sealLair(lair, this.tick);
         this.updateFlowFields();
         const enemy = getEnemy(def.enemyId);
-        this.startIntro(enemy, "boss", def.hp);
+        const hp = def.hp * (lair.empowered ? def.empowered!.hp : 1);
+        this.startIntro(enemy, def.final ? "finalBoss" : "boss", hp);
         this.emit({ type: "notice", message: def.message });
         this.emit({
             type: "lair",
@@ -5167,45 +5399,143 @@ export class Sim {
         });
     }
 
-    // The tiles a step off the floor goes onto: open ground beside its edge, with no wall
-    // between (world tiles, x then y). Found from the grid, so no breach in a wall is missed.
-    private findLairExits(): number[] {
-        const floor = this.floor!;
-        const { mask } = floor.layout;
+    // Every way out of it burning, from tick
+    private sealLair(lair: Lair, tick: number): void {
+        lair.sealTick = tick;
+        lair.liftTick = -1;
+        lair.sealed = this.findLairExits(lair);
+        for (let k = 0; k < lair.sealed.length; k += 2) {
+            this.grid.dropTile(lair.sealed[k], lair.sealed[k + 1]);
+        }
+    }
+
+    // The tiles a step out of it goes onto: open ground beside its edge, with no wall between
+    // (world tiles, x then y). Found from the grid, so no breach in a wall is missed.
+    private findLairExits(lair: Lair): number[] {
+        const box = this.lairBox(lair);
         const exits: number[] = [];
         const seen = new Set<number>();
-        for (let i = 0; i < mask.length; i++) {
-            if (!mask[i]) {
-                continue;
-            }
-            const x = floor.x0 + (i % floor.sizeX);
-            const y = floor.y0 + Math.floor(i / floor.sizeX);
-            for (const [dx, dy] of LAIR_STEPS) {
-                const nx = x + dx;
-                const ny = y + dy;
-                const j = floor.index(nx, ny);
-                const key = nx * 65536 + ny;
-                if (
-                    (j >= 0 && mask[j] === 1) ||
-                    seen.has(key) ||
-                    !this.grid.contains(nx, ny) ||
-                    !canStep(this.grid, x, y, dx, dy)
-                ) {
+        for (let y = box.y0; y <= box.y1; y++) {
+            for (let x = box.x0; x <= box.x1; x++) {
+                if (!this.inLairTile(lair, x, y)) {
                     continue;
                 }
-                seen.add(key);
-                exits.push(nx, ny);
+                for (const [dx, dy] of LAIR_STEPS) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    const key = nx * 65536 + ny;
+                    if (
+                        this.inLairTile(lair, nx, ny) ||
+                        seen.has(key) ||
+                        !this.grid.contains(nx, ny) ||
+                        !canStep(this.grid, x, y, dx, dy)
+                    ) {
+                        continue;
+                    }
+                    seen.add(key);
+                    exits.push(nx, ny);
+                }
             }
         }
         return exits;
     }
 
-    // Its fire dies down, and the floor's ways out are open again
+    // Its fire dies down, and the ways out are open again
     private liftSeal(lair: Lair): void {
+        lair.liftTick = this.tick;
         for (let k = 0; k < lair.sealed.length; k += 2) {
             this.grid.restoreTile(lair.sealed[k], lair.sealed[k + 1]);
         }
         this.updateFlowFields();
+    }
+
+    // Its pillars (LairDef.pillars) standing, solid, from tick
+    private raisePillars(lair: Lair, tick: number): void {
+        for (const pillar of lair.pillars) {
+            if (pillar.standing) {
+                continue;
+            }
+            pillar.standing = true;
+            pillar.changeTick = tick;
+            for (let k = 0; k < pillar.tiles.length; k += 2) {
+                this.grid.dropTile(pillar.tiles[k], pillar.tiles[k + 1], true);
+            }
+        }
+    }
+
+    // A pillar of a lair's crumbling, and the ground open where it stood
+    private crumblePillar(lair: Lair, pillar: LairPillar): void {
+        if (!pillar.standing) {
+            return;
+        }
+        pillar.standing = false;
+        pillar.changeTick = this.tick;
+        for (let k = 0; k < pillar.tiles.length; k += 2) {
+            this.grid.restoreTile(pillar.tiles[k], pillar.tiles[k + 1]);
+        }
+        const pillars = lair.def.pillars!;
+        const size = pillars.size;
+        this.showImpact(pillars.impact, pillar.x + size / 2, pillar.y + size / 2);
+    }
+
+    // The party's down in a lair that throws them out (LairDef.retreat): the fight's over, its boss
+    // back where it was asleep with all its hitpoints and its pillars up, and the party up again
+    // outside it, with all of theirs. The run goes on.
+    private beatBack(lair: Lair): void {
+        const def = lair.def;
+        const retreat = def.retreat!;
+        // The boss and all of its fight gone
+        for (const enemy of this.enemies) {
+            if (!enemy.dead) {
+                this.vanish(enemy);
+            }
+        }
+        this.intro = undefined;
+        this.aloneWith = undefined;
+        this.clearBossAttacks();
+        this.enemyProjectiles = [];
+        this.pools = [];
+        for (const pillars of this.wardPillars) {
+            pillars.endTick = Math.min(pillars.endTick, this.tick);
+        }
+        this.dimTo(this.baseAmbient, PHASE_LIGHT_SECONDS);
+        lair.state = "asleep";
+        lair.boss = undefined;
+        this.liftSeal(lair);
+        this.raisePillars(lair, this.tick);
+        // Out, side by side
+        const party = this.heroes.filter((hero) => !hero.left);
+        party.forEach((hero, i) => {
+            const player = hero.player;
+            const along = (i - (party.length - 1) / 2) * 1.5;
+            const spot = findFreeSpot(this.grid, retreat.x + along, retreat.y, player.radius);
+            player.x = player.prevX = spot.x;
+            player.y = player.prevY = spot.y;
+            player.hp = player.maxHp;
+            player.deathTick = -1;
+            player.invulnerable = IMMUNE_INVULNERABLE_TICKS;
+            player.flash = 0;
+            player.frozen = 0;
+            player.moving = false;
+            player.poisonEnd = -1;
+            player.poisonDamage = 0;
+            hero.down = false;
+            hero.outTick = -1;
+            hero.revive = undefined;
+            hero.immuneEndTick = this.tick + BEATEN_BACK_TICKS;
+            hero.drowsyEndTick = 0;
+        });
+        this.kitCasts = [];
+        this.rescaleParty();
+        this.updateFlowFields();
+        this.emit({ type: "notice", message: retreat.message });
+        this.emit({
+            type: "lair",
+            woken: false,
+            sound: def.seal.sound ?? -1,
+            x: def.at.x,
+            y: def.at.y,
+        });
     }
 
     // Each hero's way round, worked out again after the ground's changed
@@ -5344,8 +5674,9 @@ export class Sim {
     // it's up, and where it'll rise until then
     get introFacing(): { x: number; y: number } | undefined {
         // Turned to where it'll rise as its lair wakes (LairDef.opening)
-        if (this.lair?.state === "waking") {
-            return this.map.lair!.at;
+        const lair = this.lair;
+        if (lair?.state === "waking") {
+            return lair.def.at;
         }
         if (!this.introHolds || !this.intro?.def.boss?.intro?.faces) {
             return undefined;
@@ -5363,13 +5694,13 @@ export class Sim {
         );
     }
 
-    // Where a boss rises, if the map says (ArenaFeatures.rise, or its lair's spot)
+    // Where a boss rises, if the map says (ArenaFeatures.rise, or the spot of the lair it's in)
     get riseSpot(): { x: number; y: number } | undefined {
-        return this.map.features?.rise ?? this.map.lair?.at;
+        return this.map.features?.rise ?? this.lair?.def.at;
     }
 
     // Whether the map has a square of its own that bosses are fought in (MapDef.bossArena, or
-    // its lair's floor)
+    // the box of the lair being fought)
     private get hasBossArena(): boolean {
         return this.map.bossArena !== undefined || this.lair !== undefined;
     }
@@ -6412,11 +6743,13 @@ export class Sim {
     // The tempo of the phase a boss is in (BossPhasesDef tempo): what its
     // interval and its patterns' windups are multiplied by
     private phaseTempo(enemy: Enemy): number {
+        // Empowered, its lair's tempo on top (LairDef.empowered)
+        const empowered = enemy.bossState?.tempo ?? 1;
         const phase = enemy.bossState?.phase;
         if (!phase || phase.stage === "finale") {
-            return 1;
+            return empowered;
         }
-        return enemy.def.boss?.phases?.phases[phase.index]?.tempo ?? 1;
+        return (enemy.def.boss?.phases?.phases[phase.index]?.tempo ?? 1) * empowered;
     }
 
     // Frees the slots of dead bosses, once no bullet or volley of theirs is
@@ -7411,6 +7744,12 @@ export class Sim {
             const walkers = boss.bossState?.walkers;
             if (walkers) {
                 walkers.absorbed++;
+                // What it had in it, the boss's (summon.walkTo.heals), with its impact
+                const heals = walkers.attack.summon?.walkTo?.heals;
+                if (heals) {
+                    boss.hp = Math.min(boss.maxHp, boss.hp + Math.round(boss.maxHp * heals));
+                    this.showImpact(walkers.attack.impact, boss.x, boss.y);
+                }
             }
             this.vanish(enemy);
             return;
@@ -7435,8 +7774,10 @@ export class Sim {
             y: boss.y,
             absorbed: walkers.absorbed,
         });
-        // On the whole party
-        this.forEachHeroInReach(() => this.bossHit(boss.def.id, boss, attack, damage));
+        // On the whole party, if there's anything in it
+        if (damage > 0) {
+            this.forEachHeroInReach(() => this.bossHit(boss.def.id, boss, attack, damage));
+        }
         return false;
     }
 
@@ -7625,6 +7966,7 @@ export class Sim {
                 distance >= (attack.minRange ?? 0) &&
                 (!attack.enraged || state.enraged) &&
                 (!attack.expert || this.expert) &&
+                (!attack.empowered || state.tempo !== undefined) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
                 !(attack.parasite && this.parasite) &&
                 // Some only in its shadow realm, exhumes or yellows (BossAttackDef.ordeal)
@@ -7953,7 +8295,7 @@ export class Sim {
     private interruptBoss(
         enemy: Enemy,
         windup: BossWindup,
-        stop: NonNullable<BossAttackDef["interruptedBy"]>,
+        stop: Omit<NonNullable<BossAttackDef["interruptedBy"]>, "ability">,
     ): void {
         const state = enemy.bossState!;
         state.windup = undefined;
@@ -8771,6 +9113,9 @@ export class Sim {
                         }
                     }
                 });
+                if (this.pools.length > 0) {
+                    this.dousePools(ability.id, x, y, half);
+                }
                 return cast.done < ability.length;
             }
             case "square": {
@@ -8795,6 +9140,9 @@ export class Sim {
                         this.kitHit(cast, enemy);
                     }
                 });
+                if (this.pools.length > 0) {
+                    this.dousePools(ability.id, x0 + size / 2, y0 + size / 2, size / 2);
+                }
                 this.showImpact(ability.impact, x0 + size / 2, y0 + size / 2);
                 return false;
             }
@@ -9013,6 +9361,10 @@ export class Sim {
         });
         this.landBlastExtras(enemy, windup);
         this.queueFollow(enemy, attack);
+        // Done, it heals (a ritual finished)
+        if (attack.heal) {
+            enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.round(enemy.maxHp * attack.heal));
+        }
         // Not a row attack's: its statues fire with its volleys (fireRows)
         if (!attack.pattern?.rows) {
             this.animateStatues(attack, windup.from, attack.statues?.seq);
@@ -9054,6 +9406,7 @@ export class Sim {
             }
             // Co-op: on anyone it lands on
             let landed = false;
+            const sheltered: { x: number; y: number; radius: number }[] = [];
             this.forEachHeroInReach(() => {
                 const player = this.player;
                 let hit = line
@@ -9085,7 +9438,7 @@ export class Sim {
                     hit &&
                     attack.cover &&
                     inShadow(
-                        this.map.features?.pillars,
+                        this.coverPillars(enemy),
                         windup.at?.x ?? enemy.x,
                         windup.at?.y ?? enemy.y,
                         player.x,
@@ -9094,6 +9447,9 @@ export class Sim {
                     )
                 ) {
                     hit = false;
+                    if (attack.crumbles) {
+                        sheltered.push({ x: player.x, y: player.y, radius: player.radius });
+                    }
                 }
                 if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
                     // Behind the glyph: it takes the blow
@@ -9109,6 +9465,10 @@ export class Sim {
             });
             if (this.runOver) {
                 return;
+            }
+            // The pillars that spared anyone come down (BossAttackDef.crumbles)
+            if (sheltered.length > 0) {
+                this.crumbleShelter(enemy, windup, sheltered);
             }
             // What it throws up: a lunge's trail along its strip, and the rest where it stops
             // (once it's got there, if it dashes); a blast's on each spot, a swing's round it
@@ -9970,6 +10330,12 @@ export class Sim {
         this.hero.down = true;
         this.hero.outTick = this.tick;
         if (!this.heroes.some((hero) => this.isUp(hero))) {
+            // In a lair that throws the party out (LairDef.retreat), the run goes on
+            const lair = this.lair;
+            if (lair?.state === "fighting" && lair.def.retreat) {
+                this.beatBack(lair);
+                return;
+            }
             this.endRun("dead");
             return;
         }
@@ -10119,7 +10485,9 @@ export class Sim {
         const guard = naps && !this.isNapping(enemy) ? naps.awakeDamage : 1;
         // Its guard down after a miss, or stunned (BossDef.guard)
         const opened = this.isExposed(enemy) ? enemy.def.boss!.guard!.damage : 1;
-        const prayed = this.prayedAgainst(enemy) * guard * offColour * opened;
+        // Its bodyguards taking their share (BossDef.pact)
+        const pact = enemy.def.boss?.pact ? this.pactShare(enemy.def.boss.pact) : 1;
+        const prayed = this.prayedAgainst(enemy) * guard * offColour * opened * pact;
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too
         const bossMight = enemy.boss && mightScale > 0 ? this.stats.bossMight : 0;
@@ -10144,6 +10512,15 @@ export class Sim {
             enemy.hp -= damage;
         }
         enemy.flash = 5;
+        // Hit hard enough while winding up what that breaks (BossAttackDef.breakable)
+        const breaking = enemy.bossState?.windup;
+        const breakable = breaking?.attack.breakable;
+        if (breaking && breakable && !shielded) {
+            breaking.taken = (breaking.taken ?? 0) + damage;
+            if (enemy.hp > 0 && breaking.taken >= enemy.maxHp * breakable.share) {
+                this.interruptBoss(enemy, breaking, breakable);
+            }
+        }
         const source = this.damageSource;
         this.damageBySource[source] = (this.damageBySource[source] ?? 0) + damage;
         this.hero.recentDamage[this.tick % DPS_WINDOW_TICKS] += damage;
@@ -10277,10 +10654,12 @@ export class Sim {
             this.emit({ type: "coinsReturned", enemyId: enemy.def.id, amount: stolen });
         }
 
-        // With the last of the final bosses (the Inferno has three)
+        // With the last of the final bosses (the Inferno has three). A final lair's (LairDef.final)
+        // wins even a run with no end, its map's whole point.
         if (enemy.finalBoss && !this.finalBossLeft()) {
             const fall = enemy.def.boss?.fallSeconds;
-            if (this.endless) {
+            const lairWin = this.lairs.some((lair) => lair.def.final && lair.boss === enemy);
+            if (this.endless && !lairWin) {
                 this.nextRound();
             } else if (fall) {
                 // Its death first, with nothing landing meanwhile (stepRun)
@@ -12468,6 +12847,8 @@ export class Sim {
                 this.pools.push({
                     uid: this.nextUid++,
                     enemyId: enemy.def.id,
+                    def: pool,
+                    nextSpread: pool.spreads ? this.tick + secondsToTicks(pool.spreads.every) : -1,
                     x,
                     y,
                     radius: pool.radius,
@@ -12520,6 +12901,7 @@ export class Sim {
             return;
         }
         this.pools = this.pools.filter((pool) => pool.endTick > this.tick);
+        this.spreadPools();
         for (const pool of this.pools) {
             if (this.tick < pool.nextTick) {
                 continue;
@@ -12541,14 +12923,75 @@ export class Sim {
         }
     }
 
+    // Fire taking hold beside what's burning (BossAttackDef.pool.spreads): each one, every so
+    // often, lights another a step off in a direction of its own, on open ground of the fight's,
+    // as long as there are fewer than most of its kind
+    private spreadPools(): void {
+        const pools = this.pools;
+        const count = pools.length;
+        for (let i = 0; i < count; i++) {
+            const pool = pools[i];
+            const spreads = pool.def.spreads;
+            if (!spreads || this.tick < pool.nextSpread) {
+                continue;
+            }
+            pool.nextSpread = this.tick + secondsToTicks(spreads.every);
+            if (pools.filter((other) => other.def === pool.def).length >= spreads.most) {
+                continue;
+            }
+            const angle = this.rng.range(0, Math.PI * 2);
+            const step = pool.radius * POOL_SPREAD_STEP;
+            const x = pool.x + fm.cos(angle) * step;
+            const y = pool.y + fm.sin(angle) * step;
+            const arena = this.bossArena;
+            const lair = this.lair;
+            if (
+                x < arena.minX ||
+                x > arena.maxX ||
+                y < arena.minY ||
+                y > arena.maxY ||
+                this.grid.isSolid(Math.floor(x), Math.floor(y)) ||
+                (lair !== undefined && !this.inLair(lair, { x, y }))
+            ) {
+                continue;
+            }
+            pools.push({
+                ...pool,
+                uid: this.nextUid++,
+                x,
+                y,
+                startTick: this.tick,
+                endTick: this.tick + secondsToTicks(pool.def.seconds),
+                nextTick: 0,
+                nextSpread: this.tick + secondsToTicks(spreads.every),
+            });
+        }
+        pools.splice(0, Math.max(0, pools.length - MAX_POOLS));
+    }
+
+    // A hero's own button putting out what it's doused by (BossAttackDef.pool.dousedBy), within
+    // reach of x, y
+    private dousePools(abilityId: string, x: number, y: number, reach: number): void {
+        for (const pool of this.pools) {
+            if (
+                pool.def.dousedBy === abilityId &&
+                pool.endTick > this.tick &&
+                fm.hypot(pool.x - x, pool.y - y) <= reach + pool.radius * 0.5
+            ) {
+                pool.endTick = this.tick;
+                this.addEffect(DOUSED_SPOTANIM, pool.x, pool.y, 0, 40);
+            }
+        }
+    }
+
     // A debuff as it stands with this dose: a stacking one is its stats times
     // the doses so far
     private stackDebuff(
         effect: Extract<PlayerEffectDef, { kind: "debuff" }>,
-    ): Pick<Debuff, "id" | "name" | "iconObjId" | "stats" | "stacks"> {
-        const { id, name, iconObjId, stats, stacks: most } = effect;
+    ): Pick<Debuff, "id" | "name" | "iconObjId" | "stats" | "stacks" | "burn"> {
+        const { id, name, iconObjId, stats, stacks: most, burn } = effect;
         if (most === undefined) {
-            return { id, name, iconObjId, stats };
+            return { id, name, iconObjId, stats, burn };
         }
         const had = this.debuffs.find((d) => d.id === id)?.stacks ?? 0;
         const stacks = Math.min(most, had + 1);
@@ -12561,6 +13004,7 @@ export class Sim {
             iconObjId,
             stats: stacked,
             stacks,
+            burn,
         };
     }
 

@@ -45,6 +45,7 @@ import {
     canRetry,
     getMap,
     getMapCharacter,
+    isPeaceful,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
@@ -923,7 +924,7 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             </div>
         );
     }
-    if (getMap(ui.mapId).fun?.explore) {
+    if (isPeaceful(getMap(ui.mapId))) {
         return (
             <div
                 className="ui-endless"
@@ -931,6 +932,17 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             >
                 <span className="ui-endless-name">Explore</span>
                 <span className="ui-endless-hint">No enemies</span>
+            </div>
+        );
+    }
+    if (getMap(ui.mapId).fun?.explore) {
+        return (
+            <div
+                className="ui-endless"
+                title="No clock here: fight on for as long as you like. The run is won when its last boss falls."
+            >
+                <span className="ui-endless-name">Explore</span>
+                <span className="ui-endless-hint">No clock</span>
             </div>
         );
     }
@@ -2128,9 +2140,10 @@ const Hud = memo(function Hud({
     damagePanel: boolean;
     disabled: boolean;
 }): JSX.Element {
-    // A map to walk round (FunMapDef.explore) has no run to keep track of: no level, no clock,
-    // no kills, coins, rounds, damage or quests, only the minimap and the hero's own buttons
-    const explore = getMap(hud.mapId).fun?.explore === true;
+    // A map to walk round with nothing coming (isPeaceful) has no run to keep track of: no level,
+    // no clock, no kills, coins, rounds, damage or quests, only the minimap and the hero's own
+    // buttons
+    const explore = isPeaceful(getMap(hud.mapId));
     return (
         <>
             {!explore && <XpBar level={hud.level} client={client} />}
@@ -2165,8 +2178,8 @@ const Hud = memo(function Hud({
                 <HudBuffs client={client} />
                 <div className="ui-hud-actions">
                     {/* A boss fight has no items, only its own button, and a map to walk round
-                        has none either (FunMapDef.explore), only the hero's own buttons */}
-                    {!getMap(hud.mapId).fight && !getMap(hud.mapId).fun?.explore && (
+                        has none either (isPeaceful), only the hero's own buttons */}
+                    {!getMap(hud.mapId).fight && !explore && (
                         <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />

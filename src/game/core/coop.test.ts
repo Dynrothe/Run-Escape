@@ -771,7 +771,15 @@ describe("co-op", () => {
         const [a, b] = sim.heroes;
         b.player.x = a.player.x + 6;
         b.player.y = a.player.y;
-        const pool = { enemyId: "goblin", radius: 1, damage: 5, interval: 50, locId: -1 };
+        const pool = {
+            enemyId: "goblin",
+            def: { seconds: 20, radius: 1, damage: 5, interval: 1, locId: -1 },
+            nextSpread: -1,
+            radius: 1,
+            damage: 5,
+            interval: 50,
+            locId: -1,
+        };
         sim.pools = [a, b].map((h, i) => ({
             ...pool,
             uid: i,

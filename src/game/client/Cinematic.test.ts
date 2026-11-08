@@ -185,7 +185,7 @@ describe("a cinematic playing", () => {
 
 describe("Yama waking in his palace (LairDef.opening)", () => {
     const map = getMap("battle_for_varrock");
-    const opening = map.lair!.opening!;
+    const opening = map.lairs!.find((lair) => lair.id === "yama")!.opening!;
     const def = opening.cinematic;
     const yama = def.cast[0];
     const intro = getEnemy("yama").boss!.intro!;

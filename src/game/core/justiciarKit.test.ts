@@ -4,8 +4,8 @@ import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { JUSTICIAR_ABILITIES } from "../content/justiciarKit";
-import { getMap, getMapCharacter } from "../content/maps";
-import { emptyStats } from "../content/types";
+import { MAP_BY_ID, getMap, getMapCharacter, isPeaceful } from "../content/maps";
+import { MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { applyAction, cleanAction, syncHash } from "./lockstep";
 import { ArenaGrid } from "./world/ArenaGrid";
@@ -13,9 +13,12 @@ import { makeGrid } from "./world/testGrid";
 
 // Justiciar Zachariah as the player in the Battle for Varrock (content/justiciarKit.ts): his own
 // buttons go off where he faces with nothing to hit, land as they're timed, hit what's there,
-// and play the same on every copy of a run.
+// and play the same on every copy of a run. On the map with its hordes taken out, so nothing
+// gets in their way (the hordes, and the lairs' fights: VarrockGenerals.test.ts, Yama.test.ts).
 
 const MAP = getMap("battle_for_varrock");
+const CALM: MapDef = { ...MAP, id: "battle_for_varrock_calm", waves: [], events: [] };
+MAP_BY_ID.set(CALM.id, CALM);
 const SIZE = 48;
 // An open square round the map's spawn, with a wall along its north edge
 const ROWS = Array.from({ length: SIZE }, (_, row) => (row === 0 ? "#" : ".").repeat(SIZE));
@@ -25,7 +28,7 @@ const BASE_Y = Math.floor(MAP.spawn.y) - SIZE / 2;
 function createSim(seed = 1): Sim {
     return new Sim({
         grid: makeGrid(ROWS, BASE_X, BASE_Y),
-        mapId: MAP.id,
+        mapId: CALM.id,
         characterId: getMapCharacter(MAP)!,
         metaStats: emptyStats(),
         seed,
@@ -78,6 +81,7 @@ describe("the Battle for Varrock's Justiciar Zachariah", () => {
     });
 
     it("walks round a map with nothing in it, and nothing hurts", () => {
+        expect(isPeaceful(CALM)).toBe(true);
         const sim = createSim();
         run(sim, 60, 0, 1);
         expect(sim.enemies.length).toBe(0);
@@ -199,7 +203,7 @@ describe("the Battle for Varrock's Justiciar Zachariah", () => {
         blockShots(grid);
         const sim = new Sim({
             grid,
-            mapId: MAP.id,
+            mapId: CALM.id,
             characterId: getMapCharacter(MAP)!,
             metaStats: emptyStats(),
             seed: 3,

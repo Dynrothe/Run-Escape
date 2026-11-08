@@ -16,7 +16,7 @@
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
 //   DODGE=1 ...     # also keeps off what any boss marks on the ground, and sidesteps its bullets
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
-//   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
+//   SAFE_WAVES=1 ... # can't die outside a boss fight: it gets there with what the run earned
 //   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
@@ -26,12 +26,16 @@
 //                    # half the chances to use the fight's button
 //   GAZE=never ...   # a hero with their own buttons (the Battle for Varrock's Justiciar) never
 //                    # casts the Owl's gaze; GAZE=waste casts it whenever it's ready, not only at
-//                    # the meteor it stops (Yama's). A map with a lair (MapDef.lair) starts at it.
+//                    # the meteor it stops (Yama's). A map with one lair to retry at starts there
+//                    # (getRetryLair).
+//   LAIR=xarth FARM=480 ...  # a map with lairs (MapDef.lairs): the hordes for FARM seconds, kept
+//                    # out of every lair, then that lair's fight (Yama's generals beaten for him);
+//                    # EMPOWERED=1 as if its rival were beaten first (LairDef.empowered)
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS, getCharacter } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
 import { CASKET_GEAR, getGear, getItem } from "../../src/game/content/items";
-import { getMap } from "../../src/game/content/maps";
+import { getMap, getRetryLair } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { HeroAbilityDef, emptyStats } from "../../src/game/content/types";
@@ -40,7 +44,7 @@ import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
-import { Enemy, SimEvent } from "../../src/game/core/entities";
+import { Enemy, Lair, SimEvent } from "../../src/game/core/entities";
 import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
@@ -88,6 +92,13 @@ const SLOPPY_LAPSE = 3;
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
+// A map with lairs (MapDef.lairs: the Battle for Varrock's generals and Yama): the lair LAIR the
+// bot goes for, after FARM seconds of the map's hordes (kept out of every lair meanwhile), and
+// with EMPOWERED=1 as if its rival were beaten first (LairDef.empowered). Yama's generals are
+// beaten for him. The run's over when it's beaten, or beats the party back.
+const lairTarget = process.env.LAIR;
+const farmSeconds = parseFloat(process.env.FARM ?? "0");
+const empoweredLair = process.env.EMPOWERED === "1";
 // An act's map's step (content/acts.ts)
 const actStep = parseInt(process.env.STEP ?? "0");
 if (finalBoss) {
@@ -268,6 +279,11 @@ function botMove(sim: Sim): { x: number; y: number } {
             ay += (ry / len) * push;
         }
     }
+    // Out of the lairs it isn't going for yet, as a person keeps out of a fight they aren't
+    // ready for
+    const keepOut = lairsToAvoid(sim);
+    ax += keepOut.x;
+    ay += keepOut.y;
     // Drift back towards the middle of the arena so the bot doesn't pin itself
     // against its edge
     const cx = ARENA.baseX + ARENA.sizeX / 2 - player.x;
@@ -279,6 +295,36 @@ function botMove(sim: Sim): { x: number; y: number } {
         return { x: 0, y: 0 };
     }
     return { x: ax / len, y: ay / len };
+}
+
+// A push away from each lair that's asleep, harder the nearer its edge: from its middle, as far
+// as its box's half and three tiles more (MapDef.lairs)
+function lairsToAvoid(sim: Sim): { x: number; y: number } {
+    const player = sim.player;
+    let x = 0;
+    let y = 0;
+    for (const lair of sim.lairs) {
+        if (lair.state !== "asleep") {
+            continue;
+        }
+        const floor = sim.floor;
+        const half = lair.def.area
+            ? Math.max(lair.def.area.x1 - lair.def.area.x0, lair.def.area.y1 - lair.def.area.y0) /
+                  2 +
+              1
+            : floor
+              ? Math.max(floor.sizeX, floor.sizeY) / 2
+              : 12;
+        const dx = player.x - lair.def.at.x;
+        const dy = player.y - lair.def.at.y;
+        const away = Math.max(0.001, Math.hypot(dx, dy));
+        if (away < half + 3) {
+            const push = 3 / Math.max(0.5, away - half + 1);
+            x += (dx / away) * push;
+            y += (dy / away) * push;
+        }
+    }
+    return { x, y };
 }
 
 // Sidesteps what's about to reach it, the nearer the more. A person reads
@@ -459,8 +505,8 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         }
         // Out of the boss's sight behind a pillar, as it gazes (BossAttackDef.cover): the nearest
         // spot within reach that's hidden from it
-        const pillars = sim.map.features?.pillars;
-        if (state.windup?.attack.cover && pillars) {
+        const pillars = sim.coverPillars(boss);
+        if (state.windup?.attack.cover && pillars && pillars.length > 0) {
             let best: { x: number; y: number } | undefined;
             let bestDistance = Infinity;
             for (let dy = -10; dy <= 10; dy++) {
@@ -625,7 +671,10 @@ function kitPlan(sim: Sim): KitPlan | undefined {
 function kitChoice(sim: Sim): KitPlan | undefined {
     const kit = getCharacter(sim.characterId).abilities;
     const boss = sim.shownBoss;
-    if (!kit || !boss || boss.dead || !sim.map.lair || sim.tick < boss.risingEnd) {
+    if (kit && sim.lair === undefined) {
+        return hordeKit(sim, kit);
+    }
+    if (!kit || !boss || boss.dead || sim.lair?.state !== "fighting" || sim.tick < boss.risingEnd) {
         return undefined;
     }
     const player = sim.player;
@@ -635,6 +684,26 @@ function kitChoice(sim: Sim): KitPlan | undefined {
     const ready = (slot: number) => sim.kitSecondsLeft(slot) === 0;
     const reaches = (slot: number) => away <= kitReach(kit[slot], boss);
     const windup = boss.bossState?.windup;
+    // Behind a pillar from a boss's flames (BossAttackDef.cover): fightMove finds the spot
+    if (windup?.attack.cover && dodges) {
+        const hide = fightMove(sim);
+        if (hide) {
+            return { move: hide, slot: -1, dodge: true };
+        }
+    }
+    // The dead walking to him (BossDef walkers): each cut down before it's there, the buttons
+    // turned on the nearest
+    const walker = nearestWalker(sim, boss);
+    if (walker) {
+        const reach = Math.max(0.001, Math.hypot(walker.x - player.x, walker.y - player.y));
+        const at = { x: (walker.x - player.x) / reach, y: (walker.y - player.y) / reach };
+        for (let slot = 0; slot < kit.length; slot++) {
+            if (slot !== gaze && ready(slot) && reach <= kitReach(kit[slot], walker)) {
+                return { move: { x: at.x * 0.01, y: at.y * 0.01 }, slot };
+            }
+        }
+        return { move: reach > 2 ? at : { x: 0, y: 0 }, slot: -1 };
+    }
     // The meteor: into the gaze's reach, and cast it
     if (windup?.attack.interruptedBy && gaze >= 0 && gazePlay !== "never") {
         return { move: towards, slot: reaches(gaze) && ready(gaze) ? gaze : -1 };
@@ -710,6 +779,49 @@ function kitChoice(sim: Sim): KitPlan | undefined {
     // Round him, one way and then the other
     const side = Math.floor(sim.tick / (6 * TICKS_PER_SECOND)) % 2 === 0 ? 1 : -1;
     return { move: { x: -towards.y * side, y: towards.x * side }, slot: -1 };
+}
+
+// Against the hordes (no lair's fight on): each button that's ready turned on the nearest enemy
+// it reaches, the gaze too, as a person farming would. Undefined with nothing in reach.
+function hordeKit(sim: Sim, kit: HeroAbilityDef[]): KitPlan | undefined {
+    const player = sim.player;
+    let nearest: Enemy | undefined;
+    let away = Infinity;
+    for (const enemy of sim.enemies) {
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (!enemy.dead && !enemy.leaving && distance < away) {
+            nearest = enemy;
+            away = distance;
+        }
+    }
+    if (!nearest) {
+        return undefined;
+    }
+    const towards = {
+        x: (nearest.x - player.x) / Math.max(0.001, away),
+        y: (nearest.y - player.y) / Math.max(0.001, away),
+    };
+    for (let slot = 0; slot < kit.length; slot++) {
+        if (sim.kitSecondsLeft(slot) === 0 && away <= kitReach(kit[slot], nearest)) {
+            return { move: { x: towards.x * 0.01, y: towards.y * 0.01 }, slot };
+        }
+    }
+    return undefined;
+}
+
+// The nearest of a boss's walkers still on its way to it (BossDef walkTo), if any
+function nearestWalker(sim: Sim, boss: Enemy): Enemy | undefined {
+    const player = sim.player;
+    let nearest: Enemy | undefined;
+    let away = Infinity;
+    for (const enemy of boss.bossState?.walkers?.enemies ?? []) {
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (!enemy.dead && distance < away) {
+            nearest = enemy;
+            away = distance;
+        }
+    }
+    return nearest;
 }
 
 // Tiles from a loose flare (EnemyDef.bursts) that it steps away from it, past touching
@@ -1107,8 +1219,34 @@ function eventChoice(sim: Sim): number {
     return best;
 }
 
-// Where a run starts: at a map's lair (MapDef.lair), as a retry does, or its spawn
-const START = map.lair?.start ?? map.spawn;
+// Where a run starts: at a map's lair, as a retry does (getRetryLair), or its spawn; at LAIR's
+// with no farming first
+const START =
+    (lairTarget !== undefined && farmSeconds === 0
+        ? map.lairs?.find((lair) => lair.id === lairTarget)?.start
+        : getRetryLair(map)?.start) ?? map.spawn;
+
+// The lair the bot goes for (LAIR), set up as it asks: Yama's generals beaten for him, and its
+// rival for an empowered one
+function prepareLair(sim: Sim): Lair | undefined {
+    if (lairTarget === undefined) {
+        return undefined;
+    }
+    const lair = sim.lairById(lairTarget);
+    if (!lair) {
+        throw new Error(`No lair ${lairTarget} on ${map.id}`);
+    }
+    for (const id of lair.def.requires?.lairs ?? []) {
+        sim.lairById(id)!.state = "beaten";
+    }
+    if (empoweredLair) {
+        if (!lair.def.empowered) {
+            throw new Error(`Lair ${lairTarget} is never empowered`);
+        }
+        lair.empowered = true;
+    }
+    return lair;
+}
 
 function runOnce(characterId: string, seed: number) {
     const sim = new Sim({
@@ -1154,11 +1292,35 @@ function runOnce(characterId: string, seed: number) {
     let fightTicks = 0;
     // Ticks stood on roots (MapDef.rule)
     let rootTicks = 0;
+    // The lair it's going for, and whether it's been thrown out of it (LairDef.retreat)
+    const lair = prepareLair(sim);
+    let lairWoken = false;
+    let beatenBack = false;
+    let wokenAt = { seconds: 0, level: 0 };
+    // Its boss's share of hitpoints left, as last seen in the fight: a beat back puts it to sleep
+    // whole
+    let lairHpLeft = 1;
     // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
     // weapon's reach (MapDef.fight.strikeReach)
     const phaseTicks: number[] = [];
     const reachTicks: number[] = [];
-    while (sim.tick < maxTicks && !sim.runOver && sim.lair?.state !== "beaten") {
+    while (sim.tick < maxTicks && !sim.runOver && !beatenBack && lair?.state !== "beaten") {
+        // Done farming: into the lair it's going for, which wakes it
+        if (lair && !lairWoken && lair.state === "asleep" && sim.seconds >= farmSeconds) {
+            sim.player.x = lair.def.start.x;
+            sim.player.y = lair.def.start.y;
+        }
+        if (lair && !lairWoken && lair.state === "fighting") {
+            lairWoken = true;
+            wokenAt = { seconds: sim.seconds, level: sim.level };
+        }
+        if (lair?.state === "fighting" && lair.boss && !lair.boss.dead) {
+            lairHpLeft = Math.max(0, lair.boss.hp) / Math.max(1, lair.boss.maxHp);
+        }
+        if (lair && lairWoken && lair.state === "asleep") {
+            beatenBack = true;
+            break;
+        }
         if (sim.state === "levelUp") {
             const ranked = sim.choices
                 .map((choice, index) => ({ choice, index }))
@@ -1229,7 +1391,7 @@ function runOnce(characterId: string, seed: number) {
             lastX = sim.player.x;
             lastY = sim.player.y;
         }
-        if (process.env.SAFE_WAVES === "1" && !sim.bossSpawned) {
+        if (process.env.SAFE_WAVES === "1" && !sim.bossSpawned && sim.lair === undefined) {
             sim.player.hp = sim.player.maxHp;
         }
         if (process.env.GOD === "1") {
@@ -1338,6 +1500,17 @@ function runOnce(characterId: string, seed: number) {
             );
         }
     }
+    if (lair && lairWoken) {
+        console.log(
+            `  ${lair.def.id}${lair.empowered ? " (empowered)" : ""}: woken at ` +
+                `${formatClock(wokenAt.seconds)}, level ${wokenAt.level}, ` +
+                (lair.state === "beaten"
+                    ? `beaten in ${Math.round(sim.seconds - wokenAt.seconds)}s`
+                    : `${beatenBack ? "beat the bot back" : "still up"} at ` +
+                      `${Math.round(100 * lairHpLeft)}% ` +
+                      `after ${Math.round(sim.seconds - wokenAt.seconds)}s`),
+        );
+    }
     const result = sim.getResult();
     const ms = performance.now() - startTime;
     runs++;
@@ -1353,7 +1526,7 @@ function runOnce(characterId: string, seed: number) {
         );
     }
     console.log(
-        `${characterId} seed ${seed}: ${result.victory || sim.lair?.state === "beaten" ? "VICTORY" : sim.state === "dead" ? "died" : "timed out"} at ` +
+        `${characterId} seed ${seed}: ${result.victory || lair?.state === "beaten" ? "VICTORY" : sim.state === "dead" ? "died" : "timed out"} at ` +
             `${Math.floor(result.seconds / 60)}:${String(Math.floor(result.seconds % 60)).padStart(2, "0")}, ` +
             (endless ? `round ${result.round}, ` : "") +
             `level ${result.level}, ${result.kills} kills, ${result.coins} coins, ${chests} caskets, ` +
@@ -1390,7 +1563,7 @@ function runParty(characterId: string, seed: number) {
     const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));
     let firstDown: number | undefined;
     let fightTicks = 0;
-    while (sim.tick < maxTicks && !sim.runOver && sim.lair?.state !== "beaten") {
+    while (sim.tick < maxTicks && !sim.runOver) {
         if (sim.state !== "playing") {
             for (const hero of sim.waitingOn) {
                 sim.as(hero.index, () => {
