@@ -1357,10 +1357,14 @@ by tile and loc by loc:
   the walls either side stand.
 - **City walls** (level 0 under a `TILE_SHOWN` walkway) stand, charred, but for `breaches` (the same noise): the band's
   tiles are down and open there, both faces, walkway and rails gone. Its ends are broken the way Falador's west wall
-  is at its Crumbling wall shortcut (`breachEnds`, `BROKEN_CITY_WALL` and `BREACH_BRICKS`: its jagged end and fallen
-  bricks, its pale stone burnt with `charLight` to the dark of a burnt grey wall): along each face that came down, the
-  first and last wall of the run are the jagged end, with bricks (which block nothing) in front, if the run's 4 or
-  longer, so there's always a way through between them; a shorter run gets the bricks alone. `wallTopsKept` is the
+  is at its Crumbling wall shortcut (`breachEnds`, `BROKEN_CITY_WALL` and `BREACH_BRICKS`: its jagged ends and fallen
+  bricks, its pale stone burnt with `charLight` to the dark of a burnt grey wall). A jagged end is a slab a quarter of a
+  tile thick, whole at one end and stepping down to the other, and comes in a mirrored pair (24220 and 24221, the same
+  model, each with its own bricks, 24219 and 24218), as Falador places them. Along each face that came down, each end
+  of the run is jagged, whole against the straight wall still standing beside it, or where none does (a corner came
+  down with it) two back to back, whole ends together, so a slab's flat end never stands in the open; its bricks (which
+  block nothing) lie in front. A run that wouldn't leave 2 tiles through between them loses its pairs first, then the
+  rest, to bricks alone. `ruins.test.ts` holds them to that. `wallTopsKept` is the
   share of the walkway and its rails still up, and a walkway's paving is `walkways` (pale paving up there read as a
   white path). A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its heaviest
   phone view from 74k to under 60k. Anything with a shown level 1 counts as one, a square's fountain too (its water's

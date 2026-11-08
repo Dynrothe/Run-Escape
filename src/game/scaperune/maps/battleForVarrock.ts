@@ -200,7 +200,7 @@ const RULES = {
     fallenStones: { ids: FALLEN_STONES, share: 0.5 },
     breaches: 0.5,
     // Falador's broken west wall, burnt (LocOverrides.ts BROKEN_CITY_WALL)
-    breachEnds: { wall: BROKEN_CITY_WALL, bricks: BREACH_BRICKS },
+    breachEnds: { walls: BROKEN_CITY_WALL, bricks: BREACH_BRICKS },
     steps: [PALACE_STEPS],
     tops: WALL_TOPS,
     wallTopsKept: 0.5,

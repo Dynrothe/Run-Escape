@@ -41,11 +41,14 @@ const LAST_LOC = (1 << 21) - 1;
 // Every cache loc id is under this, so each range of ours has room for all of them
 const CACHE_LOCS = 1 << 18;
 // A ruined city wall's breach (scaperune/ruins.ts), from Falador's: its west wall's broken gap
-// (the Crumbling wall shortcut, 24222, at 2935, 3355), whose jagged ends (24220) and fallen
-// bricks (24218) are its pale stone burnt to the dark of a burnt grey wall (Varrock's, 23795,
-// comes out at about 15 of 127). The bricks block nothing, so a breach is still a way through.
-export const BROKEN_CITY_WALL = DERIVED_LOCS;
-export const BREACH_BRICKS = DERIVED_LOCS + 1;
+// (the Crumbling wall shortcut, 24222, at 2935, 3355), whose jagged ends and fallen bricks are its
+// pale stone burnt to the dark of a burnt grey wall (Varrock's, 23795, comes out at about 15 of
+// 127). The bricks block nothing, so a breach is still a way through. Each comes in a mirrored
+// pair, as Falador places them: the jagged end 24220 is whole at its north end at rotation 0, and
+// 24221 (its model mirrored) at its south, each with the bricks Falador lays in front of it (24219
+// and 24218).
+export const BROKEN_CITY_WALL: [number, number] = [DERIVED_LOCS, DERIVED_LOCS + 2];
+export const BREACH_BRICKS: [number, number] = [DERIVED_LOCS + 1, DERIVED_LOCS + 3];
 const FALADOR_STONE_BURNT = 0.18;
 
 export function getCharredLoc(id: number): number {
@@ -122,6 +125,12 @@ export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     // units up from the floor, one in a plane with the raised edge of the stone tile under it
     // (38198, 6 units up), so they z-fought (check-coplanar.ts). An odd lift keeps every step off it.
     [38542, { height: 1 }],
-    [BROKEN_CITY_WALL, { base: 24220, charred: true, charLight: FALADOR_STONE_BURNT }],
-    [BREACH_BRICKS, { base: 24218, charred: true, charLight: FALADOR_STONE_BURNT, walkable: true }],
+    ...BROKEN_CITY_WALL.map((id, i): [number, LocOverride] => [
+        id,
+        { base: [24220, 24221][i], charred: true, charLight: FALADOR_STONE_BURNT },
+    ]),
+    ...BREACH_BRICKS.map((id, i): [number, LocOverride] => [
+        id,
+        { base: [24219, 24218][i], charred: true, charLight: FALADOR_STONE_BURNT, walkable: true },
+    ]),
 ]);
