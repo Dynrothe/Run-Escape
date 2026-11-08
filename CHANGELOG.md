@@ -9,13 +9,15 @@ the version in the corner).
 
 - The Tombs of Amascut, by Okaeri: in the Apmeken room, the arrow to a pillar or vent that needs
   fixing is on the floor beside you, not at the edge of the screen.
+- Bosses' instructions, by Okaeri: each attack says what to do the first time it's used in a run,
+  one at a time and long enough to read, instead of every time and all at once.
 
 ### Added
 
 - A puzzle helper for the Tombs of Amascut's Scabaras room, by Okaeri, as the ToA plugin has it:
   the order the Sequence plates lit, the Lights out plates to step on, a way to make the Addition
-  number, and each Matching symbol named in its own colour. Beat the room once to unlock it; it can be turned
-  off in the settings.
+  number, and each Matching symbol named in its own colour. Beat the room once to unlock it; it can
+  be turned off in the settings.
 
 ## 0.29.0 - 2026-11-08
 
