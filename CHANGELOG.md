@@ -7,13 +7,11 @@ the version in the corner).
 
 ### Added
 
-- Beneath Cursed Sands, by Okaeri: a quest on the Bosses tab, open once the desert's beaten.
-  Four boss fights, played alone as the Sands Delver: Coenus, the Scarab Mages, the Champion of
-  Scabaras and the Menaphite Akh. Each is kept once won, and beating the last opens the Tombs.
-- The Tombs of Amascut, by Okaeri: a raid on the Raids tab, solo or in co-op. From the Nexus take
-  the four paths in any order, each a puzzle room and its boss (Apmeken and Ba-Ba, Het and Akkha,
-  Scabaras and Kephri, Crondis and Zebak), then face the Wardens. Invocations set the raid level:
-  the higher it is, the harder the raid and the better the chest.
+- Beneath Cursed Sands, by Okaeri: a new quest, open once the desert's beaten. Fight Coenus, the
+  Scarab Mages, the Champion of Scabaras and the Menaphite Akh to open the Tombs of Amascut.
+- The Tombs of Amascut, by Okaeri: a new raid, solo or in co-op. Four paths, each a puzzle room
+  and a boss (Ba-Ba, Akkha, Kephri and Zebak), then the Wardens, with invocations to set how hard
+  it is.
 
 ### Fixed
 
