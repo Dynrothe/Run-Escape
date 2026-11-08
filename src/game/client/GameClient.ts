@@ -28,7 +28,7 @@ import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
-import { RARITIES, Rarity } from "../content/rarity";
+import { RARITIES, Rarity, rarityName } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -338,7 +338,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
             isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
-            rarity: rarity && { name: rarity.name, color: rarity.color },
+            rarity: rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
             banishable: sim.canBanishChoice(index),
