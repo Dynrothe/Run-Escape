@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { WALKABLE_FIRE, getLocOverride } from "../../../rs/config/loctype/LocOverrides";
 import { GAME_CACHE_NAME } from "../../cache";
-import { getMap, getMapCharacter } from "../../content/maps";
+import { getMap, getMapCharacter, isPeaceful } from "../../content/maps";
+import { VARROCK_EVENTS, VARROCK_WAVES } from "../../content/varrockHordes";
 import { PHONE_TRIANGLES, lintFloor } from "../../core/floorLint";
 import { MAP_SQUARE_SIZE } from "../format";
 import { getRecipeArena } from "../recipe";
@@ -35,13 +36,54 @@ describe("the Battle for Varrock", () => {
         expect(spawn).toEqual({ x: 3211 - 48 * 64, y: 3377 - 51 * 64 });
     });
 
-    it("is a map to walk round: nothing comes, and everyone's Justiciar Zachariah", () => {
-        expect(MAP.waves).toEqual([]);
-        expect(MAP.events).toEqual([]);
+    it("is a run with no clock: Yama's hordes, no bosses but its lairs', everyone Zachariah", () => {
+        expect(MAP.waves).toBe(VARROCK_WAVES);
+        expect(MAP.events).toBe(VARROCK_EVENTS);
+        expect(isPeaceful(MAP)).toBe(false);
         expect(MAP.fun?.explore).toBe(true);
         expect(MAP.fun?.bosses.pool).toEqual([]);
         expect(getMapCharacter(MAP)).toBe("justiciar_zachariah");
         expect(MAP.scaperune).toBe(true);
+    });
+
+    it("has Yama's generals in their ruins, either first, and Yama after both", () => {
+        const lairs = MAP.lairs!;
+        expect(lairs.map((lair) => lair.id)).toEqual(["xarth", "kril", "yama"]);
+        const inside = (lair: (typeof lairs)[number], { x, y }: { x: number; y: number }) => {
+            const area = lair.area!;
+            const [tx, ty] = [Math.floor(x), Math.floor(y)];
+            const row = area.rows?.[area.y1 - ty];
+            return (
+                tx >= area.x0 &&
+                tx <= area.x1 &&
+                ty >= area.y0 &&
+                ty <= area.y1 &&
+                (row === undefined || row[tx - area.x0] === "#")
+            );
+        };
+        for (const lair of lairs.slice(0, 2)) {
+            expect(lair.requires).toBeUndefined();
+            expect(inside(lair, lair.at)).toBe(true);
+            expect(inside(lair, lair.start)).toBe(true);
+            expect(inside(lair, lair.retreat!)).toBe(false);
+            // Each grows stronger for the other's death
+            expect(lair.empowered!.by).toEqual(
+                lairs.filter((l) => l !== lair && !l.final).map((l) => l.id),
+            );
+            // and stands there from the start, a prop of its own
+            expect(MAP.props!.some((prop) => prop.lair === lair.id)).toBe(true);
+        }
+        // Xarth's pillars, whole, inside his ring
+        const xarth = lairs[0];
+        for (const { x, y } of xarth.pillars!.at) {
+            const size = xarth.pillars!.size;
+            expect(inside(xarth, { x, y })).toBe(true);
+            expect(inside(xarth, { x: x + size - 1, y: y + size - 1 })).toBe(true);
+        }
+        const yama = lairs[2];
+        expect(yama.requires!.lairs).toEqual(["xarth", "kril"]);
+        expect(yama.final).toBe(true);
+        expect(yama.retreat).toBeDefined();
     });
 
     it("lays the palace's floor over its rooms, in one piece, still, in a phone's budget", () => {
@@ -95,5 +137,16 @@ describe.skipIf(!hasCache)("the Battle for Varrock, built", () => {
         );
         const [, pairs, cut] = /(\d+) pairs in one plane \((\d+) as cut\)/.exec(stdout)!;
         expect(pairs).toBe(cut);
+    }, 250000);
+
+    // Wide bosses: K'ril stuck before the altar among the pews, and Xarth pushed off his counter
+    // by a skeleton the dressing laid on it
+    it("has room for each lair's boss where it rises, and for K'ril down his nave", async () => {
+        const { stdout } = await promisify(execFile)(
+            process.execPath,
+            ["--import", "tsx", "scripts/game/check-lairs.ts", "battle_for_varrock"],
+            { encoding: "utf8", timeout: 240000 },
+        );
+        expect(stdout).toContain("Every lair's boss has room");
     }, 250000);
 });

@@ -157,15 +157,17 @@ export function getSaying(def: CinematicDef, actor: string, seconds: number): st
     return saying;
 }
 
-// A map's cinematics, to bake and hear: its opening (MapDef.cinematic) and its lair's
+// A map's cinematics, to bake and hear: its opening (MapDef.cinematic) and its lairs'
 // (LairDef.opening)
 export function getMapCinematics(map: MapDef): CinematicDef[] {
     const cinematics: CinematicDef[] = [];
     if (map.cinematic) {
         cinematics.push(map.cinematic);
     }
-    if (map.lair?.opening) {
-        cinematics.push(map.lair.opening.cinematic);
+    for (const lair of map.lairs ?? []) {
+        if (lair.opening) {
+            cinematics.push(lair.opening.cinematic);
+        }
     }
     return cinematics;
 }

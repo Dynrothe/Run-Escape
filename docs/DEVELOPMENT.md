@@ -951,19 +951,31 @@ adventurer can have:
   as a loc can't play a skeletal animation, and the map opens with a cinematic
   (`fun/varrockOpening.ts`) in which he stands in for it. Both are in Props and opening
   cinematics, below.
-- An explore map's HUD is the minimap, the hitpoints and the hero's buttons: no level, clock,
-  kills, coins, round, damage panel or quests (`Hud` in `ui/GameUi.tsx`).
-- **`MapDef.lair`** (`LairDef`): a boss asleep on a map to walk round, Yama on his throne
-  (`content/yama.ts`; the plan and what's built, `docs/design/yama.md`). `Sim.stepLair` wakes it
-  when a hero's on the map's floor (`MapDef.floor`, which a lair needs). `wakeLair` drops every tile
-  beside a way off the floor (`ArenaGrid.dropTile`, kept in `Lair.sealed` and drawn as fire by
-  `GameView.drawLairSeal`), and the boss's intro plays, rising at `at` (`Sim.riseSpot`, which the
-  intro's camera pan goes by too). It isn't the final boss, so its death doesn't end the run: the
-  seal lifts (`liftSeal`) with the `victory` notice and the `shout`. On an explore map, hits land
-  only while it's fought (`damagePlayer`). A death there offers Retry (`canRetry` in `maps.ts`),
-  which starts the hero at `start`, on the floor (`GameClient.startRun`'s `atLair`), so it wakes on
-  the first tick. `MapPropDef.awake` swaps the sleeping prop for what's left once it's up (his empty
-  throne). `LairDef.opening` (`LairOpeningDef`, Yama's in `fun/yamaWakes.ts`) is a cinematic as it
+- An explore map with no waves (`isPeaceful` in `content/maps.ts`) has a HUD of the minimap,
+  the hitpoints and the hero's buttons: no level, clock, kills, coins, round, damage panel, quests
+  or bag (`Hud` in `ui/GameUi.tsx`). With waves (the Battle for Varrock's hordes,
+  `content/varrockHordes.ts`) it's a run as any, with the run's HUD, still with no clock to end
+  it, no boss pool and no random events.
+- **`MapDef.lairs`** (`LairDef`): bosses asleep on a map to walk round, one fought at a time
+  (`Sim.lair`): Yama on his throne (`content/yama.ts`, `docs/design/yama.md`) and his generals,
+  Xarth and K'ril Tsutsaroth (`content/xarth.ts`, `content/kril.ts`,
+  `docs/design/varrock-generals.md`). `Sim.stepLair` wakes one when a hero's in it: the map's floor
+  (`MapDef.floor`), or its own `area` (a box, with `rows` for a shape: the Exchange's octagon).
+  `wakeLair` drops every tile beside a way out (`findLairExits`, `ArenaGrid.dropTile`, kept in
+  `Lair.sealed` and drawn as fire by `GameView.drawLairSeal`), and the boss's intro plays, rising
+  at `at` (`Sim.riseSpot`, which the intro's camera pan goes by too). Beaten, the seal lifts
+  (`liftSeal`) with the `victory` notice and the `shout`, its pools go out (a pool that
+  `spreads` would burn on for good), and any lair `empowered` by it is from
+  then on (`Lair.empowered`: its hitpoints, damage and tempo times its own, and its
+  `BossAttackDef.empowered` attacks usable). A `final` lair's boss wins the run, endless or not.
+  One that `requires` others is sealed from the start (`Lair.locked`) until they're beaten. On a
+  map with nothing coming (`isPeaceful`), hits land only while one's fought (`damagePlayer`), and
+  no wave comes while one's on (`stepDirector`). A death in one with a `retreat` beats the party
+  back (`Sim.beatBack`): everything of the fight gone, the boss asleep again, its pillars up and
+  the heroes out at `retreat`, whole and briefly immune. Without one, a death offers Retry
+  (`canRetry` in `maps.ts`), which starts the hero at its `start` (`getRetryLair`,
+  `GameClient.startRun`'s `atLair`), so it wakes on the first tick. `MapPropDef.lair` ties a prop
+  to its lair: hidden once its boss is up, or swapped for `awake` (Yama's empty throne). `LairDef.opening` (`LairOpeningDef`, Yama's in `fun/yamaWakes.ts`) is a cinematic as it
   wakes, before its intro. Stepping onto the floor then puts the lair in `waking` (`Lair.wakeTick`),
   which holds every player where they stand, turned to `at` (`Sim.introHolds`, `introFacing`), with
   nothing sealed and nothing hurting; `introAt` seconds later (`Lair.introTick`) `wakeLair` seals it
@@ -1014,7 +1026,25 @@ adventurer can have:
       (`nearestFlare`). `summon.toward` brings summons out on the boss's side towards the hero
       it's after, so a flare comes from his hands rather than behind him.
     - The balance bot plays it with the hero's own buttons (`kitPlan` in `simulate-run.ts`).
-      `GAZE=never` and `GAZE=waste` check that the meteor is fair.
+      `GAZE=never` and `GAZE=waste` check that the meteor is fair. With `LAIR=<id>` it farms the
+      hordes for `FARM` seconds, kept out of every lair (`lairsToAvoid`), then fights that lair,
+      `EMPOWERED=1` as if its rival fell first; Yama's generals are beaten for him.
+      His generals' pieces are any boss's too:
+    - `LairDef.pillars` stand from the run's start, solid (`raisePillars`), and are the cover for
+      its boss's `cover` attacks (`Sim.coverPillars`, the gaze's shadows too). One that spares
+      someone from a `crumbles` attack comes down (`crumbleShelter`), and all of them at
+      `crumbleAt`. `BossFightView.drawLairPillars` draws the loc, sinking as it goes.
+    - A debuff's `burn` (`Sim.stepBurns`) hits that many hitpoints a second for each stack,
+      through armour (`BURN_SOURCE`).
+    - A pool's `spreads` lights another a step off every so often, inside the fight, up to `most`
+      of its kind (`spreadPools`). `dousedBy` names a hero's button that puts it out where its
+      wave passes or its square lands (`dousePools`).
+    - `walkTo.heals`: each walker that gets there heals the boss that share of its hitpoints.
+    - `BossDef.pact`: it takes `taken` of each hit while any of those enemies is up
+      (`pactShare`), K'ril's bodyguards.
+    - `BossAttackDef.breakable`: hit for `share` of its hitpoints during the windup, it's
+      interrupted as `interruptedBy` is (`BossWindup.taken`). `heal` heals the boss that share
+      as it lands.
 
 ### Props and opening cinematics
 
@@ -1037,7 +1067,7 @@ adventurer can have:
   and `GameView` hides the props it stands in for. The cast is baked with the props
   (`getPropRequests`, so the slim cache keeps them), its spot animations and sounds with the
   game's. A lair's cinematic as its boss wakes (`LairDef.opening`) is one too, on the sim's
-  clock: see `MapDef.lair` above.
+  clock: see `MapDef.lairs` above.
     - It's view only, on each player's own clock, and never in the sim or its hashes, so co-op
       can't fall out of step over it. Input's held while it plays: any key or controller button
       (`GameClient.pressKey`) or a click or tap on the run screen (`.ui-cinematic`) skips it, and
@@ -1488,6 +1518,8 @@ scripts/scaperune/grid-hash.ts halloween a hash of what a recipe writes, to prov
 scripts/scaperune/research/              measures real places and made maps the same way
 scripts/scaperune/check-prefabs.ts       every prefab, in every rotation: its whole floor, a way out
 scripts/scaperune/check-palette.ts       the palette map reads all that generated maps read
+scripts/game/check-lairs.ts              every lair's boss fits where it rises, and on the way to
+                                         its fight's start if it moves (MapDef.lairs)
 scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, for balancing
                                                         (MAP=barrows for another map,
                                                         META=max ARMOURY=max for everything

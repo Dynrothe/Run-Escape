@@ -223,10 +223,36 @@ version and how to run it.
   death; then the camera flies south over the city to Zachariah and the run begins. Any key,
   click, tap or controller button skips it, and it plays each time the map's travelled to.
   Zachariah starts facing into the city. Its music is Sign Here, Yama's own fight track.
-  There are no waves, no other bosses and no random events, and nothing hurts until you step onto
-  the palace floor. Then Yama wakes: he speaks from his throne, is gone from it in a drift of embers
+  Yama's demons fill its streets as any map's waves do: imps, reanimated demon spawn, hellhounds,
+  lesser, revenant, greater and black demons, with an elite a minute from 100 seconds and rings of
+  them now and then. There's no clock and no random events: kill them for levels, weapons and
+  caskets (the Justiciar's buttons hit harder with Might, like any hit) for as long as you like,
+  though they get tougher by the minute. Yama's two generals wait in their ruins from the start,
+  to be fought in either order: step into one's ruin and it wakes, every way out bursts into
+  fire, and you fight it there with nothing else coming. Die there and you're thrown out whole,
+  the general back where it stood with all its hitpoints: only a death to the hordes ends the
+  run. Beat one and the other grows stronger: 30% more hitpoints, 25% harder hits, attacks
+  sooner, and an attack of the fallen one's.
+  **Xarth** (3,800 hitpoints), in the Grand Exchange's ring, stands where he is and burns. His
+  bolts leave you burning, a stack a bolt up to three (a hitpoint a second each, through armour).
+  Up close he lashes in front of him, his guard down if he misses. Every so often he gathers his
+  flames and they burst through the whole ring, sparing only what's behind one of its four
+  pillars, which crumbles for it. Halfway down, the pillars come down and the Exchange burns: fire
+  takes the floor and spreads (Shock wave puts it out along its way), his arrows come in fans of
+  five, and the dead get up and walk to him, each healing him 5% as it reaches him; when the last
+  is there or dead, what got there goes up over the ring. With K'ril dead first, he casts
+  Zamorak's flames too.
+  **K'ril Tsutsaroth** (4,200), before the altar of the church in the north-east, comes at you
+  down its nave: poison claws, Zamorak's flames where you stand, a bloodrush onto where you were
+  (his guard down if he misses) and a "YARRRRRRR!" smash round him through armour. Every so often
+  he desecrates the church for five seconds and heals 12%, unless you hit him for 6% of his
+  hitpoints meanwhile, which leaves him stunned and open. At 70%, 45% and 20% his bodyguards come,
+  Tstanon Karlak, Zakl'n Gritch and Balfrug Kreeyath, and while any stands he takes half. With
+  Xarth dead first, his claws burn and his bloodrush leaves the ground burning.
+  Until both are dead the palace is ringed with fire, which goes out as the second falls. Step
+  onto its floor then and Yama wakes: he speaks from his throne, is gone from it in a drift of embers
   and rises before it, every way off the floor bursts into fire, and you fight him there until he's
-  dead (5,400 hitpoints, in three phases). The floor is his weapon. His stomp ripples rings of slabs
+  dead (8,400 hitpoints, in three phases). The floor is his weapon. His stomp ripples rings of slabs
   out from him, with spokes left down to stand on, and his shadow lanes raise lanes of the floor
   through where you stand, crossing from his second phase. Close in he claws: step out of it or
   round him, and a claw that misses leaves his guard down. At range he throws fiery skulls that
@@ -238,8 +264,8 @@ version and how to run it.
   his hitpoints, at every phase change and every 35 seconds or so (28 in his last phase), he calls
   down a meteor that kills you wherever you stand. The only answer is the gaze cast at him as he
   calls it, which breaks it in the sky and leaves him open. He never starts one while your gaze is
-  too far from ready. Killing him puts the fires out and leaves the city to walk round again; dying
-  offers Retry, straight back onto his floor and into the fight, without his words.
+  too far from ready. Killing him wins the run. Dying in his fight throws you out to the palace's
+  court, whole, to come back when you're ready.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any

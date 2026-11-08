@@ -16,6 +16,7 @@ import {
     BossWindup,
     Enemy,
     GroundHazard,
+    Lair,
     SimEvent,
     SurgeLane,
     WardPillars,
@@ -77,6 +78,8 @@ const THROW_LINE_ALPHA = 0.3;
 const METEOR_SHADOW_FIT: [number, number] = [1.2, 4.5];
 // A boss's pillars against a gaze (BossDef.gazeWard): how far under the ground they come up from
 const PILLAR_SINK = 3;
+// A lair's pillars (LairDef.pillars): ticks they take to sink as they crumble, or to rise again
+const LAIR_PILLAR_TICKS = 40;
 // A blast's fireball (BossAttackDef.spotAnim on a blast) flies this long before it lands, from
 // this high, arcing this much higher on the way, and this big
 const FLIGHT_SECONDS = 0.45;
@@ -221,6 +224,9 @@ export class BossFightView {
         this.drawFlights(actors, sim, alpha);
         for (const pillars of sim.wardPillars) {
             this.drawWardPillars(actors, sim, pillars, alpha);
+        }
+        for (const lair of sim.lairs) {
+            this.drawLairPillars(actors, sim, lair, alpha);
         }
         this.drawPlayerMarks(actors, sim, alpha);
         for (const hazard of sim.hazards) {
@@ -567,6 +573,31 @@ export class BossFightView {
         }
     }
 
+    // A lair's pillars (LairDef.pillars), whole loc models on their tiles: standing, sinking into
+    // the ground as they crumble, and coming back up when the party's thrown out
+    private drawLairPillars(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
+        const def = lair.def.pillars;
+        const model = def && this.assets.get("loc:" + def.locId);
+        if (!def || !model) {
+            return;
+        }
+        const tick = sim.tick + alpha;
+        for (const pillar of lair.pillars) {
+            const moved = clamp01((tick - pillar.changeTick) / LAIR_PILLAR_TICKS);
+            const up = pillar.standing ? moved : 1 - moved;
+            if (up <= 0) {
+                continue;
+            }
+            const x = pillar.x + def.size / 2;
+            const y = pillar.y + def.size / 2;
+            const sink = (1 - smooth(up)) * PILLAR_SINK;
+            actors.draw(model, model.anims[0], 0, x, this.ground(sim, x, y) + sink, y, 0, {
+                scale: def.scale ?? 1,
+                early: true,
+            });
+        }
+    }
+
     // Her petals drawing in on her before a spiral or a ring
     private drawGathering(actors: ActorRenderer, sim: Sim): void {
         for (const enemy of sim.enemies) {
@@ -868,7 +899,7 @@ export class BossFightView {
             const far = Math.hypot(arena.maxX - arena.minX, arena.maxY - arena.minY);
             this.gaze = {
                 windup,
-                outlines: (sim.map.features?.pillars ?? []).map((pillar) =>
+                outlines: (sim.coverPillars(enemy) ?? []).map((pillar) =>
                     clipToBox(shadowOutline(pillar, from.x, from.y, far), arena),
                 ),
                 strength,

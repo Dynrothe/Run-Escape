@@ -52,7 +52,7 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         name: "Shock wave",
         description:
             "Brings his sword down and sends a blue wave twelve tiles along the ground, binding " +
-            "what it reaches.",
+            "what it reaches and putting out the fire it passes over.",
         kind: "wave",
         // Justiciar faceguard
         iconObjId: 22326,

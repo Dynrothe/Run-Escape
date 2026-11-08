@@ -380,6 +380,8 @@ export type PlayerEffectDef =
           stats: Partial<Stats>;
           seconds: number;
           stacks?: number;
+          // Burns: this much damage a dose every second it lasts, through armour (Xarth's burn)
+          burn?: number;
       }
     // Takes this fraction of the run's coins (the Wise Old Man's Telekinetic
     // Grab); they come back when the boss dies
@@ -666,7 +668,8 @@ export type BossAttackDef = {
         distance?: number;
         thrown?: { seconds: number };
         holds?: number;
-        walkTo?: { distance: number; perAbsorbed: number };
+        // heals: each that gets there heals the boss this share of its hitpoints (Xarth's corpses)
+        walkTo?: { distance: number; perAbsorbed: number; heals?: number };
         // They turn up on the boss's side towards whoever it's after, distance tiles out, as if
         // out of its hands (Yama's Voidflares)
         toward?: boolean;
@@ -731,6 +734,11 @@ export type BossAttackDef = {
         effect?: PlayerEffectDef;
         // Scenery it's drawn as, spread to its radius
         locId: number;
+        // Every so many seconds each one lights another beside it, up to most of them at once
+        // (Xarth's fire taking the Exchange); a new one lasts seconds from then
+        spreads?: { every: number; most: number };
+        // A hero's own button (HeroAbilityDef, by id) that puts it out where it lands (Ice barrage)
+        dousedBy?: string;
     };
     // Blasts: the last of the spots each bring one of these enemies, unless
     // the boss still has that kind up; they drop nothing (the Mimic's red,
@@ -815,10 +823,20 @@ export type BossAttackDef = {
     // over seconds, and out of whatever of their own they were casting (Yama's swat at a gaze
     // cast too close for his pillars, BossDef.gazeWard.tooClose)
     push?: { distance: number; seconds: number };
-    // Swings: whoever's out of its sight behind a pillar of the map's (ArenaFeatures.pillars)
-    // is spared (inShadow in core/arena.ts). While it winds up, the arena's lit and the
-    // pillars' shadows are drawn on the floor, soft-edged (BossFightView.drawGazeShadows).
+    // Swings: whoever's out of its sight behind a pillar of the map's (ArenaFeatures.pillars), or
+    // of its lair's (LairDef.pillars), is spared (inShadow in core/arena.ts). While it winds up,
+    // the arena's lit and the pillars' shadows are drawn on the floor, soft-edged
+    // (BossFightView.drawGazeShadows). crumbles: a lair's pillar that spared anyone crumbles.
     cover?: boolean;
+    crumbles?: boolean;
+    // Only used while its lair's boss is empowered (LairDef.empowered): the fallen one's
+    empowered?: boolean;
+    // Stopped by being hit for share of the boss's hitpoints while it winds this up (K'ril's
+    // ritual): it's lost, broken shows on the boss, and the boss is stunned for stun seconds and
+    // its guard's down for open (BossDef.guard), saying shout
+    breakable?: { share: number; open: number; stun: number; broken?: ImpactDef; shout?: string };
+    // Landed, the boss heals this share of its hitpoints (a ritual finished)
+    heal?: number;
     // The map's statues it's done with, drawn by the fight (the map leaves their
     // model out): its own (a row attack's rows', the knights that throw) or all
     // of ArenaFeatures.statues' group. windupSeq plays from its beginning till it's
@@ -1070,6 +1088,8 @@ export type BossDef = {
         message?: string;
         shout?: string;
     }[];
+    // While any of these enemies is up, it takes this share of what hits it (K'ril's bodyguards)
+    pact?: { enemyIds: string[]; taken: number };
     // A shield that slides back and forth between the boss and the player,
     // which its blockable attacks can't get through (like TzKal-Zuk's
     // ancestral glyph in OSRS). Its line is distance tiles from the boss towards where the
@@ -1751,8 +1771,8 @@ export type MapDef = {
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
-    // A boss asleep in its lair, woken by stepping onto the map's floor (LairDef)
-    lair?: LairDef;
+    // Bosses asleep in their lairs, each woken by stepping into it (LairDef): one fought at a time
+    lairs?: LairDef[];
 };
 
 // A rule a map is played by (MapDef.rule), which core/rules runs each tick. A rule only reads the
@@ -1860,25 +1880,32 @@ export type MapPropDef = {
     y: number;
     yaw?: number;
     scale?: number;
-    // The map's lair's boss, asleep (MapDef.lair): from its fight's start drawn as this instead
-    // (his throne, empty), as he's up and fighting
+    // A lair's boss, asleep (MapDef.lairs, by LairDef.id): from its fight's start drawn as awake
+    // instead (his throne, empty), or not at all without it, as it's up and fighting; and so once
+    // it's beaten. Back as it was if the party's beaten back (LairDef.retreat).
+    lair?: string;
     awake?: { npcId: number; seq: number };
 };
 
-// A boss asleep in its lair on a map to walk round (the Battle for Varrock's Yama, on his throne
-// in the palace). Its fight starts when a player steps onto the map's floor (MapDef.floor, which
-// a lair needs): the boss's intro plays (BossIntroDef, rising at at with the players brought
-// distance south of it), and every way off the floor is sealed with fire until it's dead. Hits
-// land on a map to walk round only while it's on (FunMapDef.explore). Beaten, the seal lifts and
-// the map's free to walk round again; a death there can be retried from start, without the map's
-// opening cinematic.
+// A boss asleep in its lair on a map to walk round (the Battle for Varrock's Yama on his throne,
+// and his generals). Its fight starts when a player steps into where it's fought: the map's floor
+// (MapDef.floor), or an area of its own. The boss's intro plays (BossIntroDef, rising at at with
+// the players brought distance south of it), and every way out is sealed with fire until it's
+// dead. On a map to walk round with nothing coming (isPeaceful), hits land only while it's on.
+// Beaten, the seal lifts and the map's free to walk round again. A death there is retried from
+// start, without the map's opening cinematic, unless the lair beats the party back (retreat).
 export type LairDef = {
+    // Its name among the map's lairs (requires, empowered, MapPropDef.lair)
+    id: string;
     enemyId: string;
     hp: number;
     // Where it rises (its middle), and where a retry starts the player, in world tiles: start is
-    // on the floor, so the fight's on again at once
+    // inside, so the fight's on again at once
     at: { x: number; y: number };
     start: { x: number; y: number };
+    // Where it's fought, if not on the map's floor: world tiles x0 to x1 by y0 to y1, and with rows
+    // ("#" inside, the north row first, as FloorDef's ascii) only those tiles of the box
+    area?: { x0: number; y0: number; x1: number; y1: number; rows?: string[] };
     // What seals each way out: a loc playing its own animation (fire), on every tile it seals,
     // drawn this much bigger; sound as it's sealed and lifted
     seal: { locId: number; scale: number; sound?: number };
@@ -1888,6 +1915,32 @@ export type LairDef = {
     shout?: string;
     // Played as it wakes (LairOpeningDef), but not on a retry, which starts on its floor
     opening?: LairOpeningDef;
+    // Sealed from the run's start until these of the map's lairs are beaten (by id), with message on
+    // screen as it opens (Yama's palace, until his generals are dead)
+    requires?: { lairs: string[]; message: string };
+    // A death in its fight doesn't end the run: the party's thrown out to here, up again with all
+    // their hitpoints, and the boss is back where it was, asleep, with all of its own (message on
+    // screen). Retry then starts the map over, not at the lair.
+    retreat?: { x: number; y: number; message: string };
+    // Fought after any of these lairs is beaten (by id), its boss is empowered: hp and damage times
+    // its own, tempo times its time between attacks, and its attacks marked empowered too
+    // (BossAttackDef.empowered). message: on screen as the other's beaten.
+    empowered?: { by: string[]; hp: number; damage: number; tempo: number; message: string };
+    // Its boss's death wins the run, as a final boss's does (Yama)
+    final?: boolean;
+    // Pillars standing in it from the run's start, solid and hiding what's behind them from its
+    // boss's cover attacks (BossAttackDef.cover), drawn as locId size tiles across from their
+    // south-west tiles. Sparing someone from one that crumbles them (BossAttackDef.crumbles) brings
+    // that one down, with impact, and they all come down once the boss is down to crumbleAt of its
+    // hitpoints. Back up on a retreat.
+    pillars?: {
+        locId: number;
+        scale?: number;
+        size: number;
+        at: { x: number; y: number }[];
+        impact?: ImpactDef;
+        crumbleAt?: number;
+    };
 };
 
 // A lair's cinematic as its boss wakes (Yama on his throne, before he rises). It's on the sim's
@@ -2390,9 +2443,11 @@ export type FunMapDef = {
     // Lines the player says now and then, every few seconds (between every[0]
     // and every[1])
     playerChat?: { lines: string[]; every: [number, number] };
-    // A map to walk round and nothing more: no waves (the map's are empty), no bosses (an empty
-    // pool), no random events, and nothing hurts (the Battle for Varrock), but while its lair's
-    // boss is fought (MapDef.lair)
+    // A map to walk round: no clock to end it or turn its rounds over, no bosses on one (an empty
+    // pool) and no random events. With no waves either it's that and nothing more (isPeaceful):
+    // nothing hurts but a lair's boss while it's fought (MapDef.lairs), and the HUD's only the
+    // minimap, hitpoints and the hero's buttons. With waves (the Battle for Varrock's hordes) it's
+    // a run as any, levels and all, that ends with its final lair's boss (LairDef.final).
     explore?: boolean;
 };
 

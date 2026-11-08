@@ -23,14 +23,14 @@ hitboxes exactly as drawn, nothing painted on the floor as an arrow, and phone u
 
 ## 2. Shape
 
-|           |                                                                                                |
-| --------- | ---------------------------------------------------------------------------------------------- |
-| Who       | The player as Justiciar Zachariah: Lunge, Shock wave, Ice barrage, Lightning, the Owl's gaze   |
-| Where     | The palace floor, about 15 × 11 tiles of floor-system tiles, the throne at the north end       |
-| Hitpoints | 5,400 (Zachariah has 4,200; this comes after him, so it's longer)                              |
-| Phases    | 100–70%, 70–35%, 35–0%                                                                         |
-| Length    | About 4–5 minutes for a good run                                                               |
-| Death     | The usual death screen: Retry (straight back into the fight, no cinematic) and Return to title |
+|           |                                                                                              |
+| --------- | -------------------------------------------------------------------------------------------- |
+| Who       | The player as Justiciar Zachariah: Lunge, Shock wave, Ice barrage, Lightning, the Owl's gaze |
+| Where     | The palace floor, about 15 × 11 tiles of floor-system tiles, the throne at the north end     |
+| Hitpoints | 8,400: he comes after his generals (3,800 and 4,200) and the levels their demons give        |
+| Phases    | 100–70%, 70–35%, 35–0%                                                                       |
+| Length    | About 4–5 minutes for a good run                                                             |
+| Death     | Thrown out to the palace's court, whole, to come back when you're ready                      |
 
 He stays near the throne end and moves along it. He doesn't chase. The danger comes from the floor
 and from him at range, and close in he claws.
@@ -146,7 +146,7 @@ Their real shadows cover him, so the gaze does nothing to him. The pillars stay 
 
 ## 9. What's built (2026-11-07)
 
-**In.** The lair (`MapDef.lair`): stepping onto the palace floor wakes him, the seal is found by
+**In.** The lair (`MapDef.lair`, now `lairs`, with his generals': `varrock-generals.md`): stepping onto the palace floor wakes him, the seal is found by
 code (every floor tile beside a way off it), Retry starts on his floor, and once he's dead the
 fires go out and the map's free roam again with his throne empty (section 8's first two
 questions, answered the simple way for now). The fight's in `content/yama.ts`: Hellstomp,

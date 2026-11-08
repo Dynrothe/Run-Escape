@@ -58,9 +58,10 @@ const FLARE_BURST_SEQ = 12134;
 const FLARE_BURST_SOUND = 10239;
 const ICE = 369;
 
-// What the fight's tuned to: his hitpoints (the lair's), and the hero's 38 hitpoints that his
-// damage is out of (the floor's slabs take 6 of them: MapDef.floor's slam).
-export const YAMA_HITPOINTS = 5400;
+// What the fight's tuned to: his hitpoints (the lair's), for a hero levelled on the hordes who's
+// beaten both his generals, and the hero's 38 hitpoints (more with upgrades) that his damage is
+// out of (the floor's slabs take 6 of them: MapDef.floor's slam).
+export const YAMA_HITPOINTS = 8400;
 // Seconds into his intro he rises, which his lair's opening frames (fun/yamaWakes.ts)
 export const YAMA_RISES_AT = 0.8;
 const RADIUS = 2;

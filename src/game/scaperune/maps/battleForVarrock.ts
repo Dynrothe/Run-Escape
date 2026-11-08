@@ -98,6 +98,40 @@ export const YAMA_SCALE = 0.6;
 // Woken, he rises before his throne (content/yama.ts, MapDef.lair), and the fight starts the
 // player this far south of him, by the floor's middle
 const YAMA_RISE = { x: YAMA.x + 2, y: YAMA.y - 4 };
+
+// Yama's generals (content/xarth.ts, content/kril.ts), each asleep in a ruin of its own (real
+// tiles). Xarth in the middle of the Grand Exchange's inner ring, inside what's left of its
+// octagonal wall: twenty tiles across with its corners cut six, its counter gone. Four of the
+// Fractured Archive's pillars stand round him, and the party's thrown out to the south.
+export const EXCHANGE_RING_REAL = { x0: 3155, y0: 3480, x1: 3174, y1: 3499 };
+export const EXCHANGE_RING_ROWS = octagonRows(20, 6);
+const XARTH_REAL = { x: 3165, y: 3490 };
+const EXCHANGE_PILLARS_REAL = [
+    { x: 3159, y: 3484 },
+    { x: 3169, y: 3484 },
+    { x: 3159, y: 3494 },
+    { x: 3169, y: 3494 },
+];
+const EXCHANGE_RETREAT_REAL = { x: 3165, y: 3474.5 };
+// The counter in the ring's middle, a blocked deck in the cache, which goes
+const EXCHANGE_COUNTER_REAL = { x0: 3163, y0: 3488, x1: 3166, y1: 3491 };
+// K'ril Tsutsaroth before the altar of the church in the north-east of the city, its nave his:
+// eight tiles across from its south door to its altar, eighteen long. Thrown out, the party's
+// outside its door.
+export const CHURCH_NAVE_REAL = { x0: 3252, y0: 3471, x1: 3259, y1: 3488 };
+const KRIL_REAL = { x: 3256, y: 3483 };
+const CHURCH_RETREAT_REAL = { x: 3256, y: 3466.5 };
+
+// A square size tiles across with its corners cut corner tiles, as rows ("#" inside, the north
+// row first)
+function octagonRows(size: number, corner: number): string[] {
+    const rows: string[] = [];
+    for (let r = 0; r < size; r++) {
+        const cut = Math.max(0, corner - r, r - (size - 1 - corner));
+        rows.push(".".repeat(cut) + "#".repeat(size - cut * 2) + ".".repeat(cut));
+    }
+    return rows;
+}
 const YAMA_START = { x: YAMA_RISE.x, y: YAMA_RISE.y - 9 };
 
 // What the conversion leaves standing, by name: the square's fountain, the churches' altars and
@@ -345,10 +379,13 @@ const POINTS: MapPoint[] = [
     { name: "before Yama's throne", x: YAMA.x + 1, y: YAMA.y - 3 },
     { name: "where Yama rises", ...YAMA_RISE },
     { name: "where his fight starts", ...YAMA_START },
+    { name: "Xarth in the Grand Exchange", ...toGrid(XARTH_REAL.x, XARTH_REAL.y - 3) },
+    { name: "K'ril Tsutsaroth in the church", ...toGrid(KRIL_REAL.x, KRIL_REAL.y - 3) },
+    { name: "outside the Exchange", ...toGrid(EXCHANGE_RETREAT_REAL.x, EXCHANGE_RETREAT_REAL.y) },
+    { name: "outside the church", ...toGrid(CHURCH_RETREAT_REAL.x, CHURCH_RETREAT_REAL.y) },
 ];
 
 const DECKS_BLOCKED = [
-    { ...toGrid(3163, 3488), x1: 3166 - REAL_X, y1: 3491 - REAL_Y },
     { ...toGrid(3161, 3479), x1: 3161 - REAL_X, y1: 3479 - REAL_Y },
     { ...toGrid(3285, 3468), x1: 3285 - REAL_X, y1: 3469 - REAL_Y },
 ].map(({ x, y, x1, y1 }) => ({ x0: x, y0: y, x1, y1 }));
@@ -392,6 +429,7 @@ function isPalaceInside(loc: PlacedLoc): boolean {
 // The palace before the conversion: everything on its floor goes (its rooms' walls, furniture
 // and floor decoration), the floor's laid by the game. Its outer walls stay for the ruin rules.
 function clearPalace(grid: TileGrid): void {
+    clearCounter(grid);
     grid.locs = grid.locs.filter((loc) => {
         if (loc.level !== 0) {
             return true;
@@ -401,6 +439,52 @@ function clearPalace(grid: TileGrid): void {
         }
         return !isPalaceFloor(loc.x, loc.y);
     });
+}
+
+// The Grand Exchange's counter, where Xarth stands: open, with nothing on it. It's a deck (a
+// bridge's level over the ground), so it's unblocked on both.
+function clearCounter(grid: TileGrid): void {
+    const { x0, y0, x1, y1 } = EXCHANGE_COUNTER_REAL;
+    for (let y = y0 - REAL_Y; y <= y1 - REAL_Y; y++) {
+        for (let x = x0 - REAL_X; x <= x1 - REAL_X; x++) {
+            grid.levels[0].flags[x + y * SIZE] &= ~TILE_BLOCKED;
+            grid.levels[1].flags[x + y * SIZE] &= ~TILE_BLOCKED;
+        }
+    }
+    grid.locs = grid.locs.filter(
+        (loc) =>
+            loc.x < x0 - REAL_X ||
+            loc.x > x1 - REAL_X ||
+            loc.y < y0 - REAL_Y ||
+            loc.y > y1 - REAL_Y,
+    );
+}
+
+// Whether a grid tile is in the church's nave, south of K'ril's spot before the altar
+function isNave(x: number, y: number): boolean {
+    const { x0, y0, x1 } = CHURCH_NAVE_REAL;
+    return x >= x0 - REAL_X && x <= x1 - REAL_X && y >= y0 - REAL_Y && y <= KRIL_REAL.y - REAL_Y;
+}
+
+// The church's pews, burnt away down to the altar: K'ril comes down its nave, and he's three
+// tiles across, wider than the aisle they leave. Its walls stay. A tile of it is blocked in
+// OSRS with nothing on it, which goes too.
+function clearNave(grid: TileGrid): void {
+    const { x0, y0, x1 } = CHURCH_NAVE_REAL;
+    for (let y = y0 - REAL_Y; y <= KRIL_REAL.y - REAL_Y; y++) {
+        for (let x = x0 - REAL_X; x <= x1 - REAL_X; x++) {
+            grid.levels[0].flags[x + y * SIZE] &= ~TILE_BLOCKED;
+        }
+    }
+    grid.locs = grid.locs.filter(
+        (loc) => loc.level !== 0 || loc.type !== LOC_NORMAL || !isNave(loc.x, loc.y),
+    );
+}
+
+// Whether a grid tile is on the Grand Exchange's counter, where Xarth rises
+function isCounter(x: number, y: number): boolean {
+    const { x0, y0, x1, y1 } = EXCHANGE_COUNTER_REAL;
+    return x >= x0 - REAL_X && x <= x1 - REAL_X && y >= y0 - REAL_Y && y <= y1 - REAL_Y;
 }
 
 // Tiles taken by a loc that blocks, or by a wall, for the dressing to keep off
@@ -484,9 +568,16 @@ function dress(grid: TileGrid, locs: (id: number) => LocInfo, report: VarrockDre
         list[Math.floor(tileHash(x, y, salt) * list.length)];
     for (let y = ARENA.y0; y <= ARENA.y1; y++) {
         for (let x = ARENA.x0; x <= ARENA.x1; x++) {
-            // The gate's clear for the start, and the palace is dressed on its own
+            // The gate's clear for the start, the palace is dressed on its own, and the nave
+            // and the counter are kept clear for K'ril and Xarth
             const nearStart = Math.abs(x - START.x) < 5 && Math.abs(y - START.y) < 5;
-            if (!open(x, y) || isPalaceFloor(x, y) || nearStart) {
+            if (
+                !open(x, y) ||
+                isPalaceFloor(x, y) ||
+                isNave(x, y) ||
+                isCounter(x, y) ||
+                nearStart
+            ) {
                 continue;
             }
             const inside = (level0.flags[x + y * SIZE] & TILE_INSIDE) !== 0;
@@ -733,6 +824,7 @@ export function buildVarrockDetail(context: BuildContext): GeneratedMap & {
     const ground = new Ground(SIZE, SIZE);
     const city = cutPrefab(context.maps, REAL_X, REAL_Y, SIZE, SIZE);
     clearPalace(city);
+    clearNave(city);
     const fabric = takeFabric(city, context.locs);
     const ruins = ruinGrid(city, context.locs, {
         ...RULES,
@@ -771,8 +863,8 @@ export function buildVarrockDetail(context: BuildContext): GeneratedMap & {
         // All of it is the real world's
         designed: [{ x0: 0, y0: 0, x1: SIZE - 1, y1: SIZE - 1 }],
         // Decks blocked in OSRS too, which check-maps.ts would hold to being walked like a
-        // bridge's: the Grand Exchange's counter in its middle, and a tile of it and of the
-        // bridge east of the palace
+        // bridge's: a tile of the Grand Exchange's and of the bridge east of the palace (its
+        // counter's gone, for Xarth)
         squares: DECKS_BLOCKED,
         dressing,
     };
@@ -831,4 +923,43 @@ export const BATTLE_FOR_VARROCK = {
         x: MAP_X * MAP_SQUARE_SIZE + YAMA_START.x + 0.5,
         y: MAP_Y * MAP_SQUARE_SIZE + YAMA_START.y + 0.5,
     },
+    // Beaten back from his floor: the palace's front court
+    yamaRetreat: {
+        x: MAP_X * MAP_SQUARE_SIZE + PALACE_COURT.x + 0.5,
+        y: MAP_Y * MAP_SQUARE_SIZE + PALACE_COURT.y + 0.5,
+    },
+    // Xarth's ring: its box and rows, where he stands, his pillars' south-west tiles, and outside
+    xarth: {
+        area: { ...toWorldBox(EXCHANGE_RING_REAL), rows: EXCHANGE_RING_ROWS },
+        at: toWorld(XARTH_REAL),
+        start: toWorld({ x: XARTH_REAL.x, y: XARTH_REAL.y - 6.5 }),
+        pillars: EXCHANGE_PILLARS_REAL.map(toWorld),
+        retreat: toWorld(EXCHANGE_RETREAT_REAL),
+    },
+    // K'ril's nave
+    kril: {
+        area: toWorldBox(CHURCH_NAVE_REAL),
+        at: toWorld(KRIL_REAL),
+        start: toWorld({ x: KRIL_REAL.x, y: KRIL_REAL.y - 7.5 }),
+        retreat: toWorld(CHURCH_RETREAT_REAL),
+    },
 };
+
+// Real tiles to world tiles: a spot, and a box
+function toWorld({ x, y }: { x: number; y: number }): { x: number; y: number } {
+    return { x: x + WORLD_X, y: y + WORLD_Y };
+}
+
+function toWorldBox(box: { x0: number; y0: number; x1: number; y1: number }): {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+} {
+    return {
+        x0: box.x0 + WORLD_X,
+        y0: box.y0 + WORLD_Y,
+        x1: box.x1 + WORLD_X,
+        y1: box.y1 + WORLD_Y,
+    };
+}

@@ -42,11 +42,13 @@ go stale. Add anything that cost you time to work out.
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
+| Yama's generals in Varrock, and its demon hordes       | `content/xarth.ts`, `kril.ts`, `varrockHordes.ts`                      |
+| The generals' design and what the bot found            | `docs/design/varrock-generals.md`                                      |
 | The Battle for Varrock: burnt Varrock, to explore      | `content/fun/maps.ts`, `scaperune/maps/battleForVarrock.ts`            |
 | A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `fun/varrockOpening.ts`     |
 | A boss's cinematic as it wakes (`LairDef.opening`)     | `fun/yamaWakes.ts`, `Sim.stepLair`, `GameClient.startLairOpening`      |
 | Yama's fight in burnt Varrock, and its design          | `content/yama.ts`, `docs/design/yama.md`                               |
-| A boss asleep on a map to walk round (`MapDef.lair`)   | `Sim.stepLair`, `docs/DEVELOPMENT.md` (A hero of their own)            |
+| Bosses asleep on a map to walk round (`MapDef.lairs`)  | `Sim.stepLair`, `docs/DEVELOPMENT.md` (A hero of their own)            |
 | Burning a real place to ruins (any town)               | `src/game/scaperune/ruins.ts`, `rs/config/loctype/LocOverrides.ts`     |
 | Zachariah as the player: his model and his buttons     | `src/game/content/justiciarKit.ts`, `Sim.useKitAbility`                |
 | A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
@@ -185,6 +187,7 @@ bun run tsx scripts/cache/check-items.ts          # casket items are the items t
 bun run tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
 bun run tsx scripts/cache/sprites.ts check        # the game's interface sprites are in the cache
 bun run tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
+bun run tsx scripts/game/check-lairs.ts           # every lair's boss has room where it rises
 ```
 
 ## Tests on the release build

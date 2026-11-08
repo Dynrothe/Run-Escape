@@ -1721,8 +1721,7 @@ describe("the opening cinematic", () => {
         const skipLairOpening = vi.fn();
         const sim = {
             tick: 500,
-            map: { lair: { opening: YAMA_WAKES } },
-            lair: { state: "asleep", wakeTick: -1 },
+            lair: { state: "asleep", wakeTick: -1, def: { opening: YAMA_WAKES } },
             skipLairOpening,
         };
         const view = { cinematic: undefined as CinematicPlayer | undefined, onEvents() {} };
@@ -1763,7 +1762,7 @@ describe("the opening cinematic", () => {
         const { store, sim, view, play, state, update } = lairClient(false);
         expect(update()).toBeUndefined();
         expect(state.cinematic).toBeUndefined();
-        sim.lair = { state: "waking", wakeTick: 500 };
+        sim.lair = { ...sim.lair, state: "waking", wakeTick: 500 };
         sim.tick = 500 + 2 * TICKS_PER_SECOND;
         expect(update()).toBeDefined();
         const cinematic = state.cinematic!;
@@ -1791,7 +1790,7 @@ describe("the opening cinematic", () => {
         "a lair's skipped in co-op (%s) has its boss come straight on only on your own",
         (coop, calls) => {
             const { client, sim, state, update, skipLairOpening } = lairClient(coop);
-            sim.lair = { state: "waking", wakeTick: 500 };
+            sim.lair = { ...sim.lair, state: "waking", wakeTick: 500 };
             sim.tick = 500 + TICKS_PER_SECOND;
             update();
             client.skipCinematic();
@@ -1811,7 +1810,7 @@ describe("the opening cinematic", () => {
             startRun,
         });
         client.retry();
-        // and starts at its lair, if it has one (MapDef.lair)
+        // and starts at its lair, if it has one (getRetryLair)
         expect(startRun).toHaveBeenCalledWith("zachariah", false, true);
     });
 });
