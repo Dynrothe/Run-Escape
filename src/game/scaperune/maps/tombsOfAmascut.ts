@@ -1313,6 +1313,8 @@ export const BENEATH_CURSED_SANDS: MapDef = {
     scaperune: true,
     // The raid's light, a tomb lit by its fires
     lighting: TOMBS_LIGHTING,
+    // Twice as hard, and through armour: the quest's tuned for whoever comes in, bought or not
+    hits: { scale: 2, throughArmor: true },
     fight: {
         requires: "desert",
         character: "sands_delver",

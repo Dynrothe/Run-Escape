@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Beneath Cursed Sands, by Okaeri: the quest's bosses hit twice as hard, and armour doesn't stop
+  their hits.
+
 ## 0.29.0 - 2026-11-08
 
 ### Added
