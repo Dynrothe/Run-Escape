@@ -1620,6 +1620,40 @@ describe("Akkha", () => {
     }
     const akkha = (sim: Sim) => sim.enemies.find((e) => e.uid === sim.tombsAkkha!.uid)!;
 
+    it("walks through his own shadows to a dead one's quarter, not held behind a live one", () => {
+        // Hit steadily; each time his shadows come, kill one and wait in its quarter. A live
+        // shadow straight between held him for good before, so the fight never went on.
+        const sim = atAkkha([], 1);
+        const boss = akkha(sim);
+        let t = 0;
+        for (; t < 400 * TICKS_PER_SECOND && !boss.dead; t++) {
+            const fight = sim.tombsAkkha!;
+            sim.player.hp = sim.player.maxHp;
+            sim.player.invulnerable = 0;
+            if (t % 10 === 0) {
+                sim.damageEnemy(boss, boss.maxHp * 0.05, 0, boss.x, boss.y);
+            }
+            const live = fight.shadows.filter((s) =>
+                sim.enemies.some((e) => e.uid === s.uid && !e.dead),
+            );
+            const dead = fight.shadows.find((s) => !live.includes(s));
+            if (live.length === fight.shadows.length && live.length > 0 && t % 10 === 5) {
+                const shadow = sim.enemies.find((e) => e.uid === live[0].uid)!;
+                sim.damageEnemy(shadow, shadow.maxHp * 2, 0, shadow.x, shadow.y);
+            }
+            if (dead) {
+                const at = sim.akkhaCorner(dead.quadrant, 6);
+                sim.player.x = sim.player.prevX = at.x;
+                sim.player.y = sim.player.prevY = at.y;
+            }
+            if (sim.state === "levelUp") {
+                sim.choose(0);
+            }
+            sim.step();
+        }
+        expect(boss.dead).toBe(true);
+    });
+
     describe("Detonate", () => {
         // A party of two at him, each put on a tile
         function party(): Sim {

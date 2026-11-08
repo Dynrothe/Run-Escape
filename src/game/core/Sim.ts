@@ -4196,11 +4196,14 @@ export class Sim {
                 let sepX = 0;
                 let sepY = 0;
                 const faction = enemy.boss || enemy.aggro ? undefined : enemy.def.faction;
+                // Akkha walks through his own shadows: they never move, so one straight between him
+                // and where he's going held him there for good, never drawn into a dead one's quarter
+                const ownShadow = enemy.def.boss?.akkha?.shadows.enemyId;
                 let foe: Enemy | undefined;
                 this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
                     // A rolling boulder goes its own way, through whatever's there (Ba-Ba's cracked
                     // one starts on her altar, under her)
-                    if (other === enemy || other.rolls) {
+                    if (other === enemy || other.rolls || other.def.id === ownShadow) {
                         return;
                     }
                     const ox = enemy.x - other.x;

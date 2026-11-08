@@ -421,7 +421,9 @@ animations from a lister of those whose model or animation is in the raid's rang
       OSRS's are, and he can't be hurt except well inside a quadrant whose shadow is dead (his
       middle a tile clear of the lines between them), so you kill one and draw him into its
       quarter. Only one: once a shadow's struck the rest are shielded, as the wiki says to focus
-      one, till they're restored at the next threshold. One timer (the HUD counts it down) runs
+      one, till they're restored at the next threshold. He walks through his own shadows (they
+      don't push him apart as other enemies do): they never move, so one straight between him and
+      the dead one's quarter held him there for good, unhurtable, doing specials on and on. One timer (the HUD counts it down) runs
       for them all: when it's out, every
       quadrant whose shadow's still up floods for half your hitpoints and its element, and it
       starts again.
