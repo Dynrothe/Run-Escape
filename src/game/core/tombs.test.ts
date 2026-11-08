@@ -473,6 +473,8 @@ describe("the Apmeken room", () => {
             sim.step();
         }
         expect(baba.dead).toBe(true);
+        // Hurt as it ends: healed to full on the way out
+        sim.player.hp = 1;
         // Its death plays out, then back to the Nexus (nothing holding the player meanwhile)
         for (let i = 0; i < 400 && sim.tombsPath !== undefined; i++) {
             sim.player.invulnerable = 1e6;
@@ -486,6 +488,7 @@ describe("the Apmeken room", () => {
         }
         expect(sim.tombsPath).toBeUndefined();
         expect(sim.tombsPathsDone).toEqual(["apmeken"]);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
         expect(sim.player.x).toBeCloseTo(1036.5);
         expect(sim.player.y).toBeCloseTo(1036.5);
         // Its level ups answered, then up to its door: it's done

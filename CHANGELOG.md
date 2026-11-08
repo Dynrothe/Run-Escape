@@ -9,6 +9,8 @@ the version in the corner).
 
 - On a phone, the fight button's name (Point-blank volley, Amascut's bane) was cut off by its round
   button. It's under the button now. Fixed by Okaeri.
+- In the Tombs of Amascut, beating a path's boss only brought back teammates who were down; now
+  the whole party's back on full hitpoints for the next path. Fixed by Okaeri.
 
 ## 0.29.1 - 2026-11-08
 

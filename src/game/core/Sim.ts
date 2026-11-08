@@ -10439,19 +10439,23 @@ export class Sim {
         });
     }
 
-    // Done with a path: back to the Nexus, with what's on the floor. Co-op: anyone still down is
-    // back up for the next, as OSRS's party rejoins once a room's done.
+    // Done with a path: back to the Nexus, with what's on the floor, and the whole party on full
+    // hitpoints for the next. Co-op: anyone still down is back up, as OSRS's party rejoins once a
+    // room's done.
     private leaveTombsPath(): void {
         const tombs = this.map.tombs!;
         const current = this.hero;
         for (const hero of this.heroes) {
-            if (hero.down && !hero.left) {
-                this.use(hero);
+            if (hero.left) {
+                continue;
+            }
+            this.use(hero);
+            if (hero.down) {
                 hero.down = false;
                 hero.revive = undefined;
-                this.player.hp = this.player.maxHp;
                 this.player.deathTick = -1;
             }
+            this.player.hp = this.player.maxHp;
         }
         this.use(current);
         this.rescaleParty();
