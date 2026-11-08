@@ -8,6 +8,7 @@ import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
 import { diffStats } from "../content/stats";
+import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
 import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
@@ -196,6 +197,26 @@ export function getEventView(sim: Sim): EventView | undefined {
                     text: "Uses one of this raid's teleports.",
                     // A teleport tablet
                     iconObjId: 8013,
+                    enabled: true,
+                };
+            }
+            if (option.kind === "bundle") {
+                // One of the Helpful Spirit's, free: what's in it
+                const bundle = TOMBS_SPIRIT_BUNDLES.find((b) => b.id === option.bundleId)!;
+                const contents = option.items
+                    .map((item) => `${item.count} ${getRaidSupply(item.supplyId).name}`)
+                    .join(", ");
+                // Kinds it'd need a new slot for, against the slots free: what won't fit is used
+                const kinds = option.items.filter(
+                    (item) => !sim.inventory.some((slot) => slot?.itemId === item.supplyId),
+                ).length;
+                const room = kinds <= sim.inventory.filter((slot) => !slot).length;
+                return {
+                    title: bundle.name,
+                    text:
+                        `${bundle.description} ${contents}.` +
+                        (room ? "" : " No room for all of it: what won't fit is used at once."),
+                    iconObjId: bundle.objId,
                     enabled: true,
                 };
             }

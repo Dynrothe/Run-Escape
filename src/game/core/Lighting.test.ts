@@ -1,6 +1,7 @@
 import { getEnemy } from "../content/enemies";
 import { ALL_MAPS, MAP_BY_ID, getMap } from "../content/maps";
 import { LANTERN_ID, POWER_UPS, getPowerUp } from "../content/powerups";
+import { TOMBS_LIGHTING } from "../content/tombs";
 import { EnemyDef, LightingDef, MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy } from "./entities";
@@ -89,9 +90,12 @@ function run(sim: Sim, seconds: number, keep: Enemy[] = []): void {
 }
 
 describe("the dark", () => {
-    test("only dev maps have lights, and everywhere else is lit everywhere", () => {
+    test("only dev maps and the Tombs have lights, and everywhere else is lit everywhere", () => {
+        // The Tombs of Amascut and its quest, a tomb lit by its fires, are the shipped ones
         for (const map of ALL_MAPS) {
-            expect(map.lighting === undefined || map.dev === true).toBe(true);
+            expect(
+                map.lighting === undefined || map.dev === true || map.lighting === TOMBS_LIGHTING,
+            ).toBe(true);
         }
         const sim = createSim("lumbridge");
         expect(sim.lighting).toBeUndefined();

@@ -2905,11 +2905,23 @@ describe("maps", () => {
     test("every map's waves, events and bosses make sense", () => {
         for (const map of MAPS) {
             if (map.fight) {
-                // One boss fight: nothing but its final boss, from the start
                 expect(map.waves).toEqual([]);
-                expect(map.events.length).toBe(1);
-                expect(map.events[0]).toMatchObject({ at: 0, kind: "finalBoss" });
-                expect(getEnemy(map.events[0].enemyId).boss?.intro?.alone).toBe(true);
+                if (map.stages) {
+                    // A fight in parts (Beneath Cursed Sands): each part its final bosses, the
+                    // first from the start (the Scarab Mages' second comes later)
+                    for (const stage of map.stages) {
+                        expect(stage.events[0]).toMatchObject({ at: 0, kind: "finalBoss" });
+                        for (const event of stage.events) {
+                            expect(event.kind).toBe("finalBoss");
+                            expect(getEnemy(event.enemyId).boss).toBeDefined();
+                        }
+                    }
+                } else {
+                    // One boss fight: nothing but its final boss, from the start
+                    expect(map.events.length).toBe(1);
+                    expect(map.events[0]).toMatchObject({ at: 0, kind: "finalBoss" });
+                    expect(getEnemy(map.events[0].enemyId).boss?.intro?.alone).toBe(true);
+                }
                 // Opened by beating another map: a campaign map, or another fight that is (the
                 // Owl's trial after the Wolf's), never round in a circle
                 let requires = getMap(map.fight.requires);

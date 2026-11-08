@@ -131,6 +131,13 @@ export type EnemyDef = {
     // (the fun maps' rangers and mages): a weak shot, for the enemy's own
     // damage, that only hits when a crowd's hit could
     shot?: EnemyShotDef;
+    // Copies a boss's lunges (the Menaphite Akh's shadow, NEW-7): as boss starts one of these
+    // attacks (by name, each a swing with a line), every living enemy with this winds up its own
+    // from where it stands, at the nearest hero, with the boss's windup and seq, and lands it
+    // down its own strip. Gate it to a phase by naming only that phase's attacks. A boss can
+    // echo its partner (the elder Scarab Mage's half of the Crossfire): only while it's free,
+    // not winding up, channelling, kneeling or in the air.
+    echoes?: EchoDef;
     // Lines it says now and then, over its head (the fun maps' chat)
     chat?: string[];
     // Never moves, and can't be knocked back or left behind (Pest Control's
@@ -176,7 +183,17 @@ export type EnemyDef = {
     // Blows up when it dies, hurting the player if they're close (Pest
     // Control's splatters). damage is like EnemyDef.damage (the map's
     // difficulty and the run's time scale it the same way).
-    explodes?: { damage: number; radius: number; spotAnim?: number; sound?: number };
+    // pack: what it does to the other enemies in reach too (the Tombs' volatile baboons, which take
+    // their own pack with them), before the hit's scaling
+    explodes?: {
+        damage: number;
+        radius: number;
+        spotAnim?: number;
+        sound?: number;
+        pack?: number;
+    };
+    // What its hit does to the player besides its damage (the Tombs' cursed baboons weaken them)
+    touches?: PlayerEffectDef;
     // Drawn as this item's model, never animated, instead of as the NPC
     // (Phosani's eggs are the Parasitic egg): npcId goes unused
     objId?: number;
@@ -190,6 +207,9 @@ export type EnemyDef = {
     // The player can't push it: walking into it, they're the one that gives,
     // as with what can't move (Phosani's Nightmare and everything of hers)
     solid?: boolean;
+    // Weapons pass it by: it's there to be walked into, not hit (Zebak's jugs,
+    // which would otherwise break the moment they're down)
+    unhittable?: boolean;
     // The game's hint arrow bobs over it while it's alive, and points the way
     // from the screen's edge when it's off it (Phosani's eggs, to be found)
     hintArrow?: boolean;
@@ -416,6 +436,23 @@ export type BulletPatternDef = {
     // A wall's tiles between bullets; a closing ring's tiles out
     spacing?: number;
     distance?: number;
+    // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
+    // bursting where it lands), rather than from the boss
+    origin?: "target";
+    // Walls: straight down the arena (south), whoever's where (Ba-Ba's boulders, from her altar)
+    heading?: "south";
+    // Walls: count lanes side by side, the gap's lane (ends included) moving at most this many from
+    // the last volley's, so the next way through can always be reached (Ba-Ba's boulders: five
+    // and a gap, as in OSRS). The lanes stay as they are on hard.
+    gapStep?: number;
+    // Walls with gapStep: the way through is this enemy instead, rolling with the rest (Ba-Ba's
+    // cracked boulder), to be broken to get through. It hurts and knocks back as they do.
+    cracked?: string;
+    // Drawn as this enemy's model, playing its walk (Ba-Ba's boulders, rolling as they go), at
+    // the size it hits, rather than as the attack's spot animation
+    look?: string;
+    // Tiles a hit knocks the player on, the way the bullet's going
+    knockback?: number;
     // Tiles out from the boss's middle a ring, spiral or spread starts, and a wall in front of it:
     // a pocket by the boss the volley never crosses, for whoever fights up close
     from?: number;
@@ -423,6 +460,12 @@ export type BulletPatternDef = {
     // much it's lit up against dark ground (0 to 1)
     scale?: number;
     bright?: number;
+    // A glow on the floor under each bullet while it flies, so a dark one reads on dark ground.
+    // Only drawn, on a map with lighting.
+    glow?: LightLook;
+    // Held at this tick of its spot animation, not played: for one that bursts as it plays (Akkha's
+    // darkness orb throws shards five times its size), so each bullet looks the size of what it hits
+    still?: number;
     // Seconds the boss stands still firing before it can begin its next attack,
     // instead of until the last volley's out: a slow ring keeps coming while
     // she aims the next thing through it (Phosani's)
@@ -458,12 +501,21 @@ export type GroundPatternDef = {
         | { shape: "grid"; size: number; spacing: number }
         // awayFrom: no closer to the boss than this, and on ground the player can get to
         | { shape: "scatter"; count: number; spread: number; awayFrom?: number }
+        // A plus of spots a tile apart on the player's tile, reach tiles each way (Ba-Ba's
+        // rockfall)
+        | { shape: "cross"; reach: number }
         // checker: every cell of one colour of the map's checker (ArenaFeatures.checker),
         // at random, square; then the other colour's cells, shown from when the first
         // land and landing then seconds after. With cross, only the cells within cross
         // cells of the player's, along its row and column.
         | { shape: "checker"; then: number; cross?: number }
+        // trail: on where the player stood each of these many seconds ago (at most
+        // TRAIL_SECONDS), so the path they've just walked bursts (the Champion of Scabaras)
+        | { shape: "trail"; ago: number[] }
     )[];
+    // Marked by a shadow on the floor, darkening as what falls comes down (BossAttackDef.falls),
+    // rather than by its spot animation
+    shadow?: boolean;
     radius: number;
     // Set: it stays armed this many seconds after the windup, going off under
     // whoever comes within radius rather than landing all at once (spores)
@@ -503,6 +555,203 @@ export type GroundPatternDef = {
     smother?: { seconds: number; heal: number; healSpotAnim?: number; smotheredSpotAnim?: number };
 };
 
+// One of Akkha's four quadrants' elements: what it does to whoever's hit in it (on top of the
+// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn) and its symbol
+export type AkkhaElementDef = {
+    name: string;
+    effect: PlayerEffectDef;
+    spotAnim: number;
+    orb: string;
+    symbolLoc: number;
+};
+
+// Zebak's fight (BossDef.zebak; Sim.stepZebak), as content/tombs.ts's ZEBAK says
+export type ZebakDef = {
+    specials: number[];
+    acid: {
+        count: number;
+        half: number;
+        upsetHalf: number;
+        damage: number;
+        ramp: number;
+        poison: PlayerEffectDef;
+        loc: number;
+    };
+    jugs: {
+        enemyId: string;
+        count: number;
+        speed: number;
+        reach: number;
+        water: number;
+        upsetWater: number;
+        breakSpotAnim: number;
+        splashSpotAnim: number;
+    };
+    roar: {
+        boulders: number;
+        seconds: number;
+        hits: number;
+        share: number;
+        knock: number;
+        shelter: number;
+        look: string;
+        radius: number;
+        spotAnim: number;
+        seq: number;
+        message: string;
+        roarMessage: string;
+    };
+    waves: {
+        count: number;
+        gap: number;
+        leastGap: number;
+        speed: number;
+        delay: number;
+        damage: number;
+        shove: number;
+        look: string;
+        seq: number;
+        message: string;
+    };
+    clouds: {
+        enemyId: string;
+        every: number;
+        drain: number;
+        heal: number;
+        arterial: number;
+        message: string;
+    };
+};
+
+// Kephri's fight (BossDef.kephri; Sim.stepKephri), as content/tombs.ts's KEPHRI says
+export type KephriDef = {
+    // soldierFeed: of a shield, what each of the Soldier Scarab's heals puts on it
+    shields: { count: number; share: number; overcharge: number; soldierFeed: number };
+    intermissions: {
+        swarms: number[];
+        overlords: string[][];
+        moreOverlords: string[][];
+        message: string;
+        endMessage: string;
+    };
+    swarm: {
+        enemyId: string;
+        shield: number;
+        heal: number;
+        reach: number;
+        cadence: number[];
+        trios: number;
+        medic: number;
+    };
+    dung: {
+        // Seconds between, on her last (every's for the shields), and the least either comes to
+        // with the path level
+        every: number;
+        finalEvery?: number;
+        least: number;
+        warn: number;
+        knock: number;
+        stun: number;
+        damage: number;
+        gap: number;
+        radius: number;
+        seconds: number;
+        spotAnim: number;
+        dropSpotAnim: number;
+        pileLoc: number;
+        message: string;
+        thrownMessage: string;
+    };
+    eggs: { explodeId: string; fuse: number; radius: number; damage: number; spotAnim: number };
+    arcane: {
+        enemyId: string;
+        charge: number;
+        disperse: number;
+        spotAnim: number;
+        spots: [number, number][];
+        message: string;
+    };
+    overlordAt: Record<string, [number, number]>;
+    finalMessage: string;
+};
+
+// Akkha (the Tombs of Amascut). He fights in one style at a time, praying against it (his forms,
+// each an enemy of its own), and every specialEvery attacks does a special instead and changes to
+// another style. The floor's four quadrants (TombsPathDef boss.quadrants) each have an element.
+export type AkkhaDef = {
+    forms: string[];
+    specialEvery: number;
+    elements: AkkhaElementDef[];
+    // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the
+    // last (never across), flash seconds each and gap between; then, burst seconds apart (quick
+    // with Feeling Special), every quadrant but the next in the order is blasted, for damage (a
+    // share of your hitpoints, through armour) and its element. steps long, one more every
+    // perLevels path levels, up to most.
+    memory: {
+        steps: number;
+        perLevels: number;
+        most: number;
+        flash: number;
+        gap: number;
+        burst: number;
+        quick: number;
+        damage: number;
+        message: string;
+    };
+    // Detonate, in a party only: everyone's marked, and seconds later each goes off in a plus round
+    // their tile (an X instead, half the time, with Feeling Special), for damage (a share of the
+    // hitpoints of whoever else is on those tiles, through armour) and spotAnim on each. Whoever's on
+    // the same tile as them is spared, so a party all on one tile takes nothing.
+    detonate: { seconds: number; damage: number; spotAnim: number; message: string };
+    // Trailing orbs: for seconds, an orb on every tile anyone leaves, armed after arm seconds, that
+    // goes off (damage, its quadrant's element) under whoever comes within radius; gone linger
+    // seconds after. Feeling Special drops one ahead of you too.
+    orbs: {
+        seconds: number;
+        arm: number;
+        radius: number;
+        damage: number;
+        linger: number;
+        message: string;
+    };
+    // While his orbs are out he uses only these of his attacks (by name, whichever form he's in):
+    // shapes a single deliberate step answers, so standing still is a choice that can be made
+    orbAttacks?: string[];
+    // His shadows: at each of these shares of his hitpoints, enemyId comes in each quadrant's
+    // corner (corner tiles out from the middle each way), and he can't be hurt but in a quadrant
+    // whose shadow is dead (his middle inside tiles clear of the lines between them). Only one's
+    // to be dispelled: once one's struck the rest are shielded (struckMessage) till they're
+    // restored at the next share. One timer runs for them all: every flood seconds
+    // (warned warn seconds ahead) each quadrant whose shadow's still up floods, for damage (a
+    // share of your hitpoints) and its element.
+    shadows: {
+        at: number[];
+        enemyId: string;
+        inside: number;
+        hpShare: number;
+        corner: number;
+        flood: number;
+        warn: number;
+        damage: number;
+        message: string;
+        warnMessage: string;
+        floodMessage: string;
+        endMessage: string;
+        struckMessage: string;
+    };
+    // His final stand (the form he rises as, BossDef.rises): in a corner, out of reach, he sends
+    // Unstable Orbs straight across the floor every `every` seconds (quicker with the path level),
+    // and goes to another corner once he's lost moveAfter of his hitpoints there (more for a party)
+    // or after moveSeconds
+    unstable?: {
+        every: number;
+        least: number;
+        speed: number;
+        moveAfter: number;
+        moveSeconds: number;
+    };
+};
+
 // A while a boss can't be hurt and does only some of its attacks (BossDef.shadowRealm, exhumes,
 // yellows). It picks among them at random, whatever their range, cooldown or enraged, so an
 // attack named here is used as it is (Sotetseg's faster maze, before he's enraged). It lasts
@@ -512,6 +761,9 @@ export type BossOrdealDef = {
     seconds: number;
     attacks: string[];
     interval: number;
+    // Used once as it begins, before any of attacks: an exhumes' marks laid all at once (the
+    // Champion of Scabaras's nests), rather than coming among them
+    opener?: string;
     message: string;
     endMessage: string;
 };
@@ -537,6 +789,8 @@ export type QuartersDef = {
 
 export type BossAttackDef = {
     name: string;
+    // Akkha's: its hit brings the element of the quadrant it lands in (AkkhaDef.elements)
+    elemental?: boolean;
     // A glow under it as it winds up, on each spot it'll land (on the boss when it has none),
     // growing as the hit comes. Only drawn, on a map with lighting.
     light?: LightLook;
@@ -552,7 +806,8 @@ export type BossAttackDef = {
     // quarters: QuartersDef's flowers split the arena;
     // surge: goes to the arena's edge in line with the player, then charges
     // right across it, hitting what's in its lane;
-    // mark: lands effect or parasite on the player, however far they run
+    // mark: lands effect or parasite on the player, however far they run;
+    // tether: a beam to its partner for a while (tether)
     kind:
         | "swing"
         | "projectile"
@@ -563,7 +818,8 @@ export type BossAttackDef = {
         | "ground"
         | "quarters"
         | "surge"
-        | "mark";
+        | "mark"
+        | "tether";
     // Out of the player's 25 base hitpoints; the biggest hits take about half
     damage: number;
     // Seconds the boss stands winding up (and animating) before it lands
@@ -585,8 +841,13 @@ export type BossAttackDef = {
     // Projectiles: each one's hit radius (0.35 tiles unless set).
     radius?: number;
     // Swings: hits only a wedge this many radians across, in the way the boss
-    // faced as it began, and under the boss (around it, underRadius tiles)
+    // faced as it began, and under the boss (around it, underRadius tiles).
+    // coneAlpha: how much more solid its wedge and the circle under the boss are drawn: a big
+    // one over bright ground, or in a dark room, wants to be plainer. Set at all (even to 1),
+    // both are drawn at full strength as a lunge's strip is, not as faint as other warnings,
+    // and then multiplied by it; unset, they're as faint as the rest (BossFightView.drawCone)
     cone?: number;
+    coneAlpha?: number;
     underRadius?: number;
     // Projectiles: tiles per second, how many (fanned out by spread radians),
     // and how fast they turn towards the player (radians per second).
@@ -627,6 +888,9 @@ export type BossAttackDef = {
         thrown?: { seconds: number };
         holds?: number;
         walkTo?: { distance: number; perAbsorbed: number };
+        // Each makes for the nearest closed sarcophagus of the Tombs boss's arena, and opens it
+        // if it gets there (Ba-Ba's baboons: Sim.stepSeeker)
+        sarcophagi?: boolean;
     };
     // A mark on the player, bursting after seconds for damage (and the attack's
     // hit damage does nothing), leaving enemyId behind. An antidote keeping
@@ -670,8 +934,56 @@ export type BossAttackDef = {
     enraged?: boolean;
     // Only used in its boss's shadow realm, exhumes or yellows (BossDef), never picked otherwise
     ordeal?: boolean;
+    // The Tombs of Amascut: with this invocation on, the attack's that much bigger, quicker or
+    // harder (Boulderdash's boulders twice as fast, Shaking Things Up's wider shockwave)
+    // (count: a summon's more of them; speed: a pattern's bullets, or a surge's charge; times:
+    // that many more links of its chain, Acceleration's second charge)
+    invoked?: {
+        id: string;
+        speed?: number;
+        radius?: number;
+        damage?: number;
+        count?: number;
+        times?: number;
+    };
+    // The Wardens: not used while the obelisk's special strikes, nor within this many seconds of
+    // one landing (Entomb's hold under its beam was a hit nobody could help)
+    clearOfObelisk?: number;
+    // Blasts: each one breaks up where it lands into count shards flying out all round (drawn as
+    // the attack's spotAnim), each doing damage (Ba-Ba's rockfall)
+    // (scale: drawn that much bigger than they hit, to be seen)
+    shards?: {
+        count: number;
+        speed: number;
+        range: number;
+        radius: number;
+        damage: number;
+        scale?: number;
+        // Drawn as this spot animation rather than the attack's own (the rock that falls is too
+        // small and dark to dodge the pieces of), and lit up this much against dark ground (0 to 1)
+        spotAnim?: number;
+        bright?: number;
+        // Drawn as this enemy's model, playing its walk, as BulletPatternDef.look
+        look?: string;
+    };
+    // Blasts: what lands, drawn falling into each circle from height tiles up over the windup,
+    // as this enemy's model playing its walk (Ba-Ba's boulder, spinning), scale times its size
+    falls?: { look: string; height: number; scale: number };
+    // Blasts: marked by a shadow on the floor rather than a red circle, with this spot animation
+    // played at each spot over the windup (the debris coming down ahead of Ba-Ba's boulder)
+    shadow?: { debrisSpotAnim?: number };
+    // Blasts: landing this many tiles from the player, never on them, on ground they can get to
+    beside?: { min: number; max: number };
+    // Blasts: each leaves a rock where it landed, radius tiles across and solid, for seconds,
+    // drawn as one of these enemies' models (Ba-Ba's boulder: what to take cover by)
+    leavesCover?: { seconds: number; radius: number; looks: string[] };
+    // Lands on everyone not within reach of a rock left by leavesCover, for this share of their
+    // most hitpoints, armour or not (Ba-Ba's avalanche, after her boulder)
+    takeCover?: { reach: number; share: number };
     // Only used in these of the boss's phases (BossDef.phases), counting from 1
     phases?: number[];
+    // The Tombs: only used with this invocation on (Feeling Special's tracked lunge)
+    onlyWith?: string;
     // Said over the boss's head when it's used, like OSRS overhead chat
     shout?: string;
     // A message on screen when it's used, for attacks the player has to do
@@ -703,10 +1015,23 @@ export type BossAttackDef = {
     // Swings: a straight strip from the boss, width tiles across and length long,
     // the way it faced as it began, rather than round it (a lunge)
     // dash: the boss goes that far along it as it lands, stopping short at anything in its
-    // way, and stunned if that's one of the map's pillars (BossDef.guard)
-    line?: { width: number; length: number; dash?: number };
-    // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard)
+    // way, and stunned if that's one of the map's pillars or a rock left by leavesCover
+    // (BossDef.guard; a surge's stopped and stunned by such a rock too)
+    // track: for this many seconds of its windup the strip turns after the nearest player (no
+    // quicker than LINE_TRACK_TURN), then it's locked: a step taken too soon is followed
+    line?: { width: number; length: number; dash?: number; track?: number };
+    // A miss (no one's hit) leaves its guard down for this many seconds (BossDef.guard): a swing
+    // or blast, a wave or boomerang that reached no one, a surge that crossed without hitting
+    // anyone, a ground mark that landed on no one
     opens?: number;
+    // A spell it channels (BossDef.guard): its guard's down from the moment it begins until it's
+    // cast (a summon's walkTo: until its walkers are all in or dead), and the fight's button
+    // landing on it meanwhile breaks it: nothing's cast (walkers scatter, no blast), and its
+    // guard stays down stagger seconds more, with broken on screen (the Scarab Mages')
+    channel?: { stagger: number; broken?: string };
+    // Swings: hits only beyond this many tiles from the boss, so the shelter's at its feet (the
+    // elder's sandstorm over the whole room)
+    outside?: number;
     // Its arena's attack that hurts the boss too, if it's caught in it: a bolt that
     // reaches it (and stops there), a cell struck under its middle, a thrown sword through
     // it (once each way), for damage, stunning it (BossDef.guard) with stun
@@ -758,6 +1083,11 @@ export type BossAttackDef = {
     // once every interval) and goes out for out, every period seconds, from the
     // first phase it's in until the fight's over or a phase leaves it out. Drawn
     // as locId playing seqs at each row; sound as each starts to burn.
+    // A beam from the boss to the nearest living partner (by enemy id) for seconds, swinging as
+    // they move: after warn seconds it hurts whoever's within width / 2 of it for the attack's
+    // damage, each of them once every interval (the Scarab Mages' sand). Drawn as spotAnim laid
+    // along it. Used as it lands, or as an ambient (BossPhasesDef ambients).
+    tether?: { partner: string; width: number; seconds: number; interval: number; warn: number };
     cycle?: {
         period: number;
         stagger: number;
@@ -773,12 +1103,18 @@ export type BossAttackDef = {
 // A fight's own button (MapDef.fight.ability): Space, a pad's bottom face button or the
 // touch screen's, once every cooldown seconds. It hits the boss for damage, with impact on it,
 // as long as the boss's middle is within reach tiles of the player's; out of reach it does
-// nothing and costs nothing. The player plays playerSeq (one of their weapons' own, so it's
-// baked) as it goes, with sound; iconObjId is its button.
+// nothing and costs nothing. With two final bosses up (the Scarab Mages) it hits either, one
+// with its guard down first, then the nearer, and breaks a spell it's channelling
+// (BossAttackDef.channel). The player plays playerSeq (one of their weapons' own, so it's
+// baked) as it goes, with sound; iconObjId is its button. The Tombs of Amascut carry one too
+// (TombsDef.ability), played with your own character.
 export type FightAbilityDef = {
     id: string;
     name: string;
     damage: number;
+    // Hits for this share of the boss's max hitpoints instead of damage, with none of the hero's
+    // bonuses to damage (so it scales with the raid level and the party, as the boss does)
+    damageShare?: number;
     reach: number;
     // Its reach while the boss's guard is down (BossDef.guard), when it's worth most
     openReach?: number;
@@ -787,6 +1123,9 @@ export type FightAbilityDef = {
     impact?: ImpactDef;
     sound?: number;
     playerSeq?: number;
+    // Coaches the player (AbilityButton): early in a fight, until it's used, a hint says what it's
+    // for, and while the guard's down it pulses with a tag saying so. The Tombs' and their quest's.
+    guide?: boolean;
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
@@ -803,6 +1142,33 @@ export type ImpactDef = {
     flash?: string;
 };
 
+// An enemy that copies a boss's lunges (EnemyDef.echoes)
+export type EchoDef = {
+    // The boss it copies (an enemy id), and which of its line swings, by name
+    boss: string;
+    attacks: string[];
+    // What its copy's called (what hit, in the sims and the run's report), and its damage in
+    // place of the boss's
+    name: string;
+    damage: number;
+    // Its own animation as it winds up (baked with its model), timed so its blow falls as it
+    // lands (strikeAt, as BossAttackDef's)
+    seq: number;
+    strikeAt?: number;
+    // Seconds more windup than the boss's own, so the two strips land a beat apart
+    later?: number;
+    // What its copy throws up in place of the boss attack's impact: a trail down its strip,
+    // spots where it stops
+    impact?: ImpactDef;
+    // Only so many copy each attack, the nearest the hero first (all of them when unset)
+    most?: number;
+    // Its strip this long, in place of the boss's (a crocodile's snap is shorter than his jaws)
+    length?: number;
+    // It stays where it stands, not dashing down its strip as the boss's lunge does (Akkha's
+    // shadows, which are stationary)
+    noDash?: boolean;
+};
+
 // A boss whose guard drops (Justiciar Zachariah's). An attack with `opens` that misses everyone
 // leaves it exposed for that many seconds: it fights on, but takes `damage` times every hit. Its
 // arena's own attacks that catch it (an attack's `turns`) and a lunge that ends in a pillar
@@ -812,6 +1178,9 @@ export type ImpactDef = {
 export type BossGuardDef = {
     damage: number;
     stun: number;
+    // While it's down, its prayer (EnemyDef.protects) holds against nothing: Akkha's, so a hero
+    // whose style his form prays against gets at him through a missed lunge or leap
+    pierce?: boolean;
     stunSpotAnim?: number;
     stunHeight?: number;
     // Played as it's stunned, and as it's exposed
@@ -901,10 +1270,11 @@ export type BossPhasesDef = {
         // and back as the boss falls: an enrage that darkens the arena
         light?: number;
     }[];
-    // After the last blast it stands for seconds more before it falls, using
-    // only these attacks (by name) interval seconds apart, opener first, with
-    // ambient under them, and can't be hurt meanwhile: a last stand to live
-    // through (Phosani's desperation phase). Without it the last blast kills.
+    // After the last blast (or, without totems, at no hitpoints left) it stands for seconds more
+    // before it falls, using only these attacks (by name) interval seconds apart, opener first,
+    // with ambient (a pattern) under them, and can't be hurt meanwhile: a last stand to live
+    // through (Phosani's desperation phase, the Menaphite Akh's). Without it, it falls there.
+    // shout: over it as it begins.
     finale?: {
         seconds: number;
         attacks: string[];
@@ -912,7 +1282,11 @@ export type BossPhasesDef = {
         opener?: string;
         ambient?: BossAmbientDef;
         message: string;
+        shout?: string;
     };
+    // shields: a phase a shield broken (Kephri's, KephriDef), as she's back behind the next,
+    // not by her hitpoints (until is ignored); the form she rises into for her last keeps the last
+    by?: "shields";
     // Without them, the phases go by its hitpoints (phases' until), each change a
     // pause (threshold), and it dies at none, as anything does
     totems?: {
@@ -976,15 +1350,28 @@ export type BossDef = {
     // Dharok's set effect: hits get stronger as he loses hitpoints, up to
     // this much more at none left (1 = double)
     wretched?: number;
+    // The Tombs: from raid level `from` up, its hitpoints are multiplied by hp, its hits (and its
+    // poison, and Akkha's hits that take a share) by damage and the seconds between its phases'
+    // ambients by ambients (over one, slower), on top of the raid level's scale. For a boss the
+    // raid level's scale makes a wall from there: it eases off there and nowhere below.
+    raidEase?: { from: number; hp?: number; damage?: number; ambients?: number };
     // Vampyres heal this many hitpoints for each one they hit the player for
     lifesteal?: number;
     // Gets back up this many times, with this fraction of its hitpoints (a
     // vampyre doesn't stay down without a stake). into: the enemy it gets up
     // as, looks and attacks and all (the Kalphite Queen's second form).
     rises?: { times: number; hp: number; message: string; into?: string };
-    // Every boss is enraged at half its hitpoints: it attacks and moves
+    // Every boss is enraged at half its hitpoints (or at, a share of them): it attacks and moves
     // faster, and uses its enraged attacks too. What it says when it is.
-    enrage: { message: string; shout?: string };
+    // partner: when a boss with one of these ids dies, it's enraged at once (if it's up), with
+    // shout and message, its interval times tempo rather than the usual enraged one (the Scarab
+    // Mages: kill one and the other's furious)
+    enrage: {
+        message: string;
+        shout?: string;
+        at?: number;
+        partner?: { ids: string[]; shout?: string; message?: string; tempo?: number };
+    };
     // Calls in enemies around itself as its hitpoints drop to each fraction
     // (Kree'arra's bodyguards); a form it gets up as (rises.into)
     // calls in its own as it's hurt in turn (Nex's bodyguards)
@@ -1056,6 +1443,13 @@ export type BossDef = {
     // Verzik's yellows: at each of these shares of her hitpoints she can't be hurt for seconds, and
     // throws only these, balls that hit hard unless you're in the pool that comes with each one
     yellows?: BossOrdealDef;
+    // Akkha's fight (the Tombs of Amascut): his quadrants, his specials and his shadows
+    akkha?: AkkhaDef;
+    kephri?: KephriDef;
+    zebak?: ZebakDef;
+    // Ba-Ba's rolling stones (the Tombs of Amascut): at each of these shares of her hitpoints she
+    // can't be hurt for seconds, and does only these: boulders rolling across the arena in rows
+    rollingStones?: BossOrdealDef;
     // Walks with its guard up, taking awakeDamage of every hit, and every `every` seconds goes
     // down for `seconds`, standing still and taking all of it, then gets up with its `wake` attack
     // (the Pestilent Bloat). seq: its animation while it's down.
@@ -1469,7 +1863,9 @@ export type RunEventDef =
     // Mid-run bosses, which drop an elite (or the odd master) casket, and the
     // final boss: killing it wins the run. hp: the boss's hitpoints on this
     // map, when they're not its own.
-    | { at: number; kind: "boss" | "finalBoss"; enemyId: string; hp?: number };
+    // inArena: it turns up inside the map's bossArena, a few tiles from the player, not out past
+    // it (the Scarab Mages' elder, while the first's being fought)
+    | { at: number; kind: "boss" | "finalBoss"; enemyId: string; hp?: number; inArena?: boolean };
 
 // A place to play: the part of the world a run happens in, what comes at you
 // there, and which map it opens up when it's beaten
@@ -1485,6 +1881,19 @@ export type MapDef = {
     // totems' corners, its surges' lanes), in world tiles; all of the arena
     // when unset
     bossArena?: { baseX: number; baseY: number; size: number };
+    // A map beaten before this one opens, whatever else it is (a raid, a boss fight): the Tombs of
+    // Amascut behind Beneath Cursed Sands
+    requires?: string;
+    // A fight in parts, each a run of its own (a quest's bosses one after another, as OSRS's are):
+    // a run plays the next part not beaten yet, its events in place of the map's, and the map's
+    // beaten once the last is (SaveData.fightStages). cinematic: the part's own, played as its run
+    // starts (not on a retry) in place of the map's (MapDef.cinematic): a boss's entrance.
+    stages?: {
+        name: string;
+        events: RunEventDef[];
+        victoryText: string;
+        cinematic?: CinematicDef;
+    }[];
     // What its boss's attacks read from the arena: pillars, rows, statues
     features?: ArenaFeatures;
     // The plane (level) the arena is on: 0, the ground floor, when unset. Some
@@ -1541,12 +1950,20 @@ export type MapDef = {
         weaponLevel: number;
         strikeReach?: number;
         ability?: FightAbilityDef;
+        // Gear (items.ts, by id) everyone starts the fight wearing: the kit it's tuned to
+        gear?: string[];
+        // Played on your own only (a quest's fights): never a co-op room's map
+        solo?: boolean;
     };
     // How the map's drawn, 1 as the game is and lower darker
     brightness?: number;
     // A raid: the run's a series of rooms rather than one timeline (see RaidDef). waves and
     // events are then every room's, for what bakes and checks a map's enemies.
     raid?: RaidDef;
+    // The Tombs of Amascut (docs/design/tombs-of-amascut.md): a Nexus
+    // to start in, with a door to each path, and the invocations' raid level (invocations.ts) in
+    // place of hard mode
+    tombs?: TombsDef;
     // NPCs that sit on the map as scenery, posed with their own animation (MapPropDef): drawn by
     // the view alone, never in the sim, so they're in no hash. For what a loc can't be: a loc
     // can't play a skeletal animation.
@@ -1602,6 +2019,396 @@ export type LightingDef = {
     lanterns?: { x: number; y: number }[];
 };
 
+export type TombsDef = {
+    // Where the party stands in the Nexus, in world tiles: where a raid starts, and where a path
+    // brings it back to
+    nexus: { x: number; y: number };
+    paths: TombsPathDef[];
+    // The Wardens, once all four paths are done (in development): their room, in world tiles
+    wardens?: TombsWardensPlaces;
+    // The way to the Wardens in the Nexus, in world tiles: open once every path's done
+    wardensDoor?: { x: number; y: number };
+    // Where the Helpful Spirit stands in the Nexus, in world tiles
+    spirit?: { x: number; y: number };
+    // The raid's fight button (Sim.ability): a share of the boss's hitpoints, doubled while its
+    // guard's down (BossDef.guard), and it breaks a spell the boss channels
+    ability?: FightAbilityDef;
+};
+
+// One of the Helpful Spirit's bundles (the Tombs of Amascut's), free, one taken each time: what's
+// in it, each supply so many (least to most), some only by chance
+export type TombsBundleDef = {
+    id: string;
+    name: string;
+    description: string;
+    objId: number;
+    contents: { supplyId: string; count: [least: number, most: number]; chance?: number }[];
+};
+
+// Which Warden: Elidinis' or Tumeken's
+export type WardenSide = "elidinis" | "tumeken";
+
+// The Wardens' room, in world tiles (maps/tombsOfAmascut.ts): where the party's brought in, the
+// obelisk's middle and each Warden's, each side's orb spawn tile and gap tile (where standing
+// blocks that side) and the x its troughs end at, the troughs' rows, and the floor
+export type TombsWardensPlaces = {
+    arrive: { x: number; y: number };
+    obelisk: { x: number; y: number };
+    elidinis: { x: number; y: number };
+    tumeken: { x: number; y: number };
+    sides: Record<
+        WardenSide,
+        { spawn: { x: number; y: number }; gap: { x: number; y: number }; end: number }
+    >;
+    troughs: number[];
+    floor: { x0: number; y0: number; x1: number; y1: number };
+    // The last phase's room (OSRS's own, square 61,80): where the party's brought in, where the
+    // Warden stands (on its platform in the floor's middle, where the obelisk was, at the mouth of
+    // the crater behind it: FloorDef.holes), and the floor (the map's MapDef.floor)
+    last?: {
+        arrive: { x: number; y: number };
+        at: { x: number; y: number };
+        floor: { x0: number; y0: number; x1: number; y1: number };
+    };
+};
+
+// The Wardens' first phase (content/tombs.ts's WARDENS; Sim.stepWardens). The obelisk is what's
+// fought. It sends an energy orb down one of three troughs each side every `every` seconds (a step
+// of a tile each stepSeconds, steps of them), each one that gets there charging its Warden; one a
+// player walks into on the way is soaked (orbs.soak), and charges nothing. A Warden
+// charges perSecond and perOrb more (Ancient Haste: haste), and full, discharges (its seq and seal),
+// paused for pause seconds, its attacks taking turns: pyramids, then a shot.
+export type WardensDef = {
+    obeliskId: string;
+    wardens: Record<
+        WardenSide,
+        {
+            enemyId: string;
+            // Its pyramids' loc as they glow, the seal it discharges each attack with, its shot
+            // (a spot animation homing on each player over the shot's flight) and the share of a
+            // player's hitpoints it takes
+            pyramid: number;
+            pyramidsSpotAnim: number;
+            shotSpotAnim: number;
+            shotSeal: number;
+            shotShare: number;
+            name: string;
+        }
+    >;
+    orbs: {
+        lookId: string;
+        every: number;
+        stepSeconds: number;
+        steps: number;
+        // Walked into anywhere along its trough (within reach of it), an orb's soaked: its Warden
+        // gets nothing from it, and whoever soaked it carries its energy, each worth bonus more
+        // against the obelisk, one fading every fade seconds, up to max; soaking one more while
+        // full overcharges them for overShare of their hitpoints. On its spawn tile it can't be.
+        soak: { reach: number; max: number; bonus: number; fade: number; overShare: number };
+    };
+    charge: {
+        // Each side's charge as the fight opens
+        start: Record<"elidinis" | "tumeken", number>;
+        full: number;
+        perSecond: number;
+        perOrb: number;
+        haste: { perSecond: number; perOrb: number };
+        // The charging platform under each Warden, empty to full (45606 to 45626)
+        platforms: number[];
+    };
+    discharge: { seq: number; pause: number };
+    // Pyramids: 3 by 3 cells over the floor, cols by rows from the floor's corner offset by
+    // `from`, each Warden's every other cell (Elidinis' those whose column and row add up odd),
+    // none on the obelisk. Up `appear` seconds after the discharge, hurting whoever's in one every
+    // `every` seconds from firstHit to lastHit, gone at `leave`.
+    pyramids: {
+        cell: number;
+        cols: number;
+        rows: number;
+        from: { x: number; y: number };
+        appear: number;
+        firstHit: number;
+        lastHit: number;
+        every: number;
+        leave: number;
+        damage: number;
+        // A glow on each cell from when it's up till its first hit: what's about to hit, readable
+        // on the tomb's floor. Only drawn.
+        light?: LightLook;
+    };
+    shot: { flight: number; impactSpotAnim: number };
+    // As a Warden discharges, the obelisk flickers: open (damage times what it's hit for) for
+    // seconds, haste's with Ancient Haste, gold while it is (light)
+    flicker?: { seconds: number; haste: number; damage: number; light: LightLook };
+    // Seconds before the first orbs, once the party's in
+    holdShare: number;
+    startDelay: number;
+    message: string;
+    endMessage: string;
+    two: WardensPhaseTwoDef;
+    three: WardensPhaseThreeDef;
+};
+
+// The Wardens' second phase (Sim.stepWardens): the Warden with the more charge wakes after wake
+// seconds, its forms (each hurt by one style alone, the next flipping it) as bosses. hp is its
+// hitpoints before the room's scaling. Hits of the open style fill its shield (shield, a share of
+// its hitpoints); full, it kneels (its exposed form) and throws its core out `distance` tiles,
+// which takes coreMultiplier times what it's hit for off the Warden, for seconds[i] while the
+// Warden's above below[i] of its hitpoints (the last otherwise). Meanwhile the obelisk opens
+// firstOpen seconds after it's up, and `every` seconds after each special ends, warning for warn
+// seconds (its ring round it, the special's colour), taking its specials in turn.
+export type WardensPhaseTwoDef = {
+    wake: number;
+    wakeSeq: number;
+    hp: number;
+    forms: Record<
+        WardenSide,
+        {
+            // The open style first, then the other; the exposed (kneeling) form; the core
+            styles: ["magic" | "ranged", "magic" | "ranged"];
+            forms: [string, string];
+            exposed: string;
+            core: string;
+            // The other Warden's wreck
+            wreck: string;
+        }
+    >;
+    obeliskId: string;
+    shield: number;
+    coreMultiplier: number;
+    distance: number;
+    seconds: number[];
+    below: number[];
+    kneelSeq: number;
+    standSeq: number;
+    // Seconds from the kneel to the core's out, and from its going back to the Warden's up
+    kneel: number;
+    stand: number;
+    deathSeq: number;
+    // Seconds from its last hitpoint to the last phase
+    toLast: number;
+    obelisk: {
+        firstOpen: number;
+        every: number;
+        warn: number;
+        openSeq: number;
+        closeSeq: number;
+        // Each strike, of a player's hitpoints, armour or not
+        damage: number;
+    };
+    // Two pairs of closing walls: rings out from the middles of two opposite edges, a tile a
+    // `step`, `rings` of them, at most `wide` tiles either side of the line; north and south,
+    // and pause seconds after they start, east and west
+    beam: {
+        warnSpotAnim: number;
+        spotAnim: number;
+        step: number;
+        rings: number;
+        wide: number;
+        pause: number;
+        // Each tile glows, harmless, this many seconds before it's struck (glowSpotAnim): the
+        // ring round the obelisk alone left the strikes unseen until they hurt
+        glowAhead: number;
+        glowSpotAnim: number;
+    };
+    // Four arms that turn: a glow on one of five patterns, struck `strikeAfter` seconds later,
+    // a pattern every `every` seconds, rounds of them (WARDENS_WINDMILL, below the def)
+    windmill: {
+        warnSpotAnim: number;
+        glowSpotAnim: number;
+        spotAnim: number;
+        every: number;
+        strikeAfter: number;
+        rounds: number;
+    };
+    // Skulls thrown at random tiles every `every` seconds, flying for flight, then lightning over
+    // the 7 by 7 round each (all but the cross through it) strikeAfter seconds after they land
+    skulls: {
+        warnSpotAnim: number;
+        projectile: number;
+        shadowSpotAnim: number;
+        spotAnim: number;
+        count: number;
+        every: number;
+        flight: number;
+        strikeAfter: number;
+        half: number;
+    };
+    message: string;
+    kneelMessage: string;
+    standMessage: string;
+    endMessage: string;
+};
+
+// The Wardens' last phase: the other Warden back (its form, and its charging form for the
+// siphons), on the map's floor (MapDef.floor), slamming a half of it every `every` seconds (below
+// half its hitpoints, `quicker`; Overclocked, Overclocked 2 and Insanity quicker still), east, west
+// then both. At each of `at`, it charges: siphons (count[i]) land over the floor, each stopped by
+// a player stepping on it within window seconds (Insanity: insanityWindow); all stopped, it
+// staggers for a share of its hitpoints; any left, the floor erupts. The second and third bring
+// a path boss's phantom each (east, then west, phantomOffset tiles off it at the floor's edges).
+// At enrage, it heals heal of its hitpoints, its slams stop, lightning strikes the floor instead,
+// and a row of it tears away from the back every rowEvery seconds, till the row in front of it.
+export type WardensPhaseThreeDef = {
+    hp: number;
+    forms: Record<WardenSide, { form: string; charging: string; phantoms: [string, string] }>;
+    // Amascut's phantom, watching from offset tiles behind it, and as she is once it's enraged
+    amascut: { enemyId: string; enragedId: string; offset: number };
+    every: number;
+    quicker: number;
+    invoked: { overclocked: number; overclocked2: number; insanity: number };
+    rowSeconds: number;
+    slamSeqs: { east: number; west: number; both: number };
+    at: number[];
+    count: number[];
+    // Where they land: shapes, each a set of lines of [x, y] points in tiles from the middle of
+    // the row in front of the Warden (y north), the siphons spread evenly along them
+    formations: [number, number][][][];
+    window: number;
+    insanityWindow: number;
+    siphon: {
+        enemyId: string;
+        reversed: string;
+        reach: number;
+        beamSpotAnim: number;
+        skull: number;
+    };
+    chargeSeq: number;
+    staggerSeq: number;
+    releaseSeq: number;
+    stagger: number;
+    restart: number;
+    phantomSpotAnim: number;
+    phantomOffset: number;
+    enrage: {
+        at: number;
+        heal: number;
+        seq: number;
+        rowEvery: number;
+        firstRow: number;
+        // Lightning in the slams' place: a walk of count bolts every every seconds, each bolt's
+        // shadow warn seconds before it strikes, for damage of a player's hitpoints
+        lightning: {
+            first: number;
+            every: number;
+            warn: number;
+            count: number;
+            shadowSpotAnim: number;
+            spotAnim: number;
+            damage: number;
+            // A glow under each bolt's shadow till it strikes. Only drawn.
+            light?: LightLook;
+        };
+        message: string;
+    };
+    message: string;
+    siphonMessage: string;
+    staggerMessage: string;
+    releaseMessage: string;
+    phantomMessage: string;
+};
+
+// A path out of the Nexus: its door, in world tiles (its middle), which a player walks up to, and
+// its room once it's built: where the party's brought in
+export type TombsPathDef = {
+    id: string;
+    name: string;
+    door: { x: number; y: number };
+    room?: {
+        arrive: { x: number; y: number };
+        // What it's played as (content/tombs.ts), and the spots its issues come at (Apmeken's
+        // pillars and vents: their middles in world tiles, and how close counts as at one)
+        puzzle?: "apmeken" | "het" | "scabaras" | "crondis";
+        spots?: TombsSpotDef[];
+        // The Het room's puzzle, in world tiles: where the Caster statue's beam starts (heading
+        // south), the Shielded statue it has to reach (a rect), Het's Seal's middle, and the floor
+        // the mirrors and Orbs of Darkness keep to
+        het?: {
+            beam: { x: number; y: number };
+            target: { x0: number; y0: number; x1: number; y1: number };
+            seal: { x: number; y: number };
+            floor: { x0: number; y0: number; x1: number; y1: number };
+        };
+        // The Crondis room, in world tiles: the palm's middle; each waterfall, where you stand to
+        // fill up (fill) and where it's drawn (at, the loc's middle, and its rotation); and each
+        // corridor: its floor's tiles (x0 to x1, y0 to y1), its spear statues' columns either
+        // side (low, high), its waterfall, and whether that's at its y0 end (clouds come from it)
+        crondis?: {
+            palm: { x: number; y: number };
+            falls: {
+                fill: { x: number; y: number };
+                at: { x: number; y: number };
+                rotation: number;
+            }[];
+            lanes: {
+                x0: number;
+                x1: number;
+                y0: number;
+                y1: number;
+                low: number;
+                high: number;
+                fall: number;
+                fromLow: boolean;
+            }[];
+        };
+        // The Scabaras room's boards, each plate's middle in world tiles: Sequence's, Lights out's
+        // ring (in order round it), Addition's, and Matching's two boards (SCABARAS in tombs.ts)
+        scabaras?: {
+            sequence: { x: number; y: number }[];
+            lights: { x: number; y: number }[];
+            addition: { x: number; y: number }[];
+            matching: { north: { x: number; y: number }[]; south: { x: number; y: number }[] };
+            // The slates by the way in that say what Addition's symbols are worth, Addition's
+            // Ancient tablet with its number, and Sequence's Ancient button
+            slates: { x: number; y: number }[];
+            tablet: { x: number; y: number };
+            button: { x: number; y: number };
+        };
+        // The barrier between the safe corridor and the room: the party comes in behind it, and
+        // the room starts once someone walks through. It's the sim's: a line at world x (the
+        // corridor east of it) or world y (the corridor south of it, the room walked north), held
+        // while the room's on, and the loc drawn on its tiles while it's shut.
+        gate?: TombsGateDef;
+        // Where its enemies come in, in world tiles: the Apmeken room's holes in the walls
+        entrances?: { x: number; y: number }[];
+        // The path's boss, after its room: the party's brought to arrive, and it rises at `at`
+        // once someone's walked north past world y `line.y` (out of the safe area at its arena's
+        // south end), as the room waits for the barrier; up, that line holds
+        boss?: {
+            enemyId: string;
+            arrive: { x: number; y: number };
+            at: { x: number; y: number };
+            line: { y: number };
+            // Her rolling stones (BossDef.rollingStones): she goes up to her altar and the party's
+            // put at the arena's foot, and they're over once someone gets back up to her. With Mind
+            // the Gap, the arena's middle (pit, world tiles) is a drop that kills, meanwhile.
+            boulders?: {
+                altar: { x: number; y: number };
+                start: { x: number; y: number };
+                pit: { x0: number; x1: number; y0: number; y1: number };
+                // The arena's sarcophagi along its sides, and their locs' rotation as they stand
+                sarcophagi?: { x: number; y: number; rotation: number }[];
+            };
+            // Akkha's four quadrants (BossDef.akkha): the floor's middle and half its width, in
+            // world tiles. Quadrant 0 is the north-west and they go round clockwise.
+            quadrants?: { middle: { x: number; y: number }; half: number };
+            // Kephri's swarms' way in, round the arena's edge clockwise (BossDef.kephri)
+            swarms?: { x: number; y: number }[];
+            // Zebak's island (where his acid, jugs, boulders and waves go) and the tops of its
+            // Rock steps up from the water (where his blood clouds come in) (BossDef.zebak)
+            island?: { x0: number; y0: number; x1: number; y1: number };
+            steps?: { x: number; y: number }[];
+        };
+    };
+};
+
+// A Tombs room's barrier (TombsPathDef room gate): a line at world x or world y, never both
+export type TombsGateDef = { locId: number; tiles: { x: number; y: number }[] } & (
+    | { x: number; y?: undefined }
+    | { y: number; x?: undefined }
+);
+
+export type TombsSpotDef = { kind: "pillar" | "vent"; x: number; y: number; reach: number };
 // An NPC posed on a map as scenery (MapDef.props): npcId playing seq over and over, its middle at
 // x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and drawn scale times its size.
 // Give it a loc that blocks where it stands, as it blocks nothing itself.
@@ -1636,7 +2443,8 @@ export type CinematicDef = {
 // says otherwise), its middle at x, y (world tiles), turned yaw (2048 a turn, 0 facing south) and
 // drawn scale times its size. prop: it stands in for the map's prop at that index (MapDef.props)
 // while the cinematic plays, so the scenery itself can act. head: tiles above the ground their
-// overhead chat sits at, when it isn't the top of their model (someone on a tall throne).
+// overhead chat sits at, when it isn't the top of their model (someone on a tall throne). light:
+// a light on them while they're drawn, on a map with lighting (a tomb's boss, seen in the dark).
 export type CinematicActorDef = {
     id: string;
     npcId: number;
@@ -1647,6 +2455,7 @@ export type CinematicActorDef = {
     scale?: number;
     prop?: number;
     head?: number;
+    light?: LightLook;
 };
 
 // Something that happens at seconds into a cinematic, to actor (its id): any of
@@ -1704,6 +2513,9 @@ export type FloorDef = {
     // World tiles, both ends in: the box the floor's in. Its tiles are counted from its south-west
     // corner (floor tiles) by everything below.
     rect: { x0: number; y0: number; x1: number; y1: number };
+    // Tiles of the rectangle that aren't floor (the Wardens' crater): gone from the start, never
+    // drawn, risen or put back. Row spans in world tiles, both ends in.
+    holes?: { y: number; x0: number; x1: number }[];
     // Which tiles of the box are floor (FloorShapeDef; all of it when unset). The rest is the
     // pit's dark from the start: blocked, and never there.
     shape?: FloorShapeDef;
@@ -1744,7 +2556,8 @@ export type FloorDef = {
         // The slab tumbling, and how long it's drawn falling into the dark
         spotAnim: number;
         fall: number;
-        // Rows that never fall: the last row in front of the boss
+        // Rows a script's dropRows never takes: the last in front of the boss (a fight's own
+        // dropRows can say otherwise, with keep)
         keepRows: number;
         // As tiles fall, and as the player's hurt by one
         sound: number;
@@ -1863,10 +2676,12 @@ export type FloorMaterialDef = {
 export type FloorMaterialFxDef = { spotAnim?: number; sound?: number; scale?: number };
 
 // side: one half of the floor rises, row by row away from the front, the middle column with it
-// (east or west), or all of it but the middle three columns (both). sweep: every row from the
+// (east or west), or all of it but the middle three columns (both); outward, row by row away from
+// the origin's row instead, both ways (a boss standing in the floor's middle). sweep: every row from the
 // front, each with a gap of gap tiles that wanders a tile at a time. ripple: square rings out from
 // a tile (the player's, or the middle), with spokes along which nothing rises (a cross, or the
-// diagonals), the tile itself first. dropRows: rows from the back fall away, one after another.
+// diagonals), the tile itself first. dropRows: rows from the back fall away, one after another
+// (never past the floor's keepRows, or the pattern's own keep).
 // holes: single tiles fall away at random, never next to another hole or the floor's edge.
 // restore: everything that's fallen comes back up, front first.
 // How a pattern shows the tiles it'll hit from the moment it starts, so where's safe can be read
@@ -1990,7 +2805,7 @@ export type FloorTileRuleDef = {
 };
 
 export type FloorPatternDef = (
-    | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number }
+    | { kind: "side"; side: "east" | "west" | "both"; rowSeconds: number; outward?: boolean }
     | { kind: "sweep"; rowSeconds: number; gap: number }
     | {
           kind: "ripple";
@@ -1999,7 +2814,7 @@ export type FloorPatternDef = (
           radius: number;
           spokes: "cross" | "diagonal";
       }
-    | { kind: "dropRows"; rows: number; rowSeconds: number }
+    | { kind: "dropRows"; rows: number; rowSeconds: number; keep?: number }
     | { kind: "holes"; count: number }
     | { kind: "restore"; rowSeconds: number }
 ) & {
@@ -2154,7 +2969,9 @@ export type ItemUse =
     | { kind: "xp"; levels: number }
     // Co-op: a teammate can revive the player once more. Taken from the
     // casket at once, never kept, and only found in co-op.
-    | { kind: "revive" };
+    | { kind: "revive" }
+    // One of a raid's supplies (the Tombs of Amascut's, from its Helpful Spirit): does what it does
+    | { kind: "supply"; supplyId: string };
 
 // Carried in the inventory and used when the player wants (1-4); copies of
 // the same item stack in one slot

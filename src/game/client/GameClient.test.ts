@@ -2,7 +2,7 @@
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { emptyStats } from "../content/types";
-import { Sim } from "../core/Sim";
+import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -1791,11 +1791,123 @@ describe("the opening cinematic", () => {
         const { client } = createClient(createSim(), false);
         const startRun = vi.fn(async () => {});
         Object.assign(client, {
-            sim: { map: { id: "zachariah" } },
+            sim: { map: { id: "zachariah", fight: {} } },
             leaveRun: vi.fn(),
             startRun,
         });
         client.retry();
         expect(startRun).toHaveBeenCalledWith("zachariah", false);
+    });
+
+    test("plays the next part's entrance on a fight in parts' Next fight, not on its retry", () => {
+        const { client } = createClient(createSim(), false);
+        const startRun = vi.fn(async () => {});
+        const chosen = { stage: 3 };
+        Object.assign(client, {
+            sim: {
+                map: { id: "beneath_cursed_sands", fight: {}, stages: [{}, {}, {}, {}] },
+                stage: 2,
+            },
+            leaveRun: vi.fn(),
+            startRun,
+            chosenStage: () => chosen.stage,
+        });
+        // The Champion won: on to the Akh
+        client.retry();
+        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", true);
+        // The Champion lost: him again
+        chosen.stage = 2;
+        client.retry();
+        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", false);
+    });
+});
+
+describe("the fight button's hint", () => {
+    // Just what the button reads of a run: its ability, the clock, and the boss on the bar
+    function createFight() {
+        const sim = {
+            ability: { name: "Amascut's bane", iconObjId: 1, cooldown: 4, guide: true } as {
+                name: string;
+                iconObjId: number;
+                cooldown: number;
+                guide?: boolean;
+            },
+            map: {},
+            tick: 0,
+            shownBoss: undefined as { dead: boolean; risingEnd: number } | undefined,
+            abilityTarget: () => undefined,
+            abilitySecondsLeft: () => 0,
+            isExposed: () => false,
+        };
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, { abilityUsed: false });
+        const hint = (seconds: number): boolean => {
+            sim.tick = seconds * TICKS_PER_SECOND;
+            const view = (
+                client as unknown as { getAbilityView(sim: unknown): { hint: boolean } }
+            ).getAbilityView(sim);
+            return view.hint;
+        };
+        return { sim, client, hint };
+    }
+
+    test("goes by when the boss came up, not the run's clock, as the Tombs' Nexus comes first", () => {
+        const { sim, hint } = createFight();
+        // The Nexus: no boss, however long it takes
+        expect(hint(5)).toBe(false);
+        expect(hint(40)).toBe(false);
+        // The room's boss, rising till 62 s: not yet
+        sim.shownBoss = { dead: false, risingEnd: 62 * TICKS_PER_SECOND };
+        expect(hint(60)).toBe(false);
+        expect(hint(62)).toBe(false);
+        // A moment after it's up, and long enough to read
+        expect(hint(66)).toBe(true);
+        expect(hint(76)).toBe(true);
+        expect(hint(80)).toBe(false);
+        // Beaten, and the next room's boss: from that one's start again
+        sim.shownBoss = { dead: true, risingEnd: 0 };
+        expect(hint(100)).toBe(false);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(101)).toBe(false);
+        expect(hint(105)).toBe(true);
+    });
+
+    test("isn't shown again once the button's been used this session", () => {
+        const { sim, client, hint } = createFight();
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(0)).toBe(false);
+        expect(hint(5)).toBe(true);
+        Object.assign(client, { abilityUsed: true });
+        expect(hint(6)).toBe(false);
+        sim.shownBoss = undefined;
+        hint(20);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        hint(21);
+        expect(hint(25)).toBe(false);
+    });
+
+    test("isn't put away by a press the button says no to", () => {
+        const { sim, client, hint } = createFight();
+        Object.assign(client, { act: () => undefined, paused: false });
+        const press = (takes: boolean): void => {
+            Object.assign(client, { sim: { ...sim, abilityPressTakes: () => takes } });
+            client.useAbility();
+        };
+        // Nothing to land on, or not ready: the Sim says no
+        press(false);
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        hint(0);
+        expect(hint(5)).toBe(true);
+        // One it takes (going off, or held a moment)
+        press(true);
+        expect(hint(6)).toBe(false);
+    });
+
+    test("is only for a button that coaches, so Zachariah's Smite stays as it was", () => {
+        const { sim, hint } = createFight();
+        sim.ability = { name: "Smite", iconObjId: 1, cooldown: 4 };
+        sim.shownBoss = { dead: false, risingEnd: 0 };
+        expect(hint(0)).toBe(false);
+        expect(hint(5)).toBe(false);
     });
 });

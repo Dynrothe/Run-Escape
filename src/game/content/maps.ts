@@ -2,13 +2,14 @@ import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
+import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
-import { EnemyDef, MapDef } from "./types";
+import { CinematicDef, EnemyDef, MapDef } from "./types";
 import {
     BARROWS_EVENTS,
     BARROWS_WAVES,
@@ -412,6 +413,8 @@ export const MAPS: MapDef[] = [
         },
         music: "Blade of Forgotten Justice",
     },
+    // A quest in four parts after the desert, which opens the Tombs of Amascut
+    BENEATH_CURSED_SANDS,
 ];
 
 // The maps that open one after another
@@ -498,6 +501,23 @@ export function isFightMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fight !== undefined;
 }
 
+// Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
+export function isCoopMap(map: MapDef): boolean {
+    return map.fight?.solo !== true;
+}
+
+// Every cinematic a map can play: its opening (MapDef.cinematic) and each part's of a fight in
+// parts (MapDef.stages), for what bakes and loads them
+export function getMapCinematics(map: MapDef): CinematicDef[] {
+    const all = [map.cinematic, ...(map.stages ?? []).map((stage) => stage.cinematic)];
+    return all.filter((def): def is CinematicDef => def !== undefined);
+}
+
+// The cinematic a run plays as it starts: its part's own (a fight in parts), or the map's
+export function getRunCinematic(map: MapDef, stage: number): CinematicDef | undefined {
+    return (map.stages && map.stages[stage]?.cinematic) ?? map.cinematic;
+}
+
 // The adventurer everyone plays on a map, if it has one (Durial321 in
 // Falador, the Inquisitor against Phosani's Nightmare)
 export function getMapCharacter(map: MapDef): string | undefined {
@@ -526,11 +546,17 @@ export function getArenaRegion(map: MapDef): {
 
 // Whether anything on the map poisons you (the King Black Dragon's breath) or
 // gives you what stacks up (Slash Bash's disease). Antipoisons are only found
-// where something does.
+// where something does. The Tombs of Amascut's poisons are out of this reach
+// (Akkha's fire quarter and Zebak's acid in the raid's own data, the Spitting
+// Scarab's touch on an enemy its rooms bring), so the raid counts as poisoning.
 export function hasPoison(map: MapDef): boolean {
+    if (map.tombs) {
+        return true;
+    }
     const enemyIds = [
         ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
         ...map.events.map((event) => event.enemyId),
+        ...(map.stages ?? []).flatMap((stage) => stage.events.map((event) => event.enemyId)),
     ];
     return enemyIds.some((id) =>
         getEnemy(id).boss?.attacks.some(({ effect }) =>

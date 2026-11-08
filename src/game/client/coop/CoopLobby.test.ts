@@ -1,5 +1,6 @@
 import { MAX_LOADOUT_BYTES } from "../../../../server/coop-relay.mjs";
 import { getUpgradeLine } from "../../content/armoury";
+import { INVOCATIONS } from "../../content/invocations";
 import { CASKET_GEAR } from "../../content/items";
 import { SHOP_UPGRADES } from "../../content/shop";
 import { LOCKABLE_ITEMS } from "../../content/unlocks";
@@ -64,7 +65,18 @@ describe("loadouts", () => {
             metaStats,
             LOCKABLE_ITEMS.map((item) => item.id),
             Object.fromEntries(CASKET_GEAR.map((g) => [g.id, getUpgradeLine(g.id).length - 1])),
+            undefined,
+            // A Tombs host with every invocation on
+            INVOCATIONS.map((invocation) => invocation.id),
         );
         expect(JSON.stringify(loadout).length).toBeLessThan(MAX_LOADOUT_BYTES / 2);
+    });
+
+    // A Tombs room's lobby shows the host's raid level from their loadout; elsewhere it's left out
+    it("carry invocations only when given them", () => {
+        expect(makeLoadout({}, [], {}).invocations).toBeUndefined();
+        expect(makeLoadout({}, [], {}, undefined, ["walk_for_it"]).invocations).toEqual([
+            "walk_for_it",
+        ]);
     });
 });

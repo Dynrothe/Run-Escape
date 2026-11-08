@@ -192,6 +192,15 @@ export function layoutFloor(def: FloorDef, sizeX: number, sizeY: number): FloorL
             mask[x + y * sizeX] = inAscii && inShaped ? 1 : 0;
         }
     }
+    // Rows cut out of it, in world tiles (FloorDef.holes: the Wardens' crater)
+    for (const span of def.holes ?? []) {
+        const y = span.y - def.rect.y0;
+        for (let x = span.x0 - def.rect.x0; x <= span.x1 - def.rect.x0; x++) {
+            if (x >= 0 && x < sizeX && y >= 0 && y < sizeY) {
+                mask[x + y * sizeX] = 0;
+            }
+        }
+    }
     const layout: FloorLayout = {
         sizeX,
         sizeY,

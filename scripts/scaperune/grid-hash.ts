@@ -24,6 +24,9 @@ const SHIPPED_HASHES: Record<string, string> = {
     phosani: "4f6fcdf2dee1830db95a1c3e1cac27549d1bcaac9ccc1242fce3c148479625c1",
     theatre_of_blood: "e846bfdc8dc8abf583ebe7de484d248c1cd31ba35393ada5b24893517c510973",
     zachariah: "9486e1585cc223d81ed5ddc042d01a189265aa84e3f0de61bf32d41a0747a508",
+    tombs_of_amascut: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
+    // The raid's squares under the quest's id: the same build
+    beneath_cursed_sands: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
 };
 
 const check = !!process.env.CHECK;
