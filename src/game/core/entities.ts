@@ -1073,9 +1073,7 @@ type SimEventBody =
       }
     // Something the player should know about, on screen for a moment (a
     // shield dropping, a boss's big attack coming)
-    // instruction: a boss attack's own say on what to do (BossAttackDef.message), which the
-    // client shows once a run and one at a time (GameClient.showInstruction)
-    | { type: "notice"; message: string; instruction?: boolean }
+    | { type: "notice"; message: string }
     | { type: "evolved"; weaponId: string }
     | { type: "revive" }
     | { type: "casketDropped"; tier: CasketTier; x: number; y: number }
