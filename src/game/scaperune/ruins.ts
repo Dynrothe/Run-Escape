@@ -38,8 +38,17 @@ export type RuinRules = {
     // What a broken wall is: the cache's own broken walls (the Wilderness's ruins), by loc type
     // (0 straight, 1 and 3 corner posts, 2 a corner, 9 diagonal). `high` (broken off near the top)
     // where the noise is under halfway from `broken` to `fallen`, `low` (a stub) over it. A type
-    // with neither falls.
-    crumbled: { high: Partial<Record<number, number>>; low: Partial<Record<number, number>> };
+    // with neither falls. `mirrors`: a straight broken wall that's whole at one end and steps down
+    // to the other (whole at the end its rotation turns north to, east at 1), to its mirror. Along
+    // a wall, a run of them is turned so every whole end meets the wall standing beside the run or
+    // another's whole end, as the Wilderness's ruins are laid: never open ground, a stub or a low
+    // end (pairBroken). One that has neither is a stub (`low[0]`). A corner of it needs nothing:
+    // its own model (14623's 14788) has both whole ends at the corner, against each other.
+    crumbled: {
+        high: Partial<Record<number, number>>;
+        low: Partial<Record<number, number>>;
+        mirrors?: Record<number, number>;
+    };
     // Stones a fallen straight wall left along where it stood (a floor decoration that blocks
     // nothing, turned as the wall was), for this share of them
     fallenStones?: { ids: number[]; share: number };
@@ -198,7 +207,7 @@ export function ruinGrid(
     const fell: PlacedLoc[] = [];
     // Where a wall stands whole (charred as it was), level by level, for what stands on it
     const whole = Array.from({ length: LEVELS }, () => new Uint8Array(sizeX * sizeY));
-    // Straight walls standing whole on the ground, by tile and rotation, for a breach's ends
+    // Straight walls standing whole on the ground, by tile and rotation, for broken ends to meet
     const straight = new Set<string>();
     for (const loc of grid.locs) {
         if (breach[loc.x + loc.y * sizeX]) {
@@ -248,10 +257,18 @@ export function ruinGrid(
         out.splice(
             0,
             out.length,
-            ...out.filter((loc) => !(loc.level === 0 && tops.has(loc.id) && unsupported(loc))),
+            ...out.filter((loc) => {
+                if (loc.level === 0 && tops.has(loc.id) && unsupported(loc)) {
+                    // Nothing to hold a broken end against now
+                    straight.delete(wallKey(loc.x, loc.y, loc.rotation));
+                    return false;
+                }
+                return true;
+            }),
         );
         report.removed += before - out.length;
     }
+    pairBroken(out, rules.crumbled, straight);
     if (rules.breachEnds) {
         breakEnds(fell, rules.breachEnds, straight, out, report);
     }
@@ -300,27 +317,27 @@ function unfloat(grid: TileGrid, whole: Uint8Array[], out: PlacedLoc[], report: 
 
 const wallKey = (x: number, y: number, rotation: number) => `${x},${y},${rotation}`;
 
-// A breach's broken ends: along each face that came down, a run of its straight walls in a line,
-// each end of the run is jagged with its bricks fallen in front: one jagged end, whole against the
-// straight wall standing beside it, or where none does two back to back, whole ends together. A
-// run that wouldn't leave a way through between them loses its pairs first, then the rest, and
-// gets the bricks alone.
-function breakEnds(
-    fell: PlacedLoc[],
-    ends: NonNullable<RuinRules["breachEnds"]>,
-    straight: Set<string>,
-    out: PlacedLoc[],
-    report: RuinReport,
-): void {
-    // A face runs along x (turned 1 or 3: north or south) or along y (0 or 2)
+// A run of straight walls side by side in a line, all turned the same way: along x (turned 1 or
+// 3, on their tiles' north or south sides) or along y (0 or 2), from the south or west. `beside`
+// says whether a straight wall stands whole on the tile past either end (`to` 1 north or east, -1
+// the other way), and `whole` which of a broken wall and its mirror is whole at its end toward
+// `to` (0 the one whole at the end its rotation turns north to).
+type WallRun = {
+    run: PlacedLoc[];
+    beside: (to: number) => boolean;
+    whole: (to: number) => 0 | 1;
+};
+
+function wallRuns(locs: PlacedLoc[], straight: Set<string>): WallRun[] {
     const along = (loc: PlacedLoc) => (loc.rotation & 1) === 1;
     const lines = new Map<string, PlacedLoc[]>();
-    for (const loc of fell) {
+    for (const loc of locs) {
         const key = along(loc) ? `x${loc.y},${loc.rotation}` : `y${loc.x},${loc.rotation}`;
         const line = lines.get(key) ?? [];
         line.push(loc);
         lines.set(key, line);
     }
+    const runs: WallRun[] = [];
     for (const line of lines.values()) {
         const at = (loc: PlacedLoc) => (along(loc) ? loc.x : loc.y);
         line.sort((a, b) => at(a) - at(b));
@@ -333,37 +350,103 @@ function breakEnds(
             start = k;
             const { rotation } = run[0];
             const [dx, dy] = along(run[0]) ? [1, 0] : [0, 1];
-            // Each end's tip, with the way out of the run from it (1 north or east)
-            const tips: [PlacedLoc, number][] = [[run[0], -1]];
-            if (run.length > 1) {
-                tips.push([run[run.length - 1], 1]);
-            }
-            const pieces = tips.map(([tip, to]): number =>
-                straight.has(wallKey(tip.x + to * dx, tip.y + to * dy, rotation)) ? 1 : 2,
-            );
-            const taken = () => pieces.reduce((sum, n) => sum + n, 0);
-            while (taken() > 0 && run.length < taken() + 2) {
-                pieces[pieces.indexOf(Math.max(...pieces))] = 0;
-            }
-            // Which of the pair is whole at its end toward `to`
-            const whole = (to: number) => ((to === 1) === rotation < 2 ? 0 : 1);
-            const place = (loc: PlacedLoc, to: number) => {
-                out.push({ ...loc, id: ends.walls[whole(to)] });
-                out.push({ ...loc, id: ends.bricks[whole(to)], type: LOC_NORMAL });
-                report.rubble += 2;
-            };
-            tips.forEach(([tip, to], i) => {
-                if (pieces[i] === 1) {
-                    place(tip, to);
-                } else if (pieces[i] === 2) {
-                    place(tip, -to);
-                    place(to === 1 ? run[run.length - 2] : run[1], to);
-                } else {
-                    out.push({ ...tip, id: ends.bricks[whole(to)], type: LOC_NORMAL });
-                    report.rubble++;
-                }
+            runs.push({
+                run,
+                beside: (to) => {
+                    const tip = to === 1 ? run[run.length - 1] : run[0];
+                    return straight.has(wallKey(tip.x + to * dx, tip.y + to * dy, rotation));
+                },
+                whole: (to) => ((to === 1) === rotation < 2 ? 0 : 1),
             });
         }
+    }
+    return runs;
+}
+
+// A breach's broken ends: along each face that came down, a run of its straight walls in a line,
+// each end of the run is jagged with its bricks fallen in front: one jagged end, whole against the
+// straight wall standing beside it, or where none does two back to back, whole ends together. A
+// run that wouldn't leave a way through between them loses its pairs first, then the rest, and
+// gets the bricks alone.
+function breakEnds(
+    fell: PlacedLoc[],
+    ends: NonNullable<RuinRules["breachEnds"]>,
+    straight: Set<string>,
+    out: PlacedLoc[],
+    report: RuinReport,
+): void {
+    for (const { run, beside, whole } of wallRuns(fell, straight)) {
+        // Each end's tip, with the way out of the run from it (1 north or east)
+        const tips: [PlacedLoc, number][] = [[run[0], -1]];
+        if (run.length > 1) {
+            tips.push([run[run.length - 1], 1]);
+        }
+        const pieces = tips.map(([, to]): number => (beside(to) ? 1 : 2));
+        const taken = () => pieces.reduce((sum, n) => sum + n, 0);
+        while (taken() > 0 && run.length < taken() + 2) {
+            pieces[pieces.indexOf(Math.max(...pieces))] = 0;
+        }
+        const place = (loc: PlacedLoc, to: number) => {
+            out.push({ ...loc, id: ends.walls[whole(to)] });
+            out.push({ ...loc, id: ends.bricks[whole(to)], type: LOC_NORMAL });
+            report.rubble += 2;
+        };
+        tips.forEach(([tip, to], i) => {
+            if (pieces[i] === 1) {
+                place(tip, to);
+            } else if (pieces[i] === 2) {
+                place(tip, -to);
+                place(to === 1 ? run[run.length - 2] : run[1], to);
+            } else {
+                out.push({ ...tip, id: ends.bricks[whole(to)], type: LOC_NORMAL });
+                report.rubble++;
+            }
+        });
+    }
+}
+
+// A building's broken walls that are whole at one end (crumbled.mirrors), turned as the
+// Wilderness's ruins are laid: along each run of them, the end ones whole against the wall
+// standing beside the run, the rest in pairs, whole end to whole end, and one left over a stub,
+// with an even number either side of it to pair. So no whole end stands in the open or against a
+// low end.
+function pairBroken(
+    out: PlacedLoc[],
+    crumbled: RuinRules["crumbled"],
+    straight: Set<string>,
+): void {
+    const mirrors = crumbled.mirrors;
+    if (!mirrors) {
+        return;
+    }
+    const broken = out.filter(
+        (loc) => loc.level === 0 && loc.type === 0 && mirrors[loc.id] !== undefined,
+    );
+    for (const { run, beside, whole } of wallRuns(broken, straight)) {
+        // The way each is whole: 1 north or east, -1 the other way, 0 a stub
+        const ways = new Array<number>(run.length).fill(0);
+        let first = 0;
+        let last = run.length - 1;
+        if (beside(-1)) {
+            ways[first++] = -1;
+        }
+        if (beside(1) && first <= last) {
+            ways[last--] = 1;
+        }
+        const left = last - first + 1;
+        const stub = left % 2 === 1 ? first + 2 * Math.floor((left - 1) / 4) : -1;
+        let opens = true;
+        for (let i = first; i <= last; i++) {
+            if (i !== stub) {
+                ways[i] = opens ? 1 : -1;
+                opens = !opens;
+            }
+        }
+        run.forEach((loc, i) => {
+            const id = loc.id;
+            loc.id =
+                ways[i] === 0 ? (crumbled.low[0] ?? id) : whole(ways[i]) === 0 ? id : mirrors[id];
+        });
     }
 }
 
