@@ -69,8 +69,8 @@ version and how to run it.
   Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
   its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
   recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with
-  finds of its own (the Hallowed Night, the Theatre of Blood, Justiciar Zachariah, Phosani's
-  Nightmare): the weapons it brings in, then its trophies.
+  finds of its own (the Hallowed Night, the Theatre of Blood, the Tombs of Amascut, Justiciar
+  Zachariah, Phosani's Nightmare): the weapons it brings in, then its trophies.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
@@ -195,8 +195,8 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
-- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
-  screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
+  Sands), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -385,6 +385,30 @@ version and how to run it.
       turns faces where he'll stare and says which side, and hurts whoever hits him from in front,
       and Verzik's spider throws a ball that kills anyone outside its glowing circle. Twice the
       coins, and one of Lil' Zik's looks each clear.
+- **Beneath Cursed Sands**, the Tombs of Amascut's quest: a boss fight in four parts, open once the
+  desert's beaten, played alone as the Sands Delver (desert robes and a Crystal bow). Coenus the
+  Head Menaphite Guard, the two Scarab Mages, the Champion of Scabaras and the Menaphite Akh, each
+  a run of its own in a tomb beneath the sands. A part won is kept, so the next run starts at the
+  next part; beating the Akh beats the map and opens the Tombs of Amascut.
+- **The Tombs of Amascut**, on the Raids tab once its quest is done. Start in the Nexus and take
+  the four paths in any order, each a puzzle room and then its boss: Apmeken (fix what the
+  baboons break among their waves) and Ba-Ba; Het (turn mirrors to carry the beam to the seal) and
+  Akkha; Scabaras (sequence, lights, addition and matching boards) and Kephri; Crondis (carry water
+  to the palm past spears, poison and crocodiles) and Zebak. Then the Wardens, three phases, the
+  last on a floor that rises and falls. The Helpful Spirit in the Nexus gives a free bundle of
+  supplies after the second path and the fourth.
+    - **Invocations** take hard mode's place: each makes the raid harder and adds to its raid
+      level, which scales every enemy and boss and the chest's odds. Entry is for an account
+      that's bought little, Normal (150) wants the shop and better gear, Expert (300) more, and
+      past that the bosses climb quicker and quicker. In co-op the host's invocations count.
+    - **Guards and Amascut's bane**: every boss's guard drops when one of its big attacks misses
+      everyone, and the raid's button, Amascut's bane, hits a share of the boss's hitpoints, twice
+      as much while its guard's down.
+    - **The chest** after the Wardens rolls for a purple, more likely the higher the raid level and
+      the more points you earned: Osmumten's fang and the Lightbearer from raid level 50, the rest from
+      raid level 150, and Tumeken's guardian (a pet) now and then. They're Collection log trophies.
+      The end-of-raid board shows the raid level, each path's time, and every player's points,
+      deaths and purple chance.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle
   showing where they'll land, and projectiles fly where you stood, so keep moving.

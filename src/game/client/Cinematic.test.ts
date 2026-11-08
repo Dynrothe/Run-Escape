@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { ALL_MAPS, createDevMap } from "../content/maps";
+import { ALL_MAPS, createDevMap, getMapCinematics, getRunCinematic } from "../content/maps";
 import { CinematicDef, MapDef } from "../content/types";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { VARDHELM } from "../scaperune/maps/vardhelm";
 import {
     CINEMATIC_SKIP_AFTER,
@@ -199,62 +200,80 @@ describe("a cinematic playing", () => {
     });
 });
 
-// Every map's cinematic is one that can play, the dev maps' too (only on the dev server)
-const MAPS_WITH_CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)].filter(
-    (map, i, all) => map.cinematic && all.findIndex((m) => m.id === map.id) === i,
-);
+// Yaw units (2048 a turn) a second a cinematic's camera may turn: about 11 degrees
+const MAX_CINEMATIC_TURN = 64;
 
-describe.each(MAPS_WITH_CINEMATICS.map((map) => [map.id, map] as const))(
-    "%s's cinematic",
-    (_, map) => {
-        const def = map.cinematic!;
-        const ids = new Set(def.cast.map((actor) => actor.id));
+// Every cinematic is one that can play, the dev maps' too (only on the dev server): each map's
+// opening, and each part's of a fight in parts
+const CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)]
+    .filter((map, i, all) => all.findIndex((m) => m.id === map.id) === i)
+    .flatMap((map) => [
+        ...(map.cinematic ? [[map.id, map, map.cinematic] as const] : []),
+        ...(map.stages ?? []).flatMap((stage, i) =>
+            stage.cinematic ? [[`${map.id} part ${i + 1}`, map, stage.cinematic] as const] : [],
+        ),
+    ]);
 
-        it("starts at 0, its shots in order, and ends on the run's camera", () => {
-            const times = def.shots.map((shot) => shot.at);
-            expect(times[0]).toBe(0);
-            expect([...times].sort((a, b) => a - b)).toEqual(times);
-            const last = def.shots[def.shots.length - 1];
-            expect("player" in last && last.at).toBe(def.seconds);
-            expect(def.shots.slice(0, -1).every((shot) => !("player" in shot))).toBe(true);
-        });
+describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
+    const ids = new Set(def.cast.map((actor) => actor.id));
 
-        it("has cues for its cast alone, within its time", () => {
-            expect(ids.size).toBe(def.cast.length);
-            for (const cue of def.cues) {
-                expect(ids.has(cue.actor)).toBe(true);
-                expect(cue.at).toBeGreaterThanOrEqual(0);
-                expect(cue.at).toBeLessThan(def.seconds);
-            }
-            for (const actor of def.cast) {
-                if (actor.prop !== undefined) {
-                    expect(map.props?.[actor.prop]?.npcId).toBe(actor.npcId);
-                }
-            }
-        });
+    it("starts at 0, its shots in order, and ends on the run's camera", () => {
+        const times = def.shots.map((shot) => shot.at);
+        expect(times[0]).toBe(0);
+        expect([...times].sort((a, b) => a - b)).toEqual(times);
+        const last = def.shots[def.shots.length - 1];
+        expect("player" in last && last.at).toBe(def.seconds);
+        expect(def.shots.slice(0, -1).every((shot) => !("player" in shot))).toBe(true);
+    });
 
-        it("bakes its cast with everything they play, its spot animations and sounds", () => {
-            const requests = GameAssets.getPropRequests([map]);
-            for (const [npcId, seqs] of getCinematicSeqs(def)) {
-                const request = requests.find((r) => r.key === getPropKey(npcId));
-                expect(request).toMatchObject({ kind: "npc", npcId });
-                for (const seq of seqs) {
-                    expect((request as { seqIds: number[] }).seqIds).toContain(seq);
-                }
-            }
-            const spots = getSpotAnimIds();
-            const sounds = getGameSoundIds();
-            for (const cue of def.cues) {
-                if (cue.spotAnim !== undefined) {
-                    expect(spots).toContain(cue.spotAnim);
-                }
-                if (cue.sound !== undefined) {
-                    expect(sounds).toContain(cue.sound);
-                }
+    // Comfort: a camera that swings round fast makes people dizzy. No shot turns it more than
+    // MAX_CINEMATIC_TURN a second from the one before (yaw isn't wrapped between shots, so most
+    // of a circle shows here as one)
+    it("turns the camera gently", () => {
+        def.shots.slice(1).forEach((shot, i) => {
+            const before = def.shots[i];
+            if (!("player" in shot) && !("player" in before)) {
+                const turn = Math.abs(shot.yaw - before.yaw) / (shot.at - before.at);
+                expect(turn).toBeLessThanOrEqual(MAX_CINEMATIC_TURN);
             }
         });
-    },
-);
+    });
+
+    it("has cues for its cast alone, within its time", () => {
+        expect(ids.size).toBe(def.cast.length);
+        for (const cue of def.cues) {
+            expect(ids.has(cue.actor)).toBe(true);
+            expect(cue.at).toBeGreaterThanOrEqual(0);
+            expect(cue.at).toBeLessThan(def.seconds);
+        }
+        for (const actor of def.cast) {
+            if (actor.prop !== undefined) {
+                expect(map.props?.[actor.prop]?.npcId).toBe(actor.npcId);
+            }
+        }
+    });
+
+    it("bakes its cast with everything they play, its spot animations and sounds", () => {
+        const requests = GameAssets.getPropRequests([map]);
+        for (const [npcId, seqs] of getCinematicSeqs(def)) {
+            const request = requests.find((r) => r.key === getPropKey(npcId));
+            expect(request).toMatchObject({ kind: "npc", npcId });
+            for (const seq of seqs) {
+                expect((request as { seqIds: number[] }).seqIds).toContain(seq);
+            }
+        }
+        const spots = getSpotAnimIds();
+        const sounds = getGameSoundIds();
+        for (const cue of def.cues) {
+            if (cue.spotAnim !== undefined) {
+                expect(spots).toContain(cue.spotAnim);
+            }
+            if (cue.sound !== undefined) {
+                expect(sounds).toContain(cue.sound);
+            }
+        }
+    });
+});
 
 describe("baking props and casts", () => {
     it("bakes each NPC once, with what every map plays on it", async () => {
@@ -288,7 +307,7 @@ describe("Vardhelm's opening", () => {
     const cast = (id: string) => def.cast.find((actor) => actor.id === id)!;
 
     it("is the map's, has the player face up the mountain, and lasts 15 to 25 seconds", () => {
-        expect(MAPS_WITH_CINEMATICS.map((m) => m.id)).toContain(map.id);
+        expect(CINEMATICS.map(([, m]) => m.id)).toContain(map.id);
         expect(map.spawnFacing).toEqual({ x: 0, y: 1 });
         expect(def.seconds).toBeGreaterThanOrEqual(15);
         expect(def.seconds).toBeLessThanOrEqual(25);
@@ -371,5 +390,28 @@ describe("what a cinematic's camera sees", () => {
         const below = getCinematicSquares({ ...level, shots: [level.shots[1]] }, () => 0, play);
         expect(below).toContain(square(640, 640));
         expect(below).not.toContain(square(640, 640 + 120));
+    });
+});
+
+describe("a fight in parts' cinematics", () => {
+    const map = BENEATH_CURSED_SANDS;
+
+    it("plays each part's own, as the run for it starts", () => {
+        expect(map?.stages?.length).toBe(4);
+        map!.stages!.forEach((stage, i) => {
+            expect(stage.cinematic).toBeDefined();
+            expect(getRunCinematic(map!, i)).toBe(stage.cinematic);
+        });
+        expect(getMapCinematics(map!)).toHaveLength(4);
+    });
+
+    it("hands over to the boss's own intro: its stand-in's gone as the run starts", () => {
+        for (const stage of map!.stages!) {
+            const def = stage.cinematic!;
+            const release = def.shots[def.shots.length - 2].at;
+            for (const actor of def.cast) {
+                expect(getActorState(def, actor, release).gone).toBe(true);
+            }
+        }
     });
 });

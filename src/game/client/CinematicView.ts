@@ -1,5 +1,7 @@
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { SPOT_LIGHTS } from "../content/lights";
+import { LightLook } from "../content/types";
 import { TICKS_PER_SECOND } from "../core/Sim";
 import { CinematicPlayer, getActorState, getSaying } from "./Cinematic";
 import { GameAssets, getPropKey } from "./GameAssets";
@@ -9,6 +11,10 @@ import { Overlay, ScreenPoint } from "./Overlay";
 // take to come in at the start and go at the end
 const BAR_SHARE = 0.085;
 const BAR_SECONDS = 0.5;
+
+// A light in a cinematic, where it is (SceneLights): one of the cast's own (CinematicActorDef.light),
+// or a spot animation's playing on them (SPOT_LIGHTS)
+export type CinematicLight = { x: number; y: number; look: LightLook };
 
 // The skip hint fades in after this long and is gone this long before the end
 const HINT_FROM = 0.6;
@@ -28,6 +34,28 @@ export class CinematicView {
     // Whether the map's prop at index is stood in for by one of the cast
     hidesProp(player: CinematicPlayer, index: number): boolean {
         return player.def.cast.some((actor) => actor.prop === index);
+    }
+
+    // The lights in it now, on a map with lighting: the cast's own while they're drawn, and the
+    // spot animations playing on them that give off light
+    getLights(player: CinematicPlayer): CinematicLight[] {
+        const { def, seconds } = player;
+        const lights: CinematicLight[] = [];
+        for (const actor of def.cast) {
+            if (actor.light && !getActorState(def, actor, seconds).gone) {
+                lights.push({ x: actor.x, y: actor.y, look: actor.light });
+            }
+        }
+        for (const cue of def.cues) {
+            const look = cue.spotAnim === undefined ? undefined : SPOT_LIGHTS.get(cue.spotAnim);
+            const model = look && this.assets.get("spot:" + cue.spotAnim);
+            const actor = def.cast.find((a) => a.id === cue.actor);
+            const ticks = (seconds - cue.at) * TICKS_PER_SECOND;
+            if (look && model && actor && ticks >= 0 && ticks < model.anims[0].totalTicks) {
+                lights.push({ x: actor.x, y: actor.y, look });
+            }
+        }
+        return lights;
     }
 
     submitActors(actors: ActorRenderer, player: CinematicPlayer, ground: Ground): void {

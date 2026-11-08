@@ -3,6 +3,21 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Beneath Cursed Sands, by Okaeri: a new quest, open once the desert's beaten. Fight Coenus, the
+  Scarab Mages, the Champion of Scabaras and the Menaphite Akh to open the Tombs of Amascut.
+- The Tombs of Amascut, by Okaeri: a new raid, solo or in co-op. Four paths, each a puzzle room
+  and a boss (Ba-Ba, Akkha, Kephri and Zebak), then the Wardens, with invocations to set how hard
+  it is.
+
+### Fixed
+
+- A casket carried into the next room of the Theatre of Blood could be set down in a wall, out of
+  reach. Fixed by Okaeri.
+
 ## 0.28.1 - 2026-11-07
 
 ### Changed

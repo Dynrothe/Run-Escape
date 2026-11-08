@@ -1,8 +1,10 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
+import { CURSED_SANDS_ENEMIES } from "./cursedSands";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
 import { getTheatreBosses } from "./theatre";
+import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
 
@@ -8356,6 +8358,10 @@ export const ENEMIES: EnemyDef[] = [
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
 ];
+
+// The Tombs of Amascut's (in development)
+ENEMIES.push(...TOMBS_ENEMIES);
+ENEMIES.push(...CURSED_SANDS_ENEMIES);
 
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above
 ENEMIES.push(

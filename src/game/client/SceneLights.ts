@@ -1,7 +1,9 @@
 import { FLOOR_LIGHTS, SPOT_LIGHTS, lightColor } from "../content/lights";
+import { WARDENS } from "../content/tombs";
 import { FloorEffect, LightLook, LightingDef } from "../content/types";
-import { Sim } from "../core/Sim";
+import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { EFFECT_BURN, EFFECT_ICE } from "../core/floorLayout";
+import type { CinematicLight } from "./CinematicView";
 import { LightBudget, lightKey } from "./LightBudget";
 import { getPlayerPose } from "./PlayerPose";
 import type { PlayerPose } from "./PlayerPose";
@@ -25,6 +27,9 @@ const KIND_FLOOR = 9;
 const KIND_WINDUP = 10;
 const KIND_HAZARD = 11;
 const KIND_EXPOSED = 12;
+const KIND_CINEMATIC = 13;
+const KIND_BULLET = 14;
+const KIND_WARDENS = 15;
 const SIM_KINDS = { player: KIND_PLAYER, map: KIND_MAP, enemy: KIND_ENEMY, left: KIND_LEFT };
 
 // A floor's tiles further than this from the view's middle aren't offered (tiles)
@@ -56,7 +61,8 @@ export class SceneLights {
     }
 
     // This frame's ambient and lights, into target. px, py: the shown player as drawn (the
-    // view's middle); glowLocs: the map's glowing scenery, if it has any
+    // view's middle); glowLocs: the map's glowing scenery, if it has any; cinematic: a playing
+    // cinematic's lights (CinematicView.getLights)
     update(
         target: LightTarget,
         sim: Sim,
@@ -68,6 +74,7 @@ export class SceneLights {
         py: number,
         deltaSeconds: number,
         glowLocs: GlowLocs | undefined,
+        cinematic?: readonly CinematicLight[],
     ): void {
         this.seconds += deltaSeconds;
         const budget = this.budget;
@@ -172,13 +179,64 @@ export class SceneLights {
                 this.offer(lightKey(KIND_EXPOSED, enemy.uid), x, y, exposed.radius, exposed);
             }
         }
+        // The Wardens: the obelisk flickering open, pyramids about to hit, the enrage's
+        // lightning's shadows
+        const wardens = sim.tombsWardens;
+        if (wardens) {
+            const obelisk = sim.enemies.find((e) => e.uid === wardens.obeliskUid);
+            const flicker = WARDENS.flicker;
+            if (flicker && obelisk && !obelisk.dead && sim.obeliskFlickers(obelisk)) {
+                const key = lightKey(KIND_EXPOSED, obelisk.uid);
+                this.offer(key, obelisk.x, obelisk.y, flicker.light.radius, flicker.light);
+            }
+            const pyramids = WARDENS.pyramids;
+            const cell = pyramids.light;
+            if (cell) {
+                const first = pyramids.firstHit * TICKS_PER_SECOND;
+                wardens.pyramids.forEach((pyramid, i) => {
+                    const since = tick - pyramid.startTick;
+                    if (since >= 0 && since < first) {
+                        const half = pyramids.cell / 2;
+                        const key = lightKey(KIND_WARDENS, i);
+                        this.offer(key, pyramid.x + half, pyramid.y + half, cell.radius, cell);
+                    }
+                });
+            }
+            wardens.marks.forEach((mark, i) => {
+                if (mark.light && tick >= mark.from && tick < mark.to) {
+                    const key = lightKey(KIND_WARDENS, 1_000_000 + i);
+                    this.offer(key, mark.x, mark.y, mark.light.radius, mark.light);
+                }
+            });
+        }
         for (const hazard of sim.hazards) {
-            const look = hazard.attack.ground?.light;
+            const look = hazard.light ?? hazard.attack.ground?.light;
             if (look && sim.tick < hazard.endTick) {
                 const key = lightKey(KIND_HAZARD, hazard.uid);
                 this.offer(key, hazard.x, hazard.y, look.radius, look);
             }
         }
+        // A glow under each of a pattern's bullets that has one (BulletPatternDef.glow)
+        const bullets = sim.bullets;
+        for (let i = 0; i < bullets.count; i++) {
+            const slot = bullets.order[i];
+            const glow = sim.bulletSources[bullets.source[slot]]?.attack.pattern?.glow;
+            if (glow) {
+                const x = bullets.prevX[slot] + (bullets.x[slot] - bullets.prevX[slot]) * alpha;
+                const y = bullets.prevY[slot] + (bullets.y[slot] - bullets.prevY[slot]) * alpha;
+                this.offer(lightKey(KIND_BULLET, slot), x, y, glow.radius, glow);
+            }
+        }
+        // A cinematic's, while it plays (CinematicView.getLights)
+        cinematic?.forEach((light, i) => {
+            this.offer(
+                lightKey(KIND_CINEMATIC, i),
+                light.x,
+                light.y,
+                light.look.radius,
+                light.look,
+            );
+        });
 
         target.beginLights(px, py);
         budget.end(px, py, deltaSeconds, (x, y, radius, r, g, b) => {

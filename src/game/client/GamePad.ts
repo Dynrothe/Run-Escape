@@ -148,7 +148,7 @@ export function padLabel(kind: PadKind, button: PadButton): string {
 // During a run: the keys each button stands for. The items take the four
 // shoulder buttons, as there are four slots.
 const RUN_KEYS: Partial<Record<PadButton, string>> = {
-    // A fight's own button (MapDef.fight.ability), as Space
+    // A fight's own button (Sim.ability), as Space
     south: "Space",
     leftBumper: "Digit1",
     rightBumper: "Digit2",

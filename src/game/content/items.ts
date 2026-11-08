@@ -1,4 +1,5 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { TOMBS_SUPPLIES } from "./tombs";
 import {
     CasketDef,
     CasketTier,
@@ -971,7 +972,19 @@ export const UTILITY: UtilityDef[] = [
     },
 ];
 
-export const ITEMS: ItemDef[] = [...GEAR, ...UTILITY];
+// The Tombs of Amascut's supplies, from its Helpful Spirit, kept in the inventory like any utility
+// item. Not in UTILITY: caskets never bring them.
+export const TOMBS_SUPPLY_ITEMS: UtilityDef[] = TOMBS_SUPPLIES.map((supply) => ({
+    kind: "utility",
+    id: supply.id,
+    name: supply.name,
+    objId: supply.objId,
+    rarity: "common",
+    description: supply.description,
+    use: { kind: "supply", supplyId: supply.id },
+}));
+
+export const ITEMS: ItemDef[] = [...GEAR, ...UTILITY, ...TOMBS_SUPPLY_ITEMS];
 
 export const ITEM_BY_ID: Map<string, ItemDef> = new Map(ITEMS.map((i) => [i.id, i]));
 
