@@ -195,6 +195,10 @@ function InvocationPresets({ ui, client }: { ui: UiSnapshot; client: GameClient 
     const presets = ui.save.invocationPresets ?? [];
     const on = ui.save.invocations ?? [];
     const [name, setName] = useState("");
+    // The preset whose Delete was pressed once: a second press deletes it, so a slip beside its
+    // load button doesn't
+    const [deleting, setDeleting] = useState<string>();
+    const nameInput = useRef<HTMLInputElement>(null);
     const named = presetName(name, on);
     const replaces = presets.some((p) => p.name === named);
     const full = presets.length >= MAX_INVOCATION_PRESETS && !replaces;
@@ -207,31 +211,53 @@ function InvocationPresets({ ui, client }: { ui: UiSnapshot; client: GameClient 
                 <span className="ui-subtle">None saved yet.</span>
             ) : (
                 <div className="ui-invocations-preset-list">
-                    {presets.map((preset, i) => (
-                        <div key={preset.name} className="ui-invocations-preset">
-                            <button
-                                className={
-                                    "ui-button ui-invocations-preset-load" +
-                                    (same(preset.invocations) ? " ui-invocations-preset-on" : "")
-                                }
-                                aria-pressed={same(preset.invocations)}
-                                onClick={() => client.loadInvocationPreset(i)}
-                            >
-                                {preset.name}
-                                <span className="ui-invocations-preset-level">
-                                    level {getRaidLevel(preset.invocations)}
-                                </span>
-                            </button>
-                            <button
-                                className="ui-button ui-invocations-preset-delete"
-                                aria-label={`Delete ${preset.name}`}
-                                title={`Delete ${preset.name}`}
-                                onClick={() => client.deleteInvocationPreset(i)}
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    ))}
+                    {presets.map((preset, i) => {
+                        const level = getRaidLevel(preset.invocations);
+                        const current = same(preset.invocations);
+                        const sure = deleting === preset.name;
+                        return (
+                            <div key={preset.name} className="ui-invocations-preset">
+                                <button
+                                    className={
+                                        "ui-button ui-invocations-preset-load" +
+                                        (current ? " ui-invocations-preset-on" : "")
+                                    }
+                                    aria-label={`Load ${preset.name}, raid level ${level}`}
+                                    aria-current={current || undefined}
+                                    onClick={() => client.loadInvocationPreset(i)}
+                                >
+                                    {preset.name}{" "}
+                                    <span className="ui-invocations-preset-level">
+                                        level {level}
+                                    </span>
+                                </button>
+                                <button
+                                    className={
+                                        "ui-button ui-invocations-preset-delete" +
+                                        (sure ? " ui-invocations-preset-sure" : "")
+                                    }
+                                    aria-label={
+                                        sure
+                                            ? `Press again to delete ${preset.name}`
+                                            : `Delete ${preset.name}`
+                                    }
+                                    onBlur={() => sure && setDeleting(undefined)}
+                                    onClick={() => {
+                                        if (!sure) {
+                                            setDeleting(preset.name);
+                                            return;
+                                        }
+                                        setDeleting(undefined);
+                                        client.deleteInvocationPreset(i);
+                                        // Its button's gone: on to the name box, not the page
+                                        nameInput.current?.focus();
+                                    }}
+                                >
+                                    {sure ? "Sure?" : "Delete"}
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
             <form
@@ -245,6 +271,7 @@ function InvocationPresets({ ui, client }: { ui: UiSnapshot; client: GameClient 
                 }}
             >
                 <input
+                    ref={nameInput}
                     className="ui-invocations-preset-name"
                     value={name}
                     maxLength={MAX_PRESET_NAME}

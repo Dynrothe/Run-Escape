@@ -824,7 +824,9 @@ export class GameClient implements GameFrameHandler {
         if (index < 0 || index >= presets.length) {
             return;
         }
-        this.save.invocationPresets = presets.filter((_, i) => i !== index);
+        const left = presets.filter((_, i) => i !== index);
+        // None left is none at all, as a save loads it
+        this.save.invocationPresets = left.length > 0 ? left : undefined;
         this.persist();
     }
 
