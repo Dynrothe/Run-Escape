@@ -66,11 +66,15 @@ export type RuinRules = {
     // A city wall stands, burnt, but for breaches: where the walls' noise is over this, the wall's
     // band is down to the ground and open, both faces, walkway and rails gone
     breaches?: number;
-    // A breach's broken ends: where a run of a wall's face came down, its first and last tile
-    // are `wall` (a jagged broken end, a straight wall loc, turned as the face was) with `bricks`
-    // fallen in front of them (blocking nothing), when the run's long enough to leave a way
-    // through between them; a shorter one gets the bricks alone
-    breachEnds?: { wall: number; bricks: number };
+    // A breach's broken ends: where a run of a wall's face came down, its ends are jagged (`walls`,
+    // a straight wall loc, turned as the face was, whole at one end and stepping down to the other)
+    // with `bricks` fallen in front of them (blocking nothing). A jagged end's whole end is against
+    // the wall still standing beside it, and where no straight wall stands beside it (a corner came
+    // down too) two stand back to back, whole ends together. A run too short to leave a way
+    // through between them gets the bricks alone. Each comes in a mirrored pair: the first whole at
+    // the end its rotation turns north to (east at 1), the second at the other, each with the
+    // bricks that fell from it.
+    breachEnds?: { walls: [number, number]; bricks: [number, number] };
     // The share of a city wall's walkway and rails (upstairs, shown from the ground) still up
     wallTopsKept?: number;
     // Where a straight run of wall fell, some of it's still burning: this loc (a wall of fire)
@@ -194,6 +198,8 @@ export function ruinGrid(
     const fell: PlacedLoc[] = [];
     // Where a wall stands whole (charred as it was), level by level, for what stands on it
     const whole = Array.from({ length: LEVELS }, () => new Uint8Array(sizeX * sizeY));
+    // Straight walls standing whole on the ground, by tile and rotation, for a breach's ends
+    const straight = new Set<string>();
     for (const loc of grid.locs) {
         if (breach[loc.x + loc.y * sizeX]) {
             if (loc.level === 0 && loc.type === 0) {
@@ -204,6 +210,9 @@ export function ruinGrid(
         }
         if (skip(loc.x, loc.y)) {
             out.push(loc);
+            if (loc.level === 0 && loc.type === 0) {
+                straight.add(wallKey(loc.x, loc.y, loc.rotation));
+            }
             continue;
         }
         const kept = ruinLoc(grid, loc, locs, rules, walls, report, out);
@@ -214,6 +223,9 @@ export function ruinGrid(
         if (WALL_TYPES.has(loc.type)) {
             if (kept?.id === getCharredLoc(loc.id)) {
                 whole[loc.level][loc.x + loc.y * sizeX] = 1;
+                if (loc.level === 0 && loc.type === 0) {
+                    straight.add(wallKey(loc.x, loc.y, loc.rotation));
+                }
             } else if (loc.level === 0) {
                 down[loc.x + loc.y * sizeX] = 1;
             }
@@ -241,7 +253,7 @@ export function ruinGrid(
         report.removed += before - out.length;
     }
     if (rules.breachEnds) {
-        breakEnds(fell, rules.breachEnds, out, report);
+        breakEnds(fell, rules.breachEnds, straight, out, report);
     }
     grid.locs = out;
     return report;
@@ -286,12 +298,17 @@ function unfloat(grid: TileGrid, whole: Uint8Array[], out: PlacedLoc[], report: 
     out.splice(0, out.length, ...kept);
 }
 
+const wallKey = (x: number, y: number, rotation: number) => `${x},${y},${rotation}`;
+
 // A breach's broken ends: along each face that came down, a run of its straight walls in a line,
-// the first and last are a jagged broken end with its bricks fallen in front, if there's a way
-// through between them; a run too short for that gets the bricks alone
+// each end of the run is jagged with its bricks fallen in front: one jagged end, whole against the
+// straight wall standing beside it, or where none does two back to back, whole ends together. A
+// run that wouldn't leave a way through between them loses its pairs first, then the rest, and
+// gets the bricks alone.
 function breakEnds(
     fell: PlacedLoc[],
     ends: NonNullable<RuinRules["breachEnds"]>,
+    straight: Set<string>,
     out: PlacedLoc[],
     report: RuinReport,
 ): void {
@@ -314,15 +331,38 @@ function breakEnds(
             }
             const run = line.slice(start, k);
             start = k;
-            const tips = run.length > 1 ? [run[0], run[run.length - 1]] : [run[0]];
-            for (const tip of tips) {
-                if (run.length >= 4) {
-                    out.push({ ...tip, id: ends.wall });
+            const { rotation } = run[0];
+            const [dx, dy] = along(run[0]) ? [1, 0] : [0, 1];
+            // Each end's tip, with the way out of the run from it (1 north or east)
+            const tips: [PlacedLoc, number][] = [[run[0], -1]];
+            if (run.length > 1) {
+                tips.push([run[run.length - 1], 1]);
+            }
+            const pieces = tips.map(([tip, to]): number =>
+                straight.has(wallKey(tip.x + to * dx, tip.y + to * dy, rotation)) ? 1 : 2,
+            );
+            const taken = () => pieces.reduce((sum, n) => sum + n, 0);
+            while (taken() > 0 && run.length < taken() + 2) {
+                pieces[pieces.indexOf(Math.max(...pieces))] = 0;
+            }
+            // Which of the pair is whole at its end toward `to`
+            const whole = (to: number) => ((to === 1) === rotation < 2 ? 0 : 1);
+            const place = (loc: PlacedLoc, to: number) => {
+                out.push({ ...loc, id: ends.walls[whole(to)] });
+                out.push({ ...loc, id: ends.bricks[whole(to)], type: LOC_NORMAL });
+                report.rubble += 2;
+            };
+            tips.forEach(([tip, to], i) => {
+                if (pieces[i] === 1) {
+                    place(tip, to);
+                } else if (pieces[i] === 2) {
+                    place(tip, -to);
+                    place(to === 1 ? run[run.length - 2] : run[1], to);
+                } else {
+                    out.push({ ...tip, id: ends.bricks[whole(to)], type: LOC_NORMAL });
                     report.rubble++;
                 }
-                out.push({ ...tip, id: ends.bricks, type: LOC_NORMAL });
-                report.rubble++;
-            }
+            });
         }
     }
 }
