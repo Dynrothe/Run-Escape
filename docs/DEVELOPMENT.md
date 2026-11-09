@@ -2020,7 +2020,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   desktop's `90vh` cap leaves its buttons below the screen. Give it the screen's height less the
   safe area. The full-height panels (the shop, pause and the like) then hide their overflow and
   scroll a part inside, so their buttons stay in view. The co-op room browser scrolls as a whole
-  (`overflow-y: auto`), since only its worst case doesn't fit.
+  (`overflow-y: auto`), since only its worst case doesn't fit. The HUD's right column comes down
+  into the item buttons' column there, where the Tombs' fight button sits. Its lines let taps
+  through to the button, but the DPS doesn't, so with a fight button over the items it keeps left
+  of that column (`.ui-damage-beside-ability`). Anything new to tap in that column needs the same.
 - A touch screen also gets a pixel ratio capped at 1.5 (2 elsewhere, `DeviceUtil.pixelRatio`), 2
   workers instead of 4, textures at half size (64 a side, a quarter of the memory), 60 frames a
   second at most unless the Frame rate setting says otherwise (see Keeping it light on a phone),

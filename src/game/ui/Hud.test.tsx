@@ -182,6 +182,27 @@ describe("the run's HUD", () => {
         expect(levels()).toEqual(["2", "1"]);
     });
 
+    test("the DPS keeps out of the way of a fight button over the items, and only that", () => {
+        const { store, view } = renderHud();
+        const damage = () => view.container.querySelector(".ui-damage")!;
+        const ability = (withItems: boolean) => ({
+            name: "Amascut's bane",
+            iconObjId: 1,
+            charge: 1,
+            inReach: false,
+            opened: false,
+            guide: false,
+            withItems,
+            hint: false,
+        });
+        expect(damage()).not.toHaveClass("ui-damage-beside-ability");
+        act(() => store.setNumbers(numbers({ ability: ability(true) })));
+        expect(damage()).toHaveClass("ui-damage-beside-ability");
+        // A one-fight map's button is in the corner, below the HUD's column
+        act(() => store.setNumbers(numbers({ ability: ability(false) })));
+        expect(damage()).not.toHaveClass("ui-damage-beside-ability");
+    });
+
     test("the boss's warning counts down in the last minute", () => {
         const { store, view } = renderHud();
         expect(view.container.querySelector(".ui-boss-warning")).toBeNull();

@@ -43,6 +43,8 @@ the version in the corner).
   you into a quarter whose shadow you've killed. Fixed by Okaeri.
 - On phones, the Scabaras slate no longer covers the middle of the screen. It's a thin bar along
   the top. Fixed by Okaeri.
+- On phones in the Tombs of Amascut, the DPS sat over the special attack button and took some of
+  its taps. It's now beside the button.
 
 ## 0.29.1 - 2026-11-08
 

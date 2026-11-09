@@ -2878,13 +2878,16 @@ function DamagePanel({
 }): JSX.Element {
     const totalDps = useHudNumber(client, (n) => n.dps) ?? 0;
     const otherDps = useHudNumber(client, (n) => n.otherDps) ?? 0;
+    // A touch screen's fight button over the items (the Tombs') is in this column's way: the DPS
+    // keeps left of them there (Mobile.css)
+    const besideAbility = useHudNumber(client, (n) => n.ability?.withItems) === true;
     const weaponDamage = useHudNumber(client, (n) => n.weaponDamage);
     const damageOf = (slot: SlotView) => weaponDamage?.[slot.id];
     const total = weapons.reduce((sum, w) => sum + (damageOf(w)?.dps ?? 0), otherDps);
     // Most damage a second first; ties (weapons yet to hit) keep the HUD's order
     const rows = [...weapons].sort((a, b) => (damageOf(b)?.dps ?? 0) - (damageOf(a)?.dps ?? 0));
     return (
-        <div className="ui-damage">
+        <div className={besideAbility ? "ui-damage ui-damage-beside-ability" : "ui-damage"}>
             <button
                 className="ui-dps"
                 onClick={() => client.toggleDamagePanel()}

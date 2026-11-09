@@ -769,6 +769,21 @@
         margin-top: 0;
     }
 
+    /* The Tombs' fight button is in the item buttons' column, just where this column's lines
+       come down to, and a room's lines can take the DPS on to the items: it keeps left of that
+       column there. Its panel goes under it, not beside it: from there, beside it would reach
+       the middle of the screen, where the player is. */
+    .ui-damage-beside-ability {
+        margin-right: calc(
+            var(--touch-items-inset) + var(--touch-items-width) + 8px - var(--hud-inset)
+        );
+    }
+
+    .ui-damage-beside-ability .ui-damage-panel {
+        position: static;
+        margin-top: 4px;
+    }
+
     .ui-damage-head,
     .ui-damage-total,
     .ui-damage-other > :last-child {
