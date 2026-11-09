@@ -2551,7 +2551,7 @@ function TombsScabarasReading({ client }: { client: GameClient }): JSX.Element |
         );
     }
     return (
-        <div className="ui-panel rs-border rs-background ui-scabaras-reading">
+        <div className="ui-panel rs-border rs-background ui-scabaras-reading ui-scabaras-slate">
             <div className="ui-scabaras-title">Ancient slate</div>
             <div className="ui-scabaras-symbols">
                 {SCABARAS.symbolNames.map((name, i) => (

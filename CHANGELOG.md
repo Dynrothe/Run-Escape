@@ -19,16 +19,38 @@ the version in the corner).
 - The Tombs of Amascut's Scabaras room, by Okaeri: the HUD lists its four puzzles, where each is,
   and which are done, open, or waiting on the others.
 
+### Fixed
+
+- On a phone, the fight button's name (Point-blank volley, Amascut's bane) was cut off by its round
+  button. It's under the button now. Fixed by Okaeri.
+- In the Tombs of Amascut, beating a path's boss only brought back teammates who were down; now
+  the whole party's back on full hitpoints for the next path. Fixed by Okaeri.
+- Ba-Ba was stunned every time her lunge ran into one of her boulders, so standing behind one made
+  her fight easy. Only her Rampage is stunned by one now. Fixed by Okaeri.
+- The Crondis room's poison reached you under a waterfall. It's safe there now, as in OSRS. Fixed
+  by Okaeri.
+- The Scabaras room's Matching tiles hid their symbols, so all you could do was guess. Every tile
+  shows its symbol now, as in OSRS: find its partner on the other side. Fixed by Okaeri.
+- The Crondis room's spear statues were hard to time. The tiles a spear's about to reach now light
+  up on the floor before it thrusts. Fixed by Okaeri.
+- Akkha's Memory Blast was hard to see in his dark room. His room's lit normally now, each
+  symbol lights up bright in its own colour, and a blast throws up a spray of glowing orbs. Fixed
+  by Okaeri.
+- Zebak's roar hit hard with nothing to see. You're safe straight behind a boulder now, as in
+  OSRS, and that ground glows while the roar's coming; as he roars, dust rolls across the island
+  but those spots. Fixed by Okaeri.
+- Akkha's shadow phase could go on forever, Memory Blast after Memory Blast: he wouldn't come to
+  you to be drawn into a dead shadow's quarter, and could get stuck behind a live one. Once a
+  shadow's dead he comes after you between his specials, through his own shadows. Fixed by Okaeri.
+- On a phone, the Scabaras room's slate covered the middle of the screen, over the floor you were
+  about to step on. It's a thin row at the top now. Fixed by Okaeri.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed
 
 - Beneath Cursed Sands, by Okaeri: the quest's bosses hit twice as hard, and armour doesn't stop
   their hits.
-=======
-  number, and each Matching symbol named in its own colour. Beat the room once to unlock it; it can be turned
-  off in the settings.
->>>>>>> parent of 772212b (Changelog: the bosses' instructions)
 
 ## 0.29.0 - 2026-11-08
 

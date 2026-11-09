@@ -77,8 +77,10 @@ export function AbilityButton({
                     className="ui-ability-charge"
                     style={{ transform: `scaleY(${1 - ability.charge})` }}
                 />
-                <span className="ui-ability-name">{ability.name}</span>
+                {!touch && <span className="ui-ability-name">{ability.name}</span>}
             </button>
+            {/* Under the round button, not in it: its circle cuts off a long name's ends */}
+            {touch && <span className="ui-ability-name ui-ability-name-under">{ability.name}</span>}
         </div>
     );
 }

@@ -1,6 +1,7 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { getEnemy } from "../content/enemies";
 import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
+import { ZEBAK } from "../content/tombs";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
@@ -316,8 +317,13 @@ export class BossFightView {
                 { scale: falls.scale },
             );
         }
-        // Ba-Ba's boulders' rocks, to take cover by
-        sim.tombsCover.forEach((rock) => {
+        // Ba-Ba's boulders' rocks, to take cover by, and Zebak's boulders, gone as he roars but
+        // drawn on through its shockwave (GameView.drawZebakRoar)
+        const roared = sim.tombsZebak?.roared;
+        const shaking =
+            roared && sim.tick - roared.tick < ZEBAK.roar.shockwave.seconds * TICKS_PER_SECOND;
+        const cover = shaking ? [...sim.tombsCover, ...roared.rocks] : sim.tombsCover;
+        cover.forEach((rock) => {
             // An enemy's model, or a loc's (Kephri's dung)
             const model = rock.look.startsWith("loc:")
                 ? this.assets.get(rock.look)
