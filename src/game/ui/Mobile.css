@@ -626,8 +626,8 @@
         min-height: 44px;
     }
 
-    /* Run HUD: everything at the edges, the middle left to the fight. What's
-       only a look at the run (gear, quests) is in the pause menu. */
+     /* Run HUD: everything at the edges, the middle left to the fight. Equipment
+         has its own right-side panel; quests stay in the pause menu. */
 
     .ui-xp {
         height: calc(var(--safe-top) + 12px);
@@ -661,6 +661,35 @@
         top: 0;
         transform: translateX(-50%);
         font-size: 24px;
+    }
+
+    .ui-mobile-zoom-control {
+        position: absolute;
+        left: calc(50% + 25vw - 130px);
+        top: 1px;
+        width: clamp(76px, 16vw, 120px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .ui-mobile-zoom-toggle {
+        width: 100%;
+        padding: 0;
+        line-height: 18px;
+    }
+
+    .ui-mobile-zoom {
+        width: 100%;
+        height: 12px;
+        margin: 0;
+        padding: 0;
+        accent-color: var(--ui-orange);
+        pointer-events: auto;
+    }
+
+    .ui-mobile-zoom[hidden] {
+        display: none;
     }
 
     /* Co-op's countdown: one line where the clock was, so the boss bar, the

@@ -40,16 +40,18 @@ go stale. Add anything that cost you time to work out.
 | Caskets and the inventory                              | `src/game/core/Loot.ts`                                                |
 | Phosani's Nightmare, the one-fight map (its arena too) | `src/game/content/phosani.ts`, `scaperune/maps/sisterhoodSanctuary.ts` |
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
+| Thanksgiving Harvest's Hosidius Vinery zone            | `src/game/content/maps.ts`                                             |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | A floor that rises and falls away (the Wardens')       | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
-| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
+| Static map scenery and posed NPC props                 | `MapDef.scenery`, `MapDef.props`, `GameView`, `docs/DEVELOPMENT.md`    |
 | A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
 | Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
 | Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
@@ -246,8 +248,9 @@ desktop build.
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
-- `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
-  any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
+- `?devtools` shows the Tombs of Amascut's testing buttons and a HUD toggle for Happis's solo controls, including
+  reversible maxed melee gear and weapon/prayer loadouts. Without it the dev server plays as
+  players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the

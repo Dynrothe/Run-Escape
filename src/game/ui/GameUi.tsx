@@ -4,6 +4,7 @@ import {
     memo,
     useCallback,
     useEffect,
+    useId,
     useRef,
     useState,
     useSyncExternalStore,
@@ -31,9 +32,10 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
-import { CHARACTERS, getCharacter } from "../content/characters";
+import { CHARACTERS, characterMapRestriction, getCharacter } from "../content/characters";
+import { ENEMIES } from "../content/enemies";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
-import { GEAR_SLOT_BY_ID } from "../content/items";
+import { GEAR_SLOT_BY_ID, UTILITY } from "../content/items";
 import {
     CAMPAIGN_MAPS,
     DEV_MAPS,
@@ -52,7 +54,7 @@ import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID } from "../content/trophies";
-import { CharacterDef, CombatStyle, MapDef } from "../content/types";
+import { CharacterDef, CombatStyle, MapDef, Stats } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -70,6 +72,7 @@ import {
     isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
+import { MAX_CAMERA_DISTANCE, MIN_CAMERA_DISTANCE } from "../render/CameraRig";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
@@ -948,6 +951,7 @@ function TitleHint(): JSX.Element {
 // stands in view between them
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
+    const restriction = characterMapRestriction(getMapCharacter(map) ?? ui.characterId, map.id);
     const [board, setBoard] = useState(false);
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
     const expertShown = map.raid !== undefined && ui.coop.status === "offline";
@@ -971,8 +975,11 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                         {expertShown && <ExpertSwitch ui={ui} client={client} />}
                     </>
                 )}
+                {restriction && <span className="ui-endless-hint">{restriction}</span>}
                 <button
                     className="ui-button ui-button-go ui-select-go"
+                    disabled={restriction !== undefined}
+                    title={restriction}
                     onClick={() => client.startRun()}
                 >
                     <KeyHint pad="start" /> Enter {map.name}
@@ -1454,8 +1461,20 @@ function AdventurerDetails({
             </div>
             <div className="ui-card-text">{character.description}</div>
             {/* What they bring, a stat to a line */}
-            {bonus.length > 0 && (
+            {(bonus.length > 0 || character.damageAgainst) && (
                 <div className="ui-select-bonus">
+                    {character.damageAgainst && (
+                        <StatLine
+                            text={`+${Math.round(character.damageAgainst.damage * 100)}% damage against ${character.damageAgainst.tags
+                                .map(
+                                    (tag) =>
+                                        ({ bird: "birds", vampyre: "vampyres", undead: "undead" })[
+                                            tag
+                                        ],
+                                )
+                                .join(", ")}`}
+                        />
+                    )}
                     {bonus.map((text) => (
                         <StatLine key={text} text={text} />
                     ))}
@@ -1530,6 +1549,8 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
         setPeek(undefined);
     };
     const beaten = CAMPAIGN_MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
+    // The Thanksgiving preview intentionally themes the entire selector, not only its tile.
+    const thanksgivingTheme = (peek ?? ui.mapId) === "thanksgiving";
     const tile = (map: MapDef) => {
         const selected = map.id === ui.mapId;
         return (
@@ -1537,6 +1558,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 key={map.id}
                 className={
                     "ui-card ui-map-tile" +
+                    (map.id === "thanksgiving" ? " ui-map-tile-thanksgiving" : "") +
                     (selected ? " ui-card-selected" : "") +
                     (isMapUnlocked(save, map.id) ? "" : " ui-card-locked")
                 }
@@ -1563,7 +1585,10 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     };
     return (
         <div
-            className="ui-panel rs-border rs-background ui-select-panel ui-select-maps"
+            className={
+                "ui-panel rs-border rs-background ui-select-panel ui-select-maps" +
+                (thanksgivingTheme ? " ui-select-maps-thanksgiving" : "")
+            }
             onMouseLeave={stopPeeking(setPeek)}
         >
             <h2 className="ui-select-heading">
@@ -1675,7 +1700,12 @@ function MapDetails({
     const hardWins = save.hardVictories[map.id] ?? 0;
     const hardEndless = save.hardEndlessBest[map.id];
     return (
-        <div className="ui-select-details">
+        <div
+            className={
+                "ui-select-details" +
+                (map.id === "thanksgiving" ? " ui-select-details-thanksgiving" : "")
+            }
+        >
             <div className="ui-select-details-head">
                 <ItemIcon objId={map.iconObjId} size={36} />
                 <div>
@@ -1968,7 +1998,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     }}
                 />
             )}
-            {isCoarsePointer && hud && !ui.cinematic && (
+            {isCoarsePointer && hud && !ui.cinematic && ui.overlay !== "paused" && (
                 <TouchControls
                     inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
                     overlay={ui.overlay}
@@ -1976,7 +2006,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 />
             )}
             {/* The inspectable HUD slots sit above the touch movement zone. */}
-            {hud && !ui.cinematic && (
+            {hud && !ui.cinematic && ui.overlay !== "paused" && (
                 <Hud
                     hud={hud}
                     client={client}
@@ -2146,19 +2176,33 @@ function EvolutionLine({
 const GearSlots = memo(function GearSlots({
     gear,
     disabled,
+    id,
+    open,
 }: {
     gear: GearSlotView[];
     disabled: boolean;
+    id: string;
+    open: boolean;
 }): JSX.Element {
     return (
-        <div className="ui-slots ui-gear-slots">
+        <div
+            id={id}
+            className="ui-slots ui-hud-gear-grid"
+            role="group"
+            aria-label="Equipment slots"
+            hidden={!open}
+        >
             {gear.map((slot) => (
                 <DescriptionButton
                     key={slot.slot}
                     itemId={slot.item?.id}
                     disabled={!slot.item || disabled}
                     aria-label={slot.item?.name ?? `${slot.name} (empty)`}
-                    className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
+                    className={
+                        "ui-slot ui-gear-slot" +
+                        (slot.slot === "ring" ? " ui-gear-ring-slot" : "") +
+                        (slot.item ? "" : " ui-gear-slot-empty")
+                    }
                     style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
                     description={slot.item && <ItemDescription item={slot.item} />}
                 >
@@ -2175,6 +2219,28 @@ const GearSlots = memo(function GearSlots({
         </div>
     );
 });
+
+function GearPanel({ gear, disabled }: { gear: GearSlotView[]; disabled: boolean }): JSX.Element {
+    const [open, setOpen] = useState(!isCoarsePointer);
+    const gridId = useId();
+    return (
+        <div className="ui-hud-gear">
+            <button
+                className="ui-dps ui-gear-toggle"
+                type="button"
+                aria-label="Gear"
+                aria-expanded={open}
+                aria-controls={gridId}
+                title="Show or hide equipment slots"
+                onClick={() => setOpen((shown) => !shown)}
+            >
+                <span className="ui-dps-label">GEAR</span>{" "}
+                <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
+            </button>
+            <GearSlots gear={gear} disabled={disabled} id={gridId} open={open} />
+        </div>
+    );
+}
 
 // Utility items, used with 1-4 (a controller's shoulder buttons) or a click
 const Inventory = memo(function Inventory({
@@ -2205,14 +2271,20 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
     return (
         <div className="ui-buffs">
             {buffs.map((buff) => (
-                <div
+                <DescriptionButton
                     key={buff.id}
                     className={
                         "ui-buff" +
                         (buff.harmful ? " ui-buff-harmful" : "") +
                         (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
                     }
-                    title={buff.name}
+                    itemId={buff.id}
+                    aria-label={buff.name}
+                    description={
+                        <span>
+                            {buff.name}: {buff.description}
+                        </span>
+                    }
                 >
                     <ItemIcon objId={buff.objId} size={24} />
                     {buff.secondsLeft !== undefined && (
@@ -2224,7 +2296,7 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                             />
                         </>
                     )}
-                </div>
+                </DescriptionButton>
             ))}
         </div>
     );
@@ -2252,10 +2324,10 @@ const Hud = memo(function Hud({
                 <div className="ui-hud-left">
                     <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
                     <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
-                    <GearSlots gear={hud.gear} disabled={disabled} />
                 </div>
                 <RunTimer client={client} />
                 <TombsScabarasReading client={client} />
+                {isCoarsePointer && <CameraZoomSlider client={client} />}
                 <div className="ui-hud-right">
                     <Minimap client={client} />
                     <KillsAndCoins client={client} />
@@ -2272,6 +2344,7 @@ const Hud = memo(function Hud({
                     {import.meta.env.DEV && <DevWardensButton client={client} />}
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
+                    <GearPanel gear={hud.gear} disabled={disabled} />
                 </div>
             </div>
             <BossBar mapId={hud.mapId} client={client} />
@@ -2304,6 +2377,47 @@ function XpBar({ level, client }: { level: number; client: GameClient }): JSX.El
 function RunTimer({ client }: { client: GameClient }): JSX.Element {
     const seconds = useHudNumber(client, (n) => n.seconds) ?? 0;
     return <div className="ui-timer">{formatTime(seconds)}</div>;
+}
+
+function CameraZoomSlider({ client }: { client: GameClient }): JSX.Element {
+    const [zoom, setZoom] = useState(() => {
+        const range = MAX_CAMERA_DISTANCE - MIN_CAMERA_DISTANCE;
+        return Math.round(((MAX_CAMERA_DISTANCE - client.cameraRig.distance) / range) * 100);
+    });
+    const [open, setOpen] = useState(false);
+    const sliderId = useId();
+    return (
+        <div className="ui-mobile-zoom-control">
+            <button
+                className="ui-dps ui-mobile-zoom-toggle"
+                type="button"
+                aria-label="Zoom"
+                aria-expanded={open}
+                aria-controls={sliderId}
+                onClick={() => setOpen((shown) => !shown)}
+            >
+                <span className="ui-dps-label">ZOOM</span>
+                <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
+            </button>
+            <input
+                id={sliderId}
+                className="ui-mobile-zoom"
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={zoom}
+                hidden={!open}
+                onChange={(event) => {
+                    const value = Number(event.currentTarget.value);
+                    client.setCameraZoom(value);
+                    setZoom(value);
+                }}
+                onPointerUp={(event) => event.currentTarget.blur()}
+                aria-label="Camera zoom"
+            />
+        </div>
+    );
 }
 
 function KillsAndCoins({ client }: { client: GameClient }): JSX.Element {
@@ -2564,9 +2678,10 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                 <RaidObjective room={raidRoom} bossIn={bossIn} />
             ) : null;
         }
-        return bossIn !== undefined && bossIn <= 60 ? (
+        const warning = getMap(mapId).finalBossWarning;
+        return warning && bossIn !== undefined && bossIn <= 60 ? (
             <div className="ui-boss-warning">
-                {getMap(mapId).finalBossWarning} {bossIn}s
+                {warning} {bossIn}s
             </div>
         ) : null;
     }
@@ -2962,6 +3077,7 @@ function PauseModal({
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
     const quests = useHudNumber(client, (n) => n.quests) ?? [];
+    const activeEffects = useHudNumber(client, (n) => n.buffs) ?? [];
     const padKind = usePadKind();
     // The host can remove anyone still in the run (one who's stopped playing)
     const kickable =
@@ -3064,6 +3180,39 @@ function PauseModal({
                         )}
                     </div>
                     <div className="ui-pause-column">
+                        <h3 className="ui-pause-heading">Active Effects</h3>
+                        {activeEffects.length > 0 ? (
+                            <div className="ui-pause-list">
+                                {activeEffects.map((effect) => (
+                                    <div key={effect.id} className="ui-pause-item">
+                                        <ItemIcon objId={effect.objId} size={24} />
+                                        <span className="ui-pause-name">
+                                            {effect.name}
+                                            <span className="ui-pause-detail">
+                                                {effect.description}
+                                            </span>
+                                            {effect.secondsLeft !== undefined && (
+                                                <span className="ui-pause-detail">
+                                                    {effect.secondsLeft}s left
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span
+                                            className={
+                                                "ui-pause-level " +
+                                                (effect.harmful
+                                                    ? "ui-pause-effect-debuff"
+                                                    : "ui-pause-effect-buff")
+                                            }
+                                        >
+                                            {effect.harmful ? "Debuff" : "Buff"}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="ui-subtle">None</div>
+                        )}
                         {quests.length > 0 && (
                             <>
                                 <h3 className="ui-pause-heading">Quests</h3>

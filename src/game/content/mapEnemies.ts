@@ -2,6 +2,7 @@ import { ENEMY_BY_ID } from "./enemies";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { TOMBS_ENEMIES } from "./tombs";
 import { PUMPKIN_MAPS, PUMPKIN_OUTCOMES } from "./trickOrTreat";
+import { TURKEY_MAPS, TURKEY_OUTCOMES } from "./TurkeyDay";
 import { EnemyDef, MapDef } from "./types";
 
 // Every enemy id anywhere in a piece of content. It goes by the values, not by
@@ -27,6 +28,7 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
     const ids = new Set<string>();
     const seen = new Set<object>();
     const pumpkins = PUMPKIN_MAPS.includes(map.id) ? PUMPKIN_OUTCOMES : [];
+    const turkeys = TURKEY_MAPS.includes(map.id) ? TURKEY_OUTCOMES : []; // Add turkeys to the list of outcomes to check for enemies
     // Random events go by their effects: the rest is names and lines of chat
     const randomEvents = RANDOM_EVENTS.map((event) => event.effect);
     // The Tombs' rooms aren't waves, so their enemies are listed as they are
@@ -39,6 +41,7 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
             map.fun?.bosses,
             map.raid,
             pumpkins,
+            turkeys,
             randomEvents,
             tombs,
         ],

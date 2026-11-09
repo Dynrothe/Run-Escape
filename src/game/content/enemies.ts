@@ -3,6 +3,7 @@ import { CURSED_SANDS_ENEMIES } from "./cursedSands";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
+import { THANKSGIVING_ENEMIES } from "./thanksgivingenemies";
 import { getTheatreBosses } from "./theatre";
 import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
@@ -227,6 +228,7 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "chicken",
         name: "Chicken",
+        tags: ["bird"],
         npcId: 1173,
         idleSeq: 5386,
         walkSeq: 5385,
@@ -599,6 +601,34 @@ export const ENEMIES: EnemyDef[] = [
         sounds: { attack: 879, hit: 884, death: 882 },
     },
 
+    // Thanksgiving's fox uses the same sound stand-ins as the pyre fox.
+    {
+        id: "farmer",
+        name: "Farmer",
+        npcId: 3114,
+        ...HUMAN,
+        hp: 10,
+        damage: 2,
+        speed: 1.9,
+        radius: 0.35,
+        xp: 8,
+        sounds: HUMAN_SOUNDS,
+    },
+    {
+        id: "fox",
+        name: "Fox",
+        npcId: 3901,
+        idleSeq: 6561,
+        walkSeq: 6560,
+        attackSeq: 6559,
+        deathSeq: 6558,
+        hp: 9,
+        damage: 2,
+        speed: 2.6,
+        radius: 0.3,
+        xp: 8,
+        sounds: { attack: 710, hit: 713, death: 711 },
+    },
     // The Wilderness: revenants from the caves beneath it, bandits, dark
     // warriors, chaos druids, hill giants, poison spiders and the Ankou (and
     // the Graveyard of Shadows's zombies and skeletons, the ones above)
@@ -8357,6 +8387,7 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    ...THANKSGIVING_ENEMIES,
 ];
 
 // The Tombs of Amascut's (in development)

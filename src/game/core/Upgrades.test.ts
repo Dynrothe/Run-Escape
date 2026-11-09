@@ -360,7 +360,7 @@ describe("class weapons", () => {
     test("are only offered to their own class", () => {
         for (const style of ["melee", "ranged", "magic"] as CombatStyle[]) {
             const offered = newWeaponOffers(style, [weapon("throwing_knives")]);
-            for (const def of WEAPONS.filter((w) => w.style && !w.evolved)) {
+            for (const def of WEAPONS.filter((w) => w.style && !w.evolved && !w.pickOnly)) {
                 if (def.style === style) {
                     expect(offered.get(def.id) ?? 0).toBeGreaterThan(0);
                 } else {
@@ -368,6 +368,19 @@ describe("class weapons", () => {
                 }
             }
         }
+    });
+
+    test("the Rubber Chicken is not offered to other adventurers", () => {
+        expect(newWeaponOffers("melee", [weapon("scimitar")]).has("rubber_chicken")).toBe(false);
+        const rng = new Rng(8);
+        const choices = Array.from({ length: 100 }, () =>
+            rollChoices(rng, [weapon("rubber_chicken")], [], 0, "melee"),
+        ).flat();
+        expect(
+            choices.some(
+                (choice) => choice.kind === "weaponLevel" && choice.weaponId === "rubber_chicken",
+            ),
+        ).toBe(true);
     });
 
     test("the Very rare ones are offered least", () => {

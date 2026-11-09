@@ -125,6 +125,13 @@ describe("enemy bakes", () => {
         }
     });
 
+    test("map scenery locs are in the base bake", () => {
+        const keys = new Set(GameAssets.getBaseRequests().map(({ key }) => key));
+        for (const { locId } of getMap("thanksgiving").scenery ?? []) {
+            expect(keys).toContain("loc:" + locId);
+        }
+    });
+
     test("aren't in the base bake", () => {
         const keys = GameAssets.getBaseRequests().map((r) => r.key);
         expect(keys).not.toContain("npc:goblin");
@@ -151,6 +158,16 @@ describe("merged enemy bakes", () => {
                 expect(keys.has(key) || keys.has(merged.aliases.get(key)!)).toBe(true);
             }
         }
+    });
+
+    test("bakes the item model used by a boss projectile", () => {
+        const requests = GameAssets.getEnemyRequests(getMapEnemies(getMap("thanksgiving")));
+        expect(requests).toContainEqual({
+            kind: "obj",
+            key: "obj:23818",
+            objId: 23818,
+            count: 1,
+        });
     });
 
     test("merge only requests that bake the same model, with all their animations", () => {
@@ -289,6 +306,26 @@ describe("player bakes", () => {
         }
     });
 
+    test("Avian Assaulter keeps the chicken outfit over gear and passives in co-op", () => {
+        const sim = createRun(2, "avian_assaulter");
+        sim.as(1, () => {
+            sim.gear = {
+                head: "berserker_helm",
+                body: "rune_platebody",
+                legs: "rune_platelegs",
+                feet: "rune_boots",
+            };
+            sim.passives.push({ id: "obsidian_armour", level: 1, value: 1 });
+        });
+        const appearance = getRunAppearance(sim, 1);
+        expect(appearance.equipment[EquipSlot.HEAD]).toBe(11021);
+        expect(appearance.equipment[EquipSlot.TORSO]).toBe(11020);
+        expect(appearance.equipment[EquipSlot.LEGS]).toBe(11022);
+        expect(appearance.equipment[EquipSlot.FEET]).toBe(11019);
+        expect(appearance.equipment[EquipSlot.WEAPON]).toBe(4566);
+        expect(sim.as(1, () => sim.gear.head)).toBe("berserker_helm");
+    });
+
     test("bake the swings a level-up offers ahead, and not ones held", () => {
         const sim = createRun(1);
         const start = getWeapon(CHARACTERS[0].startingWeapon);
@@ -370,6 +407,7 @@ describe("power-ups in the cache", () => {
             [EquipSlot.SHIELD]: 1171,
             [EquipSlot.HEAD]: 1153,
         });
+
         const [request] = getPowerUpLookRequests(appearance);
         const { look } = getPowerUp("sled");
         expect(request).toMatchObject({
@@ -383,6 +421,20 @@ describe("power-ups in the cache", () => {
         expect(worn[EquipSlot.HEAD]).toBe(1153);
         // The player's own look is left as it was
         expect(appearance.equipment[EquipSlot.WEAPON]).toBe(1277);
+    });
+
+    test("adventurers' overhead effects are baked and kept in the slim cache", () => {
+        const avian = CHARACTERS.find((character) => character.id === "avian_assaulter")!;
+        expect(avian.overheadSpotAnim).toBe(254);
+        expect(CHARACTERS.filter((character) => character.overheadSpotAnim !== undefined)).toEqual([
+            avian,
+        ]);
+        expect(getSpotAnimIds()).toContain(avian.overheadSpotAnim);
+        expect(GameAssets.getBaseRequests()).toContainEqual({
+            kind: "spotanim",
+            key: "spot:254",
+            spotAnimId: 254,
+        });
     });
 
     test("what their effects draw is baked, so the slim cache gets it", () => {

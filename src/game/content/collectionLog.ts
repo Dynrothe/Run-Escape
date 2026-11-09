@@ -11,13 +11,13 @@ import { WEAPONS } from "./weapons";
 
 export type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
 
-// The map a trophy's from: a pumpkin's are the Hallowed Night's, the Tombs' chest's the raid's
+// The map a trophy's from: a pumpkin's are the Hallowed Night's, a turkey's Thanksgiving, the
+// Tombs' chest the raid.
 function trophyMap(trophy: TrophyDef): string {
-    return trophy.from.kind === "pumpkin"
-        ? "halloween"
-        : trophy.from.kind === "tombs"
-          ? "tombs_of_amascut"
-          : trophy.from.mapId;
+    if (trophy.from.kind === "pumpkin") return "halloween";
+    if (trophy.from.kind === "turkey") return "thanksgiving";
+    if (trophy.from.kind === "tombs") return "tombs_of_amascut";
+    return trophy.from.mapId;
 }
 
 // Whether a weapon's brought in on a map: its boss's drops, its chest's

@@ -18,7 +18,7 @@ import {
     createAppearance,
     getAppearanceKey,
 } from "../../rs/model/player/PlayerModelLoader";
-import { getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
@@ -137,6 +137,9 @@ export function getPickupModelKey(pickup: Pickup): string {
         return "pickup:casket_" + pickup.tier;
     }
     if (pickup.kind === "powerUp" && pickup.powerUp) {
+        if (pickup.powerUp === "cooked_turkey") {
+            return "pickup:food";
+        }
         const powerUp = getPowerUp(pickup.powerUp);
         return powerUp.locId !== undefined ? "loc:" + powerUp.locId : "obj:" + powerUp.objId;
     }
@@ -240,6 +243,9 @@ export function getSpotAnimIds(): number[] {
             }
         }
     };
+    for (const character of CHARACTERS) {
+        add(character.overheadSpotAnim);
+    }
     for (const weapon of WEAPONS) {
         for (const level of weapon.levels) {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
@@ -443,8 +449,8 @@ export function getCharacterAttackSeqs(characterId: string): number[] {
 }
 
 // The player's look in a run: the character's outfit, the held weapon tier,
-// any gear their passives add, and what they've equipped from caskets (which
-// goes over the rest).
+// any gear their passives add, and what they've equipped from caskets. A
+// character's fixed outfit slots stay visible over that gear.
 export function getRunAppearance(sim: Sim, hero = sim.focus): PlayerAppearance {
     return sim.as(hero, () => getCurrentAppearance(sim));
 }
@@ -470,6 +476,14 @@ function getCurrentAppearance(sim: Sim): PlayerAppearance {
         const equipSlot = GEAR_SLOT_BY_ID.get(slot as GearSlot)?.equipSlot;
         if (equipSlot !== undefined) {
             appearance.equipment[equipSlot] = getItem(itemId).objId;
+        }
+    }
+    const character = getCharacter(sim.characterId);
+    if (character.fixedOutfit) {
+        for (const [slot, objId] of Object.entries(character.equipment)) {
+            if (objId !== undefined) {
+                appearance.equipment[Number(slot)] = objId;
+            }
         }
     }
     return appearance;
@@ -735,6 +749,14 @@ export class GameAssets {
         }
         // Scenery its attacks grow, here rather than in what every run bakes
         for (const attack of enemy.boss?.attacks ?? []) {
+            if (attack.projectileObjId !== undefined) {
+                requests.push({
+                    kind: "obj",
+                    key: "obj:" + attack.projectileObjId,
+                    objId: attack.projectileObjId,
+                    count: 1,
+                });
+            }
             const quarters = attack.quarters;
             for (const locId of [quarters?.safeLocId, quarters?.hurtLocId, attack.ground?.locId]) {
                 if (locId !== undefined) {
@@ -867,6 +889,11 @@ export class GameAssets {
         }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
+        for (const map of ALL_MAPS) {
+            for (const { locId } of map.scenery ?? []) {
+                locIds.add(locId);
+            }
+        }
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 if (attack.pool) {

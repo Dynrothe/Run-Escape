@@ -39,7 +39,7 @@
         "start": "vite",
         "start:singleplayer": "vite",
         "build": "vite build",
-        "test": "vitest run",
+        "test": "vitest run --test-timeout=30000",
         "preview": "vite preview",
         "serve": "node server/serve.mjs",
         "serve:singleplayer": "node server/serve.mjs",

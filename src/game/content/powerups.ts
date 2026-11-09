@@ -37,6 +37,19 @@ export const POWER_UPS: PowerUpDef[] = [
         effect: { kind: "pumpkin" },
     },
     {
+        id: "cooked_turkey",
+        name: "Cooked Turkey",
+        description: "A feast or a foul trick.",
+        objId: 2313,
+        weight: 0,
+        price: 0,
+        color: "#d27d2d", // A nice golden roast brown mini-map dot color
+        flash: "#ffcc00",
+        // eat sound
+        sound: 2393,
+        effect: { kind: "cooked_turkey" },
+    },
+    {
         id: "cannon",
         name: "Dwarf multicannon",
         description: "Sets up a cannon that shoots everything nearby for 20 seconds.",

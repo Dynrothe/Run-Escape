@@ -22,7 +22,7 @@ import {
 import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getPageCost, getUpgradeCost } from "../content/shop";
-import { TROPHY_BY_ID } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import {
     CharacterDef,
     CombatStyle,
@@ -292,9 +292,6 @@ export function migrateSave(raw: unknown): SaveData {
     if (Array.isArray(data.invocations)) {
         save.invocations = cleanInvocations(data.invocations);
     }
-    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
-        save.pet = data.pet;
-    }
     if (
         typeof data.favouriteCharacter === "string" &&
         CHARACTERS.some((c) => c.id === data.favouriteCharacter && !c.only)
@@ -312,6 +309,14 @@ export function migrateSave(raw: unknown): SaveData {
                 save.questsDone.push(id);
             }
         }
+    }
+    applyQuestTrophies(save);
+    // A recorded hard victory already required defeating the map's final boss.
+    if ((save.hardVictories.thanksgiving ?? 0) > 0 && !save.trophies.includes("golden_egg")) {
+        save.trophies.push("golden_egg");
+    }
+    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
+        save.pet = data.pet;
     }
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
@@ -536,8 +541,21 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         save.coins += quest.coins;
         save.totalCoins += quest.coins;
     }
+    applyQuestTrophies(save);
     applyUnlocks(save, run);
     return quests;
+}
+
+function applyQuestTrophies(save: SaveData): void {
+    for (const trophy of TROPHIES) {
+        if (
+            trophy.from.kind === "quest" &&
+            save.questsDone.includes(trophy.from.questId) &&
+            !save.trophies.includes(trophy.id)
+        ) {
+            save.trophies.push(trophy.id);
+        }
+    }
 }
 
 // What a run counts towards quests: its kills and caskets, except on the fun

@@ -3,6 +3,38 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Avian Assaulter, a melee adventurer in a chicken outfit with a Rubber Chicken.
+- Optional developer controls for a maxed melee loadout.
+- Thanksgiving Harvest quests for its bosses and a Chompy Bird hunt, which rewards 4,000 coins.
+- The Thanksgiving Collection Log gains Chompy drops, a Chompy chick pet, turkey-carving secateurs and boss-gated event rewards.
+
+### Changed
+
+- HUD effect descriptions explain their effects; debuffs lead the HUD and pause-menu lists.
+- Equipment slots for solo and co-op runs use a collapsible two-column grid below the DPS tracker.
+- Professor Oddenstein throws an explosive potion and strikes with a forward-facing dagger cone.
+- Professor Oddenstein uses his dagger more often up close instead of casting point-blank.
+- Thanksgiving Harvest moves to the Hosidius Vinery, with an autumn map selector and a spawn beside the Vinery.
+- Thanksgiving Harvest now lasts 7 minutes: the Professor arrives at 2:00, the Evil Chickens at 4:30 and the Freaky Forester at 7:00, with his 60-second warning from 6:00.
+- Avian Assaulter has 70 HP and moves 45% faster, and the Freaky Forester's Pheasant Arrow fires four arrows at once.
+- The Freaky Forester's 60-second warning now appears at 9 minutes into Thanksgiving Harvest.
+- The Freaky Forester uses cache-backed Pheasant Arrows and rises into his larger form in the same boss fight.
+- Enraged Dark Chicken's Lane Rush now covers a 10-tile lane.
+- A mobile HUD slider adjusts camera zoom in solo and co-op runs.
+- Thanksgiving Harvest waves now feature farmers, bandits and foxes instead of goblins and rats.
+- Chompy Slayer awards the Chompy chick, and Thanksgiving's Collection Log has a Turkey hat and a hard-mode Golden Egg.
+- Thanksgiving Harvest is exclusive to Avian Assaulter, who gets bird-hunting bonuses and upgrades a mighty Rubber Chicken instead of finding other weapons.
+- The Rubber Chicken strikes in front and behind from its first level.
+- Professor Oddenstein's Chemical Splash fires three flasks, the Evil Chicken's Magic Peck a tight cone of five, and the Forester's Boot Kick shows a red cone warning like the Professor's dagger slice.
+- Summoned Enraged Dark Chickens now charge down their lane instead of only walking at you.
+- Avian Assaulter is 35% bigger and 35% faster on Thanksgiving Harvest.
+- The Rubber Chicken has ten levels, hits bosses for 20% more and heals on hit, more with every upgrade. Avian Assaulter no longer finds gear, passives or utility items.
+- Avian Assaulter has circling birds overhead throughout the run, without being stunned.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed
@@ -199,18 +231,18 @@ the version in the corner).
   beaten: a trial in the Owl's Court, hung in the Hallowed Sepulchre's dark, where the court
   itself is his weapon. You play the Saradominist, with Saradomin Strike, which only reaches him
   from close by. With its own track, Blade of Forgotten Justice.
-  - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
-    him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
-    for a few seconds after, as he'll tell you).
-  - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
-    a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
-    early still lands.
-  - Each phase has its own full health bar.
-  - His gaze lights up the court, and the pillars' shadows are where it can't see you.
-  - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
-    slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
-    a burst of light as he kneels, and a ring across the court as he rises.
-  - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
+    - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
+      him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
+      for a few seconds after, as he'll tell you).
+    - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
+      a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
+      early still lands.
+    - Each phase has its own full health bar.
+    - His gaze lights up the court, and the pillars' shadows are where it can't see you.
+    - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
+      slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
+      a burst of light as he kneels, and a ring across the court as he rises.
+    - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
 - A Screen shake setting, on unless your system asks for less motion.
 - Retry on a boss fight's results, to go straight into it again.
 
@@ -244,31 +276,31 @@ the version in the corner).
   than every few seconds.
 - The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
 - The Theatre of Blood's bosses, by Okaeri: each one a real fight, with a mechanic of its own.
-  - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
-    Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
-    Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
-  - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
-    bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
-  - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
-    to 1s.
-  - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
-    attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
-    one marked on the ground first.
-  - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
-    round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
-  - Hard and expert mode fire half as many bullets again, with the space between them as wide:
-    spreads fan out wider, and rings with no way through stay as they are.
-  - The raid's green and blue Nylocas shoot from range, Verzik's too.
-  - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
-    fight is worth as much as a quick early one.
-  - The Theatre is brighter, the woods outside Canifis most of all.
+    - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
+      Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
+      Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
+    - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
+      bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
+    - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
+      to 1s.
+    - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
+      attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
+      one marked on the ground first.
+    - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
+      round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
+    - Hard and expert mode fire half as many bullets again, with the space between them as wide:
+      spreads fan out wider, and rings with no way through stay as they are.
+    - The raid's green and blue Nylocas shoot from range, Verzik's too.
+    - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
+      fight is worth as much as a quick early one.
+    - The Theatre is brighter, the woods outside Canifis most of all.
 - Expert mode in the Theatre of Blood, by Okaeri:
-  - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
-    Vasilias turns to a colour its weapon can't hurt.
-  - The Maiden's Nylocas feed her more.
-  - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
-    can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
-  - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
+    - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
+      Vasilias turns to a colour its weapon can't hurt.
+    - The Maiden's Nylocas feed her more.
+    - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
+      can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
+    - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
 - The Theatre of Blood's weapons come from its chest, by Okaeri: a Ghrazi rapier in the chest
   unlocks the rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which
   unlocks the Holy Scythe. Beating the raid no longer unlocks them. Weapons already unlocked stay
@@ -312,16 +344,16 @@ the version in the corner).
 - Raids, by Okaeri: the Theatre of Blood, a new section on the map screen. Six rooms one after
   another, each with its own waves and then its boss in its real room from OSRS, fought as a
   bullet hell. It's a melee raid: its bosses take far less from missiles and magic.
-  - Raid points for each room, more for a fast, clean kill: they pay coins, buy food and potions from
-    a supply chest between rooms, and better your chance of a purple from the chest at the end.
-  - The Theatre's uniques for the Collection log, Lil' Zik, and two weapons: the Ghrazi rapier for
-    beating it, and the Holy Scythe of Vitur for beating it on hard.
-  - The raid runs through Morytania: each room fights its waves in a real place, from the woods
-    outside Canifis to Vampyrium. Bones and coins left on a hall floor go with you to its boss.
-  - Teleporters: once you've killed a room's boss, its hall has a portal straight to it (three a raid),
-    to get back to the boss you're learning quicker.
-  - Beat the raid on hard for expert mode, with more of the real raid's mechanics, twice the coins
-    and Lil' Zik's looks.
+    - Raid points for each room, more for a fast, clean kill: they pay coins, buy food and potions from
+      a supply chest between rooms, and better your chance of a purple from the chest at the end.
+    - The Theatre's uniques for the Collection log, Lil' Zik, and two weapons: the Ghrazi rapier for
+      beating it, and the Holy Scythe of Vitur for beating it on hard.
+    - The raid runs through Morytania: each room fights its waves in a real place, from the woods
+      outside Canifis to Vampyrium. Bones and coins left on a hall floor go with you to its boss.
+    - Teleporters: once you've killed a room's boss, its hall has a portal straight to it (three a raid),
+      to get back to the boss you're learning quicker.
+    - Beat the raid on hard for expert mode, with more of the real raid's mechanics, twice the coins
+      and Lil' Zik's looks.
 - Phosani's Nightmare: a boss fight on its own, open once Hallowed Night's beaten. One fight in
   the Sisterhood Sanctuary under Slepe, with no waves, picks or items: everything The Nightmare
   has, quicker, plus bullet hell patterns, eggs that hatch parasites and husks that hold you where

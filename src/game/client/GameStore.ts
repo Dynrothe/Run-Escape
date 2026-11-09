@@ -61,6 +61,7 @@ export type InventorySlotView = { item: ItemView; count: number } | null;
 export type BuffView = {
     id: string;
     name: string;
+    description: string;
     objId: number;
     // A boss attack's drain rather than a potion or power-up
     harmful: boolean;

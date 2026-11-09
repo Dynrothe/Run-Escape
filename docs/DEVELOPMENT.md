@@ -1030,8 +1030,39 @@ Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apar
 of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
 2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
 
+### Collection log rewards
+
+- **`TrophyDef`** (`content/trophies.ts`): its stable `id` is stored in `SaveData.trophies`; don't rename one
+  players may already have. `TrophySource.enemy` rolls on a loot-bearing kill of that enemy on `mapId`;
+  `turkey` rolls when cooked turkey is carved; `boss` rolls on that boss's kill; and `map` is granted
+  only on victory, with optional `requiresBoss` checked against the run's `bossesKilled` and `hard`
+  limiting it to hard mode. A `quest` source is awarded when the quest is recorded and backfilled
+  for saves that already completed it. Thanksgiving's Golden Egg is also backfilled for recorded
+  hard victories.
+- **`PetDef`** (`content/pets.ts`): a pet's `id` is its trophy id, and its follower NPC is the cache
+  variant marked as a follower, with its own idle and walk sequences. The pet is usable once its
+  trophy is found.
+
+An adventurer's `CharacterDef.fixedOutfit` keeps the outfit's specified equipment slots visible
+over passive and casket gear without changing its stats. Avian Assaulter's Rubber Chicken is
+`pickOnly`: the adventurer starts with it and can upgrade it, but it isn't offered to others.
+Thanksgiving Harvest requires Avian Assaulter, whose `mapOnly` keeps them on that map. This applies
+to every co-op party member as well as solo runs. Their `maxWeapons` leaves room only for the
+Rubber Chicken. `EnemyDef.minionAttacks` lets a summoned (non-boss) enemy fight with its `boss`
+attacks, as the Enraged Dark Chickens' surge does; set its `enrage.at` to 0. `CharacterDef.noItems` also gives no passive slots and no casket item (caskets pay
+only coins). The chicken's `WeaponDef.bloodHeal` rolls its heal on every hit, and each upgrade adds
+to `WeaponState.healGain` by the offer's rarity (`BLOOD_HEAL_GAIN` in `Sim.ts`); `bossDamage`
+adds damage against bosses for that weapon only. `damageAgainst` applies the
+character's bonus to tagged birds for that hero's damage, not enemy or environmental damage.
+`CharacterDef.overheadSpotAnim` is a looping, purely visual effect drawn with each hero's rendered
+pose; Avian Assaulter uses the cache's stun birds without applying a stun. Its spot animation enters
+the base bake and slim cache with the other character effects.
+
 ### Props and opening cinematics
 
+- **`MapDef.scenery`** (`MapSceneryDef`): static cache locs drawn over a map at world-tile coordinates,
+  without changing its collision. Their loc ids enter the base asset bake and slim cache automatically.
+  Use for decorative seasonal objects; keep them clear of doors and roads.
 - **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
   on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
   such as a person standing guard (Vardhelm's two knights at the keep's door). They're baked as
@@ -1562,7 +1593,7 @@ opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
 `?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
-Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens). F3
+Amascut's testing buttons and god mode. F3
 shows collision and stats.
 
 ### A newer cache
