@@ -1718,6 +1718,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "scarab_swarm",
         name: "Scarab Swarm",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 1782,
         idleSeq: 1947,
         walkSeq: 1945,
@@ -1745,6 +1747,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_worker",
         name: "Kalphite worker",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 955,
         idleSeq: 6218,
         walkSeq: 6220,
@@ -1778,6 +1782,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_soldier",
         name: "Kalphite soldier",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 138,
         idleSeq: 6218,
         walkSeq: 6220,
@@ -1830,6 +1836,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_guardian",
         name: "Kalphite guardian",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 959,
         idleSeq: 6219,
         walkSeq: 6222,
@@ -2126,6 +2134,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_queen",
         name: "Kalphite Queen",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 963,
         idleSeq: 6239,
         walkSeq: 6238,
@@ -2228,6 +2238,8 @@ export const ENEMIES: EnemyDef[] = [
     {
         id: "kalphite_queen_risen",
         name: "Kalphite Queen",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 965,
         idleSeq: 6236,
         walkSeq: 6236,

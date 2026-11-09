@@ -49,7 +49,12 @@ import {
 } from "../content/invocations";
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
-import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
+import {
+    DIVINE_RUNE_POUCH,
+    canLevelPassive,
+    getPassive,
+    getPassiveGain,
+} from "../content/passives";
 import {
     LANTERN_ID,
     POWER_UPS,
@@ -2410,9 +2415,11 @@ export class Sim {
         }
     }
 
-    // Weapons and passives carried at once, with the shop's extra slots
+    // Weapons and passives carried at once, with the shop's extra slots, and the Divine rune
+    // pouch's, for a magic weapon (Upgrades' fitsWithPouch keeps it for one)
     get maxWeapons(): number {
-        return MAX_WEAPONS + this.metaStats.weaponSlots;
+        const pouch = this.passives.some((p) => p.id === DIVINE_RUNE_POUCH) ? 1 : 0;
+        return MAX_WEAPONS + this.metaStats.weaponSlots + pouch;
     }
 
     get maxPassives(): number {
@@ -17467,9 +17474,15 @@ export class Sim {
         }
         let dealt = 0;
         let effects = 0;
+        const lowHealth =
+            def.lowHealth && player.hp < player.maxHp * def.lowHealth.below
+                ? 1 + def.lowHealth.damage
+                : 1;
         for (const enemy of hit) {
-            const enemyDamage = damage * this.slayerScale(def, enemy);
+            const breach = this.breachScale(def, enemy);
+            const enemyDamage = damage * this.slayerScale(def, enemy) * lowHealth * breach;
             const hits = def.hits ?? [1];
+            const alive = !enemy.dead;
             const hitDealt =
                 this.damageEnemy(
                     enemy,
@@ -17478,6 +17491,16 @@ export class Sim {
                     player.x,
                     player.y,
                 ) + this.bigHits(def, enemy, enemyDamage, player.x, player.y);
+            // The gap shows only where the hit got in (not on a shield, or a style it's proof
+            // against), and on no more than 10 at once
+            if (breach > 1 && hitDealt > 0 && effects++ < 10) {
+                this.addEffect(def.breach!.spotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+            }
+            // A kill by this swing itself heals (the Keris partisan of the sun): not one some
+            // other kill leaves this weapon's name on
+            if (def.killHeal && alive && enemy.dead && this.isUp(this.hero)) {
+                this.heal(def.killHeal * this.healScale);
+            }
             // The rest of a multi-hit weapon's hits land a moment apart
             hits.slice(1).forEach((fraction, i) => {
                 this.pendingHits.push({
@@ -17510,9 +17533,29 @@ export class Sim {
         if (special?.effect?.kind === "heal" && dealt > 0) {
             this.heal(Math.min(Math.round(dealt * special.effect.fraction), special.effect.max));
         }
+        if (special?.effect?.kind === "restore") {
+            // Tumeken's Light: whole again, poison and boss drains gone, swung at something or not
+            player.poisonEnd = -1;
+            player.poisonDamage = 0;
+            this.debuffs = [];
+            // The drains' stats go with them, max hitpoints too, before healing to it
+            this.updateStats();
+            this.heal(player.maxHp);
+        }
         if (def.chain) {
             this.chainHits(def, def.chain, hit, damage);
         }
+    }
+
+    // A gap in the shell (WeaponDef.breach): the hit times its damage, now and then, far more
+    // often in what has one of its tags
+    private breachScale(def: WeaponDef, enemy: Enemy): number {
+        const breach = def.breach;
+        if (!breach || enemy.dead) {
+            return 1;
+        }
+        const chance = hasTag(enemy, breach.tags) ? breach.tagChance : breach.chance;
+        return this.rng.chance(chance) ? breach.damage : 1;
     }
 
     // How much harder a weapon hits this enemy for what it is (the Ivandis

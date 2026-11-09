@@ -1,8 +1,8 @@
 import { tr } from "../i18n";
 
 // Trophies: rare finds, kept in the Collection log, and in the save once they're
-// found. They do nothing in a run, but a few bring a weapon into the game (the
-// Theatre of Blood's rapier and Holy Scythe: UnlockTask "raidChest").
+// found. They do nothing in a run, but a few bring a weapon or a passive into the game (the
+// Theatre of Blood's rapier and Holy Scythe, the Tombs' jewels and Thread: UnlockTask "raidChest").
 export type TrophySource =
     // This chance on each kill of the boss on the map, or hardChance on hard mode
     | { kind: "boss"; enemyId: string; mapId: string; chance: number; hardChance?: number }
@@ -231,35 +231,35 @@ TROPHIES.push(
         id: "thread_of_elidinis",
         name: "Thread of Elidinis",
         objId: 27279,
-        how: "Sometimes in the Tombs of Amascut's chest, at any raid level.",
+        how: "Sometimes in the Tombs of Amascut's chest, at any raid level. Unlocks the Divine rune pouch as a passive.",
         from: { kind: "tombs", level: 0, chance: 1 / 10 },
     },
     {
         id: "breach_of_the_scarab",
         name: "Breach of the Scarab",
         objId: 27283,
-        how: "Rarely in the Tombs of Amascut's chest, from raid level 150.",
+        how: "Rarely in the Tombs of Amascut's chest, from raid level 150. Unlocks the Keris partisan of breaching as a weapon.",
         from: { kind: "tombs", level: 150, chance: 1 / 25 },
     },
     {
         id: "eye_of_the_corruptor",
         name: "Eye of the Corruptor",
         objId: 27285,
-        how: "Rarely in the Tombs of Amascut's chest, from raid level 300.",
+        how: "Rarely in the Tombs of Amascut's chest, from raid level 300. Unlocks the Keris partisan of corruption as a weapon.",
         from: { kind: "tombs", level: 300, chance: 1 / 25 },
     },
     {
         id: "jewel_of_the_sun",
         name: "Jewel of the Sun",
         objId: 27289,
-        how: "Rarely in the Tombs of Amascut's chest, from raid level 400.",
+        how: "Rarely in the Tombs of Amascut's chest, from raid level 400. Unlocks the Keris partisan of the sun as a weapon.",
         from: { kind: "tombs", level: 400, chance: 1 / 25 },
     },
     {
         id: "jewel_of_amascut",
         name: "Jewel of Amascut",
         objId: 30893,
-        how: "Very rarely in the Tombs of Amascut's chest, at raid level 500.",
+        how: "Very rarely in the Tombs of Amascut's chest, at raid level 500. Unlocks the Keris partisan of amascut as a weapon.",
         from: { kind: "tombs", level: 500, chance: 1 / 50 },
     },
 );

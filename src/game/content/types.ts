@@ -80,7 +80,8 @@ export function emptyStats(): Stats {
 }
 
 // What some weapons hit harder (the Ivandis flail and undead, vampyres)
-export type EnemyTag = "undead" | "vampyre";
+// kalphite: the kalphites and the scarabs (Kephri too), for the keris partisans
+export type EnemyTag = "undead" | "vampyre" | "kalphite";
 
 export type EnemyDef = {
     id: string;
@@ -1694,6 +1695,22 @@ export type WeaponDef = {
     // Hits enemies with any of these tags this much harder (0.5 = +50%; the
     // Ivandis flail against vampyres and the undead)
     slayer?: { tags: EnemyTag[]; damage: number };
+    // Slashes and sweeps: each enemy hit has this chance (tagChance with one of the tags) of a
+    // gap in its shell, taking damage times the hit, with spotAnim on it (the Keris partisan of
+    // breaching)
+    breach?: {
+        chance: number;
+        tagChance: number;
+        tags: EnemyTag[];
+        damage: number;
+        spotAnim: number;
+    };
+    // Slashes and sweeps: heals the player this much for each kill a swing of it makes (the Keris
+    // partisan of the sun)
+    killHeal?: number;
+    // Hits this much harder while the player is below this share of their hitpoints (below
+    // 0.25, damage 0.25: +25% under a quarter; the Keris partisan of the sun)
+    lowHealth?: { below: number; damage: number };
     // Slashes and sweeps: each enemy caught takes these hits, a fraction of
     // the damage each, a moment apart (the Dragon claws' four)
     hits?: number[];
@@ -1761,7 +1778,9 @@ export type SpecialAttackDef = {
         | { kind: "drain"; amount: number; seconds: number }
         // Sets what it hits burning: this fraction of the hit's damage every
         // second for seconds
-        | { kind: "burn"; damage: number; seconds: number };
+        | { kind: "burn"; damage: number; seconds: number }
+        // Heals the player to full and cures poison and boss drains (Tumeken's Light)
+        | { kind: "restore" };
 };
 
 export type PassiveDef = {
@@ -1783,6 +1802,8 @@ export type PassiveDef = {
     // An interface sprite shown for it instead of iconObjId's item (Piety's
     // prayer icon)
     iconSpriteId?: number;
+    // Never levelled past maxLevel, even in endless (the Divine rune pouch: one slot)
+    noOverlevel?: boolean;
     // Visible gear: the item worn at each level (index = level - 1)
     equipment?: { slot: number; objIds: number[] }[];
     // Stats it adds the same amount to as well (the Ring of wealth's coins,

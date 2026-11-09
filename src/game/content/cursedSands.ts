@@ -1255,6 +1255,8 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
         // alone holds back every event, its elder's too, till it's dead)
         id: "scarab_mage",
         name: "Scarab Mage",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11508,
         idleSeq: GUARD_IDLE,
         walkSeq: GUARD_WALK,
@@ -1309,6 +1311,8 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
         // (its event's inArena), with no intro to send the first off
         id: "scarab_mage_elder",
         name: "Scarab Mage",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11508,
         idleSeq: GUARD_IDLE,
         walkSeq: GUARD_WALK,
@@ -1373,6 +1377,8 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
         // The swarm the first mage calls to it (Kephri's): a few arrows each, walking in
         id: "mage_scarab",
         name: "Scarab Swarm",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,

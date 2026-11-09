@@ -7,6 +7,12 @@ the version in the corner).
 
 ### Added
 
+- The Keris partisan, by Okaeri: a new melee weapon, unlocked by killing the Kalphite Queen in
+  the Desert. Its quick stabs hit kalphites and scarabs harder, Kephri included.
+- Tombs of Amascut rewards, by Okaeri: the jewels and the Thread of Elidinis from the raid's
+  chest now unlock things. Each jewel unlocks its own keris partisan with a power of its own, and
+  the Thread unlocks the Divine rune pouch, which gives you an extra weapon slot for a magic
+  weapon, whatever your style.
 - Invocation presets, by Okaeri: save up to five sets of Tombs of Amascut invocations and load
   one with a tap.
 - A puzzle helper for the Scabaras room, by Okaeri: like the ToA plugin, it shows the order to

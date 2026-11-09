@@ -1,6 +1,7 @@
 import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
 import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
 import {
+    DIVINE_RUNE_POUCH,
     PASSIVES,
     canLevelPassive,
     formatPassiveNumber,
@@ -11,7 +12,7 @@ import {
     passiveName,
 } from "../content/passives";
 import { RARITIES, Rarity, atLeast, rollRarity } from "../content/rarity";
-import { CombatStyle, PassiveDef } from "../content/types";
+import { CombatStyle, PassiveDef, WeaponDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import {
     WeaponStatLine,
@@ -22,6 +23,7 @@ import {
 import {
     WEAPONS,
     getWeapon,
+    getWeaponStyle,
     weaponDescription,
     weaponLevelDescription,
     weaponLevelName,
@@ -339,6 +341,34 @@ export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>)
     }));
 }
 
+// With the Divine rune pouch (maxWeapons counting its slot), whether a new weapon fits: the
+// pouch's slot holds a magic weapon only, so the rest stay one fewer, and one magic weapon of
+// another class can be taken, for that slot. Magic is what its hits count as (getWeaponStyle, so
+// the fire spells too); another class is its class (WeaponDef.style). Only the level up keeps to
+// this: a weapon added some other way (the dev console) isn't checked.
+export function fitsWithPouch(
+    weapon: WeaponDef,
+    weapons: readonly WeaponState[],
+    style: CombatStyle,
+    maxWeapons: number,
+): boolean {
+    const isMagic = (def: WeaponDef) => getWeaponStyle(def) === "magic";
+    const offStyle = (def: WeaponDef) => !!def.style && def.style !== style;
+    if (weapons.length >= maxWeapons) {
+        return false;
+    }
+    if (isMagic(weapon)) {
+        return !offStyle(weapon) || !weapons.some((w) => offStyle(w.def));
+    }
+    if (offStyle(weapon)) {
+        return false;
+    }
+    // Something not magic: the slots but the pouch's, and the pouch's too once a magic weapon's
+    // in one of them
+    const magic = weapons.some((w) => isMagic(w.def));
+    return weapons.length + 1 <= maxWeapons - 1 + (magic ? 1 : 0);
+}
+
 export function rollChoices(
     rng: Rng,
     weapons: readonly WeaponState[],
@@ -391,6 +421,7 @@ export function rollChoices(
         }
     }
     if (weapons.length < maxWeapons) {
+        const pouch = ownedPassives.has(DIVINE_RUNE_POUCH);
         for (const weapon of WEAPONS) {
             if (
                 weapon.evolved ||
@@ -401,11 +432,13 @@ export function rollChoices(
             ) {
                 continue;
             }
-            // Another class's weapon, or a second of a family (one godsword
-            // is enough)
+            // A second of a family (one godsword is enough), or one that doesn't fit: another
+            // class's weapon, or (with the pouch) a weapon that isn't magic in its magic slot
             if (
-                (weapon.style && weapon.style !== style) ||
-                (weapon.family && ownedFamilies.has(weapon.family))
+                (weapon.family && ownedFamilies.has(weapon.family)) ||
+                !(pouch
+                    ? fitsWithPouch(weapon, weapons, style, maxWeapons)
+                    : !weapon.style || weapon.style === style)
             ) {
                 continue;
             }

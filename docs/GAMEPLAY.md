@@ -136,8 +136,15 @@ version and how to run it.
       undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
       sides; and
       the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
-      everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
-      you, further out than any other melee weapon.
+      everything around you; **Dinh's bulwark**, a slow bash that hits everything around
+      you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
+      hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
+      Amascut's chest brings in a keris of its own: **of breaching** now and then finds a gap in
+      the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
+      every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
+      **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
+      hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
+      amascut** has all three. You carry one keris at most.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
@@ -174,7 +181,7 @@ version and how to run it.
 
     | Map            | For beating it                                   | For its bosses                                                                                       |
     | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst)                                               |
+    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
     | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
     | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
@@ -411,6 +418,9 @@ version and how to run it.
     - **The chest** after the Wardens rolls for a purple, more likely the higher the raid level and
       the more points you earned: Osmumten's fang and the Lightbearer from raid level 50, the rest from
       raid level 150, and Tumeken's guardian (a pet) now and then. They're Collection log trophies.
+      The Thread of Elidinis and the jewels are rolls of their own, and each brings something in:
+      the Thread the **Divine rune pouch**, a rare passive that gives one more weapon slot, for a
+      magic weapon, and offers magic weapons whatever your style; each jewel its keris partisan.
       The end-of-raid board shows the raid level, each path's time, and every player's points,
       deaths and purple chance.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
