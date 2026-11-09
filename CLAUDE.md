@@ -176,6 +176,8 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   can't win on some maps even on normal, and on early maps it lasts until the final boss either way.
 - The bot is simple. It doesn't play strike-based adventurers well, so don't judge those from a sim.
   Treat its numbers as a comparison, not as how a player would do.
+- Each run's line says how long the bot was `stuck`: pressing on without moving, against a wall
+  or held by a boss. A lot of it means the bot can't get round that map, not that the map is hard.
 - Without `DODGE=1` the bot ignores the bullets, rings and marks of a boss without phases (the
   Theatre's): sim a change to those with it.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit

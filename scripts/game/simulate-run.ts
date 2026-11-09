@@ -16,7 +16,7 @@
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
 //   DODGE=1 ...     # also keeps off what any boss marks on the ground, sidesteps its bullets and
 //                   # makes for a closing ring's way out
-//   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
+//   FLAT=1 ...      # the map's arena with nothing in it: no walls in the bot's way, no cache needed
 //   STAGE=1 ...     # a fight in parts (MapDef.stages): the second, as a run that's won the first
 //   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
 //   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
@@ -44,6 +44,7 @@ import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
+import { canWalkStraight } from "../../src/game/core/world/FlowField";
 import { makeGrid } from "../../src/game/core/world/testGrid";
 import {
     buttonMove,
@@ -158,8 +159,9 @@ const setsStarted = new Map<string, number>();
 const setsFinished = new Map<string, number>();
 let runs = 0;
 
-// Steers away from nearby enemies (closer counts more) and towards bones when
-// nothing is close; slides along walls by trying a few nearby directions.
+// Steers away from nearby enemies (closer counts more) and towards the nearest
+// bones by the walk there when nothing is close; slides along walls by trying a
+// few nearby directions.
 function botMove(sim: Sim): { x: number; y: number } {
     const player = sim.player;
     let ax = 0;
@@ -191,30 +193,51 @@ function botMove(sim: Sim): { x: number; y: number } {
         }
     }
     // Bones nearby are worth a detour unless enemies are right on top, and
-    // power-ups and random events' visitors twice as far
+    // power-ups and random events' visitors twice as far; with nothing close,
+    // bones further off are worth fetching. Near is by the walk there, so a pile
+    // behind a wall is as far as the way round it, and one there's no way to is
+    // left where it lies. (Lumbridge's arena has its middle in a walled corner of
+    // the castle's courtyard, where the drift below held the bot for minutes,
+    // pushing into the wall towards bones on the other side.)
+    const reach = threat < 0.08 ? FETCH_TILES * FETCH_TILES : 144;
     let best = Infinity;
-    let bx = 0;
-    let by = 0;
+    let target: { x: number; y: number } | undefined;
+    // How far ahead to look for walls: no further than where it's walking to
+    let look = SLIDE_LOOK;
     if (sim.visitor) {
-        bx = sim.visitor.x - player.x;
-        by = sim.visitor.y - player.y;
-        best = (bx * bx + by * by) / 4;
+        const walk = walkTiles(sim, sim.visitor.x, sim.visitor.y);
+        if (walk !== undefined) {
+            best = (walk * walk) / 4;
+            target = sim.visitor;
+        }
     }
     for (const pickup of sim.pickups) {
         const dx = pickup.x - player.x;
         const dy = pickup.y - player.y;
-        const d = (dx * dx + dy * dy) / (pickup.kind === "powerUp" ? 4 : 1);
-        if (d < best && d < 144) {
+        const scale = pickup.kind === "powerUp" ? 4 : 1;
+        // The walk's never shorter than the straight line, so only a pile that
+        // might be nearer is worth looking up
+        if ((dx * dx + dy * dy) / scale >= Math.min(best, reach)) {
+            continue;
+        }
+        const walk = walkTiles(sim, pickup.x, pickup.y);
+        const d = walk === undefined ? Infinity : (walk * walk) / scale;
+        if (d < best && d < reach) {
             best = d;
-            bx = dx;
-            by = dy;
+            target = pickup;
         }
     }
-    if (best < Infinity) {
+    if (target) {
+        const way = wayTo(sim, target.x, target.y);
+        const bx = way.x - player.x;
+        const by = way.y - player.y;
         const len = Math.hypot(bx, by);
-        const pull = threat < 0.08 ? 1 : 0.6 / (1 + threat * 4);
-        ax += (bx / len) * pull;
-        ay += (by / len) * pull;
+        look = Math.min(look, len);
+        if (len > 1e-6) {
+            const pull = threat < 0.08 ? 1 : 0.6 / (1 + threat * 4);
+            ax += (bx / len) * pull;
+            ay += (by / len) * pull;
+        }
     }
     // Drift back towards the middle of the arena so the bot doesn't pin itself
     // against its edge
@@ -226,7 +249,85 @@ function botMove(sim: Sim): { x: number; y: number } {
     if (len < 1e-6) {
         return { x: 0, y: 0 };
     }
-    return { x: ax / len, y: ay / len };
+    return slide(sim, { x: ax / len, y: ay / len }, look);
+}
+
+// How far, walking, the bot goes to fetch bones when nothing's close: inside the
+// flow field's window (FLOW_FIELD_SIZE in Sim.ts), where the walk's known
+const FETCH_TILES = 40;
+
+// Tiles to walk from the player to (x, y) round walls, by the flow field enemies
+// follow to the player (ten to a tile), never less than the straight line; or
+// undefined when there's no way there. Out of the field's window it's the
+// straight line, as it always was.
+function walkTiles(sim: Sim, x: number, y: number): number | undefined {
+    const field = sim.flowField;
+    const tileX = Math.floor(x);
+    const tileY = Math.floor(y);
+    const straight = Math.hypot(x - sim.player.x, y - sim.player.y);
+    if (!field.contains(tileX, tileY)) {
+        return straight;
+    }
+    if (!field.isReachable(tileX, tileY)) {
+        return undefined;
+    }
+    return Math.max(straight, field.getCost(tileX, tileY) / 10);
+}
+
+// Where to head for to get to (x, y): straight there when nothing's in the way,
+// or else the furthest tile back along the walk from it (the flow field's steps
+// towards the player) that the player can walk to straight
+function wayTo(sim: Sim, x: number, y: number): { x: number; y: number } {
+    const player = sim.player;
+    if (canWalkStraight(grid, player.x, player.y, x, y)) {
+        return { x, y };
+    }
+    let tileX = Math.floor(x);
+    let tileY = Math.floor(y);
+    const step = { x: 0, y: 0 };
+    // Far more steps than a walk to anything it'd go for
+    for (let i = 0; i < 64 && sim.flowField.getStep(grid, tileX, tileY, step); i++) {
+        tileX += step.x;
+        tileY += step.y;
+        if (canWalkStraight(grid, player.x, player.y, tileX + 0.5, tileY + 0.5)) {
+            return { x: tileX + 0.5, y: tileY + 0.5 };
+        }
+    }
+    return { x, y };
+}
+
+// How far ahead a wall turns the bot aside, in tiles: far enough that it goes
+// along a building rather than into a nook one tile deep (Kourend's held it for
+// minutes, fleeing enemies into one). And the turns it tries, nearest first,
+// from either side of the way it wants to as far as straight back out.
+const SLIDE_LOOK = 2;
+const SLIDE_TURNS = [1, 2, 3, 4, 5, 6, 7]
+    .flatMap((i) => [(i * Math.PI) / 8, (-i * Math.PI) / 8])
+    .concat(Math.PI);
+
+// Along a wall rather than into it, as a person does: the nearest turn from the
+// way it wants to go that's open as far as it looks (less than SLIDE_LOOK when
+// it's walking up to something nearer), or failing that for a tile, or that way
+// if none is
+function slide(sim: Sim, move: { x: number; y: number }, look: number): { x: number; y: number } {
+    const { x, y } = sim.player;
+    const open = (dx: number, dy: number, length: number) =>
+        canWalkStraight(grid, x, y, x + dx * length, y + dy * length);
+    if (open(move.x, move.y, look)) {
+        return move;
+    }
+    for (const length of look > 1 ? [look, 1] : [look]) {
+        for (const turn of SLIDE_TURNS) {
+            const cos = Math.cos(turn);
+            const sin = Math.sin(turn);
+            const dx = move.x * cos - move.y * sin;
+            const dy = move.x * sin + move.y * cos;
+            if (open(dx, dy, length)) {
+                return { x: dx, y: dy };
+            }
+        }
+    }
+    return move;
 }
 
 // A phased boss's fight, as a careful person plays it, or undefined outside one. With DODGE it
@@ -649,6 +750,7 @@ function runOnce(characterId: string, seed: number) {
     let bossTick = 0;
     let nextReport = REPORT_SECONDS;
     let stuckTicks = 0;
+    let pinnedTicks = 0;
     let lastX = sim.player.x;
     let lastY = sim.player.y;
     let move = { x: 0, y: 0 };
@@ -738,9 +840,14 @@ function runOnce(characterId: string, seed: number) {
         if (planned) {
             move = planned;
         } else if (sim.tick % 5 === 0) {
+            const moved = Math.hypot(sim.player.x - lastX, sim.player.y - lastY);
+            // Pressed on and got nowhere (against a wall, or held), for the summary
+            if (moved < 0.05 && Math.hypot(move.x, move.y) > 0.5) {
+                pinnedTicks += 5;
+            }
             move = fightMove(sim) ?? botMove(sim);
             // Stuck against a wall: wiggle sideways for a moment
-            if (Math.hypot(sim.player.x - lastX, sim.player.y - lastY) < 0.05) {
+            if (moved < 0.05) {
                 stuckTicks += 5;
             } else {
                 stuckTicks = 0;
@@ -954,7 +1061,7 @@ function runOnce(characterId: string, seed: number) {
             `${Math.floor(result.seconds / 60)}:${String(Math.floor(result.seconds % 60)).padStart(2, "0")}, ` +
             (endless ? `round ${result.round}, ` : "") +
             `level ${result.level}, ${result.kills} kills, ${result.coins} coins, ${chests} caskets, ` +
-            `${powerUps} power-ups ` +
+            `${powerUps} power-ups, stuck ${Math.round(pinnedTicks / TICKS_PER_SECOND)}s ` +
             `(${(ms / sim.tick).toFixed(3)}ms per tick)`,
     );
     return result;
