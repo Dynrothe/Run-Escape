@@ -2379,6 +2379,62 @@ describe("the Scabaras room", () => {
         expect(sim.scabarasInfo!.readable).toBe(true);
     });
 
+    it("lists its puzzles for the HUD: done, open, or waiting on the others", () => {
+        const sim = scabaras();
+        const states = () =>
+            sim.scabarasInfo!.puzzles.map(({ puzzle, state }) => `${puzzle} ${state}`);
+        expect(states()).toEqual([
+            "sequence open",
+            "lights open",
+            "addition waiting",
+            "matching waiting",
+        ]);
+        room(sim).solved.push("lights");
+        expect(states()).toEqual([
+            "sequence open",
+            "lights solved",
+            "addition waiting",
+            "matching waiting",
+        ]);
+        // Addition once the tablet's readable, Matching once the other three are done
+        room(sim).solved.push("sequence");
+        expect(states()).toEqual([
+            "sequence solved",
+            "lights solved",
+            "addition open",
+            "matching waiting",
+        ]);
+        room(sim).solved.push("addition");
+        expect(states()).toEqual([
+            "sequence solved",
+            "lights solved",
+            "addition solved",
+            "matching open",
+        ]);
+    });
+
+    it("counts the Sequence's plates lit so far as its order's shown, for the helper", () => {
+        const sim = scabaras();
+        expect(sim.scabarasSequenceShown).toBe(0);
+        push(sim);
+        const sequence = room(sim).sequence;
+        expect(sequence.showFrom).toBeGreaterThan(sim.tick);
+        expect(sim.scabarasSequenceShown).toBe(0);
+        // One more as each plate lights, the way scabarasLitPlate goes through them
+        const lit: number[] = [];
+        while (sim.tick < sim["scabarasShowEnd"](sequence)) {
+            const plate = sim.scabarasLitPlate;
+            if (plate !== undefined && lit[lit.length - 1] !== plate) {
+                lit.push(plate);
+                expect(sim.scabarasSequenceShown).toBe(lit.length);
+            }
+            sim.player.hp = sim.player.maxHp;
+            stand(sim, AWAY);
+        }
+        expect(lit).toEqual(sequence.order);
+        expect(sim.scabarasSequenceShown).toBe(sequence.order.length);
+    });
+
     it("lays out every board as it begins", () => {
         const sim = scabaras();
         const scabaras_ = room(sim);

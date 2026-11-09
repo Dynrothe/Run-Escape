@@ -2180,8 +2180,11 @@ export class GameView {
             this.drawTeammateArrows(overlay, sim, alpha, now, scale);
         }
         this.drawShouts(overlay, sim, alpha, now, scale);
-        this.fight.viewPose = getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose);
-        this.fight.drawScreen(overlay, sim, alpha, now, scale);
+        // Where the hero the camera's on is drawn, for the Apmeken room's floor arrow from them
+        const viewPose = sim.tombsIssue
+            ? getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose)
+            : undefined;
+        this.fight.drawScreen(overlay, sim, alpha, now, scale, viewPose);
         this.drawFlash(overlay, now);
         if (this.cinematic) {
             this.cinematicView.drawScreen(overlay, this.cinematic, (x, y) =>
@@ -2726,19 +2729,23 @@ export class GameView {
         }
     }
 
-    // A tile's square on the ground, a little inside its edges, as the current canvas path
-    private traceGroundTile(overlay: Overlay, sim: Sim, cx: number, cy: number): void {
+    // A rectangle on the ground, in world tiles, as the current canvas path
+    private traceGroundRect(
+        overlay: Overlay,
+        sim: Sim,
+        x0: number,
+        y0: number,
+        x1: number,
+        y1: number,
+    ): void {
         const ctx = overlay.ctx;
-        const half = 0.45;
         ctx.beginPath();
         [
-            [-half, -half],
-            [half, -half],
-            [half, half],
-            [-half, half],
-        ].forEach(([ox, oy], i) => {
-            const wx = cx + ox;
-            const wy = cy + oy;
+            [x0, y0],
+            [x1, y0],
+            [x1, y1],
+            [x0, y1],
+        ].forEach(([wx, wy], i) => {
             const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.05, wy, this.screen2);
             if (i === 0) {
                 ctx.moveTo(p.x, p.y);
@@ -2747,6 +2754,12 @@ export class GameView {
             }
         });
         ctx.closePath();
+    }
+
+    // A tile's square on the ground, a little inside its edges, as the current canvas path
+    private traceGroundTile(overlay: Overlay, sim: Sim, cx: number, cy: number): void {
+        const half = 0.45;
+        this.traceGroundRect(overlay, sim, cx - half, cy - half, cx + half, cy + half);
     }
 
     // Text on the ground at a tile's middle: white (or colour) with a dark edge, readable on any
@@ -2802,12 +2815,8 @@ export class GameView {
         };
         // Sequence: each plate's place in the order once it's lit
         const sequence = scabaras.sequence;
-        if (!solved("sequence") && sequence.showFrom !== -1 && sim.tick >= sequence.showFrom) {
-            const each = Math.round((SCABARAS.flash + SCABARAS.gap) * TICKS_PER_SECOND);
-            const shown = Math.min(
-                sequence.order.length,
-                Math.floor((sim.tick - sequence.showFrom) / each) + 1,
-            );
+        if (!solved("sequence")) {
+            const shown = sim.scabarasSequenceShown;
             for (let k = sequence.step; k < shown; k++) {
                 const plate = def.sequence[sequence.order[k]];
                 if (k === sequence.step) {
@@ -2830,14 +2839,17 @@ export class GameView {
                 mark(def.lights[i].x, def.lights[i].y, pulse);
             }
         }
-        // Addition: once the tablet's readable, the way on from what's been stepped on
+        // Addition: once the tablet's readable, the way on from what's been stepped on, or from
+        // beside the plate the hero's on
         const addition = scabaras.addition;
         if (!solved("addition") && solved("sequence") && solved("lights")) {
+            const on = scabaras.standing[this.viewHero];
             const way = solveScabarasAddition(
                 def.addition,
                 addition.values,
                 addition.target,
                 addition.stepped,
+                on?.[0] === "a" ? Number(on.slice(1)) : undefined,
             );
             for (const i of way ?? []) {
                 if (!addition.stepped[i]) {
@@ -2891,21 +2903,7 @@ export class GameView {
             }
             const t = Math.min(1, Math.max(0, age / tell));
             const area = sim.crondisSpearArea(def, thrust);
-            ctx.beginPath();
-            [
-                [area.x0, area.y0],
-                [area.x1, area.y0],
-                [area.x1, area.y1],
-                [area.x0, area.y1],
-            ].forEach(([wx, wy], i) => {
-                const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.05, wy, this.screen2);
-                if (i === 0) {
-                    ctx.moveTo(p.x, p.y);
-                } else {
-                    ctx.lineTo(p.x, p.y);
-                }
-            });
-            ctx.closePath();
+            this.traceGroundRect(overlay, sim, area.x0, area.y0, area.x1, area.y1);
             // Yellow, not red: the room's floor is red already
             ctx.fillStyle = `rgba(255, 220, 90, ${0.2 + 0.35 * t})`;
             ctx.fill();

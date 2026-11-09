@@ -489,10 +489,14 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **The puzzle helper** (`DisplaySettings.puzzleHelper`, `GameView.drawScabarasHelper`), as
       OSRS's ToA plugin: Sequence's plates numbered as they light, the next outlined; the fewest
       Lights out plates to step on (`solveScabarasLights`); Addition's way to the tablet's number,
-      the board's own for each number (`SCABARAS_ADDITION_WAYS`) or a capped search on from what's
-      been stepped on (`searchScabarasAddition`); Matching's tiles named in their symbol's colour.
+      the board's own for each number (`SCABARAS_ADDITION_WAYS`), a way on from a first step off
+      it onto an edge symbol (`SCABARAS_ADDITION_FROM`, from whichever stepped symbol has one), or
+      a capped search on from what's been stepped on (`searchScabarasAddition`), or from beside
+      the hero when they're inside the board with nothing stepped on (it reset under them), the
+      board's own way if that finds none in time; Matching's tiles named in their symbol's colour.
       On at Entry, and at any raid level once the room's been beaten (`SaveData.scabarasBeaten`,
-      from `Sim.scabarasBeaten`, a loss included). Client only.
+      from `Sim.scabarasBeaten`, a loss included). Client only. Its marks are flat tiles and
+      names drawn over the floor, as the plugin's are: nothing in the cache marks a tile.
     - Not in yet: the obelisk puzzle (OSRS's random one, which the wiki has solos skip).
     - Matching's room, west, is walled off in OSRS by barriers (45135, 45375 to 45379) that open
       once the other three are solved. Cut with the room they never opened, so nobody could finish

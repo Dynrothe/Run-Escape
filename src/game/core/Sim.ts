@@ -979,6 +979,11 @@ export type CrondisRoom = {
 
 type ScabarasDef = NonNullable<NonNullable<TombsPathDef["room"]>["scabaras"]>;
 export type ScabarasPuzzle = "sequence" | "lights" | "addition" | "matching";
+// A puzzle on the HUD's list: done, to be done now, or waiting on the others (Sim.scabarasInfo)
+export type ScabarasPuzzleState = {
+    puzzle: ScabarasPuzzle;
+    state: "solved" | "open" | "waiting";
+};
 // The Scabaras room's puzzles (SCABARAS in tombs.ts): which are solved; Sequence's order, when
 // it's shown from and how far through it the party is (no order, shown from -1, till its button's
 // pushed); Lights out's ring and when a light next
@@ -9153,6 +9158,20 @@ export class Sim {
         );
     }
 
+    // How many of the Sequence's plates have lit so far as its order's shown, all once it has (none
+    // before it starts), for the puzzle helper's numbers
+    get scabarasSequenceShown(): number {
+        const sequence = this.tombsRoom?.scabaras?.sequence;
+        if (!sequence || sequence.showFrom === -1 || this.tick < sequence.showFrom) {
+            return 0;
+        }
+        const each = secondsToTicks(SCABARAS.flash + SCABARAS.gap);
+        return Math.min(
+            sequence.order.length,
+            Math.floor((this.tick - sequence.showFrom) / each) + 1,
+        );
+    }
+
     // The Sequence's plate lit now while its order's shown, if any
     get scabarasLitPlate(): number | undefined {
         const sequence = this.tombsRoom?.scabaras?.sequence;
@@ -9179,7 +9198,7 @@ export class Sim {
               sum: number;
               readable: boolean;
               reading?: "slate" | "tablet";
-              puzzles: { puzzle: ScabarasPuzzle; state: "solved" | "open" | "waiting" }[];
+              puzzles: ScabarasPuzzleState[];
           }
         | undefined {
         const scabaras = this.tombsRoom?.scabaras;

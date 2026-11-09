@@ -2477,7 +2477,8 @@ function TombsHetInfo({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
-// The Scabaras room's Ancient tablet's number, once it's read (the puzzles solved are the wave line's)
+// The Scabaras room's puzzles, each done, open or waiting on the others, with where it is (how
+// many are solved is the wave line's), and the Ancient tablet's number once it's read
 function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | null {
     const info = useHudNumber(client, (n) => n.tombsScabaras);
     if (!info) {

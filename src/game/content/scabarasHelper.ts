@@ -8,8 +8,26 @@ type Plate = { x: number; y: number };
 
 // Lights out: the fewest plates to step on to light the whole ring, each toggling itself and its
 // two neighbours (Sim.toggleScabarasLight). None when it's lit; every plate's tried both ways, as
-// there are only eight.
-export function solveScabarasLights(lights: readonly boolean[]): number[] {
+// there are only eight. Kept by ring, as it's asked every frame.
+export function solveScabarasLights(lights: readonly boolean[]): readonly number[] {
+    let ring = lights.length;
+    for (let i = 0; i < lights.length; i++) {
+        if (lights[i]) {
+            ring += 2 ** (i + 8);
+        }
+    }
+    let solution = lightsSolutions.get(ring);
+    if (!solution) {
+        solution = searchScabarasLights(lights);
+        lightsSolutions.set(ring, solution);
+    }
+    return solution;
+}
+
+// By ring: its size, and from bit 8 up, which are lit
+const lightsSolutions = new Map<number, number[]>();
+
+function searchScabarasLights(lights: readonly boolean[]): number[] {
     const count = lights.length;
     let best: number[] | undefined;
     for (let mask = 0; mask < 1 << count; mask++) {
@@ -456,33 +474,56 @@ export const SCABARAS_ADDITION_FROM: Record<number, Record<number, readonly numb
 // yet, or only symbols on its way, it's the board's own way (SCABARAS_ADDITION_WAYS). Off it,
 // it's grown from what's been stepped on (a symbol stepped on again adds nothing), searching no
 // more than ADDITION_SEARCH groups so a frame never waits on it. Undefined when there's none to
-// be found that way: going over resets the board, and the board's own way is shown again.
+// be found that way: going over resets the board, and a way from scratch is shown again.
+// standing: the plate the hero's on, if any. Inside the board with nothing stepped on (the board
+// reset under them, or it was dull when they walked on), the way starts beside them, since any
+// step off it lands on a plate.
 export function solveScabarasAddition(
     plates: readonly Plate[],
     values: readonly number[],
     target: number,
     stepped: readonly boolean[] = [],
+    standing?: number,
 ): number[] | undefined {
     const start = plates.flatMap((_, i) => (stepped[i] ? [i] : []));
-    if (sameBoardValues(values)) {
-        const own = SCABARAS_ADDITION_WAYS[target];
-        if (own && start.every((i) => own.includes(i))) {
+    const inside =
+        start.length === 0 && standing !== undefined && !onEdge(plates, standing)
+            ? standing
+            : undefined;
+    const reachable = (way: readonly number[]) =>
+        inside === undefined || way.some((i) => touching(plates[i], plates[inside]));
+    const own = sameBoardValues(values) ? SCABARAS_ADDITION_WAYS[target] : undefined;
+    if (own) {
+        if (start.every((i) => own.includes(i)) && reachable(own)) {
             return [...own];
         }
-        // From a first step off it, onto an edge symbol: that one's way on, while it's kept to
-        const from = SCABARAS_ADDITION_FROM[start[0]]?.[target];
-        if (from && start.every((i) => from.includes(i))) {
-            return [...from];
+        // From a first step off it, onto an edge symbol: that one's way on, while it's kept to.
+        // Any symbol stepped on may be that first one, so each is tried.
+        for (const first of start) {
+            const from = SCABARAS_ADDITION_FROM[first]?.[target];
+            if (from && start.every((i) => from.includes(i))) {
+                return [...from];
+            }
         }
     }
-    const key = `${values.join(",")}|${target}|${start.join(",")}`;
+    const key = `${values.join(",")}|${target}|${start.join(",")}|${inside ?? ""}`;
     if (!additionSolutions.has(key)) {
         if (additionSolutions.size > 500) {
             additionSolutions.clear();
         }
-        additionSolutions.set(key, searchScabarasAddition(plates, values, target, start));
+        additionSolutions.set(
+            key,
+            searchScabarasAddition(plates, values, target, start, ADDITION_SEARCH, inside),
+        );
     }
-    return additionSolutions.get(key);
+    // None beside them within the cap: the board's own way, to thread out to between the plates
+    // (a plate counts only well inside its tile)
+    return additionSolutions.get(key) ?? (inside !== undefined && own ? [...own] : undefined);
+}
+
+// A plate on the board's edge: one that can be walked onto from off the board
+function onEdge(plates: readonly Plate[], i: number): boolean {
+    return plates.filter((q) => touching(plates[i], q)).length < 8;
 }
 
 const additionSolutions = new Map<string, number[] | undefined>();
@@ -500,17 +541,21 @@ function sameBoardValues(values: readonly number[]): boolean {
 const SCABARAS_BOARD = SCABARAS.additionBoard.map((symbol) => symbol + 1);
 
 // The fewest symbols that make the target, touching one another and grown from start (or, with
-// none, from one on the board's edge, walked onto from off it): smallest groups first, so the
-// first to add up is the fewest. limit: groups tried before giving up.
+// none, from one on the board's edge, walked onto from off it, or from one beside the plate
+// stood on, inside): smallest groups first, so the first to add up is the fewest. limit: groups
+// tried before giving up.
 export function searchScabarasAddition(
     plates: readonly Plate[],
     values: readonly number[],
     target: number,
     start: readonly number[] = [],
     limit = ADDITION_SEARCH,
+    inside?: number,
 ): number[] | undefined {
     const neighbours = plates.map((p) => plates.flatMap((q, j) => (touching(p, q) ? [j] : [])));
-    const edge = neighbours.map((n) => n.length < 8);
+    const first = neighbours.map((n, i) =>
+        inside === undefined ? n.length < 8 : neighbours[inside].includes(i),
+    );
     const startSum = start.reduce((sum, i) => sum + values[i], 0);
     let layer: { set: number[]; sum: number }[] =
         start.length > 0
@@ -518,7 +563,7 @@ export function searchScabarasAddition(
                 ? [{ set: [...start], sum: startSum }]
                 : []
             : plates.flatMap((_, i) =>
-                  edge[i] && values[i] <= target ? [{ set: [i], sum: values[i] }] : [],
+                  first[i] && values[i] <= target ? [{ set: [i], sum: values[i] }] : [],
               );
     const seen = new Set<string>();
     let tried = 0;

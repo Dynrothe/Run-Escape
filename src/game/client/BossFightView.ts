@@ -154,9 +154,6 @@ export class BossFightView {
     private beams: { x: number; y: number; toX: number; toY: number; start: number }[] = [];
     private readonly a: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly b: ScreenPoint = { x: 0, y: 0, visible: false };
-    // Where the hero the camera's on is drawn this frame (GameView sets it), for what's drawn by
-    // them (drawGroundArrow)
-    viewPose?: { x: number; y: number };
     // Whether the curse was on last frame, and when (ms) it lifted, for its flash
     private curseOn = false;
     private curseEndedAt = -1;
@@ -1137,11 +1134,20 @@ export class BossFightView {
 
     // ---- Over the whole screen ----
 
-    drawScreen(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
+    // viewPose: where the hero the camera's on is drawn this frame, when something's drawn from
+    // them (the Apmeken room's floor arrow)
+    drawScreen(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+        viewPose?: { x: number; y: number },
+    ): void {
         this.drawBeams(overlay, sim, now, scale);
         this.drawTotemArrows(overlay, sim, scale);
         this.drawOverheads(overlay, sim, alpha, scale);
-        this.drawHintArrows(overlay, sim, alpha, now, scale);
+        this.drawHintArrows(overlay, sim, alpha, now, scale, viewPose);
         const boss = sim.shownBoss;
         const width = overlay.width;
         const height = overlay.height;
@@ -1292,10 +1298,11 @@ export class BossFightView {
         y: number,
         size: number,
         bob: number,
+        viewPose: { x: number; y: number } | undefined,
     ): void {
         // From where the hero's drawn this frame (smoothed, and predicted for a co-op guest), so
         // it moves with them rather than ticking after
-        const player = this.viewPose ?? sim.player;
+        const player = viewPose ?? sim.player;
         const dx = x - player.x;
         const dy = y - player.y;
         const distance = Math.hypot(dx, dy);
@@ -1384,6 +1391,7 @@ export class BossFightView {
         alpha: number,
         now: number,
         scale: number,
+        viewPose: { x: number; y: number } | undefined,
     ): void {
         const sprite = this.assets.getSprite(HINT_ARROW_SPRITE);
         const ctx = overlay.ctx;
@@ -1421,6 +1429,7 @@ export class BossFightView {
                     issue.y,
                     TOTEM_ARROW * scale,
                     bob / (HINT_ARROW_BOB * scale),
+                    viewPose,
                 );
             } else if (sprite) {
                 const w = sprite.width * HINT_ARROW_SCALE * scale;

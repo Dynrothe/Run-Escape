@@ -2,7 +2,7 @@ import { Rarity } from "../content/rarity";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
-import { RunResult, ScabarasPuzzle } from "../core/Sim";
+import { RunResult, ScabarasPuzzleState } from "../core/Sim";
 import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
 import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
@@ -182,7 +182,7 @@ export type HudNumbers = {
         readable: boolean;
         reading?: "slate" | "tablet";
         // Each puzzle: done, to be done now, or waiting on the others
-        puzzles: { puzzle: ScabarasPuzzle; state: "solved" | "open" | "waiting" }[];
+        puzzles: ScabarasPuzzleState[];
     };
     // The Het room: the mirrors you're holding, and how far the caster's charged (0 to 1)
     tombsHet?: { held: number; charge: number };

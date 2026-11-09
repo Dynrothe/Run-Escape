@@ -333,6 +333,13 @@
     .ui-scabaras-slate .ui-scabaras-value {
         font-size: 15px;
     }
+
+    /* The Scabaras room's puzzles: only those to do now (two at most), as the line above counts
+       those done, so the column stays short beside the fight button */
+    .ui-scabaras-puzzle-solved,
+    .ui-scabaras-puzzle-waiting {
+        display: none;
+    }
 }
 
 /* Held upright */

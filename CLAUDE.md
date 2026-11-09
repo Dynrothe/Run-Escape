@@ -89,6 +89,7 @@ go stale. Add anything that cost you time to work out.
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
 | The Tombs of Amascut (a raid, behind its quest)        | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
 | The Tombs' bot, and its sim of puzzle rooms and bosses | `scripts/game/tombsBot.ts`, `scripts/game/simulate-tombs.ts`           |
+| The Scabaras room's puzzle helper, and what unlocks it | `content/scabarasHelper.ts`, `GameView.drawScabarasHelper`             |
 | Beneath Cursed Sands, the Tombs' quest (a boss fight)  | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
 | Its fights' design: four parts, each kept once won     | `docs/design/beneath-cursed-sands.md`                                  |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
