@@ -31,6 +31,7 @@ import {
     cleanId,
     cleanUnlocks,
     countryCode,
+    currentCountry,
     guesserKey,
     isAnyMapOn,
     missingMap,
@@ -433,7 +434,7 @@ export class Lobby extends DurableObject {
                 host: room.host ?? "",
                 // Stored entries from an older deployment contain the
                 // host's country. Don't show it as a server measurement.
-                country: room.countrySource === "server" ? room.country : undefined,
+                country: room.countrySource === "server" ? currentCountry(room.country) : undefined,
                 countrySource: "server",
                 players: room.players,
                 max: MAX_PARTY,

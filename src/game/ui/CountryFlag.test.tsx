@@ -16,11 +16,11 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
+// The relays send current codes (the Cloudflare lobby maps a room's old one)
 it.each([
-    ["UK", "United Kingdom", 1],
     ["GB", "United Kingdom", 1],
-    ["FX", "France", 19],
-])("renders the flag for a saved %s country", (country, name, frame) => {
+    ["FR", "France", 19],
+])("renders the flag for %s", (country, name, frame) => {
     render(<CountryFlag country={country} label="Server in" />);
 
     const flag = screen.getByRole("img", { name: `Server in ${name}` });
@@ -29,8 +29,8 @@ it.each([
     expect(iconCache.requestFrame).toHaveBeenCalledWith(815, frame, expect.any(Function));
 });
 
-it("keeps the canonical letters when the country has no flag sprite", () => {
-    render(<CountryFlag country="YU" label="Server in" />);
+it("shows the letters for a country with no flag sprite", () => {
+    render(<CountryFlag country="RS" label="Server in" />);
 
     expect(screen.getByRole("img", { name: "Server in Serbia" })).toHaveTextContent("RS");
     expect(iconCache.requestFrame).not.toHaveBeenCalled();

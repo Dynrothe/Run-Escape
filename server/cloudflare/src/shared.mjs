@@ -109,6 +109,17 @@ export function countryCode(text) {
     return /^[A-Z]{2}$/.test(code) && code !== "XX" ? code : undefined;
 }
 
+// A country by its current code (UK as GB, FX as FR, SU as RU). Rooms measured
+// before colo-countries.json left out the old codes have them saved.
+export function currentCountry(code) {
+    if (typeof code !== "string") return undefined;
+    try {
+        return new Intl.Locale(`und-${code}`).region ?? code;
+    } catch {
+        return code;
+    }
+}
+
 export function guesserKey(address) {
     return address.endsWith("::/64") ? `${address.split(":").slice(0, 3).join(":")}::/48` : address;
 }

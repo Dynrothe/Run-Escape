@@ -132,6 +132,10 @@ describe("Cloudflare co-op lobby", () => {
             country: "FI",
             countrySource: "server",
         });
+        // A room measured with the old colo table saved an old code
+        await lobby.roomUpdate({ ...listing("AAAAAAAA"), country: "UK", countrySource: "server" });
+        await Promise.resolve();
+        expect(rooms(browser).at(-1).rooms[0].country).toBe("GB");
         await lobby.roomUpdate({ ...listing("AAAAAAAA"), countrySource: "server" });
         await Promise.resolve();
         expect(rooms(browser).at(-1).rooms[0].country).toBeUndefined();
