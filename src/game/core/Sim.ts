@@ -49,12 +49,7 @@ import {
 } from "../content/invocations";
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
-import {
-    DIVINE_RUNE_POUCH,
-    canLevelPassive,
-    getPassive,
-    getPassiveGain,
-} from "../content/passives";
+import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import {
     LANTERN_ID,
     POWER_UPS,
@@ -2415,11 +2410,10 @@ export class Sim {
         }
     }
 
-    // Weapons and passives carried at once, with the shop's extra slots, and the Divine rune
+    // Weapons and passives carried at once, with the extra slots: the shop's, and the Divine rune
     // pouch's, for a magic weapon (Upgrades' fitsWithPouch keeps it for one)
     get maxWeapons(): number {
-        const pouch = this.passives.some((p) => p.id === DIVINE_RUNE_POUCH) ? 1 : 0;
-        return MAX_WEAPONS + this.metaStats.weaponSlots + pouch;
+        return MAX_WEAPONS + this.stats.weaponSlots;
     }
 
     get maxPassives(): number {
@@ -2782,6 +2776,15 @@ export class Sim {
         this.appearanceVersion++;
     }
 
+    // Poison and boss drains gone (an antidote, a cure, Tumeken's Light), and with the spores'
+    // drain the drowsiness it brings, the boss's quicker attacks; the caller updates the stats
+    private cure(): void {
+        this.player.poisonEnd = -1;
+        this.player.poisonDamage = 0;
+        this.debuffs = [];
+        this.drowsyEndTick = 0;
+    }
+
     heal(amount: number): void {
         const hp = this.player.hp;
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + amount);
@@ -2912,9 +2915,7 @@ export class Sim {
                 this.addBuff(item.id, use.stats, use.seconds, false);
                 break;
             case "cure":
-                this.player.poisonEnd = -1;
-                this.player.poisonDamage = 0;
-                this.debuffs = [];
+                this.cure();
                 this.addBuff(item.id, {}, use.seconds, true);
                 this.heal((use.heal ?? 0) * this.healScale);
                 break;
@@ -11305,9 +11306,7 @@ export class Sim {
             return;
         }
         if (effect.cures) {
-            this.player.poisonEnd = -1;
-            this.player.poisonDamage = 0;
-            this.debuffs = [];
+            this.cure();
         }
         this.addBuff(`raid:${supply.id}`, effect.stats, effect.seconds, effect.cures ?? false);
         this.buffs[this.buffs.length - 1].look = { name: supply.name, objId: supply.objId };
@@ -17497,8 +17496,9 @@ export class Sim {
                 this.addEffect(def.breach!.spotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
             }
             // A kill by this swing itself heals (the Keris partisan of the sun): not one some
-            // other kill leaves this weapon's name on
-            if (def.killHeal && alive && enemy.dead && this.isUp(this.hero)) {
+            // other kill leaves this weapon's name on, nor one that's part of a fight (a boss's
+            // summons, Zebak's jugs, one brought back), as with kills and drops
+            if (def.killHeal && alive && enemy.dead && !enemy.noDrops && this.isUp(this.hero)) {
                 this.heal(def.killHeal * this.healScale);
             }
             // The rest of a multi-hit weapon's hits land a moment apart
@@ -17534,10 +17534,8 @@ export class Sim {
             this.heal(Math.min(Math.round(dealt * special.effect.fraction), special.effect.max));
         }
         if (special?.effect?.kind === "restore") {
-            // Tumeken's Light: whole again, poison and boss drains gone, swung at something or not
-            player.poisonEnd = -1;
-            player.poisonDamage = 0;
-            this.debuffs = [];
+            // Tumeken's Light: whole again, poison and boss drains gone
+            this.cure();
             // The drains' stats go with them, max hitpoints too, before healing to it
             this.updateStats();
             this.heal(player.maxHp);
@@ -20026,9 +20024,7 @@ export class Sim {
     private addEventBuff(id: string, effect: Extract<RandomEventEffect, { kind: "buff" }>): void {
         const { name, objId, stats, seconds, cures = false } = effect;
         if (cures) {
-            this.player.poisonEnd = -1;
-            this.player.poisonDamage = 0;
-            this.debuffs = [];
+            this.cure();
         }
         this.addBuff(id, stats, seconds, cures);
         this.buffs[this.buffs.length - 1].look = { name, objId };

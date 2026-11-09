@@ -315,7 +315,7 @@ const KERIS_PARTISANS: WeaponDef[] = [
         id: "keris_partisan_of_amascut",
         name: "Keris partisan of amascut",
         description:
-            "All three jewels in one: gaps in the shell for triple damage, Wrath of Amascut every sixth stab, and a heal on each kill. Kalphites and scarabs take a third more.",
+            "The jewels' powers in one, but Tumeken's Light: gaps in the shell for triple damage, Wrath of Amascut every sixth stab, a heal on each kill, and a quarter harder below a quarter of your hitpoints. Kalphites and scarabs take a third more.",
         iconObjId: 30891,
         rarity: "veryRare",
         breach: BREACH_OF_THE_SCARAB,

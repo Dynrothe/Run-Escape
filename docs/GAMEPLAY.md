@@ -144,7 +144,7 @@ version and how to run it.
       every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
       **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
       hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
-      amascut** has all three. You carry one keris at most.
+      amascut** has all of it but Tumeken's Light. You carry one keris at most.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and

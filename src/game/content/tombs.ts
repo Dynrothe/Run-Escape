@@ -2346,6 +2346,8 @@ const kephriForm = (
 const scarab = (id: string, name: string, npcId: number, more: Partial<EnemyDef>): EnemyDef => ({
     id,
     name,
+    // A scarab: the keris partisans hit it harder
+    tags: ["kalphite"],
     npcId,
     idleSeq: 9586,
     walkSeq: 9584,
@@ -2371,6 +2373,8 @@ TOMBS_ENEMIES.push(
         // on everyone for each that gets there, the call broken by the button (it scatters)
         id: "kephri_swarm_home",
         name: "Scarab Swarm",
+        // A scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,
@@ -2387,6 +2391,8 @@ TOMBS_ENEMIES.push(
         // Walks to her and restores her shield if it gets there (Sim.stepKephri): anything kills it
         id: "kephri_swarm",
         name: "Scarab Swarm",
+        // A scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,

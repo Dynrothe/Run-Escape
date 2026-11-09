@@ -276,15 +276,19 @@ unlocks something in the game.
       target takes 25% more from everything for 6 seconds.
     - **Of the sun** (Jewel of the Sun): heals on every kill and hits harder below 25% health;
       Tumeken's Light, on a long cooldown, heals in full and cures poison.
-    - **Of amascut** (Jewel of Amascut, raid level 500): all three jewels in one.
+    - **Of amascut** (Jewel of Amascut, raid level 500): the three jewels in one, but for
+      Tumeken's Light: a keris has one special attack, and this one's is the Wrath.
     - **In the game** (`KERIS_PARTISANS` in `content/weapons.ts`): one `family`, so one a run;
       the plain one from the Queen's second form (`kalphite_queen_risen`, where her kill counts);
-      the rest `raidChest` unlocks on their jewels. Kalphites and scarabs, Kephri and the Scarab
-      Mages too, carry the `kalphite` tag, and `slayer` gives them the third. Breaching is
+      the rest `raidChest` unlocks on their jewels. Kalphites and scarabs, Kephri and her
+      scarabs too, carry the `kalphite` tag (not the Scarab Mages, who are men), and `slayer`
+      gives them the third. Breaching is
       `WeaponDef.breach` (6% a stab, 30% on a kalphite, triple, diamond bolts' Armour Piercing on
       it); Wrath of Amascut is a `special` every sixth stab (1.5x and a 25% `drain` for 6 seconds,
-      OSRS's own keris special animation); the sun's are `killHeal`, `lowHealth` and a `restore`
-      special every fortieth stab (Tumeken's Light's own cast, Heal Group's light on you). The
+      OSRS's own keris special animation); the sun's are `killHeal` (the stab's own kills, and
+      none of what's part of a fight, its `noDrops` summons), `lowHealth` and a `restore`
+      special every fortieth stab (Tumeken's Light's own cast, Heal Group's light on you; it ends
+      the spores' drowsiness too). The
       keris partisans are held as a spear, the Zamorakian hasta's stance and the dragon spear's
       stab.
 - **Thread of Elidinis: the Divine rune pouch.** In OSRS the thread on a rune pouch makes the

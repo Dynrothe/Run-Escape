@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { getEnemy } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
 import { DIVINE_RUNE_POUCH, getPassive } from "../content/passives";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { CombatStyle, emptyStats } from "../content/types";
@@ -68,9 +68,19 @@ function stab(sim: Sim, ...enemies: Enemy[]): number[] {
 
 describe("the keris partisans", () => {
     test("hit kalphites and scarabs, Kephri too, a third harder", () => {
-        for (const id of ["kalphite_worker", "scarab_swarm", "kephri", "scarab_mage"]) {
-            expect(getEnemy(id).tags, id).toContain("kalphite");
+        // Everything that's one by its name and can be hit, Kephri's own scarabs too; not the
+        // Scarab Mages, who are men
+        const shelled = ENEMIES.filter(
+            (e) =>
+                /kalphite|scarab|kephri/i.test(e.name) && e.name !== "Scarab Mage" && !e.unhittable,
+        );
+        expect(shelled.map((e) => e.id)).toEqual(
+            expect.arrayContaining(["kephri_soldier", "kephri_swarm", "mage_scarab"]),
+        );
+        for (const enemy of shelled) {
+            expect(enemy.tags, enemy.id).toContain("kalphite");
         }
+        expect(getEnemy("scarab_mage").tags ?? []).not.toContain("kalphite");
         const sim = armed("keris_partisan");
         const [kalphite] = stab(sim, dummy(sim, "kalphite_soldier"));
         const other = armed("keris_partisan");
@@ -164,6 +174,17 @@ describe("the keris partisans", () => {
         stab(sim, goblin);
         expect(goblin.dead).toBe(true);
         expect(sim.player.hp).toBeGreaterThan(before);
+        // Not one that's part of a fight, as a boss's summons are: no farm of them
+        const healed = sim.player.hp;
+        const summoned = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+            x: sim.player.x + 1.5,
+            y: sim.player.y,
+        })!;
+        summoned.hp = 1;
+        summoned.noDrops = true;
+        stab(sim, summoned);
+        expect(summoned.dead).toBe(true);
+        expect(sim.player.hp).toBe(healed);
 
         const full = armed("keris_partisan_of_the_sun");
         const [high] = stab(full, dummy(full, "goblin"));
@@ -194,10 +215,13 @@ describe("the keris partisans", () => {
         light.player.hp = 3;
         light.player.poisonEnd = light.tick + 1000;
         light.player.poisonDamage = 2;
+        // The spores' drowsiness, the boss's quicker attacks, goes with its debuff
+        light["drowsyEndTick"] = light.tick + 1000;
         stab(light, target);
         expect(light.player.maxHp).toBeGreaterThan(drained);
         expect(light.player.hp).toBe(light.player.maxHp);
         expect(light.player.poisonEnd).toBe(-1);
+        expect(light["drowsyEndTick"]).toBeLessThanOrEqual(light.tick);
     });
 });
 
@@ -268,6 +292,22 @@ describe("the Divine rune pouch", () => {
         );
     });
 
+    test("opens its slot to the rest once a magic weapon's in", () => {
+        // The whip's for any class, so only the slot decides
+        const whip = getWeapon("abyssal_whip");
+        const max = MAX_WEAPONS + 1;
+        expect(fitsWithPouch(whip, [...melee, weapon("ghrazi_rapier")], "melee", max)).toBe(false);
+        // The fire spells' hits are magic: they take the pouch's slot, so the whip can have theirs
+        expect(fitsWithPouch(whip, [...melee, weapon("fire_spells")], "melee", max)).toBe(true);
+    });
+
+    test("offers a ranged adventurer magic weapons too, and no melee ones", () => {
+        const ranged = ["throwing_knives", "shortbow", "toxic_blowpipe"].map(weapon);
+        const offers = offered("ranged", ranged, [pouch], MAX_WEAPONS + 1);
+        expect(offers.some((w) => w.style === "magic")).toBe(true);
+        expect(offers.some((w) => w.style === "melee")).toBe(false);
+    });
+
     test("is one level, in endless too", () => {
         const rng = new Rng(4);
         for (let i = 0; i < 500; i++) {
@@ -282,6 +322,7 @@ describe("the Divine rune pouch", () => {
         const sim = armed("osmumtens_fang");
         const max = sim.maxWeapons;
         sim.passives.push({ ...pouch });
+        sim.updateStats();
         expect(sim.maxWeapons).toBe(max + 1);
     });
 });
