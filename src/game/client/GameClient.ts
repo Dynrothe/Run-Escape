@@ -135,6 +135,7 @@ import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
+import { CoopTicker } from "./coop/CoopTicker";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
 import { saveFile } from "./saveFile";
 
@@ -1744,10 +1745,8 @@ export class GameClient implements GameFrameHandler {
         if (!this.coop.isHost && this.cinematicLoading === undefined) {
             this.coop.sendUp({ loaded: true });
         }
-        // Hidden while it loaded: it keeps up from the start
-        if (document.hidden) {
-            this.onVisibilityChange();
-        }
+        // Start while the page is still active, not only after it is hidden.
+        this.startCoopTicker();
     }
 
     // pets: each hero's pet, in the party's order
@@ -2411,7 +2410,11 @@ export class GameClient implements GameFrameHandler {
         }
 
         if (this.coopRun) {
-            this.updateCoop(deltaTimeMs, sim, this.coopRun);
+            if (this.coopTicker) {
+                this.coopTicker.render();
+            } else {
+                this.updateCoop(deltaTimeMs, sim, this.coopRun);
+            }
         } else if (
             !this.paused &&
             !this.cinematic?.holdsRun &&
@@ -2941,41 +2944,27 @@ export class GameClient implements GameFrameHandler {
     private coopPlayerIds: string[] = [];
     // A co-op run that's ended early for this player (endCoopRunEarly)
     private coopStopped = false;
-    // Ticks for a co-op player whose tab is hidden (see onVisibilityChange)
-    private backgroundTicker?: Worker;
-    private backgroundTime = 0;
+    private coopTicker?: CoopTicker;
 
-    // A hidden tab isn't drawn, and its frames stop with it, so a co-op
-    // player keeps stepping off a worker's timer (a page's own timers are
-    // slowed right down in a hidden tab, a worker's aren't): the host keeps
-    // the run going for everyone, and a guest keeps up rather than having
-    // minutes to catch up on when they're back
+    // Visibility is useful for saves, but is not a reliable indication of
+    // whether rendering is still being scheduled. Co-op owns a clock for
+    // the whole run, including while this page reports itself as visible.
     private onVisibilityChange = (): void => {
-        this.stopBackgroundTicker();
         this.cloud?.onVisibility(document.hidden);
-        if (document.hidden && this.coopRun) {
-            this.backgroundTime = performance.now();
-            const source = `setInterval(() => postMessage(0), ${TICK_MS});`;
-            const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-            this.backgroundTicker = new Worker(url);
-            URL.revokeObjectURL(url);
-            this.backgroundTicker.onmessage = () => {
-                const sim = this.sim;
-                const run = this.coopRun;
-                const now = performance.now();
-                if (sim && run && document.hidden) {
-                    this.updateCoop(now - this.backgroundTime, sim, run);
-                }
-                this.backgroundTime = now;
-            };
-        } else {
-            this.stopBackgroundTicker();
-        }
     };
 
+    private startCoopTicker(): void {
+        this.stopBackgroundTicker();
+        this.coopTicker = new CoopTicker((elapsed) => {
+            if (this.sim && this.coopRun && !this.coopStopped) {
+                this.updateCoop(elapsed, this.sim, this.coopRun);
+            }
+        }, TICK_MS);
+    }
+
     private stopBackgroundTicker(): void {
-        this.backgroundTicker?.terminate();
-        this.backgroundTicker = undefined;
+        this.coopTicker?.stop();
+        this.coopTicker = undefined;
     }
 
     // A co-op action of this player's, now it's been done in its frame

@@ -148,6 +148,22 @@ export const MAX_LOADOUT_BYTES = 16 * 1024;
 const FULL_TEXT = "All rooms are taken right now. Try again when one opens.";
 const OTHER_BUILD_TEXT =
     "That room's on another version of the game. Reload the page to get the latest.";
+
+// What a member readies up with: changing it un-readies them (setMember).
+// Not the host's invocations, which only show in the lobby: the start
+// carries the party's
+function pickOf(member) {
+    const { invocations, ...loadout } = member.loadout ?? {};
+    return JSON.stringify([member.characterId, member.loadout && loadout]);
+}
+
+// The host's start, refused while someone's changed their pick since they
+// readied: the host's game may not have heard of the change yet
+function repickedText(member, host) {
+    return member === host
+        ? "You changed your pick, so you need to ready up again."
+        : `${member.name} changed their pick, so they need to ready up again.`;
+}
 // The open rooms list comes a page at a time: this many to a page unless the
 // game asks for another size, up to the most
 const LIST_PAGE_SIZE = 8;
@@ -1109,15 +1125,22 @@ export function createRelay(limits = {}) {
     // What a player's told the room about themselves. Their name isn't theirs
     // to say: the relay gives it.
     function setMember(client, message) {
+        const pick = pickOf(client);
         if (message.characterId !== undefined) {
             client.characterId = cleanId(message.characterId);
-        }
-        if (message.ready !== undefined) {
-            client.ready = message.ready === true;
         }
         if (message.loadout !== undefined) {
             const size = JSON.stringify(message.loadout)?.length ?? 0;
             client.loadout = size <= MAX_LOADOUT_BYTES ? message.loadout : undefined;
+        }
+        if (message.ready !== undefined) {
+            client.ready = message.ready === true;
+            client.repicked = false;
+        } else if (client.ready && pickOf(client) !== pick) {
+            // Ready with another pick: the host's view of them can still
+            // say ready, with the old one, so its start waits (see "start")
+            client.ready = false;
+            client.repicked = true;
         }
         if (message.unlocks !== undefined) {
             client.unlocks = cleanUnlocks(message.unlocks);
@@ -1286,6 +1309,7 @@ export function createRelay(limits = {}) {
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
+                client.repicked = false;
                 const created = {
                     code: newCode(),
                     name: newRoomName(),
@@ -1372,6 +1396,7 @@ export function createRelay(limits = {}) {
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
+                client.repicked = false;
                 target.members.push(client);
                 client.room = target;
                 roomChanged(target);
@@ -1464,6 +1489,11 @@ export function createRelay(limits = {}) {
                         error(versionError);
                         return;
                     }
+                    const repicked = room.members.find((member) => member.repicked);
+                    if (repicked) {
+                        error(repickedText(repicked, client));
+                        return;
+                    }
                     if (!hostCanSend(room, payload.length)) {
                         client.connection.close(1008);
                         return;
@@ -1477,6 +1507,7 @@ export function createRelay(limits = {}) {
                     counters.runsStarted++;
                     for (const member of room.members) {
                         member.ready = false;
+                        member.repicked = false;
                         member.connection.write(start);
                     }
                     roomChanged(room);

@@ -1727,8 +1727,11 @@ it, see Measuring prediction at the end of this section.
   `CoopRun.decisionSeconds` feeds the HUD's numbers store. It never enters the sim or its hash.
   A guest's deadline only moves later by more than `DEADLINE_SLACK_MS` (for the next wait), so
   frames arriving unevenly can't make it count back up. A run that ends early drops it.
-- **Hidden tabs**: a co-op player whose tab is hidden keeps stepping off a worker's timer, so the
-  host keeps the run going and a guest keeps up.
+- **Background co-op**: `CoopTicker` starts its worker with the run and takes over when rendering
+  stops, including when a covered window still reports itself as visible. Rendering and worker
+  callbacks share one clock, so returning to the tab cannot count elapsed time twice. A page timer
+  backs it up if the worker is blocked. A page the browser freezes (Memory Saver, Edge's sleeping
+  tabs, a phone in the background) stops the worker too, and nothing in the page can help that.
 
 For that every copy has to agree to the bit. The sim only uses its seeded `Rng`, and its
 trigonometry goes through `fm` in `core/fmath.ts`: the browser's own `Math` on your own (so solo
@@ -1872,10 +1875,12 @@ the one connection. Change the protocol in both relays.
 
 Cloudflare restarts its objects now and then, dropping their connections, so the Cloudflare relay's
 `room` message carries a `token`. `CoopLobby` reconnects to `coop/room/<code>?resume=<token>` for
-`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile, and the room
+`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile. Each handshake
+is limited by `RESUME_ATTEMPT_MS`, so a hanging attempt leaves time for another. The room
 (kept in storage) holds the player's place a little longer. A guest that misses some of the host's
-frames sees it from `from` on the next `down` and asks for them with a `resend` up message; the
-host keeps 20 seconds of what it's sent (longer than the room holds a dropped player) and answers
+frames asks for them immediately on reconnect, or from `from` on the next `down`, with a `resend`
+up message; the host keeps 20 seconds of what it's sent (longer than the room holds a dropped
+player) and answers
 once a second at most, from the earliest frame asked for, to every guest; each takes only frames
 after the ones it has, in messages of `RESEND_EVENTS` at most. That part works on either relay.
 A guest numbers its actions that aren't decisions (`actionSeq`, so using an item), and the host's
@@ -1892,8 +1897,9 @@ as above while the host still has the frames (about 7 seconds are left for that:
 guests' runs end, as below). It doesn't judge after a gap in its own calls (a frozen page), whose
 replies may be unread. It also pings a room it's sent nothing to for `PING_INTERVAL_MS` (a guest
 standing still), since it runs off the hidden tab's worker and the regular ping doesn't. The ping
-every `PING_INTERVAL_MS` checks the connection outside a run. The Cloudflare room lets go of a
-player it's heard nothing from, not even a ping, for `SILENT_MS`, as if their connection had closed
+every `PING_INTERVAL_MS` checks the connection outside a run; a local timer checks for its reply
+without sending more frequent pings. The Cloudflare room lets go of a player it's heard nothing
+from, not even a ping, for `SILENT_MS`, as if their connection had closed
 (the Node relay finds those with its own pings). A guest whose missing frames haven't come for
 `GIVE_UP_GAP_MS` while the host's others do ends its run (the host no longer has them); a break of
 `GAP_LATE_MS` between sightings (a frozen page) starts that wait over. A frame that fails to step
@@ -1903,6 +1909,28 @@ together when every copy failed alike; the hash check finds one that didn't. The
 out even when something after a step throws, and no time is banked for the steps it stopped. Only
 the Cloudflare relay gives a room its own connection to check; the rest is the game's, so it holds
 on either relay.
+
+Cloudflare rooms advertise `memberAcks` and acknowledge a player's numbered `me` changes with
+`meSeq` in the existing room update. `CoopLobby` keeps the latest unconfirmed changes (merged, so
+a retry carries all of them) and sends them again once per connection after `MEMBER_RETRY_MS`,
+with a ping: Cloudflare answers pings without waking the room, so only the confirmation shows
+the room itself got it. An unanswered ping makes the connection again as above, and the changes
+go again on the new one. A room that answers but hasn't confirmed within `MEMBER_WAIT_MS` of the
+retry gets no more tries, and the player's told to choose again; that message stays through
+others' room updates until a confirmation or a new choice. Leaving or starting clears what's
+waiting. The room keeps each player's sequence through sleep and ignores older retries, and
+incoming traffic runs alarm jobs that are overdue, so a late alarm can't hold back the members'
+update. Relays without `memberAcks` keep the old messages; if support disappears on reconnect,
+what's waiting is sent once without waiting for a confirmation.
+
+What starts the run is the host's view of everyone's picks (`startCoopRun`), which can be behind
+the relay's. So both relays un-ready a player whose adventurer or loadout changes while they're
+ready (`setMember`, `pickOf`: sending the same pick again, as on a map change, doesn't), and
+refuse the host's start while anyone's been un-readied that way and hasn't readied again
+(`repicked`, kept through the Cloudflare room's sleep). The change reaches the relay before the
+host's start, so a start made from a view that still says ready is turned away with a message.
+`CoopLobby.setReady(true)` sends the player's adventurer and loadout in the same message, so a
+pick that never arrived can't leave them ready with an older one.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it

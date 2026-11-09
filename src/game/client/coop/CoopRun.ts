@@ -634,6 +634,10 @@ export class CoopRun {
         this.moveSentAt = -Infinity;
         this.moveCredits = 2;
         this.moveCreditAt = this.now();
+        if (!this.isHost) {
+            this.askedAt = this.now();
+            this.link.sendUp({ resend: this.upTo });
+        }
         for (const { actionSeq, action } of this.unconfirmed) {
             this.link.sendUp({ action, actionSeq });
         }

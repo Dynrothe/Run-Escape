@@ -28,6 +28,7 @@ import {
 import { GameClient, TICK_MS, getPhaseBarFraction, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
+import { CoopTicker } from "./coop/CoopTicker";
 import { UpMessage } from "./coop/protocol";
 
 function createSim(focus?: number): Sim {
@@ -197,6 +198,122 @@ describe("power-up timers", () => {
 function displayOf(client: GameClient): DisplaySettings {
     return (client as unknown as { display: DisplaySettings }).display;
 }
+
+describe("co-op without render frames", () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+            "URL",
+            class extends URL {
+                static createObjectURL() {
+                    return "blob:background-test";
+                }
+                static revokeObjectURL() {}
+            },
+        );
+        vi.stubGlobal(
+            "Worker",
+            class {
+                onmessage?: () => void;
+                private timer = setInterval(() => this.onmessage?.(), TICK_MS);
+                terminate() {
+                    clearInterval(this.timer);
+                }
+            },
+        );
+    });
+    afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    test.each([false, true])(
+        "keeps the guest in step for 30 seconds without drawing (host down: %s)",
+        async (down) => {
+            // No visibilitychange occurs: this is the hole in the former loop.
+            vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+            const hostSim = createSim(0);
+            const guestSim = createSim(1);
+            for (const sim of [hostSim, guestSim]) sim.heroes[0].down = down;
+            const heroes = new Map([
+                ["host", 0],
+                ["guest", 1],
+            ]);
+            let host: CoopRun;
+            const guest = new CoopRun(
+                guestSim,
+                false,
+                {
+                    sendUp: (m) => host.receiveUp("guest", m),
+                    sendDown() {},
+                },
+                heroes,
+                "host",
+            );
+            let lastFrameAt = performance.now();
+            let largestGap = 0;
+            host = new CoopRun(
+                hostSim,
+                true,
+                {
+                    sendUp() {},
+                    sendDown(m) {
+                        const now = performance.now();
+                        largestGap = Math.max(largestGap, now - lastFrameAt);
+                        lastFrameAt = now;
+                        guest.receiveDown(m);
+                        while (guest.canStep()) {
+                            guest.stepFrame();
+                            guestSim.takeEvents();
+                        }
+                    },
+                },
+                heroes,
+                "host",
+            );
+            host.receiveUp("guest", { loaded: true });
+            const { client } = createClient(hostSim, false);
+            Object.assign(client, {
+                coopRun: host,
+                coopStopped: false,
+                accumulator: 0,
+                coop: { keepAlive() {} },
+                input: { getMoveVector: () => ({ x: 0, y: 0 }) },
+                handleEvents() {},
+                syncOverlay() {},
+                getDecisionKey: () => "playing",
+                resendAutoChest() {},
+            });
+            const ticking = client as unknown as {
+                startCoopTicker(): void;
+                stopBackgroundTicker(): void;
+                coopTicker: CoopTicker;
+            };
+            ticking.startCoopTicker();
+            for (let frame = 0; frame < 50; frame++) {
+                await vi.advanceTimersByTimeAsync(TICK_MS);
+                ticking.coopTicker.render();
+            }
+            const before = guest.frame;
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(guest.frame - before).toBe(1500);
+            expect(largestGap).toBeLessThanOrEqual(60);
+            expect(guest.desynced).toBe(false);
+            expect(syncHash(hostSim)).toBe(syncHash(guestSim));
+            ticking.coopTicker.render();
+            expect(host.frame).toBe(1550);
+            await vi.advanceTimersByTimeAsync(TICK_MS);
+            ticking.coopTicker.render();
+            expect(host.frame).toBe(1551);
+            ticking.stopBackgroundTicker();
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(host.frame).toBe(1551);
+            expect(vi.getTimerCount()).toBe(0);
+        },
+    );
+});
 
 describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>

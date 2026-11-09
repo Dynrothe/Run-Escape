@@ -29,6 +29,22 @@ export const FULL_TEXT = "All rooms are taken right now. Try again when one open
 export const OTHER_BUILD_TEXT =
     "That room's on another version of the game. Reload the page to get the latest.";
 
+// What a member readies up with: changing it un-readies them (setMember).
+// Not the host's invocations, which only show in the lobby: the start
+// carries the party's
+export function pickOf(member) {
+    const { invocations, ...loadout } = member.loadout ?? {};
+    return JSON.stringify([member.characterId, member.loadout && loadout]);
+}
+
+// The host's start, refused while someone's changed their pick since they
+// readied: the host's game may not have heard of the change yet
+export function repickedText(member, host) {
+    return member === host
+        ? "You changed your pick, so you need to ready up again."
+        : `${member.name} changed their pick, so they need to ready up again.`;
+}
+
 export function isAnyMapOn(env) {
     return ["on", "1", "true"].includes((env.MULTIPLAYER_ANY_MAP ?? "").toLowerCase());
 }
