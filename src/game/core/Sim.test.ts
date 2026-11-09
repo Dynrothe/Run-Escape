@@ -2863,6 +2863,7 @@ describe("enemy mechanics", () => {
                 expect(events).toContainEqual({
                     type: "notice",
                     message: "Hide behind the glyph!",
+                    instruction: true,
                 });
                 return events.filter((e) => e.type === "playerHit" && e.enemyId === boss.def.id)
                     .length;

@@ -1210,6 +1210,14 @@ export type ZebakFight = {
     uid: number;
     special: number;
     roar?: { tick: number };
+    // When his last roar went off, from where, and the boulders that sheltered from it: for its
+    // shockwave (drawn only)
+    roared?: {
+        tick: number;
+        x: number;
+        y: number;
+        rocks: { x: number; y: number; radius: number; look: string }[];
+    };
     waves: {
         y: number;
         dir: 1 | -1;
@@ -1224,6 +1232,29 @@ export type ZebakFight = {
     clouds: { uid: number; x: number; y: number }[];
     nextCloudTick: number;
 };
+
+// Whether a boulder shelters (x, y) from Zebak's roar from (fromX, fromY): straight behind it,
+// down the island away from him (as OSRS's, not slanting off the line from him), within shelter
+// tiles of it and as wide as it is. The sim's (Sim.zebakSheltered) and the shockwave's drawing
+// both go by it.
+export function zebakShelters(
+    fromX: number,
+    fromY: number,
+    x: number,
+    y: number,
+    rocks: readonly { x: number; y: number; radius: number }[],
+    shelter: number,
+): boolean {
+    return rocks.some((rock) => {
+        const away = rock.y >= fromY ? 1 : -1;
+        const behind = (y - rock.y) * away;
+        return (
+            behind > 0 &&
+            behind <= shelter + rock.radius &&
+            Math.abs(x - rock.x) <= rock.radius + 0.5
+        );
+    });
+}
 
 // Kephri's fight (BossDef.kephri), while she's up: how many intermissions she's had, whether
 // she's on her last (her swarm gone), the intermission she's in (its swarms still to send, how
@@ -4083,7 +4114,7 @@ export class Sim {
                     ) {
                         // Stands still winding up, so a swing can be stepped away from
                         dirX = dirY = 0;
-                    } else if (this.tick < bossState.channelEnd) {
+                    } else if (this.tick < bossState.channelEnd && !this.akkhaDrawn(enemy)) {
                         // And while its volleys go out, so a spiral stays a spiral
                         dirX = dirY = 0;
                     } else if (this.keepsTo(enemy)) {
@@ -4165,11 +4196,14 @@ export class Sim {
                 let sepX = 0;
                 let sepY = 0;
                 const faction = enemy.boss || enemy.aggro ? undefined : enemy.def.faction;
+                // Akkha walks through his own shadows: they never move, so one straight between him
+                // and where he's going held him there for good, never drawn into a dead one's quarter
+                const ownShadow = enemy.def.boss?.akkha?.shadows.enemyId;
                 let foe: Enemy | undefined;
                 this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
                     // A rolling boulder goes its own way, through whatever's there (Ba-Ba's cracked
                     // one starts on her altar, under her)
-                    if (other === enemy || other.rolls) {
+                    if (other === enemy || other.rolls || other.def.id === ownShadow) {
                         return;
                     }
                     const ox = enemy.x - other.x;
@@ -5589,6 +5623,11 @@ export class Sim {
                         };
                     }
                     if (enemy.def.boss?.akkha) {
+                        // His room in full light (AkkhaDef.ambient), so Memory Blast's
+                        // quadrants read; the map's own again once the path's left
+                        if (this.lighting) {
+                            this.dimTo(enemy.def.boss.akkha.ambient, 1);
+                        }
                         this.tombsAkkha = {
                             uid: enemy.uid,
                             attacks: 0,
@@ -5962,6 +6001,22 @@ export class Sim {
         boss.attackSeq = AKKHA_VANISH_SEQ;
         boss.animStart = this.tick;
         this.emit({ type: "notice", message: memory.message });
+    }
+
+    // Akkha with a shadow of his dead: he can be drawn into its quarter, so he comes on at whoever
+    // he's after while his volleys go out (still standing to wind each up), as OSRS's is dragged.
+    // Standing for every volley, his ranged and magic forms hardly took a step between his
+    // specials, so he was never drawn in and the fight never went on.
+    private akkhaDrawn(boss: Enemy): boolean {
+        const fight = this.tombsAkkha;
+        return (
+            fight !== undefined &&
+            fight.uid === boss.uid &&
+            !fight.memory &&
+            fight.shadows.some(
+                (shadow) => !this.enemies.some((e) => e.uid === shadow.uid && !e.dead),
+            )
+        );
     }
 
     // Akkha's shadows while they're up: how many, and seconds till those still up flood
@@ -7937,24 +7992,10 @@ export class Sim {
         this.emit({ type: "notice", message: def.waves.message });
     }
 
-    // Whether a boulder shelters a point from him: between them, and close enough to it
+    // Whether a boulder shelters a point from him: straight behind it (zebakShelters)
     private zebakSheltered(boss: Enemy, x: number, y: number, def: ZebakDef): boolean {
-        const dx = x - boss.x;
-        const dy = y - boss.y;
-        const length = Math.max(0.001, fm.hypot(dx, dy));
-        return this.tombsCover.some((rock) => {
-            if (rock.look !== def.roar.look) {
-                return false;
-            }
-            // Along the line from him to the point, the boulder short of it, and near the line
-            const along = ((rock.x - boss.x) * dx + (rock.y - boss.y) * dy) / length;
-            const off = Math.abs(((rock.x - boss.x) * dy - (rock.y - boss.y) * dx) / length);
-            return (
-                along < length &&
-                length - along <= def.roar.shelter + rock.radius &&
-                off <= rock.radius + 0.5
-            );
-        });
+        const rocks = this.tombsCover.filter((rock) => rock.look === def.roar.look);
+        return zebakShelters(boss.x, boss.y, x, y, rocks, def.roar.shelter);
     }
 
     // His Great Roar, once its time's up: everyone not behind a boulder is hit, hard, and thrown back
@@ -7964,10 +8005,22 @@ export class Sim {
             return;
         }
         fight.roar = undefined;
+        fight.roared = {
+            tick: this.tick,
+            x: boss.x,
+            y: boss.y,
+            rocks: this.tombsCover.filter((rock) => rock.look === def.roar.look),
+        };
         boss.anim = "attack";
         boss.animStart = this.tick;
         boss.attackSeq = def.roar.seq;
         this.emit({ type: "notice", message: def.roar.roarMessage });
+        this.emit({
+            type: "bossImpact",
+            x: boss.x,
+            y: boss.y,
+            shake: def.roar.shockwave.shake,
+        });
         const current = this.hero;
         for (const hero of this.heroes) {
             if (!this.isUp(hero)) {
@@ -8751,9 +8804,7 @@ export class Sim {
                 continue;
             }
             const { x, y } = hero.player;
-            const at = def.falls.findIndex(
-                (fall) => fm.hypot(fall.fill.x - x, fall.fill.y - y) <= 1.5,
-            );
+            const at = this.crondisFallAt(def, x, y);
             if (
                 at !== -1 &&
                 this.tick >= crondis.dryUntil[at] &&
@@ -8898,6 +8949,11 @@ export class Sim {
                 if (cloud.hit.includes(hero.index) || x < lane.x0 || x > lane.x1 + 1) {
                     return;
                 }
+                // Under a waterfall, as OSRS's: the poison doesn't reach them there, running or
+                // dry (filling dries it, so it'd go the moment they'd filled)
+                if (this.crondisFallAt(def, x, y) !== -1) {
+                    return;
+                }
                 // How far along from the waterfall's end
                 const along = lane.fromLow ? y - lane.y0 : lane.y1 + 1 - y;
                 if (along <= dark && along >= dark - CRONDIS.cloudLength) {
@@ -8907,6 +8963,11 @@ export class Sim {
             });
             return true;
         });
+    }
+
+    // The waterfall someone at (x, y) is under (where they fill their water), or -1
+    private crondisFallAt(def: CrondisDef, x: number, y: number): number {
+        return def.falls.findIndex((fall) => fm.hypot(fall.fill.x - x, fall.fill.y - y) <= 1.5);
     }
 
     // How far down its corridor a cloud's pale front and dark front are, in tiles from the
@@ -10439,19 +10500,23 @@ export class Sim {
         });
     }
 
-    // Done with a path: back to the Nexus, with what's on the floor. Co-op: anyone still down is
-    // back up for the next, as OSRS's party rejoins once a room's done.
+    // Done with a path: back to the Nexus, with what's on the floor, and the whole party on full
+    // hitpoints for the next. Co-op: anyone still down is back up, as OSRS's party rejoins once a
+    // room's done.
     private leaveTombsPath(): void {
         const tombs = this.map.tombs!;
         const current = this.hero;
         for (const hero of this.heroes) {
-            if (hero.down && !hero.left) {
-                this.use(hero);
+            if (hero.left) {
+                continue;
+            }
+            this.use(hero);
+            if (hero.down) {
                 hero.down = false;
                 hero.revive = undefined;
-                this.player.hp = this.player.maxHp;
                 this.player.deathTick = -1;
             }
+            this.player.hp = this.player.maxHp;
         }
         this.use(current);
         this.rescaleParty();
@@ -14340,7 +14405,7 @@ export class Sim {
             this.emit({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
         }
         if (attack.message) {
-            this.emit({ type: "notice", message: attack.message });
+            this.emit({ type: "notice", message: attack.message, instruction: true });
         }
     }
 
@@ -14660,9 +14725,10 @@ export class Sim {
             if (boxCircle(pillars, nx, ny, enemy.radius)) {
                 return { x, y, stuck: true };
             }
-            // One of Ba-Ba's boulders' rocks: stuck in it if it can be stunned, else stopped short
+            // One of Ba-Ba's boulders' rocks: stopped short of it. Only her Rampage is stunned by one
+            // (stepSurge), so hiding behind a rock from her lunges doesn't stun her every time.
             if (this.tombsCover.length > 0 && this.inCoverRock(nx, ny, enemy.radius)) {
-                return { x, y, stuck: (enemy.def.boss?.guard?.stun ?? 0) > 0 };
+                return { x, y, stuck: false };
             }
             const inTheWay = this.heroes.some(
                 (hero) =>
@@ -14720,8 +14786,7 @@ export class Sim {
                 enemy.x + (dx / length) * enemy.radius,
                 enemy.y + (dy / length) * enemy.radius,
             );
-            // (the Tombs have no pillars: there it's one of Ba-Ba's rocks)
-            this.dropGuard(enemy, guard.stun, true, this.map.tombs ? "Rubble" : "Pillar");
+            this.dropGuard(enemy, guard.stun, true, "Pillar");
         }
     }
 

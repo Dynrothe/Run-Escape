@@ -2970,7 +2970,7 @@
 }
 
 /* The Scabaras room's slates and Ancient tablet, read while you're stood by one: over the play
-   area, not in the way of touching it */
+   area, not in the way of touching it (on a touch screen, a thin row at the top: Mobile.css) */
 .ui-scabaras-reading {
     position: absolute;
     top: 14%;

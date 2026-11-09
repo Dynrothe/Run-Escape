@@ -63,7 +63,23 @@
     .ui-ability-wrap-touch {
         position: absolute;
         right: calc(var(--safe-right) + 16px);
-        bottom: calc(var(--safe-bottom) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px + var(--touch-ability-name, 14px));
+    }
+
+    /* Its name, under the circle and as wide as it needs ("Point-blank volley") */
+    .ui-ability-name-under {
+        top: 100%;
+        bottom: auto;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        margin-top: 1px;
+        padding: 0 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        /* Straight on the floor now, not the button's face: a dark backing to read on any */
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
     }
 
     /* A run with items (the Tombs): above their two rows, in their column */
@@ -74,7 +90,7 @@
         );
         bottom: calc(
             var(--safe-bottom) + var(--touch-items-inset, 12px) + var(--touch-item-size, 58px) * 2 +
-                var(--touch-items-gap, 6px) + 10px
+                var(--touch-items-gap, 6px) + 10px + var(--touch-ability-name, 14px)
         );
     }
 
@@ -282,6 +298,40 @@
 
     .ui-volume {
         height: 32px;
+    }
+
+    /* The Scabaras slate: one thin row along the top, under the clock, not over the floor round
+       the hero. With no zoom, the middle of the screen is the plates you're about to step on.
+       (The tablet's panel, with only its number, stays as it is.) */
+    .ui-scabaras-slate {
+        top: calc(var(--safe-top) + 34px);
+        width: auto;
+        max-width: calc((100vw - var(--safe-left) - var(--safe-right) - 16px) / var(--ui-scale));
+        padding: 3px 8px;
+        opacity: 0.92;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-title,
+    .ui-scabaras-slate .ui-scabaras-name {
+        display: none;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbols {
+        grid-template-columns: repeat(9, auto);
+        gap: 2px 5px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbol {
+        gap: 2px;
+    }
+
+    .ui-scabaras-slate .ui-icon {
+        width: auto;
+        height: 18px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-value {
+        font-size: 15px;
     }
 }
 

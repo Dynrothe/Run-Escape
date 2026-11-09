@@ -35,7 +35,7 @@ import {
 import { TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
-import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow } from "./Sim";
+import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow, zebakShelters } from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { isCircleFree } from "./world/Collision";
 import { makeGrid } from "./world/testGrid";
@@ -544,6 +544,8 @@ describe("the Apmeken room", () => {
             sim.step();
         }
         expect(baba.dead).toBe(true);
+        // Hurt as it ends: healed to full on the way out
+        sim.player.hp = 1;
         // Its death plays out, then back to the Nexus (nothing holding the player meanwhile)
         for (let i = 0; i < 400 && sim.tombsPath !== undefined; i++) {
             sim.player.invulnerable = 1e6;
@@ -557,6 +559,7 @@ describe("the Apmeken room", () => {
         }
         expect(sim.tombsPath).toBeUndefined();
         expect(sim.tombsPathsDone).toEqual(["apmeken"]);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
         expect(sim.player.x).toBeCloseTo(1036.5);
         expect(sim.player.y).toBeCloseTo(1036.5);
         // Its level ups answered, then up to its door: it's done
@@ -957,7 +960,7 @@ describe("Ba-Ba", () => {
         );
     });
 
-    it("is stunned by a lunge into one of her rocks, but not again for a while", () => {
+    it("stops a lunge short of one of her rocks, not stunned by it", () => {
         const sim = atBaba();
         sim.weapons = [];
         const boss = baba(sim);
@@ -973,7 +976,9 @@ describe("Ba-Ba", () => {
         });
         sim["startBossAttack"](boss, lunge);
         seconds(sim, lunge.windup + 0.5, { x: sim.player.x, y: sim.player.y });
-        expect(sim.isStunned(boss)).toBe(true);
+        // Hiding behind a rock from her lunges isn't a free stun: only her Rampage is
+        expect(sim.isStunned(boss)).toBe(false);
+        expect(boss.y - (sim.player.y + 2)).toBeGreaterThan(1.4);
     });
 
     it("drops her rockfall in a cross of shadows on the player's tile", () => {
@@ -1685,6 +1690,85 @@ describe("Akkha", () => {
         return sim;
     }
     const akkha = (sim: Sim) => sim.enemies.find((e) => e.uid === sim.tombsAkkha!.uid)!;
+
+    it("walks through his own shadows to a dead one's quarter, not held behind a live one", () => {
+        // Hit steadily; each time his shadows come, kill one and wait in its quarter. A live
+        // shadow between him and it held him there for good before (on any seed), so the fight
+        // never went on.
+        const sim = atAkkha([], 1);
+        const boss = akkha(sim);
+        let t = 0;
+        for (; t < 400 * TICKS_PER_SECOND && !boss.dead; t++) {
+            const fight = sim.tombsAkkha!;
+            sim.player.hp = sim.player.maxHp;
+            sim.player.invulnerable = 0;
+            if (t % 10 === 0) {
+                sim.damageEnemy(boss, boss.maxHp * 0.05, 0, boss.x, boss.y);
+            }
+            const live = fight.shadows.filter((s) =>
+                sim.enemies.some((e) => e.uid === s.uid && !e.dead),
+            );
+            const dead = fight.shadows.find((s) => !live.includes(s));
+            if (live.length === fight.shadows.length && live.length > 0 && t % 10 === 5) {
+                const shadow = sim.enemies.find((e) => e.uid === live[0].uid)!;
+                sim.damageEnemy(shadow, shadow.maxHp * 2, 0, shadow.x, shadow.y);
+            }
+            if (dead) {
+                const at = sim.akkhaCorner(dead.quadrant, 6);
+                sim.player.x = sim.player.prevX = at.x;
+                sim.player.y = sim.player.prevY = at.y;
+            }
+            if (sim.state === "levelUp") {
+                sim.choose(0);
+            }
+            sim.step();
+        }
+        expect(boss.dead).toBe(true);
+    });
+
+    it("comes on at you between his specials while a shadow's dead, to be drawn into its quarter", () => {
+        // With Double Trouble every special's a Memory Blast; his volleys between held him in the
+        // middle, so he was never drawn into the dead shadow's quarter and the blasts went on
+        for (const seed of [1, 2, 3]) {
+            const sim = atAkkha(["double_trouble", "feeling_special", "stay_vigilant"], seed);
+            const boss = akkha(sim);
+            sim.damageEnemy(boss, boss.maxHp, 0, boss.x, boss.y);
+            const line = boss.hp;
+            let killedAt = -1;
+            let hurtAt = -1;
+            for (let t = 0; t < 60 * TICKS_PER_SECOND && hurtAt < 0; t++) {
+                const fight = sim.tombsAkkha!;
+                const dead = fight.shadows.find(
+                    (s) => !sim.enemies.some((e) => e.uid === s.uid && !e.dead),
+                );
+                if (!dead && fight.memory && fight.shadows.length > 0) {
+                    const shadow = sim.enemies.find((e) => e.uid === fight.shadows[0].uid)!;
+                    sim.damageEnemy(shadow, shadow.maxHp * 2, 0, shadow.x, shadow.y);
+                    killedAt = t;
+                }
+                if (dead) {
+                    const at = sim.akkhaCorner(dead.quadrant, 6);
+                    sim.player.x = sim.player.prevX = at.x;
+                    sim.player.y = sim.player.prevY = at.y;
+                    if (t % 10 === 0) {
+                        sim.damageEnemy(boss, boss.maxHp * 0.01, 0, boss.x, boss.y);
+                    }
+                    if (boss.hp < line) {
+                        hurtAt = t;
+                    }
+                }
+                sim.player.hp = sim.player.maxHp;
+                sim.player.invulnerable = 0;
+                if (sim.state === "levelUp") {
+                    sim.choose(0);
+                }
+                sim.step();
+            }
+            expect(killedAt).toBeGreaterThanOrEqual(0);
+            expect(hurtAt).toBeGreaterThan(0);
+            expect((hurtAt - killedAt) / TICKS_PER_SECOND).toBeLessThan(25);
+        }
+    });
 
     describe("Detonate", () => {
         // A party of two at him, each put on a tile
@@ -2903,7 +2987,8 @@ describe("Kephri", () => {
 // waterfall
 const CRONDIS_DEF = {
     palm: { x: 1036.5, y: 1036.5 },
-    falls: [{ fill: { x: 1036.5, y: 1058.5 }, at: { x: 1036.5, y: 1062.5 }, rotation: 0 }],
+    // The fill spot as far past the corridor's end as the real room's (1.5 tiles)
+    falls: [{ fill: { x: 1036.5, y: 1055.5 }, at: { x: 1036.5, y: 1059.5 }, rotation: 0 }],
     lanes: [
         { x0: 1034, x1: 1039, y0: 1044, y1: 1053, low: 1033, high: 1040, fall: 0, fromLow: false },
     ],
@@ -3091,6 +3176,21 @@ describe("the Crondis room", () => {
         expect(cloud.hit).toEqual([0]);
     });
 
+    it("leaves anyone under a waterfall alone, as OSRS's poison does, running or dry", () => {
+        const sim = crondis();
+        const fall = CRONDIS_DEF.falls[0];
+        room(sim).dryUntil[0] = sim.tick + 1e4;
+        const cloud = { lane: 0, startTick: sim.tick, hit: [] as number[] };
+        room(sim).clouds.push(cloud);
+        const hp = sim.player.maxHp;
+        for (let i = 0; i < 4 * TICKS_PER_SECOND; i++) {
+            sim.player.hp = hp;
+            at(sim, fall.fill);
+            room(sim).clouds = room(sim).clouds.length ? room(sim).clouds : [cloud];
+        }
+        expect(cloud.hit).toEqual([]);
+    });
+
     it("has a crocodile's bite spill your water", () => {
         const sim = crondis();
         fill(sim);
@@ -3267,6 +3367,22 @@ describe("Zebak", () => {
         expect(open.hurt).toBeGreaterThan(0);
         expect(open.moved).toBeGreaterThan(0.5);
         expect(roarOn(true).hurt).toBe(0);
+    });
+
+    it("shelters from his roar straight behind a boulder, down the island, not on a slant", () => {
+        // He's at (0, 10), a boulder off to his side at (5, 0)
+        const rock = [{ x: 5, y: 0, radius: 0.8 }];
+        const shelters = (x: number, y: number) =>
+            zebakShelters(0, 10, x, y, rock, DEF.roar.shelter);
+        expect(shelters(5, -3)).toBe(true);
+        expect(shelters(5, 1)).toBe(false);
+        expect(shelters(5, -5)).toBe(false);
+        // On the line from him through it, as far back: off to the side of what it shelters
+        const len = Math.hypot(5, -10);
+        expect(shelters(5 + (5 / len) * 3.2, -(10 / len) * 3.2)).toBe(false);
+        // As wide as it is, and a bit
+        expect(shelters(6.2, -2)).toBe(true);
+        expect(shelters(6.5, -2)).toBe(false);
     });
 
     it("leaves a party his roar kills where the room starts over, not thrown from there", () => {
