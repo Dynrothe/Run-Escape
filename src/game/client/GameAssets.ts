@@ -900,7 +900,6 @@ export class GameAssets {
         for (const id of [
             scabaras.plate,
             scabaras.lightsPlate,
-            scabaras.hidden,
             scabaras.tablet,
             scabaras.button,
             ...scabaras.symbols,

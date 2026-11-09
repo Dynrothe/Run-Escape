@@ -2863,6 +2863,7 @@ describe("enemy mechanics", () => {
                 expect(events).toContainEqual({
                     type: "notice",
                     message: "Hide behind the glyph!",
+                    instruction: true,
                 });
                 return events.filter((e) => e.type === "playerHit" && e.enemyId === boss.def.id)
                     .length;
@@ -3225,6 +3226,16 @@ describe("maps", () => {
             for (const id of ids) {
                 if (id !== undefined) {
                     expect(() => getEnemy(id), `${id} for ${enemy.id}`).not.toThrow();
+                }
+            }
+        }
+    });
+
+    test("only a closing ring stands where it formed first (BulletPatternDef.hold)", () => {
+        for (const enemy of ENEMIES) {
+            for (const attack of enemy.boss?.attacks ?? []) {
+                if (attack.pattern?.hold !== undefined) {
+                    expect(attack.pattern.shape, `${enemy.id}: ${attack.name}`).toBe("closing");
                 }
             }
         }

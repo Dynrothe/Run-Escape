@@ -133,6 +133,41 @@ function expectInStep(runs: CoopRun[]): void {
 }
 
 describe("co-op lockstep", () => {
+    it("requests missing frames on reconnect, without repeatedly requesting during silence", () => {
+        const clock = { now: 0 };
+        const { run: host, sent: downs } = hostRun(clock);
+        const ups: UpMessage[] = [];
+        const heroes = new Map(IDS.map((id, i) => [id, i]));
+        const guest = new CoopRun(
+            createSim(1),
+            false,
+            { sendUp: (m) => ups.push(m), sendDown: () => {} },
+            heroes,
+            "host",
+            () => clock.now,
+        );
+        for (let i = 0; i < 10; i++) {
+            host.stepFrame();
+            host.flush();
+        }
+        guest.receiveDown(downs[0]);
+        const first = downs[0].upTo;
+        while (guest.canStep()) guest.stepFrame();
+        expect(guest.frame).toBe(first);
+        clock.now = 5000;
+        guest.flush();
+        expect(ups).toEqual([]);
+        guest.resumed();
+        expect(ups).toEqual([{ resend: first }]);
+        host.receiveUp("guest1", ups[0]);
+        guest.receiveDown(downs.at(-1)!);
+        while (guest.canStep()) guest.stepFrame();
+        expect(guest.frame).toBe(host.frame);
+        expect(syncHash(guest.sim)).toBe(syncHash(host.sim));
+        clock.now = 10_000;
+        guest.flush();
+        expect(ups).toHaveLength(1);
+    });
     afterEach(() => usePortableMath(false));
 
     it("keeps everyone's run the same through a lagging network", () => {
@@ -699,7 +734,7 @@ describe("co-op lockstep", () => {
         });
         ups.length = 0;
         guest.resumed();
-        expect(ups).toEqual([{ action: { kind: "item", index: 1 }, actionSeq: 2 }]);
+        expect(ups).toEqual([{ resend: 1 }, { action: { kind: "item", index: 1 }, actionSeq: 2 }]);
 
         // It had reached the host the first time: the second is the same one
         const { run: host } = hostRun({ now: 0 });

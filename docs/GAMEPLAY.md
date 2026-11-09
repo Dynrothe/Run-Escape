@@ -393,7 +393,8 @@ version and how to run it.
 - **The Tombs of Amascut**, on the Raids tab once its quest is done. Start in the Nexus and take
   the four paths in any order, each a puzzle room and then its boss: Apmeken (fix what the
   baboons break among their waves) and Ba-Ba; Het (turn mirrors to carry the beam to the seal) and
-  Akkha; Scabaras (sequence, lights, addition and matching boards) and Kephri; Crondis (carry water
+  Akkha; Scabaras (sequence, lights, addition and matching boards, listed on the HUD with which
+  are open) and Kephri; Crondis (carry water
   to the palm past spears, poison and crocodiles) and Zebak. Then the Wardens, three phases, the
   last on a floor that rises and falls. The Helpful Spirit in the Nexus gives a free bundle of
   supplies after the second path and the fourth.
@@ -401,6 +402,9 @@ version and how to run it.
       level, which scales every enemy and boss and the chest's odds. Entry is for an account
       that's bought little, Normal (150) wants the shop and better gear, Expert (300) more, and
       past that the bosses climb quicker and quicker. In co-op the host's invocations count.
+      Up to five setups save as presets on the board, named or by their raid level, each loaded
+      in one go. Saving under a name that's there saves over it, so one left blank replaces the
+      last saved at its level.
     - **Guards and Amascut's bane**: every boss's guard drops when one of its big attacks misses
       everyone, and the raid's button, Amascut's bane, hits a share of the boss's hitpoints, twice
       as much while its guard's down.
@@ -733,3 +737,6 @@ version and how to run it.
   title screen's Settings stop it (it starts off stopped if your system asks for reduced motion).
 - **Power-up timers**: the circles over power-ups on the ground; Settings and the pause screen
   turn them off.
+- **Puzzle helper**: in the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA
+  plugin does in OSRS: on at Entry, and at any raid level once you've beaten the room. Settings and
+  the pause screen turn it off.

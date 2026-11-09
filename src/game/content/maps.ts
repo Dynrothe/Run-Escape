@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
@@ -595,4 +596,17 @@ export function hasFliers(map: MapDef): boolean {
     visit(map);
     visit(RANDOM_EVENTS);
     return enemies.some((enemy) => enemy.flies);
+}
+
+// A map's texts in the language chosen (map.<id>.name|desc|warning|victory)
+export function mapName(map: MapDef): string {
+    return tr(`map.${map.id}.name`, map.name);
+}
+
+export function mapDescription(map: MapDef): string {
+    return tr(`map.${map.id}.desc`, map.description);
+}
+
+export function mapFinalBossWarning(map: MapDef): string {
+    return tr(`map.${map.id}.warning`, map.finalBossWarning);
 }

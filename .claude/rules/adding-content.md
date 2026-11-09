@@ -207,14 +207,18 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   strip `length` if it's shorter; `noDash` keeps a stationary one where it stands.
   Name only one phase's attacks to keep it to that phase (a finale's need names of their own).
   The bot finds the pocket between two strips (`sharedPocket` in `bossReads.ts`).
-- The Tombs' bosses: a lunge or a surge into one of Ba-Ba's rocks (`leavesCover`) is stunned
-  as one into a pillar is; a guard with `pierce` lets its prayer down while it's open (Akkha's);
+- The Tombs' bosses: a surge into one of Ba-Ba's rocks (`leavesCover`) is stunned as a lunge
+  into a pillar is (a lunge only stops short of a rock); a guard with `pierce` lets its prayer
+  down while it's open (Akkha's);
   `phases.by: "shields"` steps Kephri's phases at her shields; `onlyWith` keeps an attack to an
   invocation, and `invoked.times` adds links to its chain; `AkkhaDef.orbAttacks` are all he
   uses while his orbs are out; `clearOfObelisk` keeps a Wardens attack off the obelisk's
   special; `raidEase` eases a boss off from a raid level up (hitpoints, hits, the time between
   its ambients), where the raid level's scale would make a wall. Each boss's stage in
   `docs/design/tombs-of-amascut.md` says what it uses.
+- A boss attack's `message` is what to do about it, said the first time it's used in a run, one
+  at a time with others (`GameClient.showInstruction`), never again that run. A warning for every
+  cast belongs in the attack's telegraph, not its message.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
@@ -328,6 +332,17 @@ under the Hallowed Night), with a tab of its own for a new map, and so do weapon
 names that map (`content/collectionLog.ts`). A boss fight map (`MapDef.fight`) whose boss brings
 in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't. The Tombs of Amascut's
 chest's are under the raid.
+
+## Text and languages
+
+Names and descriptions are read through the accessors in `content/` (`tr(key, english)`), never
+straight off the definition. After adding or renaming content, run
+`bun run tsx scripts/i18n/extract.ts` to regenerate `src/game/i18n/locales/en/*.json`. See
+`docs/DEVELOPMENT.md`, Languages.
+
+Write it in English only: never translate it into another language unless the developer asks you
+to (CLAUDE.md, Conventions). The other languages show the English until their translators add
+theirs.
 
 ## Adventurer
 

@@ -1,6 +1,7 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { getEnemy } from "../content/enemies";
 import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
+import { ZEBAK } from "../content/tombs";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
@@ -12,6 +13,7 @@ import {
     SimEvent,
     SurgeLane,
 } from "../core/entities";
+import { tl } from "../i18n";
 import {
     GameAssets,
     HINT_ARROW_SPRITE,
@@ -81,6 +83,8 @@ const LANE_SHOW_SECONDS = 1;
 const LANE_SHOW_ALPHA = 0.6;
 // Pixels, at a scale of 1
 const TOTEM_ARROW = 14;
+// Tiles from the player the floor arrow sits, the way the Apmeken room's issue is (drawGroundArrow)
+const GROUND_ARROW_REACH = 2.5;
 // The hint arrow: how many times its 25 pixels it's drawn, how far over the
 // top of what it marks in tiles, and how far it bobs in pixels
 const HINT_ARROW_SCALE = 1.2;
@@ -311,8 +315,13 @@ export class BossFightView {
                 { scale: falls.scale },
             );
         }
-        // Ba-Ba's boulders' rocks, to take cover by
-        sim.tombsCover.forEach((rock) => {
+        // Ba-Ba's boulders' rocks, to take cover by, and Zebak's boulders, gone as he roars but
+        // drawn on through its shockwave (GameView.drawZebakRoar)
+        const roared = sim.tombsZebak?.roared;
+        const shaking =
+            roared && sim.tick - roared.tick < ZEBAK.roar.shockwave.seconds * TICKS_PER_SECOND;
+        const cover = shaking ? [...sim.tombsCover, ...roared.rocks] : sim.tombsCover;
+        cover.forEach((rock) => {
             // An enemy's model, or a loc's (Kephri's dung)
             const model = rock.look.startsWith("loc:")
                 ? this.assets.get(rock.look)
@@ -1126,11 +1135,20 @@ export class BossFightView {
 
     // ---- Over the whole screen ----
 
-    drawScreen(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
+    // viewPose: where the hero the camera's on is drawn this frame, when something's drawn from
+    // them (the Apmeken room's floor arrow)
+    drawScreen(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+        viewPose?: { x: number; y: number },
+    ): void {
         this.drawBeams(overlay, sim, now, scale);
         this.drawTotemArrows(overlay, sim, scale);
         this.drawOverheads(overlay, sim, alpha, scale);
-        this.drawHintArrows(overlay, sim, alpha, now, scale);
+        this.drawHintArrows(overlay, sim, alpha, now, scale, viewPose);
         const boss = sim.shownBoss;
         const width = overlay.width;
         const height = overlay.height;
@@ -1270,6 +1288,57 @@ export class BossFightView {
         ctx.stroke();
     }
 
+    // A yellow arrow on the floor beside the player, a couple of tiles out the way something off
+    // the screen is, pointing along the ground at it (the Apmeken room's pillar or vent): where the
+    // player's looking, not out at the screen's edge. It nudges the way it points as it bobs (0 to
+    // 1, with the hint arrows').
+    private drawGroundArrow(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        size: number,
+        bob: number,
+        viewPose: { x: number; y: number } | undefined,
+    ): void {
+        // From where the hero's drawn this frame (smoothed, and predicted for a co-op guest), so
+        // it moves with them rather than ticking after
+        const player = viewPose ?? sim.player;
+        const dx = x - player.x;
+        const dy = y - player.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance < 0.001) {
+            return;
+        }
+        const ux = dx / distance;
+        const uy = dy / distance;
+        const reach = Math.min(GROUND_ARROW_REACH, Math.max(1, distance - 1));
+        const ax = player.x + ux * reach;
+        const ay = player.y + uy * reach;
+        const at = overlay.project(ax, this.ground(sim, ax, ay), ay, this.a);
+        const ahead = overlay.project(ax + ux, this.ground(sim, ax + ux, ay + uy), ay + uy, this.b);
+        if (at.behind || ahead.behind) {
+            return;
+        }
+        const length = Math.max(0.001, Math.hypot(ahead.x - at.x, ahead.y - at.y));
+        const dirX = (ahead.x - at.x) / length;
+        const dirY = (ahead.y - at.y) / length;
+        const nudge = bob * size * 0.5;
+        const tipX = at.x + dirX * nudge;
+        const tipY = at.y + dirY * nudge;
+        const ctx = overlay.ctx;
+        ctx.beginPath();
+        ctx.moveTo(tipX + dirX * size, tipY + dirY * size);
+        ctx.lineTo(tipX - dirX * size - dirY * size * 0.8, tipY - dirY * size + dirX * size * 0.8);
+        ctx.lineTo(tipX - dirX * size + dirY * size * 0.8, tipY - dirY * size - dirX * size * 0.8);
+        ctx.closePath();
+        ctx.fillStyle = "#ffd76a";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.stroke();
+    }
+
     // On the screen, gap tiles over the top of an enemy's model, where it is this frame: what's
     // drawn over its head (its overhead prayer, a hint arrow) sits on this
     private overHead(overlay: Overlay, sim: Sim, enemy: Enemy, alpha: number, gap: number) {
@@ -1323,6 +1392,7 @@ export class BossFightView {
         alpha: number,
         now: number,
         scale: number,
+        viewPose: { x: number; y: number } | undefined,
     ): void {
         const sprite = this.assets.getSprite(HINT_ARROW_SPRITE);
         const ctx = overlay.ctx;
@@ -1353,7 +1423,15 @@ export class BossFightView {
             const top = this.ground(sim, issue.x, issue.y) - (issue.kind === "pillar" ? 3.2 : 1.6);
             const p = overlay.project(issue.x, top, issue.y, this.a);
             if (p.behind || p.x < 0 || p.y < 0 || p.x > width || p.y > height) {
-                this.drawEdgeArrow(overlay, sim, issue.x, issue.y, TOTEM_ARROW * scale, 40 * scale);
+                this.drawGroundArrow(
+                    overlay,
+                    sim,
+                    issue.x,
+                    issue.y,
+                    TOTEM_ARROW * scale,
+                    bob / (HINT_ARROW_BOB * scale),
+                    viewPose,
+                );
             } else if (sprite) {
                 const w = sprite.width * HINT_ARROW_SCALE * scale;
                 const h = sprite.height * HINT_ARROW_SCALE * scale;
@@ -1407,15 +1485,15 @@ export class BossFightView {
         // anything nearer the middle is on top of the player
         const y = height * 0.72;
         ctx.fillStyle = "#000000";
-        ctx.fillText(def.title, width / 2 + pixel, y + pixel);
+        ctx.fillText(tl(def.title), width / 2 + pixel, y + pixel);
         ctx.fillStyle = look?.title ?? "#ff9ae6";
-        ctx.fillText(def.title, width / 2, y);
+        ctx.fillText(tl(def.title), width / 2, y);
         if (def.subtitle) {
             ctx.font = `${12 * pixel}px "OSRS Bold", sans-serif`;
             ctx.fillStyle = "#000000";
-            ctx.fillText(def.subtitle, width / 2 + pixel, y + 18 * pixel + pixel);
+            ctx.fillText(tl(def.subtitle), width / 2 + pixel, y + 18 * pixel + pixel);
             ctx.fillStyle = look?.subtitle ?? "#e8d0ff";
-            ctx.fillText(def.subtitle, width / 2, y + 18 * pixel);
+            ctx.fillText(tl(def.subtitle), width / 2, y + 18 * pixel);
         }
         ctx.globalAlpha = 1;
     }

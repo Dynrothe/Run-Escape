@@ -96,6 +96,22 @@ describe("save", () => {
         expect(loaded.coins).toBe(10000);
     });
 
+    it("keeps invocation presets, cleaned", () => {
+        const loaded = migrateSave({
+            ...createSave(),
+            invocationPresets: [
+                { name: "Speed", invocations: ["try_again", "hardcore_run", "not_one"] },
+                "junk",
+            ],
+        });
+        expect(loaded.invocationPresets).toEqual([
+            { name: "Speed", invocations: ["hardcore_run"] },
+        ]);
+        expect(migrateSave({ ...createSave(), invocationPresets: "junk" }).invocationPresets).toBe(
+            undefined,
+        );
+    });
+
     test("unequal page spending releases only the gold no other page needs", () => {
         expect.hasAssertions();
         const save = createSave();
@@ -1486,6 +1502,19 @@ describe("a fight in parts, and a map behind another", () => {
         MAPS.splice(MAPS.indexOf(fight), 2);
         MAP_BY_ID.delete(fight.id);
         MAP_BY_ID.delete(behind.id);
+    });
+
+    it("unlocks the Scabaras puzzle helper once the room's beaten, won or not", () => {
+        const save = createSave();
+        expect(save.scabarasBeaten).toBeUndefined();
+        recordRun(save, run("tombs_of_amascut", { victory: false }));
+        expect(save.scabarasBeaten).toBeUndefined();
+        recordRun(save, run("tombs_of_amascut", { victory: false, scabarasBeaten: true }));
+        expect(save.scabarasBeaten).toBe(true);
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).scabarasBeaten).toBe(true);
+        expect(migrateSave({ ...createSave(), scabarasBeaten: "yes" }).scabarasBeaten).toBe(
+            undefined,
+        );
     });
 
     it("keeps each part won, and beats the map only with the last", () => {

@@ -1127,8 +1127,11 @@ and `oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set `BulletPatter
 there's no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the scythe's), and the
 slams are as wide, so there's no ring round a still boss to hit it from untouched. Each has
 something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
-them. Each boss has a mechanic of its own that makes the fight longer by making it harder, not by
-more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
+them. A closing ring stands where it formed for `RING_HOLD` (`BulletPatternDef.hold`, a bullet's
+`wait` in `BulletPool`) before it comes in, hurting whoever walks into it meanwhile, and as long
+on hard and expert. Only a closing ring can take a `hold` (a test checks). Each boss has
+a mechanic of its own that makes the fight longer by making it harder, not by more hitpoints: the
+Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
@@ -1151,7 +1154,8 @@ for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` tim
 (`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps its
 width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring or
 spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
-clears, not the bot's: it often dies to the Maiden.
+clears, not the bot's: it often dies to the Maiden. It makes for a closing ring's way out only
+with `DODGE=1` (`cageGap`), so sim a change to the rings with that.
 
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
 up's pick at its max; `?raidtest=short` does only the first.
@@ -1723,8 +1727,11 @@ it, see Measuring prediction at the end of this section.
   `CoopRun.decisionSeconds` feeds the HUD's numbers store. It never enters the sim or its hash.
   A guest's deadline only moves later by more than `DEADLINE_SLACK_MS` (for the next wait), so
   frames arriving unevenly can't make it count back up. A run that ends early drops it.
-- **Hidden tabs**: a co-op player whose tab is hidden keeps stepping off a worker's timer, so the
-  host keeps the run going and a guest keeps up.
+- **Background co-op**: `CoopTicker` starts its worker with the run and takes over when rendering
+  stops, including when a covered window still reports itself as visible. Rendering and worker
+  callbacks share one clock, so returning to the tab cannot count elapsed time twice. A page timer
+  backs it up if the worker is blocked. A page the browser freezes (Memory Saver, Edge's sleeping
+  tabs, a phone in the background) stops the worker too, and nothing in the page can help that.
 
 For that every copy has to agree to the bit. The sim only uses its seeded `Rng`, and its
 trigonometry goes through `fm` in `core/fmath.ts`: the browser's own `Math` on your own (so solo
@@ -1868,17 +1875,20 @@ the one connection. Change the protocol in both relays.
 
 Cloudflare restarts its objects now and then, dropping their connections, so the Cloudflare relay's
 `room` message carries a `token`. `CoopLobby` reconnects to `coop/room/<code>?resume=<token>` for
-`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile, and the room
+`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile. Each handshake
+is limited by `RESUME_ATTEMPT_MS`, so a hanging attempt leaves time for another (the trade: one
+that always takes longer, on a weak mobile signal, never gets through). The room
 (kept in storage) holds the player's place a little longer. A guest that misses some of the host's
-frames sees it from `from` on the next `down` and asks for them with a `resend` up message; the
-host keeps 20 seconds of what it's sent (longer than the room holds a dropped player) and answers
+frames asks for them immediately on reconnect, or from `from` on the next `down`, with a `resend`
+up message; the host keeps 20 seconds of what it's sent (longer than the room holds a dropped
+player) and answers
 once a second at most, from the earliest frame asked for, to every guest; each takes only frames
 after the ones it has, in messages of `RESEND_EVENTS` at most. That part works on either relay.
 A guest numbers its actions that aren't decisions (`actionSeq`, so using an item), and the host's
 frames echo the number; after reconnecting it sends again those not echoed yet, and the host takes
 each number once. Decisions have their own resend (`DECISION_RESEND_MS`). The room saves someone
-joining or leaving, and the run starting or ending, at once and before telling anyone; other
-changes at most once a second. The Node relay sends no token, so with it a dropped connection
+joining or leaving, and the run starting or ending, at once and before telling anyone, and a
+change of pick or ready it confirms (below); other changes at most once a second. The Node relay sends no token, so with it a dropped connection
 still ends a guest's run.
 
 A room's connection can also die without closing (a laptop asleep, a network that went away). During
@@ -1887,9 +1897,14 @@ for `RUN_QUIET_MS` and takes one that hasn't answered within `PONG_WAIT_MS` as d
 as above while the host still has the frames (about 7 seconds are left for that: past them the
 guests' runs end, as below). It doesn't judge after a gap in its own calls (a frozen page), whose
 replies may be unread. It also pings a room it's sent nothing to for `PING_INTERVAL_MS` (a guest
-standing still), since it runs off the hidden tab's worker and the regular ping doesn't. The ping
-every `PING_INTERVAL_MS` checks the connection outside a run. The Cloudflare room lets go of a
-player it's heard nothing from, not even a ping, for `SILENT_MS`, as if their connection had closed
+standing still), since `CoopTicker`'s worker keeps it going once drawing stops, and the regular
+ping is slowed in a hidden tab. The ping
+every `PING_INTERVAL_MS` checks the connection outside a run; a local timer (`ROOM_CHECK_MS`)
+checks for its reply without sending more frequent pings. After a gap in its own runs that timer
+only waits for the next one: in a hidden tab slowed to a run a minute, it would otherwise forget
+the regular ping every time, and that ping's own check (`tick`) judges it instead.
+The Cloudflare room lets go of a player it's heard nothing
+from, not even a ping, for `SILENT_MS`, as if their connection had closed
 (the Node relay finds those with its own pings). A guest whose missing frames haven't come for
 `GIVE_UP_GAP_MS` while the host's others do ends its run (the host no longer has them); a break of
 `GAP_LATE_MS` between sightings (a frozen page) starts that wait over. A frame that fails to step
@@ -1899,6 +1914,36 @@ together when every copy failed alike; the hash check finds one that didn't. The
 out even when something after a step throws, and no time is banked for the steps it stopped. Only
 the Cloudflare relay gives a room its own connection to check; the rest is the game's, so it holds
 on either relay.
+
+Cloudflare rooms advertise `memberAcks` and acknowledge a player's numbered `me` changes with
+`meSeq` in the existing room update. `CoopLobby` keeps the latest unconfirmed changes (merged, so
+a retry carries all of them) and sends them again once per connection after `MEMBER_RETRY_MS`,
+with a ping: Cloudflare answers pings without waking the room, so only the confirmation shows
+the room itself got it. An unanswered ping makes the connection again as above, and the changes
+go again on the new one. A room that answers but hasn't confirmed within `MEMBER_WAIT_MS` of the
+retry gets no more tries, and the player's told to choose again; that message stays through
+others' room updates until a confirmation or a new choice. Leaving or starting clears what's
+waiting. A new pick leaves out a Ready still waiting for its confirmation: the relays un-ready
+a player whose pick changes (below), and a Ready carried along would ready them on a pick the
+host may not have yet. The room keeps each player's sequence through sleep and ignores older
+retries. It saves a change of pick or ready before the update that confirms it, throttle or not,
+since the game won't send a confirmed pick again after a restart. Once a message is handled the
+room runs any alarm jobs that are overdue, so a late alarm can't hold back the members' update;
+after it, so the heartbeat counts its sender as just heard from.
+Relays without `memberAcks` keep the old messages; if support disappears on reconnect,
+what's waiting is sent once without waiting for a confirmation.
+
+What starts the run is the host's view of everyone's picks (`startCoopRun`), which can be behind
+the relay's. So both relays un-ready a player whose adventurer or loadout changes while they're
+ready (`setMember`, `pickOf`: sending the same pick again, as on a map change, doesn't), and
+refuse the host's start while anyone's been un-readied that way and hasn't readied again
+(`repicked`, kept through the Cloudflare room's sleep). The change reaches the relay before the
+host's start, so a start made from a view that still says ready is turned away with a message.
+A map with its own adventurer (Durial321's) sets everyone's skill page to its adventurer's, so
+switching to or from one changes their loadouts and un-readies them too: the message says their
+pick changed, not that they changed it.
+`CoopLobby.setReady(true)` sends the player's adventurer and loadout in the same message, so a
+pick that never arrived can't leave them ready with an older one.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it
@@ -1926,7 +1971,9 @@ Emoji flags won't do: Windows has none, so they show as two letters there anyway
 A room in the list has a flag too. On Cloudflare it's where the room's Durable Object runs, which
 needn't be near its host, nor where the request came in (`cf.colo`). The room measures it once and
 saves it (`server/cloudflare/src/location.mjs`, explained in that relay's README), and its listing
-says `countrySource: "server"`, which the game shows as "Server in". A room that couldn't measure
+says `countrySource: "server"`, which the game shows as "Server in". The lobby lists it by its
+current code (`currentCountry`), as rooms measured with an older colo table saved `UK` and `FX`
+for `GB` and `FR`. A room that couldn't measure
 it has no flag, never its host's. The Node relay lists the host's country instead, as "Host
 playing from".
 
@@ -2020,7 +2067,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   desktop's `90vh` cap leaves its buttons below the screen. Give it the screen's height less the
   safe area. The full-height panels (the shop, pause and the like) then hide their overflow and
   scroll a part inside, so their buttons stay in view. The co-op room browser scrolls as a whole
-  (`overflow-y: auto`), since only its worst case doesn't fit.
+  (`overflow-y: auto`), since only its worst case doesn't fit. The HUD's right column comes down
+  into the item buttons' column there, where the Tombs' fight button sits. Its lines let taps
+  through to the button, but the DPS doesn't, so with a fight button over the items it keeps left
+  of that column (`.ui-damage-beside-ability`). Anything new to tap in that column needs the same.
 - A touch screen also gets a pixel ratio capped at 1.5 (2 elsewhere, `DeviceUtil.pixelRatio`), 2
   workers instead of 4, textures at half size (64 a side, a quarter of the memory), 60 frames a
   second at most unless the Frame rate setting says otherwise (see Keeping it light on a phone),
@@ -2241,6 +2291,47 @@ button's tap area reaches up beside the pips rather than making the cost's row t
 skill adds a card, so check the page still fits at 1024x768 and 1280x720. On a phone the
 one-line help under the title stays, though other panels drop their subtitle there: it says which
 preset an adventurer uses. Keep it to one line at 667 wide.
+
+### Languages
+
+The game is in English and Português (BR). Only English is checked: the other languages are
+their translators', set in `LANGS` (`i18n/types.ts`) and credited under the language's name
+wherever it's picked (`LanguageName` in `ui/LanguageSetting.tsx`: Settings' and the pause menu's
+dropdown, and the title's globe). The first time the game is in another language, picked or the
+browser's, `ui/LanguageNotice.tsx` says so,
+once (its own `rune-survivors-language-notice` key, not the save). **Agents never translate**:
+text is written in English only unless the developer asks for a translation (CLAUDE.md,
+Conventions), and a language without a key shows the English.
+
+Text lives in flat `{"key": "text"}` files at `src/game/i18n/locales/<lang>/<namespace>.json`. A
+new language is a folder of them, an entry in `LANGS` and `Lang`, and its browser-language match
+in `i18n/store.ts`.
+
+- `t(key, params)` looks the key up in the active language, then English, then gives the key.
+  `tp(key, n)` picks a plural form (`key.one`, `key.other`, `key.zero`). `tr(key, english)` ends
+  on the English in the code: content's accessors (`weaponName`, `mapName` and the rest in
+  `src/game/content/`) read names and descriptions with it, so call those rather than building
+  keys.
+- The sim works in English. It reads definitions' own names, and its events carry English text,
+  so co-op players in different languages run the same sim. The views turn that text into the
+  active language with `tl(text)`, which finds the key whose English it is. Sentences the sim
+  builds round names and numbers ("Teleported to the Maiden of Sugadinti. 2 teleports left.") are
+  patterns in `SENTENCES` (`i18n/store.ts`), each filling a `notice.*` key in `ui-misc.json`. A
+  language without that key keeps the whole sentence in English, and a new sentence of the kind
+  needs a pattern and its English key. In `core/`, only `Upgrades.ts`'s choice descriptions read
+  the accessors, for the level-up cards.
+- `items.json`, `world.json` and `gen.json` are generated from the content by
+  `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
+  `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is
+  keyed by its text, not its place, so a changed line is a new key and the test fails on the old
+  one's translations until they're removed. `ui.json` and `ui-misc.json` are written by hand.
+- Numbers go through `fmtNum`, lists through `list` (in English as the game always wrote them, "a,
+  b and c") and dates through `dateLocale()` (in English, the browser's own format). Their `Intl`
+  formatters are kept, as numbers are formatted every frame.
+- Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give
+  keys there, and `tr()` and `tl()` English.
+- The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
+  whatever the machine's language (`src/setupTests.ts`).
 
 ### Notice
 

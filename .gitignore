@@ -29,6 +29,8 @@ caches/
 
 # ScapeRune world index, made by scripts/scaperune/world-index.ts
 world.json
+# ...but not the world texts of the language files (src/game/i18n/locales/<lang>/world.json)
+!src/game/i18n/locales/*/world.json
 
 # Android builds and private signing files
 /android/.gradle/

@@ -14,7 +14,8 @@
 //   WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
 //   FINAL_BOSS=the_nightmare BOSS_ARENA=48 bun run tsx ...   # another final boss, on a square of the map
 //   FRESH=1 ...                                          # straight to it with nothing upgraded
-//   DODGE=1 ...     # also keeps off what any boss marks on the ground, and sidesteps its bullets
+//   DODGE=1 ...     # also keeps off what any boss marks on the ground, sidesteps its bullets and
+//                   # makes for a closing ring's way out
 //   FLAT=1 ...      # the map's arena with nothing in it, as the bot walks straight into walls
 //   STAGE=1 ...     # a fight in parts (MapDef.stages): the second, as a run that's won the first
 //   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
@@ -229,7 +230,8 @@ function botMove(sim: Sim): { x: number; y: number } {
 }
 
 // A phased boss's fight, as a careful person plays it, or undefined outside one. With DODGE it
-// also keeps out of any boss's ground marks that hurt, phased or not.
+// also keeps out of any boss's ground marks that hurt and makes for a closing ring's way out,
+// phased or not.
 // Without DODGE it only goes where the fight needs it to: the totems and the
 // sleepwalkers, without which it can't be won at all.
 function fightMove(sim: Sim): { x: number; y: number } | undefined {
@@ -273,9 +275,11 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         }
     }
     if (dodges && boss && !boss.dead && !phase) {
-        const sidestep = sidestepBullets(sim);
-        if (sidestep) {
-            return sidestep;
+        // A closing ring's way out first, as for a phased boss (the Theatre's rings): sidestepping
+        // its bullets alone steps into the rest of it
+        const way = cageGap(sim) ?? sidestepBullets(sim);
+        if (way) {
+            return way;
         }
     }
     if (!boss || !state || !phase || boss.dead) {

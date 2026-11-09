@@ -7,6 +7,10 @@ export type DisplaySettings = {
     screenShake: boolean;
     // A countdown pie over each power-up on the ground (GameView.drawPickupTimers)
     pickupTimers: boolean;
+    // The Tombs of Amascut's Scabaras room shows what to step on, as OSRS's ToA plugin does
+    // (GameView.drawScabarasHelper): at Entry, and at any raid level once it's been beaten
+    // (SaveData.scabarasBeaten)
+    puzzleHelper: boolean;
     // A run pauses when the window loses focus or the tab is hidden
     pauseOnBlur: boolean;
     // The quest tracker on the HUD is open (Q, or its title, opens and shuts it)
@@ -63,6 +67,7 @@ export function getDefaultDisplaySettings(): DisplaySettings {
         menuSpin: !reducedMotion,
         screenShake: !reducedMotion,
         pickupTimers: true,
+        puzzleHelper: true,
         pauseOnBlur: true,
         questTracker: true,
         damagePanel: false,
@@ -89,6 +94,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.pickupTimers === "boolean") {
                 settings.pickupTimers = data.pickupTimers;
+            }
+            if (typeof data.puzzleHelper === "boolean") {
+                settings.puzzleHelper = data.puzzleHelper;
             }
             if (typeof data.pauseOnBlur === "boolean") {
                 settings.pauseOnBlur = data.pauseOnBlur;

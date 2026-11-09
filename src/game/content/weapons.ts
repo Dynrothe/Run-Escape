@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { CombatStyle, ProjectileItemLook, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
 
 // Builds a weapon's level table from its first level and what each later level
@@ -2733,4 +2734,26 @@ export function getWeaponStyle(weapon: WeaponDef): CombatStyle {
         case "orbit":
             return "magic";
     }
+}
+
+export function weaponName(weapon: WeaponDef): string {
+    return tr(`weapon.${weapon.id}.name`, weapon.name);
+}
+
+export function weaponDescription(weapon: WeaponDef): string {
+    return tr(`weapon.${weapon.id}.desc`, weapon.description);
+}
+
+export function weaponLevelName(weapon: WeaponDef, levelIndex: number): string | undefined {
+    const name = weapon.levels[levelIndex]?.name;
+    return name === undefined
+        ? undefined
+        : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.name`, name);
+}
+
+export function weaponLevelDescription(weapon: WeaponDef, levelIndex: number): string {
+    const description = weapon.levels[levelIndex]?.description ?? "";
+    return description === ""
+        ? description
+        : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.desc`, description);
 }

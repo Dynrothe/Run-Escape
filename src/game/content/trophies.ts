@@ -1,3 +1,5 @@
+import { tr } from "../i18n";
+
 // Trophies: rare finds, kept in the Collection log, and in the save once they're
 // found. They do nothing in a run, but a few bring a weapon into the game (the
 // Theatre of Blood's rapier and Holy Scythe: UnlockTask "raidChest").
@@ -263,3 +265,7 @@ TROPHIES.push(
 );
 
 export const TROPHY_BY_ID: Map<string, TrophyDef> = new Map(TROPHIES.map((t) => [t.id, t]));
+
+export function trophyName(trophy: TrophyDef): string {
+    return tr(`trophy.${trophy.id}.name`, trophy.name);
+}

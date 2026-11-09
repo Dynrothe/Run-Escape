@@ -3,6 +3,61 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.30.0 - 2026-11-09
+
+### Added
+
+- Invocation presets, by Okaeri: save up to five sets of Tombs of Amascut invocations and load
+  one with a tap.
+- A puzzle helper for the Scabaras room, by Okaeri: like the ToA plugin, it shows the order to
+  step on the plates, which plates to press, a way to make the tablet's number, and the name of
+  each matching symbol. It's on at Entry, and at any raid level once you've beaten the room. You
+  can turn it off in Settings.
+- Languages, by Iakee: play in English or Português (BR). Pick one with the globe on the
+  title screen, in Settings or in the pause menu. Only English is checked: the others may be wrong
+  or have text missing.
+
+### Changed
+
+- Boss instructions, by Okaeri: they show once per run, one at a time, and stay up long enough
+  to read.
+- The Apmeken room's arrow, by Okaeri: the arrow to a pillar or vent that needs fixing is now on
+  the floor next to you, not at the edge of the screen.
+- The Scabaras room's puzzles, by Okaeri: the screen now lists all four, where each one is, and
+  which are done.
+- Theatre of Blood's closing rings, by trippy22: a ring of blood, flies or Verzik's blasts that
+  closes in round you waits a second where it forms, so there's time to find the way out.
+
+### Fixed
+
+- On phones, the name of your special attack button was cut off. It now sits under the button.
+  Fixed by Okaeri.
+- Beating a boss in the Tombs of Amascut now heals your whole party to full. Fixed by Okaeri.
+- Ba-Ba no longer gets stunned every time she charges into a boulder. Only her Rampage does that
+  now. Fixed by Okaeri.
+- In the Crondis room, standing under a waterfall now keeps you safe from the poison, like in
+  OSRS. Fixed by Okaeri.
+- In the Scabaras room, the matching tiles now show their symbols, like in OSRS. Fixed by Okaeri.
+- In the Crondis room, the floor now lights up where a spear statue is about to strike. Fixed by
+  Okaeri.
+- Akkha's room is no longer dark. His symbols light up brightly in their own colours, and a
+  quadrant bursts into glowing orbs when it explodes. Fixed by Okaeri.
+- Zebak's roar: you're now safe straight behind a boulder, like in OSRS. The safe spots glow
+  before he roars, and a wave of dust shows the roar. Fixed by Okaeri.
+- Akkha could get stuck repeating Simon says forever once his shadows were out. He now follows
+  you into a quarter whose shadow you've killed. Fixed by Okaeri.
+- On phones, the Scabaras slate no longer covers the middle of the screen. It's a thin bar along
+  the top. Fixed by Okaeri.
+- On phones in the Tombs of Amascut, the DPS sat over the special attack button and took some of
+  its taps. It's now beside the button.
+- A co-op run keeps going when the host's window is covered and stops drawing. Fixed by trippy22.
+- In a co-op room, an adventurer picked while the connection was dropping is sent again, and you're
+  told if the room never gets it. Fixed by trippy22.
+- A co-op player who changes adventurer after readying up is no longer started on their old one:
+  changing it un-readies them, and the host waits for them to ready again. Fixed by trippy22.
+- Co-op rooms on servers in the UK and France show their flags rather than letters, and rooms in
+  Russia, Serbia and Burkina Faso the right letters. Fixed by trippy22.
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed
@@ -55,7 +110,7 @@ the version in the corner).
   passive, worn piece or Armoury piece to read it.
 - Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
   it saves you, and the Pyromancer's own revive shows as a phoenix.
-- Stat icons, by Giordano Souza: each stat shows its icon from the game's cache wherever it's
+- Stat icons, by Iakee: each stat shows its icon from the game's cache wherever it's
   listed, from descriptions and level ups to the pause menu, caskets and the Armoury.
 
 ### Changed

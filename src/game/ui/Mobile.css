@@ -63,7 +63,23 @@
     .ui-ability-wrap-touch {
         position: absolute;
         right: calc(var(--safe-right) + 16px);
-        bottom: calc(var(--safe-bottom) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px + var(--touch-ability-name, 14px));
+    }
+
+    /* Its name, under the circle and as wide as it needs ("Point-blank volley") */
+    .ui-ability-name-under {
+        top: 100%;
+        bottom: auto;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        margin-top: 1px;
+        padding: 0 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        /* Straight on the floor now, not the button's face: a dark backing to read on any */
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
     }
 
     /* A run with items (the Tombs): above their two rows, in their column */
@@ -74,7 +90,7 @@
         );
         bottom: calc(
             var(--safe-bottom) + var(--touch-items-inset, 12px) + var(--touch-item-size, 58px) * 2 +
-                var(--touch-items-gap, 6px) + 10px
+                var(--touch-items-gap, 6px) + 10px + var(--touch-ability-name, 14px)
         );
     }
 
@@ -283,6 +299,47 @@
     .ui-volume {
         height: 32px;
     }
+
+    /* The Scabaras slate: one thin row along the top, under the clock, not over the floor round
+       the hero. With no zoom, the middle of the screen is the plates you're about to step on.
+       (The tablet's panel, with only its number, stays as it is.) */
+    .ui-scabaras-slate {
+        top: calc(var(--safe-top) + 34px);
+        width: auto;
+        max-width: calc((100vw - var(--safe-left) - var(--safe-right) - 16px) / var(--ui-scale));
+        padding: 3px 8px;
+        opacity: 0.92;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-title,
+    .ui-scabaras-slate .ui-scabaras-name {
+        display: none;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbols {
+        grid-template-columns: repeat(9, auto);
+        gap: 2px 5px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbol {
+        gap: 2px;
+    }
+
+    .ui-scabaras-slate .ui-icon {
+        width: auto;
+        height: 18px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-value {
+        font-size: 15px;
+    }
+
+    /* The Scabaras room's puzzles: only those to do now (two at most), as the line above counts
+       those done, so the column stays short beside the fight button */
+    .ui-scabaras-puzzle-solved,
+    .ui-scabaras-puzzle-waiting {
+        display: none;
+    }
 }
 
 /* Held upright */
@@ -463,7 +520,8 @@
         padding: 8px;
     }
 
-    .ui-title-settings {
+    .ui-title-settings,
+    .ui-title-language {
         width: 44px;
         height: 44px;
         padding: 0;
@@ -712,6 +770,21 @@
         margin-top: 0;
     }
 
+    /* The Tombs' fight button is in the item buttons' column, just where this column's lines
+       come down to, and a room's lines can take the DPS on to the items: it keeps left of that
+       column there. Its panel goes under it, not beside it: from there, beside it would reach
+       the middle of the screen, where the player is. */
+    .ui-damage-beside-ability {
+        margin-right: calc(
+            var(--touch-items-inset) + var(--touch-items-width) + 8px - var(--hud-inset)
+        );
+    }
+
+    .ui-damage-beside-ability .ui-damage-panel {
+        position: static;
+        margin-top: 4px;
+    }
+
     .ui-damage-head,
     .ui-damage-total,
     .ui-damage-other > :last-child {
@@ -946,7 +1019,8 @@
     }
 
     .ui-setting {
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 4px 10px;
         padding: 2px 0;
     }
 }
@@ -1016,5 +1090,14 @@
     .ui-coop-bar .ui-endless {
         min-width: 0;
         gap: 4px;
+    }
+}
+
+/* The Tombs' invocation board as tall as the screen at most, kept clear of the notch: its middle
+   scrolls, so Reset All and Done stay in view */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-invocations {
+        width: min(620px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
     }
 }

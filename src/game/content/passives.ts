@@ -1,4 +1,5 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { tr } from "../i18n";
 import { CAPPED_STATS } from "./endless";
 import { RARITIES, Rarity } from "./rarity";
 import { PassiveDef } from "./types";
@@ -249,7 +250,7 @@ export function getPassiveGain(passive: PassiveDef, quality: Rarity): number {
 
 // "+12% damage", "+1.5 armour"
 export function formatPassiveValue(passive: PassiveDef, value: number): string {
-    return `${formatPassiveNumber(passive, value)} ${passive.effect}`;
+    return `${formatPassiveNumber(passive, value)} ${passiveEffect(passive)}`;
 }
 
 // Just the number: "+12%", "+1.5"
@@ -258,4 +259,16 @@ export function formatPassiveNumber(passive: PassiveDef, value: number): string 
         return `+${Math.round(value * 100)}%`;
     }
     return `+${Math.round(value * 10) / 10}`;
+}
+
+export function passiveName(passive: PassiveDef): string {
+    return tr(`passive.${passive.id}.name`, passive.name);
+}
+
+export function passiveDescription(passive: PassiveDef): string {
+    return tr(`passive.${passive.id}.desc`, passive.description);
+}
+
+export function passiveEffect(passive: PassiveDef): string {
+    return tr(`passive.${passive.id}.effect`, passive.effect);
 }

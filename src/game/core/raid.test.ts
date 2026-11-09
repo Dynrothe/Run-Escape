@@ -446,7 +446,7 @@ describe("the Theatre's bullet shapes", () => {
                 vy: bullets.vy[slot],
             });
         }
-        return { attack, shot };
+        return { attack, shot, bullets, sim, boss };
     }
 
     it("a wall is a line across, all going one way, with its gap left out", () => {
@@ -559,6 +559,47 @@ describe("the Theatre's bullet shapes", () => {
             expect(Math.hypot(dx, dy)).toBeCloseTo(pattern.distance!);
             // Heading for the middle
             expect(dx * bullet.vx + dy * bullet.vy).toBeLessThan(0);
+        }
+    });
+
+    it("every closing ring stands where it forms for its hold before it comes in", () => {
+        for (const id of TEST_BOSS_IDS) {
+            for (const attack of getEnemy(id).boss!.attacks) {
+                if (attack.pattern?.shape === "closing") {
+                    expect(attack.pattern.hold ?? 0, `${id}: ${attack.name}`).toBeGreaterThan(0);
+                }
+            }
+        }
+        const { attack, bullets } = volley("Blood tide", "maiden_of_sugadinti");
+        const hold = Math.round(attack.pattern!.hold! * TICKS_PER_SECOND);
+        const slot = bullets.order[0];
+        const at = () => [bullets.x[slot], bullets.y[slot]];
+        const formed = at();
+        const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
+        for (let i = 0; i < hold; i++) {
+            bullets.step(targets);
+        }
+        expect(at()).toEqual(formed);
+        bullets.step(targets);
+        expect(at()).not.toEqual(formed);
+    });
+
+    it("a closing ring hurts whoever walks into it while it stands", () => {
+        const { attack, shot, bullets, sim, boss } = volley("Blood tide", "maiden_of_sugadinti");
+        // The source a real attack would have taken (Sim.startPattern)
+        sim.bulletSources[0] = { attack, enemy: boss };
+        sim.player.invulnerable = 0;
+        const slot = bullets.order[0];
+        sim.player.x = sim.player.prevX = bullets.x[slot];
+        sim.player.y = sim.player.prevY = bullets.y[slot];
+        sim["stepBullets"]();
+        expect(sim.damageByAttack[attack.name]).toBeGreaterThan(0);
+        // Spent on the hit, and the rest still where they formed
+        expect(bullets.count).toBe(shot.length - 1);
+        for (let i = 0; i < bullets.count; i++) {
+            const other = bullets.order[i];
+            expect(bullets.x[other]).toBe(bullets.prevX[other]);
+            expect(bullets.y[other]).toBe(bullets.prevY[other]);
         }
     });
 });

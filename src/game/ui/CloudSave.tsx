@@ -4,38 +4,43 @@ import { CloudProblem, CloudSummary, CloudView, summarize } from "../client/Clou
 import { GameClient } from "../client/GameClient";
 import { CLOUD_SAVE_SPRITES } from "../content/titleIcons";
 import { SaveData } from "../core/save";
+import { dateLocale, fmtNum, t } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
 
 const PROBLEMS: Record<CloudProblem, string> = {
-    offline: "Can't reach cloud save right now. Your progress is still kept here.",
-    unknownCode: "That code isn't one cloud save knows.",
-    deleted: "That code's cloud save was deleted. Restore brings it back.",
-    refused: "Cloud save wouldn't take this save. Export it to keep a copy.",
+    offline: "cloud.problem.offline",
+    unknownCode: "cloud.problem.unknown_code",
+    deleted: "cloud.problem.deleted",
+    refused: "cloud.problem.refused",
 };
+
+const when = (time: number | string) => new Date(time).toLocaleString(dateLocale());
 
 // What's wrong, for Settings and the title's button: a deleted code says until when it's kept,
 // and a linked one that stopped working says what to do
 function describeProblem(cloud: CloudView): string | undefined {
     if (cloud.problem === "deleted" && cloud.deletedUntil) {
-        const until = new Date(cloud.deletedUntil).toLocaleDateString();
-        return `That code's cloud save was deleted. It's kept until ${until}, and Restore brings it back.`;
+        const until = new Date(cloud.deletedUntil).toLocaleDateString(dateLocale());
+        return t("cloud.problem.deleted_until", { date: until });
     }
     if (cloud.problem === "unknownCode" && cloud.code) {
-        return "This code doesn't work any more: New code was used on another device, or it went unused for weeks. Turn off, then type in the new code or turn cloud save on again.";
+        return t("cloud.problem.code_dead");
     }
-    return cloud.problem && PROBLEMS[cloud.problem];
+    return cloud.problem && t(PROBLEMS[cloud.problem]);
 }
 
 function describe(summary: CloudSummary | undefined): string {
     if (!summary) {
-        return "nothing yet";
+        return t("cloud.summary.nothing");
     }
-    return (
-        `${summary.runs.toLocaleString()} runs, ${summary.victories.toLocaleString()} wins, ` +
-        `${summary.mapsBeaten} maps beaten, ${summary.totalCoins.toLocaleString()} coins earned`
-    );
+    return t("cloud.summary", {
+        runs: fmtNum(summary.runs),
+        wins: fmtNum(summary.victories),
+        maps: summary.mapsBeaten,
+        coins: fmtNum(summary.totalCoins),
+    });
 }
 
 // The Settings row's layout, as GameUi's Setting draws it. wide: its control is a box to type
@@ -77,7 +82,7 @@ export function CloudSaveSettings({
     // In cloud save's own panel, whose heading already says what it is
     inPanel?: boolean;
 }): JSX.Element | null {
-    const first = inPanel ? "Status" : "Cloud save";
+    const first = inPanel ? t("cloud.status") : t("cloud.title");
     const [typed, setTyped] = useState("");
     const [copied, setCopied] = useState(false);
     const sync = client.cloud;
@@ -97,19 +102,13 @@ export function CloudSaveSettings({
                 sync.restore();
             }}
         >
-            Restore
+            {t("cloud.restore")}
         </button>
     );
     if (!cloud.code) {
         return (
             <>
-                <CloudRow
-                    name={first}
-                    text={
-                        problem ??
-                        "Keep a copy online, and take it to another device with a code. No account, name or email."
-                    }
-                >
+                <CloudRow name={first} text={problem ?? t("cloud.off.text")}>
                     {restore}
                     <button
                         className="ui-button ui-button-small"
@@ -119,14 +118,10 @@ export function CloudSaveSettings({
                             sync.turnOn();
                         }}
                     >
-                        Turn on
+                        {t("cloud.turn_on")}
                     </button>
                 </CloudRow>
-                <CloudRow
-                    name="Have a code?"
-                    text="From another device, to bring its save here"
-                    wide
-                >
+                <CloudRow name={t("cloud.have_code.name")} text={t("cloud.have_code.text")} wide>
                     <form
                         className="ui-cloud-link"
                         onSubmit={(e) => {
@@ -137,11 +132,11 @@ export function CloudSaveSettings({
                         <input
                             className="ui-coop-input ui-cloud-code-input"
                             value={typed}
-                            placeholder="Sync code"
+                            placeholder={t("cloud.code_label")}
                             spellCheck={false}
                             autoCapitalize="characters"
                             autoComplete="off"
-                            aria-label="Sync code"
+                            aria-label={t("cloud.code_label")}
                             onChange={(e) => setTyped(e.target.value)}
                         />
                         <button
@@ -149,7 +144,7 @@ export function CloudSaveSettings({
                             type="submit"
                             disabled={busy || typed.trim().length === 0}
                         >
-                            Link
+                            {t("cloud.link")}
                         </button>
                     </form>
                 </CloudRow>
@@ -157,11 +152,9 @@ export function CloudSaveSettings({
         );
     }
     const status = cloud.working
-        ? "Syncing..."
+        ? t("cloud.syncing")
         : (problem ??
-          (cloud.syncedAt
-              ? `On. Last synced ${new Date(cloud.syncedAt).toLocaleString()}.`
-              : "On."));
+          (cloud.syncedAt ? t("cloud.on_synced", { when: when(cloud.syncedAt) }) : t("cloud.on")));
     const code = cloud.code;
     // A code that's stopped working can only be turned off
     const dead = cloud.problem === "unknownCode";
@@ -177,27 +170,23 @@ export function CloudSaveSettings({
                         sync.check(true);
                     }}
                 >
-                    Sync now
+                    {t("cloud.sync_now")}
                 </button>
                 <button
                     className="ui-button ui-button-small"
                     disabled={cloud.working}
                     onClick={(e) => {
                         blur(e);
-                        if (
-                            window.confirm(
-                                "Stop syncing on this device? The cloud keeps its copy, for your code's other devices.",
-                            )
-                        ) {
+                        if (window.confirm(t("cloud.turn_off_confirm"))) {
                             sync.turnOff();
                         }
                     }}
                 >
-                    Turn off
+                    {t("cloud.turn_off")}
                 </button>
             </CloudRow>
             {cloud.choice?.closed && (
-                <CloudRow name="Two saves" text="The cloud has a different save from this one">
+                <CloudRow name={t("cloud.two_saves.name")} text={t("cloud.two_saves.text")}>
                     <button
                         className="ui-button ui-button-small"
                         onClick={(e) => {
@@ -205,19 +194,17 @@ export function CloudSaveSettings({
                             sync.reopenChoice();
                         }}
                     >
-                        Choose
+                        {t("cloud.choose")}
                     </button>
                 </CloudRow>
             )}
             <CloudRow
-                name="Your sync code"
+                name={t("cloud.your_code.name")}
                 text={
                     <>
                         <span className="ui-cloud-code">{code}</span>
                         <br />
-                        Type it on another device to bring this save there. Anyone with it can load
-                        or replace your save, and it can't be recovered, so keep it safe. If it gets
-                        out, New code shuts the old one out.
+                        {t("cloud.your_code.text")}
                     </>
                 }
             >
@@ -231,45 +218,34 @@ export function CloudSaveSettings({
                         );
                     }}
                 >
-                    {copied ? "Copied" : "Copy"}
+                    {copied ? t("cloud.copied") : t("cloud.copy")}
                 </button>
                 <button
                     className="ui-button ui-button-small"
                     disabled={busy || dead}
                     onClick={(e) => {
                         blur(e);
-                        if (
-                            window.confirm(
-                                "Get a new code for this save? The old one stops working everywhere, so your other devices will need the new one typed in.",
-                            )
-                        ) {
+                        if (window.confirm(t("cloud.new_code_confirm"))) {
                             setCopied(false);
                             sync.newCode();
                         }
                     }}
                 >
-                    New code
+                    {t("cloud.new_code")}
                 </button>
             </CloudRow>
-            <CloudRow
-                name="Delete the cloud copy"
-                text="And the code. It's kept for a week in case you change your mind."
-            >
+            <CloudRow name={t("cloud.delete.name")} text={t("cloud.delete.text")}>
                 <button
                     className="ui-button ui-button-small"
                     disabled={cloud.working}
                     onClick={(e) => {
                         blur(e);
-                        if (
-                            window.confirm(
-                                "Delete the cloud copy of your save? The save on this device stays, and the code stops working everywhere. For a week, Restore in Settings brings it back, here or on any device you type the code into.",
-                            )
-                        ) {
+                        if (window.confirm(t("cloud.delete_confirm"))) {
                             sync.deleteCloud();
                         }
                     }}
                 >
-                    Delete
+                    {t("cloud.delete")}
                 </button>
             </CloudRow>
         </>
@@ -293,31 +269,27 @@ export function CloudChoicePanel({
         return null;
     }
     const theirs = choice.cloud;
-    const when = theirs.updatedAt && new Date(theirs.updatedAt).toLocaleString();
+    const savedAt = theirs.updatedAt && when(theirs.updatedAt);
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-notice">
-                <h2>Which save do you want?</h2>
+                <h2>{t("cloud.choice.title")}</h2>
                 <div className="ui-notice-body">
-                    <p>Your cloud save is different from the one on this device.</p>
+                    <p>{t("cloud.choice.different")}</p>
                     <p>
-                        <b>Cloud</b>
-                        {when && `, saved ${when}`}: {describe(theirs.summary)}
+                        <b>{t("cloud.choice.cloud")}</b>
+                        {savedAt && t("cloud.choice.saved", { when: savedAt })}:{" "}
+                        {describe(theirs.summary)}
                         {theirs.summary && ` (v${theirs.summary.gameVersion})`}
                     </p>
                     <p>
-                        <b>This device</b>: {describe(summarize(save, GAME_VERSION))}
+                        <b>{t("cloud.choice.this_device")}</b>:{" "}
+                        {describe(summarize(save, GAME_VERSION))}
                     </p>
                     {choice.newer ? (
-                        <p>
-                            The cloud's is from a newer version of Run Escape than this one (v
-                            {GAME_VERSION}). Reload or update to use it. Keeping this device's
-                            replaces it, and loses what's new in it.
-                        </p>
+                        <p>{t("cloud.choice.newer", { version: GAME_VERSION })}</p>
                     ) : (
-                        <p>
-                            The one you don't keep is replaced. Export this one first to keep both.
-                        </p>
+                        <p>{t("cloud.choice.replaced")}</p>
                     )}
                 </div>
                 <div className="ui-notice-close">
@@ -326,17 +298,17 @@ export function CloudChoicePanel({
                         disabled={choice.newer || cloud.working}
                         onClick={() => sync.useCloud()}
                     >
-                        Use the cloud's
+                        {t("cloud.use_cloud")}
                     </button>
                     <button
                         className="ui-button"
                         disabled={cloud.working}
                         onClick={() => sync.keepLocal()}
                     >
-                        Keep this device's
+                        {t("cloud.keep_local")}
                     </button>
                     <button className="ui-button" onClick={() => sync.later()}>
-                        Later
+                        {t("cloud.later")}
                     </button>
                 </div>
             </div>
@@ -358,13 +330,13 @@ export function CloudSavePanel({
 }): JSX.Element {
     return (
         <div className="ui-panel rs-border rs-background ui-settings ui-cloud-panel">
-            <h2>Cloud save</h2>
+            <h2>{t("cloud.title")}</h2>
             <div className="ui-settings-body">
                 <CloudSaveSettings cloud={cloud} client={client} saving={saving} inPanel />
             </div>
             <div className="ui-row">
                 <button className="ui-button" onClick={onClose}>
-                    Back
+                    {t("cloud.back")}
                 </button>
             </div>
         </div>
@@ -395,22 +367,22 @@ export function CloudSaveButton({
     const status = !cloud.code
         ? problem
             ? describeProblem(cloud)
-            : "off"
+            : t("cloud.button.off")
         : cloud.choice
-          ? "pick which save to keep"
+          ? t("cloud.button.choose")
           : cloud.problem
             ? describeProblem(cloud)
             : cloud.syncedAt
-              ? `on, last synced ${new Date(cloud.syncedAt).toLocaleString()}`
-              : "on";
+              ? t("cloud.button.on_synced", { when: when(cloud.syncedAt) })
+              : t("cloud.button.on");
     return (
         <button
             className={
                 "ui-title-link ui-title-settings ui-title-cloud" +
                 (cloud.code ? "" : " ui-title-cloud-off")
             }
-            title={`Cloud save: ${status}`}
-            aria-label={`Cloud save: ${status}`}
+            title={t("cloud.button.label", { status: status ?? "" })}
+            aria-label={t("cloud.button.label", { status: status ?? "" })}
             onClick={(e) => {
                 e.currentTarget.blur();
                 if (cloud.choice) {

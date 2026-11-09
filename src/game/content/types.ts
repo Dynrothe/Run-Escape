@@ -436,6 +436,9 @@ export type BulletPatternDef = {
     // A wall's tiles between bullets; a closing ring's tiles out
     spacing?: number;
     distance?: number;
+    // Closing rings only (a test checks): seconds it stands where it formed before it closes in,
+    // to find the way out
+    hold?: number;
     // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
     // bursting where it lands), rather than from the boss
     origin?: "target";
@@ -556,13 +559,16 @@ export type GroundPatternDef = {
 };
 
 // One of Akkha's four quadrants' elements: what it does to whoever's hit in it (on top of the
-// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn) and its symbol
+// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn), its symbol,
+// and its colour: its symbol's and the funnel of light round it as it lights up for Memory Blast,
+// and the orbs a blast throws up
 export type AkkhaElementDef = {
     name: string;
     effect: PlayerEffectDef;
     spotAnim: number;
     orb: string;
     symbolLoc: number;
+    glow: number;
 };
 
 // Zebak's fight (BossDef.zebak; Sim.stepZebak), as content/tombs.ts's ZEBAK says
@@ -600,6 +606,15 @@ export type ZebakDef = {
         seq: number;
         message: string;
         roarMessage: string;
+        // Drawn only: the roar's shockwave, spotAnim rolling out from him reach tiles
+        // over seconds, and the camera's shake (0 to 1) as it goes
+        shockwave: {
+            spotAnim: number;
+            seconds: number;
+            reach: number;
+            scale: number;
+            shake: number;
+        };
     };
     waves: {
         count: number;
@@ -680,6 +695,8 @@ export type KephriDef = {
 // another style. The floor's four quadrants (TombsPathDef boss.quadrants) each have an element.
 export type AkkhaDef = {
     forms: string[];
+    // How bright his room is for his fight (drawn only), in place of the Tombs' dimmer ambient
+    ambient: number;
     specialEvery: number;
     elements: AkkhaElementDef[];
     // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the
@@ -987,7 +1004,9 @@ export type BossAttackDef = {
     // Said over the boss's head when it's used, like OSRS overhead chat
     shout?: string;
     // A message on screen when it's used, for attacks the player has to do
-    // something about
+    // something about: an instruction, shown the first time it's used in a run, one after
+    // another with a quieter boss's (GameClient.showInstruction), so it's for what to do, not a
+    // warning each cast (the attack's own telegraph is that)
     message?: string;
     // Blasts: each one leaves a pool that lasts seconds, hurting a player
     // standing in it every interval seconds, with effect if it's set (Slash
@@ -1015,8 +1034,8 @@ export type BossAttackDef = {
     // Swings: a straight strip from the boss, width tiles across and length long,
     // the way it faced as it began, rather than round it (a lunge)
     // dash: the boss goes that far along it as it lands, stopping short at anything in its
-    // way, and stunned if that's one of the map's pillars or a rock left by leavesCover
-    // (BossDef.guard; a surge's stopped and stunned by such a rock too)
+    // way, and stunned if that's one of the map's pillars (BossDef.guard); a rock left by
+    // leavesCover only stops it short (a surge's stopped and stunned by such a rock)
     // track: for this many seconds of its windup the strip turns after the nearest player (no
     // quicker than LINE_TRACK_TURN), then it's locked: a step taken too soon is followed
     line?: { width: number; length: number; dash?: number; track?: number };

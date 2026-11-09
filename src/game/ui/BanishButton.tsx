@@ -1,7 +1,9 @@
+import { t } from "../i18n";
+
 // Banishes a level up's reward or a casket's item (Firemaking): it's never
 // offered again this run, and something else takes its place
 export function BanishButton({
-    label = "Banish",
+    label,
     title,
     onBanish,
 }: {
@@ -22,7 +24,7 @@ export function BanishButton({
                 e.currentTarget.blur();
             }}
         >
-            {label}
+            {label ?? t("canvas.banish")}
         </button>
     );
 }
