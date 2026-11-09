@@ -392,7 +392,7 @@ describe("the title's export reminder", () => {
         expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
         // With its translator under its name
         expect(
-            screen.getByRole("button", { name: "Português (BR) Translated by Giordano Souza" }),
+            screen.getByRole("button", { name: "Português (BR) Translated by Iakee" }),
         ).toBeInTheDocument();
     });
 

@@ -127,7 +127,7 @@ describe("TitleLanguageMenu", () => {
         act(() => {
             fireEvent.click(screen.getByRole("button", { name: "Language" }));
         });
-        const credit = screen.getByText("Translated by Giordano Souza");
+        const credit = screen.getByText("Translated by Iakee");
         expect(credit.previousElementSibling?.textContent).toBe("Português (BR)");
         expect(credit.closest("button")?.textContent).toContain("Português (BR)");
     });

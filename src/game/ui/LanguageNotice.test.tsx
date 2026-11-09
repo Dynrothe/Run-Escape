@@ -34,7 +34,7 @@ describe("LanguageNotice", () => {
         act(() => setLang("pt-BR"));
         expect(screen.getByText(NOTICE)).toBeDefined();
         // The translator's credited where the language is picked, not here
-        expect(screen.queryByText(/Giordano Souza/)).toBeNull();
+        expect(screen.queryByText(/Iakee/)).toBeNull();
     });
 
     it("goes once it's read, and doesn't come back", () => {

@@ -3,7 +3,7 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.30.0 - 2026-11-09
 
 ### Added
 
@@ -13,7 +13,7 @@ the version in the corner).
   step on the plates, which plates to press, a way to make the tablet's number, and the name of
   each matching symbol. It's on at Entry, and at any raid level once you've beaten the room. You
   can turn it off in Settings.
-- Languages, by Giordano Souza: play in English or Português (BR). Pick one with the globe on the
+- Languages, by Iakee: play in English or Português (BR). Pick one with the globe on the
   title screen, in Settings or in the pause menu. Only English is checked: the others may be wrong
   or have text missing.
 
@@ -110,7 +110,7 @@ the version in the corner).
   passive, worn piece or Armoury piece to read it.
 - Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
   it saves you, and the Pyromancer's own revive shows as a phoenix.
-- Stat icons, by Giordano Souza: each stat shows its icon from the game's cache wherever it's
+- Stat icons, by Iakee: each stat shows its icon from the game's cache wherever it's
   listed, from descriptions and level ups to the pause menu, caskets and the Armoury.
 
 ### Changed

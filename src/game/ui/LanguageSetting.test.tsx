@@ -26,7 +26,7 @@ describe("LanguageSetting", () => {
         const options = screen.getAllByRole("option");
         expect(options.map((option) => option.textContent)).toEqual([
             "English",
-            "Português (BR)Translated by Giordano Souza",
+            "Português (BR)Translated by Iakee",
         ]);
         expect(options[0].getAttribute("aria-selected")).toBe("true");
         expect(screen.queryByRole("option", { name: /Español/ })).toBeNull();
@@ -35,12 +35,12 @@ describe("LanguageSetting", () => {
     it("credits the translator under the language's name, picked or not", () => {
         render(<LanguageSetting />);
         open();
-        const credit = screen.getByText("Translated by Giordano Souza");
+        const credit = screen.getByText("Translated by Iakee");
         expect(credit.className).toBe("ui-language-credit");
         expect(credit.previousElementSibling?.textContent).toBe("Português (BR)");
 
         act(() => void fireEvent.click(screen.getByRole("option", { name: /Português/ })));
-        expect(dropdown().textContent).toContain("Translated by Giordano Souza");
+        expect(dropdown().textContent).toContain("Translated by Iakee");
     });
 
     it("switches the language when one's picked, and closes", () => {
