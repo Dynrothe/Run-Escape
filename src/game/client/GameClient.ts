@@ -363,7 +363,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
 
 // What a co-op player brings, as far as any game could have it (another
 // player's game could send anything)
-function cleanLoadout(loadout: Loadout | undefined): {
+export function cleanLoadout(loadout: Loadout | undefined): {
     unlockedItems: Set<string>;
     trophiesFound: Set<string>;
     armoury: Record<string, number>;

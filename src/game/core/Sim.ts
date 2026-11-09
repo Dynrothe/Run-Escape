@@ -11152,7 +11152,7 @@ export class Sim {
             const hardOne =
                 this.hard && this.rng.chance(HARD_UNIQUE_CHANCE) ? pick(true) : undefined;
             // Expert mode: one of Lil' Zik's looks, every time, one they haven't got while there's
-            // one left (as OSRS's are), and any of them after that
+            // one left, and any of them after that
             const expertPool = purples.filter((t) => t.from.kind === "raid" && t.from.expert);
             const missing = expertPool.filter(
                 (t) => !hero.trophies.has(t.id) && !(hero.trophiesFound?.has(t.id) ?? false),

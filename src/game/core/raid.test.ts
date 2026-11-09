@@ -73,11 +73,17 @@ afterAll(() => {
 });
 
 // raidTeleports: with a teleporter in every hall, as if each boss had been killed before
-function raid(expert = false, raidTeleports = 0, raidPortals?: boolean[]): Sim {
+function raid(
+    expert = false,
+    raidTeleports = 0,
+    raidPortals?: boolean[],
+    trophiesFound?: ReadonlySet<string>,
+): Sim {
     const sim = new Sim({
         grid: makeGrid(field(), 1000, 1000),
         mapId: TEST_RAID.id,
         expert,
+        trophiesFound,
         raidTeleports,
         raidPortals: raidPortals ?? TEST_RAID.raid!.rooms.map(() => raidTeleports > 0),
         characterId: "warrior",
@@ -248,12 +254,14 @@ describe("raids", () => {
             sim["openRaidChest"]();
             expect(lookIn()).toHaveLength(1);
         }
-        // And the last one missing is the one given
-        sim.heroes[0].trophiesFound = new Set(looks.slice(1));
+        // And the last one missing is the one given, with the found ones brought in as a run
+        // starts
+        const last = raid(true, 0, undefined, new Set(looks.slice(1)));
+        Object.assign(last, { map: getMap("theatre_of_blood") });
         for (let i = 0; i < 20; i++) {
-            sim.trophies.clear();
-            sim["openRaidChest"]();
-            expect(lookIn()).toEqual([looks[0]]);
+            last.trophies.clear();
+            last["openRaidChest"]();
+            expect([...last.trophies].filter((id) => looks.includes(id))).toEqual([looks[0]]);
         }
         expect(getEveryTimeTrophiesFound(["lil_bloat", "ghrazi_rapier", "lil_zik"])).toEqual([
             "lil_bloat",
