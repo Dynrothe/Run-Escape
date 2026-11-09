@@ -17,6 +17,9 @@ hitboxes are what's drawn, real assets before overlays, and a phone under 69k.
   one on. That's the balance.
 - **The second grows stronger** once the first is beaten.
 - **Unique fights and abilities** for each: ours to design.
+- **When** (asked later that day, once a playtest beat all three at level 1): on average a hero's
+  strong enough for the first general after 8 minutes of the hordes, for the second after 15, and
+  for Yama straight after the second. Section 10, Tuned to the clock, has how.
 
 ## 2. The map becomes a run
 
@@ -51,7 +54,7 @@ was the minimap, hitpoints and the hero's buttons. Farming needs a run:
 beaten on its own, one fought at a time.
 
 - **Where it's fought**: Yama's on the floor. A general's on an area of its own (`LairDef.area`,
-  a box, with rows for the Exchange's octagon). Stepping inside wakes it, and every way out burns
+  a box, with rows for the Exchange's pad). Stepping inside wakes it, and every way out burns
   until it's beaten, found from the grid as Yama's is.
 - **Standing there from the start**: each general's a map prop (`MapPropDef.lair`), hidden once
   its lair wakes. Its intro then plays where it stood.
@@ -63,7 +66,7 @@ beaten on its own, one fought at a time.
   meanwhile, not the run. This is what lets a player test whether they're ready. Only a death to
   the hordes ends it, and Retry then starts at the gate (`getRetryLair` has no lair to start at).
 - **The second grows stronger** (`LairDef.empowered`): once a general's beaten, the other's
-  fights are empowered: 1.3 times the hitpoints, 1.25 times the damage, 0.85 of the time between
+  fights are empowered: 1.5 times the hitpoints, 1.3 times the damage, 0.85 of the time between
   attacks, and attacks of the fallen one's (`BossAttackDef.empowered`), said on screen.
 - **Yama's death wins**, though the map's endless (`LairDef.final`).
 
@@ -74,25 +77,27 @@ his own animations and spot animations). In OSRS it burns with every spell, blas
 you hide behind a pillar, then sets the floor alight and raises corpses that heal it if they reach
 it. Ours follows that. He doesn't move.
 
-**Arena**: the Exchange's inner ring, an octagon twenty tiles across, its counter gone. Four of
-the Fractured Archive's pillars (62738) stand round him.
+**Arena**: the whole of the Exchange's raised pad, 34 tiles across, its walls, booths and upper
+storey gone (`clearExchange`), and fire right round its rim once he wakes (the seal, a flame every
+other tile). Eight of the Fractured Archive's pillars (62738) stand in a ring round him, where the
+inner ring's walls were, so one's never far whichever side you're on.
 
 **Phase 1, "Mastered flame"** (100–50%):
 
-| Attack        | What happens                                                                       | How you beat it                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Searing bolt  | A bolt at you. Each one that lands adds a stack of burn, up to three.              | Keep moving. Burn is a hitpoint a second a stack, through armour, for three seconds from the last.     |
-| Flame lash    | Up close, a sweep of fire in front of him. Missed, his guard's down.               | Step out of it, then punish.                                                                           |
-| Conflagration | He gathers his flames (3 s) and they burst through the whole ring, through armour. | Get behind a pillar: its shadow, drawn as he gathers, is safe. The pillar that sheltered you crumbles. |
+| Attack        | What happens                                                                   | How you beat it                                                                                        |
+| ------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Searing bolt  | A bolt at you. Each one that lands adds a stack of burn, up to three.          | Keep moving. Burn is a hitpoint a second a stack, through armour, for three seconds from the last.     |
+| Flame lash    | Up close, a sweep of fire in front of him. Missed, his guard's down.           | Step out of it, then punish.                                                                           |
+| Conflagration | He gathers his flames (3 s) and they burst over the whole pad, through armour. | Get behind a pillar: its shadow, drawn as he gathers, is safe. The pillar that sheltered you crumbles. |
 
 **Phase 2, "The Exchange burns"** (50–0%): every pillar that's left comes down, and his flames take
 the floor.
 
-| Attack             | What happens                                                                                                                                               | How you beat it                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| The Exchange burns | Fires take hold on the ring's floor, each lighting another beside it every five seconds.                                                                   | Shock wave puts fire out along its way.                |
-| Reanimate          | Four of the Exchange's dead get up and walk to him; each that reaches him heals him 5%. With the last there or dead, what got there goes up over the ring. | Kill them on the way: Shock wave binds a line of them. |
-| Hellfire arrows    | A fan of five arrows at you.                                                                                                                               | Step across them.                                      |
+| Attack             | What happens                                                                                                                                                                                   | How you beat it                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| The Exchange burns | Fires take hold on the pad's floor, each lighting another beside it every five seconds.                                                                                                        | Shock wave puts fire out along its way.                |
+| Reanimate          | Six of the Exchange's dead get up by the pad's rim, fourteen tiles out, and walk to him; each that reaches him heals him 4%. With the last there or dead, what got there goes up over the pad. | Kill them on the way: Shock wave binds a line of them. |
+| Hellfire arrows    | A fan of five arrows at you.                                                                                                                                                                   | Step across them.                                      |
 
 Shock wave is the button that matters in phase 2: aimed at the fire or the dead.
 
@@ -144,23 +149,31 @@ throws the hero out to the palace's court rather than ending the run, and his de
 ## 8. Checks
 
 - **Bot sims**: `FARM=<seconds> LAIR=<id>` plays the hordes for that long, kept out of every lair,
-  then fights that lair (`EMPOWERED=1` as if its rival fell first). Section 10 has what it found.
+  then fights that lair (`EMPOWERED=1` as if its rival fell first). With `GOD=1` the bot's never
+  hurt (only an unstopped meteor kills it), so the fight's length is how long the hero's damage
+  takes against the boss's heals: what the fights are tuned by. Section 10 has what it found.
 - **Tests**: `core/VarrockGenerals.test.ts` (lairs wake, seal and beat back; empowerment; burn;
   cover and pillars; fire spreading, doused and out when he dies; corpses healing; the pact; the
   desecration) and `core/Yama.test.ts` (his palace sealed until both are dead, thrown out, the
   win). `scripts/game/check-lairs.ts` (run by `battleForVarrock.test.ts` with the cache): room
   for each boss where it rises, and for K'ril down his nave.
 - **Phone** (844 × 390, `frameProbe`, each fight's busiest moment): K'ril 62.6k, 67.1k with all
-  three bodyguards up; Yama 55.5k to 56.7k. Xarth is 83.5k, over the 69k: the Exchange's ruins
-  are 67.7k on their own, before anything of his (his fires, the dead and him are 15.8k).
+  three bodyguards up; Yama 55.5k to 56.7k. Xarth is 86k to 94k, over the 69k: the Exchange's
+  ruins are about the budget on their own, before anything of his. On the pad (section 10) he's
+  no dearer than he was on the inner ring.
 
 ## 9. Open for Dynny
 
 - **Beaten back** (section 3) is our call: the alternative is that a death anywhere ends the run.
-- **Numbers**: hitpoints, damage and how long to farm are tuned on the bot (section 10), to tune
-  again by playtest.
+- **Numbers**: hitpoints are tuned to the brief's clock on the bot (section 10, Tuned to the
+  clock), to tune again by playtest. A player deals more than the bot, so if 8 and 15 minutes
+  still come early, hitpoints are the knob: K'ril's heal goes with his, so he climbs steeply.
+- **The hordes at 15 minutes**: farming that long was never asked of a player before. They're
+  twice the crowd from the eighth minute and tougher every minute, and the bot can't say whether
+  a player lasts that long (`SAFE_WAVES=1` keeps it alive).
 - **The Exchange on a phone**: its ruins alone are about the whole budget, so Xarth's fight is
-  over it. Slimming them (the burnt booths, the dressing in the ring) is work of its own.
+  over it. The pad's walls and booths are gone now, but its floor is locs (about 50 triangles a
+  tile, a thousand tiles), and slimming that is work of its own.
 
 ## 10. What the bot found
 
@@ -250,3 +263,103 @@ armour. Taking brew and ward early, the order the bot has now, wins 11 of the 15
 random draws' 10 and damage first's 10. A player can build for the fight in front of them,
 which no fixed order does. The bot that dies at 1:22 met imps and fires with only the sword: no
 crossbow had been offered by then.
+
+### The whole pad
+
+Xarth's fight moved from the Exchange's inner ring to the whole raised pad: every wall, booth and
+the upper storey on it gone, down to the deck's floor, and the seal round its rim. A bigger floor
+needed the rest to grow with it:
+
+- **Pillars**: four round him were too far apart for a hero across a pad 34 tiles wide, so eight
+  stand in a ring where the inner ring's walls were.
+- **The dead**: they rise fourteen tiles out, by the rim, where they rose nine out on the ring, so
+  they walk longer and give Shock wave a longer line. Six of them, healing 4% each, where four
+  healed 5%: at most 24% back, against 20%, for a walk half as long again.
+- **The seal**: fire on every one of the rim's tiles cost 18.8k triangles in a phone's view. Its
+  `spacing` draws one every other tile, at twice the size, for 11k; every tile's still sealed.
+
+The Justiciar, 3 seeds each, as above, on the code before and after. The pad's walls change where
+the hordes go too, so the levels at 12 minutes aren't quite the same (27–28 before, 28 after):
+
+| Xarth, after          | The inner ring | The whole pad |
+| --------------------- | -------------- | ------------- |
+| 8 minutes             | 1 (21%, 31%)   | 1 (18%, 19%)  |
+| 12 minutes            | 3 (24–26 s)    | 2 (9%)        |
+| 12 minutes, empowered | 0 (2–38%)      | 2 (12%)       |
+
+Wins out of nine went from four to five, which is the bot's noise: the fight is about as hard as
+it was. The wins take a few seconds longer, with more floor to keep away on. On a phone
+(844 × 390, distance 18, measured the same way on both):
+
+| Where                  | The inner ring | The whole pad |
+| ---------------------- | -------------- | ------------- |
+| As he wakes            | 92.6k          | 86.3k         |
+| On the pad's south rim | 92.0k          | 93.5k         |
+| Phase 2 at its busiest | 96.9k          | 88.5k         |
+
+Both are over the 69k as before. What's left is the Exchange's ruins and its floor (section 9).
+
+### Tuned to the clock
+
+A playtest beat Xarth, K'ril and Yama at level 1, before a single blessing, so Dynny set the clock
+in section 1: about 8 minutes of the hordes for the first general, 15 for the second, and Yama
+straight after. The bot's no judge of that on its own. It lasts about half a minute against Xarth
+whatever its level, and not much longer against K'ril, where a player who dodges lasts the fight,
+so its wins and losses say how well it dodges. With `GOD=1` it's never hurt, and how long a fight
+takes is then how its damage does against the boss's heals: that's what's tuned. A player deals
+more than the bot (its buttons on cooldown and every swing on the boss, about 41 a second at level
+1 to its 31), so a fight that's long for the bot is shorter for them.
+
+Each boss stops a fresh hero for a reason of its own, and every one of them goes by its hitpoints:
+
+- **Xarth**: the Conflagration takes a pillar every 14 seconds or so, and they're gone about two
+  minutes into his first phase, which ends at half. At level 1 the bot has him at 73% then, and a
+  player who never misses at about 64%; after that each Conflagration is 16 through armour, of 38.
+  In his second phase each of the dead that reaches him heals him 4% of his hitpoints.
+- **K'ril**: his desecration heals 12% unless 6% of his hitpoints land in its five seconds. At
+  8,400, that's 1,008 healed every 16 to 24 seconds, about all a level 1 hero deals in that time
+  at best (and half that while a bodyguard's up), and a break of 504, more than everything on a
+  level 1 hero's buttons and three swings.
+- **Yama** can't be reached until both are dead, so he's tuned to the hero that beat them.
+
+The empowered general had 1.3 times the hitpoints and 1.25 times the damage. The bot's hero gains
+a third to a half again between 8 and 15 minutes, so it's 1.5 and 1.3 now. Past 10 minutes the
+bot's blessings do less (the last ranks of strength and the blade, and Zeal), so a fight there
+shortens less than its levels suggest.
+
+The Justiciar, 3 seeds each, `DODGE=1 SAFE_WAVES=1 GOD=1`, the average time to beat each (its
+level when it went in, in brackets); "stuck" is still up after ten minutes. Yama's third seed
+walks into his palace at 5:28, level 11, and isn't counted.
+
+| Fight                      | Before (3,800, 4,200, 8,400) | After (13,300, 8,400, 25,200) |
+| -------------------------- | ---------------------------- | ----------------------------- |
+| Xarth at level 1           | stuck (73–95%)               | stuck (98–100%)               |
+| Xarth after 5 min (11)     | 53 s                         | 164 s                         |
+| Xarth after 8 min (19–20)  | 36 s                         | 122 s                         |
+| Xarth after 10 min (24–25) | 31 s                         | 100 s                         |
+| K'ril at level 1           | stuck (86–97%)               | stuck (97–100%)               |
+| K'ril after 5 min          | 41 s                         | 229 s (161–332)               |
+| K'ril after 8 min          | 31 s                         | 99 s (63–132)                 |
+| K'ril after 10 min         | 25 s                         | 77 s                          |
+| Xarth empowered, 10 min    | 38 s                         | 157 s                         |
+| Xarth empowered, 13 min    | 41 s                         | 157 s                         |
+| Xarth empowered, 15 min    | 34 s                         | 134 s                         |
+| K'ril empowered, 10 min    | 33 s                         | 207 s (105–278)               |
+| K'ril empowered, 13 min    | 31 s                         | 153 s                         |
+| K'ril empowered, 15 min    | 27 s                         | 135 s (83–201)                |
+| Yama after 10 min (21–24)  | 53 s                         | 127 s                         |
+| Yama after 15 min (32)     | 45 s                         | 97 s                          |
+
+So each fight takes a minute and a half to two and a quarter at its time, half as long again or
+more a few minutes sooner, and can't be won at level 1. K'ril climbs the most steeply: at 9,600
+he was beaten once in three at 5 minutes, in 594 s, and took 93 to 409 s empowered at 15. Yama at
+21,000 took 92 s at 15 minutes and at 25,200 took 97, as his phases and the meteor's clock take
+their time whatever the damage.
+
+The same, mortal (no `GOD`): before, the bot beat K'ril every time from 5 minutes, and Xarth 1 of
+3 at 8 minutes. After, it beats K'ril 1 of 3 at 8 and 10 minutes and empowered at 15, and never
+Xarth or Yama: it's beaten back from Xarth in 19 to 36 s as it was before, and lasts 63 to 114 s
+on Yama's floor.
+
+`GOD=1` used to let Yama's rising floor hurt the bot, so it was beaten back from him even when
+"never hurt". It's kept whole now as well as untouchable, and only an unstopped meteor kills it.

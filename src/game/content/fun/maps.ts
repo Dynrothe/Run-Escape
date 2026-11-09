@@ -854,7 +854,8 @@ export const FUN_MAPS: MapDef[] = [
                 at: BATTLE_FOR_VARROCK.xarth.at,
                 start: BATTLE_FOR_VARROCK.xarth.start,
                 area: BATTLE_FOR_VARROCK.xarth.area,
-                seal: { locId: FLAMES, scale: 1.4, sound: 10271 },
+                // Right round the pad's rim: a flame every other tile, bigger, for a phone
+                seal: { locId: FLAMES, scale: 2, sound: 10271, spacing: 2 },
                 message: "Xarth wakes! The Grand Exchange is ringed with fire!",
                 victory: "Xarth is beaten. The fires round the Exchange die down.",
                 shout: "The flame... outlives me...",
@@ -864,12 +865,13 @@ export const FUN_MAPS: MapDef[] = [
                 },
                 empowered: {
                     by: ["kril"],
-                    hp: 1.3,
-                    damage: 1.25,
+                    hp: 1.5,
+                    damage: 1.3,
                     tempo: 0.85,
                     message: "K'ril Tsutsaroth is dead. Xarth takes up his flames of Zamorak!",
                 },
-                // The Fractured Archive's pillars, four round him (62738)
+                // The Fractured Archive's pillars (62738), eight in a ring round him where the
+                // Exchange's inner ring stood
                 pillars: {
                     locId: 62738,
                     size: 2,
@@ -901,8 +903,8 @@ export const FUN_MAPS: MapDef[] = [
                 },
                 empowered: {
                     by: ["xarth"],
-                    hp: 1.3,
-                    damage: 1.25,
+                    hp: 1.5,
+                    damage: 1.3,
                     tempo: 0.85,
                     message: "Xarth is dead. K'ril Tsutsaroth's claws burn with his fire!",
                 },

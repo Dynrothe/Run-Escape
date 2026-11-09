@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getLocBase, getLocOverride } from "../../../rs/config/loctype/LocOverrides";
 import { GAME_CACHE_NAME } from "../../cache";
+import { getEnemy } from "../../content/enemies";
 import { getMap, getMapCharacter, isPeaceful } from "../../content/maps";
 import { VARROCK_EVENTS, VARROCK_WAVES } from "../../content/varrockHordes";
 import { PHONE_TRIANGLES, lintFloor } from "../../core/floorLint";
@@ -77,12 +78,27 @@ describe("the Battle for Varrock", () => {
             // and stands there from the start, a prop of its own
             expect(MAP.props!.some((prop) => prop.lair === lair.id)).toBe(true);
         }
-        // Xarth's pillars, whole, inside his ring
+        // Xarth's pillars, whole, on his pad and clear of him, and his dead getting up on it
         const xarth = lairs[0];
+        const radius = getEnemy(xarth.enemyId).radius;
         for (const { x, y } of xarth.pillars!.at) {
             const size = xarth.pillars!.size;
             expect(inside(xarth, { x, y })).toBe(true);
             expect(inside(xarth, { x: x + size - 1, y: y + size - 1 })).toBe(true);
+            const middle = { x: x + size / 2, y: y + size / 2 };
+            expect(Math.hypot(middle.x - xarth.at.x, middle.y - xarth.at.y)).toBeGreaterThan(
+                radius + size,
+            );
+        }
+        const reanimate = getEnemy(xarth.enemyId).boss!.attacks.find((a) => a.summon?.walkTo)!;
+        const out = reanimate.summon!.walkTo!.distance;
+        for (let i = 0; i < 16; i++) {
+            const angle = (i / 16) * Math.PI * 2;
+            const spot = {
+                x: xarth.at.x + Math.cos(angle) * out,
+                y: xarth.at.y + Math.sin(angle) * out,
+            };
+            expect(inside(xarth, spot)).toBe(true);
         }
         const yama = lairs[2];
         expect(yama.requires!.lairs).toEqual(["xarth", "kril"]);

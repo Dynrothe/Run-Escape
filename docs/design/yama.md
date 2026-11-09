@@ -27,9 +27,9 @@ hitboxes exactly as drawn, nothing painted on the floor as an arrow, and phone u
 | --------- | -------------------------------------------------------------------------------------------- |
 | Who       | The player as Justiciar Zachariah: Lunge, Shock wave, Ice barrage, Lightning, the Owl's gaze |
 | Where     | The palace floor, about 15 × 11 tiles of floor-system tiles, the throne at the north end     |
-| Hitpoints | 8,400: he comes after his generals (3,800 and 4,200) and the levels their demons give        |
+| Hitpoints | 25,200: for a hero of about 15 minutes of the hordes, straight after his second general      |
 | Phases    | 100–70%, 70–35%, 35–0%                                                                       |
-| Length    | About 4–5 minutes for a good run                                                             |
+| Length    | About 2 minutes for that hero (varrock-generals.md, section 10)                              |
 | Death     | Thrown out to the palace's court, whole, to come back when you're ready                      |
 
 He stays near the throne end and moves along it. He doesn't chase. The danger comes from the floor

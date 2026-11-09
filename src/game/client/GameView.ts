@@ -108,6 +108,29 @@ const SEAL_RISE_TICKS = 12;
 const SEAL_RUN_TICKS = 1.2;
 const SEAL_LIFT_TICKS = 60;
 
+// The sealed tiles a flame's drawn on (LairDef.seal.spacing): the first, then each one no nearer
+// than spacing to any drawn before it, as indexes into sealed's pairs. Every one without spacing.
+const sealFlames = new WeakMap<number[], number[]>();
+function getSealFlames(sealed: number[], spacing: number | undefined): number[] {
+    let flames = sealFlames.get(sealed);
+    if (flames) {
+        return flames;
+    }
+    flames = [];
+    const reach = (spacing ?? 0) ** 2;
+    for (let k = 0; k < sealed.length; k += 2) {
+        const [x, y] = [sealed[k], sealed[k + 1]];
+        const near = flames.some(
+            (i) => (sealed[i * 2] - x) ** 2 + (sealed[i * 2 + 1] - y) ** 2 < reach,
+        );
+        if (!near) {
+            flames.push(k / 2);
+        }
+    }
+    sealFlames.set(sealed, flames);
+    return flames;
+}
+
 // What's running from a boss's entrance fades out this many ticks before it goes
 const LEAVING_FADE_TICKS = 20;
 
@@ -848,16 +871,15 @@ export class GameView {
         const anim = model.anims[0];
         const clock = sceneryTick();
         const { sealed } = lair;
-        for (let k = 0; k < sealed.length; k += 2) {
-            const x = sealed[k] + 0.5;
-            const y = sealed[k + 1] + 0.5;
+        for (const i of getSealFlames(sealed, def.seal.spacing)) {
+            const x = sealed[i * 2] + 0.5;
+            const y = sealed[i * 2 + 1] + 0.5;
             const away = Math.hypot(x - def.at.x, y - def.at.y);
             const up = Math.min(1, (now - lair.sealTick - away * SEAL_RUN_TICKS) / SEAL_RISE_TICKS);
             const size = Math.min(up, 1 - lifted);
             if (size <= 0) {
                 continue;
             }
-            const i = k / 2;
             actors.draw(
                 model,
                 anim,

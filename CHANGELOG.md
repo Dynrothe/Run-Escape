@@ -22,10 +22,12 @@ the version in the corner).
   opens on Yama on his throne, facing the last of the palace guard (any key, click or tap skips
   it). Lunge through his rising floor unharmed, and keep your gaze out of his reach: up close he
   swats you away.
-- Yama's generals in the Battle for Varrock, in either order: Xarth in the Grand Exchange, who
-  burns you, blasts the ring unless you hide behind a pillar, sets the floor alight and raises the
-  dead, and K'ril Tsutsaroth in the church, with his bodyguards and a desecration you must break.
-  Beat one and the other grows stronger. Lose to either and you're thrown out to try again later.
+- Yama's generals in the Battle for Varrock, in either order: Xarth on the Grand Exchange's pad,
+  ringed with fire, who burns you, blasts the pad unless you hide behind a pillar, sets the floor
+  alight and raises the dead, and K'ril Tsutsaroth in the church, with his bodyguards and a
+  desecration you must break. Beat one and the other grows stronger. Lose to either and you're
+  thrown out to try again later. A fresh hero is no match for them: farm the hordes first, about
+  eight minutes for the first and fifteen for the second, and Yama comes straight after.
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
   maps to play in any order, each harder the more of the others you've beaten. The first is the
   Stranglewood; the Lassar Undercity, Ghorrock and the Scar are coming.

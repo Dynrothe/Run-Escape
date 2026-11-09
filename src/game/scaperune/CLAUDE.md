@@ -1416,7 +1416,8 @@ starts at the top of its front steps; the court and the steps are the ground's.
 **What it can't do**: a broken wall is one of the Wilderness's few pieces, dark stone whatever the wall was; a charred
 texture is one of two, not the texture darkened; and the noise doesn't know a building's doors, so a ruin can lose the
 wall a door was in and keep the rest. check-maps.ts holds a ruin to what any cut is held to: Varrock's blocked decks
-(the Grand Exchange's counter) are its `squares`.
+(the bridge's east of the palace) are its `squares`. The Grand Exchange's pad is a deck too, cleared to its floor for
+Xarth by `clearExchange`, which throws if the pad's rows stop matching the cache's deck.
 
 ### City walls
 

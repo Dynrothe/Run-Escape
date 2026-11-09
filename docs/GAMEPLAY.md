@@ -256,20 +256,22 @@ version and how to run it.
   show in a row under the sword, and on the pause menu. Yama's two
   generals wait in their ruins from the start, to be fought in either order: step into one's ruin
   and it wakes, the demons about run from it every way, every way out bursts into fire, and you
-  fight it there with nothing else coming.
+  fight it there with nothing else coming. Neither is a fight for a fresh hero: on average the
+  first wants about eight minutes of the hordes' levels, the second fifteen, and Yama no more.
   Die there and you're thrown out whole, the general back where it stood with all its hitpoints:
-  only a death to the hordes ends the run. Beat one and the other grows stronger: 30% more
-  hitpoints, 25% harder hits, attacks sooner, and an attack of the fallen one's.
-  **Xarth** (3,800 hitpoints), in the Grand Exchange's ring, stands where he is and burns. His
-  bolts leave you burning, a stack a bolt up to three (a hitpoint a second each, through armour).
-  Up close he lashes in front of him, his guard down if he misses. Every so often he gathers his
-  flames and they burst through the whole ring, sparing only what's behind one of its four
-  pillars, which crumbles for it. Halfway down, the pillars come down and the Exchange burns: fire
-  takes the floor and spreads (Shock wave puts it out along its way), his arrows come in fans of
-  five, and the dead get up and walk to him, each healing him 5% as it reaches him; when the last
-  is there or dead, what got there goes up over the ring. With K'ril dead first, he casts
-  Zamorak's flames too.
-  **K'ril Tsutsaroth** (4,200), before the altar of the church in the north-east, comes at you
+  only a death to the hordes ends the run. Beat one and the other grows stronger: 50% more
+  hitpoints, 30% harder hits, attacks sooner, and an attack of the fallen one's.
+  **Xarth** (13,300 hitpoints), in the middle of the Grand Exchange's pad, stands where he is and
+  burns. The whole pad is his fight, its walls and booths gone, and it's ringed with fire once he
+  wakes. His bolts leave you burning, a stack a bolt up to three (a hitpoint a second each,
+  through armour). Up close he lashes in front of him, his guard down if he misses. Every so often
+  he gathers his flames and they burst over the whole pad, sparing only what's behind one of the
+  eight pillars in a ring round him, which crumbles for it. Halfway down, the pillars come down and
+  the Exchange burns: fire takes the floor and spreads (Shock wave puts it out along its way), his
+  arrows come in fans of five, and six of the dead get up out by the pad's rim and walk in to him,
+  each healing him 4% as it reaches him; when the last is there or dead, what got there goes up
+  over the pad. With K'ril dead first, he casts Zamorak's flames too.
+  **K'ril Tsutsaroth** (8,400), before the altar of the church in the north-east, comes at you
   down its nave: poison claws, Zamorak's flames where you stand, a bloodrush onto where you were
   (his guard down if he misses) and a "YARRRRRRR!" smash round him through armour. Every so often
   he desecrates the church for five seconds and heals 12%, unless you hit him for 6% of his
@@ -279,10 +281,10 @@ version and how to run it.
   Until both are dead the palace is ringed with fire, which goes out as the second falls. Step
   onto its floor then and Yama wakes: he speaks from his throne, is gone from it in a drift of embers
   and rises before it, every way off the floor bursts into fire, and you fight him there until he's
-  dead (8,400 hitpoints, in three phases). The floor is his weapon. His stomp ripples rings of slabs
-  out from him, with spokes left down to stand on, and his shadow lanes raise lanes of the floor
-  through where you stand, crossing from his second phase. Close in he claws: step out of it or
-  round him, and a claw that misses leaves his guard down. At range he throws fiery skulls that
+  dead (25,200 hitpoints, in three phases). The floor is his weapon. His stomp ripples rings of
+  slabs out from him, with spokes left down to stand on, and his shadow lanes raise lanes of the
+  floor through where you stand, crossing from his second phase. Close in he claws: step out of it
+  or round him, and a claw that misses leaves his guard down. At range he throws fiery skulls that
   leave the floor burning. From his second phase he sends void flares after you: slow orbs that
   burst into a cross of rising floor when their time's up, or when they touch you. Nothing hurts
   one, but Ice barrage holds it still, its time too, and Lightning breaks a held one, leaving food

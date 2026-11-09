@@ -232,7 +232,7 @@ describe("Xarth", () => {
         run(sim, conflagration.windup + 0.3);
         expect(sim.player.hp).toBe(before);
         expect(pillar.standing).toBe(false);
-        expect(lair.pillars.filter((p) => p.standing).length).toBe(3);
+        expect(lair.pillars.filter((p) => p.standing).length).toBe(lair.pillars.length - 1);
         expect(sim.grid.isSolid(pillar.x, pillar.y)).toBe(false);
         // In the open, it hits through armour
         stand(sim, boss.x, boss.y - 5);
