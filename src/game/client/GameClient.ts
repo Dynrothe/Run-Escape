@@ -36,7 +36,14 @@ import { RARITIES, Rarity } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { TROPHY_BY_ID } from "../content/trophies";
-import { BlessingsDef, CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
+import {
+    BlessingsDef,
+    CinematicDef,
+    CombatStyle,
+    MapDef,
+    Stats,
+    emptyStats,
+} from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
@@ -80,6 +87,7 @@ import {
     getCinematicCamera,
     getCinematicSquares,
 } from "./Cinematic";
+import { CinematicDirector, FlyInput, getDirectorChoices } from "./CinematicDirector";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -130,6 +138,7 @@ import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
 import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
+import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecorder";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
@@ -220,6 +229,8 @@ const PHONE_MAX_HEIGHT = 520;
 const CINEMATIC_MAX_FRAME_MS = 100;
 // The longest it waits for what it sees to load before it plays anyway (ms)
 const CINEMATIC_LOAD_MS = 45000;
+// How long the shot editor's shots stand still before what they'll see is loaded (ms)
+const DIRECTOR_PIN_MS = 250;
 
 // How far past the arena the camera can get: a run's is behind the player, zoomed
 // all the way out, and the title screen's circles them
@@ -436,6 +447,8 @@ export type GameClientOptions = {
     // ?raidtest on the dev server: solo runs with a raid's rooms two minutes apart and every
     // level up at its max (SimTesting); "short" for the rooms alone
     raidTest?: "max" | "short";
+    // ?director=<map id> on the dev server: a run there with the shot editor open (direct)
+    director?: string;
 };
 
 // A boss winding up a gaze (BossAttackDef.cover) lights the arena, more as it comes: how much
@@ -530,6 +543,14 @@ export class GameClient implements GameFrameHandler {
     private cinematicLoading?: number;
     // The tick the lair woke whose opening's been played (Lair.wakeTick), so it plays once
     private lairOpeningTick = -1;
+    // Dev only: the shot editor, while it's open (direct), with the cinematic it holds as
+    // this.cinematic; and its shots' versions (shotsVersion) last loaded along the way and last
+    // seen, and when they were seen to change (ms)
+    director?: CinematicDirector;
+    private directorPins = { pinned: -1, seen: -1, changed: 0 };
+    // Dev only: a trailer being recorded from the shot editor (recordTrailer). rolling: its frames
+    // are being drawn; live: the run steps meanwhile.
+    private trailer?: { recorder: TrailerRecorder; live: boolean; rolling: boolean };
 
     sim?: Sim;
     paused = false;
@@ -684,6 +705,8 @@ export class GameClient implements GameFrameHandler {
         if (options.autostart) {
             this.store.set({ characterId: options.autostart });
             this.startRun();
+        } else if (options.director) {
+            void this.direct(options.director);
         } else if (invite) {
             this.openCoop().then(() => this.joinRoom(invite));
         } else {
@@ -1847,9 +1870,10 @@ export class GameClient implements GameFrameHandler {
         this.sounds.chest(cue, rarity);
     }
 
-    // Co-op's menu doesn't stop the run: the others play on
+    // Co-op's menu doesn't stop the run: the others play on. The shot editor's run never steps,
+    // so there's nothing to pause (and its window loses focus to the console often)
     pause(): void {
-        if (this.sim && !this.sim.runOver) {
+        if (this.sim && !this.sim.runOver && !this.director) {
             this.paused = true;
             this.syncOverlay();
         }
@@ -2067,9 +2091,19 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // Any key or controller button skips the opening cinematic, and does nothing else
+    // Any key or controller button skips the opening cinematic, and does nothing else. The shot
+    // editor has its own keys, and F3 and M as ever.
     private pressKey(code: string): void {
-        if (this.cinematic) {
+        if (this.trailer) {
+            // Nothing moves the camera while a trailer's recorded; Escape stops it
+            if (code === "Escape") {
+                this.cancelTrailer();
+            }
+        } else if (this.director) {
+            if (!this.director.press(code) && (code === "F3" || code === "KeyM")) {
+                this.onKeyPress(code);
+            }
+        } else if (this.cinematic) {
             this.skipCinematic();
         } else {
             this.onKeyPress(code);
@@ -2163,7 +2197,10 @@ export class GameClient implements GameFrameHandler {
             this.updateCoop(deltaTimeMs, sim, this.coopRun);
         } else if (
             !this.paused &&
-            !this.cinematic?.holdsRun &&
+            // The shot editor holds the run, but for a live trailer's frames
+            (this.director
+                ? this.trailer?.rolling && this.trailer.live
+                : !this.cinematic?.holdsRun) &&
             (sim.state === "playing" || sim.runOver)
         ) {
             const wasOver = sim.runOver;
@@ -2391,23 +2428,34 @@ export class GameClient implements GameFrameHandler {
     // loading screen, and kept until it's over (MapManager.setPinned), so nothing pops in as it
     // flies over the map
     private preloadCinematic(sim: Sim, cinematic: CinematicPlayer): void {
-        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
-        const { x, y } = sim.player;
-        const squares = getCinematicSquares(cinematic.def, ground, {
-            x,
-            y,
-            height: ground(x, y) - 0.6,
-            pitch: this.cameraRig.pitch,
-            yaw: this.cameraRig.yaw,
-            distance: this.cameraRig.distance,
-        });
-        this.renderer.mapManager.setPinned(squares);
+        this.pinCinematic(sim, cinematic.def);
         this.cinematicLoading = performance.now();
         this.store.set({
             screen: "loading",
             loadingText: `Travelling to ${sim.map.name}`,
             loadingProgress: 0,
         });
+    }
+
+    // The squares a cinematic's camera will see, loaded wherever the camera is and kept
+    // (getCinematicSquares, MapManager.setPinned)
+    private pinCinematic(sim: Sim, def: CinematicDef): void {
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        const squares = getCinematicSquares(def, ground, this.getStandingCamera(sim));
+        this.renderer.mapManager.setPinned(squares);
+    }
+
+    // The run's camera on the player where they stand, before anything leans or pans it
+    private getStandingCamera(sim: Sim): CinematicCamera {
+        const { x, y } = sim.player;
+        return {
+            x,
+            y,
+            height: this.grid.getHeight(x, y) / 128 - 0.6,
+            pitch: this.cameraRig.pitch,
+            yaw: this.cameraRig.yaw,
+            distance: this.cameraRig.distance,
+        };
     }
 
     // Whether the cinematic's still waiting on what it sees to load, showing how far it's got
@@ -2447,6 +2495,9 @@ export class GameClient implements GameFrameHandler {
         if (this.isCinematicLoading()) {
             return getCinematicCamera(cinematic.def, 0, ground, play);
         }
+        if (this.director) {
+            return this.updateDirector(deltaTimeMs, sim, this.director, play);
+        }
         // A lair's opening is on the sim's clock, from when it woke. The map's own plays on behind
         // a menu (a co-op run's pause doesn't stop it either), a frame at most at a time (the
         // first after the map loads can be long).
@@ -2484,10 +2535,199 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ cinematic: true });
     }
 
+    // Dev only: the shot editor (CinematicDirector) on mapId's cinematic at index
+    // (getDirectorChoices), after starting a run there if this isn't one: ?director=<map id>, or
+    // game.direct() from the console. It holds the run where it stands, never to step, until it's
+    // left with the run (leaveRun).
+    async direct(
+        mapId: string = this.sim?.map.id ?? this.store.getSnapshot().mapId,
+        index = 0,
+    ): Promise<void> {
+        if (!import.meta.env.DEV) {
+            return;
+        }
+        if (this.coopRun) {
+            this.store.toast("The shot editor is for solo runs.");
+            return;
+        }
+        if (this.sim?.map.id !== mapId) {
+            if (this.sim) {
+                this.leaveRun(false);
+            }
+            await this.startRun(mapId);
+        }
+        const sim = this.sim;
+        if (!sim || sim.map.id !== mapId) {
+            this.store.toast(`No run started on ${mapId}: is it open in this save?`, 6000);
+            return;
+        }
+        const choices = getDirectorChoices(sim.map);
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        let drafts: Storage | undefined;
+        try {
+            drafts = window.localStorage;
+        } catch {
+            // Blocked: drafts aren't kept
+        }
+        this.director = new CinematicDirector(
+            choices,
+            Math.min(Math.max(0, index), choices.length - 1),
+            ground,
+            this.getStandingCamera(sim),
+            drafts,
+        );
+        this.cinematic = this.director.player;
+        this.view.cinematic = this.cinematic;
+        this.paused = false;
+        this.pinCinematic(sim, this.director.def);
+        const version = this.director.shotsVersion;
+        this.directorPins = { pinned: version, seen: version, changed: 0 };
+        this.store.set({ cinematic: true, director: this.director, overlay: "none" });
+    }
+
+    // The shot editor on by a frame: flown by the keys held, its cues heard as it plays, and what
+    // its camera will see loaded once its shots have stood still a moment
+    private updateDirector(
+        deltaTimeMs: number,
+        sim: Sim,
+        director: CinematicDirector,
+        play: CinematicCamera,
+    ): CinematicCamera {
+        const held = (...codes: string[]) =>
+            codes.some((code) => this.input.isDown(code)) ? 1 : 0;
+        const fly: FlyInput = {
+            forward: held("KeyW") - held("KeyS"),
+            right: held("KeyD") - held("KeyA"),
+            up: held("KeyE") - held("KeyQ"),
+            turn: held("ArrowRight") - held("ArrowLeft"),
+            tilt: held("ArrowUp") - held("ArrowDown"),
+            fast: held("ShiftLeft", "ShiftRight") === 1,
+        };
+        const seconds = Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000;
+        const { camera, cues } = director.frame(seconds, play, this.trailer ? undefined : fly);
+        for (const cue of cues) {
+            if (cue.sound !== undefined) {
+                this.audio.play(cue.sound, { volume: 1, minGap: 0 });
+            }
+        }
+        const pins = this.directorPins;
+        const now = performance.now();
+        if (director.shotsVersion !== pins.seen) {
+            pins.seen = director.shotsVersion;
+            pins.changed = now;
+        }
+        if (pins.seen !== pins.pinned && now - pins.changed > DIRECTOR_PIN_MS) {
+            this.pinCinematic(sim, director.def);
+            pins.pinned = pins.seen;
+        }
+        return camera;
+    }
+
+    // Dev only: the shot editor's cinematic recorded as a trailer (TrailerRecorder), an MP4 that
+    // the dev server makes in trailers/ with ffmpeg. Where it is, or undefined if it wasn't made
+    // (a toast says why). From the console: game.recordTrailer({ from: 2, to: 8, live: true }).
+    async recordTrailer(options: TrailerOptions = {}): Promise<string | undefined> {
+        const director = this.director;
+        const sim = this.sim;
+        if (!import.meta.env.DEV || !director || !sim || this.trailer) {
+            return undefined;
+        }
+        const spec = getTrailerSpec(options, director.def.seconds, sim.map.id);
+        director.pause();
+        director.seek(spec.from);
+        this.pinCinematic(sim, director.def);
+        const trailer = { live: spec.live, rolling: false };
+        const recorder = new TrailerRecorder(spec, {
+            renderer: this.renderer,
+            overlay: this.overlay.canvas,
+            audio: this.audio,
+            getLoading: () => this.renderer.mapManager.getPinnedProgress(),
+            roll: () => {
+                trailer.rolling = true;
+                this.accumulator = 0;
+                director.playFrom(spec.from);
+            },
+            cut: () => {
+                trailer.rolling = false;
+                director.pause();
+            },
+            beforeFrame: () => {
+                if (spec.live) {
+                    this.keepTrailerRunGoing(sim);
+                }
+            },
+            onProgress: (trailer) => this.store.set({ trailer }),
+        });
+        this.trailer = Object.assign(trailer, { recorder });
+        this.store.set({ trailer: { stage: "loading", done: 0, total: 1 } });
+        try {
+            if (spec.live && spec.warmup > 0) {
+                this.warmUpTrailer(sim, spec.warmup);
+            }
+            const file = await recorder.record();
+            this.store.toast(`Trailer saved to ${file}`, 10000);
+            return file;
+        } catch (error) {
+            if (recorder.cancelled) {
+                this.store.toast("Trailer cancelled.");
+            } else {
+                console.error("No trailer", error);
+                const why = error instanceof Error ? error.message : String(error);
+                this.store.toast(`No trailer: ${why}`, 10000);
+            }
+            return undefined;
+        } finally {
+            this.trailer = undefined;
+            this.store.set({ trailer: undefined });
+        }
+    }
+
+    cancelTrailer(): void {
+        this.trailer?.recorder.cancel();
+    }
+
+    // A live trailer's run: no one dies, and anything it'd stop to ask is answered straight away
+    private keepTrailerRunGoing(sim: Sim): void {
+        for (const hero of sim.heroes) {
+            hero.player.hp = hero.player.maxHp;
+        }
+        if (sim.isChoosing()) {
+            const index = sim.choices.findIndex((_, i) => !sim.isBanishedChoice(i));
+            this.choose(Math.max(0, index));
+        } else if (sim.state === "chest") {
+            this.resolveChest("take");
+            if (sim.state === "chest") {
+                this.resolveChest("alch");
+            }
+        } else if (sim.state === "event") {
+            this.leaveEvent();
+        }
+    }
+
+    // A live trailer's run played on for seconds before it's recorded, unseen and unheard, so
+    // there's a fight on when it starts
+    private warmUpTrailer(sim: Sim, seconds: number): void {
+        this.audio.startRecording(performance.now());
+        try {
+            const ticks = Math.round(seconds * TICKS_PER_SECOND);
+            for (let tick = 0; tick < ticks && !sim.runOver; tick++) {
+                this.keepTrailerRunGoing(sim);
+                if (sim.state !== "playing") {
+                    break;
+                }
+                sim.step(0, 0);
+                this.handleEvents(sim, sim.takeEvents());
+            }
+            this.keepTrailerRunGoing(sim);
+        } finally {
+            this.audio.stopRecording();
+        }
+    }
+
     // Any key, click, tap or button during the opening cinematic: straight to the run
     skipCinematic(): void {
         const cinematic = this.cinematic;
-        if (cinematic?.skip()) {
+        if (!this.director && cinematic?.skip()) {
             this.endCinematic();
             // Solo, a lair's boss comes straight on (in co-op, the others may be watching)
             if (cinematic.onSim && !this.coopRun) {
@@ -2497,6 +2737,10 @@ export class GameClient implements GameFrameHandler {
     }
 
     private endCinematic(): void {
+        if (this.director) {
+            this.director = undefined;
+            this.store.set({ director: undefined });
+        }
         if (!this.cinematic) {
             return;
         }

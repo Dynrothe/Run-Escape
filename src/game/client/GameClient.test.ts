@@ -3,6 +3,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { YAMA_WAKES } from "../content/fun/yamaWakes";
+import { getMap } from "../content/maps";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
@@ -1812,5 +1813,103 @@ describe("the opening cinematic", () => {
         client.retry();
         // and starts at its lair, if it has one (getRetryLair)
         expect(startRun).toHaveBeenCalledWith("zachariah", false, true);
+    });
+});
+
+describe("the shot editor", () => {
+    // The client mid-run in burnt Varrock, with the editor open on its opening
+    async function directorClient() {
+        const { client, store } = createClient(createSim(), false);
+        const view = { cinematic: undefined as CinematicPlayer | undefined, onEvents() {} };
+        const play = vi.fn();
+        const setPinned = vi.fn();
+        Object.assign(client, {
+            sim: { map: getMap("battle_for_varrock"), player: { x: 3212.5, y: 3400.5 } },
+            view,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned } },
+            cameraRig: { pitch: -400, yaw: 0, distance: 18 },
+            input: { isDown: () => false },
+        });
+        await client.direct();
+        const state = client as unknown as {
+            cinematic?: CinematicPlayer;
+            pressKey(code: string): void;
+            endCinematic(): void;
+            updateCinematic(
+                ms: number,
+                sim: unknown,
+                alpha: number,
+                play: CinematicCamera,
+            ): CinematicCamera | undefined;
+        };
+        return { client, store, view, play, setPinned, state };
+    }
+
+    test("opens on the map's opening, held, with what its camera sees loaded", async () => {
+        const { client, store, view, setPinned, state } = await directorClient();
+        const director = client.director!;
+        expect(director.def.cast).toBe(VARROCK_OPENING.cast);
+        expect(state.cinematic).toBe(director.player);
+        expect(view.cinematic).toBe(director.player);
+        expect(store.getSnapshot()).toMatchObject({ cinematic: true, director });
+        expect(setPinned.mock.calls[0][0].length).toBeGreaterThan(0);
+    });
+
+    test("has its own keys, which do nothing else, and F3 and M as ever", async () => {
+        const { client, state } = await directorClient();
+        const onKeyPress = vi.fn();
+        Object.assign(client, { onKeyPress });
+        for (const code of ["Space", "KeyQ", "Digit1", "Escape", "F3", "KeyM"]) {
+            state.pressKey(code);
+        }
+        expect(client.director!.getSnapshot().playing).toBe(true);
+        expect(state.cinematic).toBeDefined();
+        expect(onKeyPress.mock.calls.map(([code]) => code)).toEqual(["F3", "KeyM"]);
+    });
+
+    test("isn't paused or skipped, and goes with the run", async () => {
+        const { client, store, state } = await directorClient();
+        client.pause();
+        expect(client.paused).toBe(false);
+        client.director!.seek(5);
+        client.skipCinematic();
+        expect(client.director).toBeDefined();
+        state.endCinematic();
+        expect(client.director).toBeUndefined();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().director).toBeUndefined();
+    });
+
+    test("takes no keys while a trailer's recorded, but Escape, which stops it", async () => {
+        const { client, state } = await directorClient();
+        const cancel = vi.fn();
+        Object.assign(client, { trailer: { recorder: { cancel }, live: false, rolling: true } });
+        state.pressKey("Space");
+        state.pressKey("Enter");
+        expect(client.director!.getSnapshot()).toMatchObject({ playing: false, edited: false });
+        expect(cancel).not.toHaveBeenCalled();
+        state.pressKey("Escape");
+        expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    test("plays on from its playhead, its sounds heard, its camera the run's", async () => {
+        const { client, play, state } = await directorClient();
+        const director = client.director!;
+        director.seek(15);
+        director.togglePlay();
+        const run: CinematicCamera = { x: 1, y: 2, height: 0, pitch: -400, yaw: 0, distance: 18 };
+        let camera: CinematicCamera | undefined;
+        for (let i = 0; i < 20; i++) {
+            // A long frame moves it on by a frame's worth, as a cinematic does
+            camera = state.updateCinematic(1000, client.sim, 0, run);
+        }
+        expect(director.seconds).toBeCloseTo(17);
+        // Yama's click, once
+        expect(play.mock.calls.map(([id]) => id)).toEqual([10235]);
+        expect(camera).toEqual(director.getCamera());
+        expect(state.cinematic).toBe(director.player);
     });
 });

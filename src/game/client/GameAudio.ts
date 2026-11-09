@@ -26,6 +26,23 @@ export type PlayOptions = {
     minGap?: number;
 };
 
+// A trailer's sound (TrailerRecorder): what was asked to play while it was recorded, kept rather
+// than played, to be rendered after (renderRecording). Times are seconds from its start.
+export type SoundRecording = {
+    // When it started (performance.now)
+    start: number;
+    sounds: { id: number; at: number; volume: number; pan: number }[];
+    // The music from then on, or none
+    music: { at: number; url?: string }[];
+    lastPlayed: Map<number, number>;
+    // When the sounds playing now end, for MAX_VOICES
+    ends: number[];
+};
+
+export type RecordingLevels = { volume: number; music: number };
+
+const RECORDING_RATE = 48000;
+
 function loadSettings(): AudioSettings {
     try {
         const json = window.localStorage.getItem(SETTINGS_KEY);
@@ -64,6 +81,7 @@ export class GameAudio {
     private voices = 0;
     // The recording looping now, streamed rather than decoded up front
     private music?: { url: string; element: HTMLAudioElement };
+    private recording?: SoundRecording;
 
     constructor() {
         window.addEventListener("pointerdown", this.unlock);
@@ -112,7 +130,7 @@ export class GameAudio {
             this.context.resume();
         }
         // Started away from a press, it can be refused (a run has loading first)
-        if (this.music?.element.paused) {
+        if (this.music?.element.paused && !this.recording) {
             this.music.element.play().catch(() => {});
         }
     };
@@ -143,10 +161,17 @@ export class GameAudio {
             this.music = { url, element };
             this.applyVolume();
         }
+        if (this.recording) {
+            this.recordMusic(this.recording, url);
+            return;
+        }
         this.music.element.play().catch((e) => console.warn("No music", e));
     }
 
     stopMusic(): void {
+        if (this.recording) {
+            this.recordMusic(this.recording, undefined);
+        }
         if (this.music) {
             this.music.element.pause();
             // Lets go of the stream
@@ -165,17 +190,17 @@ export class GameAudio {
     }
 
     private getBuffer(id: number): AudioBuffer | undefined {
-        const context = this.context;
-        if (!context) {
-            return undefined;
-        }
         let buffer = this.buffers.get(id);
         if (!buffer) {
             const sound = this.sounds.get(id);
             if (!sound || sound.samples.length === 0) {
                 return undefined;
             }
-            buffer = context.createBuffer(1, sound.samples.length, sound.sampleRate);
+            buffer = new AudioBuffer({
+                length: sound.samples.length,
+                numberOfChannels: 1,
+                sampleRate: sound.sampleRate,
+            });
             buffer.copyToChannel(sound.samples as Float32Array<ArrayBuffer>, 0);
             this.buffers.set(id, buffer);
             this.sounds.delete(id);
@@ -183,7 +208,135 @@ export class GameAudio {
         return buffer;
     }
 
+    // How long a sound is, or undefined for one that isn't loaded
+    private getSeconds(id: number): number | undefined {
+        const buffer = this.buffers.get(id);
+        if (buffer) {
+            return buffer.duration;
+        }
+        const sound = this.sounds.get(id);
+        return sound && sound.samples.length > 0
+            ? sound.samples.length / sound.sampleRate
+            : undefined;
+    }
+
+    // ---- Trailers ----
+
+    // From now, sounds and music are kept for a trailer rather than played (and the music's
+    // paused), start being its first frame's time
+    startRecording(start: number): void {
+        this.recording = {
+            start,
+            sounds: [],
+            music: [{ at: 0, url: this.music?.url }],
+            lastPlayed: new Map(),
+            ends: [],
+        };
+        this.music?.element.pause();
+    }
+
+    // What was kept, and the music playing again
+    stopRecording(): SoundRecording | undefined {
+        const recording = this.recording;
+        this.recording = undefined;
+        if (recording && this.music && this.context) {
+            this.music.element.play().catch(() => {});
+        }
+        return recording;
+    }
+
+    // As play() would have played it then, but whether or not the browser's let it play yet
+    private record(recording: SoundRecording, id: number, options: PlayOptions): void {
+        const now = performance.now();
+        const last = recording.lastPlayed.get(id) ?? -Infinity;
+        const length = this.getSeconds(id);
+        if (now - last < (options.minGap ?? 50) || length === undefined) {
+            return;
+        }
+        const at = Math.max(0, (now - recording.start) / 1000);
+        recording.ends = recording.ends.filter((end) => end > at);
+        if (recording.ends.length >= MAX_VOICES) {
+            return;
+        }
+        recording.lastPlayed.set(id, now);
+        recording.ends.push(at + length);
+        recording.sounds.push({
+            id,
+            at,
+            volume: options.volume ?? 1,
+            pan: Math.min(Math.max(options.pan ?? 0, -1), 1),
+        });
+    }
+
+    private recordMusic(recording: SoundRecording, url: string | undefined): void {
+        const at = Math.max(0, (performance.now() - recording.start) / 1000);
+        const last = recording.music[recording.music.length - 1];
+        if (last.url === url) {
+            return;
+        }
+        if (last.at === at) {
+            last.url = url;
+        } else {
+            recording.music.push({ at, url });
+        }
+    }
+
+    // A recording's sound, seconds long, at fixed levels (not the player's settings): stereo at
+    // 48 kHz, the music looped from its start
+    async renderRecording(
+        recording: SoundRecording,
+        seconds: number,
+        levels: RecordingLevels,
+    ): Promise<AudioBuffer> {
+        const length = Math.max(1, Math.ceil(seconds * RECORDING_RATE));
+        const context = new OfflineAudioContext(2, length, RECORDING_RATE);
+        const effects = new GainNode(context, { gain: levels.volume });
+        effects.connect(context.destination);
+        for (const sound of recording.sounds) {
+            const buffer = this.getBuffer(sound.id);
+            if (!buffer || sound.at >= seconds) {
+                continue;
+            }
+            const source = new AudioBufferSourceNode(context, { buffer });
+            const gain = new GainNode(context, { gain: sound.volume });
+            source.connect(gain);
+            if (sound.pan) {
+                const panner = new StereoPannerNode(context, { pan: sound.pan });
+                gain.connect(panner);
+                panner.connect(effects);
+            } else {
+                gain.connect(effects);
+            }
+            source.start(sound.at);
+        }
+        const decoded = new Map<string, AudioBuffer>();
+        for (let i = 0; i < recording.music.length; i++) {
+            const { at, url } = recording.music[i];
+            const end = Math.min(seconds, recording.music[i + 1]?.at ?? seconds);
+            if (!url || end <= at) {
+                continue;
+            }
+            let buffer = decoded.get(url);
+            if (!buffer) {
+                const response = await fetch(url);
+                buffer = await context.decodeAudioData(await response.arrayBuffer());
+                decoded.set(url, buffer);
+            }
+            const source = new AudioBufferSourceNode(context, { buffer, loop: true });
+            const gain = new GainNode(context, { gain: levels.music * MUSIC_VOLUME });
+            source.connect(gain);
+            gain.connect(context.destination);
+            source.start(at);
+            source.stop(end);
+        }
+        return context.startRendering();
+    }
+
     play(id: number, options: PlayOptions = {}): void {
+        if (id >= 0 && this.recording) {
+            this.record(this.recording, id, options);
+            return;
+        }
         const context = this.context;
         const master = this.master;
         if (

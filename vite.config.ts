@@ -7,6 +7,7 @@ import { normalizePath } from "vite";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
+import { isTrailerFile, trailerServerPlugin } from "./scripts/dev/trailer-server";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
@@ -253,6 +254,7 @@ export default defineConfig({
         wasmGzipNoSourceMapPlugin(),
         leaveOutDevMapsPlugin(),
         buildIdFilePlugin(),
+        trailerServerPlugin(),
     ],
     define: {
         __APP_VERSION__: JSON.stringify(version),
@@ -287,7 +289,7 @@ export default defineConfig({
             "Cross-Origin-Opener-Policy": "same-origin",
             "Cross-Origin-Embedder-Policy": "require-corp",
         },
-        watch: { ignored: [isInClaudeDir] },
+        watch: { ignored: [isInClaudeDir, isTrailerFile] },
     },
     worker: {
         // The render data worker is spawned with `{ type: "module" }` and its

@@ -47,6 +47,8 @@ go stale. Add anything that cost you time to work out.
 | The Battle for Varrock: burnt Varrock, to explore      | `content/fun/maps.ts`, `scaperune/maps/battleForVarrock.ts`            |
 | A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `fun/varrockOpening.ts`     |
 | A boss's cinematic as it wakes (`LairDef.opening`)     | `fun/yamaWakes.ts`, `Sim.stepLair`, `GameClient.startLairOpening`      |
+| The shot editor for cinematics (`?director=<map id>`)  | `client/CinematicDirector.ts`, `ui/DirectorPanel.tsx`                  |
+| Recording a cinematic as a trailer MP4 (ffmpeg)        | `client/TrailerRecorder.ts`, `scripts/dev/trailer-server.ts`           |
 | Yama's fight in burnt Varrock, and its design          | `content/yama.ts`, `docs/design/yama.md`                               |
 | Bosses asleep on a map to walk round (`MapDef.lairs`)  | `Sim.stepLair`, `docs/DEVELOPMENT.md` (A hero of their own)            |
 | Burning a real place to ruins (any town)               | `src/game/scaperune/ruins.ts`, `rs/config/loctype/LocOverrides.ts`     |

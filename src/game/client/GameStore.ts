@@ -4,8 +4,10 @@ import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult } from "../core/Sim";
 import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
+import type { CinematicDirector } from "./CinematicDirector";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
+import type { TrailerProgress } from "./TrailerRecorder";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
 
 export type Screen =
@@ -410,6 +412,10 @@ export type UiSnapshot = {
     revive?: ReviveView;
     // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
     cinematic?: boolean;
+    // Dev only: the shot editor's open on it (GameClient.direct), with its panel for the HUD
+    director?: CinematicDirector;
+    // Dev only: the trailer being recorded from it, how far it's got
+    trailer?: TrailerProgress;
     choices: ChoiceView[];
     chest?: ChestView;
     event?: EventView;

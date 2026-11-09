@@ -282,7 +282,9 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 - People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
   `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
   cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
-  one to copy. Check every shot's triangles at a phone's size, as it says.
+  one to copy. Place its shots with the shot editor (`?director=<map id>` on the dev server) and
+  paste the code it gives (its Trailer row records it as an MP4, for the pull request). Check
+  every shot's triangles at a phone's size, as it says.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
   `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.

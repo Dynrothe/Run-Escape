@@ -192,7 +192,8 @@ export function getCinematicSeqs(def: CinematicDef): Map<number, number[]> {
 export class CinematicPlayer {
     seconds = 0;
     skipped = false;
-    // For screenshots (the dev console): the clock stands still
+    // For screenshots (the dev console) and the shot editor (CinematicDirector): the clock stands
+    // still, and there's no hint how to skip
     held = false;
 
     constructor(

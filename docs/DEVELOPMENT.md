@@ -1146,6 +1146,67 @@ adventurer can have:
       then `await frameProbe.sample(5)` for its triangles. The page reloads if a source file
       changes, which ends it.
 
+#### The shot editor
+
+Shots are easier placed by eye than typed. `?director=<map id>` on the dev server (or
+`game.direct()` mid-run, `game.direct("battle_for_varrock", 1)` from anywhere) starts a run on the
+map and opens the shot editor (`client/CinematicDirector.ts`, its panel `ui/DirectorPanel.tsx`) on
+one of its cinematics: its opening, a new one if it hasn't got one, or a lair's (the panel's list,
+`getDirectorChoices`). The run never steps while it's open, nothing pauses it, and no run is
+recorded: Exit leaves it for the title.
+
+- The cinematic's held at the playhead (`CinematicPlayer.held`, so there's no skip hint), its cast,
+  cues, bars and sounds just as they play. Play (Space) plays on from there; the timeline moves the
+  playhead, shows the cues along its top (hover one for what it is) and the shots as diamonds, the
+  run's camera as a square, which drag in time.
+- Your own camera starts from wherever the path is: drag to turn it, right or Shift drag to move it,
+  the wheel to zoom, WASD and Q E to fly (Shift faster), the arrows to turn. Enter adds a shot
+  there at the playhead (or sets the shot already there, rounded to a tenth of a second), U sets
+  the selected shot to it, H holds a shot, Delete takes one out (never the first, nor the run's
+  camera at the end), R puts the camera back on the path and V hides the panel to see the frame as
+  a player does. A shot added at the end pushes the run's camera 2 s on; a new shot's yaw is the
+  way round nearest the one before, so the camera doesn't spin the long way.
+- Copy code (or Show code) gives `seconds` and `shots` to paste over the def's own, or a whole
+  `cinematic: { ... }` for a map without one, in world tiles: constants like `YX` come out as
+  numbers. Prettier wraps the long lines. The cast and cues are left as they are in the file.
+- The shots are kept as a draft in the browser (`run-escape-director-drafts` in localStorage, by
+  map and cinematic) as they change, so a reload doesn't lose them, and come back the next time
+  it's opened. Revert drops the draft for the file's shots; a draft that matches the file goes by
+  itself.
+- What the shots will see is pinned as they settle (`MapManager.setPinned`, a quarter second after
+  the last change), so playing back doesn't wait on squares. A lair's opening plays on the editor's
+  clock, not the sim's, so its boss doesn't rise: only the cast does what it does.
+- It's a mouse and keyboard tool on the dev server, and never in a player's game.
+
+#### Trailers
+
+The shot editor's Trailer row records its cinematic to an MP4 in `trailers/` (gitignored):
+`client/TrailerRecorder.ts` in the page, and `scripts/dev/trailer-server.ts` on the dev server at
+`/__trailer`, which needs [ffmpeg](https://ffmpeg.org/) on the PATH, or `FFMPEG` set to it before
+the server starts. From the console, `game.recordTrailer({ ... })` takes everything
+`TrailerOptions` has: `width`, `height`, `fps`, `from` and `to` (seconds, which can go past the
+end, the camera resting there), `live`, `warmup`, `sound`, `volume`, `music` and `name`.
+
+- It's frame-exact, however slowly the frames draw. The renderer's own loop stops and each frame
+  is drawn by hand (`Renderer.frameCallback`) on a clock of its own (`VirtualClock`, in place of
+  `performance.now`), a frame's time apart, so actors' animations, hitsplats and the camera's shake
+  keep time too. The game's loop and clock come back however it ends.
+- Both canvases are drawn at the trailer's size, whatever the window's, by sizing them on the page
+  and shrinking them to fit with a transform (the renderer and `Overlay` go by `offsetWidth`, which a
+  transform doesn't change). The 3D canvas isn't kept once it's shown, so each frame's read back in
+  the same task it's drawn in, with the overlay over it, and sent as raw RGBA to ffmpeg's stdin.
+  Only the canvases are in it: no HUD, toasts or panel.
+- Sounds aren't played while it records. `GameAudio.startRecording` keeps what's asked for, with its
+  time (each sound's gap and the voice limit go by the trailer's clock), and the music as it
+  changes. They're rendered after the frames (`renderRecording`, an `OfflineAudioContext`) at fixed
+  levels, not the player's settings, and ffmpeg adds them, brought up to a video site's loudness.
+- What the camera will see is loaded first, with real frames, before the clock's taken over.
+- `live: true` lets the run play on behind the cinematic, the player stood still: no one's hurt
+  enough to die, level ups take the first choice, caskets are taken and visitors sent off.
+  `warmup` plays that many seconds unseen first, so there's a fight on when it starts.
+- Escape or Cancel stops it, and nothing's kept. Headless, on a software renderer, a 1080p frame
+  takes a second or so: a short `from` and `to` is enough to check it works.
+
 ### Raids
 
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
@@ -1603,7 +1664,8 @@ doesn't follow workers, so it would find the package mid-load and reload the pag
 
 URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
-browser tab that isn't being painted, `?notice` shows the notice even after it's been closed, `?raidtest` (dev only) speeds up a raid (see Raids). F3
+browser tab that isn't being painted, `?notice` shows the notice even after it's been closed, `?raidtest` (dev only) speeds up a raid (see Raids), `?director=battle_for_varrock`
+(dev only) opens the shot editor on a map's cinematics (see Props and opening cinematics). F3
 shows collision and stats.
 
 ### A newer cache
