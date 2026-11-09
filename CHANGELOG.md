@@ -7,32 +7,54 @@ the version in the corner).
 
 ### Added
 
-- Avian Assaulter, a melee adventurer in a chicken outfit with a Rubber Chicken.
-- Thanksgiving Harvest quests for its bosses and a Chompy Bird hunt, which rewards 4,000 coins.
-- The Thanksgiving Collection Log gains Chompy drops, a Chompy chick pet, turkey-carving secateurs and boss-gated event rewards.
+-Thanksgiving Harvest, By Happi:
+|Added a brand-new Thanksgiving Harvest event located at the Hosidius Vinery.
+|Added an autumn-themed map selector and a new spawn location beside the Vinery.
+|Added a 7-minute event with three boss encounters: Professor Oddenstein, Evil Chickens, and the Freaky Forester.
+|Added new event waves featuring farmers, bandits, and foxes.
+|Added bird-hunting bonuses exclusive to the Thanksgiving Harvest event.
+|Thanksgiving Harvest is now exclusive to Avian Assaulter, who is automatically selected when entering the event.
+|Avian Assaulter replaces traditional gear, passive, and utility item drops with a dedicated Rubber Chicken upgrade system.
+
+-Enemies Added, By Happi:
+|Added Avian Assaulter, a new melee adventurer wearing a chicken outfit and wielding a Rubber Chicken.
+|Added Professor Oddenstein, a new event boss.
+|Added Evil Chickens, new event enemies and boss encounters.
+|Added Freaky Forester, a new event boss featuring a larger transformed form.
+|Added Enraged Dark Chickens, new enemies that perform lane-based charges.
+|Added farmers, bandits, and foxes as new event wave enemies.
+|Added Chompy Birds as new huntable enemies.
+
+-Rubber Chicken, By Happi:
+|Added a unique 10-level Rubber Chicken upgrade system exclusive to Avian Assaulter.
+|Rubber Chicken attacks enemies in front of and behind the player starting at level 1.
+|Each upgrade increases the weapon's healing capabilities.
+
+-Thanksgiving Collection Log, By Happi:
+|Added a Thanksgiving Collection Log featuring new event drops and rewards.
+|Added Chompy Bird drops and the Chompy Chick pet.
+|Added Turkey Hat.
+|Added Turkey-Carving Secateurs.
+|Added a Golden Egg reward for hard mode.
+|Added boss-gated event rewards.
+|Added Chompy Slayer, rewarding the Chompy Chick pet.
+|Added a Chompy Bird hunting quest rewarding 4,000 coins.
+
+-Visual and Gameplay Improvements, By Happi:
+|Added circling birds overhead throughout Avian Assaulter's run.
+|Added new boss attack animations and visual telegraphs.
+|Added cache-backed Pheasant Arrows for the Freaky Forester.
+|Added a larger transformed form for the Freaky Forester within the same boss encounter.
+
+-HUD and Interface Improvements, By Happi:
+|Added detailed HUD effect descriptions explaining what each effect does.
+|Added collapsible two-column equipment grids for solo and co-op runs, positioned below the DPS tracker.
+|Added a mobile HUD slider to adjust camera zoom during solo and co-op runs.
 
 ### Changed
 
-- HUD effect descriptions explain their effects; debuffs lead the HUD and pause-menu lists.
-- Equipment slots for solo and co-op runs use a collapsible two-column grid below the DPS tracker.
-- Professor Oddenstein throws an explosive potion and strikes with a forward-facing dagger cone.
-- Professor Oddenstein uses his dagger more often up close instead of casting point-blank.
-- Thanksgiving Harvest moves to the Hosidius Vinery, with an autumn map selector and a spawn beside the Vinery.
-- Thanksgiving Harvest now lasts 7 minutes: the Professor arrives at 2:00, the Evil Chickens at 4:30 and the Freaky Forester at 7:00, with his 60-second warning from 6:00.
-- Avian Assaulter has 70 HP and moves 45% faster, and the Freaky Forester's Pheasant Arrow fires four arrows at once.
-- The Freaky Forester's 60-second warning now appears at 9 minutes into Thanksgiving Harvest.
-- The Freaky Forester uses cache-backed Pheasant Arrows and rises into his larger form in the same boss fight.
-- Enraged Dark Chicken's Lane Rush now covers a 12-tile lane.
-- A mobile HUD slider adjusts camera zoom in solo and co-op runs.
-- Thanksgiving Harvest waves now feature farmers, bandits and foxes instead of goblins and rats.
-- Chompy Slayer awards the Chompy chick, and Thanksgiving's Collection Log has a Turkey hat and a hard-mode Golden Egg.
-- Thanksgiving Harvest is exclusive to Avian Assaulter, who is picked for you there like Durial321 in Falador, with bird-hunting bonuses and a mighty Rubber Chicken to upgrade instead of finding other weapons.
-- The Rubber Chicken strikes in front and behind from its first level.
-- Professor Oddenstein's Chemical Splash fires three flasks, the Evil Chicken's Magic Peck a tight cone of five, and the Forester's Boot Kick shows a red cone warning like the Professor's dagger slice.
-- Summoned Enraged Dark Chickens now charge down their lane instead of only walking at you.
-- Avian Assaulter is 35% bigger and 35% faster on Thanksgiving Harvest.
-- The Rubber Chicken has ten levels, hits bosses for 20% more and heals on hit, more with every upgrade. Avian Assaulter no longer finds gear, passives or utility items.
-- Avian Assaulter has circling birds overhead throughout the run, without being stunned.
+-HUD and Interface Improvements, By Happi:
+|Changed Debuffs now appear before buffs in the HUD and pause-menu effect lists.
 
 ## 0.30.0 - 2026-11-09
 
