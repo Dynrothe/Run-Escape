@@ -49,7 +49,12 @@ import {
 } from "../content/invocations";
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
-import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
+import {
+    DIVINE_RUNE_POUCH,
+    canLevelPassive,
+    getPassive,
+    getPassiveGain,
+} from "../content/passives";
 import {
     LANTERN_ID,
     POWER_UPS,
@@ -183,7 +188,13 @@ import {
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
-import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
+import {
+    WEAPONS,
+    WEAPON_BY_ID,
+    getProjectileObjId,
+    getWeapon,
+    getWeaponStyle,
+} from "../content/weapons";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
@@ -2410,9 +2421,11 @@ export class Sim {
         }
     }
 
-    // Weapons and passives carried at once, with the shop's extra slots
+    // Weapons and passives carried at once, with the shop's extra slots, and the Divine rune
+    // pouch's, for a magic weapon (Upgrades' fitsWithPouch keeps it for one)
     get maxWeapons(): number {
-        return MAX_WEAPONS + this.metaStats.weaponSlots;
+        const pouch = this.passives.some((p) => p.id === DIVINE_RUNE_POUCH) ? 1 : 0;
+        return MAX_WEAPONS + this.metaStats.weaponSlots + pouch;
     }
 
     get maxPassives(): number {
@@ -16791,6 +16804,13 @@ export class Sim {
             }
             const source = this.damageSource;
             this.killsBySource[source] = (this.killsBySource[source] ?? 0) + 1;
+            // A weapon that heals on each kill (the Keris partisan of the sun)
+            const killHeal = source.startsWith("weapon:")
+                ? WEAPON_BY_ID.get(source.slice("weapon:".length))?.killHeal
+                : undefined;
+            if (killHeal && this.isUp(this.hero)) {
+                this.heal(killHeal * this.healScale);
+            }
         }
         if (enemy.boss) {
             if (lastCopy) {
@@ -17467,8 +17487,13 @@ export class Sim {
         }
         let dealt = 0;
         let effects = 0;
+        const lowHealth =
+            def.lowHealth && player.hp < player.maxHp * def.lowHealth.below
+                ? 1 + def.lowHealth.damage
+                : 1;
         for (const enemy of hit) {
-            const enemyDamage = damage * this.slayerScale(def, enemy);
+            const enemyDamage =
+                damage * this.slayerScale(def, enemy) * lowHealth * this.breachScale(def, enemy);
             const hits = def.hits ?? [1];
             const hitDealt =
                 this.damageEnemy(
@@ -17510,9 +17535,31 @@ export class Sim {
         if (special?.effect?.kind === "heal" && dealt > 0) {
             this.heal(Math.min(Math.round(dealt * special.effect.fraction), special.effect.max));
         }
+        if (special?.effect?.kind === "restore") {
+            // Tumeken's Light: whole again, poison and boss drains gone, swung at something or not
+            player.poisonEnd = -1;
+            player.poisonDamage = 0;
+            this.debuffs = [];
+            this.heal(player.maxHp);
+        }
         if (def.chain) {
             this.chainHits(def, def.chain, hit, damage);
         }
+    }
+
+    // A gap in the shell (WeaponDef.breach): the hit times its damage, now and then, far more
+    // often in what has one of its tags
+    private breachScale(def: WeaponDef, enemy: Enemy): number {
+        const breach = def.breach;
+        if (!breach || enemy.dead) {
+            return 1;
+        }
+        const chance = hasTag(enemy, breach.tags) ? breach.tagChance : breach.chance;
+        if (!this.rng.chance(chance)) {
+            return 1;
+        }
+        this.addEffect(breach.spotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+        return breach.damage;
     }
 
     // How much harder a weapon hits this enemy for what it is (the Ivandis

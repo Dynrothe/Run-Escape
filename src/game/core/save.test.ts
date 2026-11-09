@@ -916,7 +916,11 @@ describe("save", () => {
             } else if (task.kind === "raidChest") {
                 // A real trophy, from this raid's chest
                 const from = TROPHY_BY_ID.get(task.trophyId)?.from;
-                expect(from, task.trophyId).toMatchObject({ kind: "raid", mapId: task.mapId });
+                if (from?.kind === "tombs") {
+                    expect(task.mapId, task.trophyId).toBe("tombs_of_amascut");
+                } else {
+                    expect(from, task.trophyId).toMatchObject({ kind: "raid", mapId: task.mapId });
+                }
             } else {
                 expect(getMap(task.mapId)).toBeDefined();
             }

@@ -827,6 +827,8 @@ export const HET_ENEMIES: EnemyDef[] = [
     {
         id: "scarab_swarm",
         name: "Scarab Swarm",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,
@@ -842,6 +844,8 @@ export const HET_ENEMIES: EnemyDef[] = [
     {
         id: "agile_scarab",
         name: "Agile Scarab",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11727,
         idleSeq: 9592,
         walkSeq: 9592,
@@ -865,6 +869,8 @@ export const HET_ENEMIES: EnemyDef[] = [
     {
         id: "spitting_scarab",
         name: "Spitting Scarab",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11725,
         idleSeq: 9586,
         walkSeq: 9584,
@@ -1714,6 +1720,8 @@ export const SCABARAS_ENEMIES: EnemyDef[] = [
     {
         id: "scabaras_scarab",
         name: "Scarab",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11697,
         idleSeq: 9586,
         walkSeq: 9584,
@@ -2295,6 +2303,8 @@ const kephriForm = (
 ): EnemyDef => ({
     id,
     name: "Kephri",
+    // A scarab: the keris partisans hit her harder
+    tags: ["kalphite"],
     npcId,
     idleSeq: KEPHRI_IDLE,
     walkSeq: KEPHRI_IDLE,

@@ -4,6 +4,8 @@ import { CAPPED_STATS } from "./endless";
 import { RARITIES, Rarity } from "./rarity";
 import { PassiveDef } from "./types";
 
+export const DIVINE_RUNE_POUCH = "divine_rune_pouch";
+
 // perLevel is what a Common pick gives; an Uncommon pick gives 1.5x that, Rare
 // 2.25x and Very rare 3.5x (see rarity.ts).
 export const PASSIVES: PassiveDef[] = [
@@ -162,6 +164,28 @@ export const PASSIVES: PassiveDef[] = [
         iconObjId: 28951,
         equipment: [{ slot: EquipSlot.CAPE, objIds: [28951, 28951] }],
         unlock: { kind: "beatMap", mapId: "varlamore" },
+    },
+    // The Thread of Elidinis's: a slot for one more weapon, a magic one, whatever your style
+    // (Upgrades' rollChoices, Sim.maxWeapons). A melee or ranged build can carry the third style
+    // the Theatre's expert mode asks for.
+    {
+        id: DIVINE_RUNE_POUCH,
+        name: "Divine rune pouch",
+        description:
+            "One more weapon slot, for a magic weapon. Magic weapons are offered whatever your style.",
+        stat: "weaponSlots",
+        perLevel: 1,
+        effect: "magic weapon slot",
+        unit: "flat",
+        whole: true,
+        maxLevel: 1,
+        rarity: "rare",
+        iconObjId: 27281,
+        unlock: {
+            kind: "raidChest",
+            mapId: "tombs_of_amascut",
+            trophyId: "thread_of_elidinis",
+        },
     },
     // Melee's prayer, for being in the thick of it
     {

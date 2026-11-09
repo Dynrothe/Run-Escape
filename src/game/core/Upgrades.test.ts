@@ -356,7 +356,7 @@ describe("class weapons", () => {
     function newWeaponOffers(
         style: CombatStyle,
         owned: WeaponState[],
-        rolls = 4000,
+        rolls = 12000,
     ): Map<string, number> {
         const rng = new Rng(11);
         const offered = new Map<string, number>();
