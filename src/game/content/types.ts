@@ -1001,7 +1001,9 @@ export type BossAttackDef = {
     // Said over the boss's head when it's used, like OSRS overhead chat
     shout?: string;
     // A message on screen when it's used, for attacks the player has to do
-    // something about
+    // something about: an instruction, shown the first time it's used in a run, one after
+    // another with a quieter boss's (GameClient.showInstruction), so it's for what to do, not a
+    // warning each cast (the attack's own telegraph is that)
     message?: string;
     // Blasts: each one leaves a pool that lasts seconds, hurting a player
     // standing in it every interval seconds, with effect if it's set (Slash
