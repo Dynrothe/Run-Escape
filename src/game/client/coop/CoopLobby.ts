@@ -1070,6 +1070,7 @@ export function makeLoadout(
     armoury: Record<string, number>,
     pet?: string,
     invocations?: string[],
+    trophies?: string[],
 ): Loadout {
     // Only what's been bought, so it stays small
     const bought = Object.fromEntries(Object.entries(metaStats).filter(([, value]) => value !== 0));
@@ -1079,5 +1080,6 @@ export function makeLoadout(
         armoury,
         ...(pet && { pet }),
         ...(invocations && { invocations }),
+        ...(trophies && trophies.length > 0 && { trophies }),
     };
 }

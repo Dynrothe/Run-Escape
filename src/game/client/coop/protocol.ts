@@ -12,6 +12,9 @@ export type Loadout = {
     // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby. Only
     // shown: the start carries the party's (GameStart.invocations), and the relay passes it as is
     invocations?: string[];
+    // The trophies they've found that a raid's chest gives one of every time (expert mode's Lil'
+    // Zik looks), so theirs gives one they haven't got
+    trophies?: string[];
 };
 
 // The maps a player has unlocked, and has endless and hard mode for, which

@@ -391,7 +391,7 @@ version and how to run it.
       colour), the Maiden's Nylocas feed her more, Xarpus stares one way, and a moment before he
       turns faces where he'll stare and says which side, and hurts whoever hits him from in front,
       and Verzik's spider throws a ball that kills anyone outside its glowing circle. Twice the
-      coins, and one of Lil' Zik's looks each clear.
+      coins, and one of Lil' Zik's looks each clear (one you haven't got, till you have all five).
 - **Beneath Cursed Sands**, the Tombs of Amascut's quest: a boss fight in four parts, open once the
   desert's beaten, played alone as the Sands Delver (desert robes and a Crystal bow). Coenus the
   Head Menaphite Guard, the two Scarab Mages, the Champion of Scabaras and the Menaphite Akh, each
