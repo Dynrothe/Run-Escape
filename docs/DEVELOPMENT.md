@@ -2295,8 +2295,10 @@ preset an adventurer uses. Keep it to one line at 667 wide.
 ### Languages
 
 The game is in English and Português (BR). Only English is checked: the other languages are
-their translators', credited in `LANGS` (`i18n/types.ts`) beside the language picker. The first
-time the game is in another language, picked or the browser's, `ui/LanguageNotice.tsx` says so,
+their translators', set in `LANGS` (`i18n/types.ts`) and credited under the language's name
+wherever it's picked (`LanguageName` in `ui/LanguageSetting.tsx`: Settings' and the pause menu's
+dropdown, and the title's globe). The first time the game is in another language, picked or the
+browser's, `ui/LanguageNotice.tsx` says so,
 once (its own `rune-survivors-language-notice` key, not the save). **Agents never translate**:
 text is written in English only unless the developer asks for a translation (CLAUDE.md,
 Conventions), and a language without a key shows the English.

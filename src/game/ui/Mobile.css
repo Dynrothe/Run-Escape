@@ -527,10 +527,6 @@
         padding: 0;
     }
 
-    .ui-setting-control.ui-language-control .ui-language-btn {
-        min-height: 36px;
-    }
-
     .ui-version {
         min-height: 40px;
     }

@@ -122,6 +122,16 @@ describe("TitleLanguageMenu", () => {
         expect(screen.getByText("English")).toBeInTheDocument();
     });
 
+    it("credits the translator under the language's name", () => {
+        render(<TitleLanguageMenu />);
+        act(() => {
+            fireEvent.click(screen.getByRole("button", { name: "Language" }));
+        });
+        const credit = screen.getByText("Translated by Giordano Souza");
+        expect(credit.previousElementSibling?.textContent).toBe("Português (BR)");
+        expect(credit.closest("button")?.textContent).toContain("Português (BR)");
+    });
+
     it("closes on Escape key with exit transition", () => {
         render(<TitleLanguageMenu />);
         const btn = screen.getByRole("button", { name: "Language" });

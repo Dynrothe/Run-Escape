@@ -390,7 +390,10 @@ describe("the title's export reminder", () => {
         expect(langBtn).toBeInTheDocument();
         fireEvent.click(langBtn);
         expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Português (BR)" })).toBeInTheDocument();
+        // With its translator under its name
+        expect(
+            screen.getByRole("button", { name: "Português (BR) Translated by Giordano Souza" }),
+        ).toBeInTheDocument();
     });
 
     test("goes while cloud save has a copy, and comes back when it stops keeping one", () => {

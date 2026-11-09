@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LANGS, Lang, setLang, t, useLang } from "../i18n";
-import { languageCredits } from "./LanguageSetting";
+import { LanguageName } from "./LanguageSetting";
 import "./TitleLanguageMenu.css";
 
 const EXIT_DURATION_MS = 180;
@@ -176,7 +176,7 @@ export function TitleLanguageMenu(): JSX.Element {
                 >
                     <div className="ui-title-language-header">{t("settings.language.name")}</div>
                     <div className="ui-title-language-options">
-                        {LANGS.map(({ id, label }) => {
+                        {LANGS.map(({ id }) => {
                             const isCurrent = currentLang === id;
                             return (
                                 <button
@@ -192,7 +192,7 @@ export function TitleLanguageMenu(): JSX.Element {
                                         handleSelect(id);
                                     }}
                                 >
-                                    <span className="ui-title-language-label">{label}</span>
+                                    <LanguageName lang={id} />
                                     {isCurrent && (
                                         <span
                                             className="ui-title-language-indicator"
@@ -205,11 +205,6 @@ export function TitleLanguageMenu(): JSX.Element {
                             );
                         })}
                     </div>
-                    {languageCredits().map((credit) => (
-                        <div key={credit} className="ui-title-language-credit">
-                            {credit}
-                        </div>
-                    ))}
                 </div>
             )}
         </div>

@@ -489,14 +489,9 @@
 }
 
 /* The frame rate's choices: the one picked lit up */
-.ui-setting-control .ui-frame-rate,
-.ui-setting-control .ui-language-btn {
+.ui-setting-control .ui-frame-rate {
     padding-left: 8px;
     padding-right: 8px;
-}
-
-.ui-setting-control.ui-language-control {
-    flex-wrap: wrap;
 }
 
 .ui-frame-rate-on {
