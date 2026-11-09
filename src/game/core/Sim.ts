@@ -131,7 +131,7 @@ import {
     PUMPKIN_MIN_GAP,
     PUMPKIN_OUTCOMES,
 } from "../content/trickOrTreat";
-import { TROPHIES, TrophyDef } from "../content/trophies";
+import { TROPHIES, TrophyDef, isEveryTimeTrophy } from "../content/trophies";
 import {
     AkkhaDef,
     ArenaStatue,
@@ -788,7 +788,7 @@ export type Hero = {
     // Armoury (see SimOptions)
     metaStats: Stats;
     unlockedItems: ReadonlySet<string> | undefined;
-    // Trophies they'd found before the run (SimOptions.trophiesFound)
+    // The every-time trophies they'd found before the run, only those (SimOptions.trophiesFound)
     trophiesFound: ReadonlySet<string> | undefined;
     armoury: ArmouryUpgrades | undefined;
     player: Player;
@@ -11143,6 +11143,9 @@ export class Sim {
             const weights = pool.map((t) => (t.from.kind === "raid" ? t.from.weight : 0));
             return pool[this.rng.weightedIndex(weights)];
         };
+        // Expert mode: one of Lil' Zik's looks, every time, one they haven't got while there's one
+        // left, and any of them after that
+        const expertPool = this.expert ? purples.filter(isEveryTimeTrophy) : [];
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
@@ -11151,17 +11154,11 @@ export class Sim {
             const purple = this.rng.chance(chance) ? pick(false) : undefined;
             const hardOne =
                 this.hard && this.rng.chance(HARD_UNIQUE_CHANCE) ? pick(true) : undefined;
-            // Expert mode: one of Lil' Zik's looks, every time, one they haven't got while there's
-            // one left, and any of them after that
-            const expertPool = purples.filter((t) => t.from.kind === "raid" && t.from.expert);
             const missing = expertPool.filter(
                 (t) => !hero.trophies.has(t.id) && !(hero.trophiesFound?.has(t.id) ?? false),
             );
             const expertFrom = missing.length > 0 ? missing : expertPool;
-            const expertOne =
-                this.expert && expertFrom.length > 0
-                    ? expertFrom[this.rng.int(expertFrom.length)]
-                    : undefined;
+            const expertOne = expertFrom.length > 0 ? this.rng.pick(expertFrom) : undefined;
             const found = [purple, hardOne, expertOne].filter(
                 (t): t is TrophyDef => t !== undefined,
             );

@@ -270,11 +270,16 @@ export function trophyName(trophy: TrophyDef): string {
     return tr(`trophy.${trophy.id}.name`, trophy.name);
 }
 
-// The trophies a save has found that a raid's chest gives one of every time (expert mode's Lil'
-// Zik looks): the chest goes by these to give one not found yet (Sim.openRaidChest)
+// A trophy a raid's chest gives one of every time (expert mode's Lil' Zik looks), one not found
+// yet while there's one left (Sim.openRaidChest)
+export function isEveryTimeTrophy(trophy: TrophyDef): boolean {
+    return trophy.from.kind === "raid" && (trophy.from.expert ?? false);
+}
+
+// Those of them a save has found, for the chest to go by
 export function getEveryTimeTrophiesFound(trophies: readonly string[]): string[] {
     return trophies.filter((id) => {
-        const from = TROPHY_BY_ID.get(id)?.from;
-        return from?.kind === "raid" && (from.expert ?? false);
+        const trophy = TROPHY_BY_ID.get(id);
+        return trophy !== undefined && isEveryTimeTrophy(trophy);
     });
 }

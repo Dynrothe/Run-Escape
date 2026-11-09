@@ -5,7 +5,12 @@ import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
 import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
-import { TROPHIES, TROPHY_BY_ID, getEveryTimeTrophiesFound } from "../content/trophies";
+import {
+    TROPHIES,
+    TROPHY_BY_ID,
+    getEveryTimeTrophiesFound,
+    isEveryTimeTrophy,
+} from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
 import { LUMBRIDGE_WAVES } from "../content/waves";
@@ -231,9 +236,7 @@ describe("raids", () => {
     it("gives a Lil' Zik look not found yet from expert's chest, till there are none left", () => {
         const sim = raid(true);
         Object.assign(sim, { map: getMap("theatre_of_blood") });
-        const looks = TROPHIES.filter((t) => t.from.kind === "raid" && t.from.expert).map(
-            (t) => t.id,
-        );
+        const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
         expect(looks).toHaveLength(5);
         const lookIn = () => [...sim.trophies].filter((id) => looks.includes(id));
         // Five chests in a row, each run's found kept: all five, none twice
@@ -248,12 +251,17 @@ describe("raids", () => {
             found.add(got[0]);
         }
         expect([...found].sort()).toEqual([...looks].sort());
-        // Once they're all found, still one every time
+        // Once they're all found, still one every time, and any of the five
+        sim.heroes[0].trophiesFound = new Set(found);
+        const given = new Set<string>();
         for (let i = 0; i < 20; i++) {
             sim.trophies.clear();
             sim["openRaidChest"]();
-            expect(lookIn()).toHaveLength(1);
+            const got = lookIn();
+            expect(got).toHaveLength(1);
+            given.add(got[0]);
         }
+        expect(given.size).toBeGreaterThan(1);
         // And the last one missing is the one given, with the found ones brought in as a run
         // starts
         const last = raid(true, 0, undefined, new Set(looks.slice(1)));
@@ -1268,9 +1276,7 @@ describe("expert mode", () => {
         Object.assign(sim, { map: getMap("theatre_of_blood") });
         sim.trophies.clear();
         sim["openRaidChest"]();
-        const looks = TROPHIES.filter((t) => t.from.kind === "raid" && t.from.expert).map(
-            (t) => t.id,
-        );
+        const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
         expect([...sim.trophies].some((id) => looks.includes(id))).toBe(true);
     });
 

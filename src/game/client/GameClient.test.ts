@@ -1409,6 +1409,27 @@ describe("saving", () => {
         },
     );
 
+    // For the expert chest, which gives a look not found yet
+    test("a solo run and a co-op loadout bring the save's Lil' Zik looks, only those", async () => {
+        expect.hasAssertions();
+        const { client } = createSaving(true);
+        client.save.trophies = ["lil_bloat", "ghrazi_rapier", "lil_sot"];
+        const enterRun = vi.fn<(sim: Sim) => void>();
+        Object.assign(client, {
+            grid: createSim().grid,
+            travelTo: vi.fn().mockResolvedValue(true),
+            enterRun,
+            options: { stress: 0 },
+        });
+        await client.startRun("lumbridge");
+        const sim = enterRun.mock.calls[0][0];
+        expect([...(sim.heroes[0].trophiesFound ?? [])]).toEqual(["lil_bloat", "lil_sot"]);
+        const loadout = (
+            client as unknown as { getLoadout(): Parameters<typeof loadoutStats>[0] }
+        ).getLoadout();
+        expect(loadout?.trophies).toEqual(["lil_bloat", "lil_sot"]);
+    });
+
     test("a co-op map's forced adventurer determines the skill page", () => {
         expect.hasAssertions();
         const { client, store } = createSaving(true);
