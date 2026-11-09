@@ -426,9 +426,8 @@ animations from a lister of those whose model or animation is in the raid's rang
       dead one's quarter. With one dead he comes on at whoever he's after while his volleys go out
       (`Sim.akkhaDrawn`; still standing to wind each up), as OSRS's is dragged: standing for every
       volley, his ranged and magic forms hardly took a step between specials, so he was never
-      drawn in. One timer (the HUD counts it down) runs for them all: when it's out,
-      every quadrant whose shadow's still up floods for half your hitpoints and its element, and it
-      starts again.
+      drawn in. One timer (the HUD counts it down) runs for them all: when it's out, every quadrant
+      whose shadow's still up floods for half your hitpoints and its element, and it starts again.
     - **Final stand**: at 0 he rises (`rises`) as `akkha_enraged` with a fifth of his hitpoints, in
       a corner, praying against ranged and magic (mostly, not whole as OSRS's: a hero here keeps to
       one style, and a wizard with no melee would never finish him), and sends Unstable Orbs (11804, their arrows the
