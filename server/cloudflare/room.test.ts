@@ -225,6 +225,35 @@ describe("Cloudflare co-op room", () => {
         expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("ranger");
     });
 
+    it("saves a confirmed pick before anyone hears of it, inside the save throttle too", async () => {
+        const { room, host, guest } = await party();
+        // The join's just been saved, so another save would wait SAVE_MS
+        log = [];
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 1 });
+        expect(saved.members[1]).toMatchObject({ characterId: "ranger", meSeq: 1 });
+        expect(log.indexOf("save")).toBeLessThan(log.indexOf("guest room"));
+        // The same pick again (a map change's loadout) waits for the throttle
+        const writesBefore = writes;
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 2 });
+        expect(writes).toBe(writesBefore);
+        // Another inside MEMBER_UPDATE_MS: saved now, told everyone with the next update
+        say(room, guest, { t: "me", characterId: "wizard", meSeq: 3 });
+        expect(saved.members[1]).toMatchObject({ characterId: "wizard", meSeq: 3 });
+        expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("ranger");
+    });
+
+    it("hears a message before a late alarm's heartbeat judges who sent it", async () => {
+        const { room, host, guest } = await party();
+        // Over SILENT_MS with nothing from the guest, and the heartbeat's alarm late
+        vi.setSystemTime(Date.now() + 6 * 60_000);
+        host.socket.pingedAt = new Date();
+        const socket = guest.socket;
+        say(room, guest, { t: "me", characterId: "ranger" });
+        // Not let go as silent, and what it said counts
+        expect(socket.closes).toEqual([]);
+        expect(room.room.members[1]).toMatchObject({ socket, characterId: "ranger" });
+    });
+
     it("un-readies a player who changes their pick, and holds the host's start until they're ready", async () => {
         const { room, host, guest } = await party();
         const loadout = { metaStats: {}, unlockedItems: [], armoury: {} };
@@ -240,7 +269,7 @@ describe("Cloudflare co-op room", () => {
         expect(room.room.started).toBeFalsy();
         expect(host.socket.sent.at(-1)).toEqual({
             t: "error",
-            message: "guest changed their pick, so they need to ready up again.",
+            message: "guest's pick changed, so they need to ready up again.",
         });
         // Through a restart too
         await wait(room, 1000);
@@ -269,7 +298,7 @@ describe("Cloudflare co-op room", () => {
         expect(room.room.started).toBeFalsy();
         expect(host.socket.sent.at(-1)).toEqual({
             t: "error",
-            message: "You changed your pick, so you need to ready up again.",
+            message: "Your pick changed, so you need to ready up again.",
         });
     });
 

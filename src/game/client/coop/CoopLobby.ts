@@ -14,6 +14,15 @@ import {
     UpMessage,
 } from "./protocol";
 
+// What a player readies up with, as the relays compare it (pickOf in
+// server/cloudflare/src/shared.mjs): not the host's invocations
+function pickOf(me: Partial<Member>): string {
+    return JSON.stringify([
+        me.characterId,
+        me.loadout && { ...me.loadout, invocations: undefined },
+    ]);
+}
+
 // The co-op menus' view of things, for the UI
 export type CoopView = {
     status: "offline" | "connecting" | "online";
@@ -75,6 +84,8 @@ export const RESUME_WINDOW_MS = 10_000;
 // Waits between tries, the last repeating
 const RESUME_DELAYS_MS = [0, 250, 500, 1000, 2000];
 // A single handshake that hangs must not consume the whole recovery window.
+// The trade: one that always takes longer than this (a weak mobile signal)
+// never gets through.
 const RESUME_ATTEMPT_MS = 2500;
 // What's said in the room meanwhile waits, up to this many messages
 const MAX_WAITING_MESSAGES = 2000;
@@ -423,7 +434,12 @@ export class CoopLobby {
             return undefined;
         }
         if (socket.readyState !== WebSocket.OPEN) {
-            this.roomSocketDead(socket);
+            // Closing after a "gone" or a leave is the room's ordinary way
+            // out, and its close comes next; shut while still in the room, it
+            // may never say so
+            if (this.view.room) {
+                this.roomSocketDead(socket);
+            }
             return undefined;
         }
         if (late) {
@@ -558,9 +574,20 @@ export class CoopLobby {
             this.roomCheckedAt = now;
             // A running game checks every frame, even when the tab's regular
             // timers are throttled. Do not reset those checks here.
-            if (now - this.keptAliveAt > KEEP_ALIVE_LATE_MS) {
-                this.maintainRoom(late, false);
+            if (now - this.keptAliveAt <= KEEP_ALIVE_LATE_MS) {
+                return;
             }
+            if (late) {
+                // After a gap nothing's judged here (a reply may still be
+                // unread), but the ping isn't forgotten either: in a hidden
+                // tab, slowed to a minute, this would forget the regular
+                // ping's every time, and tick() judges it (TICK_LATE_MS)
+                if (this.pendingMe) {
+                    this.pendingMe.sentAt = now;
+                }
+                return;
+            }
+            this.maintainRoom(false, false);
         }, ROOM_CHECK_MS);
         socket.onmessage = (event) => {
             if (socket !== this.roomSocket) {
@@ -891,15 +918,23 @@ export class CoopLobby {
 
     // This player's adventurer and what they bring, kept up to date
     setMe(changes: Partial<Member>): void {
+        const pick = pickOf(this.me);
         this.me = { ...this.me, ...changes };
         if (this.view.room) {
             if (this.memberAcks && !this.view.room.started) {
                 if (this.view.error === UNCONFIRMED_TEXT) {
                     this.update({ error: undefined });
                 }
+                const carried = { ...this.pendingMe?.changes };
+                // A new pick un-readies the player (the relays' setMember): a
+                // Ready still waiting for its confirmation doesn't go along, or
+                // it would ready them on a pick the host may not have yet
+                if (changes.ready === undefined && pickOf(this.me) !== pick) {
+                    delete carried.ready;
+                }
                 this.pendingMe = {
                     sequence: ++this.meSequence,
-                    changes: { ...this.pendingMe?.changes, ...changes },
+                    changes: { ...carried, ...changes },
                     sentAt: Date.now(),
                     retried: false,
                     gaveUp: false,

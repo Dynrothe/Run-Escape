@@ -157,8 +157,9 @@ updates, and moving objects between machines. Each one drops every connection to
 what it had in memory, often more than once an hour. So:
 
 - A room keeps itself in storage, and gives each player a token when they make or join it.
-  Someone joining or leaving, and a run starting or ending, are saved before anyone hears of
-  them, so a restart straight after doesn't bring back the room as it was.
+  Someone joining or leaving, a run starting or ending, and a player's change of pick or ready
+  that the room confirms (`meSeq`), are saved before anyone hears of them, so a restart straight
+  after doesn't bring back the room as it was.
 - A player whose connection drops keeps their place for 15 seconds. Their game reconnects to
   `coop/room/<code>?resume=<token>` for up to 10 seconds, and the run carries on. Someone who
   doesn't come back is let go, as if they'd left.

@@ -288,7 +288,7 @@ describe("co-op without render frames", () => {
             });
             const ticking = client as unknown as {
                 startCoopTicker(): void;
-                stopBackgroundTicker(): void;
+                stopCoopTicker(): void;
                 coopTicker: CoopTicker;
             };
             ticking.startCoopTicker();
@@ -307,7 +307,7 @@ describe("co-op without render frames", () => {
             await vi.advanceTimersByTimeAsync(TICK_MS);
             ticking.coopTicker.render();
             expect(host.frame).toBe(1551);
-            ticking.stopBackgroundTicker();
+            ticking.stopCoopTicker();
             await vi.advanceTimersByTimeAsync(1000);
             expect(host.frame).toBe(1551);
             expect(vi.getTimerCount()).toBe(0);

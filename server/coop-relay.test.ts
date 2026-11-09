@@ -473,7 +473,7 @@ describe("co-op relay", () => {
         // Sent before the host's heard: the relay has the change first
         host.send({ t: "start", game: { seed: 5 } });
         const refused = await host.next("error");
-        expect(refused.message).toMatch(/changed their pick, so they need to ready up again\.$/);
+        expect(refused.message).toMatch(/'s pick changed, so they need to ready up again\.$/);
         const { room } = await host.roomWhere((r) => r.members[1].characterId === "ranger");
         expect(room.members[1].ready).toBe(false);
         guests[0].send({ t: "me", ready: true, characterId: "ranger" });

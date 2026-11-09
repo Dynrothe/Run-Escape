@@ -684,6 +684,55 @@ describe("the lobby's timers", () => {
         expect(FakeSocket.all).toHaveLength(2);
     });
 
+    it("finds a dead room connection in a hidden tab whose timers run once a minute", async () => {
+        // Chrome's intensive throttling: each timer runs once a minute at most
+        const intervals: (() => void)[] = [];
+        vi.stubGlobal("window", {
+            location: { href: "https://example.com/game/" },
+            setInterval: (f: () => void) => intervals.push(f),
+            clearInterval: (id: number | undefined) => {
+                if (id) {
+                    intervals[id - 1] = () => {};
+                }
+            },
+            setTimeout: (f: () => void, ms: number) => setTimeout(f, ms),
+            clearTimeout: (id: number) => clearTimeout(id),
+        });
+        const { room } = await selecting();
+        room.answersPings = false;
+        for (let minute = 0; minute < 3 && FakeSocket.all.length === 2; minute++) {
+            vi.setSystemTime(Date.now() + 60_000);
+            // The room's check has been due longest, so it runs first, then
+            // the regular ping
+            for (const run of [...intervals].reverse()) {
+                run();
+            }
+            await vi.advanceTimersByTimeAsync(0);
+        }
+        expect(FakeSocket.all).toHaveLength(3);
+        expect(FakeSocket.all[2].url).toContain("resume=secret");
+    });
+
+    it("doesn't carry an unconfirmed Ready over to a new pick", async () => {
+        const { lobby, room } = await selecting();
+        const loadout = { metaStats: {}, unlockedItems: [], armoury: {} };
+        lobby.setMe({ characterId: "wizard", loadout });
+        lobby.setReady(true);
+        // The same pick again (as on a map change) keeps it
+        lobby.setMe({ loadout: { ...loadout } });
+        expect(room.sent.at(-1)).toMatchObject({ t: "me", ready: true, characterId: "wizard" });
+        // Another, before the Ready's confirmed, goes without it: the relays
+        // un-ready a player whose pick changes, so the host, which may still
+        // see them ready on wizard, can't start them on it
+        lobby.setMe({ characterId: "ranger", loadout });
+        expect(room.sent.at(-1)).toEqual({
+            t: "me",
+            characterId: "ranger",
+            loadout,
+            meSeq: expect.any(Number),
+        });
+    });
+
     it("asks for the list only of a relay that doesn't send it", async () => {
         const pushing = await welcomed({ listUpdates: true });
         await vi.advanceTimersByTimeAsync(60_000);

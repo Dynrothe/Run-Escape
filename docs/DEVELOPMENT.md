@@ -1876,7 +1876,8 @@ the one connection. Change the protocol in both relays.
 Cloudflare restarts its objects now and then, dropping their connections, so the Cloudflare relay's
 `room` message carries a `token`. `CoopLobby` reconnects to `coop/room/<code>?resume=<token>` for
 `RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile. Each handshake
-is limited by `RESUME_ATTEMPT_MS`, so a hanging attempt leaves time for another. The room
+is limited by `RESUME_ATTEMPT_MS`, so a hanging attempt leaves time for another (the trade: one
+that always takes longer, on a weak mobile signal, never gets through). The room
 (kept in storage) holds the player's place a little longer. A guest that misses some of the host's
 frames asks for them immediately on reconnect, or from `from` on the next `down`, with a `resend`
 up message; the host keeps 20 seconds of what it's sent (longer than the room holds a dropped
@@ -1886,8 +1887,8 @@ after the ones it has, in messages of `RESEND_EVENTS` at most. That part works o
 A guest numbers its actions that aren't decisions (`actionSeq`, so using an item), and the host's
 frames echo the number; after reconnecting it sends again those not echoed yet, and the host takes
 each number once. Decisions have their own resend (`DECISION_RESEND_MS`). The room saves someone
-joining or leaving, and the run starting or ending, at once and before telling anyone; other
-changes at most once a second. The Node relay sends no token, so with it a dropped connection
+joining or leaving, and the run starting or ending, at once and before telling anyone, and a
+change of pick or ready it confirms (below); other changes at most once a second. The Node relay sends no token, so with it a dropped connection
 still ends a guest's run.
 
 A room's connection can also die without closing (a laptop asleep, a network that went away). During
@@ -1896,9 +1897,13 @@ for `RUN_QUIET_MS` and takes one that hasn't answered within `PONG_WAIT_MS` as d
 as above while the host still has the frames (about 7 seconds are left for that: past them the
 guests' runs end, as below). It doesn't judge after a gap in its own calls (a frozen page), whose
 replies may be unread. It also pings a room it's sent nothing to for `PING_INTERVAL_MS` (a guest
-standing still), since it runs off the hidden tab's worker and the regular ping doesn't. The ping
-every `PING_INTERVAL_MS` checks the connection outside a run; a local timer checks for its reply
-without sending more frequent pings. The Cloudflare room lets go of a player it's heard nothing
+standing still), since `CoopTicker`'s worker keeps it going once drawing stops, and the regular
+ping is slowed in a hidden tab. The ping
+every `PING_INTERVAL_MS` checks the connection outside a run; a local timer (`ROOM_CHECK_MS`)
+checks for its reply without sending more frequent pings. After a gap in its own runs that timer
+only waits for the next one: in a hidden tab slowed to a run a minute, it would otherwise forget
+the regular ping every time, and that ping's own check (`tick`) judges it instead.
+The Cloudflare room lets go of a player it's heard nothing
 from, not even a ping, for `SILENT_MS`, as if their connection had closed
 (the Node relay finds those with its own pings). A guest whose missing frames haven't come for
 `GIVE_UP_GAP_MS` while the host's others do ends its run (the host no longer has them); a break of
@@ -1918,9 +1923,14 @@ the room itself got it. An unanswered ping makes the connection again as above, 
 go again on the new one. A room that answers but hasn't confirmed within `MEMBER_WAIT_MS` of the
 retry gets no more tries, and the player's told to choose again; that message stays through
 others' room updates until a confirmation or a new choice. Leaving or starting clears what's
-waiting. The room keeps each player's sequence through sleep and ignores older retries, and
-incoming traffic runs alarm jobs that are overdue, so a late alarm can't hold back the members'
-update. Relays without `memberAcks` keep the old messages; if support disappears on reconnect,
+waiting. A new pick leaves out a Ready still waiting for its confirmation: the relays un-ready
+a player whose pick changes (below), and a Ready carried along would ready them on a pick the
+host may not have yet. The room keeps each player's sequence through sleep and ignores older
+retries. It saves a change of pick or ready before the update that confirms it, throttle or not,
+since the game won't send a confirmed pick again after a restart. Once a message is handled the
+room runs any alarm jobs that are overdue, so a late alarm can't hold back the members' update;
+after it, so the heartbeat counts its sender as just heard from.
+Relays without `memberAcks` keep the old messages; if support disappears on reconnect,
 what's waiting is sent once without waiting for a confirmation.
 
 What starts the run is the host's view of everyone's picks (`startCoopRun`), which can be behind
@@ -1929,6 +1939,9 @@ ready (`setMember`, `pickOf`: sending the same pick again, as on a map change, d
 refuse the host's start while anyone's been un-readied that way and hasn't readied again
 (`repicked`, kept through the Cloudflare room's sleep). The change reaches the relay before the
 host's start, so a start made from a view that still says ready is turned away with a message.
+A map with its own adventurer (Durial321's) sets everyone's skill page to its adventurer's, so
+switching to or from one changes their loadouts and un-readies them too: the message says their
+pick changed, not that they changed it.
 `CoopLobby.setReady(true)` sends the player's adventurer and loadout in the same message, so a
 pick that never arrived can't leave them ready with an older one.
 

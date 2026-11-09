@@ -47,10 +47,11 @@ the version in the corner).
   the top. Fixed by Okaeri.
 - On phones in the Tombs of Amascut, the DPS sat over the special attack button and took some of
   its taps. It's now beside the button.
-- Co-op keeps stepping when the host's browser stops drawing, and retries unconfirmed lobby
-  selections after interruptions. Fixed by trippy22.
+- A co-op run keeps going when the host's window is covered and stops drawing. Fixed by trippy22.
+- In a co-op room, an adventurer picked while the connection was dropping is sent again, and you're
+  told if the room never gets it. Fixed by trippy22.
 - A co-op player who changes adventurer after readying up is no longer started on their old one:
-  changing it un-readies them, and the host waits for them to ready again.
+  changing it un-readies them, and the host waits for them to ready again. Fixed by trippy22.
 
 ## 0.29.1 - 2026-11-08
 

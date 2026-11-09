@@ -151,7 +151,9 @@ const OTHER_BUILD_TEXT =
 
 // What a member readies up with: changing it un-readies them (setMember).
 // Not the host's invocations, which only show in the lobby: the start
-// carries the party's
+// carries the party's. Their skill page is the map's adventurer's on a
+// map with its own (Durial321's), so switching to or from one changes it
+// too, and the host's start waits for their loadout as for a new pick
 function pickOf(member) {
     const { invocations, ...loadout } = member.loadout ?? {};
     return JSON.stringify([member.characterId, member.loadout && loadout]);
@@ -161,8 +163,8 @@ function pickOf(member) {
 // readied: the host's game may not have heard of the change yet
 function repickedText(member, host) {
     return member === host
-        ? "You changed your pick, so you need to ready up again."
-        : `${member.name} changed their pick, so they need to ready up again.`;
+        ? "Your pick changed, so you need to ready up again."
+        : `${member.name}'s pick changed, so they need to ready up again.`;
 }
 // The open rooms list comes a page at a time: this many to a page unless the
 // game asks for another size, up to the most

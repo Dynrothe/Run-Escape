@@ -778,7 +778,7 @@ export class GameClient implements GameFrameHandler {
         this.stopSaveLock?.();
         this.cloud?.stop();
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
-        this.stopBackgroundTicker();
+        this.stopCoopTicker();
         this.coop.close();
         this.input.dispose();
         this.audio.dispose();
@@ -1199,8 +1199,8 @@ export class GameClient implements GameFrameHandler {
                 }
             }
             this.coopRun = undefined;
-            // Solo now: a hidden tab no longer needs stepping
-            this.stopBackgroundTicker();
+            // Solo now: rendering steps it, as any solo run
+            this.stopCoopTicker();
             this.store.toast(
                 "Lost the connection to the others. The run goes on without them.",
                 6000,
@@ -1229,7 +1229,7 @@ export class GameClient implements GameFrameHandler {
     private endCoopRunEarly(why: string): void {
         // Nothing more of it is stepped, frames still to come included
         this.coopStopped = true;
-        this.stopBackgroundTicker();
+        this.stopCoopTicker();
         this.finishRun(why);
         this.store.set({ overlay: "dead", choices: [], chest: undefined, waitingOn: [] });
         this.updateHud(true);
@@ -2146,7 +2146,7 @@ export class GameClient implements GameFrameHandler {
             this.coop.end();
         }
         this.coopRun = undefined;
-        this.stopBackgroundTicker();
+        this.stopCoopTicker();
         usePortableMath(false);
         this.assets.dropPlayers(1);
         this.sim = undefined;
@@ -2954,7 +2954,7 @@ export class GameClient implements GameFrameHandler {
     };
 
     private startCoopTicker(): void {
-        this.stopBackgroundTicker();
+        this.stopCoopTicker();
         this.coopTicker = new CoopTicker((elapsed) => {
             if (this.sim && this.coopRun && !this.coopStopped) {
                 this.updateCoop(elapsed, this.sim, this.coopRun);
@@ -2962,7 +2962,7 @@ export class GameClient implements GameFrameHandler {
         }, TICK_MS);
     }
 
-    private stopBackgroundTicker(): void {
+    private stopCoopTicker(): void {
         this.coopTicker?.stop();
         this.coopTicker = undefined;
     }
