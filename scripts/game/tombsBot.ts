@@ -1332,7 +1332,8 @@ const AVOID_COST = 2.5;
 
 // The move (the one wanted if nothing it'd walk into is coming, or the nearest way to it that's
 // clear: sixteen headings and standing still) that the bullets about now miss, played forward:
-// each bullet on its line (and its turn), the bot at its speed, stopped by walls
+// each bullet on its line (and its turn, once it's stood its wait), the bot at its speed, stopped
+// by walls
 function clearOfBullets(
     sim: Sim,
     want: Point,
@@ -1354,6 +1355,8 @@ function clearOfBullets(
         radius: number;
         life: number;
         homing: number;
+        // Ticks it stands where it is first (BulletPatternDef.hold), its life not running
+        wait: number;
     }[] = [];
     const close = (x: number, y: number) =>
         Math.abs(x - player.x) < LOOK_NEAR && Math.abs(y - player.y) < LOOK_NEAR;
@@ -1370,12 +1373,13 @@ function clearOfBullets(
                 radius: bullets.radius[slot],
                 life: bullets.life[slot],
                 homing: 0,
+                wait: bullets.wait[slot],
             });
         }
     }
     for (const shot of sim.enemyProjectiles) {
         if (close(shot.x, shot.y)) {
-            near.push({ ...shot, cos: 1, sin: 0 });
+            near.push({ ...shot, cos: 1, sin: 0, wait: 0 });
         }
     }
     // A blast's marks still winding up: where it'd still be under one at the end of the look
@@ -1447,14 +1451,20 @@ function clearOfBullets(
             let vx = shot.vx;
             let vy = shot.vy;
             const { cos, sin, life, homing } = shot;
+            let wait = shot.wait;
             const speed = Math.hypot(vx, vy);
             const reach = shot.radius + player.radius + 0.15;
             for (let step = 0; step < positions.length; step++) {
                 const t = (step + 1) * LOOK_STEP;
-                if (t > life) {
+                if (t > shot.wait + life) {
                     break;
                 }
                 for (let k = 0; k < LOOK_STEP; k++) {
+                    // Still where it stands, as BulletPool.step has it
+                    if (wait > 0) {
+                        wait--;
+                        continue;
+                    }
                     if (cos !== 1) {
                         const nvx = vx * cos - vy * sin;
                         vy = vx * sin + vy * cos;

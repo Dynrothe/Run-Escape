@@ -3231,6 +3231,16 @@ describe("maps", () => {
         }
     });
 
+    test("only a closing ring stands where it formed first (BulletPatternDef.hold)", () => {
+        for (const enemy of ENEMIES) {
+            for (const attack of enemy.boss?.attacks ?? []) {
+                if (attack.pattern?.hold !== undefined) {
+                    expect(attack.pattern.shape, `${enemy.id}: ${attack.name}`).toBe("closing");
+                }
+            }
+        }
+    });
+
     test("every arena is on one of the cache's four planes, the ground floor unless set", () => {
         for (const map of [...MAPS, ...FUN_MAPS]) {
             const region = getArenaRegion(map);

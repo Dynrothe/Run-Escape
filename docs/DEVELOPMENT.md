@@ -1128,7 +1128,8 @@ there's no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the
 slams are as wide, so there's no ring round a still boss to hit it from untouched. Each has
 something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
 them. A closing ring stands where it formed for `RING_HOLD` (`BulletPatternDef.hold`, a bullet's
-`wait` in `BulletPool`) before it comes in, hurting whoever walks into it meanwhile. Each boss has
+`wait` in `BulletPool`) before it comes in, hurting whoever walks into it meanwhile, and as long
+on hard and expert. Only a closing ring can take a `hold` (a test checks). Each boss has
 a mechanic of its own that makes the fight longer by making it harder, not by more hitpoints: the
 Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
@@ -1153,7 +1154,8 @@ for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` tim
 (`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps its
 width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring or
 spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
-clears, not the bot's: it often dies to the Maiden.
+clears, not the bot's: it often dies to the Maiden. It makes for a closing ring's way out only
+with `DODGE=1` (`cageGap`), so sim a change to the rings with that.
 
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
 up's pick at its max; `?raidtest=short` does only the first.

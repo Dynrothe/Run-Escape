@@ -1079,6 +1079,8 @@ describe("the bullet pool", () => {
         const waiting = pool.add(0, 0, 1, 0, 0, 0.25, 1, 2, 0, 0, 3);
         pool.step([at(0, 0)]);
         expect(pool.hits).toEqual([waiting]);
+        // Spent by the hit, as a moving one is
+        expect(pool.count).toBe(0);
     });
 });
 
