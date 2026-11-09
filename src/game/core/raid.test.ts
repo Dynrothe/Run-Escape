@@ -446,7 +446,7 @@ describe("the Theatre's bullet shapes", () => {
                 vy: bullets.vy[slot],
             });
         }
-        return { attack, shot };
+        return { attack, shot, bullets };
     }
 
     it("a wall is a line across, all going one way, with its gap left out", () => {
@@ -560,6 +560,27 @@ describe("the Theatre's bullet shapes", () => {
             // Heading for the middle
             expect(dx * bullet.vx + dy * bullet.vy).toBeLessThan(0);
         }
+    });
+
+    it("every closing ring stands a second where it forms before it comes in", () => {
+        for (const id of TEST_BOSS_IDS) {
+            for (const attack of getEnemy(id).boss!.attacks) {
+                if (attack.pattern?.shape === "closing") {
+                    expect(attack.pattern.hold, `${id}: ${attack.name}`).toBe(1);
+                }
+            }
+        }
+        const { bullets } = volley("Blood tide", "maiden_of_sugadinti");
+        const slot = bullets.order[0];
+        const at = () => [bullets.x[slot], bullets.y[slot]];
+        const formed = at();
+        const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
+        for (let i = 0; i < TICKS_PER_SECOND; i++) {
+            bullets.step(targets);
+        }
+        expect(at()).toEqual(formed);
+        bullets.step(targets);
+        expect(at()).not.toEqual(formed);
     });
 });
 

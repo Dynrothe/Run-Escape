@@ -22,6 +22,8 @@ the version in the corner).
   the floor next to you, not at the edge of the screen.
 - The Scabaras room's puzzles, by Okaeri: the screen now lists all four, where each one is, and
   which are done.
+- Theatre of Blood's closing rings, by trippy22: a ring of blood, flies or Verzik's blasts that
+  closes in round you waits a second where it forms, so there's time to find the way out.
 
 ### Fixed
 

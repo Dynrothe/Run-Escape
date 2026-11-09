@@ -436,6 +436,8 @@ export type BulletPatternDef = {
     // A wall's tiles between bullets; a closing ring's tiles out
     spacing?: number;
     distance?: number;
+    // A closing ring: seconds it stands where it formed before it closes in, to find the way out
+    hold?: number;
     // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
     // bursting where it lands), rather than from the boss
     origin?: "target";
