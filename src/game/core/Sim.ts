@@ -188,13 +188,7 @@ import {
 } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
-import {
-    WEAPONS,
-    WEAPON_BY_ID,
-    getProjectileObjId,
-    getWeapon,
-    getWeaponStyle,
-} from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
@@ -16804,13 +16798,6 @@ export class Sim {
             }
             const source = this.damageSource;
             this.killsBySource[source] = (this.killsBySource[source] ?? 0) + 1;
-            // A weapon that heals on each kill (the Keris partisan of the sun)
-            const killHeal = source.startsWith("weapon:")
-                ? WEAPON_BY_ID.get(source.slice("weapon:".length))?.killHeal
-                : undefined;
-            if (killHeal && this.isUp(this.hero)) {
-                this.heal(killHeal * this.healScale);
-            }
         }
         if (enemy.boss) {
             if (lastCopy) {
@@ -17492,9 +17479,10 @@ export class Sim {
                 ? 1 + def.lowHealth.damage
                 : 1;
         for (const enemy of hit) {
-            const enemyDamage =
-                damage * this.slayerScale(def, enemy) * lowHealth * this.breachScale(def, enemy);
+            const breach = this.breachScale(def, enemy);
+            const enemyDamage = damage * this.slayerScale(def, enemy) * lowHealth * breach;
             const hits = def.hits ?? [1];
+            const alive = !enemy.dead;
             const hitDealt =
                 this.damageEnemy(
                     enemy,
@@ -17503,6 +17491,16 @@ export class Sim {
                     player.x,
                     player.y,
                 ) + this.bigHits(def, enemy, enemyDamage, player.x, player.y);
+            // The gap shows only where the hit got in (not on a shield, or a style it's proof
+            // against), and on no more than 10 at once
+            if (breach > 1 && hitDealt > 0 && effects++ < 10) {
+                this.addEffect(def.breach!.spotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+            }
+            // A kill by this swing itself heals (the Keris partisan of the sun): not one some
+            // other kill leaves this weapon's name on
+            if (def.killHeal && alive && enemy.dead && this.isUp(this.hero)) {
+                this.heal(def.killHeal * this.healScale);
+            }
             // The rest of a multi-hit weapon's hits land a moment apart
             hits.slice(1).forEach((fraction, i) => {
                 this.pendingHits.push({
@@ -17540,6 +17538,8 @@ export class Sim {
             player.poisonEnd = -1;
             player.poisonDamage = 0;
             this.debuffs = [];
+            // The drains' stats go with them, max hitpoints too, before healing to it
+            this.updateStats();
             this.heal(player.maxHp);
         }
         if (def.chain) {
@@ -17555,11 +17555,7 @@ export class Sim {
             return 1;
         }
         const chance = hasTag(enemy, breach.tags) ? breach.tagChance : breach.chance;
-        if (!this.rng.chance(chance)) {
-            return 1;
-        }
-        this.addEffect(breach.spotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
-        return breach.damage;
+        return this.rng.chance(chance) ? breach.damage : 1;
     }
 
     // How much harder a weapon hits this enemy for what it is (the Ivandis

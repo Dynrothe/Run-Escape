@@ -284,8 +284,9 @@ unlocks something in the game.
       `WeaponDef.breach` (6% a stab, 30% on a kalphite, triple, diamond bolts' Armour Piercing on
       it); Wrath of Amascut is a `special` every sixth stab (1.5x and a 25% `drain` for 6 seconds,
       OSRS's own keris special animation); the sun's are `killHeal`, `lowHealth` and a `restore`
-      special every fortieth stab (Tumeken's Light's own cast). They're held as a spear, the
-      Zamorakian hasta's stance and the dragon spear's stab.
+      special every fortieth stab (Tumeken's Light's own cast, Heal Group's light on you). The
+      keris partisans are held as a spear, the Zamorakian hasta's stance and the dragon spear's
+      stab.
 - **Thread of Elidinis: the Divine rune pouch.** In OSRS the thread on a rune pouch makes the
   divine pouch, four runes instead of three. Here the thread puts the pouch in the level-up
   choices, as a rare passive, for every adventurer. It takes a passive slot (the price, and with
@@ -297,7 +298,7 @@ unlocks something in the game.
   In the game it's the `divine_rune_pouch` passive (`content/passives.ts`, one level), unlocked by
   the Thread. `Sim.maxWeapons` counts its slot, and `fitsWithPouch` in `core/Upgrades.ts` keeps
   it for magic: a weapon that isn't magic fits only in the other slots, and one magic weapon of
-  another class can be taken.
+  another class can be taken. Its one level holds in endless too (`PassiveDef.noOverlevel`).
 
 ### Combat Achievements
 

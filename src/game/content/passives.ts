@@ -179,6 +179,8 @@ export const PASSIVES: PassiveDef[] = [
         unit: "flat",
         whole: true,
         maxLevel: 1,
+        // A second pick would add nothing: it's one slot
+        noOverlevel: true,
         rarity: "rare",
         iconObjId: 27281,
         unlock: {
@@ -264,7 +266,7 @@ export function getPassive(id: string): PassiveDef {
 // and on past it in endless runs unless one of its stats is capped
 export function canLevelPassive(passive: PassiveDef, level: number, endless: boolean): boolean {
     const capped = [passive.stat, ...(passive.alsoAdds ?? [])].some((s) => CAPPED_STATS.has(s));
-    return level < passive.maxLevel || (endless && !capped);
+    return level < passive.maxLevel || (endless && !capped && !passive.noOverlevel);
 }
 
 // What one pick of this quality adds to the passive's stat

@@ -343,7 +343,9 @@ export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>)
 
 // With the Divine rune pouch (maxWeapons counting its slot), whether a new weapon fits: the
 // pouch's slot holds a magic weapon only, so the rest stay one fewer, and one magic weapon of
-// another class can be taken, for that slot
+// another class can be taken, for that slot. Magic is what its hits count as (getWeaponStyle, so
+// the fire spells too); another class is its class (WeaponDef.style). Only the level up keeps to
+// this: a weapon added some other way (the dev console) isn't checked.
 export function fitsWithPouch(
     weapon: WeaponDef,
     weapons: readonly WeaponState[],

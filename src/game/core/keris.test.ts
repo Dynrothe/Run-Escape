@@ -178,10 +178,24 @@ describe("the keris partisans", () => {
         for (let i = 0; i < every - 1; i++) {
             stab(light, target);
         }
+        // A drain on max hitpoints, gone with the Light, and healed past
+        light.debuffs = [
+            {
+                id: "test_drain",
+                name: "Drain",
+                iconObjId: 0,
+                stats: { maxHp: -0.5 },
+                startTick: light.tick,
+                endTick: light.tick + 1e6,
+            },
+        ];
+        light.updateStats();
+        const drained = light.player.maxHp;
         light.player.hp = 3;
         light.player.poisonEnd = light.tick + 1000;
         light.player.poisonDamage = 2;
         stab(light, target);
+        expect(light.player.maxHp).toBeGreaterThan(drained);
         expect(light.player.hp).toBe(light.player.maxHp);
         expect(light.player.poisonEnd).toBe(-1);
     });
@@ -252,6 +266,16 @@ describe("the Divine rune pouch", () => {
         expect(fitsWithPouch(other, [...melee, weapon(staff.id)], "melee", MAX_WEAPONS + 1)).toBe(
             false,
         );
+    });
+
+    test("is one level, in endless too", () => {
+        const rng = new Rng(4);
+        for (let i = 0; i < 500; i++) {
+            const choices = rollChoices(rng, melee, [pouch], 0, "melee", undefined, true, 5);
+            expect(
+                choices.some((c) => c.kind === "passiveLevel" && c.passiveId === DIVINE_RUNE_POUCH),
+            ).toBe(false);
+        }
     });
 
     test("is a passive slot taken for one more weapon slot", () => {

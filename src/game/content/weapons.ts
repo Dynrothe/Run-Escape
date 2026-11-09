@@ -304,7 +304,9 @@ const KERIS_PARTISANS: WeaponDef[] = [
             every: 40,
             damage: 1,
             playerSeq: 9546, // TOA_TUMEKANS_LIGHT_CAST01
-            spotAnim: 2128,
+            // Heal Group's light (QUEST_LUNAR_SPELLBOOK_HEAL_GROUP_SPOT_ANIM): the keris's own
+            // special graphic is the Wrath's
+            spotAnim: 745,
             effect: { kind: "restore" },
         },
         unlock: { kind: "raidChest", mapId: "tombs_of_amascut", trophyId: "jewel_of_the_sun" },

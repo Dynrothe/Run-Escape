@@ -1705,7 +1705,8 @@ export type WeaponDef = {
         damage: number;
         spotAnim: number;
     };
-    // Heals the player this much for each kill it makes (the Keris partisan of the sun)
+    // Slashes and sweeps: heals the player this much for each kill a swing of it makes (the Keris
+    // partisan of the sun)
     killHeal?: number;
     // Hits this much harder while the player is below this share of their hitpoints (below
     // 0.25, damage 0.25: +25% under a quarter; the Keris partisan of the sun)
@@ -1801,6 +1802,8 @@ export type PassiveDef = {
     // An interface sprite shown for it instead of iconObjId's item (Piety's
     // prayer icon)
     iconSpriteId?: number;
+    // Never levelled past maxLevel, even in endless (the Divine rune pouch: one slot)
+    noOverlevel?: boolean;
     // Visible gear: the item worn at each level (index = level - 1)
     equipment?: { slot: number; objIds: number[] }[];
     // Stats it adds the same amount to as well (the Ring of wealth's coins,
