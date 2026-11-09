@@ -82,6 +82,8 @@ const LANE_SHOW_SECONDS = 1;
 const LANE_SHOW_ALPHA = 0.6;
 // Pixels, at a scale of 1
 const TOTEM_ARROW = 14;
+// Tiles from the player the floor arrow sits, the way the Apmeken room's issue is (drawGroundArrow)
+const GROUND_ARROW_REACH = 2.5;
 // The hint arrow: how many times its 25 pixels it's drawn, how far over the
 // top of what it marks in tiles, and how far it bobs in pixels
 const HINT_ARROW_SCALE = 1.2;
@@ -152,6 +154,9 @@ export class BossFightView {
     private beams: { x: number; y: number; toX: number; toY: number; start: number }[] = [];
     private readonly a: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly b: ScreenPoint = { x: 0, y: 0, visible: false };
+    // Where the hero the camera's on is drawn this frame (GameView sets it), for what's drawn by
+    // them (drawGroundArrow)
+    viewPose?: { x: number; y: number };
     // Whether the curse was on last frame, and when (ms) it lifted, for its flash
     private curseOn = false;
     private curseEndedAt = -1;
@@ -1276,6 +1281,56 @@ export class BossFightView {
         ctx.stroke();
     }
 
+    // A yellow arrow on the floor beside the player, a couple of tiles out the way something off
+    // the screen is, pointing along the ground at it (the Apmeken room's pillar or vent): where the
+    // player's looking, not out at the screen's edge. It nudges the way it points as it bobs (0 to
+    // 1, with the hint arrows').
+    private drawGroundArrow(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        size: number,
+        bob: number,
+    ): void {
+        // From where the hero's drawn this frame (smoothed, and predicted for a co-op guest), so
+        // it moves with them rather than ticking after
+        const player = this.viewPose ?? sim.player;
+        const dx = x - player.x;
+        const dy = y - player.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance < 0.001) {
+            return;
+        }
+        const ux = dx / distance;
+        const uy = dy / distance;
+        const reach = Math.min(GROUND_ARROW_REACH, Math.max(1, distance - 1));
+        const ax = player.x + ux * reach;
+        const ay = player.y + uy * reach;
+        const at = overlay.project(ax, this.ground(sim, ax, ay), ay, this.a);
+        const ahead = overlay.project(ax + ux, this.ground(sim, ax + ux, ay + uy), ay + uy, this.b);
+        if (at.behind || ahead.behind) {
+            return;
+        }
+        const length = Math.max(0.001, Math.hypot(ahead.x - at.x, ahead.y - at.y));
+        const dirX = (ahead.x - at.x) / length;
+        const dirY = (ahead.y - at.y) / length;
+        const nudge = bob * size * 0.5;
+        const tipX = at.x + dirX * nudge;
+        const tipY = at.y + dirY * nudge;
+        const ctx = overlay.ctx;
+        ctx.beginPath();
+        ctx.moveTo(tipX + dirX * size, tipY + dirY * size);
+        ctx.lineTo(tipX - dirX * size - dirY * size * 0.8, tipY - dirY * size + dirX * size * 0.8);
+        ctx.lineTo(tipX - dirX * size + dirY * size * 0.8, tipY - dirY * size - dirX * size * 0.8);
+        ctx.closePath();
+        ctx.fillStyle = "#ffd76a";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.stroke();
+    }
+
     // On the screen, gap tiles over the top of an enemy's model, where it is this frame: what's
     // drawn over its head (its overhead prayer, a hint arrow) sits on this
     private overHead(overlay: Overlay, sim: Sim, enemy: Enemy, alpha: number, gap: number) {
@@ -1359,7 +1414,14 @@ export class BossFightView {
             const top = this.ground(sim, issue.x, issue.y) - (issue.kind === "pillar" ? 3.2 : 1.6);
             const p = overlay.project(issue.x, top, issue.y, this.a);
             if (p.behind || p.x < 0 || p.y < 0 || p.x > width || p.y > height) {
-                this.drawEdgeArrow(overlay, sim, issue.x, issue.y, TOTEM_ARROW * scale, 40 * scale);
+                this.drawGroundArrow(
+                    overlay,
+                    sim,
+                    issue.x,
+                    issue.y,
+                    TOTEM_ARROW * scale,
+                    bob / (HINT_ARROW_BOB * scale),
+                );
             } else if (sprite) {
                 const w = sprite.width * HINT_ARROW_SCALE * scale;
                 const h = sprite.height * HINT_ARROW_SCALE * scale;

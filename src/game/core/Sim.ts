@@ -718,6 +718,8 @@ export type RunResult = {
     raidChest?: RaidChest;
     // The Tombs of Amascut's board
     tombs?: TombsSummary;
+    // The Scabaras room was beaten (Sim.scabarasBeaten)
+    scabarasBeaten?: boolean;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -976,7 +978,7 @@ export type CrondisRoom = {
 };
 
 type ScabarasDef = NonNullable<NonNullable<TombsPathDef["room"]>["scabaras"]>;
-type ScabarasPuzzle = "sequence" | "lights" | "addition" | "matching";
+export type ScabarasPuzzle = "sequence" | "lights" | "addition" | "matching";
 // The Scabaras room's puzzles (SCABARAS in tombs.ts): which are solved; Sequence's order, when
 // it's shown from and how far through it the party is (no order, shown from -1, till its button's
 // pushed); Lights out's ring and when a light next
@@ -1487,6 +1489,9 @@ export class Sim {
     devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
+    // The Scabaras room's puzzles all solved this run: what unlocks its puzzle helper
+    // (SaveData.scabarasBeaten)
+    scabarasBeaten = false;
     // The Helpful Spirit's bundles each hero's had, or let go by (of two), and who's stood by it
     private tombsSpiritTaken = new Map<number, number>();
     private tombsSpiritNear = new Set<number>();
@@ -2290,6 +2295,7 @@ export class Sim {
             ...(this.map.stages && { stage: this.stage }),
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
             ...(this.map.tombs && { tombs: this.tombsSummary() }),
+            ...(this.scabarasBeaten && { scabarasBeaten: true }),
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -9173,6 +9179,7 @@ export class Sim {
               sum: number;
               readable: boolean;
               reading?: "slate" | "tablet";
+              puzzles: { puzzle: ScabarasPuzzle; state: "solved" | "open" | "waiting" }[];
           }
         | undefined {
         const scabaras = this.tombsRoom?.scabaras;
@@ -9190,6 +9197,22 @@ export class Sim {
             sum: scabaras.addition.sum,
             readable: this.scabarasTabletReadable(scabaras),
             reading: def.slates.some(near) ? "slate" : near(def.tablet) ? "tablet" : undefined,
+            // Each puzzle, and whether it can be done yet: Addition once Sequence and Lights out
+            // are, Matching once the other three are
+            puzzles: (["sequence", "lights", "addition", "matching"] as const).map((puzzle) => ({
+                puzzle,
+                state: scabaras.solved.includes(puzzle)
+                    ? "solved"
+                    : puzzle === "addition"
+                      ? this.scabarasTabletReadable(scabaras)
+                          ? "open"
+                          : "waiting"
+                      : puzzle === "matching"
+                        ? scabaras.solved.length >= 3
+                            ? "open"
+                            : "waiting"
+                        : "open",
+            })),
         };
     }
 
@@ -9432,6 +9455,7 @@ export class Sim {
         scabaras.solved.push(puzzle);
         if (puzzle === "matching") {
             room.doneTick = this.tick;
+            this.scabarasBeaten = true;
             scabaras.rocks = [];
             scabaras.shards = [];
             this.emit({ type: "notice", message: "The way on opens." });

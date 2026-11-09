@@ -9,11 +9,19 @@ the version in the corner).
 
 - Invocation presets, by Okaeri: save up to five sets of Tombs of Amascut invocations and load
   one with a tap.
+- A puzzle helper for the Scabaras room, by Okaeri: like the ToA plugin, it shows the order to
+  step on the plates, which plates to press, a way to make the tablet's number, and the name of
+  each matching symbol. It's on at Entry, and at any raid level once you've beaten the room. You
+  can turn it off in Settings.
 
 ### Changed
 
 - Boss instructions, by Okaeri: they show once per run, one at a time, and stay up long enough
   to read.
+- The Apmeken room's arrow, by Okaeri: the arrow to a pillar or vent that needs fixing is now on
+  the floor next to you, not at the edge of the screen.
+- The Scabaras room's puzzles, by Okaeri: the screen now lists all four, where each one is, and
+  which are done.
 
 ### Fixed
 

@@ -393,7 +393,8 @@ version and how to run it.
 - **The Tombs of Amascut**, on the Raids tab once its quest is done. Start in the Nexus and take
   the four paths in any order, each a puzzle room and then its boss: Apmeken (fix what the
   baboons break among their waves) and Ba-Ba; Het (turn mirrors to carry the beam to the seal) and
-  Akkha; Scabaras (sequence, lights, addition and matching boards) and Kephri; Crondis (carry water
+  Akkha; Scabaras (sequence, lights, addition and matching boards, listed on the HUD with which
+  are open) and Kephri; Crondis (carry water
   to the palm past spears, poison and crocodiles) and Zebak. Then the Wardens, three phases, the
   last on a floor that rises and falls. The Helpful Spirit in the Nexus gives a free bundle of
   supplies after the second path and the fourth.
@@ -736,3 +737,6 @@ version and how to run it.
   title screen's Settings stop it (it starts off stopped if your system asks for reduced motion).
 - **Power-up timers**: the circles over power-ups on the ground; Settings and the pause screen
   turn them off.
+- **Puzzle helper**: in the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA
+  plugin does in OSRS: on at Entry, and at any raid level once you've beaten the room. Settings and
+  the pause screen turn it off.

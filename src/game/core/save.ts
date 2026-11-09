@@ -111,6 +111,8 @@ export type SaveData = {
     invocations?: string[];
     // Saved setups of the invocation board, to load in one go (content/invocations.ts)
     invocationPresets?: InvocationPreset[];
+    // The Scabaras room's been beaten once: its puzzle helper's unlocked (DisplaySettings.puzzleHelper)
+    scabarasBeaten?: boolean;
     // The pet taken along on runs (pets.ts), one of the trophies found
     pet?: string;
     // The adventurer the game starts on, picked as a favourite
@@ -298,6 +300,9 @@ export function migrateSave(raw: unknown): SaveData {
     if (presets.length > 0) {
         save.invocationPresets = presets;
     }
+    if (data.scabarasBeaten === true) {
+        save.scabarasBeaten = true;
+    }
     if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;
     }
@@ -481,6 +486,8 @@ export type RunSummary = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills?: Record<string, number>;
     caskets?: number;
+    // The Scabaras room was beaten: its puzzle helper's unlocked
+    scabarasBeaten?: boolean;
 };
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
@@ -531,6 +538,10 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         if (!save.trophies.includes(id)) {
             save.trophies.push(id);
         }
+    }
+    // Won or not, the room was beaten
+    if (run.scabarasBeaten) {
+        save.scabarasBeaten = true;
     }
     const tallies = getQuestTallies(run);
     for (const [id, kills] of Object.entries(tallies.enemyKills)) {

@@ -17,6 +17,7 @@ import {
 } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
+import { solveScabarasAddition, solveScabarasLights } from "../content/scabarasHelper";
 import {
     AKKHA,
     CRONDIS,
@@ -320,6 +321,20 @@ export function getRunPoseFrame(
     return runPose.getFrame(moveTicks);
 }
 
+// Matching's nine symbols as the puzzle helper names them (GameView.drawScabarasHelper): each its
+// own colour, all light enough to read with their dark edge on the room's floor
+const MATCHING_COLORS = [
+    "#ffffff",
+    "#ff5c5c",
+    "#ffd84a",
+    "#5aa9ff",
+    "#4fe0d0",
+    "#ff8fd6",
+    "#a98bff",
+    "#7dff8a",
+    "#ffa94d",
+];
+
 // Draws a run: everything in the sim as 3D actors, and hitsplats, health bars
 // and weapon swooshes on the 2D overlay.
 export class GameView {
@@ -344,6 +359,8 @@ export class GameView {
     // Countdown pies over power-ups on the ground (DisplaySettings.pickupTimers,
     // which GameClient sets)
     pickupTimers = true;
+    // The Scabaras room's puzzle helper (DisplaySettings.puzzleHelper, which GameClient sets)
+    puzzleHelper = true;
 
     private readonly fight: BossFightView;
     private readonly floor: FloorView;
@@ -2123,6 +2140,7 @@ export class GameView {
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
         this.drawPickupTimers(overlay, sim, alpha, scale);
+        this.drawScabarasHelper(overlay, sim, now, scale);
         if (sim.litTargetsOnly) {
             this.drawDarkArrows(overlay, sim, alpha, scale);
         }
@@ -2162,6 +2180,7 @@ export class GameView {
             this.drawTeammateArrows(overlay, sim, alpha, now, scale);
         }
         this.drawShouts(overlay, sim, alpha, now, scale);
+        this.fight.viewPose = getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose);
         this.fight.drawScreen(overlay, sim, alpha, now, scale);
         this.drawFlash(overlay, now);
         if (this.cinematic) {
@@ -2704,6 +2723,153 @@ export class GameView {
                 ? `rgba(${slash.color}, ${0.75 * (1 - t)})`
                 : `rgba(255, 255, 255, ${0.6 * (1 - t)})`;
             ctx.stroke();
+        }
+    }
+
+    // A tile's square on the ground, a little inside its edges, as the current canvas path
+    private traceGroundTile(overlay: Overlay, sim: Sim, cx: number, cy: number): void {
+        const ctx = overlay.ctx;
+        const half = 0.45;
+        ctx.beginPath();
+        [
+            [-half, -half],
+            [half, -half],
+            [half, half],
+            [-half, half],
+        ].forEach(([ox, oy], i) => {
+            const wx = cx + ox;
+            const wy = cy + oy;
+            const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.05, wy, this.screen2);
+            if (i === 0) {
+                ctx.moveTo(p.x, p.y);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        });
+        ctx.closePath();
+    }
+
+    // Text on the ground at a tile's middle: white (or colour) with a dark edge, readable on any
+    // floor
+    private drawGroundText(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        text: string,
+        color: string,
+        size: number,
+    ): void {
+        const p = overlay.project(x, this.ground(sim, x, y) - 0.1, y, this.screen2);
+        if (!p.visible) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        ctx.font = `${Math.round(size)}px "OSRS Bold", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = Math.max(2, size / 5);
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+        ctx.strokeText(text, p.x, p.y);
+        ctx.fillStyle = color;
+        ctx.fillText(text, p.x, p.y);
+    }
+
+    // The Scabaras room's puzzle helper, as OSRS's ToA plugin: Sequence's plates numbered in the
+    // order they've lit (the next to step on brightest), the Lights out plates to step on, the
+    // Addition symbols that make the tablet's number from what's been stepped on, and Matching's
+    // tiles named and coloured by symbol. Only for a puzzle that's open and not yet solved.
+    private drawScabarasHelper(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const scabaras = sim.tombsRoom?.scabaras;
+        const def = sim.tombsPathRoom?.scabaras;
+        if (!this.puzzleHelper || !scabaras || !def || sim.runOver) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const solved = (puzzle: string) => scabaras.solved.some((p) => p === puzzle);
+        const pulse = 0.7 + 0.3 * Math.sin(now / 220);
+        const mark = (x: number, y: number, alpha: number) => {
+            this.traceGroundTile(overlay, sim, x, y);
+            ctx.fillStyle = `rgba(80, 230, 255, ${0.3 * alpha})`;
+            ctx.fill();
+            // A dark edge under the bright one, so it reads on a lit plate as on the floor
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 * alpha})`;
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(150, 245, 255, ${alpha})`;
+            ctx.stroke();
+        };
+        // Sequence: each plate's place in the order once it's lit
+        const sequence = scabaras.sequence;
+        if (!solved("sequence") && sequence.showFrom !== -1 && sim.tick >= sequence.showFrom) {
+            const each = Math.round((SCABARAS.flash + SCABARAS.gap) * TICKS_PER_SECOND);
+            const shown = Math.min(
+                sequence.order.length,
+                Math.floor((sim.tick - sequence.showFrom) / each) + 1,
+            );
+            for (let k = sequence.step; k < shown; k++) {
+                const plate = def.sequence[sequence.order[k]];
+                if (k === sequence.step) {
+                    mark(plate.x, plate.y, pulse);
+                }
+                this.drawGroundText(
+                    overlay,
+                    sim,
+                    plate.x,
+                    plate.y,
+                    `${k + 1}`,
+                    k === sequence.step ? "#ffffff" : "#c8c8c8",
+                    22 * scale,
+                );
+            }
+        }
+        // Lights out: the fewest to step on to light the ring
+        if (!solved("lights")) {
+            for (const i of solveScabarasLights(scabaras.lights)) {
+                mark(def.lights[i].x, def.lights[i].y, pulse);
+            }
+        }
+        // Addition: once the tablet's readable, the way on from what's been stepped on
+        const addition = scabaras.addition;
+        if (!solved("addition") && solved("sequence") && solved("lights")) {
+            const way = solveScabarasAddition(
+                def.addition,
+                addition.values,
+                addition.target,
+                addition.stepped,
+            );
+            for (const i of way ?? []) {
+                if (!addition.stepped[i]) {
+                    mark(def.addition[i].x, def.addition[i].y, pulse);
+                }
+            }
+        }
+        // Matching: each tile not matched yet named in its symbol's own colour, so a pair stands
+        // out across the room, as the plugin's tiles do
+        const matching = scabaras.matching;
+        if (!solved("matching") && scabaras.solved.length >= 3) {
+            for (const side of ["north", "south"] as const) {
+                def.matching[side].forEach((p, i) => {
+                    const symbol = matching[side][i];
+                    if (matching.matched[symbol]) {
+                        return;
+                    }
+                    this.traceGroundTile(overlay, sim, p.x, p.y);
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = MATCHING_COLORS[symbol];
+                    ctx.stroke();
+                    this.drawGroundText(
+                        overlay,
+                        sim,
+                        p.x,
+                        p.y,
+                        SCABARAS.symbolNames[symbol],
+                        MATCHING_COLORS[symbol],
+                        15 * scale,
+                    );
+                });
+            }
         }
     }
 
