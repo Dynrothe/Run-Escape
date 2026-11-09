@@ -12,6 +12,10 @@ export type Loadout = {
     // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby. Only
     // shown: the start carries the party's (GameStart.invocations), and the relay passes it as is
     invocations?: string[];
+    // The trophies they've found that a raid's chest gives one of every time (expert mode's Lil'
+    // Zik looks), so theirs gives one they haven't got. Ready for co-op's expert mode: rooms don't
+    // carry expert yet (GameStart), so no co-op chest goes by it so far
+    trophies?: string[];
 };
 
 // The maps a player has unlocked, and has endless and hard mode for, which
@@ -164,7 +168,7 @@ export type ClientMessage =
       }
     | { t: "join"; code: string; me: Partial<Member> }
     | { t: "leave" }
-    | ({ t: "me" } & Partial<Member>)
+    | ({ t: "me"; meSeq?: number } & Partial<Member>)
     // A new name, from the relay (not during a run)
     | { t: "rename" }
     | { t: "settings"; open?: boolean; mapId?: string; endless?: boolean; hard?: boolean }
@@ -204,7 +208,15 @@ export type ServerMessage =
       }
     // token: to come back to the room with, should the connection drop (the
     // Cloudflare relay's; coop/room/<code>?resume=<token>)
-    | { t: "room"; room: RoomView; you: string; token?: string }
+    | {
+          t: "room";
+          room: RoomView;
+          you: string;
+          token?: string;
+          // Supports numbered member changes, acknowledged in room updates.
+          memberAcks?: true;
+          meSeq?: number;
+      }
     // The relay keeps each room on its own connection (the Cloudflare relay,
     // server/cloudflare): make or join it there, at coop/room/<code>, with
     // this ticket. The Node relay never sends it.

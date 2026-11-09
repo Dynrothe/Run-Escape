@@ -1373,6 +1373,8 @@ export const CURSED_SANDS_ENEMIES: EnemyDef[] = [
         // The swarm the first mage calls to it (Kephri's): a few arrows each, walking in
         id: "mage_scarab",
         name: "Scarab Swarm",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,

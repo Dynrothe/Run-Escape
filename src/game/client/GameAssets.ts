@@ -251,7 +251,7 @@ export function getSpotAnimIds(): number[] {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
         add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim);
+        add(weapon.chain?.spotAnim, weapon.breach?.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -927,7 +927,6 @@ export class GameAssets {
         for (const id of [
             scabaras.plate,
             scabaras.lightsPlate,
-            scabaras.hidden,
             scabaras.tablet,
             scabaras.button,
             ...scabaras.symbols,

@@ -18,6 +18,7 @@ import {
 } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
+import { solveScabarasAddition, solveScabarasLights } from "../content/scabarasHelper";
 import {
     AKKHA,
     CRONDIS,
@@ -39,7 +40,10 @@ import {
     RAMPAGE_FADE_TICKS,
     Sim,
     TICKS_PER_SECOND,
+    ZEBAK_SHELTER_SIDE,
+    ZebakFight,
     yawFromVector,
+    zebakShelters,
 } from "../core/Sim";
 import {
     Enemy,
@@ -55,6 +59,7 @@ import {
     Thrall,
     Visitor,
 } from "../core/entities";
+import { t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
 import { BossFightView } from "./BossFightView";
 import { CinematicPlayer } from "./Cinematic";
@@ -210,8 +215,6 @@ const THRALL_FADE_TICKS = TICKS_PER_SECOND;
 // The Apmeken room's barrier stands turned a quarter (its loc's rotation 1)
 const TOMBS_GATE_YAW = 512;
 // Jungle Japes's peels: twice a banana's size, to stand out from the bananas on her floor
-// Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
-// (they're a tile across)
 // The Crondis room's poison: the Spitting Scarab's green splash, that much bigger to fill a
 // corridor, pale for the warning and dark for the real thing
 const CRONDIS_CLOUD_SCALE = 1.6;
@@ -219,10 +222,36 @@ const CRONDIS_PALE_TINT = 0xffffff;
 const CRONDIS_DARK_TINT = 0x608040;
 // Kephri's swarm shield, round her while it's up
 const KEPHRI_SHIELD_SPOTANIM = 2141;
+// Akkha's floor's symbols: tiles out from its middle each way, and how big one's drawn lit up
+// (they're a tile across)
 const AKKHA_SYMBOL_OUT = 1.5;
-const AKKHA_SYMBOL_SCALE = 2.2;
+const AKKHA_SYMBOL_SCALE = 3.2;
+// and how far towards its element's glow colour (a negative flash: lit whatever the light)
+const AKKHA_SYMBOL_GLOW = -0.9;
+// and lifted off the floor that much (tiles, up being less, as heights are): flat on it, the
+// floor's own symbol hides it
+const AKKHA_SYMBOL_LIFT = -0.1;
 // How strongly the quadrant he's showing glows, against a blast's full strength
 const AKKHA_GLOW_ALPHA = 0.45;
+// The glowing circles behind Zebak's boulders, where his roar can't reach, a tile across
+const ZEBAK_SHELTER_SCALE = 0.9;
+// His roar's shockwave: its dust that far towards white, to read on his sandy island, a puff
+// every so many tiles
+const ZEBAK_SHOCKWAVE_FLASH = 0.45;
+const ZEBAK_SHOCKWAVE_STEP = 1.5;
+// The funnel of light round a lit symbol, in its colour: darkness's own swirl (already baked
+// with his elements), for every element
+const AKKHA_FUNNEL_SPOTANIM = 2257;
+const AKKHA_FUNNEL_SCALE = 2;
+const AKKHA_FUNNEL_GLOW = -0.7;
+// A blast's spray: so many of its element's orbs out of each quadrant it takes, flying up and
+// out over its first so many seconds, so far (tiles) and so high at most, glowing in its colour
+const AKKHA_SPRAY_ORBS = 14;
+const AKKHA_SPRAY_TICKS = Math.round(1.1 * TICKS_PER_SECOND);
+const AKKHA_SPRAY_REACH = 3.5;
+const AKKHA_SPRAY_HEIGHT = 2.5;
+const AKKHA_SPRAY_SCALE = 1.2;
+const AKKHA_SPRAY_GLOW = -0.7;
 const PEEL_SCALE = 2;
 
 type HitsplatKind = keyof typeof HITSPLAT_SPRITES;
@@ -302,6 +331,20 @@ export function getRunPoseFrame(
     return runPose.getFrame(moveTicks);
 }
 
+// Matching's nine symbols as the puzzle helper names them (GameView.drawScabarasHelper): each its
+// own colour, all light enough to read with their dark edge on the room's floor
+const MATCHING_COLORS = [
+    "#ffffff",
+    "#ff5c5c",
+    "#ffd84a",
+    "#5aa9ff",
+    "#4fe0d0",
+    "#ff8fd6",
+    "#a98bff",
+    "#7dff8a",
+    "#ffa94d",
+];
+
 // Draws a run: everything in the sim as 3D actors, and hitsplats, health bars
 // and weapon swooshes on the 2D overlay.
 export class GameView {
@@ -326,6 +369,8 @@ export class GameView {
     // Countdown pies over power-ups on the ground (DisplaySettings.pickupTimers,
     // which GameClient sets)
     pickupTimers = true;
+    // The Scabaras room's puzzle helper (DisplaySettings.puzzleHelper, which GameClient sets)
+    puzzleHelper = true;
 
     private readonly fight: BossFightView;
     private readonly floor: FloorView;
@@ -1042,6 +1087,7 @@ export class GameView {
                 }
             }
         }
+        this.drawZebakRoar(actors, sim, fight);
         const island = sim.tombsPathRoom?.boss?.island;
         const look = getEnemy(ZEBAK.waves.look);
         const crest = this.assets.get(getEnemyModelKey(look, 0));
@@ -1065,6 +1111,66 @@ export class GameView {
                         wave.dir > 0 ? 0 : 1024,
                     );
                 }
+            }
+        }
+    }
+
+    // Zebak's roar: while it's coming and as it goes off, the ground each boulder shelters
+    // glowing behind it (as zebakShelters has it); as it goes off, its shockwave, blown dust
+    // rolling out from him over the whole island but where the boulders shelter, as OSRS's does
+    private drawZebakRoar(actors: ActorRenderer, sim: Sim, fight: ZebakFight): void {
+        const roar = ZEBAK.roar;
+        const wave = roar.shockwave;
+        const ticks = wave.seconds * TICKS_PER_SECOND;
+        const roared = fight.roared;
+        const since = roared ? sim.tick - roared.tick : -1;
+        const going = roared !== undefined && since >= 0 && since < ticks;
+        const boss = sim.enemies.find((e) => e.uid === fight.uid && !e.dead);
+        // Where it's from and what shelters: as it's coming, his boulders now; as it goes, those
+        // it went off over
+        const from = going ? roared : fight.roar && boss;
+        if (!from) {
+            return;
+        }
+        const rocks = going
+            ? roared.rocks
+            : sim.tombsCover.filter((rock) => rock.look === roar.look);
+        // Straight behind each, down the island from him, as wide as it shelters: a circle a tile
+        // across on its middle, and one each side with its edge where the shelter's is
+        for (const rock of rocks) {
+            const away = rock.y >= from.y ? 1 : -1;
+            const side = rock.radius + ZEBAK_SHELTER_SIDE - 0.5;
+            for (let out = rock.radius + 0.4; out <= roar.shelter + rock.radius; out += 1) {
+                for (const across of [-side, 0, side]) {
+                    const y = rock.y + away * out;
+                    this.drawGlowCircle(actors, sim, rock.x + across, y, ZEBAK_SHELTER_SCALE);
+                }
+            }
+        }
+        const island = sim.tombsPathRoom?.boss?.island;
+        const dust = this.assets.get("spot:" + wave.spotAnim);
+        if (!going || !island || !dust) {
+            return;
+        }
+        const anim = dust.anims[0];
+        const t = since / ticks;
+        // Its front, out from him, and fading once it's across
+        const front = wave.reach * Math.min(1, t * 1.6);
+        const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+        const frame = anim.getFrame(since, true);
+        for (let y = island.y0 + 0.5; y <= island.y1 + 0.5; y += ZEBAK_SHOCKWAVE_STEP) {
+            for (let x = island.x0 + 0.5; x <= island.x1 + 0.5; x += ZEBAK_SHOCKWAVE_STEP) {
+                if (Math.hypot(x - from.x, y - from.y) > front) {
+                    continue;
+                }
+                if (zebakShelters(from.x, from.y, x, y, rocks, roar.shelter)) {
+                    continue;
+                }
+                actors.draw(dust, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                    scale: wave.scale,
+                    flash: ZEBAK_SHOCKWAVE_FLASH,
+                    alpha,
+                });
             }
         }
     }
@@ -1339,8 +1445,8 @@ export class GameView {
     }
 
     // The Scabaras room's boards: Sequence's plates (the one it's showing lit, and those done),
-    // Lights out's ring, Addition's symbols (lit once stepped on), Matching's tiles (hidden, or
-    // their symbol once turned up or matched), and the roof's shards flying
+    // Lights out's ring, Addition's symbols (lit once stepped on), Matching's tiles (each with its
+    // symbol, lit while stepped on, shining once matched), and the roof's shards flying
     private drawScabaras(actors: ActorRenderer, sim: Sim): void {
         const scabaras = sim.tombsRoom?.scabaras;
         const def = sim.tombsPathRoom?.scabaras;
@@ -1389,18 +1495,16 @@ export class GameView {
         }
         put(locs.tablet, def.tablet.x, def.tablet.y);
         put(locs.button, def.button.x, def.button.y);
+        // Matching: every tile's symbol on it from the start, as OSRS's: the puzzle's finding its
+        // partner on the other board. The one stepped on is lit; a matched pair shines.
         const matching = scabaras.matching;
         for (const side of ["north", "south"] as const) {
             def.matching[side].forEach((p, i) => {
                 const symbol = matching[side][i];
                 const matched = matching.matched[symbol];
-                if (matched || matching.up[side] === i) {
-                    put(locs.shown[symbol], p.x, p.y);
-                    if (matched) {
-                        put(locs.matched, p.x, p.y, true);
-                    }
-                } else {
-                    put(locs.hidden, p.x, p.y);
+                put(locs.shown[symbol], p.x, p.y, false, matching.up[side] === i ? 0.5 : 0);
+                if (matched) {
+                    put(locs.matched, p.x, p.y, true);
                 }
             });
         }
@@ -1438,19 +1542,29 @@ export class GameView {
             const at = sim.akkhaCorner(lit, AKKHA_SYMBOL_OUT);
             const height = this.ground(sim, at.x, at.y);
             const model = this.assets.get("loc:" + element.symbolLoc);
+            const lifted = height + AKKHA_SYMBOL_LIFT;
             if (model) {
                 const anim = model.anims[0];
-                actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, {
+                actors.draw(model, anim, anim.getFrame(sim.tick, true), at.x, lifted, at.y, 0, {
                     scale: AKKHA_SYMBOL_SCALE,
-                    flash: 0.7,
+                    // Glowing in its element's colour: darkness's own model is near black
+                    flash: AKKHA_SYMBOL_GLOW,
+                    tint: element.glow,
                 });
             }
-            const glow = this.assets.get("spot:" + element.spotAnim);
-            if (glow) {
-                const anim = glow.anims[0];
-                actors.draw(glow, anim, anim.getFrame(sim.tick, true), at.x, height, at.y, 0, {
-                    scale: 2,
-                });
+            const funnel = this.assets.get("spot:" + AKKHA_FUNNEL_SPOTANIM);
+            if (funnel) {
+                // Twice, half its loop apart: its animation has gaps with nothing in them
+                const anim = funnel.anims[0];
+                const half = Math.max(1, Math.floor(anim.totalTicks / 2));
+                for (const offset of [0, half]) {
+                    const frame = anim.getFrame(sim.tick + offset, true);
+                    actors.draw(funnel, anim, frame, at.x, height, at.y, 0, {
+                        scale: AKKHA_FUNNEL_SCALE,
+                        flash: AKKHA_FUNNEL_GLOW,
+                        tint: element.glow,
+                    });
+                }
             }
         }
         // A blast or a flood: its element all over each quadrant it took. The one he's showing
@@ -1479,6 +1593,7 @@ export class GameView {
         for (const burst of fight.bursts) {
             for (const quadrant of burst.quadrants) {
                 fill(quadrant, sim.tick - burst.tick, 1);
+                this.drawAkkhaSpray(actors, sim, area, quadrant, burst.tick);
             }
         }
         if (lit !== undefined) {
@@ -1494,6 +1609,64 @@ export class GameView {
             const height = this.ground(sim, orb.x, orb.y);
             actors.draw(model, anim, anim.getFrame(sim.tick, true), orb.x, height, orb.y, 0, {
                 alpha: sim.tick < orb.armTick ? 0.5 : 1,
+            });
+        }
+    }
+
+    // A blast's spray of bright orbs out of a quadrant (AKKHA_SPRAY_*): each from somewhere in
+    // it, up and out in an arc, fading as it falls. Where each goes is from the burst's tick, so
+    // it's the same every frame; drawn only.
+    private drawAkkhaSpray(
+        actors: ActorRenderer,
+        sim: Sim,
+        area: { middle: { x: number; y: number }; half: number },
+        quadrant: number,
+        startTick: number,
+    ): void {
+        const t = (sim.tick - startTick) / AKKHA_SPRAY_TICKS;
+        if (t < 0 || t >= 1) {
+            return;
+        }
+        const element = AKKHA.elements[quadrant];
+        const def = getEnemy(element.orb);
+        const model = this.assets.get(getEnemyModelKey(def, 0));
+        if (!model) {
+            return;
+        }
+        const anim = model.getAnim(def.idleSeq);
+        const frame = anim.getFrame(sim.tick, true);
+        const east = quadrant === 1 || quadrant === 2;
+        const north = quadrant === 0 || quadrant === 1;
+        // A number from 0 to 1 for each orb's each pick, from the burst
+        const pick = (n: number) => {
+            const v = Math.sin((startTick * 31 + quadrant * 977 + n) * 12.9898) * 43758.5453;
+            return v - Math.floor(v);
+        };
+        for (let i = 0; i < AKKHA_SPRAY_ORBS; i++) {
+            const n = i * 5;
+            // From somewhere in the quadrant, on the floor's round (the one fill keeps to) and a
+            // tile in from its edge: a square's far corner is off it
+            let outX = 1 + pick(n) * (area.half - 2);
+            let outY = 1 + pick(n + 1) * (area.half - 2);
+            const out = Math.hypot(outX, outY);
+            const most = area.half - 1.5;
+            if (out > most) {
+                outX *= most / out;
+                outY *= most / out;
+            }
+            const fromX = area.middle.x + (east ? outX : -outX);
+            const fromY = area.middle.y + (north ? outY : -outY);
+            const angle = pick(n + 2) * Math.PI * 2;
+            const reach = AKKHA_SPRAY_REACH * (0.4 + 0.6 * pick(n + 3)) * t;
+            const x = fromX + Math.cos(angle) * reach;
+            const y = fromY + Math.sin(angle) * reach;
+            // Up and back down (up being less)
+            const rise = AKKHA_SPRAY_HEIGHT * (0.5 + 0.5 * pick(n + 4)) * 4 * t * (1 - t);
+            actors.draw(model, anim, frame, x, this.ground(sim, x, y) - rise, y, 0, {
+                scale: AKKHA_SPRAY_SCALE,
+                flash: AKKHA_SPRAY_GLOW,
+                tint: element.glow,
+                alpha: 1 - t * t,
             });
         }
     }
@@ -2014,6 +2187,7 @@ export class GameView {
 
         this.drawLootBeams(overlay, sim, alpha, now, scale);
         this.drawBossWindups(overlay, sim, alpha);
+        this.drawCrondisSpearTells(overlay, sim);
         this.fight.drawGround(overlay, sim, alpha, now, scale);
         this.drawAuras(overlay, sim, alpha, now);
         this.drawBlasts(overlay, sim, now, scale);
@@ -2023,6 +2197,7 @@ export class GameView {
         this.drawSlashes(overlay, sim, alpha, now, scale);
         this.drawEnemyProjectileGlows(overlay, sim, alpha, scale);
         this.drawPickupTimers(overlay, sim, alpha, scale);
+        this.drawScabarasHelper(overlay, sim, now, scale);
         if (sim.litTargetsOnly) {
             this.drawDarkArrows(overlay, sim, alpha, scale);
         }
@@ -2062,7 +2237,11 @@ export class GameView {
             this.drawTeammateArrows(overlay, sim, alpha, now, scale);
         }
         this.drawShouts(overlay, sim, alpha, now, scale);
-        this.fight.drawScreen(overlay, sim, alpha, now, scale);
+        // Where the hero the camera's on is drawn, for the Apmeken room's floor arrow from them
+        const viewPose = sim.tombsIssue
+            ? getPlayerPose(sim, this.viewHero, alpha, this.localPlayerPose)
+            : undefined;
+        this.fight.drawScreen(overlay, sim, alpha, now, scale, viewPose);
         this.drawFlash(overlay, now);
         if (this.cinematic) {
             this.cinematicView.drawScreen(overlay, this.cinematic, (x, y) =>
@@ -2198,9 +2377,9 @@ export class GameView {
                 continue;
             }
             ctx.fillStyle = "#000000";
-            ctx.fillText(shout.text, p.x + pixel, p.y - 4 * pixel + pixel);
+            ctx.fillText(tl(shout.text), p.x + pixel, p.y - 4 * pixel + pixel);
             ctx.fillStyle = "#ffff00";
-            ctx.fillText(shout.text, p.x, p.y - 4 * pixel);
+            ctx.fillText(tl(shout.text), p.x, p.y - 4 * pixel);
         }
     }
 
@@ -2624,6 +2803,194 @@ export class GameView {
         }
     }
 
+    // A rectangle on the ground, in world tiles, as the current canvas path
+    private traceGroundRect(
+        overlay: Overlay,
+        sim: Sim,
+        x0: number,
+        y0: number,
+        x1: number,
+        y1: number,
+    ): void {
+        const ctx = overlay.ctx;
+        ctx.beginPath();
+        [
+            [x0, y0],
+            [x1, y0],
+            [x1, y1],
+            [x0, y1],
+        ].forEach(([wx, wy], i) => {
+            const p = overlay.project(wx, this.ground(sim, wx, wy) - 0.05, wy, this.screen2);
+            if (i === 0) {
+                ctx.moveTo(p.x, p.y);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        });
+        ctx.closePath();
+    }
+
+    // A tile's square on the ground, a little inside its edges, as the current canvas path
+    private traceGroundTile(overlay: Overlay, sim: Sim, cx: number, cy: number): void {
+        const half = 0.45;
+        this.traceGroundRect(overlay, sim, cx - half, cy - half, cx + half, cy + half);
+    }
+
+    // Text on the ground at a tile's middle: white (or colour) with a dark edge, readable on any
+    // floor
+    private drawGroundText(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        text: string,
+        color: string,
+        size: number,
+    ): void {
+        const p = overlay.project(x, this.ground(sim, x, y) - 0.1, y, this.screen2);
+        if (!p.visible) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        ctx.font = `${Math.round(size)}px "OSRS Bold", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = Math.max(2, size / 5);
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+        ctx.strokeText(text, p.x, p.y);
+        ctx.fillStyle = color;
+        ctx.fillText(text, p.x, p.y);
+    }
+
+    // The Scabaras room's puzzle helper, as OSRS's ToA plugin: Sequence's plates numbered in the
+    // order they've lit (the next to step on brightest), the Lights out plates to step on, the
+    // Addition symbols that make the tablet's number from what's been stepped on, and Matching's
+    // tiles named and coloured by symbol. Only for a puzzle that's open and not yet solved.
+    private drawScabarasHelper(overlay: Overlay, sim: Sim, now: number, scale: number): void {
+        const scabaras = sim.tombsRoom?.scabaras;
+        const def = sim.tombsPathRoom?.scabaras;
+        if (!this.puzzleHelper || !scabaras || !def || sim.runOver) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const solved = (puzzle: string) => scabaras.solved.some((p) => p === puzzle);
+        const pulse = 0.7 + 0.3 * Math.sin(now / 220);
+        const mark = (x: number, y: number, alpha: number) => {
+            this.traceGroundTile(overlay, sim, x, y);
+            ctx.fillStyle = `rgba(80, 230, 255, ${0.3 * alpha})`;
+            ctx.fill();
+            // A dark edge under the bright one, so it reads on a lit plate as on the floor
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 * alpha})`;
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(150, 245, 255, ${alpha})`;
+            ctx.stroke();
+        };
+        // Sequence: each plate's place in the order once it's lit
+        const sequence = scabaras.sequence;
+        if (!solved("sequence")) {
+            const shown = sim.scabarasSequenceShown;
+            for (let k = sequence.step; k < shown; k++) {
+                const plate = def.sequence[sequence.order[k]];
+                if (k === sequence.step) {
+                    mark(plate.x, plate.y, pulse);
+                }
+                this.drawGroundText(
+                    overlay,
+                    sim,
+                    plate.x,
+                    plate.y,
+                    `${k + 1}`,
+                    k === sequence.step ? "#ffffff" : "#c8c8c8",
+                    22 * scale,
+                );
+            }
+        }
+        // Lights out: the fewest to step on to light the ring
+        if (!solved("lights")) {
+            for (const i of solveScabarasLights(scabaras.lights)) {
+                mark(def.lights[i].x, def.lights[i].y, pulse);
+            }
+        }
+        // Addition: once the tablet's readable, the way on from what's been stepped on, or from
+        // beside the plate the hero's on
+        const addition = scabaras.addition;
+        if (!solved("addition") && solved("sequence") && solved("lights")) {
+            const on = scabaras.standing[this.viewHero];
+            const way = solveScabarasAddition(
+                def.addition,
+                addition.values,
+                addition.target,
+                addition.stepped,
+                on?.[0] === "a" ? Number(on.slice(1)) : undefined,
+            );
+            for (const i of way ?? []) {
+                if (!addition.stepped[i]) {
+                    mark(def.addition[i].x, def.addition[i].y, pulse);
+                }
+            }
+        }
+        // Matching: each tile not matched yet named in its symbol's own colour, so a pair stands
+        // out across the room, as the plugin's tiles do
+        const matching = scabaras.matching;
+        if (!solved("matching") && scabaras.solved.length >= 3) {
+            for (const side of ["north", "south"] as const) {
+                def.matching[side].forEach((p, i) => {
+                    const symbol = matching[side][i];
+                    if (matching.matched[symbol]) {
+                        return;
+                    }
+                    this.traceGroundTile(overlay, sim, p.x, p.y);
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = MATCHING_COLORS[symbol];
+                    ctx.stroke();
+                    this.drawGroundText(
+                        overlay,
+                        sim,
+                        p.x,
+                        p.y,
+                        SCABARAS.symbolNames[symbol],
+                        MATCHING_COLORS[symbol],
+                        15 * scale,
+                    );
+                });
+            }
+        }
+    }
+
+    // The Crondis room's spears about to thrust: the tiles each will reach, on the floor through
+    // its tell, filling in as it nears (the spear's own glint is small, and a step out of its
+    // statue): what to time a way past by, in time to read it
+    private drawCrondisSpearTells(overlay: Overlay, sim: Sim): void {
+        const crondis = sim.tombsRoom?.crondis;
+        const def = sim.tombsPathRoom?.crondis;
+        if (!crondis || !def) {
+            return;
+        }
+        const ctx = overlay.ctx;
+        const tell = Math.round(CRONDIS.spearTell * TICKS_PER_SECOND);
+        for (const thrust of crondis.thrusts) {
+            const age = sim.tick - thrust.startTick;
+            if (age >= tell) {
+                continue;
+            }
+            const t = Math.min(1, Math.max(0, age / tell));
+            const area = sim.crondisSpearArea(def, thrust);
+            this.traceGroundRect(overlay, sim, area.x0, area.y0, area.x1, area.y1);
+            // Yellow, not red: the room's floor is red already
+            ctx.fillStyle = `rgba(255, 220, 90, ${0.2 + 0.35 * t})`;
+            ctx.fill();
+            // A dark edge under the bright one, to read on any of its floor
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = `rgba(0, 0, 0, ${0.55 + 0.3 * t})`;
+            ctx.stroke();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = `rgba(255, 235, 140, ${0.8 + 0.2 * t})`;
+            ctx.stroke();
+        }
+    }
+
     // A circle on the ground, as the current canvas path
     private traceGroundCircle(
         overlay: Overlay,
@@ -3018,7 +3385,7 @@ export class GameView {
         ctx.textAlign = "center";
         ctx.textBaseline = "alphabetic";
         const text = hero.down
-            ? `${hero.name} (${sim.canBeRevived(hero) ? "down, revive me!" : "down"})`
+            ? `${hero.name} (${sim.canBeRevived(hero) ? t("canvas.down_revive") : t("canvas.down")})`
             : hero.name;
         const y = p.y - 7 * pixel;
         ctx.fillStyle = "#000000";

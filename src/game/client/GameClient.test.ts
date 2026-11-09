@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
+import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
@@ -24,9 +25,11 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, TICK_MS, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import { GameClient, TICK_MS, cleanLoadout, getPhaseBarFraction, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
+import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
+import { CoopTicker } from "./coop/CoopTicker";
 import { UpMessage } from "./coop/protocol";
 
 function createSim(focus?: number): Sim {
@@ -124,6 +127,22 @@ describe("movement prediction", () => {
     });
 });
 
+describe("a co-op player's loadout", () => {
+    // Their Lil' Zik looks, for their expert chest: only those, whatever their game sends
+    it("keeps only the looks a chest gives every time, from a list of strings", () => {
+        const loadout = makeLoadout({}, [], {}, undefined, undefined, ["lil_sot", "lil_xarp"]);
+        expect([...cleanLoadout(loadout).trophiesFound]).toEqual(["lil_sot", "lil_xarp"]);
+        const junk = {
+            ...loadout,
+            trophies: ["lil_bloat", 7, null, "ghrazi_rapier", "nope", {}] as unknown as string[],
+        };
+        expect([...cleanLoadout(junk).trophiesFound]).toEqual(["lil_bloat"]);
+        const notAList = { ...loadout, trophies: "lil_bloat" as unknown as string[] };
+        expect(cleanLoadout(notAList).trophiesFound.size).toBe(0);
+        expect(cleanLoadout(undefined).trophiesFound.size).toBe(0);
+    });
+});
+
 describe("the co-op flag", () => {
     test("shows unless it's been turned off, and is remembered", () => {
         const stored = new Map<string, string>();
@@ -196,6 +215,122 @@ describe("power-up timers", () => {
 function displayOf(client: GameClient): DisplaySettings {
     return (client as unknown as { display: DisplaySettings }).display;
 }
+
+describe("co-op without render frames", () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+            "URL",
+            class extends URL {
+                static createObjectURL() {
+                    return "blob:background-test";
+                }
+                static revokeObjectURL() {}
+            },
+        );
+        vi.stubGlobal(
+            "Worker",
+            class {
+                onmessage?: () => void;
+                private timer = setInterval(() => this.onmessage?.(), TICK_MS);
+                terminate() {
+                    clearInterval(this.timer);
+                }
+            },
+        );
+    });
+    afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    test.each([false, true])(
+        "keeps the guest in step for 30 seconds without drawing (host down: %s)",
+        async (down) => {
+            // No visibilitychange occurs: this is the hole in the former loop.
+            vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+            const hostSim = createSim(0);
+            const guestSim = createSim(1);
+            for (const sim of [hostSim, guestSim]) sim.heroes[0].down = down;
+            const heroes = new Map([
+                ["host", 0],
+                ["guest", 1],
+            ]);
+            let host: CoopRun;
+            const guest = new CoopRun(
+                guestSim,
+                false,
+                {
+                    sendUp: (m) => host.receiveUp("guest", m),
+                    sendDown() {},
+                },
+                heroes,
+                "host",
+            );
+            let lastFrameAt = performance.now();
+            let largestGap = 0;
+            host = new CoopRun(
+                hostSim,
+                true,
+                {
+                    sendUp() {},
+                    sendDown(m) {
+                        const now = performance.now();
+                        largestGap = Math.max(largestGap, now - lastFrameAt);
+                        lastFrameAt = now;
+                        guest.receiveDown(m);
+                        while (guest.canStep()) {
+                            guest.stepFrame();
+                            guestSim.takeEvents();
+                        }
+                    },
+                },
+                heroes,
+                "host",
+            );
+            host.receiveUp("guest", { loaded: true });
+            const { client } = createClient(hostSim, false);
+            Object.assign(client, {
+                coopRun: host,
+                coopStopped: false,
+                accumulator: 0,
+                coop: { keepAlive() {} },
+                input: { getMoveVector: () => ({ x: 0, y: 0 }) },
+                handleEvents() {},
+                syncOverlay() {},
+                getDecisionKey: () => "playing",
+                resendAutoChest() {},
+            });
+            const ticking = client as unknown as {
+                startCoopTicker(): void;
+                stopCoopTicker(): void;
+                coopTicker: CoopTicker;
+            };
+            ticking.startCoopTicker();
+            for (let frame = 0; frame < 50; frame++) {
+                await vi.advanceTimersByTimeAsync(TICK_MS);
+                ticking.coopTicker.render();
+            }
+            const before = guest.frame;
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(guest.frame - before).toBe(1500);
+            expect(largestGap).toBeLessThanOrEqual(60);
+            expect(guest.desynced).toBe(false);
+            expect(syncHash(hostSim)).toBe(syncHash(guestSim));
+            ticking.coopTicker.render();
+            expect(host.frame).toBe(1550);
+            await vi.advanceTimersByTimeAsync(TICK_MS);
+            ticking.coopTicker.render();
+            expect(host.frame).toBe(1551);
+            ticking.stopCoopTicker();
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(host.frame).toBe(1551);
+            expect(vi.getTimerCount()).toBe(0);
+        },
+    );
+});
 
 describe("the HUD", () => {
     const updateHud = (client: GameClient, force = false) =>
@@ -1281,6 +1416,27 @@ describe("saving", () => {
         },
     );
 
+    // For the expert chest, which gives a look not found yet
+    test("a solo run and a co-op loadout bring the save's Lil' Zik looks, only those", async () => {
+        expect.hasAssertions();
+        const { client } = createSaving(true);
+        client.save.trophies = ["lil_bloat", "ghrazi_rapier", "lil_sot"];
+        const enterRun = vi.fn<(sim: Sim) => void>();
+        Object.assign(client, {
+            grid: createSim().grid,
+            travelTo: vi.fn().mockResolvedValue(true),
+            enterRun,
+            options: { stress: 0 },
+        });
+        await client.startRun("lumbridge");
+        const sim = enterRun.mock.calls[0][0];
+        expect([...(sim.heroes[0].trophiesFound ?? [])]).toEqual(["lil_bloat", "lil_sot"]);
+        const loadout = (
+            client as unknown as { getLoadout(): Parameters<typeof loadoutStats>[0] }
+        ).getLoadout();
+        expect(loadout?.trophies).toEqual(["lil_bloat", "lil_sot"]);
+    });
+
     test("a co-op map's forced adventurer determines the skill page", () => {
         expect.hasAssertions();
         const { client, store } = createSaving(true);
@@ -1297,18 +1453,34 @@ describe("saving", () => {
         );
     });
 
-    test.each([
-        ["warrior", "thanksgiving"],
-        ["avian_assaulter", "lumbridge"],
-    ])("solo start rejects %s on %s before loading the map", async (characterId, mapId) => {
-        const { client, store } = createSaving(true);
-        store.set({ characterId });
-        const travelTo = vi.fn();
-        const denied = vi.fn();
-        Object.assign(client, { travelTo, sounds: { denied } });
-        await client.startRun(mapId);
-        expect(travelTo).not.toHaveBeenCalled();
-        expect(denied).toHaveBeenCalledOnce();
+    test.each([["avian_assaulter", "lumbridge"]])(
+        "solo start rejects %s on %s before loading the map",
+        async (characterId, mapId) => {
+            const { client, store } = createSaving(true);
+            store.set({ characterId });
+            const travelTo = vi.fn();
+            const denied = vi.fn();
+            Object.assign(client, { travelTo, sounds: { denied } });
+            await client.startRun(mapId);
+            expect(travelTo).not.toHaveBeenCalled();
+            expect(denied).toHaveBeenCalledOnce();
+        },
+    );
+
+    test("the co-op host plays everyone as the Avian Assaulter on Thanksgiving", () => {
+        const { client } = createSaving(true);
+        const members = [
+            { id: "host", name: "Host", characterId: "warrior", ready: true },
+            { id: "guest", name: "Guest", characterId: "ranger", ready: true },
+        ];
+        const room = { mapId: "thanksgiving", members, endless: false, hard: false };
+        const start = vi.fn();
+        Object.assign(client, { coop: { room, isHost: true, start } });
+        client.startCoopRun();
+        expect(start).toHaveBeenCalledOnce();
+        expect(
+            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
+        ).toEqual(["avian_assaulter", "avian_assaulter"]);
     });
 
     test("the co-op host requires every hero to match the selected map", () => {
@@ -1317,20 +1489,14 @@ describe("saving", () => {
             { id: "host", name: "Host", characterId: "avian_assaulter", ready: true },
             { id: "guest", name: "Guest", characterId: "warrior", ready: true },
         ];
-        const room = { mapId: "thanksgiving", members, endless: false, hard: false };
+        const room = { mapId: "lumbridge", members, endless: false, hard: false };
         const start = vi.fn();
         const denied = vi.fn();
         Object.assign(client, { coop: { room, isHost: true, start }, sounds: { denied } });
         client.startCoopRun();
         expect(start).not.toHaveBeenCalled();
         expect(denied).toHaveBeenCalledOnce();
-        members[1].characterId = "avian_assaulter";
-        client.startCoopRun();
-        expect(start).toHaveBeenCalledOnce();
-        expect(
-            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
-        ).toEqual(["avian_assaulter", "avian_assaulter"]);
-        room.mapId = "lumbridge";
+        members[0].characterId = "warrior";
         client.startCoopRun();
         expect(start).toHaveBeenCalledOnce();
     });
@@ -1977,5 +2143,201 @@ describe("the fight button's hint", () => {
         sim.shownBoss = { dead: false, risingEnd: 0 };
         expect(hint(0)).toBe(false);
         expect(hint(5)).toBe(false);
+    });
+});
+
+describe("invocation presets", () => {
+    function createClient() {
+        const save = createSave();
+        const sent: unknown[] = [];
+        const writes = { count: 0 };
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, {
+            save,
+            persist: () => writes.count++,
+            getLoadout: () => ({ invocations: save.invocations }),
+            coop: { room: {}, setMe: (me: unknown) => sent.push(me) },
+        });
+        return { client, save, sent, writes };
+    }
+
+    test("load onto the board and tell the lobby, as a toggle does", () => {
+        const { client, save, sent } = createClient();
+        save.invocations = ["on_a_diet"];
+        client.saveInvocationPreset("Diet");
+        save.invocations = [];
+        client.loadInvocationPreset("Diet");
+        expect(save.invocations).toEqual(["on_a_diet"]);
+        expect(sent).toEqual([{ loadout: { invocations: ["on_a_diet"] } }]);
+        // Not one of them, nothing happens
+        client.loadInvocationPreset("Nope");
+        client.deleteInvocationPreset("Nope");
+        expect(save.invocationPresets).toHaveLength(1);
+        expect(sent).toHaveLength(1);
+    });
+
+    test("leave none at all once the last is deleted, as a save loads it", () => {
+        const { client, save } = createClient();
+        client.saveInvocationPreset("");
+        client.deleteInvocationPreset("Raid level 0");
+        expect(save.invocationPresets).toBeUndefined();
+    });
+
+    test("write nothing for a new one when they're all used", () => {
+        const { client, save, writes } = createClient();
+        for (let i = 0; i < MAX_INVOCATION_PRESETS; i++) {
+            client.saveInvocationPreset(`Set ${i}`);
+        }
+        const presets = save.invocationPresets;
+        writes.count = 0;
+        client.saveInvocationPreset("One more");
+        expect(writes.count).toBe(0);
+        expect(save.invocationPresets).toBe(presets);
+    });
+});
+
+describe("boss attacks' instructions", () => {
+    function createClient() {
+        const now = vi.spyOn(performance, "now").mockReturnValue(0);
+        const store = new GameStore(createSave());
+        const shown: { text: string; ms?: number }[] = [];
+        const toast = store.toast.bind(store);
+        store.toast = (text: string, ms?: number) => {
+            shown.push({ text, ms });
+            return toast(text, ms);
+        };
+        let playing = true;
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, {
+            instructionsSeen: new Set<string>(),
+            instructions: [],
+            instructionsUp: [],
+            instructionShownAt: -Infinity,
+            instructionPumpedAt: 0,
+            isPlaying: () => playing,
+            store,
+        });
+        const inner = client as unknown as {
+            queueInstruction(text: string): void;
+            showInstruction(now: number): void;
+        };
+        // A frame at t, as GameClient.update has it: toasts past their time go, then the next
+        // instruction
+        const frame = (t: number) => {
+            now.mockReturnValue(t);
+            store.expireToasts();
+            inner.showInstruction(t);
+        };
+        return {
+            store,
+            shown,
+            texts: () => shown.map((s) => s.text),
+            queue: (text: string) => inner.queueInstruction(text),
+            frame,
+            // Frames from one time to another, 100 ms apart
+            play: (from: number, to: number) => {
+                for (let t = from; t <= to; t += 100) {
+                    frame(t);
+                }
+            },
+            pause: (on: boolean) => (playing = !on),
+            restore: () => now.mockRestore(),
+        };
+    }
+
+    test("show once a run, one after another, each held long enough to read", () => {
+        const c = createClient();
+        try {
+            c.frame(1000);
+            c.queue("Dodge the spears!");
+            c.queue("Hide behind a rock!");
+            c.queue("Dodge the spears!");
+            expect(c.texts()).toEqual(["Dodge the spears!"]);
+            expect(c.shown[0].ms).toBeGreaterThanOrEqual(4000);
+            // Not on top of the first
+            c.play(1100, 3900);
+            expect(c.shown).toHaveLength(1);
+            c.play(4000, 4100);
+            expect(c.texts()).toEqual(["Dodge the spears!", "Hide behind a rock!"]);
+            // Its attack again later: not said again this run
+            c.play(4200, 20000);
+            c.queue("Dodge the spears!");
+            c.play(20100, 25000);
+            expect(c.shown).toHaveLength(2);
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("come back after a level up that covered them, till they've been read", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
+            c.queue("First");
+            c.queue("Second");
+            c.play(100, 500);
+            expect(c.texts()).toEqual(["First"]);
+            // A level up's choice half a second after it came up: it's taken down, not read
+            c.pause(true);
+            c.frame(600);
+            expect(c.store.getSnapshot().toasts).toEqual([]);
+            c.play(700, 30000);
+            expect(c.texts()).toEqual(["First"]);
+            // Back in play: the first again straight away, then the second
+            c.pause(false);
+            c.play(30100, 33100);
+            expect(c.texts()).toEqual(["First", "First", "Second"]);
+            // Each read once it's been up long enough: a pause after that brings neither back
+            c.play(33200, 37000);
+            c.pause(true);
+            c.frame(37100);
+            c.pause(false);
+            c.play(37200, 45000);
+            expect(c.texts()).toEqual(["First", "First", "Second"]);
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("come again when newer notices push one off before it's read", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
+            c.queue("Get behind a boulder!");
+            c.play(100, 1000);
+            // Four of the game's other notices at once: the store keeps four
+            for (const text of ["Zebak roars!", "A casket drops!", "Power up!", "Level 5!"]) {
+                c.store.toast(text);
+            }
+            c.frame(1100);
+            expect(c.texts().filter((t) => t === "Get behind a boulder!")).toHaveLength(2);
+            expect(c.store.getSnapshot().toasts.map((t) => t.text)).toContain(
+                "Get behind a boulder!",
+            );
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("drop one that waited too long in play, but not for time in a hidden tab", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
+            // Six at once, 3 s apart: the fifth's and sixth's turns come after 12 s of play, too
+            // late, and they go
+            ["A", "B", "C", "D", "E", "F"].forEach(c.queue);
+            c.play(100, 20000);
+            expect(c.texts()).toEqual(["A", "B", "C", "D"]);
+            // Time away in a hidden tab isn't time waited, or time read: back after minutes, the
+            // one that was up comes again, and the one behind it isn't dropped
+            c.queue("G");
+            c.queue("H");
+            c.frame(20100);
+            c.frame(200000);
+            c.play(200100, 203100);
+            expect(c.texts().slice(-3)).toEqual(["G", "G", "H"]);
+        } finally {
+            c.restore();
+        }
     });
 });

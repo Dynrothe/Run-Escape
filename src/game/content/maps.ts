@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
@@ -437,6 +438,7 @@ export const MAPS: MapDef[] = [
         finalBossWarning: "The harvest feast is interrupted... the Freaky Forester approaches!",
         victoryText: "The Freaky Forester is defeated! The harvest is safe!",
         seasonal: true,
+        seasonalCharacter: "avian_assaulter",
     },
 ];
 
@@ -544,7 +546,7 @@ export function getRunCinematic(map: MapDef, stage: number): CinematicDef | unde
 // The adventurer everyone plays on a map, if it has one (Durial321 in
 // Falador, the Inquisitor against Phosani's Nightmare)
 export function getMapCharacter(map: MapDef): string | undefined {
-    return map.fun?.character ?? map.fight?.character;
+    return map.fun?.character ?? map.fight?.character ?? map.seasonalCharacter;
 }
 
 export function getMap(id: string): MapDef {
@@ -618,4 +620,17 @@ export function hasFliers(map: MapDef): boolean {
     visit(map);
     visit(RANDOM_EVENTS);
     return enemies.some((enemy) => enemy.flies);
+}
+
+// A map's texts in the language chosen (map.<id>.name|desc|warning|victory)
+export function mapName(map: MapDef): string {
+    return tr(`map.${map.id}.name`, map.name);
+}
+
+export function mapDescription(map: MapDef): string {
+    return tr(`map.${map.id}.desc`, map.description);
+}
+
+export function mapFinalBossWarning(map: MapDef): string {
+    return tr(`map.${map.id}.warning`, map.finalBossWarning);
 }

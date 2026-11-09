@@ -276,6 +276,21 @@ unlocks something in the game.
       target takes 25% more from everything for 6 seconds.
     - **Of the sun** (Jewel of the Sun): heals on every kill and hits harder below 25% health;
       Tumeken's Light, on a long cooldown, heals in full and cures poison.
+    - **Of amascut** (Jewel of Amascut, raid level 500): the three jewels in one, but for
+      Tumeken's Light: a keris has one special attack, and this one's is the Wrath.
+    - **In the game** (`KERIS_PARTISANS` in `content/weapons.ts`): one `family`, so one a run;
+      the plain one from the Queen's second form (`kalphite_queen_risen`, where her kill counts);
+      the rest `raidChest` unlocks on their jewels. Kalphites and scarabs, Kephri and her
+      scarabs too, carry the `kalphite` tag (not the Scarab Mages, who are men), and `slayer`
+      gives them the third. Breaching is
+      `WeaponDef.breach` (6% a stab, 30% on a kalphite, triple, diamond bolts' Armour Piercing on
+      it); Wrath of Amascut is a `special` every sixth stab (1.5x and a 25% `drain` for 6 seconds,
+      OSRS's own keris special animation); the sun's are `killHeal` (the stab's own kills, and
+      none of what's part of a fight, its `noDrops` summons), `lowHealth` and a `restore`
+      special every fortieth stab (Tumeken's Light's own cast, Heal Group's light on you; it ends
+      the spores' drowsiness too). The
+      keris partisans are held as a spear, the Zamorakian hasta's stance and the dragon spear's
+      stab.
 - **Thread of Elidinis: the Divine rune pouch.** In OSRS the thread on a rune pouch makes the
   divine pouch, four runes instead of three. Here the thread puts the pouch in the level-up
   choices, as a rare passive, for every adventurer. It takes a passive slot (the price, and with
@@ -284,6 +299,10 @@ unlocks something in the game.
   style, for that slot. So a melee or ranged build can carry the third style the Theatre of
   Blood's expert mode asks for (its Nylocas take nothing from the wrong one), and a magic build
   gets one more spell. (It was magic adventurers only at first; that did nothing for expert.)
+  In the game it's the `divine_rune_pouch` passive (`content/passives.ts`, one level), unlocked by
+  the Thread. `Sim.maxWeapons` counts its slot, and `fitsWithPouch` in `core/Upgrades.ts` keeps
+  it for magic: a weapon that isn't magic fits only in the other slots, and one magic weapon of
+  another class can be taken. Its one level holds in endless too (`PassiveDef.noOverlevel`).
 
 ### Combat Achievements
 
@@ -367,7 +386,10 @@ animations from a lister of those whose model or animation is in the raid's rang
   it isn't open yet (`Sim.stepTombs`), once as you come up to it.
 - **The board**: Invocations in the setup bar, with the raid level and its band, opens the board.
   What's picked is kept in the save (`SaveData.invocations`) and goes to the run as
-  `SimOptions.invocations`.
+  `SimOptions.invocations`. Up to five setups save as presets (`SaveData.invocationPresets`), each
+  loaded in one go. They go by name, and one left blank is named by its raid level, so a blank
+  save replaces the last at that level with one press (its button says Replace; Delete takes
+  two). A level name follows the level as an update changes it (`cleanInvocationPresets`).
 - **Ba-Ba** (`content/tombs.ts`, her fight in `Sim.stepTombsBoss`): her arena's cut turned so her
   throne's north, and she rises once the party's a step past the gap at its foot. Her attacks:
   the shockwave round her (a ground mark); rockfall, shadows in a cross on your tile (a `cross` of
@@ -406,9 +428,13 @@ animations from a lister of those whose model or animation is in the raid's rang
       Melee swings and stamps out a ring; ranged fires fans and a spiral of sand; magic rings and
       streams red sand, which brings the element of the quadrant it hits you in.
     - **Memory Blast**, Simon says: he vanishes to the middle and can't be hurt, the symbols light up
-      one at a time (each beside the last, never across), the quadrant glowing with its element. Then,
-      2.4 seconds apart (1.2 with Feeling Special), every quadrant but the next in the order is
-      blasted for nearly half your hitpoints and its element. Four steps, one more every two path
+      one at a time (each beside the last, never across), the quadrant glowing with its element and
+      its floor symbol lit in the element's colour (`AkkhaElementDef.glow`) in a funnel of light
+      (darkness's own swirl, 2257, tinted for each). His room's in full light for the fight
+      (`AkkhaDef.ambient`), not the Tombs' dimmer light. Then, 2.4 seconds apart (1.2 with
+      Feeling Special), every quadrant but the next in the order is
+      blasted for nearly half your hitpoints and its element, each throwing up a spray of its
+      element's orbs, bright in its colour (drawn only). Four steps, one more every two path
       levels.
     - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
       leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
@@ -418,10 +444,13 @@ animations from a lister of those whose model or animation is in the raid's rang
       OSRS's are, and he can't be hurt except well inside a quadrant whose shadow is dead (his
       middle a tile clear of the lines between them), so you kill one and draw him into its
       quarter. Only one: once a shadow's struck the rest are shielded, as the wiki says to focus
-      one, till they're restored at the next threshold. One timer (the HUD counts it down) runs
-      for them all: when it's out, every
-      quadrant whose shadow's still up floods for half your hitpoints and its element, and it
-      starts again.
+      one, till they're restored at the next threshold. He walks through his own shadows (they
+      don't push him as other enemies do): they never move, so one in his way would hold him off a
+      dead one's quarter. With one dead he comes on at whoever he's after while his volleys go out
+      (`Sim.akkhaDrawn`; still standing to wind each up), as OSRS's is dragged: standing for every
+      volley, his ranged and magic forms hardly took a step between specials, so he was never
+      drawn in. One timer (the HUD counts it down) runs for them all: when it's out, every quadrant
+      whose shadow's still up floods for half your hitpoints and its element, and it starts again.
     - **Final stand**: at 0 he rises (`rises`) as `akkha_enraged` with a fifth of his hitpoints, in
       a corner, praying against ranged and magic (mostly, not whole as OSRS's: a hero here keeps to
       one style, and a wizard with no melee would never finish him), and sends Unstable Orbs (11804, their arrows the
@@ -447,7 +476,9 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **The slates** by the way in, one on each wall, as OSRS's: stand by one and a screen shows
       Addition's nine symbols, the floor's own models seen from above (`ItemIcon`'s `locId`,
       `ItemIconLoader.renderLocIcon`), each with what it's worth (drawn with the Ancient tablet,
-      45339).
+      45339). On a touch screen the slate's one thin row along the top instead, with no names,
+      since with no zoom the middle of the screen is the floor you're about to step on (the
+      tablet's panel is as it is elsewhere).
     - **Sequence** (the east hall, by the way in): OSRS's nine plates in a diamond, and its Ancient
       button (45338) on the wall beside them. Push it (walk up to it) and they light one at a time
       (0.8 s each), 4 steps, one more every two path levels, up to 6; push it again for another
@@ -463,14 +494,28 @@ animations from a lister of those whose model or animation is in the raid's rang
       corner south-west of it shows its number, 20 to 45, on a screen while you're by it (and the
       HUD keeps it), dark till the two before are solved. Walk over symbols that add up to it, each
       once; past it, the roof comes down and they reset.
-    - **Matching** (the far, north room, last): two boards of the same nine hidden symbols either
-      side of the chasm. A pair that matches stays; one that doesn't drops the roof and hides
-      again. Solo, 4 are done as it starts, as OSRS's are, one fewer each path level; in a party
-      none.
+    - **Matching** (the far, north room, last): two boards of the same nine symbols either side
+      of the chasm, shuffled apart, each tile's symbol on it from the start as OSRS's are (they
+      were hidden at first, which left only guessing): find each one's partner on the other
+      board. A pair that matches stays; one that doesn't drops the roof. Solo, 4 are done as it
+      starts, as OSRS's are, one fewer each path level; in a party none.
     - A mistake takes a quarter of your hitpoints, through armour. Meanwhile rocks fall near
       everyone every 4.5 s (down to 1.8 with levels), shown by 302's falling roof, and every rock
       breaks into shards, bullets out all round. Scarabs (11697, ranged) and Kephri's swarms
       stream in from the passages.
+    - The HUD lists the four (`Sim.scabarasInfo.puzzles`): each done, open, or waiting (Addition on
+      Sequence and Lights out, Matching on the other three), with where it is and what it wants.
+    - **The puzzle helper** (`DisplaySettings.puzzleHelper`, `GameView.drawScabarasHelper`), as
+      OSRS's ToA plugin: Sequence's plates numbered as they light, the next outlined; the fewest
+      Lights out plates to step on (`solveScabarasLights`); Addition's way to the tablet's number,
+      the board's own for each number (`SCABARAS_ADDITION_WAYS`), a way on from a first step off
+      it onto an edge symbol (`SCABARAS_ADDITION_FROM`, from whichever stepped symbol has one), or
+      a capped search on from what's been stepped on (`searchScabarasAddition`), or from beside
+      the hero when they're inside the board with nothing stepped on (it reset under them), the
+      board's own way if that finds none in time; Matching's tiles named in their symbol's colour.
+      On at Entry, and at any raid level once the room's been beaten (`SaveData.scabarasBeaten`,
+      from `Sim.scabarasBeaten`, a loss included). Client only. Its marks are flat tiles and
+      names drawn over the floor, as the plugin's are: nothing in the cache marks a tile.
     - Not in yet: the obelisk puzzle (OSRS's random one, which the wiki has solos skip).
     - Matching's room, west, is walled off in OSRS by barriers (45135, 45375 to 45379) that open
       once the other three are solved. Cut with the room they never opened, so nobody could finish
@@ -510,12 +555,15 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **Water**: stand at a running waterfall (out of the map, drawn running or dry by the client) to
       fill your container, 100, and it's dry for 10 s after. Near the palm you pour it.
     - **Spears**: each corridor's crocodile statues thrust their spears out across a pair of rows at
-      a time, down the corridor, the side turning about, then rest; a tell (the spear glinting out
-      a tile) first. **Poison** comes down each corridor from its waterfall's end every 9 s (less
-      with path levels): pale first, the dark cloud a second behind it. It's the Spitting Scarab's
-      green splash (2155), faint for the pale: the room's own spot animations (2129 to 2131) draw
-      nothing, and its poison floor tiles' activation can't be baked (a loc bakes with its own
-      animation only).
+      a time, down the corridor, the side turning about, then rest; a tell first: the spear
+      glinting out a tile, and the tiles it'll reach marked on the floor
+      (`GameView.drawCrondisSpearTells`, yellow, as the floor's red; players found the glint
+      alone too hard to time). **Poison** comes down each corridor from its waterfall's end every
+      9 s (less with path levels): pale first, the dark cloud a second behind it. Under a
+      waterfall (where you fill) it doesn't reach you, running or dry, as in OSRS. It's the
+      Spitting Scarab's green splash (2155), faint for the pale: the room's own spot animations
+      (2129 to 2131) draw nothing, and its poison floor tiles' activation can't be baked (a loc
+      bakes with its own animation only).
     - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
       (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
       growth, never below the stage it's reached.
@@ -529,7 +577,12 @@ animations from a lister of those whose model or animation is in the raid's rang
       the island's edge or at the end of its roll, its water clearing the acid round it. Weapons
       pass them by (`EnemyDef.unhittable`): hit, they broke the moment they were down.
     - **Great Roar**: boulders across the island, then three roars a few seconds later, each a
-      fifth of your hitpoints and a knock back, unless a boulder's between you and him.
+      fifth of your hitpoints and a knock back, unless you're straight behind a boulder, down the
+      island from him, as OSRS's shelter is (`zebakShelters`; it was a slant on the line from him).
+      While it's coming, that ground glows behind each boulder (Verzik's circle, as the Het room
+      has); as it goes off, blown dust (2184) rolls out from him over the whole island but those
+      shadows, the boulders drawn on through it (gone from the sim already), and the camera
+      shakes. Without them a roar read as a big hit from nowhere.
     - **Tidal Waves**: two waves across the island (11738), up from the south then down from the
       north, each with a gap to stand in, narrower with path levels; they wash away his acid.
     - **Enrage** below 25%: quicker, with no more specials.
@@ -790,18 +843,19 @@ rubble rock stops.
   (`echoes`), her own lunge (9745) on their skeleton; the pocket between is the way out.
 - **Rampage** (the last phase's opener, then every 12 seconds): a surge. She goes to the room's
   edge in line with you, beats her chest (9751) and charges across on her walk, 6 damage, three
-  lanes in a row; across without hitting anyone she's open 2 seconds. **A charge or a lunge into one
-  of her boulders' rocks stops her dead, stunned 2.5 seconds** (Zachariah's stars over her head,
+  lanes in a row; across without hitting anyone she's open 2 seconds. **A charge into one of her
+  boulders' rocks stops her dead, stunned 2.5 seconds** (Zachariah's stars over her head,
   `BossGuardDef.stunSpotAnim` 80), not again for 8 seconds (`stunGrace`; a rock then only opens
-  her). Boulderdash makes it 1.4 times as fast.
-- **Engine**: a surge or a lunge's dash into a `leavesCover` rock is stuck, as a lunge into a pillar
-  is (`Sim.inCoverRock`, in `stepSurge` and `dashEnd`; what can't be stunned only stops short). The
+  her). Boulderdash makes it 1.4 times as fast. A lunge only stops short of a rock, not stunned
+  (players found standing behind one stunned her every 8 seconds, which made the fight easy).
+- **Engine**: a surge into a `leavesCover` rock is stuck, as a lunge into a pillar is
+  (`Sim.inCoverRock`, in `stepSurge`); a lunge's dash only stops short of one (`dashEnd`). The
   Tombs have no boss square, so a surge's lane in them runs as far as the floor does along the
   player's row or column (`Sim.tombsLaneBox`), never back over the fight's line.
 - **The bot**: off her strips sideways and to the pocket between hers and her brawlers' (stage 1's
   readers); out of a rampage's lane, or behind the rock in it when that's nearer (`rampageCover`),
-  and between her and a rock whenever there is one (as it was for her avalanche), so her lunges and
-  rampages run into it.
+  and between her and a rock whenever there is one (as it was for her avalanche), so her rampages
+  run into it (her lunges now only stop short there).
 
 Ids: nothing new from the cache. The stun's stars (80) are Zachariah's; the brawlers are the
 Apmeken room's Baboon Brawler (11709), which plays her 9745 (skeleton 2063, `find-npc-seqs.ts`).
@@ -867,7 +921,7 @@ in his quadrants' elements, and a miss drops his guard and his prayer with it. M
 quadrants, the shadows, Detonate and the final stand stay.
 
 - **Three phases** (`BossDef.phases` at 66% and 33%, where his shadows come now: two times, not
-  four, flooding every 15 seconds, not 20), `tempo` 1, 0.85, 0.7, the last dimmed to 0.6, the same
+  four, flooding every 15 seconds, not 20), `tempo` 1, 0.85, 0.7, the same
   on every form (`akkhaForm`; a form's change keeps the phase). His attack interval is 1.4 seconds
   (1.8), a special every 6 attacks (7). Memory Blast is a step longer in the last phase.
 - **His prayer down with his guard** (`BossGuardDef.pierce`, E2): while he's open, his overhead
@@ -1056,7 +1110,7 @@ the dev console can drive the real game with it (`await import("/scripts/game/to
   gone over the fall with time to be ahead of the next, and on past a spear by the corridor's other
   half.
 - **The bosses**: Ba-Ba's cracked boulder's lane and a rock's cover (between her and it, so she
-  lunges and rampages into it, and behind it when her rampage's lane runs into it); Akkha's spared quadrant (by
+  rampages into it, and behind it when her rampage's lane runs into it); Akkha's spared quadrant (by
   the line it shares with the next, a hop across as each burst lands: Feeling Special's bursts
   come quicker than a walk between corners), round his body (the flow field only knows the walls)
   and his dead shadows' quadrants; Kephri near enough; Zebak's island near him (melee on the row

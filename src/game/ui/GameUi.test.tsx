@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
 import { GameUi } from "./GameUi";
+
+vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
 
 const device = vi.hoisted(() => ({ coarse: false }));
 
@@ -296,7 +298,7 @@ test("Avian Assaulter is an available melee adventurer with the requested descri
     );
     expect(
         screen.getByText(
-            "Starts with a Rubber Chicken. Questionable.... This is one deadly Avain!",
+            "Starts with a Rubber Chicken. Questionable.... This is one dangerous bird! Everyone plays it in Thanksgiving Harvest.",
         ),
     ).toBeVisible();
     expect(screen.getByText("+15% damage against birds")).toBeVisible();
@@ -304,19 +306,16 @@ test("Avian Assaulter is an available melee adventurer with the requested descri
     expect(actions.selectCharacter).toHaveBeenCalledWith("avian_assaulter");
 });
 
-test("Thanksgiving and Avian require each other in either selection order", () => {
+test("Thanksgiving fixes the adventurer as the Avian Assaulter, and the Avian is kept to it", () => {
     const actions = renderMaps();
     const enter = () => screen.getByRole("button", { name: /Enter / });
     fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));
-    expect(enter()).toBeDisabled();
-    expect(screen.getByText("Thanksgiving Harvest requires Avian Assaulter.")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Avian Assaulter" }));
     expect(enter()).toBeEnabled();
+    expect(document.querySelector(".ui-select-fixed-note")).toHaveTextContent("Avian Assaulter");
     fireEvent.click(enter());
     expect(actions.startRun).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "Lumbridge" }));
-    expect(enter()).toBeDisabled();
-    expect(screen.getByText("Avian Assaulter can only enter Thanksgiving Harvest.")).toBeVisible();
+    expect(document.querySelector(".ui-select-fixed-note")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Warrior" }));
     expect(enter()).toBeEnabled();
 });
@@ -438,6 +437,19 @@ describe("the title's export reminder", () => {
         expect(screen.getByRole("button", { name: "Export save" })).toBeInTheDocument();
         act(() => store.set({ saveBlock: { kind: "otherTab" }, saveBlockClosed: true }));
         expect(screen.queryByRole("button", { name: "Export save" })).toBeNull();
+    });
+
+    test("has language button that opens settings with language controls", () => {
+        expect.hasAssertions();
+        renderTitle(0);
+        const langBtn = screen.getByRole("button", { name: "Language" });
+        expect(langBtn).toBeInTheDocument();
+        fireEvent.click(langBtn);
+        expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
+        // With its translator under its name
+        expect(
+            screen.getByRole("button", { name: "Português (BR) Translated by Iakee" }),
+        ).toBeInTheDocument();
     });
 
     test("goes while cloud save has a copy, and comes back when it stops keeping one", () => {

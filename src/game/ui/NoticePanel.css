@@ -50,6 +50,11 @@
     z-index: 10;
 }
 
+/* The language notice: over the pause menu or Settings it was picked in */
+.ui-language-notice {
+    z-index: 10;
+}
+
 .ui-notice-close {
     display: flex;
     flex-wrap: wrap;

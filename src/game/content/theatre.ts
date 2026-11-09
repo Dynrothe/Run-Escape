@@ -35,6 +35,10 @@ const ARMOR_CAP = 0.5;
 // a splat's on the ground it hurts
 const SPLAT_FIT = 0.8;
 
+// Seconds a ring closing in round you (the Maiden's blood, the Bloat's flies, Verzik's blasts and
+// green balls) stands where it formed first: finding the way out as it came in was too quick
+const RING_HOLD = 1;
+
 // Standing on a boss was safe from most of what it did. Each boss has an attack for whoever's up
 // close (its slam, stomp, bite or claws), used only within CLOSE_REACH tiles and picked about half
 // the time there. A slam marks the ground under the boss as it winds up, so there's time to step
@@ -131,6 +135,7 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         message: "The Maiden's blood closes in! Find the way out!",
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 20,
             volleys: 1,
             interval: 1,
@@ -155,6 +160,7 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         enraged: true,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 22,
             volleys: 3,
             interval: 1.1,
@@ -236,6 +242,7 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
         weight: 4,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 18,
             volleys: 3,
             interval: 0.9,
@@ -563,6 +570,7 @@ const VERZIK_ONE_ATTACKS: BossAttackDef[] = [
         weight: 3,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 16,
             volleys: 2,
             interval: 1.2,
@@ -717,6 +725,7 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         weight: 4,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 14,
             volleys: 1,
             interval: 1,

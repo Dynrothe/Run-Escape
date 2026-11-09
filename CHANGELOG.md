@@ -8,7 +8,6 @@ the version in the corner).
 ### Added
 
 - Avian Assaulter, a melee adventurer in a chicken outfit with a Rubber Chicken.
-- Optional developer controls for a maxed melee loadout.
 - Thanksgiving Harvest quests for its bosses and a Chompy Bird hunt, which rewards 4,000 coins.
 - The Thanksgiving Collection Log gains Chompy drops, a Chompy chick pet, turkey-carving secateurs and boss-gated event rewards.
 
@@ -23,17 +22,80 @@ the version in the corner).
 - Avian Assaulter has 70 HP and moves 45% faster, and the Freaky Forester's Pheasant Arrow fires four arrows at once.
 - The Freaky Forester's 60-second warning now appears at 9 minutes into Thanksgiving Harvest.
 - The Freaky Forester uses cache-backed Pheasant Arrows and rises into his larger form in the same boss fight.
-- Enraged Dark Chicken's Lane Rush now covers a 10-tile lane.
+- Enraged Dark Chicken's Lane Rush now covers a 12-tile lane.
 - A mobile HUD slider adjusts camera zoom in solo and co-op runs.
 - Thanksgiving Harvest waves now feature farmers, bandits and foxes instead of goblins and rats.
 - Chompy Slayer awards the Chompy chick, and Thanksgiving's Collection Log has a Turkey hat and a hard-mode Golden Egg.
-- Thanksgiving Harvest is exclusive to Avian Assaulter, who gets bird-hunting bonuses and upgrades a mighty Rubber Chicken instead of finding other weapons.
+- Thanksgiving Harvest is exclusive to Avian Assaulter, who is picked for you there like Durial321 in Falador, with bird-hunting bonuses and a mighty Rubber Chicken to upgrade instead of finding other weapons.
 - The Rubber Chicken strikes in front and behind from its first level.
 - Professor Oddenstein's Chemical Splash fires three flasks, the Evil Chicken's Magic Peck a tight cone of five, and the Forester's Boot Kick shows a red cone warning like the Professor's dagger slice.
 - Summoned Enraged Dark Chickens now charge down their lane instead of only walking at you.
 - Avian Assaulter is 35% bigger and 35% faster on Thanksgiving Harvest.
 - The Rubber Chicken has ten levels, hits bosses for 20% more and heals on hit, more with every upgrade. Avian Assaulter no longer finds gear, passives or utility items.
 - Avian Assaulter has circling birds overhead throughout the run, without being stunned.
+
+## 0.30.0 - 2026-11-09
+
+### Added
+
+- The Keris partisan, by Okaeri: a new melee weapon, unlocked by killing the Kalphite Queen in
+  the Desert. Its quick stabs hit kalphites and scarabs harder, Kephri included.
+- Tombs of Amascut rewards, by Okaeri: the jewels and the Thread of Elidinis from the raid's
+  chest now unlock things. Each jewel unlocks its own keris partisan with a power of its own, and
+  the Thread unlocks the Divine rune pouch, which gives you an extra weapon slot for a magic
+  weapon, whatever your style.
+- Invocation presets, by Okaeri: save up to five sets of Tombs of Amascut invocations and load
+  one with a tap.
+- A puzzle helper for the Scabaras room, by Okaeri: like the ToA plugin, it shows the order to
+  step on the plates, which plates to press, a way to make the tablet's number, and the name of
+  each matching symbol. It's on at Entry, and at any raid level once you've beaten the room. You
+  can turn it off in Settings.
+- Languages, by Iakee: play in English or Português (BR). Pick one with the globe on the
+  title screen, in Settings or in the pause menu. Only English is checked: the others may be wrong
+  or have text missing.
+
+### Changed
+
+- Boss instructions, by Okaeri: they show once per run, one at a time, and stay up long enough
+  to read.
+- The Apmeken room's arrow, by Okaeri: the arrow to a pillar or vent that needs fixing is now on
+  the floor next to you, not at the edge of the screen.
+- The Scabaras room's puzzles, by Okaeri: the screen now lists all four, where each one is, and
+  which are done.
+- Theatre of Blood's closing rings, by trippy22: a ring of blood, flies or Verzik's blasts that
+  closes in round you waits a second where it forms, so there's time to find the way out.
+
+### Fixed
+
+- The Theatre of Blood's expert chest could give a Lil' Zik look you already had. It now gives
+  one you haven't got until you have all five. Fixed by Okaeri.
+- On phones, the name of your special attack button was cut off. It now sits under the button.
+  Fixed by Okaeri.
+- Beating a boss in the Tombs of Amascut now heals your whole party to full. Fixed by Okaeri.
+- Ba-Ba no longer gets stunned every time she charges into a boulder. Only her Rampage does that
+  now. Fixed by Okaeri.
+- In the Crondis room, standing under a waterfall now keeps you safe from the poison, like in
+  OSRS. Fixed by Okaeri.
+- In the Scabaras room, the matching tiles now show their symbols, like in OSRS. Fixed by Okaeri.
+- In the Crondis room, the floor now lights up where a spear statue is about to strike. Fixed by
+  Okaeri.
+- Akkha's room is no longer dark. His symbols light up brightly in their own colours, and a
+  quadrant bursts into glowing orbs when it explodes. Fixed by Okaeri.
+- Zebak's roar: you're now safe straight behind a boulder, like in OSRS. The safe spots glow
+  before he roars, and a wave of dust shows the roar. Fixed by Okaeri.
+- Akkha could get stuck repeating Simon says forever once his shadows were out. He now follows
+  you into a quarter whose shadow you've killed. Fixed by Okaeri.
+- On phones, the Scabaras slate no longer covers the middle of the screen. It's a thin bar along
+  the top. Fixed by Okaeri.
+- On phones in the Tombs of Amascut, the DPS sat over the special attack button and took some of
+  its taps. It's now beside the button.
+- A co-op run keeps going when the host's window is covered and stops drawing. Fixed by trippy22.
+- In a co-op room, an adventurer picked while the connection was dropping is sent again, and you're
+  told if the room never gets it. Fixed by trippy22.
+- A co-op player who changes adventurer after readying up is no longer started on their old one:
+  changing it un-readies them, and the host waits for them to ready again. Fixed by trippy22.
+- Co-op rooms on servers in the UK and France show their flags rather than letters, and rooms in
+  Russia, Serbia and Burkina Faso the right letters. Fixed by trippy22.
 
 ## 0.29.1 - 2026-11-08
 
@@ -87,7 +149,7 @@ the version in the corner).
   passive, worn piece or Armoury piece to read it.
 - Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
   it saves you, and the Pyromancer's own revive shows as a phoenix.
-- Stat icons, by Giordano Souza: each stat shows its icon from the game's cache wherever it's
+- Stat icons, by Iakee: each stat shows its icon from the game's cache wherever it's
   listed, from descriptions and level ups to the pause menu, caskets and the Armoury.
 
 ### Changed

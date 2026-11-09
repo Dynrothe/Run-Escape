@@ -1,4 +1,5 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
 import { CharacterDef } from "./types";
 
@@ -48,7 +49,8 @@ export const CHARACTERS: CharacterDef[] = [
     {
         id: "avian_assaulter",
         name: "Avian Assaulter",
-        description: "Starts with a Rubber Chicken. Questionable.... This is one deadly Avain!",
+        description:
+            "Starts with a Rubber Chicken. Questionable.... This is one dangerous bird! Everyone plays it in Thanksgiving Harvest.",
         style: "melee",
         startingWeapon: "rubber_chicken",
         equipment: {
@@ -651,4 +653,12 @@ export function characterMapRestriction(characterId: string, mapId: string): str
         return `${character.name} can only enter Thanksgiving Harvest.`;
     }
     return undefined;
+}
+
+export function characterName(character: CharacterDef): string {
+    return tr(`char.${character.id}.name`, character.name);
+}
+
+export function characterDescription(character: CharacterDef): string {
+    return tr(`char.${character.id}.desc`, character.description);
 }

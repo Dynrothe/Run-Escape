@@ -61,7 +61,10 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - `colo-countries.json` is made from Cloudflare's status page by
   `node scripts/update-colo-countries.mjs`, run in this directory: review its diff and commit it.
   A data centre it hasn't got has no flag until then. The status page names a few without a
-  country, which the script's `places` lists, and it stops at any new one.
+  country, which `places` in `scripts/colo-countries.mjs` lists, and it stops at any new one.
+  It takes only current country codes: `Intl.DisplayNames` names old ones too, such as `UK` and
+  `FX`, which would replace `GB` and `FR`. The lobby lists a room that saved an old code by its
+  current one (`currentCountry` in `src/shared.mjs`).
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
   (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
   and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
@@ -157,8 +160,9 @@ updates, and moving objects between machines. Each one drops every connection to
 what it had in memory, often more than once an hour. So:
 
 - A room keeps itself in storage, and gives each player a token when they make or join it.
-  Someone joining or leaving, and a run starting or ending, are saved before anyone hears of
-  them, so a restart straight after doesn't bring back the room as it was.
+  Someone joining or leaving, a run starting or ending, and a player's change of pick or ready
+  that the room confirms (`meSeq`), are saved before anyone hears of them, so a restart straight
+  after doesn't bring back the room as it was.
 - A player whose connection drops keeps their place for 15 seconds. Their game reconnects to
   `coop/room/<code>?resume=<token>` for up to 10 seconds, and the run carries on. Someone who
   doesn't come back is let go, as if they'd left.

@@ -1,7 +1,10 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { tr } from "../i18n";
 import { CAPPED_STATS } from "./endless";
 import { RARITIES, Rarity } from "./rarity";
 import { PassiveDef } from "./types";
+
+export const DIVINE_RUNE_POUCH = "divine_rune_pouch";
 
 // perLevel is what a Common pick gives; an Uncommon pick gives 1.5x that, Rare
 // 2.25x and Very rare 3.5x (see rarity.ts).
@@ -162,6 +165,30 @@ export const PASSIVES: PassiveDef[] = [
         equipment: [{ slot: EquipSlot.CAPE, objIds: [28951, 28951] }],
         unlock: { kind: "beatMap", mapId: "varlamore" },
     },
+    // The Thread of Elidinis's: a slot for one more weapon, a magic one, whatever your style
+    // (Upgrades' rollChoices, Sim.maxWeapons). A melee or ranged build can carry the third style
+    // the Theatre's expert mode asks for.
+    {
+        id: DIVINE_RUNE_POUCH,
+        name: "Divine rune pouch",
+        description:
+            "One more weapon slot, for a magic weapon. Magic weapons are offered whatever your style.",
+        stat: "weaponSlots",
+        perLevel: 1,
+        effect: "magic weapon slot",
+        unit: "flat",
+        whole: true,
+        maxLevel: 1,
+        // A second pick would add nothing: it's one slot
+        noOverlevel: true,
+        rarity: "rare",
+        iconObjId: 27281,
+        unlock: {
+            kind: "raidChest",
+            mapId: "tombs_of_amascut",
+            trophyId: "thread_of_elidinis",
+        },
+    },
     // Melee's prayer, for being in the thick of it
     {
         id: "chivalry",
@@ -239,7 +266,7 @@ export function getPassive(id: string): PassiveDef {
 // and on past it in endless runs unless one of its stats is capped
 export function canLevelPassive(passive: PassiveDef, level: number, endless: boolean): boolean {
     const capped = [passive.stat, ...(passive.alsoAdds ?? [])].some((s) => CAPPED_STATS.has(s));
-    return level < passive.maxLevel || (endless && !capped);
+    return level < passive.maxLevel || (endless && !capped && !passive.noOverlevel);
 }
 
 // What one pick of this quality adds to the passive's stat
@@ -249,7 +276,7 @@ export function getPassiveGain(passive: PassiveDef, quality: Rarity): number {
 
 // "+12% damage", "+1.5 armour"
 export function formatPassiveValue(passive: PassiveDef, value: number): string {
-    return `${formatPassiveNumber(passive, value)} ${passive.effect}`;
+    return `${formatPassiveNumber(passive, value)} ${passiveEffect(passive)}`;
 }
 
 // Just the number: "+12%", "+1.5"
@@ -258,4 +285,16 @@ export function formatPassiveNumber(passive: PassiveDef, value: number): string 
         return `+${Math.round(value * 100)}%`;
     }
     return `+${Math.round(value * 10) / 10}`;
+}
+
+export function passiveName(passive: PassiveDef): string {
+    return tr(`passive.${passive.id}.name`, passive.name);
+}
+
+export function passiveDescription(passive: PassiveDef): string {
+    return tr(`passive.${passive.id}.desc`, passive.description);
+}
+
+export function passiveEffect(passive: PassiveDef): string {
+    return tr(`passive.${passive.id}.effect`, passive.effect);
 }

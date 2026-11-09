@@ -80,7 +80,8 @@ export function emptyStats(): Stats {
 }
 
 // What some weapons hit harder (the Ivandis flail and undead, vampyres)
-export type EnemyTag = "undead" | "vampyre" | "bird";
+// kalphite: the kalphites and the scarabs (Kephri too), for the keris partisans
+export type EnemyTag = "undead" | "vampyre" | "kalphite" | "bird";
 
 export type EnemyDef = {
     id: string;
@@ -440,6 +441,9 @@ export type BulletPatternDef = {
     // A wall's tiles between bullets; a closing ring's tiles out
     spacing?: number;
     distance?: number;
+    // Closing rings only (a test checks): seconds it stands where it formed before it closes in,
+    // to find the way out
+    hold?: number;
     // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
     // bursting where it lands), rather than from the boss
     origin?: "target";
@@ -560,13 +564,16 @@ export type GroundPatternDef = {
 };
 
 // One of Akkha's four quadrants' elements: what it does to whoever's hit in it (on top of the
-// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn) and its symbol
+// damage), its spot animation, the trailing orb dropped in it (an enemy, only drawn), its symbol,
+// and its colour: its symbol's and the funnel of light round it as it lights up for Memory Blast,
+// and the orbs a blast throws up
 export type AkkhaElementDef = {
     name: string;
     effect: PlayerEffectDef;
     spotAnim: number;
     orb: string;
     symbolLoc: number;
+    glow: number;
 };
 
 // Zebak's fight (BossDef.zebak; Sim.stepZebak), as content/tombs.ts's ZEBAK says
@@ -604,6 +611,15 @@ export type ZebakDef = {
         seq: number;
         message: string;
         roarMessage: string;
+        // Drawn only: the roar's shockwave, spotAnim rolling out from him reach tiles
+        // over seconds, and the camera's shake (0 to 1) as it goes
+        shockwave: {
+            spotAnim: number;
+            seconds: number;
+            reach: number;
+            scale: number;
+            shake: number;
+        };
     };
     waves: {
         count: number;
@@ -684,6 +700,8 @@ export type KephriDef = {
 // another style. The floor's four quadrants (TombsPathDef boss.quadrants) each have an element.
 export type AkkhaDef = {
     forms: string[];
+    // How bright his room is for his fight (drawn only), in place of the Tombs' dimmer ambient
+    ambient: number;
     specialEvery: number;
     elements: AkkhaElementDef[];
     // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the
@@ -996,7 +1014,9 @@ export type BossAttackDef = {
     // Said over the boss's head when it's used, like OSRS overhead chat
     shout?: string;
     // A message on screen when it's used, for attacks the player has to do
-    // something about
+    // something about: an instruction, shown the first time it's used in a run, one after
+    // another with a quieter boss's (GameClient.showInstruction), so it's for what to do, not a
+    // warning each cast (the attack's own telegraph is that)
     message?: string;
     // Blasts: each one leaves a pool that lasts seconds, hurting a player
     // standing in it every interval seconds, with effect if it's set (Slash
@@ -1024,8 +1044,8 @@ export type BossAttackDef = {
     // Swings: a straight strip from the boss, width tiles across and length long,
     // the way it faced as it began, rather than round it (a lunge)
     // dash: the boss goes that far along it as it lands, stopping short at anything in its
-    // way, and stunned if that's one of the map's pillars or a rock left by leavesCover
-    // (BossDef.guard; a surge's stopped and stunned by such a rock too)
+    // way, and stunned if that's one of the map's pillars (BossDef.guard); a rock left by
+    // leavesCover only stops it short (a surge's stopped and stunned by such a rock)
     // track: for this many seconds of its windup the strip turns after the nearest player (no
     // quicker than LINE_TRACK_TURN), then it's locked: a step taken too soon is followed
     line?: { width: number; length: number; dash?: number; track?: number };
@@ -1690,6 +1710,22 @@ export type WeaponDef = {
     // Hits enemies with any of these tags this much harder (0.5 = +50%; the
     // Ivandis flail against vampyres and the undead)
     slayer?: { tags: EnemyTag[]; damage: number };
+    // Slashes and sweeps: each enemy hit has this chance (tagChance with one of the tags) of a
+    // gap in its shell, taking damage times the hit, with spotAnim on it (the Keris partisan of
+    // breaching)
+    breach?: {
+        chance: number;
+        tagChance: number;
+        tags: EnemyTag[];
+        damage: number;
+        spotAnim: number;
+    };
+    // Slashes and sweeps: heals the player this much for each kill a swing of it makes (the Keris
+    // partisan of the sun)
+    killHeal?: number;
+    // Hits this much harder while the player is below this share of their hitpoints (below
+    // 0.25, damage 0.25: +25% under a quarter; the Keris partisan of the sun)
+    lowHealth?: { below: number; damage: number };
     // Slashes and sweeps: each enemy caught takes these hits, a fraction of
     // the damage each, a moment apart (the Dragon claws' four)
     hits?: number[];
@@ -1757,7 +1793,9 @@ export type SpecialAttackDef = {
         | { kind: "drain"; amount: number; seconds: number }
         // Sets what it hits burning: this fraction of the hit's damage every
         // second for seconds
-        | { kind: "burn"; damage: number; seconds: number };
+        | { kind: "burn"; damage: number; seconds: number }
+        // Heals the player to full and cures poison and boss drains (Tumeken's Light)
+        | { kind: "restore" };
 };
 
 export type PassiveDef = {
@@ -1779,6 +1817,8 @@ export type PassiveDef = {
     // An interface sprite shown for it instead of iconObjId's item (Piety's
     // prayer icon)
     iconSpriteId?: number;
+    // Never levelled past maxLevel, even in endless (the Divine rune pouch: one slot)
+    noOverlevel?: boolean;
     // Visible gear: the item worn at each level (index = level - 1)
     equipment?: { slot: number; objIds: number[] }[];
     // Stats it adds the same amount to as well (the Ring of wealth's coins,
@@ -1964,6 +2004,8 @@ export type MapDef = {
     scaperune?: boolean;
     // A seasonal event: open from the start, outside the campaign's chain
     seasonal?: boolean;
+    // Everyone plays this adventurer here, unlocked or not (the Avian Assaulter at Thanksgiving)
+    seasonalCharacter?: string;
     // One boss fight and nothing else (Phosani's Nightmare): no waves, no
     // picks and no items, and its final boss rises as the run begins. Outside
     // the campaign's chain like a seasonal map, and open once requires (a map

@@ -1,4 +1,5 @@
-import { getEnemy } from "./enemies";
+import { fmtNum, t, tp, tr } from "../i18n";
+import { enemyName, getEnemy } from "./enemies";
 import { getMapEnemyIds } from "./mapEnemies";
 import { getMap } from "./maps";
 import { MapDef, QuestDef, QuestObjective } from "./types";
@@ -412,25 +413,70 @@ export function canDoQuestOn(quest: QuestDef, map: MapDef): boolean {
         : objective.enemyIds.every((id) => here.has(id));
 }
 
+// The quests' words, for locales/en/gen.json: the sentences here, and (generated from QUESTS)
+// quest.<id>.name for each quest and quest.what.<slug> for the words that say what a quest
+// kills: slug.one / slug.other by the count for the ones that kill, slug alone for killing each
+// of several
+export const QUEST_MESSAGES: Record<string, string> = {
+    "quest.kill": "Kill {what}",
+    "quest.kill_many": "Kill {count} {what}",
+    "quest.caskets.other": "Open {n} reward caskets",
+    "quest.beat_map": "Beat {map}",
+    "quest.join.pair": "{first} and {last}",
+    "quest.join.last": "{rest} and {last}",
+    "quest.join.separator": ", ",
+};
+
+// The key of what a quest kills, from its English: "the Crazy archaeologist" is
+// quest.what.the_crazy_archaeologist
+export function questWhatKey(what: string): string {
+    return `quest.what.${what
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_|_$/g, "")}`;
+}
+
 // "Kill 75 chickens", "Kill Count Draynor", "Kill Fareed, Dessous and Damis",
 // "Open 30 reward caskets", "Beat The Inferno"
 export function describeQuest(objective: QuestObjective): string {
     switch (objective.kind) {
         case "kill":
             return objective.count === 1
-                ? `Kill ${objective.what ?? getEnemy(objective.enemyIds[0]).name}`
-                : `Kill ${objective.count.toLocaleString()} ${objective.what}`;
+                ? t("quest.kill", {
+                      what:
+                          objective.what === undefined
+                              ? enemyName(getEnemy(objective.enemyIds[0]))
+                              : tp(questWhatKey(objective.what), 1),
+                  })
+                : t("quest.kill_many", {
+                      count: fmtNum(objective.count),
+                      what: tp(questWhatKey(objective.what ?? ""), objective.count),
+                  });
         case "killEach":
-            return `Kill ${objective.what ?? joinNames(objective.enemyIds.map((id) => getEnemy(id).name))}`;
+            return t("quest.kill", {
+                what:
+                    objective.what !== undefined
+                        ? tr(questWhatKey(objective.what), objective.what)
+                        : joinNames(objective.enemyIds.map((id) => enemyName(getEnemy(id)))),
+            });
         case "caskets":
-            return `Open ${objective.count} reward caskets`;
+            return tp("quest.caskets", objective.count);
         case "beatMap":
-            return `Beat ${getMap(objective.mapId).name}`;
+            return t("quest.beat_map", {
+                map: tr(`map.${objective.mapId}.name`, getMap(objective.mapId).name),
+            });
     }
 }
 
+// "A, B and C": joined by the messages and not by list(), whose English has a comma before the
+// "and" ("A, B, and C"), which the game doesn't
 function joinNames(names: string[]): string {
-    return names.length > 1
-        ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
-        : names[0];
+    if (names.length < 2) {
+        return names[0];
+    }
+    const rest = names.slice(0, -1);
+    const last = names[names.length - 1];
+    return rest.length === 1
+        ? t("quest.join.pair", { first: rest[0], last })
+        : t("quest.join.last", { rest: rest.join(t("quest.join.separator")), last });
 }

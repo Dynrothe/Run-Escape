@@ -1,3 +1,5 @@
+import { fmtNum } from "../i18n";
+
 // Thousands, millions, billions, trillions, then the short scale's names on
 // up to decillions (Qa quadrillion, Qi quintillion, Sx, Sp, Oc, No, Dc)
 const UNITS = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
@@ -12,7 +14,7 @@ export function formatCompact(value: number): string {
     }
     if (value >= 999.5 * 1000 ** (UNITS.length - 1)) {
         const [mantissa, exponent] = value.toExponential(1).split("e+");
-        return `${mantissa.replace(/\.0$/, "")}e${exponent}`;
+        return `${fmtNum(Number(mantissa), { maximumFractionDigits: 1 })}e${exponent}`;
     }
     let n = value;
     let unit = 0;
@@ -21,8 +23,11 @@ export function formatCompact(value: number): string {
         n /= 1000;
         unit++;
     }
-    const text = n < 9.95 ? n.toFixed(1) : Math.round(n).toString();
-    return text.replace(/\.0$/, "") + UNITS[unit];
+    const text = fmtNum(n < 9.95 ? n : Math.round(n), {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: n < 9.95 ? 1 : 0,
+    });
+    return text + UNITS[unit];
 }
 
 // A share of the whole as a whole percentage, with a sliver as "<1%"
@@ -31,5 +36,5 @@ export function formatShare(part: number, whole: number): string {
         return "0%";
     }
     const percent = (part / whole) * 100;
-    return percent < 0.5 ? "<1%" : `${Math.round(percent)}%`;
+    return percent < 0.5 ? `<${fmtNum(1)}%` : `${fmtNum(Math.round(percent))}%`;
 }

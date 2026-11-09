@@ -2,7 +2,7 @@ import { Rarity } from "../content/rarity";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
-import { RunResult } from "../core/Sim";
+import { RunResult, ScabarasPuzzleState } from "../core/Sim";
 import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
 import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
@@ -182,6 +182,8 @@ export type HudNumbers = {
         sum: number;
         readable: boolean;
         reading?: "slate" | "tablet";
+        // Each puzzle: done, to be done now, or waiting on the others
+        puzzles: ScabarasPuzzleState[];
     };
     // The Het room: the mirrors you're holding, and how far the caster's charged (0 to 1)
     tombsHet?: { held: number; charge: number };
@@ -533,13 +535,23 @@ export class GameStore {
         }
     }
 
-    toast(text: string, ms = 3500): void {
+    // Its id, to find it again or take it down early (a boss's instruction: GameClient)
+    toast(text: string, ms = 3500): number {
         const now = performance.now();
         // The same message twice at once (three Jads turning up together)
         // shows once
         const toasts = this.snapshot.toasts.filter((t) => t.until > now && t.text !== text);
-        toasts.push({ id: this.nextToastId++, text, until: now + ms });
+        const id = this.nextToastId++;
+        toasts.push({ id, text, until: now + ms });
         this.set({ toasts: toasts.slice(-4) });
+        return id;
+    }
+
+    dismissToast(id: number): void {
+        const toasts = this.snapshot.toasts;
+        if (toasts.some((t) => t.id === id)) {
+            this.set({ toasts: toasts.filter((t) => t.id !== id) });
+        }
     }
 
     expireToasts(): void {

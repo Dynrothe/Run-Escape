@@ -1,3 +1,4 @@
+import { fmtNum, t } from "../i18n";
 import { KeyHint } from "./PadHint";
 
 // Takes none of a level up's rewards (X), for coins from the run: dearer each
@@ -18,14 +19,14 @@ export function SkipButton({
                 // It has its own sound
                 data-silent
                 disabled={!affordable}
-                title={affordable ? undefined : `Skipping costs ${cost.toLocaleString()} coins`}
+                title={affordable ? undefined : t("canvas.skip_cost", { cost: fmtNum(cost) })}
                 onClick={(e) => {
                     onSkip();
                     // Give the number keys back
                     e.currentTarget.blur();
                 }}
             >
-                <KeyHint keyLabel="X" pad="north" /> Skip ({cost.toLocaleString()} coins)
+                <KeyHint keyLabel="X" pad="north" /> {t("canvas.skip", { cost: fmtNum(cost) })}
             </button>
         </div>
     );

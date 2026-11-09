@@ -418,8 +418,9 @@ export const BA_BA: EnemyDef = {
     boss: {
         attackInterval: 1.5,
         enrage: { message: "Ba-Ba's furious!" },
-        // Open after a lunge or a shockwave that misses (opens); a lunge or a rampage into one of
-        // her boulder's rocks stuns her, stars round her head, but not twice in 8 seconds
+        // Open after a lunge or a shockwave that misses (opens); a rampage into one of her
+        // boulder's rocks stuns her, stars round her head, but not twice in 8 seconds (a lunge
+        // only stops short of one)
         guard: {
             ...TOMBS_GUARD,
             stun: 2.5,
@@ -826,6 +827,8 @@ export const HET_ENEMIES: EnemyDef[] = [
     {
         id: "scarab_swarm",
         name: "Scarab Swarm",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,
@@ -841,6 +844,8 @@ export const HET_ENEMIES: EnemyDef[] = [
     {
         id: "agile_scarab",
         name: "Agile Scarab",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11727,
         idleSeq: 9592,
         walkSeq: 9592,
@@ -864,6 +869,8 @@ export const HET_ENEMIES: EnemyDef[] = [
     {
         id: "spitting_scarab",
         name: "Spitting Scarab",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11725,
         idleSeq: 9586,
         walkSeq: 9584,
@@ -1092,6 +1099,7 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2257,
         orb: "akkha_orb_darkness",
         symbolLoc: 45871,
+        glow: 0x9a50ff,
     },
     {
         // North-east
@@ -1108,6 +1116,7 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2256,
         orb: "akkha_orb_lightning",
         symbolLoc: 45869,
+        glow: 0xffe640,
     },
     {
         // South-east
@@ -1124,6 +1133,7 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2259,
         orb: "akkha_orb_frozen",
         symbolLoc: 45870,
+        glow: 0xf0f8ff,
     },
     {
         // South-west
@@ -1132,11 +1142,14 @@ export const AKKHA_ELEMENTS: AkkhaElementDef[] = [
         spotAnim: 2258,
         orb: "akkha_orb_burning",
         symbolLoc: 45868,
+        glow: 0xff3018,
     },
 ];
 
 export const AKKHA: AkkhaDef = {
     forms: ["akkha", "akkha_ranged", "akkha_magic"],
+    // Full light: his floor's symbols and Memory Blast's quadrants are what he's read by
+    ambient: 1,
     specialEvery: 6,
     elements: AKKHA_ELEMENTS,
     memory: {
@@ -1199,7 +1212,7 @@ const AKKHA_LIGHTS: Record<string, LightLook> = {
 };
 
 // His three phases (66% and 33%, where his shadows come), the same on every form: quicker each,
-// opening on a leap, the last in a dimmer room; his stamp's ring out of him from the first second
+// opening on a leap; his stamp's ring out of him from the first second
 const AKKHA_PHASES: NonNullable<NonNullable<EnemyDef["boss"]>["phases"]> = {
     phases: [
         {
@@ -1218,7 +1231,6 @@ const AKKHA_PHASES: NonNullable<NonNullable<EnemyDef["boss"]>["phases"]> = {
         {
             tempo: 0.6,
             speed: 1.2,
-            light: 0.6,
             opener: "Leaps",
             status: "Akkha's fury",
             ambients: [{ attack: "Stamp", interval: 3.5, delay: 3 }],
@@ -1708,6 +1720,8 @@ export const SCABARAS_ENEMIES: EnemyDef[] = [
     {
         id: "scabaras_scarab",
         name: "Scarab",
+        // A kalphite or a scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11697,
         idleSeq: 9586,
         walkSeq: 9584,
@@ -1793,9 +1807,9 @@ export function getScabarasTrickle(wave: number): WaveDef {
 //    in say which), and the Ancient tablet's number, targetLeast to targetMost, to make exactly by
 //    walking over them, each once. Over it, the roof comes down and they reset. The wiki's chart
 //    of a way across for every number works on it as it does in OSRS.
-//  - Matching, last, once the others are done: two boards of nine hidden symbols, the same nine
-//    on each. Step on one on each board: the same, they stay; not, the roof comes down and they
-//    hide again. Solo, preSolved pairs (fewer with path levels) are done as it starts, as OSRS's
+//  - Matching, last, once the others are done: two boards of the same nine symbols, each tile's
+//    on it from the start as OSRS's are, shuffled apart. Step on one on each board: the same,
+//    they stay; not, the roof comes down. Solo, preSolved pairs (fewer with path levels) are done as it starts, as OSRS's
 //    four are; in a party none.
 // A mistake's rock takes wrongShare of your hitpoints and breaks into shards. Rocks fall on
 // everyone meanwhile, every rockEvery seconds (less with path levels), for rockDamage within
@@ -1861,8 +1875,7 @@ export const SCABARAS = {
         // Addition's symbols, Line (1) to Foot (9), and the glow on one stepped on
         symbols: [45345, 45346, 45347, 45348, 45349, 45350, 45351, 45352, 45353],
         stepped: 45386,
-        // Matching: a hidden tile, the nine symbols shown, and a matched pair's glow
-        hidden: 45356,
+        // Matching: the nine symbols, on their tiles from the start, and a matched pair's glow
         shown: [45365, 45366, 45367, 45368, 45369, 45370, 45371, 45372, 45373],
         matched: 45387,
         tablet: 45339,
@@ -2290,6 +2303,8 @@ const kephriForm = (
 ): EnemyDef => ({
     id,
     name: "Kephri",
+    // A scarab: the keris partisans hit her harder
+    tags: ["kalphite"],
     npcId,
     idleSeq: KEPHRI_IDLE,
     walkSeq: KEPHRI_IDLE,
@@ -2331,6 +2346,8 @@ const kephriForm = (
 const scarab = (id: string, name: string, npcId: number, more: Partial<EnemyDef>): EnemyDef => ({
     id,
     name,
+    // A scarab: the keris partisans hit it harder
+    tags: ["kalphite"],
     npcId,
     idleSeq: 9586,
     walkSeq: 9584,
@@ -2356,6 +2373,8 @@ TOMBS_ENEMIES.push(
         // on everyone for each that gets there, the call broken by the button (it scatters)
         id: "kephri_swarm_home",
         name: "Scarab Swarm",
+        // A scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,
@@ -2372,6 +2391,8 @@ TOMBS_ENEMIES.push(
         // Walks to her and restores her shield if it gets there (Sim.stepKephri): anything kills it
         id: "kephri_swarm",
         name: "Scarab Swarm",
+        // A scarab: the keris partisans hit it harder
+        tags: ["kalphite"],
         npcId: 11723,
         idleSeq: 9606,
         walkSeq: 9606,
@@ -2689,8 +2710,8 @@ export const ZEBAK: ZebakDef = {
     },
     roar: {
         // Boulders across the island, then after seconds the roar: hits times, each hit share of
-        // your hitpoints and a knock back from him, unless a boulder's between you and him within
-        // shelter tiles
+        // your hitpoints and a knock back from him, unless you're straight behind a boulder, down
+        // the island from him, within shelter tiles of it (zebakShelters)
         boulders: 3,
         seconds: 9,
         hits: 3,
@@ -2703,6 +2724,8 @@ export const ZEBAK: ZebakDef = {
         seq: 9628,
         message: "Zebak spits boulders onto the island: get behind one before he roars!",
         roarMessage: "Zebak roars!",
+        // Blown dust, as OSRS's roar sends a wave of it across the island
+        shockwave: { spotAnim: 2184, seconds: 1.6, reach: 28, scale: 1.3, shake: 0.5 },
     },
     waves: {
         // Waves across the island, the first up from the south and the second down from the

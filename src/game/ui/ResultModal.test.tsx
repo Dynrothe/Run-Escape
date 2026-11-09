@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import { GameStore, PlayerResultView, UiSnapshot } from "../client/GameStore";
 import { createSave } from "../core/save";
 import { ResultModal } from "./GameUi";
+
+vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
 
 function createUi(solo = false, hard = false, expert = false): UiSnapshot {
     const players: PlayerResultView[] = ["Alice", "Bob", "Charlie", "Dana"].map((name, i) => ({

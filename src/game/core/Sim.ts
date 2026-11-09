@@ -138,7 +138,7 @@ import {
     PUMPKIN_MIN_GAP,
     PUMPKIN_OUTCOMES,
 } from "../content/trickOrTreat";
-import { TROPHIES, TrophyDef } from "../content/trophies";
+import { TROPHIES, TrophyDef, isEveryTimeTrophy } from "../content/trophies";
 import {
     AkkhaDef,
     ArenaStatue,
@@ -668,6 +668,9 @@ export type SimOptions = {
     // The weapons, passives and items brought in by map tasks; everything can
     // turn up when unset
     unlockedItems?: ReadonlySet<string>;
+    // The trophies already in their Collection log that a chest gives one of every time (expert
+    // mode's Lil' Zik looks), so it gives one they haven't got while there's one left
+    trophiesFound?: ReadonlySet<string>;
     // Round after round until the player falls, rather than a win at the
     // final boss (see endless.ts)
     endless?: boolean;
@@ -685,7 +688,7 @@ export type SimOptions = {
     // become (none when unset)
     armoury?: ArmouryUpgrades;
     // Co-op: everyone in the run, in the same order on every player's copy
-    // (characterId, metaStats, unlockedItems and armoury are then unused), and
+    // (characterId, metaStats, unlockedItems, trophiesFound and armoury are then unused), and
     // which of them this copy plays
     party?: HeroOptions[];
     focus?: number;
@@ -732,6 +735,8 @@ export type RunResult = {
     raidChest?: RaidChest;
     // The Tombs of Amascut's board
     tombs?: TombsSummary;
+    // The Scabaras room was beaten (Sim.scabarasBeaten)
+    scabarasBeaten?: boolean;
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -797,6 +802,8 @@ export type Hero = {
     // Armoury (see SimOptions)
     metaStats: Stats;
     unlockedItems: ReadonlySet<string> | undefined;
+    // The every-time trophies they'd found before the run, only those (SimOptions.trophiesFound)
+    trophiesFound: ReadonlySet<string> | undefined;
     armoury: ArmouryUpgrades | undefined;
     player: Player;
     stats: Stats;
@@ -930,6 +937,7 @@ export type HeroOptions = {
     characterId: string;
     metaStats: Stats;
     unlockedItems?: ReadonlySet<string>;
+    trophiesFound?: ReadonlySet<string>;
     armoury?: ArmouryUpgrades;
 };
 
@@ -990,7 +998,12 @@ export type CrondisRoom = {
 };
 
 type ScabarasDef = NonNullable<NonNullable<TombsPathDef["room"]>["scabaras"]>;
-type ScabarasPuzzle = "sequence" | "lights" | "addition" | "matching";
+export type ScabarasPuzzle = "sequence" | "lights" | "addition" | "matching";
+// A puzzle on the HUD's list: done, to be done now, or waiting on the others (Sim.scabarasInfo)
+export type ScabarasPuzzleState = {
+    puzzle: ScabarasPuzzle;
+    state: "solved" | "open" | "waiting";
+};
 // The Scabaras room's puzzles (SCABARAS in tombs.ts): which are solved; Sequence's order, when
 // it's shown from and how far through it the party is (no order, shown from -1, till its button's
 // pushed); Lights out's ring and when a light next
@@ -1224,6 +1237,14 @@ export type ZebakFight = {
     uid: number;
     special: number;
     roar?: { tick: number };
+    // When his last roar went off, from where, and the boulders that sheltered from it: for its
+    // shockwave (drawn only)
+    roared?: {
+        tick: number;
+        x: number;
+        y: number;
+        rocks: { x: number; y: number; radius: number; look: string }[];
+    };
     waves: {
         y: number;
         dir: 1 | -1;
@@ -1238,6 +1259,33 @@ export type ZebakFight = {
     clouds: { uid: number; x: number; y: number }[];
     nextCloudTick: number;
 };
+
+// How far past a boulder's edge, each side, its shelter from Zebak's roar reaches (zebakShelters;
+// the glow that shows it goes by it too)
+export const ZEBAK_SHELTER_SIDE = 0.5;
+
+// Whether a boulder shelters (x, y) from Zebak's roar from (fromX, fromY): straight behind it,
+// down the island away from him (as OSRS's, not slanting off the line from him), within shelter
+// tiles of it and as wide as it is. The sim's (Sim.zebakSheltered) and the shockwave's drawing
+// both go by it.
+export function zebakShelters(
+    fromX: number,
+    fromY: number,
+    x: number,
+    y: number,
+    rocks: readonly { x: number; y: number; radius: number }[],
+    shelter: number,
+): boolean {
+    return rocks.some((rock) => {
+        const away = rock.y >= fromY ? 1 : -1;
+        const behind = (y - rock.y) * away;
+        return (
+            behind > 0 &&
+            behind <= shelter + rock.radius &&
+            Math.abs(x - rock.x) <= rock.radius + ZEBAK_SHELTER_SIDE
+        );
+    });
+}
 
 // Kephri's fight (BossDef.kephri), while she's up: how many intermissions she's had, whether
 // she's on her last (her swarm gone), the intermission she's in (its swarms still to send, how
@@ -1468,6 +1516,9 @@ export class Sim {
     devGod = false;
     // Times the party's died in the Tombs (each a room started over)
     tombsDeaths = 0;
+    // The Scabaras room's puzzles all solved this run: what unlocks its puzzle helper
+    // (SaveData.scabarasBeaten)
+    scabarasBeaten = false;
     // The Helpful Spirit's bundles each hero's had, or let go by (of two), and who's stood by it
     private tombsSpiritTaken = new Map<number, number>();
     private tombsSpiritNear = new Set<number>();
@@ -1855,6 +1906,7 @@ export class Sim {
                 characterId: options.characterId,
                 metaStats: options.metaStats,
                 unlockedItems: options.unlockedItems,
+                trophiesFound: options.trophiesFound,
                 armoury: options.armoury,
             },
         ];
@@ -1938,6 +1990,7 @@ export class Sim {
             characterId: options.characterId,
             metaStats: options.metaStats,
             unlockedItems: options.unlockedItems,
+            trophiesFound: options.trophiesFound,
             armoury: options.armoury,
             player: {
                 x: start.x,
@@ -2271,6 +2324,7 @@ export class Sim {
             ...(this.map.stages && { stage: this.stage }),
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
             ...(this.map.tombs && { tombs: this.tombsSummary() }),
+            ...(this.scabarasBeaten && { scabarasBeaten: true }),
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -2380,11 +2434,10 @@ export class Sim {
         }
     }
 
-    // Weapons and passives carried at once, with the shop's extra slots
+    // Weapons and passives carried at once, with the extra slots: the shop's, and the Divine rune
+    // pouch's, for a magic weapon (Upgrades' fitsWithPouch keeps it for one)
     get maxWeapons(): number {
-        return (
-            getCharacter(this.characterId).maxWeapons ?? MAX_WEAPONS + this.metaStats.weaponSlots
-        );
+        return getCharacter(this.characterId).maxWeapons ?? MAX_WEAPONS + this.stats.weaponSlots;
     }
 
     get maxPassives(): number {
@@ -2758,6 +2811,15 @@ export class Sim {
         this.appearanceVersion++;
     }
 
+    // Poison and boss drains gone (an antidote, a cure, Tumeken's Light), and with the spores'
+    // drain the drowsiness it brings, the boss's quicker attacks; the caller updates the stats
+    private cure(): void {
+        this.player.poisonEnd = -1;
+        this.player.poisonDamage = 0;
+        this.debuffs = [];
+        this.drowsyEndTick = 0;
+    }
+
     heal(amount: number): void {
         const hp = this.player.hp;
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + amount);
@@ -2888,9 +2950,7 @@ export class Sim {
                 this.addBuff(item.id, use.stats, use.seconds, false);
                 break;
             case "cure":
-                this.player.poisonEnd = -1;
-                this.player.poisonDamage = 0;
-                this.debuffs = [];
+                this.cure();
                 this.addBuff(item.id, {}, use.seconds, true);
                 this.heal((use.heal ?? 0) * this.healScale);
                 break;
@@ -4112,7 +4172,7 @@ export class Sim {
                     ) {
                         // Stands still winding up, so a swing can be stepped away from
                         dirX = dirY = 0;
-                    } else if (this.tick < bossState.channelEnd) {
+                    } else if (this.tick < bossState.channelEnd && !this.akkhaDrawn(enemy)) {
                         // And while its volleys go out, so a spiral stays a spiral
                         dirX = dirY = 0;
                     } else if (this.keepsTo(enemy)) {
@@ -4194,11 +4254,14 @@ export class Sim {
                 let sepX = 0;
                 let sepY = 0;
                 const faction = enemy.boss || enemy.aggro ? undefined : enemy.def.faction;
+                // Akkha walks through his own shadows: they never move, so one straight between him
+                // and where he's going held him there for good, never drawn into a dead one's quarter
+                const ownShadow = enemy.def.boss?.akkha?.shadows.enemyId;
                 let foe: Enemy | undefined;
                 this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
                     // A rolling boulder goes its own way, through whatever's there (Ba-Ba's cracked
                     // one starts on her altar, under her)
-                    if (other === enemy || other.rolls) {
+                    if (other === enemy || other.rolls || other.def.id === ownShadow) {
                         return;
                     }
                     const ox = enemy.x - other.x;
@@ -5618,6 +5681,11 @@ export class Sim {
                         };
                     }
                     if (enemy.def.boss?.akkha) {
+                        // His room in full light (AkkhaDef.ambient), so Memory Blast's
+                        // quadrants read; the map's own again once the path's left
+                        if (this.lighting) {
+                            this.dimTo(enemy.def.boss.akkha.ambient, 1);
+                        }
                         this.tombsAkkha = {
                             uid: enemy.uid,
                             attacks: 0,
@@ -5991,6 +6059,22 @@ export class Sim {
         boss.attackSeq = AKKHA_VANISH_SEQ;
         boss.animStart = this.tick;
         this.emit({ type: "notice", message: memory.message });
+    }
+
+    // Akkha with a shadow of his dead: he can be drawn into its quarter, so he comes on at whoever
+    // he's after while his volleys go out (still standing to wind each up), as OSRS's is dragged.
+    // Standing for every volley, his ranged and magic forms hardly took a step between his
+    // specials, so he was never drawn in and the fight never went on.
+    private akkhaDrawn(boss: Enemy): boolean {
+        const fight = this.tombsAkkha;
+        return (
+            fight !== undefined &&
+            fight.uid === boss.uid &&
+            !fight.memory &&
+            fight.shadows.some(
+                (shadow) => !this.enemies.some((e) => e.uid === shadow.uid && !e.dead),
+            )
+        );
     }
 
     // Akkha's shadows while they're up: how many, and seconds till those still up flood
@@ -7966,24 +8050,10 @@ export class Sim {
         this.emit({ type: "notice", message: def.waves.message });
     }
 
-    // Whether a boulder shelters a point from him: between them, and close enough to it
+    // Whether a boulder shelters a point from him: straight behind it (zebakShelters)
     private zebakSheltered(boss: Enemy, x: number, y: number, def: ZebakDef): boolean {
-        const dx = x - boss.x;
-        const dy = y - boss.y;
-        const length = Math.max(0.001, fm.hypot(dx, dy));
-        return this.tombsCover.some((rock) => {
-            if (rock.look !== def.roar.look) {
-                return false;
-            }
-            // Along the line from him to the point, the boulder short of it, and near the line
-            const along = ((rock.x - boss.x) * dx + (rock.y - boss.y) * dy) / length;
-            const off = Math.abs(((rock.x - boss.x) * dy - (rock.y - boss.y) * dx) / length);
-            return (
-                along < length &&
-                length - along <= def.roar.shelter + rock.radius &&
-                off <= rock.radius + 0.5
-            );
-        });
+        const rocks = this.tombsCover.filter((rock) => rock.look === def.roar.look);
+        return zebakShelters(boss.x, boss.y, x, y, rocks, def.roar.shelter);
     }
 
     // His Great Roar, once its time's up: everyone not behind a boulder is hit, hard, and thrown back
@@ -7993,10 +8063,22 @@ export class Sim {
             return;
         }
         fight.roar = undefined;
+        fight.roared = {
+            tick: this.tick,
+            x: boss.x,
+            y: boss.y,
+            rocks: this.tombsCover.filter((rock) => rock.look === def.roar.look),
+        };
         boss.anim = "attack";
         boss.animStart = this.tick;
         boss.attackSeq = def.roar.seq;
         this.emit({ type: "notice", message: def.roar.roarMessage });
+        this.emit({
+            type: "bossImpact",
+            x: boss.x,
+            y: boss.y,
+            shake: def.roar.shockwave.shake,
+        });
         const current = this.hero;
         for (const hero of this.heroes) {
             if (!this.isUp(hero)) {
@@ -8780,9 +8862,7 @@ export class Sim {
                 continue;
             }
             const { x, y } = hero.player;
-            const at = def.falls.findIndex(
-                (fall) => fm.hypot(fall.fill.x - x, fall.fill.y - y) <= 1.5,
-            );
+            const at = this.crondisFallAt(def, x, y);
             if (
                 at !== -1 &&
                 this.tick >= crondis.dryUntil[at] &&
@@ -8927,6 +9007,11 @@ export class Sim {
                 if (cloud.hit.includes(hero.index) || x < lane.x0 || x > lane.x1 + 1) {
                     return;
                 }
+                // Under a waterfall, as OSRS's: the poison doesn't reach them there, running or
+                // dry (filling dries it, so it'd go the moment they'd filled)
+                if (this.crondisFallAt(def, x, y) !== -1) {
+                    return;
+                }
                 // How far along from the waterfall's end
                 const along = lane.fromLow ? y - lane.y0 : lane.y1 + 1 - y;
                 if (along <= dark && along >= dark - CRONDIS.cloudLength) {
@@ -8936,6 +9021,11 @@ export class Sim {
             });
             return true;
         });
+    }
+
+    // The waterfall someone at (x, y) is under (where they fill their water), or -1
+    private crondisFallAt(def: CrondisDef, x: number, y: number): number {
+        return def.falls.findIndex((fall) => fm.hypot(fall.fill.x - x, fall.fill.y - y) <= 1.5);
     }
 
     // How far down its corridor a cloud's pale front and dark front are, in tiles from the
@@ -9111,6 +9201,20 @@ export class Sim {
         );
     }
 
+    // How many of the Sequence's plates have lit so far as its order's shown, all once it has (none
+    // before it starts), for the puzzle helper's numbers
+    get scabarasSequenceShown(): number {
+        const sequence = this.tombsRoom?.scabaras?.sequence;
+        if (!sequence || sequence.showFrom === -1 || this.tick < sequence.showFrom) {
+            return 0;
+        }
+        const each = secondsToTicks(SCABARAS.flash + SCABARAS.gap);
+        return Math.min(
+            sequence.order.length,
+            Math.floor((this.tick - sequence.showFrom) / each) + 1,
+        );
+    }
+
     // The Sequence's plate lit now while its order's shown, if any
     get scabarasLitPlate(): number | undefined {
         const sequence = this.tombsRoom?.scabaras?.sequence;
@@ -9137,6 +9241,7 @@ export class Sim {
               sum: number;
               readable: boolean;
               reading?: "slate" | "tablet";
+              puzzles: ScabarasPuzzleState[];
           }
         | undefined {
         const scabaras = this.tombsRoom?.scabaras;
@@ -9154,6 +9259,22 @@ export class Sim {
             sum: scabaras.addition.sum,
             readable: this.scabarasTabletReadable(scabaras),
             reading: def.slates.some(near) ? "slate" : near(def.tablet) ? "tablet" : undefined,
+            // Each puzzle, and whether it can be done yet: Addition once Sequence and Lights out
+            // are, Matching once the other three are
+            puzzles: (["sequence", "lights", "addition", "matching"] as const).map((puzzle) => ({
+                puzzle,
+                state: scabaras.solved.includes(puzzle)
+                    ? "solved"
+                    : puzzle === "addition"
+                      ? this.scabarasTabletReadable(scabaras)
+                          ? "open"
+                          : "waiting"
+                      : puzzle === "matching"
+                        ? scabaras.solved.length >= 3
+                            ? "open"
+                            : "waiting"
+                        : "open",
+            })),
         };
     }
 
@@ -9396,6 +9517,7 @@ export class Sim {
         scabaras.solved.push(puzzle);
         if (puzzle === "matching") {
             room.doneTick = this.tick;
+            this.scabarasBeaten = true;
             scabaras.rocks = [];
             scabaras.shards = [];
             this.emit({ type: "notice", message: "The way on opens." });
@@ -10468,19 +10590,23 @@ export class Sim {
         });
     }
 
-    // Done with a path: back to the Nexus, with what's on the floor. Co-op: anyone still down is
-    // back up for the next, as OSRS's party rejoins once a room's done.
+    // Done with a path: back to the Nexus, with what's on the floor, and the whole party on full
+    // hitpoints for the next. Co-op: anyone still down is back up, as OSRS's party rejoins once a
+    // room's done.
     private leaveTombsPath(): void {
         const tombs = this.map.tombs!;
         const current = this.hero;
         for (const hero of this.heroes) {
-            if (hero.down && !hero.left) {
-                this.use(hero);
+            if (hero.left) {
+                continue;
+            }
+            this.use(hero);
+            if (hero.down) {
                 hero.down = false;
                 hero.revive = undefined;
-                this.player.hp = this.player.maxHp;
                 this.player.deathTick = -1;
             }
+            this.player.hp = this.player.maxHp;
         }
         this.use(current);
         this.rescaleParty();
@@ -11044,6 +11170,9 @@ export class Sim {
             const weights = pool.map((t) => (t.from.kind === "raid" ? t.from.weight : 0));
             return pool[this.rng.weightedIndex(weights)];
         };
+        // Expert mode: one of Lil' Zik's looks, every time, one they haven't got while there's one
+        // left, and any of them after that
+        const expertPool = this.expert ? purples.filter(isEveryTimeTrophy) : [];
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
@@ -11052,12 +11181,11 @@ export class Sim {
             const purple = this.rng.chance(chance) ? pick(false) : undefined;
             const hardOne =
                 this.hard && this.rng.chance(HARD_UNIQUE_CHANCE) ? pick(true) : undefined;
-            // Expert mode: one of Lil' Zik's looks, every time
-            const expertPool = purples.filter((t) => t.from.kind === "raid" && t.from.expert);
-            const expertOne =
-                this.expert && expertPool.length > 0
-                    ? expertPool[this.rng.int(expertPool.length)]
-                    : undefined;
+            const missing = expertPool.filter(
+                (t) => !hero.trophies.has(t.id) && !(hero.trophiesFound?.has(t.id) ?? false),
+            );
+            const expertFrom = missing.length > 0 ? missing : expertPool;
+            const expertOne = expertFrom.length > 0 ? this.rng.pick(expertFrom) : undefined;
             const found = [purple, hardOne, expertOne].filter(
                 (t): t is TrophyDef => t !== undefined,
             );
@@ -11215,9 +11343,7 @@ export class Sim {
             return;
         }
         if (effect.cures) {
-            this.player.poisonEnd = -1;
-            this.player.poisonDamage = 0;
-            this.debuffs = [];
+            this.cure();
         }
         this.addBuff(`raid:${supply.id}`, effect.stats, effect.seconds, effect.cures ?? false);
         this.buffs[this.buffs.length - 1].look = { name: supply.name, objId: supply.objId };
@@ -12911,7 +13037,7 @@ export class Sim {
             state.wallGap = gapStart;
         }
         const inGap = (i: number) => (i - gapStart + count) % count < gap;
-        const add = (x: number, y: number, angle: number, ticks: number) => {
+        const add = (x: number, y: number, angle: number, ticks: number, wait = 0) => {
             const vx = fm.cos(angle) * speed;
             const vy = fm.sin(angle) * speed;
             this.bullets.add(
@@ -12925,6 +13051,7 @@ export class Sim {
                 pattern.pillars ? this.cutAtPillars(x, y, vx, vy, ticks) : ticks,
                 emitter.source,
                 this.tick,
+                wait,
             );
         };
         if (pattern.shape === "wall") {
@@ -12972,6 +13099,8 @@ export class Sim {
         const distance = pattern.distance ?? 8;
         // In to where they stood, and no further
         const ticks = Math.min(life, Math.ceil(distance / speed));
+        // Standing where it formed a while first (BulletPatternDef.hold)
+        const wait = secondsToTicks(pattern.hold ?? 0);
         for (let i = 0; i < count; i++) {
             if (inGap(i)) {
                 continue;
@@ -12982,6 +13111,7 @@ export class Sim {
                 target.y + fm.sin(angle) * distance,
                 angle + Math.PI,
                 ticks,
+                wait,
             );
         }
     }
@@ -14406,7 +14536,7 @@ export class Sim {
             this.emit({ type: "bossShout", enemyUid: enemy.uid, text: attack.shout });
         }
         if (attack.message) {
-            this.emit({ type: "notice", message: attack.message });
+            this.emit({ type: "notice", message: attack.message, instruction: true });
         }
     }
 
@@ -14726,9 +14856,10 @@ export class Sim {
             if (boxCircle(pillars, nx, ny, enemy.radius)) {
                 return { x, y, stuck: true };
             }
-            // One of Ba-Ba's boulders' rocks: stuck in it if it can be stunned, else stopped short
+            // One of Ba-Ba's boulders' rocks: stopped short of it. Only her Rampage is stunned by one
+            // (stepSurge), so hiding behind a rock from her lunges doesn't stun her every time.
             if (this.tombsCover.length > 0 && this.inCoverRock(nx, ny, enemy.radius)) {
-                return { x, y, stuck: (enemy.def.boss?.guard?.stun ?? 0) > 0 };
+                return { x, y, stuck: false };
             }
             const inTheWay = this.heroes.some(
                 (hero) =>
@@ -14786,8 +14917,7 @@ export class Sim {
                 enemy.x + (dx / length) * enemy.radius,
                 enemy.y + (dy / length) * enemy.radius,
             );
-            // (the Tombs have no pillars: there it's one of Ba-Ba's rocks)
-            this.dropGuard(enemy, guard.stun, true, this.map.tombs ? "Rubble" : "Pillar");
+            this.dropGuard(enemy, guard.stun, true, "Pillar");
         }
     }
 
@@ -17452,9 +17582,15 @@ export class Sim {
         }
         let dealt = 0;
         let effects = 0;
+        const lowHealth =
+            def.lowHealth && player.hp < player.maxHp * def.lowHealth.below
+                ? 1 + def.lowHealth.damage
+                : 1;
         for (const enemy of hit) {
-            const enemyDamage = damage * this.slayerScale(def, enemy);
+            const breach = this.breachScale(def, enemy);
+            const enemyDamage = damage * this.slayerScale(def, enemy) * lowHealth * breach;
             const hits = def.hits ?? [1];
+            const alive = !enemy.dead;
             const hitDealt =
                 this.damageEnemy(
                     enemy,
@@ -17463,6 +17599,17 @@ export class Sim {
                     player.x,
                     player.y,
                 ) + this.bigHits(def, enemy, enemyDamage, player.x, player.y);
+            // The gap shows only where the hit got in (not on a shield, or a style it's proof
+            // against), and on no more than 10 at once
+            if (breach > 1 && hitDealt > 0 && effects++ < 10) {
+                this.addEffect(def.breach!.spotAnim, enemy.x, enemy.y, 0, 40, enemy.uid);
+            }
+            // A kill by this swing itself heals (the Keris partisan of the sun): not one some
+            // other kill leaves this weapon's name on, nor one that's part of a fight (a boss's
+            // summons, Zebak's jugs, one brought back), as with kills and drops
+            if (def.killHeal && alive && enemy.dead && !enemy.noDrops && this.isUp(this.hero)) {
+                this.heal(def.killHeal * this.healScale);
+            }
             // The rest of a multi-hit weapon's hits land a moment apart
             hits.slice(1).forEach((fraction, i) => {
                 this.pendingHits.push({
@@ -17495,9 +17642,27 @@ export class Sim {
         if (special?.effect?.kind === "heal" && dealt > 0) {
             this.heal(Math.min(Math.round(dealt * special.effect.fraction), special.effect.max));
         }
+        if (special?.effect?.kind === "restore") {
+            // Tumeken's Light: whole again, poison and boss drains gone
+            this.cure();
+            // The drains' stats go with them, max hitpoints too, before healing to it
+            this.updateStats();
+            this.heal(player.maxHp);
+        }
         if (def.chain) {
             this.chainHits(def, def.chain, hit, damage);
         }
+    }
+
+    // A gap in the shell (WeaponDef.breach): the hit times its damage, now and then, far more
+    // often in what has one of its tags
+    private breachScale(def: WeaponDef, enemy: Enemy): number {
+        const breach = def.breach;
+        if (!breach || enemy.dead) {
+            return 1;
+        }
+        const chance = hasTag(enemy, breach.tags) ? breach.tagChance : breach.chance;
+        return this.rng.chance(chance) ? breach.damage : 1;
     }
 
     // How much harder a weapon hits this enemy for what it is (the Ivandis
@@ -20067,9 +20232,7 @@ export class Sim {
     private addEventBuff(id: string, effect: Extract<RandomEventEffect, { kind: "buff" }>): void {
         const { name, objId, stats, seconds, cures = false } = effect;
         if (cures) {
-            this.player.poisonEnd = -1;
-            this.player.poisonDamage = 0;
-            this.debuffs = [];
+            this.cure();
         }
         this.addBuff(id, stats, seconds, cures);
         this.buffs[this.buffs.length - 1].look = { name, objId };

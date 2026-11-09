@@ -49,7 +49,9 @@ import {
     lobbyStub,
     missingMap,
     parseMessage,
+    pickOf,
     randomToken,
+    repickedText,
 } from "./shared.mjs";
 
 // How often a room tells the lobby it's still there. Each one is a billed
@@ -160,10 +162,6 @@ export class Room extends DurableObject {
     }
 
     async webSocketMessage(ws, data) {
-        // An alarm that couldn't be set (armAlarm), tried again
-        if (this.alarmAt === undefined) {
-            this.armAlarm();
-        }
         const member = this.sockets.get(ws);
         if (member?.socket === ws) {
             this.receive(member, data);
@@ -173,6 +171,15 @@ export class Room extends DurableObject {
             // the room through its being out of memory
             this.room.strays = (this.room.strays ?? 0) + 1;
             this.persist();
+        }
+        // Alarms are durable wakeups, not precise timers: one that's late
+        // doesn't hold back what's overdue (the members' update) when a
+        // message comes. After the message, whose sender the heartbeat's
+        // checks (dropSilent, idle) then count as just heard from.
+        this.runDue();
+        // An alarm that couldn't be set (armAlarm), tried again
+        if (this.alarmAt === undefined) {
+            this.armAlarm();
         }
     }
 
@@ -387,12 +394,7 @@ export class Room extends DurableObject {
         if (wasAway) {
             this.save();
         }
-        this.send(member, {
-            t: "room",
-            room: this.roomView(),
-            you: member.id,
-            token: member.token,
-        });
+        this.sendRoom(member);
         return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -461,7 +463,22 @@ export class Room extends DurableObject {
 
     async alarm() {
         this.alarmAt = undefined;
+        this.runDue();
+        if (this.due.size > 0) {
+            this.armAlarm();
+        } else if (!this.room) {
+            await this.ctx.storage.deleteAll();
+        }
+    }
+
+    runDue() {
         const now = Date.now();
+        // Nothing's due before the alarm, which armAlarm keeps at the
+        // earliest: most messages (a run's frames) stop here
+        if (this.alarmAt > now) {
+            return;
+        }
+        this.alarmAt = undefined;
         for (const [key, job] of [...this.due]) {
             if (job.at <= now && this.due.get(key) === job) {
                 this.due.delete(key);
@@ -471,11 +488,6 @@ export class Room extends DurableObject {
                     console.warn("Co-op room: something it waited for failed:", e);
                 }
             }
-        }
-        if (this.due.size > 0) {
-            this.armAlarm();
-        } else if (!this.room) {
-            await this.ctx.storage.deleteAll();
         }
     }
 
@@ -594,9 +606,11 @@ export class Room extends DurableObject {
                     kind: m.kind,
                     characterId: m.characterId,
                     ready: m.ready,
+                    repicked: m.repicked,
                     loadout: m.loadout,
                     unlocks: m.unlocks,
                     build: m.build,
+                    meSeq: m.meSeq,
                     token: m.token,
                     awayAt: m.awayAt,
                     discarded: m.discarded,
@@ -694,20 +708,37 @@ export class Room extends DurableObject {
     broadcastRoom() {
         const view = this.roomView();
         for (const member of this.room.members) {
-            this.send(member, { t: "room", room: view, you: member.id, token: member.token });
+            this.sendRoom(member, view);
         }
     }
 
-    broadcastMembers() {
+    sendRoom(member, view = this.roomView()) {
+        this.send(member, {
+            t: "room",
+            room: view,
+            you: member.id,
+            token: member.token,
+            memberAcks: true,
+            meSeq: member.meSeq,
+        });
+    }
+
+    // saveNow: a pick to confirm (meSeq), saved before anyone hears of it, so
+    // a restart can't bring back the room without a pick its player's been
+    // told it has (their game doesn't send it again)
+    broadcastMembers(saveNow = false) {
         const room = this.room;
         if (room.started) {
             return;
         }
         if (this.due.has("update")) {
             room.updateWaiting = true;
+            if (saveNow) {
+                this.persist(true);
+            }
             return;
         }
-        this.persist();
+        this.persist(saveNow);
         this.broadcastRoom();
         this.later("update", MEMBER_UPDATE_MS, () => {
             if (room.updateWaiting && this.room === room) {
@@ -848,15 +879,22 @@ export class Room extends DurableObject {
     }
 
     setMember(client, message) {
+        const pick = pickOf(client);
         if (message.characterId !== undefined) {
             client.characterId = cleanId(message.characterId);
-        }
-        if (message.ready !== undefined) {
-            client.ready = message.ready === true;
         }
         if (message.loadout !== undefined) {
             const size = JSON.stringify(message.loadout)?.length ?? 0;
             client.loadout = size <= MAX_LOADOUT_BYTES ? message.loadout : undefined;
+        }
+        if (message.ready !== undefined) {
+            client.ready = message.ready === true;
+            client.repicked = false;
+        } else if (client.ready && pickOf(client) !== pick) {
+            // Ready with another pick: the host's view of them can still
+            // say ready, with the old one, so its start waits (see "start")
+            client.ready = false;
+            client.repicked = true;
         }
         if (message.unlocks !== undefined) {
             client.unlocks = cleanUnlocks(message.unlocks);
@@ -907,8 +945,23 @@ export class Room extends DurableObject {
                 return;
             case "me":
                 if (text.length <= MAX_ME_BYTES) {
-                    this.setMember(client, message);
-                    this.broadcastMembers();
+                    const numbered = Number.isSafeInteger(message.meSeq) && message.meSeq > 0;
+                    // A confirmed change of pick or ready is saved first
+                    // (broadcastMembers); a loadout sent again on a map change
+                    // isn't, so the save throttle holds for those
+                    let saveNow = false;
+                    // Retries cannot roll back a newer selection, including
+                    // after reconnecting or restoring the room from storage.
+                    if (!numbered || message.meSeq > (client.meSeq ?? 0)) {
+                        const pick = pickOf(client);
+                        const ready = client.ready;
+                        this.setMember(client, message);
+                        if (numbered) {
+                            client.meSeq = message.meSeq;
+                            saveNow = pickOf(client) !== pick || client.ready !== ready;
+                        }
+                    }
+                    this.broadcastMembers(saveNow);
                 }
                 return;
             case "rename":
@@ -1001,6 +1054,11 @@ export class Room extends DurableObject {
                         );
                         return;
                     }
+                    const repicked = room.members.find((member) => member.repicked);
+                    if (repicked) {
+                        error(repickedText(repicked, client));
+                        return;
+                    }
                     room.started = true;
                     room.heroIds = heroIdsOf(message.game, MAX_PARTY);
                     room.runInfo = room.heroIds && runOf(room, message.game);
@@ -1009,6 +1067,7 @@ export class Room extends DurableObject {
                     this.watch = room.heroIds && this.newWatch(room, false);
                     for (const member of room.members) {
                         member.ready = false;
+                        member.repicked = false;
                     }
                     this.persist(true);
                     for (const member of room.members) {
@@ -1113,6 +1172,7 @@ export class Room extends DurableObject {
         }
         this.setMember(client, message.me ?? {});
         client.ready = false;
+        client.repicked = false;
         client.token = randomToken();
         const now = Date.now();
         this.room = {
@@ -1216,6 +1276,7 @@ export class Room extends DurableObject {
         }
         this.setMember(client, message.me ?? {});
         client.ready = false;
+        client.repicked = false;
         client.token = randomToken();
         this.remember(client);
         room.members.push(client);

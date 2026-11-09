@@ -3215,6 +3215,7 @@ describe("enemy mechanics", () => {
                 expect(events).toContainEqual({
                     type: "notice",
                     message: "Hide behind the glyph!",
+                    instruction: true,
                 });
                 return events.filter((e) => e.type === "playerHit" && e.enemyId === boss.def.id)
                     .length;
@@ -3583,6 +3584,16 @@ describe("maps", () => {
         }
     });
 
+    test("only a closing ring stands where it formed first (BulletPatternDef.hold)", () => {
+        for (const enemy of ENEMIES) {
+            for (const attack of enemy.boss?.attacks ?? []) {
+                if (attack.pattern?.hold !== undefined) {
+                    expect(attack.pattern.shape, `${enemy.id}: ${attack.name}`).toBe("closing");
+                }
+            }
+        }
+    });
+
     test("every arena is on one of the cache's four planes, the ground floor unless set", () => {
         for (const map of [...MAPS, ...FUN_MAPS]) {
             const region = getArenaRegion(map);
@@ -3681,7 +3692,8 @@ function attackOnce(sim: Sim, seconds: number) {
 }
 
 describe("class weapons", () => {
-    // Half a minute of play for each of them takes a while
+    // Half a minute of play for each of them takes a while, and each new weapon adds to it
+    // (11.6 s on 0.30.0's release build before the keris partisans)
     test("every class weapon kills things", () => {
         const classes = { melee: "warrior", ranged: "ranger", magic: "wizard" };
         for (const weapon of WEAPONS.filter((w) => w.style)) {
@@ -3689,7 +3701,7 @@ describe("class weapons", () => {
             runFor(sim, 30);
             expect(sim.kills).toBeGreaterThan(0);
         }
-    }, 20000);
+    }, 40000);
 
     test("the scythe sweeps a wide arc in front, and hits bosses three times", () => {
         const sim = armed("scythe_of_vitur");
@@ -5486,7 +5498,8 @@ describe("random events", () => {
         expect(first).toBeGreaterThanOrEqual(RANDOM_EVENT_FIRST[0]);
         expect(first).toBeLessThanOrEqual(RANDOM_EVENT_FIRST[1]);
         expect(new Set(seen).size).toBeGreaterThan(3);
-    });
+        // Up to an hour and more of ticks: past 5 seconds on the release's busy machine
+    }, 30000);
 
     test("a visitor waits, says their piece, then goes", () => {
         const sim = createSim();

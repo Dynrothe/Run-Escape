@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import {
     ChestView,
     EventView,
@@ -32,6 +32,15 @@ vi.mock("./TouchControls", () => ({
     TouchControls: () => null,
     RotateNotice: () => null,
     enterFullscreen: vi.fn(),
+}));
+
+vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
+
+vi.mock("../client/GameView", () => ({
+    formatTime: (seconds: number) => {
+        const s = Math.floor(seconds);
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    },
 }));
 
 function slot(id: string, level: number): SlotView {
@@ -356,6 +365,27 @@ describe("the run's HUD", () => {
         expect(levels()).toEqual(["1"]);
         act(() => store.set({ hud: hud([slot("bow", 2), slot("staff", 1)]) }));
         expect(levels()).toEqual(["2", "1"]);
+    });
+
+    test("the DPS keeps out of the way of a fight button over the items, and only that", () => {
+        const { store, view } = renderHud();
+        const damage = () => view.container.querySelector(".ui-damage")!;
+        const ability = (withItems: boolean) => ({
+            name: "Amascut's bane",
+            iconObjId: 1,
+            charge: 1,
+            inReach: false,
+            opened: false,
+            guide: false,
+            withItems,
+            hint: false,
+        });
+        expect(damage()).not.toHaveClass("ui-damage-beside-ability");
+        act(() => store.setNumbers(numbers({ ability: ability(true) })));
+        expect(damage()).toHaveClass("ui-damage-beside-ability");
+        // A one-fight map's button is in the corner, below the HUD's column
+        act(() => store.setNumbers(numbers({ ability: ability(false) })));
+        expect(damage()).not.toHaveClass("ui-damage-beside-ability");
     });
 
     test("the boss's warning counts down in the last minute", () => {

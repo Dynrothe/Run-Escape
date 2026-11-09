@@ -30,6 +30,7 @@ go stale. Add anything that cost you time to work out.
 | Getting it running, controls, cache version            | `README.md`                                                            |
 | What changed in each version                           | `CHANGELOG.md`                                                         |
 | How to add a weapon, enemy, map and so on              | `.claude/rules/adding-content.md`                                      |
+| Languages, and the text in each one                    | `src/game/i18n/`, its `locales/<lang>/*.json`                          |
 | Weapons, enemies, items, maps, shop (plain data)       | `src/game/content/`                                                    |
 | Weapon damage controls                                 | `docs/BALANCE.md`                                                      |
 | The game itself: tick, combat, spawning, levels        | `src/game/core/Sim.ts`                                                 |
@@ -91,6 +92,7 @@ go stale. Add anything that cost you time to work out.
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
 | The Tombs of Amascut (a raid, behind its quest)        | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
 | The Tombs' bot, and its sim of puzzle rooms and bosses | `scripts/game/tombsBot.ts`, `scripts/game/simulate-tombs.ts`           |
+| The Scabaras room's puzzle helper, and what unlocks it | `content/scabarasHelper.ts`, `GameView.drawScabarasHelper`             |
 | Beneath Cursed Sands, the Tombs' quest (a boss fight)  | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
 | Its fights' design: four parts, each kept once won     | `docs/design/beneath-cursed-sands.md`                                  |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
@@ -176,6 +178,10 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   can't win on some maps even on normal, and on early maps it lasts until the final boss either way.
 - The bot is simple. It doesn't play strike-based adventurers well, so don't judge those from a sim.
   Treat its numbers as a comparison, not as how a player would do.
+- Each run's line says how long the bot was `stuck`: pressing on without moving, against a wall
+  or held by a boss. A lot of it means the bot can't get round that map, not that the map is hard.
+- Without `DODGE=1` the bot ignores the bullets, rings and marks of a boss without phases (the
+  Theatre's): sim a change to those with it.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
   `src/` in the same checkout meanwhile, since each run reads the source when it starts.
 - **Run sweeps as one process per map.** The script already loops over adventurers and seeds, so
@@ -286,6 +292,11 @@ desktop build.
 - **Comments**: short, and they say why or what something's for. Match what's around them.
 - **Content** is plain data with real cache ids. Look ids up with the scripts, not from memory. OSRS
   names should be spelled as the cache spells them.
+- **Languages: never translate.** Don't write text in any language but English unless the developer
+  asks you to translate it. New and changed text goes in English only (in the code, or
+  `locales/en/`), and other languages show the English until their translator adds theirs. When
+  you change what an English text means, remove its key from the other languages' files rather
+  than rewording them, and say so in the pull request. See Languages in `docs/DEVELOPMENT.md`.
 - **Saves**: if `SaveData` changes shape, raise `SAVE_VERSION` and add a step to `migrateSave`.
   New shop upgrades, ids and optional fields don't need one, and nor does dropping an optional
   field that loading ignores. Write the save only through `GameClient.persist()`: it doesn't write

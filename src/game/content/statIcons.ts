@@ -61,6 +61,7 @@ const ICONS: Record<string, StatIconRef> = {
     "chance to heal on hit": obj(11090), // Phoenix necklace
     "melee knockback": obj(1347), // Rune warhammer
     "weapon slots": SCIMITAR,
+    "magic weapon slot": obj(27281), // Divine rune pouch
     "passive slots": obj(8850), // Rune defender
     "power-up drops": obj(13393), // Xeric's talisman
 
