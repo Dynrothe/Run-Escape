@@ -4114,7 +4114,7 @@ export class Sim {
                     ) {
                         // Stands still winding up, so a swing can be stepped away from
                         dirX = dirY = 0;
-                    } else if (this.tick < bossState.channelEnd) {
+                    } else if (this.tick < bossState.channelEnd && !this.akkhaDrawn(enemy)) {
                         // And while its volleys go out, so a spiral stays a spiral
                         dirX = dirY = 0;
                     } else if (this.keepsTo(enemy)) {
@@ -6001,6 +6001,22 @@ export class Sim {
         boss.attackSeq = AKKHA_VANISH_SEQ;
         boss.animStart = this.tick;
         this.emit({ type: "notice", message: memory.message });
+    }
+
+    // Akkha with a shadow of his dead: he can be drawn into its quarter, so he comes on at whoever
+    // he's after while his volleys go out (still standing to wind each up), as OSRS's is dragged.
+    // Standing for every volley, his ranged and magic forms hardly took a step between his
+    // specials, so he was never drawn in and the fight never went on.
+    private akkhaDrawn(boss: Enemy): boolean {
+        const fight = this.tombsAkkha;
+        return (
+            fight !== undefined &&
+            fight.uid === boss.uid &&
+            !fight.memory &&
+            fight.shadows.some(
+                (shadow) => !this.enemies.some((e) => e.uid === shadow.uid && !e.dead),
+            )
+        );
     }
 
     // Akkha's shadows while they're up: how many, and seconds till those still up flood

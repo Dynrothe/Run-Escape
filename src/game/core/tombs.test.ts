@@ -1655,6 +1655,50 @@ describe("Akkha", () => {
         expect(boss.dead).toBe(true);
     });
 
+    it("comes on at you between his specials while a shadow's dead, to be drawn into its quarter", () => {
+        // With Double Trouble every special's a Memory Blast; his volleys between held him in the
+        // middle, so he was never drawn into the dead shadow's quarter and the blasts went on
+        for (const seed of [1, 2, 3]) {
+            const sim = atAkkha(["double_trouble", "feeling_special", "stay_vigilant"], seed);
+            const boss = akkha(sim);
+            sim.damageEnemy(boss, boss.maxHp, 0, boss.x, boss.y);
+            const line = boss.hp;
+            let killedAt = -1;
+            let hurtAt = -1;
+            for (let t = 0; t < 60 * TICKS_PER_SECOND && hurtAt < 0; t++) {
+                const fight = sim.tombsAkkha!;
+                const dead = fight.shadows.find(
+                    (s) => !sim.enemies.some((e) => e.uid === s.uid && !e.dead),
+                );
+                if (!dead && fight.memory && fight.shadows.length > 0) {
+                    const shadow = sim.enemies.find((e) => e.uid === fight.shadows[0].uid)!;
+                    sim.damageEnemy(shadow, shadow.maxHp * 2, 0, shadow.x, shadow.y);
+                    killedAt = t;
+                }
+                if (dead) {
+                    const at = sim.akkhaCorner(dead.quadrant, 6);
+                    sim.player.x = sim.player.prevX = at.x;
+                    sim.player.y = sim.player.prevY = at.y;
+                    if (t % 10 === 0) {
+                        sim.damageEnemy(boss, boss.maxHp * 0.01, 0, boss.x, boss.y);
+                    }
+                    if (boss.hp < line) {
+                        hurtAt = t;
+                    }
+                }
+                sim.player.hp = sim.player.maxHp;
+                sim.player.invulnerable = 0;
+                if (sim.state === "levelUp") {
+                    sim.choose(0);
+                }
+                sim.step();
+            }
+            expect(killedAt).toBeGreaterThanOrEqual(0);
+            expect(hurtAt).toBeGreaterThan(0);
+            expect((hurtAt - killedAt) / TICKS_PER_SECOND).toBeLessThan(25);
+        }
+    });
+
     describe("Detonate", () => {
         // A party of two at him, each put on a tile
         function party(): Sim {

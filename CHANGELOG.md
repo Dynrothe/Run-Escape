@@ -25,8 +25,9 @@ the version in the corner).
 - Zebak's roar hit hard with nothing to see. You're safe straight behind a boulder now, as in
   OSRS, and that ground glows while the roar's coming; as he roars, dust rolls across the island
   but those spots. Fixed by Okaeri.
-- Akkha could get stuck behind one of his own shadows during the shadow phase, and then he couldn't
-  be hurt and went on doing his specials forever. He walks through them now. Fixed by Okaeri.
+- Akkha's shadow phase could go on forever, Memory Blast after Memory Blast: he wouldn't come to
+  you to be drawn into a dead shadow's quarter, and could get stuck behind a live one. Once a
+  shadow's dead he comes after you between his specials, through his own shadows. Fixed by Okaeri.
 - On a phone, the Scabaras room's slate covered the middle of the screen, over the floor you were
   about to step on. It's a thin row at the top now. Fixed by Okaeri.
 

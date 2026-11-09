@@ -423,7 +423,10 @@ animations from a lister of those whose model or animation is in the raid's rang
       quarter. Only one: once a shadow's struck the rest are shielded, as the wiki says to focus
       one, till they're restored at the next threshold. He walks through his own shadows (they
       don't push him as other enemies do): they never move, so one in his way would hold him off a
-      dead one's quarter. One timer (the HUD counts it down) runs for them all: when it's out,
+      dead one's quarter. With one dead he comes on at whoever he's after while his volleys go out
+      (`Sim.akkhaDrawn`; still standing to wind each up), as OSRS's is dragged: standing for every
+      volley, his ranged and magic forms hardly took a step between specials, so he was never
+      drawn in. One timer (the HUD counts it down) runs for them all: when it's out,
       every quadrant whose shadow's still up floods for half your hitpoints and its element, and it
       starts again.
     - **Final stand**: at 0 he rises (`rises`) as `akkha_enraged` with a fifth of his hitpoints, in
