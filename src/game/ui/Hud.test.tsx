@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import {
     ChestView,
     EventView,
@@ -18,6 +18,15 @@ import { describeUnlockTask } from "../content/unlocks";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 import { iconCache } from "./ItemIcon";
+
+vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
+
+vi.mock("../client/GameView", () => ({
+    formatTime: (seconds: number) => {
+        const s = Math.floor(seconds);
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    },
+}));
 
 function slot(id: string, level: number): SlotView {
     return { id, name: id, level, maxLevel: 8, iconObjId: 1, detail: "", rarityColor: "#fff" };

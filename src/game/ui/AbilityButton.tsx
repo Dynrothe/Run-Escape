@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
 import { AbilityView } from "../client/GameStore";
+import { t, tl } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint, PadIcon, usePadKind } from "./PadHint";
 
@@ -28,12 +29,12 @@ export function AbilityButton({
     }
     const press = pad ? (
         <>
-            Press <PadIcon kind={pad} icon="south" label={padLabel(pad, "south")} />
+            {t("canvas.press")} <PadIcon kind={pad} icon="south" label={padLabel(pad, "south")} />
         </>
     ) : touch ? (
-        "Tap"
+        t("canvas.tap")
     ) : (
-        "Press Space or click"
+        t("canvas.press_space_or_click")
     );
     return (
         <div
@@ -51,21 +52,22 @@ export function AbilityButton({
             {ability.guide && ability.opened ? (
                 // The moment it's for, said plainly: in reach, use it; out of it, get in
                 <span className="ui-ability-tag" role="status">
-                    {ability.inReach ? "Guard down! Fire!" : "Guard down! Get close!"}
+                    {ability.inReach
+                        ? t("canvas.ability_guard_fire")
+                        : t("canvas.ability_guard_close")}
                 </span>
             ) : (
                 ability.hint && (
                     <span className="ui-ability-hint" role="status">
-                        Dodge the boss's big attacks to drop its guard, then get close. {press} this
-                        while it's down: it hits twice as hard.
+                        {t("canvas.ability_guide")} {press} {t("canvas.ability_guide_action")}
                     </span>
                 )
             )}
             <button
                 data-silent
                 className={abilityClass(ability, touch)}
-                aria-label={ability.name}
-                title={`${ability.name}: from right by him, and twice as hard while his guard's down`}
+                aria-label={tl(ability.name)}
+                title={t("canvas.ability_hint", { name: tl(ability.name) })}
                 // Keep focus on the game, so Space doesn't press it again
                 onMouseDown={(e) => e.preventDefault()}
                 onPointerDown={touch ? () => client.useAbility() : undefined}
@@ -77,7 +79,7 @@ export function AbilityButton({
                     className="ui-ability-charge"
                     style={{ transform: `scaleY(${1 - ability.charge})` }}
                 />
-                {!touch && <span className="ui-ability-name">{ability.name}</span>}
+                {!touch && <span className="ui-ability-name">{tl(ability.name)}</span>}
             </button>
             {/* Under the round button, not in it: its circle cuts off a long name's ends */}
             {touch && <span className="ui-ability-name ui-ability-name-under">{ability.name}</span>}

@@ -414,10 +414,16 @@
 
 .ui-setting {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 6px 16px;
     padding: 5px 0;
+}
+
+.ui-setting-label {
+    flex: 1 1 180px;
+    min-width: 0;
 }
 
 .ui-setting-name {
@@ -434,6 +440,7 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 /* A box to type in (cloud save's code): it goes under the label when there isn't room beside it,
@@ -482,9 +489,14 @@
 }
 
 /* The frame rate's choices: the one picked lit up */
-.ui-setting-control .ui-frame-rate {
+.ui-setting-control .ui-frame-rate,
+.ui-setting-control .ui-language-btn {
     padding-left: 8px;
     padding-right: 8px;
+}
+
+.ui-setting-control.ui-language-control {
+    flex-wrap: wrap;
 }
 
 .ui-frame-rate-on {
@@ -548,7 +560,8 @@
 }
 
 /* The client's wrench, on one of the game's own buttons */
-.ui-title-settings {
+.ui-title-settings,
+.ui-title-language {
     width: 40px;
     height: 40px;
     padding: 0;
@@ -556,7 +569,8 @@
     box-shadow: inset 0 0 0 1px var(--ui-edge-light);
 }
 
-.ui-title-settings:hover {
+.ui-title-settings:hover,
+.ui-title-language:hover {
     background: var(--ui-card-hover);
 }
 

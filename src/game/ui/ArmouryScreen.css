@@ -28,7 +28,7 @@
 
 .ui-armoury-slot-name {
     flex-shrink: 0;
-    width: 48px;
+    min-width: 48px;
     font-family: "OSRS Bold", sans-serif;
     font-size: 15px;
     color: var(--ui-white);

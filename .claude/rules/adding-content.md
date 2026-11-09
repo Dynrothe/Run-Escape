@@ -333,6 +333,13 @@ names that map (`content/collectionLog.ts`). A boss fight map (`MapDef.fight`) w
 in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't. The Tombs of Amascut's
 chest's are under the raid.
 
+## Text and languages
+
+Names and descriptions are read through the accessors in `content/` (`tr(key, english)`), never
+straight off the definition. After adding or renaming content, run
+`bun run tsx scripts/i18n/extract.ts` to regenerate `src/game/i18n/locales/en/*.json`. See
+`docs/DEVELOPMENT.md`, Languages.
+
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`

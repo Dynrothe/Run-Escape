@@ -12,6 +12,7 @@
 //
 // The buttons are turned into the keys the game already answers (see
 // GameInput), so a pad can do everything the keyboard can and nothing else.
+import { t } from "../i18n";
 import { MoveVector } from "./GameTouch";
 
 export type PadKind = "xbox" | "playstation" | "nintendo" | "generic";
@@ -76,7 +77,7 @@ export function identifyPad(pad: { id: string; mapping: string }): PadInfo {
         id
             .replace(/\s*\([^)]*\)\s*$/, "")
             .replace(/^[0-9a-f]{4}-[0-9a-f]{4}-/i, "")
-            .trim() || "Controller";
+            .trim() || t("canvas.controller");
     return { kind, standard: pad.mapping === "standard", name };
 }
 
@@ -142,7 +143,10 @@ const LABELS: Record<PadKind, Record<PadButton, string>> = {
 LABELS.generic = LABELS.xbox;
 
 export function padLabel(kind: PadKind, button: PadButton): string {
-    return LABELS[kind][button];
+    const label = LABELS[kind][button];
+    return label === "Up" || label === "Down" || label === "Left" || label === "Right"
+        ? t(`canvas.pad.${label.toLowerCase()}`)
+        : label;
 }
 
 // During a run: the keys each button stands for. The items take the four

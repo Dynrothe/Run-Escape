@@ -30,6 +30,7 @@ go stale. Add anything that cost you time to work out.
 | Getting it running, controls, cache version            | `README.md`                                                            |
 | What changed in each version                           | `CHANGELOG.md`                                                         |
 | How to add a weapon, enemy, map and so on              | `.claude/rules/adding-content.md`                                      |
+| Languages, and the text in each one                    | `src/game/i18n/`, its `locales/<lang>/*.json`                          |
 | Weapons, enemies, items, maps, shop (plain data)       | `src/game/content/`                                                    |
 | Weapon damage controls                                 | `docs/BALANCE.md`                                                      |
 | The game itself: tick, combat, spawning, levels        | `src/game/core/Sim.ts`                                                 |

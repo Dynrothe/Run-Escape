@@ -4,6 +4,7 @@ import { getMap } from "../content/maps";
 import { QUESTS, describeQuest } from "../content/quests";
 import { QuestDef } from "../content/types";
 import { SaveData, getQuestProgress, isMapUnlocked } from "../core/save";
+import { fmtNum, t, tl } from "../i18n";
 import { Coins } from "./Coins";
 import "./QuestScreen.css";
 
@@ -32,18 +33,17 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-quests">
-                <h2>Quests</h2>
-                <p className="ui-subtle">
-                    Quests take as many runs as they need. Each pays its coins once, when the run
-                    that finishes it ends.
-                </p>
+                <h2>{t("quest.title")}</h2>
+                <p className="ui-subtle">{t("quest.intro")}</p>
                 <div className="ui-quest-list">
                     {getQuestGroups().map(({ mapId, quests }) => (
                         <section key={mapId ?? ""} className="ui-quest-group">
                             <h3 className="ui-quest-group-name">
-                                {mapId ? getMap(mapId).name : "All over"}
+                                {mapId ? tl(getMap(mapId).name) : t("quest.all_over")}
                                 {mapId && !isMapUnlocked(save, mapId) && (
-                                    <span className="ui-quest-group-note">not open yet</span>
+                                    <span className="ui-quest-group-note">
+                                        {t("quest.not_open")}
+                                    </span>
                                 )}
                             </h3>
                             {quests.map((quest) => (
@@ -54,10 +54,13 @@ export function QuestScreen({ ui, client }: Props): JSX.Element {
                 </div>
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
-                        Back
+                        {t("canvas.back")}
                     </button>
                     <span className="ui-quests-count">
-                        Completed {save.questsDone.length} / {QUESTS.length}
+                        {t("quest.completed", {
+                            done: fmtNum(save.questsDone.length),
+                            total: fmtNum(QUESTS.length),
+                        })}
                     </span>
                     <Coins amount={save.coins} />
                 </div>
@@ -72,12 +75,15 @@ function QuestRow({ save, quest }: { save: SaveData; quest: QuestDef }): JSX.Ele
     const state = done ? "done" : progress.done > 0 ? "started" : "new";
     return (
         <div className={"ui-quest ui-quest-" + state}>
-            <span className="ui-quest-name">{quest.name}</span>
+            <span className="ui-quest-name">{tl(quest.name)}</span>
             <span className="ui-quest-task">{describeQuest(quest.objective)}</span>
             <span className="ui-quest-progress">
                 {done
-                    ? "Done"
-                    : `${progress.done.toLocaleString()} / ${progress.of.toLocaleString()}`}
+                    ? t("quest.done")
+                    : t("quest.progress", {
+                          done: fmtNum(progress.done),
+                          total: fmtNum(progress.of),
+                      })}
             </span>
             <span className="ui-quest-reward">
                 <Coins amount={quest.coins} />

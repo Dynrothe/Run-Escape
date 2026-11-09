@@ -1,3 +1,4 @@
+import { t, tp, tr } from "../i18n";
 import { CHARACTERS } from "./characters";
 import { getEnemy } from "./enemies";
 import { ITEMS } from "./items";
@@ -60,31 +61,58 @@ export function isAvailable(
     return !def.unlock || !unlocked || unlocked.has(def.id);
 }
 
+// The tasks' sentences, for locales/en/gen.json. Each whole, with the names as {placeholders}
+// (and the "a" of "Find a ..." in it), so a language can reorder it. The "In" ones are for a
+// task shown with its map, the others for where the map is clear.
+export const UNLOCK_MESSAGES: Record<string, string> = {
+    "unlock.beat_map": "Beat {map}",
+    "unlock.beat_map.hard": "Beat {map} on hard",
+    "unlock.kill_boss": "Kill {enemy}",
+    "unlock.kill_boss.in": "Kill {enemy} in {map}",
+    "unlock.survive": "Survive {time}",
+    "unlock.survive.in": "Survive {time} in {map}",
+    "unlock.survive.minutes.other": "{n} minutes",
+    "unlock.survive.clock": "{minutes}:{seconds}",
+    "unlock.raid_chest": "Find a {trophy} in its chest",
+    "unlock.raid_chest.hard": "Find a {trophy} in its chest on hard or expert",
+    "unlock.raid_chest.in": "Find a {trophy} in the {map} chest",
+    "unlock.raid_chest.in.hard": "Find a {trophy} in the {map} chest on hard or expert",
+};
+
 // "10 minutes", or "6:06" when rounding would promise an unlock too soon
 function describeSurvival(seconds: number): string {
     const minutes = Math.floor(seconds / 60);
     const rest = seconds % 60;
-    return rest === 0 ? `${minutes} minutes` : `${minutes}:${String(rest).padStart(2, "0")}`;
+    return rest === 0
+        ? tp("unlock.survive.minutes", minutes)
+        : t("unlock.survive.clock", { minutes, seconds: String(rest).padStart(2, "0") });
 }
 
 // "Beat Barrows", "Kill Count Draynor in Lumbridge" (or just "Kill Count
 // Draynor" where it's clear which map it's on)
 export function describeUnlockTask(task: UnlockTask, withMap = true): string {
-    const map = getMap(task.mapId).name;
-    const where = withMap ? ` in ${map}` : "";
+    const map = tr(`map.${task.mapId}.name`, getMap(task.mapId).name);
+    const suffix = withMap ? ".in" : "";
     switch (task.kind) {
         case "beatMap":
-            return task.hard ? `Beat ${map} on hard` : `Beat ${map}`;
-        case "killBoss":
-            return `Kill ${getEnemy(task.enemyId).name}${where}`;
+            return t(task.hard ? "unlock.beat_map.hard" : "unlock.beat_map", { map });
+        case "killBoss": {
+            const enemy = getEnemy(task.enemyId);
+            return t(`unlock.kill_boss${suffix}`, {
+                enemy: tr(`enemy.${enemy.id}.name`, enemy.name),
+                map,
+            });
+        }
         case "survive":
-            return `Survive ${describeSurvival(task.seconds)}${where}`;
+            return t(`unlock.survive${suffix}`, { time: describeSurvival(task.seconds), map });
         case "raidChest": {
             // A thing to do, as the rest are: callers build sentences on it ("... to unlock")
             const trophy = TROPHY_BY_ID.get(task.trophyId)!;
             const hard = trophy.from.kind === "raid" && trophy.from.hard;
-            const chest = withMap ? `the ${map} chest` : "its chest";
-            return `Find a ${trophy.name} in ${chest}${hard ? " on hard or expert" : ""}`;
+            return t(`unlock.raid_chest${withMap ? ".in" : ""}${hard ? ".hard" : ""}`, {
+                trophy: tr(`trophy.${trophy.id}.name`, trophy.name),
+                map,
+            });
         }
     }
 }

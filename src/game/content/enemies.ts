@@ -1,4 +1,5 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
+import { tr } from "../i18n";
 import { CURSED_SANDS_ENEMIES } from "./cursedSands";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
@@ -1716,7 +1717,7 @@ export const ENEMIES: EnemyDef[] = [
     },
     {
         id: "scarab_swarm",
-        name: "Scarab swarm",
+        name: "Scarab Swarm",
         npcId: 1782,
         idleSeq: 1947,
         walkSeq: 1945,
@@ -8382,4 +8383,9 @@ export function getEnemy(id: string): EnemyDef {
         throw new Error("Unknown enemy " + id);
     }
     return enemy;
+}
+
+// The name to show for an enemy, in the language chosen (enemy.<id>.name)
+export function enemyName(def: Pick<EnemyDef, "id" | "name">): string {
+    return tr(`enemy.${def.id}.name`, def.name);
 }

@@ -520,10 +520,15 @@
         padding: 8px;
     }
 
-    .ui-title-settings {
+    .ui-title-settings,
+    .ui-title-language {
         width: 44px;
         height: 44px;
         padding: 0;
+    }
+
+    .ui-setting-control.ui-language-control .ui-language-btn {
+        min-height: 36px;
     }
 
     .ui-version {
@@ -1018,7 +1023,8 @@
     }
 
     .ui-setting {
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 4px 10px;
         padding: 2px 0;
     }
 }

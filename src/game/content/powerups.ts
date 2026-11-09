@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { PowerUpDef, ThrallDef } from "./types";
 
 // Power-ups drop now and then from enemies and are used as soon as they're
@@ -275,4 +276,26 @@ export function getPowerUp(id: string): PowerUpDef {
         throw new Error("Unknown power-up " + id);
     }
     return powerUp;
+}
+
+export function powerUpName(powerUp: PowerUpDef): string {
+    return tr(`powerup.${powerUp.id}.name`, powerUp.name);
+}
+
+export function powerUpDescription(powerUp: PowerUpDef): string {
+    return tr(`powerup.${powerUp.id}.desc`, powerUp.description);
+}
+
+export function powerUpText(powerUp: PowerUpDef) {
+    return { name: powerUpName(powerUp), description: powerUpDescription(powerUp) };
+}
+
+export function thrallName(thrall: ThrallDef): string {
+    return tr(`thrall.${thrall.id}.name`, thrall.name);
+}
+
+export function powerUpShout(powerUp: PowerUpDef): string | undefined {
+    return powerUp.effect.kind === "laps"
+        ? tr(`powerup.${powerUp.id}.shout`, powerUp.effect.shout)
+        : undefined;
 }

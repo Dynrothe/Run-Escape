@@ -156,6 +156,10 @@ the version in the corner).
 - On a phone, the damage a second and its panel no longer show on top of level ups, caskets,
   random events and the menus.
 
+### Added
+
+- Languages: play in English or Português (BR). Pick one on the title screen (the globe button) or in Settings and the pause menu, and it changes right away.
+
 ## 0.27.0 - 2026-11-05
 
 ### Added

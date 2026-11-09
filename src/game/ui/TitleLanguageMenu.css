@@ -1,0 +1,153 @@
+.ui-title-language-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.ui-title-language {
+    transition:
+        background 0.15s ease-out,
+        color 0.15s ease-out;
+}
+
+.ui-title-language-open {
+    color: var(--ui-yellow);
+    background: var(--ui-card-hover);
+}
+
+.ui-title-language-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    z-index: 50;
+    min-width: 154px;
+    padding: 6px 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+    pointer-events: auto;
+    user-select: none;
+    animation: ui-language-fade-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    /* Exclude tooltip from full-page view transitions so its own CSS exit animation runs smoothly */
+    view-transition-name: none;
+}
+
+.ui-title-language-tooltip.ui-title-language-closing {
+    animation: ui-language-fade-out 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+    pointer-events: none;
+}
+
+/* Hover bridge between button and tooltip so pointer doesn't leave wrapper */
+.ui-title-language-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 12px;
+}
+
+@keyframes ui-language-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes ui-language-fade-out {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+}
+
+.ui-title-language-header {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 14px;
+    color: var(--ui-orange);
+    text-shadow: 1px 1px 0 #000;
+    text-align: center;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--ui-divider);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.ui-title-language-options {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 2px;
+}
+
+.ui-title-language-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 5px 8px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-white);
+    text-shadow: 1px 1px 0 #000;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-align: left;
+    transition:
+        background 0.12s ease-out,
+        color 0.12s ease-out,
+        border-color 0.12s ease-out;
+}
+
+.ui-title-language-option:hover {
+    color: var(--ui-yellow);
+    background: var(--ui-card-hover);
+    border-color: var(--ui-edge-light);
+}
+
+.ui-title-language-option.ui-language-active {
+    color: var(--ui-yellow);
+    background: rgba(62, 53, 41, 0.95);
+    border-color: var(--ui-edge-light);
+}
+
+.ui-title-language-label {
+    white-space: nowrap;
+}
+
+.ui-title-language-indicator {
+    color: var(--ui-yellow);
+    font-size: 14px;
+    margin-left: 6px;
+}
+
+/* Global View Transitions for seamless text cross-fading */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation-duration: 0.22s;
+    animation-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-title-language-tooltip,
+    .ui-title-language-tooltip.ui-title-language-closing {
+        animation: none;
+        transition: none;
+    }
+
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation: none !important;
+    }
+}
