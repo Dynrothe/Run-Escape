@@ -1967,6 +1967,8 @@ Open to all. The game draws a flag with `CountryFlag` (`ui/CountryFlag.tsx`): th
 world list flags (sprite 815, a frame for each country it has, in `content/flags.ts`), or the
 country's letters where there's no flag, with its name from `Intl.DisplayNames` as the tooltip.
 Emoji flags won't do: Windows has none, so they show as two letters there anyway.
+`CountryFlag` resolves country-code aliases before choosing a sprite, so older saved room
+countries such as `UK` and `FX` use the `GB` and `FR` flags without measuring the room again.
 
 A room in the list has a flag too. On Cloudflare it's where the room's Durable Object runs, which
 needn't be near its host, nor where the request came in (`cf.colo`). The room measures it once and

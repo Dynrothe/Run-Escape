@@ -52,6 +52,7 @@ the version in the corner).
   told if the room never gets it. Fixed by trippy22.
 - A co-op player who changes adventurer after readying up is no longer started on their old one:
   changing it un-readies them, and the host waits for them to ready again. Fixed by trippy22.
+- Co-op room flags show the UK and French flags instead of country-code letters. Fixed by trippy22.
 
 ## 0.29.1 - 2026-11-08
 
