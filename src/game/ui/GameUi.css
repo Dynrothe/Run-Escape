@@ -2750,7 +2750,14 @@
     gap: 8px;
     width: min(620px, calc(94vw / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
+    overflow-y: auto;
     box-sizing: border-box;
+}
+
+/* Each row its own height, so a short screen scrolls the board rather than squeezing the icons
+   (the grid keeps its own cap and scroll) */
+.ui-invocations > * {
+    flex-shrink: 0;
 }
 
 .ui-invocations-title {
@@ -2760,7 +2767,6 @@
 .ui-invocations-body {
     display: flex;
     gap: 8px;
-    min-height: 0;
 }
 
 .ui-invocations-grid {
@@ -2889,6 +2895,85 @@
 .ui-invocations-buttons {
     display: flex;
     justify-content: space-between;
+}
+
+/* Saved setups of the board: each loads in one go */
+.ui-invocations-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocations-presets-title {
+    color: #ff981f;
+}
+
+.ui-invocations-preset-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.ui-invocations-preset {
+    display: flex;
+    gap: 2px;
+}
+
+.ui-invocations-preset-load {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+}
+
+/* The one the board's set to now */
+.ui-invocations-preset-on {
+    box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+.ui-invocations-preset-level {
+    color: #c8b58a;
+    font-size: 0.85em;
+}
+
+/* Smaller than what it's beside: it's not the button to reach for */
+.ui-invocations-preset-delete {
+    font-size: 0.8em;
+    padding: 2px 6px;
+}
+
+/* Asking to be pressed again before it deletes */
+.ui-invocations-preset-sure {
+    color: #ff6d5e;
+}
+
+.ui-invocations-preset-save {
+    display: flex;
+    gap: 4px;
+}
+
+.ui-invocations-preset-name {
+    flex: 1;
+    min-width: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+    background: rgba(0, 0, 0, 0.35);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+    padding: 4px 8px;
+    outline: none;
+}
+
+.ui-invocations-preset-name:focus {
+    box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+.ui-invocations-preset-name::placeholder {
+    color: #7d705b;
 }
 
 /* A phone: the reward potential goes under the icons */

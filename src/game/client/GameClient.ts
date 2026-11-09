@@ -9,7 +9,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
-import { toggleInvocation } from "../content/invocations";
+import { saveInvocationPreset, toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
@@ -796,6 +796,38 @@ export class GameClient implements GameFrameHandler {
         this.save.invocations = [];
         this.persist();
         this.invocationsChanged();
+    }
+
+    // The board as it is, saved as a preset (named, or by its raid level), over one of that name
+    saveInvocationPreset(name: string): void {
+        this.save.invocationPresets = saveInvocationPreset(
+            this.save.invocationPresets ?? [],
+            name,
+            this.save.invocations ?? [],
+        );
+        this.persist();
+    }
+
+    // A preset's invocations on the board, in place of what was on it
+    loadInvocationPreset(index: number): void {
+        const preset = this.save.invocationPresets?.[index];
+        if (!preset) {
+            return;
+        }
+        this.save.invocations = [...preset.invocations];
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    deleteInvocationPreset(index: number): void {
+        const presets = this.save.invocationPresets ?? [];
+        if (index < 0 || index >= presets.length) {
+            return;
+        }
+        const left = presets.filter((_, i) => i !== index);
+        // None left is none at all, as a save loads it
+        this.save.invocationPresets = left.length > 0 ? left : undefined;
+        this.persist();
     }
 
     // In a room, the lobby's told (its raid level goes by the host's: Loadout.invocations)

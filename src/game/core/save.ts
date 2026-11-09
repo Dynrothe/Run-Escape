@@ -6,7 +6,7 @@ import {
 } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
-import { cleanInvocations } from "../content/invocations";
+import { InvocationPreset, cleanInvocationPresets, cleanInvocations } from "../content/invocations";
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
     ALL_MAPS,
@@ -109,6 +109,8 @@ export type SaveData = {
     trophies: string[];
     // The Tombs of Amascut's invocations, as last picked (content/invocations.ts)
     invocations?: string[];
+    // Saved setups of the invocation board, to load in one go (content/invocations.ts)
+    invocationPresets?: InvocationPreset[];
     // The pet taken along on runs (pets.ts), one of the trophies found
     pet?: string;
     // The adventurer the game starts on, picked as a favourite
@@ -291,6 +293,10 @@ export function migrateSave(raw: unknown): SaveData {
     }
     if (Array.isArray(data.invocations)) {
         save.invocations = cleanInvocations(data.invocations);
+    }
+    const presets = cleanInvocationPresets(data.invocationPresets);
+    if (presets.length > 0) {
+        save.invocationPresets = presets;
     }
     if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;

@@ -96,6 +96,22 @@ describe("save", () => {
         expect(loaded.coins).toBe(10000);
     });
 
+    it("keeps invocation presets, cleaned", () => {
+        const loaded = migrateSave({
+            ...createSave(),
+            invocationPresets: [
+                { name: "Speed", invocations: ["try_again", "hardcore_run", "not_one"] },
+                "junk",
+            ],
+        });
+        expect(loaded.invocationPresets).toEqual([
+            { name: "Speed", invocations: ["hardcore_run"] },
+        ]);
+        expect(migrateSave({ ...createSave(), invocationPresets: "junk" }).invocationPresets).toBe(
+            undefined,
+        );
+    });
+
     test("unequal page spending releases only the gold no other page needs", () => {
         expect.hasAssertions();
         const save = createSave();

@@ -367,7 +367,8 @@ animations from a lister of those whose model or animation is in the raid's rang
   it isn't open yet (`Sim.stepTombs`), once as you come up to it.
 - **The board**: Invocations in the setup bar, with the raid level and its band, opens the board.
   What's picked is kept in the save (`SaveData.invocations`) and goes to the run as
-  `SimOptions.invocations`.
+  `SimOptions.invocations`. Up to five setups save as presets (`SaveData.invocationPresets`), each
+  loaded in one go.
 - **Ba-Ba** (`content/tombs.ts`, her fight in `Sim.stepTombsBoss`): her arena's cut turned so her
   throne's north, and she rises once the party's a step past the gap at its foot. Her attacks:
   the shockwave round her (a ground mark); rockfall, shadows in a cross on your tile (a `cross` of

@@ -551,3 +551,54 @@ export function getRaidLevelScale(level: number): RaidLevelScale {
         bullets: a.bullets * fm.pow(b.bullets / a.bullets, t),
     };
 }
+
+// Saved setups of the invocation board, as OSRS's presets: a name and its invocations, loaded in one
+// go (SaveData.invocationPresets)
+export type InvocationPreset = { name: string; invocations: string[] };
+
+export const MAX_INVOCATION_PRESETS = 5;
+export const MAX_PRESET_NAME = 24;
+
+// A preset's name as typed, or its raid level's when left blank
+export function presetName(name: string, invocations: readonly string[]): string {
+    const typed = name.trim().slice(0, MAX_PRESET_NAME);
+    return typed || `Raid level ${getRaidLevel(invocations)}`;
+}
+
+// The current setup saved as a preset: over the one of that name if there is one, else added while
+// there's room. Unchanged when it's full.
+export function saveInvocationPreset(
+    presets: readonly InvocationPreset[],
+    name: string,
+    invocations: readonly string[],
+): InvocationPreset[] {
+    const preset = { name: presetName(name, invocations), invocations: [...invocations] };
+    const at = presets.findIndex((p) => p.name === preset.name);
+    if (at >= 0) {
+        return presets.map((p, i) => (i === at ? preset : p));
+    }
+    return presets.length < MAX_INVOCATION_PRESETS ? [...presets, preset] : [...presets];
+}
+
+// What a save holds, as presets: anything odd left out, each one's invocations cleaned
+export function cleanInvocationPresets(data: unknown): InvocationPreset[] {
+    if (!Array.isArray(data)) {
+        return [];
+    }
+    const out: InvocationPreset[] = [];
+    for (const item of data) {
+        if (out.length >= MAX_INVOCATION_PRESETS || typeof item !== "object" || item === null) {
+            continue;
+        }
+        const { name, invocations } = item as { name?: unknown; invocations?: unknown };
+        if (typeof name !== "string" || !Array.isArray(invocations)) {
+            continue;
+        }
+        const ids = cleanInvocations(invocations);
+        const named = presetName(name, ids);
+        if (!out.some((p) => p.name === named)) {
+            out.push({ name: named, invocations: ids });
+        }
+    }
+    return out;
+}

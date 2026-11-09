@@ -1911,3 +1911,40 @@ describe("the fight button's hint", () => {
         expect(hint(5)).toBe(false);
     });
 });
+
+describe("invocation presets", () => {
+    function createClient() {
+        const save = createSave();
+        const sent: unknown[] = [];
+        const client: GameClient = Object.create(GameClient.prototype);
+        Object.assign(client, {
+            save,
+            persist() {},
+            getLoadout: () => ({ invocations: save.invocations }),
+            coop: { room: {}, setMe: (me: unknown) => sent.push(me) },
+        });
+        return { client, save, sent };
+    }
+
+    test("load onto the board and tell the lobby, as a toggle does", () => {
+        const { client, save, sent } = createClient();
+        save.invocations = ["on_a_diet"];
+        client.saveInvocationPreset("Diet");
+        save.invocations = [];
+        client.loadInvocationPreset(0);
+        expect(save.invocations).toEqual(["on_a_diet"]);
+        expect(sent).toEqual([{ loadout: { invocations: ["on_a_diet"] } }]);
+        // Out of the list, nothing happens
+        client.loadInvocationPreset(3);
+        client.deleteInvocationPreset(-1);
+        expect(save.invocationPresets).toHaveLength(1);
+        expect(sent).toHaveLength(1);
+    });
+
+    test("leave none at all once the last is deleted, as a save loads it", () => {
+        const { client, save } = createClient();
+        client.saveInvocationPreset("");
+        client.deleteInvocationPreset(0);
+        expect(save.invocationPresets).toBeUndefined();
+    });
+});

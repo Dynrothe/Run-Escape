@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Invocation presets: save up to five sets of Tombs of Amascut invocations and load one with a
+  tap (by Okaeri)
+
 ## 0.29.1 - 2026-11-08
 
 ### Changed

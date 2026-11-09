@@ -6,6 +6,8 @@ import {
     INVOCATIONS,
     INVOCATION_BY_ID,
     INVOCATION_GROUPS,
+    MAX_INVOCATION_PRESETS,
+    MAX_PRESET_NAME,
     MAX_RAID_LEVEL,
     OFF_SPRITE,
     RAID_BAND_SPRITES,
@@ -13,6 +15,7 @@ import {
     getRaidBand,
     getRaidLevel,
     getRaidLevelScale,
+    presetName,
 } from "../content/invocations";
 import { ItemIcon } from "./ItemIcon";
 
@@ -172,6 +175,7 @@ export function InvocationBoard({
                         </span>
                     )}
                 </div>
+                <InvocationPresets ui={ui} client={client} />
                 <div className="ui-invocations-buttons">
                     <button className="ui-button" onClick={() => client.clearInvocations()}>
                         Reset All
@@ -181,6 +185,110 @@ export function InvocationBoard({
                     </button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// The board's saved setups (SaveData.invocationPresets): each loads in one go, and the board as it
+// is saves as one, named or by its raid level, over one of the same name
+function InvocationPresets({ ui, client }: { ui: UiSnapshot; client: GameClient }): JSX.Element {
+    const presets = ui.save.invocationPresets ?? [];
+    const on = ui.save.invocations ?? [];
+    const [name, setName] = useState("");
+    // The preset whose Delete was pressed once: a second press deletes it, so a slip beside its
+    // load button doesn't
+    const [deleting, setDeleting] = useState<string>();
+    const nameInput = useRef<HTMLInputElement>(null);
+    const named = presetName(name, on);
+    const replaces = presets.some((p) => p.name === named);
+    const full = presets.length >= MAX_INVOCATION_PRESETS && !replaces;
+    const same = (ids: readonly string[]) =>
+        ids.length === on.length && ids.every((id) => on.includes(id));
+    return (
+        <div className="ui-invocations-presets">
+            <div className="ui-invocations-presets-title">Presets</div>
+            {presets.length === 0 ? (
+                <span className="ui-subtle">None saved yet.</span>
+            ) : (
+                <div className="ui-invocations-preset-list">
+                    {presets.map((preset, i) => {
+                        const level = getRaidLevel(preset.invocations);
+                        const current = same(preset.invocations);
+                        const sure = deleting === preset.name;
+                        return (
+                            <div key={preset.name} className="ui-invocations-preset">
+                                <button
+                                    className={
+                                        "ui-button ui-invocations-preset-load" +
+                                        (current ? " ui-invocations-preset-on" : "")
+                                    }
+                                    aria-label={`Load ${preset.name}, raid level ${level}`}
+                                    aria-current={current || undefined}
+                                    onClick={() => client.loadInvocationPreset(i)}
+                                >
+                                    {preset.name}{" "}
+                                    <span className="ui-invocations-preset-level">
+                                        level {level}
+                                    </span>
+                                </button>
+                                <button
+                                    className={
+                                        "ui-button ui-invocations-preset-delete" +
+                                        (sure ? " ui-invocations-preset-sure" : "")
+                                    }
+                                    aria-label={
+                                        sure
+                                            ? `Press again to delete ${preset.name}`
+                                            : `Delete ${preset.name}`
+                                    }
+                                    onBlur={() => sure && setDeleting(undefined)}
+                                    onClick={() => {
+                                        if (!sure) {
+                                            setDeleting(preset.name);
+                                            return;
+                                        }
+                                        setDeleting(undefined);
+                                        client.deleteInvocationPreset(i);
+                                        // Its button's gone: on to the name box, not the page
+                                        nameInput.current?.focus();
+                                    }}
+                                >
+                                    {sure ? "Sure?" : "Delete"}
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            <form
+                className="ui-invocations-preset-save"
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!full) {
+                        client.saveInvocationPreset(name);
+                        setName("");
+                    }
+                }}
+            >
+                <input
+                    ref={nameInput}
+                    className="ui-invocations-preset-name"
+                    value={name}
+                    maxLength={MAX_PRESET_NAME}
+                    placeholder={presetName("", on)}
+                    aria-label="Preset name"
+                    spellCheck={false}
+                    onChange={(e) => setName(e.target.value)}
+                />
+                <button className="ui-button" type="submit" disabled={full}>
+                    {replaces ? "Replace" : "Save"}
+                </button>
+            </form>
+            {full && (
+                <span className="ui-subtle">
+                    All {MAX_INVOCATION_PRESETS} are used: delete one, or save over one by its name.
+                </span>
+            )}
         </div>
     );
 }
