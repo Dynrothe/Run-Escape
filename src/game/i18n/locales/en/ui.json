@@ -38,7 +38,6 @@
     "settings.language.translator": "Translated by {name}",
     "language.notice.title": "Translations",
     "language.notice.body": "English is the only officially supported language. Other languages may be wrong or have translations missing, and they aren't verified in any way.",
-    "language.notice.credit": "{language} was translated by {name}.",
     "language.notice.ok": "Got it",
     "settings.movement_prediction.desc": "Joining a co-op game, you move as soon as you press, then correct to the host",
     "settings.movement_prediction.name": "Movement prediction",

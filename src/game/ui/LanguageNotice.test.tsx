@@ -29,11 +29,12 @@ describe("LanguageNotice", () => {
         expect(screen.queryByText(NOTICE)).toBeNull();
     });
 
-    it("comes up the first time another language is picked, with its translator", () => {
+    it("comes up the first time another language is picked, without a credit", () => {
         render(<LanguageNotice />);
         act(() => setLang("pt-BR"));
         expect(screen.getByText(NOTICE)).toBeDefined();
-        expect(screen.getByText(/Português \(BR\) was translated by Giordano Souza/)).toBeDefined();
+        // The translator's credited where the language is picked, not here
+        expect(screen.queryByText(/Giordano Souza/)).toBeNull();
     });
 
     it("goes once it's read, and doesn't come back", () => {
