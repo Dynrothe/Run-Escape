@@ -798,19 +798,23 @@ export class GameClient implements GameFrameHandler {
         this.invocationsChanged();
     }
 
-    // The board as it is, saved as a preset (named, or by its raid level), over one of that name
+    // The board as it is, saved as a preset (named, or by its raid level), over one of that name.
+    // Presets go by their names, which are unique. Nothing when there's no room for another.
     saveInvocationPreset(name: string): void {
-        this.save.invocationPresets = saveInvocationPreset(
+        const presets = saveInvocationPreset(
             this.save.invocationPresets ?? [],
             name,
             this.save.invocations ?? [],
         );
-        this.persist();
+        if (presets) {
+            this.save.invocationPresets = presets;
+            this.persist();
+        }
     }
 
     // A preset's invocations on the board, in place of what was on it
-    loadInvocationPreset(index: number): void {
-        const preset = this.save.invocationPresets?.[index];
+    loadInvocationPreset(name: string): void {
+        const preset = this.save.invocationPresets?.find((p) => p.name === name);
         if (!preset) {
             return;
         }
@@ -819,12 +823,12 @@ export class GameClient implements GameFrameHandler {
         this.invocationsChanged();
     }
 
-    deleteInvocationPreset(index: number): void {
+    deleteInvocationPreset(name: string): void {
         const presets = this.save.invocationPresets ?? [];
-        if (index < 0 || index >= presets.length) {
+        const left = presets.filter((p) => p.name !== name);
+        if (left.length === presets.length) {
             return;
         }
-        const left = presets.filter((_, i) => i !== index);
         // None left is none at all, as a save loads it
         this.save.invocationPresets = left.length > 0 ? left : undefined;
         this.persist();

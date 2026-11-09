@@ -4,6 +4,7 @@ import { getEnemy } from "../content/enemies";
 import {
     INVOCATIONS,
     INVOCATION_GROUPS,
+    InvocationPreset,
     MAX_INVOCATION_PRESETS,
     RAID_LEVEL_SCALE,
     TOMBS_UNIQUES,
@@ -192,19 +193,50 @@ describe("invocations", () => {
     });
 
     it("save as presets by name, or by raid level left blank, over one of the same name", () => {
+        // Saved, with room for it
+        const saved = (presets: InvocationPreset[], name: string, ids: string[]) => {
+            const next = saveInvocationPreset(presets, name, ids);
+            expect(next).toBeDefined();
+            return next ?? [];
+        };
         const diet = ["hardcore_run", "on_a_diet", "boulderdash"];
-        let presets = saveInvocationPreset([], "  ", diet);
+        let presets = saved([], "  ", diet);
         expect(presets).toEqual([{ name: "Raid level 50", invocations: diet }]);
-        presets = saveInvocationPreset(presets, "Speed", ["try_again"]);
-        presets = saveInvocationPreset(presets, "Speed", ["on_a_diet"]);
+        presets = saved(presets, "Speed", ["try_again"]);
+        presets = saved(presets, "Speed", ["on_a_diet"]);
         expect(presets.map((p) => p.name)).toEqual(["Raid level 50", "Speed"]);
         expect(presets[1].invocations).toEqual(["on_a_diet"]);
+        // Left blank, another setup at the same level goes over it (the board says Replace)
+        expect(saved(saved([], "", ["hardcore_run"]), "", ["on_a_diet", "boulderdash"])).toEqual([
+            { name: "Raid level 25", invocations: ["on_a_diet", "boulderdash"] },
+        ]);
         // Full: a new name isn't added, an old one's still saved over
         for (let i = presets.length; i < MAX_INVOCATION_PRESETS; i++) {
-            presets = saveInvocationPreset(presets, `Set ${i}`, []);
+            presets = saved(presets, `Set ${i}`, []);
         }
-        expect(saveInvocationPreset(presets, "One more", [])).toEqual(presets);
-        expect(saveInvocationPreset(presets, "Speed", [])[1].invocations).toEqual([]);
+        expect(saveInvocationPreset(presets, "One more", [])).toBeUndefined();
+        expect(saved(presets, "Speed", [])[1].invocations).toEqual([]);
+    });
+
+    it("name a preset named by its raid level by what it comes to now, if no other has that name", () => {
+        // As after an update that changed an invocation's level
+        expect(
+            cleanInvocationPresets([
+                // Its new name is the next one's old one
+                { name: "Raid level 20", invocations: ["on_a_diet"] },
+                { name: "Raid level 15", invocations: ["on_a_diet", "boulderdash"] },
+                // The one after keeps its name
+                { name: "Raid level 99", invocations: ["boulderdash"] },
+                { name: "Raid level 10", invocations: ["boulderdash"] },
+                { name: "My raid level 1", invocations: [] },
+            ]),
+        ).toEqual([
+            { name: "Raid level 15", invocations: ["on_a_diet"] },
+            { name: "Raid level 25", invocations: ["on_a_diet", "boulderdash"] },
+            { name: "Raid level 99", invocations: ["boulderdash"] },
+            { name: "Raid level 10", invocations: ["boulderdash"] },
+            { name: "My raid level 1", invocations: [] },
+        ]);
     });
 
     it("read presets from a save, leaving out anything odd", () => {

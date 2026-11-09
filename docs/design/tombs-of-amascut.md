@@ -368,7 +368,9 @@ animations from a lister of those whose model or animation is in the raid's rang
 - **The board**: Invocations in the setup bar, with the raid level and its band, opens the board.
   What's picked is kept in the save (`SaveData.invocations`) and goes to the run as
   `SimOptions.invocations`. Up to five setups save as presets (`SaveData.invocationPresets`), each
-  loaded in one go.
+  loaded in one go. They go by name, and one left blank is named by its raid level, so a blank
+  save replaces the last at that level with one press (its button says Replace; Delete takes
+  two). A level name follows the level as an update changes it (`cleanInvocationPresets`).
 - **Ba-Ba** (`content/tombs.ts`, her fight in `Sim.stepTombsBoss`): her arena's cut turned so her
   throne's north, and she rises once the party's a step past the gap at its foot. Her attacks:
   the shockwave round her (a ground mark); rockfall, shadows in a cross on your tile (a `cross` of

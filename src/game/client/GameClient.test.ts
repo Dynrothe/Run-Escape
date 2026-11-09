@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
+import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
@@ -1916,14 +1917,15 @@ describe("invocation presets", () => {
     function createClient() {
         const save = createSave();
         const sent: unknown[] = [];
+        const writes = { count: 0 };
         const client: GameClient = Object.create(GameClient.prototype);
         Object.assign(client, {
             save,
-            persist() {},
+            persist: () => writes.count++,
             getLoadout: () => ({ invocations: save.invocations }),
             coop: { room: {}, setMe: (me: unknown) => sent.push(me) },
         });
-        return { client, save, sent };
+        return { client, save, sent, writes };
     }
 
     test("load onto the board and tell the lobby, as a toggle does", () => {
@@ -1931,12 +1933,12 @@ describe("invocation presets", () => {
         save.invocations = ["on_a_diet"];
         client.saveInvocationPreset("Diet");
         save.invocations = [];
-        client.loadInvocationPreset(0);
+        client.loadInvocationPreset("Diet");
         expect(save.invocations).toEqual(["on_a_diet"]);
         expect(sent).toEqual([{ loadout: { invocations: ["on_a_diet"] } }]);
-        // Out of the list, nothing happens
-        client.loadInvocationPreset(3);
-        client.deleteInvocationPreset(-1);
+        // Not one of them, nothing happens
+        client.loadInvocationPreset("Nope");
+        client.deleteInvocationPreset("Nope");
         expect(save.invocationPresets).toHaveLength(1);
         expect(sent).toHaveLength(1);
     });
@@ -1944,7 +1946,19 @@ describe("invocation presets", () => {
     test("leave none at all once the last is deleted, as a save loads it", () => {
         const { client, save } = createClient();
         client.saveInvocationPreset("");
-        client.deleteInvocationPreset(0);
+        client.deleteInvocationPreset("Raid level 0");
         expect(save.invocationPresets).toBeUndefined();
+    });
+
+    test("write nothing for a new one when they're all used", () => {
+        const { client, save, writes } = createClient();
+        for (let i = 0; i < MAX_INVOCATION_PRESETS; i++) {
+            client.saveInvocationPreset(`Set ${i}`);
+        }
+        const presets = save.invocationPresets;
+        writes.count = 0;
+        client.saveInvocationPreset("One more");
+        expect(writes.count).toBe(0);
+        expect(save.invocationPresets).toBe(presets);
     });
 });

@@ -7,8 +7,8 @@ the version in the corner).
 
 ### Added
 
-- Invocation presets: save up to five sets of Tombs of Amascut invocations and load one with a
-  tap (by Okaeri)
+- Invocation presets, by Okaeri: save up to five sets of Tombs of Amascut invocations and load
+  one with a tap.
 
 ## 0.29.1 - 2026-11-08
 

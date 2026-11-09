@@ -2750,13 +2750,22 @@
     gap: 8px;
     width: min(620px, calc(94vw / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
-    overflow-y: auto;
     box-sizing: border-box;
 }
 
-/* Each row its own height, so a short screen scrolls the board rather than squeezing the icons
-   (the grid keeps its own cap and scroll) */
-.ui-invocations > * {
+/* Between the title and the buttons, scrolling on a short screen so they stay in view. Each part
+   keeps its own height there rather than squeezing the icons (the grid keeps its own cap and
+   scroll). */
+.ui-invocations-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ui-invocations-scroll > * {
     flex-shrink: 0;
 }
 
@@ -2908,7 +2917,7 @@
 }
 
 .ui-invocations-presets-title {
-    color: #ff981f;
+    color: var(--ui-orange);
 }
 
 .ui-invocations-preset-list {
@@ -2938,42 +2947,15 @@
     font-size: 0.85em;
 }
 
-/* Smaller than what it's beside: it's not the button to reach for */
-.ui-invocations-preset-delete {
-    font-size: 0.8em;
-    padding: 2px 6px;
-}
-
 /* Asking to be pressed again before it deletes */
 .ui-invocations-preset-sure {
     color: #ff6d5e;
 }
 
+/* The name box is co-op's (.ui-coop-input), as cloud save's is */
 .ui-invocations-preset-save {
     display: flex;
     gap: 4px;
-}
-
-.ui-invocations-preset-name {
-    flex: 1;
-    min-width: 0;
-    font-family: "OSRS Small", sans-serif;
-    font-size: 16px;
-    color: var(--ui-yellow);
-    text-shadow: 1px 1px 0 #000;
-    background: rgba(0, 0, 0, 0.35);
-    border: 2px solid var(--ui-edge);
-    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
-    padding: 4px 8px;
-    outline: none;
-}
-
-.ui-invocations-preset-name:focus {
-    box-shadow: inset 0 0 0 1px var(--ui-yellow);
-}
-
-.ui-invocations-preset-name::placeholder {
-    color: #7d705b;
 }
 
 /* A phone: the reward potential goes under the icons */

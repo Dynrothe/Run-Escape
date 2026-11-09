@@ -559,25 +559,32 @@ export type InvocationPreset = { name: string; invocations: string[] };
 export const MAX_INVOCATION_PRESETS = 5;
 export const MAX_PRESET_NAME = 24;
 
-// A preset's name as typed, or its raid level's when left blank
-export function presetName(name: string, invocations: readonly string[]): string {
+// A preset's name as typed, or its raid level's when left blank. Saving goes by the name, so a
+// blank save goes over the one named by that level (the board's button says Replace)
+export function presetName(name: string, level: number): string {
     const typed = name.trim().slice(0, MAX_PRESET_NAME);
-    return typed || `Raid level ${getRaidLevel(invocations)}`;
+    return typed || `Raid level ${level}`;
 }
 
+// The name presetName gives one left blank
+const LEVEL_NAME = /^Raid level \d+$/;
+
 // The current setup saved as a preset: over the one of that name if there is one, else added while
-// there's room. Unchanged when it's full.
+// there's room. Undefined when it's full, as nothing changes.
 export function saveInvocationPreset(
     presets: readonly InvocationPreset[],
     name: string,
     invocations: readonly string[],
-): InvocationPreset[] {
-    const preset = { name: presetName(name, invocations), invocations: [...invocations] };
+): InvocationPreset[] | undefined {
+    const preset = {
+        name: presetName(name, getRaidLevel(invocations)),
+        invocations: [...invocations],
+    };
     const at = presets.findIndex((p) => p.name === preset.name);
     if (at >= 0) {
         return presets.map((p, i) => (i === at ? preset : p));
     }
-    return presets.length < MAX_INVOCATION_PRESETS ? [...presets, preset] : [...presets];
+    return presets.length < MAX_INVOCATION_PRESETS ? [...presets, preset] : undefined;
 }
 
 // What a save holds, as presets: anything odd left out, each one's invocations cleaned
@@ -595,9 +602,22 @@ export function cleanInvocationPresets(data: unknown): InvocationPreset[] {
             continue;
         }
         const ids = cleanInvocations(invocations);
-        const named = presetName(name, ids);
+        const named = presetName(name, getRaidLevel(ids));
         if (!out.some((p) => p.name === named)) {
             out.push({ name: named, invocations: ids });
+        }
+    }
+    // One named by its raid level goes by what it comes to now (an update can change an
+    // invocation's level, or take one away), unless another has that name. Again until none
+    // moves, as one moving can free the name another wants; each moves once at most.
+    for (let moved = true; moved; ) {
+        moved = false;
+        for (const preset of out) {
+            const now = presetName("", getRaidLevel(preset.invocations));
+            if (LEVEL_NAME.test(preset.name) && !out.some((p) => p.name === now)) {
+                preset.name = now;
+                moved = true;
+            }
         }
     }
     return out;
