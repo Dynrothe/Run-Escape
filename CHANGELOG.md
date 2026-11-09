@@ -10,6 +10,13 @@ the version in the corner).
 - Invocation presets, by Okaeri: save up to five setups of the Tombs of Amascut's invocations and
   load one in a tap.
 
+## 0.29.1 - 2026-11-08
+
+### Changed
+
+- Beneath Cursed Sands, by Okaeri: the quest's bosses hit twice as hard, and armour doesn't stop
+  their hits.
+
 ## 0.29.0 - 2026-11-08
 
 ### Added

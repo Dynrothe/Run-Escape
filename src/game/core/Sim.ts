@@ -4480,8 +4480,8 @@ export class Sim {
     }
 
     // A hit on the player; armour takes some off (unless it hits through it), at most its boss's
-    // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare.
-    // Returns what it took.
+    // share (BossDef.armorCap), whatever the hit: its attacks, its stomp, its pools, its stare. A
+    // map's MapDef.hits scales it and can put it through armour. Returns what it took.
     private damagePlayer(
         damage: number,
         enemyId: string,
@@ -4507,11 +4507,16 @@ export class Sim {
         // Quiet Prayers: armour stops less. Deadly Prayers: a hit leaves the player open, so the
         // next within a second does more.
         const stops = this.stats.armor * (this.invoked("quiet_prayers") ? QUIET_PRAYERS : 1);
-        const armor = ignoreArmor
-            ? 0
-            : armorCap === undefined
-              ? stops
-              : Math.min(stops, damage * armorCap);
+        const hits = this.map.hits;
+        if (hits) {
+            damage *= hits.scale;
+        }
+        const armor =
+            ignoreArmor || hits?.throughArmor
+                ? 0
+                : armorCap === undefined
+                  ? stops
+                  : Math.min(stops, damage * armorCap);
         const openUntil = this.tombsOpenUntil.get(this.hero.index) ?? -1;
         const opened =
             this.invoked("deadly_prayers") && this.tick <= openUntil ? DEADLY_PRAYERS : 1;
