@@ -25,8 +25,9 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, TICK_MS, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import { GameClient, TICK_MS, cleanLoadout, getPhaseBarFraction, loadoutStats } from "./GameClient";
 import { GameStore } from "./GameStore";
+import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
 import { UpMessage } from "./coop/protocol";
@@ -123,6 +124,22 @@ describe("movement prediction", () => {
         client.toggleMovePrediction();
         expect(setPrediction).toHaveBeenLastCalledWith(false);
         vi.unstubAllGlobals();
+    });
+});
+
+describe("a co-op player's loadout", () => {
+    // Their Lil' Zik looks, for their expert chest: only those, whatever their game sends
+    it("keeps only the looks a chest gives every time, from a list of strings", () => {
+        const loadout = makeLoadout({}, [], {}, undefined, undefined, ["lil_sot", "lil_xarp"]);
+        expect([...cleanLoadout(loadout).trophiesFound]).toEqual(["lil_sot", "lil_xarp"]);
+        const junk = {
+            ...loadout,
+            trophies: ["lil_bloat", 7, null, "ghrazi_rapier", "nope", {}] as unknown as string[],
+        };
+        expect([...cleanLoadout(junk).trophiesFound]).toEqual(["lil_bloat"]);
+        const notAList = { ...loadout, trophies: "lil_bloat" as unknown as string[] };
+        expect(cleanLoadout(notAList).trophiesFound.size).toBe(0);
+        expect(cleanLoadout(undefined).trophiesFound.size).toBe(0);
     });
 });
 

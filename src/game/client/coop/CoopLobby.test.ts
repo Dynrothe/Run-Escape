@@ -79,4 +79,13 @@ describe("loadouts", () => {
             "walk_for_it",
         ]);
     });
+
+    // The Lil' Zik looks found, for the expert chest: left out when there are none
+    it("carry the trophies found only when there are some", () => {
+        expect(makeLoadout({}, [], {}).trophies).toBeUndefined();
+        expect(makeLoadout({}, [], {}, undefined, undefined, []).trophies).toBeUndefined();
+        expect(makeLoadout({}, [], {}, undefined, undefined, ["lil_nylo"]).trophies).toEqual([
+            "lil_nylo",
+        ]);
+    });
 });

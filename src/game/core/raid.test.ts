@@ -5,7 +5,7 @@ import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
 import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
-import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID, getEveryTimeTrophiesFound } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
 import { LUMBRIDGE_WAVES } from "../content/waves";
@@ -73,11 +73,17 @@ afterAll(() => {
 });
 
 // raidTeleports: with a teleporter in every hall, as if each boss had been killed before
-function raid(expert = false, raidTeleports = 0, raidPortals?: boolean[]): Sim {
+function raid(
+    expert = false,
+    raidTeleports = 0,
+    raidPortals?: boolean[],
+    trophiesFound?: ReadonlySet<string>,
+): Sim {
     const sim = new Sim({
         grid: makeGrid(field(), 1000, 1000),
         mapId: TEST_RAID.id,
         expert,
+        trophiesFound,
         raidTeleports,
         raidPortals: raidPortals ?? TEST_RAID.raid!.rooms.map(() => raidTeleports > 0),
         characterId: "warrior",
@@ -220,6 +226,46 @@ describe("raids", () => {
         expect(few).toBeGreaterThan(2);
         expect(few).toBeLessThan(25);
         expect(many).toBeGreaterThan(100);
+    });
+
+    it("gives a Lil' Zik look not found yet from expert's chest, till there are none left", () => {
+        const sim = raid(true);
+        Object.assign(sim, { map: getMap("theatre_of_blood") });
+        const looks = TROPHIES.filter((t) => t.from.kind === "raid" && t.from.expert).map(
+            (t) => t.id,
+        );
+        expect(looks).toHaveLength(5);
+        const lookIn = () => [...sim.trophies].filter((id) => looks.includes(id));
+        // Five chests in a row, each run's found kept: all five, none twice
+        const found = new Set<string>();
+        for (let i = 0; i < looks.length; i++) {
+            sim.trophies.clear();
+            sim.heroes[0].trophiesFound = new Set(found);
+            sim["openRaidChest"]();
+            const got = lookIn();
+            expect(got).toHaveLength(1);
+            expect(found.has(got[0])).toBe(false);
+            found.add(got[0]);
+        }
+        expect([...found].sort()).toEqual([...looks].sort());
+        // Once they're all found, still one every time
+        for (let i = 0; i < 20; i++) {
+            sim.trophies.clear();
+            sim["openRaidChest"]();
+            expect(lookIn()).toHaveLength(1);
+        }
+        // And the last one missing is the one given, with the found ones brought in as a run
+        // starts
+        const last = raid(true, 0, undefined, new Set(looks.slice(1)));
+        Object.assign(last, { map: getMap("theatre_of_blood") });
+        for (let i = 0; i < 20; i++) {
+            last.trophies.clear();
+            last["openRaidChest"]();
+            expect([...last.trophies].filter((id) => looks.includes(id))).toEqual([looks[0]]);
+        }
+        expect(getEveryTimeTrophiesFound(["lil_bloat", "ghrazi_rapier", "lil_zik"])).toEqual([
+            "lil_bloat",
+        ]);
     });
 
     it("keeps a raid's wins, normal and hard, when the save's loaded again", () => {

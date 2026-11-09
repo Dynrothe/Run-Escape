@@ -168,7 +168,7 @@ TROPHIES.push(
         id,
         name,
         objId,
-        how: "One each time the Theatre of Blood's beaten on expert mode.",
+        how: "One each time the Theatre of Blood's beaten on expert mode, a new one until you have them all.",
         from: { ...TOB, weight: 1, expert: true },
     })),
     {
@@ -268,4 +268,13 @@ export const TROPHY_BY_ID: Map<string, TrophyDef> = new Map(TROPHIES.map((t) => 
 
 export function trophyName(trophy: TrophyDef): string {
     return tr(`trophy.${trophy.id}.name`, trophy.name);
+}
+
+// The trophies a save has found that a raid's chest gives one of every time (expert mode's Lil'
+// Zik looks): the chest goes by these to give one not found yet (Sim.openRaidChest)
+export function getEveryTimeTrophiesFound(trophies: readonly string[]): string[] {
+    return trophies.filter((id) => {
+        const from = TROPHY_BY_ID.get(id)?.from;
+        return from?.kind === "raid" && (from.expert ?? false);
+    });
 }

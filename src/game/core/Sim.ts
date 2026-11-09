@@ -654,6 +654,9 @@ export type SimOptions = {
     // The weapons, passives and items brought in by map tasks; everything can
     // turn up when unset
     unlockedItems?: ReadonlySet<string>;
+    // The trophies already in their Collection log that a chest gives one of every time (expert
+    // mode's Lil' Zik looks), so it gives one they haven't got while there's one left
+    trophiesFound?: ReadonlySet<string>;
     // Round after round until the player falls, rather than a win at the
     // final boss (see endless.ts)
     endless?: boolean;
@@ -671,7 +674,7 @@ export type SimOptions = {
     // become (none when unset)
     armoury?: ArmouryUpgrades;
     // Co-op: everyone in the run, in the same order on every player's copy
-    // (characterId, metaStats, unlockedItems and armoury are then unused), and
+    // (characterId, metaStats, unlockedItems, trophiesFound and armoury are then unused), and
     // which of them this copy plays
     party?: HeroOptions[];
     focus?: number;
@@ -785,6 +788,8 @@ export type Hero = {
     // Armoury (see SimOptions)
     metaStats: Stats;
     unlockedItems: ReadonlySet<string> | undefined;
+    // Trophies they'd found before the run (SimOptions.trophiesFound)
+    trophiesFound: ReadonlySet<string> | undefined;
     armoury: ArmouryUpgrades | undefined;
     player: Player;
     stats: Stats;
@@ -918,6 +923,7 @@ export type HeroOptions = {
     characterId: string;
     metaStats: Stats;
     unlockedItems?: ReadonlySet<string>;
+    trophiesFound?: ReadonlySet<string>;
     armoury?: ArmouryUpgrades;
 };
 
@@ -1884,6 +1890,7 @@ export class Sim {
                 characterId: options.characterId,
                 metaStats: options.metaStats,
                 unlockedItems: options.unlockedItems,
+                trophiesFound: options.trophiesFound,
                 armoury: options.armoury,
             },
         ];
@@ -1967,6 +1974,7 @@ export class Sim {
             characterId: options.characterId,
             metaStats: options.metaStats,
             unlockedItems: options.unlockedItems,
+            trophiesFound: options.trophiesFound,
             armoury: options.armoury,
             player: {
                 x: start.x,
@@ -11143,11 +11151,16 @@ export class Sim {
             const purple = this.rng.chance(chance) ? pick(false) : undefined;
             const hardOne =
                 this.hard && this.rng.chance(HARD_UNIQUE_CHANCE) ? pick(true) : undefined;
-            // Expert mode: one of Lil' Zik's looks, every time
+            // Expert mode: one of Lil' Zik's looks, every time, one they haven't got while there's
+            // one left, and any of them after that
             const expertPool = purples.filter((t) => t.from.kind === "raid" && t.from.expert);
+            const missing = expertPool.filter(
+                (t) => !hero.trophies.has(t.id) && !(hero.trophiesFound?.has(t.id) ?? false),
+            );
+            const expertFrom = missing.length > 0 ? missing : expertPool;
             const expertOne =
-                this.expert && expertPool.length > 0
-                    ? expertPool[this.rng.int(expertPool.length)]
+                this.expert && expertFrom.length > 0
+                    ? expertFrom[this.rng.int(expertFrom.length)]
                     : undefined;
             const found = [purple, hardOne, expertOne].filter(
                 (t): t is TrophyDef => t !== undefined,

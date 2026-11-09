@@ -36,6 +36,8 @@ the version in the corner).
 
 ### Fixed
 
+- The Theatre of Blood's expert chest could give a Lil' Zik look you already had. It now gives
+  one you haven't got until you have all five. Fixed by Okaeri.
 - On phones, the name of your special attack button was cut off. It now sits under the button.
   Fixed by Okaeri.
 - Beating a boss in the Tombs of Amascut now heals your whole party to full. Fixed by Okaeri.
