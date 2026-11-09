@@ -2294,17 +2294,42 @@ preset an adventurer uses. Keep it to one line at 667 wide.
 
 ### Languages
 
-The game speaks English and Português (BR); Spanish was dropped until it can be translated well.
-Text lives in flat `{"key": "text"}` files at `src/game/i18n/locales/<lang>/<namespace>.json`;
-every `en/` file has a mirror in `pt-BR/`. A new language is a folder of mirrors, an entry in
-`LANGS` and `Lang` (`i18n/types.ts`), and its browser-language match in `i18n/store.ts`. `t(key, params)` looks the key up in the active
-language, then English, then the key itself. `tr(key, fallback)` is the same but ends on the English
-literal kept in the code, which is how content (`src/game/content/`) reads its names and
-descriptions. `core/` doesn't import `i18n/`, so `Sim.ts` keeps emitting English, and the drawing
-layer wraps that text in `tl(text)` to translate it. `items.json`, `world.json` and `gen.json` are
-generated from the content by `scripts/i18n/extractors/`; regenerate them after changing content
-with `bun run tsx scripts/i18n/extract.ts`. `ui.json` and `ui-misc.json` are edited by hand. The
-choice is saved under `rune-survivors-language` in localStorage.
+The game is in English and Português (BR). Only English is checked: the other languages are
+their translators', credited in `LANGS` (`i18n/types.ts`) beside the language picker. The first
+time the game is in another language, picked or the browser's, `ui/LanguageNotice.tsx` says so,
+once (its own `rune-survivors-language-notice` key, not the save). **Agents never translate**:
+text is written in English only unless the developer asks for a translation (CLAUDE.md,
+Conventions), and a language without a key shows the English.
+
+Text lives in flat `{"key": "text"}` files at `src/game/i18n/locales/<lang>/<namespace>.json`. A
+new language is a folder of them, an entry in `LANGS` and `Lang`, and its browser-language match
+in `i18n/store.ts`.
+
+- `t(key, params)` looks the key up in the active language, then English, then gives the key.
+  `tp(key, n)` picks a plural form (`key.one`, `key.other`, `key.zero`). `tr(key, english)` ends
+  on the English in the code: content's accessors (`weaponName`, `mapName` and the rest in
+  `src/game/content/`) read names and descriptions with it, so call those rather than building
+  keys.
+- The sim works in English. It reads definitions' own names, and its events carry English text,
+  so co-op players in different languages run the same sim. The views turn that text into the
+  active language with `tl(text)`, which finds the key whose English it is. Sentences the sim
+  builds round names and numbers ("Teleported to the Maiden of Sugadinti. 2 teleports left.") are
+  patterns in `SENTENCES` (`i18n/store.ts`), each filling a `notice.*` key in `ui-misc.json`. A
+  language without that key keeps the whole sentence in English, and a new sentence of the kind
+  needs a pattern and its English key. In `core/`, only `Upgrades.ts`'s choice descriptions read
+  the accessors, for the level-up cards.
+- `items.json`, `world.json` and `gen.json` are generated from the content by
+  `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
+  `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is
+  keyed by its text, not its place, so a changed line is a new key and the test fails on the old
+  one's translations until they're removed. `ui.json` and `ui-misc.json` are written by hand.
+- Numbers go through `fmtNum`, lists through `list` (in English as the game always wrote them, "a,
+  b and c") and dates through `dateLocale()` (in English, the browser's own format). Their `Intl`
+  formatters are kept, as numbers are formatted every frame.
+- Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give
+  keys there, and `tr()` and `tl()` English.
+- The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
+  whatever the machine's language (`src/setupTests.ts`).
 
 ### Notice
 

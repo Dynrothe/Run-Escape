@@ -1,4 +1,4 @@
-import type { Lang } from "./types";
+import { LANGS, Lang } from "./types";
 
 // The language files, merged per language. Every file in locales/<lang>/ is a flat
 // {"key": "text"} object; a language is all of its files together.
@@ -7,8 +7,12 @@ export type Messages = Record<string, string>;
 
 // The files as the bundler read them, by language and then namespace (the file's name
 // without .json). import.meta.glob only exists under Vite and Vitest: in a script run
-// with tsx the catalog is empty, and every lookup falls back to the English in the code.
-export const files: Record<Lang, Record<string, Messages>> = { en: {}, "pt-BR": {} };
+// with tsx the catalog is empty, so t() and tp() give their keys and only tr() and tl() give
+// the English in the code.
+export const files = Object.fromEntries(LANGS.map((lang) => [lang.id, {}])) as Record<
+    Lang,
+    Record<string, Messages>
+>;
 
 function readFiles(): Record<string, Messages> {
     try {
@@ -32,10 +36,10 @@ function merge(lang: Lang): Messages {
     return Object.assign({}, ...Object.values(files[lang]));
 }
 
-let catalogs: Record<Lang, Messages> = {
-    en: merge("en"),
-    "pt-BR": merge("pt-BR"),
-};
+let catalogs = Object.fromEntries(LANGS.map((lang) => [lang.id, merge(lang.id)])) as Record<
+    Lang,
+    Messages
+>;
 
 // English text to its key, for tl(). Built the first time it's asked for
 let reverseEn: Map<string, string> | undefined;

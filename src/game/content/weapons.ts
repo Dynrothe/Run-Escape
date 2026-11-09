@@ -2757,22 +2757,3 @@ export function weaponLevelDescription(weapon: WeaponDef, levelIndex: number): s
         ? description
         : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.desc`, description);
 }
-
-export function weaponSpecialName(weapon: WeaponDef): string | undefined {
-    return weapon.special === undefined
-        ? undefined
-        : tr(`weapon.${weapon.id}.special.name`, weapon.special.name);
-}
-
-export function weaponText(weapon: WeaponDef) {
-    return {
-        name: weaponName(weapon),
-        description: weaponDescription(weapon),
-        levels: weapon.levels.map((level, index) => ({
-            ...level,
-            name: weaponLevelName(weapon, index),
-            description: weaponLevelDescription(weapon, index),
-        })),
-        specialName: weaponSpecialName(weapon),
-    };
-}

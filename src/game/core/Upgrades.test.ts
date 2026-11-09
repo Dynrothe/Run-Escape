@@ -3,6 +3,7 @@ import { PASSIVES, canLevelPassive, getPassive, getPassiveGain } from "../conten
 import { RARITIES, RARITY_ORDER, Rarity, rollRarity } from "../content/rarity";
 import { CombatStyle } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
+import { setLang, t } from "../i18n";
 import { Rng } from "./Rng";
 import {
     MAX_PASSIVES,
@@ -259,6 +260,18 @@ describe("hilts", () => {
             text: "Every third swing is The Judgement, a huge hit.",
             iconObjId: 11810,
         });
+        // In another language too, without the sweep it shares with the blade
+        setLang("pt-BR");
+        try {
+            const whole = t("weapon.armadyl_godsword.desc");
+            const { text } = describeChoice(choices[0]);
+            expect(text.length).toBeGreaterThan(0);
+            expect(text.length).toBeLessThan(whole.length);
+            expect(whole.endsWith(text)).toBe(true);
+            expect(t("weapon.godsword.desc").startsWith(whole.slice(0, -text.length))).toBe(true);
+        } finally {
+            setLang("en");
+        }
         // A godsword that has its hilt has no more to pick
         expect(hiltChoices(weapon("armadyl_godsword", 2))).toEqual([]);
     });

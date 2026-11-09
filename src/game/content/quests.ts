@@ -1,5 +1,5 @@
 import { fmtNum, t, tp, tr } from "../i18n";
-import { getEnemy } from "./enemies";
+import { enemyName, getEnemy } from "./enemies";
 import { getMapEnemyIds } from "./mapEnemies";
 import { getMap } from "./maps";
 import { MapDef, QuestDef, QuestObjective } from "./types";
@@ -389,11 +389,6 @@ export const QUEST_MESSAGES: Record<string, string> = {
     "quest.join.separator": ", ",
 };
 
-// A quest's name, in the active language
-export function questName(quest: QuestDef): string {
-    return tr(`quest.${quest.id}.name`, quest.name);
-}
-
 // The key of what a quest kills, from its English: "the Crazy archaeologist" is
 // quest.what.the_crazy_archaeologist
 export function questWhatKey(what: string): string {
@@ -401,10 +396,6 @@ export function questWhatKey(what: string): string {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "_")
         .replace(/^_|_$/g, "")}`;
-}
-
-function enemyName(enemyId: string): string {
-    return tr(`enemy.${enemyId}.name`, getEnemy(enemyId).name);
 }
 
 // "Kill 75 chickens", "Kill Count Draynor", "Kill Fareed, Dessous and Damis",
@@ -416,7 +407,7 @@ export function describeQuest(objective: QuestObjective): string {
                 ? t("quest.kill", {
                       what:
                           objective.what === undefined
-                              ? enemyName(objective.enemyIds[0])
+                              ? enemyName(getEnemy(objective.enemyIds[0]))
                               : tp(questWhatKey(objective.what), 1),
                   })
                 : t("quest.kill_many", {
@@ -428,7 +419,7 @@ export function describeQuest(objective: QuestObjective): string {
                 what:
                     objective.what !== undefined
                         ? tr(questWhatKey(objective.what), objective.what)
-                        : joinNames(objective.enemyIds.map(enemyName)),
+                        : joinNames(objective.enemyIds.map((id) => enemyName(getEnemy(id)))),
             });
         case "caskets":
             return tp("quest.caskets", objective.count);

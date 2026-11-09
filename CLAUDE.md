@@ -287,6 +287,11 @@ desktop build.
 - **Comments**: short, and they say why or what something's for. Match what's around them.
 - **Content** is plain data with real cache ids. Look ids up with the scripts, not from memory. OSRS
   names should be spelled as the cache spells them.
+- **Languages: never translate.** Don't write text in any language but English unless the developer
+  asks you to translate it. New and changed text goes in English only (in the code, or
+  `locales/en/`), and other languages show the English until their translator adds theirs. When
+  you change what an English text means, remove its key from the other languages' files rather
+  than rewording them, and say so in the pull request. See Languages in `docs/DEVELOPMENT.md`.
 - **Saves**: if `SaveData` changes shape, raise `SAVE_VERSION` and add a step to `migrateSave`.
   New shop upgrades, ids and optional fields don't need one, and nor does dropping an optional
   field that loading ignores. Write the save only through `GameClient.persist()`: it doesn't write

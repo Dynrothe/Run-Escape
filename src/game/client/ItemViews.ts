@@ -9,8 +9,9 @@ import {
     itemName,
     utilityDescription,
 } from "../content/items";
-import { getPowerUp } from "../content/powerups";
+import { getPowerUp, powerUpDescription, powerUpName } from "../content/powerups";
 import { getRaidSupply } from "../content/raids";
+import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
@@ -181,7 +182,7 @@ export function getEventView(sim: Sim): EventView | undefined {
     const forPoints = offer.options.some((option) => option.kind === "supply");
     return {
         uid: offer.uid,
-        name: tr(`event.${offer.def.id}.name`, offer.def.name),
+        name: eventName(offer.def),
         speech: tr(`event.${offer.def.id}.speech`, offer.def.speech ?? ""),
         leaveLabel: tr(`event.${offer.def.id}.leave_label`, effect.leaveLabel),
         points: forPoints ? sim.raidPoints : undefined,
@@ -243,8 +244,8 @@ export function getEventView(sim: Sim): EventView | undefined {
             }
             const powerUp = getPowerUp(option.powerUpId);
             return {
-                title: tr(`powerup.${powerUp.id}.name`, powerUp.name),
-                text: tr(`powerup.${powerUp.id}.desc`, powerUp.description),
+                title: powerUpName(powerUp),
+                text: powerUpDescription(powerUp),
                 iconObjId: powerUp.objId,
                 price: option.price,
                 sold: option.sold,

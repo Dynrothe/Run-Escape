@@ -2,7 +2,7 @@ import { Camera } from "../../mapviewer/Camera";
 import { MapViewer } from "../../mapviewer/MapViewer";
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
-import type { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
+import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { CHARACTERS, getCharacter } from "../content/characters";
@@ -75,6 +75,7 @@ import { ArenaGrid } from "../core/world/ArenaGrid";
 import { fmtNum, t, tl, tp } from "../i18n";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
     CinematicCamera,
@@ -467,7 +468,6 @@ export class GameClient implements GameFrameHandler {
     ): Promise<GameClient> {
         // Before the first map squares load, so they're only what the title screen needs
         setPlayArea(renderer, getArenaRegion(TITLE_MAP), false);
-        const { RegionDataLoader } = await import("../../mapviewer/worker/RegionDataLoader");
         const workerPool = mapViewer.workerPool;
         const regionPromise = workerPool.queueLoad<RegionDataInput, RegionData, RegionDataLoader>(
             new RegionDataLoader(),
@@ -1536,10 +1536,6 @@ export class GameClient implements GameFrameHandler {
     private async loadGrid(mapId: string): Promise<ArenaGrid> {
         let grid = this.grids.get(mapId);
         if (!grid) {
-            const [{ installRecipe }, { RegionDataLoader }] = await Promise.all([
-                import("../scaperune/squares"),
-                import("../../mapviewer/worker/RegionDataLoader"),
-            ]);
             await installRecipe(this.mapViewer, mapId);
             const region = await this.mapViewer.workerPool.queueLoad<
                 RegionDataInput,

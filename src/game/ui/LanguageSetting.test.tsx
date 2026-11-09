@@ -19,6 +19,11 @@ describe("LanguageSetting", () => {
         expect(screen.queryByRole("button", { name: "Español" })).toBeNull();
     });
 
+    it("credits the translator", () => {
+        render(<LanguageSetting />);
+        expect(screen.getByText("Português (BR) translated by Giordano Souza")).toBeDefined();
+    });
+
     it("has the current language pressed and switches when clicked", () => {
         render(<LanguageSetting />);
         const enButton = screen.getByRole("button", { name: "English" });

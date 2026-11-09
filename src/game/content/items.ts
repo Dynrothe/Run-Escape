@@ -1063,10 +1063,6 @@ export const CASKETS: Record<CasketTier, CasketDef> = {
 
 export const CASKET_TIERS: CasketTier[] = ["easy", "medium", "hard", "elite", "master"];
 
-export function gearSlotName(slot: (typeof GEAR_SLOTS)[number]): string {
-    return tr(`slot.${slot.id}.name`, slot.name);
-}
-
 export function itemName(item: ItemDef): string {
     return tr(`${item.kind === "gear" ? "gear" : "util"}.${item.id}.name`, item.name);
 }

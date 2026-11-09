@@ -269,11 +269,3 @@ export const TROPHY_BY_ID: Map<string, TrophyDef> = new Map(TROPHIES.map((t) => 
 export function trophyName(trophy: TrophyDef): string {
     return tr(`trophy.${trophy.id}.name`, trophy.name);
 }
-
-export function trophyHow(trophy: TrophyDef): string {
-    return tr(`trophy.${trophy.id}.how`, trophy.how);
-}
-
-export function trophyText(trophy: TrophyDef) {
-    return { name: trophyName(trophy), how: trophyHow(trophy) };
-}

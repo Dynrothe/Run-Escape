@@ -234,7 +234,3 @@ export function shopUpgradeName(upgrade: ShopUpgradeDef): string {
 export function shopUpgradeDescription(upgrade: ShopUpgradeDef): string {
     return tr(`shop.${upgrade.id}.desc`, upgrade.description);
 }
-
-export function shopUpgradeText(upgrade: ShopUpgradeDef) {
-    return { name: shopUpgradeName(upgrade), description: shopUpgradeDescription(upgrade) };
-}

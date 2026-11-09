@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LANGS, Lang, setLang, t, useLang } from "../i18n";
+import { languageCredits } from "./LanguageSetting";
 import "./TitleLanguageMenu.css";
 
 const EXIT_DURATION_MS = 180;
@@ -204,6 +205,11 @@ export function TitleLanguageMenu(): JSX.Element {
                             );
                         })}
                     </div>
+                    {languageCredits().map((credit) => (
+                        <div key={credit} className="ui-title-language-credit">
+                            {credit}
+                        </div>
+                    ))}
                 </div>
             )}
         </div>

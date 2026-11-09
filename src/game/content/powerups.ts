@@ -285,17 +285,3 @@ export function powerUpName(powerUp: PowerUpDef): string {
 export function powerUpDescription(powerUp: PowerUpDef): string {
     return tr(`powerup.${powerUp.id}.desc`, powerUp.description);
 }
-
-export function powerUpText(powerUp: PowerUpDef) {
-    return { name: powerUpName(powerUp), description: powerUpDescription(powerUp) };
-}
-
-export function thrallName(thrall: ThrallDef): string {
-    return tr(`thrall.${thrall.id}.name`, thrall.name);
-}
-
-export function powerUpShout(powerUp: PowerUpDef): string | undefined {
-    return powerUp.effect.kind === "laps"
-        ? tr(`powerup.${powerUp.id}.shout`, powerUp.effect.shout)
-        : undefined;
-}

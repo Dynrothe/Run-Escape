@@ -629,7 +629,3 @@ export function characterName(character: CharacterDef): string {
 export function characterDescription(character: CharacterDef): string {
     return tr(`char.${character.id}.desc`, character.description);
 }
-
-export function characterText(character: CharacterDef) {
-    return { name: characterName(character), description: characterDescription(character) };
-}

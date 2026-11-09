@@ -13,6 +13,9 @@ the version in the corner).
   step on the plates, which plates to press, a way to make the tablet's number, and the name of
   each matching symbol. It's on at Entry, and at any raid level once you've beaten the room. You
   can turn it off in Settings.
+- Languages, by Giordano Souza: play in English or Português (BR). Pick one with the globe on the
+  title screen, in Settings or in the pause menu. Only English is checked: the others may be wrong
+  or have text missing.
 
 ### Changed
 
@@ -155,10 +158,6 @@ the version in the corner).
   expert mode, not Hard. Fixed by Okaeri.
 - On a phone, the damage a second and its panel no longer show on top of level ups, caskets,
   random events and the menus.
-
-### Added
-
-- Languages: play in English or Português (BR). Pick one on the title screen (the globe button) or in Settings and the pause menu, and it changes right away.
 
 ## 0.27.0 - 2026-11-05
 

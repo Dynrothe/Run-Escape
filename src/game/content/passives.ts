@@ -272,7 +272,3 @@ export function passiveDescription(passive: PassiveDef): string {
 export function passiveEffect(passive: PassiveDef): string {
     return tr(`passive.${passive.id}.effect`, passive.effect);
 }
-
-export function passiveText(passive: PassiveDef) {
-    return { name: passiveName(passive), description: passiveDescription(passive) };
-}

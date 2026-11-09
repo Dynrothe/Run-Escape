@@ -179,8 +179,12 @@ function passiveStat(passive: PassiveDef, value: number, before?: number): Weapo
     };
 }
 
-// The sentence a hilted godsword's description shares with the blade, per language
-const HILT_SHARED_SWEEP = ["A heavy two-handed sweep\.", "Um golpe amplo e pesado de duas mãos\."];
+// A description without the first sentence it shares with another, in whatever language
+// they're shown in: a hilted godsword's, without the sweep it shares with the blade
+function withoutSharedOpening(text: string, other: string): string {
+    const end = text.indexOf(". ");
+    return end > 0 && other.startsWith(text.slice(0, end + 2)) ? text.slice(end + 2) : text;
+}
 
 export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
     switch (choice.kind) {
@@ -251,9 +255,9 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
             const into = getWeapon(choice.into);
             return {
                 title: weaponName(into),
-                text: weaponDescription(into).replace(
-                    new RegExp("^(" + HILT_SHARED_SWEEP.join("|") + ") "),
-                    "",
+                text: withoutSharedOpening(
+                    weaponDescription(into),
+                    weaponDescription(getWeapon(choice.weaponId)),
                 ),
                 iconObjId: choice.hiltObjId,
             };

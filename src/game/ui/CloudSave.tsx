@@ -4,7 +4,7 @@ import { CloudProblem, CloudSummary, CloudView, summarize } from "../client/Clou
 import { GameClient } from "../client/GameClient";
 import { CLOUD_SAVE_SPRITES } from "../content/titleIcons";
 import { SaveData } from "../core/save";
-import { fmtNum, getLang, t } from "../i18n";
+import { dateLocale, fmtNum, t } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
@@ -16,13 +16,13 @@ const PROBLEMS: Record<CloudProblem, string> = {
     refused: "cloud.problem.refused",
 };
 
-const when = (time: number | string) => new Date(time).toLocaleString(getLang());
+const when = (time: number | string) => new Date(time).toLocaleString(dateLocale());
 
 // What's wrong, for Settings and the title's button: a deleted code says until when it's kept,
 // and a linked one that stopped working says what to do
 function describeProblem(cloud: CloudView): string | undefined {
     if (cloud.problem === "deleted" && cloud.deletedUntil) {
-        const until = new Date(cloud.deletedUntil).toLocaleDateString(getLang());
+        const until = new Date(cloud.deletedUntil).toLocaleDateString(dateLocale());
         return t("cloud.problem.deleted_until", { date: until });
     }
     if (cloud.problem === "unknownCode" && cloud.code) {

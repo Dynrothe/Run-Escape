@@ -65,6 +65,7 @@ export function setLang(lang: Lang): void {
     }
     const apply = () => {
         current = lang;
+        formatters.clear();
         applyToDocument(lang);
         for (const fn of [...listeners]) {
             fn();
@@ -123,7 +124,7 @@ export function tr(key: string, fallback: string, params?: Params): string {
 export function tp(key: string, n: number, params?: Params): string {
     let category: string = "other";
     try {
-        category = new Intl.PluralRules(current).select(n);
+        category = pluralRules().select(n);
     } catch (e) {}
     const candidates = n === 0 ? ["zero", category, "other"] : [category, "other"];
     const messages = [getMessages(current), getMessages("en")];
@@ -143,109 +144,176 @@ export function tl(text: string): string {
         return text;
     }
     const key = keyForEnglish(text);
-    return (
-        (key !== undefined ? getMessages(current)[key] : undefined) ??
-        translateDynamic(text) ??
-        text
-    );
+    const found = key !== undefined ? getMessages(current)[key] : undefined;
+    return found ?? translateSentence(text) ?? text;
 }
 
-function translateDynamic(text: string): string | undefined {
-    let m: RegExpExecArray | null;
-
-    if ((m = /^Evolved:\s*(.+)!$/.exec(text))) {
-        return current === "pt-BR" ? `Evoluído: ${tl(m[1])}!` : text;
+// A name as the sim put it in a sentence. "the Maiden of Sugadinti" is "The Maiden of
+// Sugadinti" in the files (Sim's midSentence).
+function tlName(name: string): string {
+    const translated = tl(name);
+    if (translated === name && name.startsWith("the ")) {
+        const capital = "T" + name.slice(1);
+        const found = tl(capital);
+        return found === capital ? name : found;
     }
+    return translated;
+}
 
-    if ((m = /^(.+?)\s+set bonus:\s*(.+)!$/.exec(text))) {
-        return current === "pt-BR" ? `Bônus do conjunto ${tl(m[1])}: ${tl(m[2])}!` : text;
+// The sentences the sim builds round names and numbers, as it writes them in English. A
+// sentence's groups fill its key's {params} (notice.* in ui-misc.json). A language without the
+// key keeps the whole sentence in English, rather than English round translated names. The
+// first pattern that matches is the one.
+interface Sentence {
+    pattern: RegExp;
+    key: string;
+    // A param for each group. n picks the plural form (key.one, key.other).
+    params: string[];
+    // Params that are names, translated with tl()
+    names?: string[];
+    // Params that are one of a few words, each a key of its own: notice.<param>.<word>
+    words?: string[];
+}
+
+const SENTENCES: Sentence[] = [
+    { pattern: /^Evolved: (.+)!$/, key: "notice.evolved", params: ["name"], names: ["name"] },
+    {
+        pattern: /^(.+?) set bonus: (.+)!$/,
+        key: "notice.set_bonus",
+        params: ["set", "bonus"],
+        names: ["set", "bonus"],
+    },
+    { pattern: /^(.+?) has appeared!$/, key: "notice.appeared", params: ["name"], names: ["name"] },
+    {
+        pattern: /^Room (\d+) of (\d+): (.+)$/,
+        key: "notice.room_of",
+        params: ["room_n", "total", "room"],
+        names: ["room"],
+    },
+    {
+        pattern: /^Teleported to (.+?)\. (\d+) teleports? left\.$/,
+        key: "notice.teleported",
+        params: ["room", "n"],
+        names: ["room"],
+    },
+    {
+        pattern:
+            /^Room cleared! Boss down in (\d+:\d+): \+(\d+) raid points, \+([0-9,.]+) coins\.$/,
+        key: "notice.room_cleared",
+        params: ["time", "points", "coins"],
+    },
+    // Before "protects from", which matches it too
+    {
+        pattern: /^Akkha turns to (\w+), and protects from (\w+)!$/,
+        key: "notice.akkha_turns",
+        params: ["style", "protects"],
+        names: ["style", "protects"],
+    },
+    {
+        pattern: /^(.+?) protects from (.+)!$/,
+        key: "notice.protects_from",
+        params: ["boss", "styles"],
+    },
+    {
+        pattern: /^New item added to your collection log: (.+)$/,
+        key: "notice.collection_log",
+        params: ["item"],
+        names: ["item"],
+    },
+    {
+        pattern: /^A purple chest! (.+)$/,
+        key: "notice.purple_chest",
+        params: ["rest"],
+        names: ["rest"],
+    },
+    {
+        pattern: /^The chest holds no unique this time \((\d+)% chance\)\.$/,
+        key: "notice.no_unique",
+        params: ["percent"],
+    },
+    { pattern: /^Bot nuke! (\d+) bots? banned\.$/, key: "notice.bot_nuke", params: ["n"] },
+    {
+        pattern: /^(.+?) He'll face (north|south|east|west)!$/,
+        key: "notice.face",
+        params: ["first", "side"],
+        names: ["first"],
+        words: ["side"],
+    },
+    {
+        pattern: /^(.+?) turns (grey|green|blue)! Only (melee|ranged|magic) hurts it\.$/,
+        key: "notice.turns_only",
+        params: ["name", "colour", "style"],
+        names: ["name", "style"],
+        words: ["colour"],
+    },
+    {
+        pattern: /^(.+?) turns (grey|green|blue)! Mostly (melee|ranged|magic) hurts it\.$/,
+        key: "notice.turns_mostly",
+        params: ["name", "colour", "style"],
+        names: ["name", "style"],
+        words: ["colour"],
+    },
+];
+
+function translateSentence(text: string): string | undefined {
+    for (const sentence of SENTENCES) {
+        const match = sentence.pattern.exec(text);
+        if (!match) {
+            continue;
+        }
+        const messages = getMessages(current);
+        const plural = sentence.params.includes("n");
+        if (!(plural ? `${sentence.key}.other` in messages : sentence.key in messages)) {
+            return text;
+        }
+        const params: Params = {};
+        sentence.params.forEach((name, i) => {
+            const value = match[i + 1];
+            params[name] = sentence.names?.includes(name)
+                ? tlName(value)
+                : sentence.words?.includes(name)
+                  ? tr(`notice.${name}.${value}`, value)
+                  : value;
+        });
+        // "magic and missiles": each style on its own, joined the language's way
+        if (sentence.key === "notice.protects_from") {
+            params.boss = tlName(match[1]);
+            params.styles = list(match[2].split(" and ").map(tlName));
+        }
+        return plural ? tp(sentence.key, Number(params.n), params) : t(sentence.key, params);
     }
-
-    if ((m = /^(.+?)\s+has appeared!$/.exec(text))) {
-        return current === "pt-BR" ? `${tl(m[1])} apareceu!` : text;
-    }
-
-    if ((m = /^Room\s+(\d+)\s+of\s+(\d+):\s*(.+)$/.exec(text))) {
-        return current === "pt-BR" ? `Sala ${m[1]} de ${m[2]}: ${tl(m[3])}` : text;
-    }
-
-    if ((m = /^Teleported to\s+(.+?)\.\s*(\d+)\s+teleports?\s+left\.$/.exec(text))) {
-        const teleWord = m[2] === "1" ? "teletransporte restante" : "teletransportes restantes";
-        return current === "pt-BR" ? `Teleportado para ${tl(m[1])}. ${m[2]} ${teleWord}.` : text;
-    }
-
-    if (
-        (m =
-            /^Room cleared! Boss down in\s*(\d+:\d+):\s*\+(\d+)\s+raid points,\s*\+([0-9,.]+)\s+coins\.$/.exec(
-                text,
-            ))
-    ) {
-        return current === "pt-BR"
-            ? `Sala concluída! Chefe derrotado em ${m[1]}: +${m[2]} pontos de incursão, +${m[3]} moedas.`
-            : text;
-    }
-
-    if ((m = /^(.+?)\s+protects from\s+(.+)!$/.exec(text))) {
-        const styles = m[2]
-            .split(" and ")
-            .map((s) => tl(s))
-            .join(" e ");
-        return current === "pt-BR" ? `${tl(m[1])} protege contra ${styles}!` : text;
-    }
-
-    if ((m = /^New item added to your collection log:\s*(.+)$/.exec(text))) {
-        return current === "pt-BR"
-            ? `Novo item adicionado ao seu registro de coleção: ${tl(m[1])}`
-            : text;
-    }
-
-    if ((m = /^A purple chest!\s*(.+)$/.exec(text))) {
-        return current === "pt-BR" ? `Um baú roxo! ${tl(m[1])}` : text;
-    }
-
-    if ((m = /^The chest holds no unique this time\s*\((\d+)%\s*chance\)\.$/.exec(text))) {
-        return current === "pt-BR"
-            ? `O baú não contém nenhum item único desta vez (${m[1]}% de chance).`
-            : text;
-    }
-
-    if ((m = /^Bot nuke!\s*(\d+)\s+bots?\s+banned\.$/.exec(text))) {
-        const botWord = m[1] === "1" ? "bot banido" : "bots banidos";
-        return current === "pt-BR" ? `Bomba de bots! ${m[1]} ${botWord}.` : text;
-    }
-
-    if ((m = /^(.+?)\s+He'll face\s+(.+)!$/.exec(text))) {
-        const sides: Record<string, string> = {
-            north: "norte",
-            south: "sul",
-            east: "leste",
-            west: "oeste",
-        };
-        const side = sides[m[2].toLowerCase()] ?? m[2];
-        return current === "pt-BR" ? `${tl(m[1])} Ele ficará de frente para o ${side}!` : text;
-    }
-
-    if (
-        (m =
-            /^(.+?)\s+turns\s+(grey|green|blue)!\s*(Only|Mostly)\s+(melee|ranged|magic)\s+hurts it\.$/.exec(
-                text,
-            ))
-    ) {
-        const colors: Record<string, string> = { grey: "cinza", green: "verde", blue: "azul" };
-        const color = colors[m[2]] ?? m[2];
-        const onlyWord = m[3] === "Only" ? "Apenas" : "Principalmente";
-        const style = tl(m[4]);
-        return current === "pt-BR"
-            ? `${tl(m[1])} fica ${color}! ${onlyWord} ${style} causa dano.`
-            : text;
-    }
-
     return undefined;
 }
 
+// Intl's formatters, kept: making one costs far more than using it, and numbers are formatted
+// every frame (hitsplats). Cleared when the language changes.
+const formatters = new Map<string, Intl.NumberFormat | Intl.ListFormat | Intl.PluralRules>();
+
+function cached<T extends Intl.NumberFormat | Intl.ListFormat | Intl.PluralRules>(
+    id: string,
+    make: () => T,
+): T {
+    let formatter = formatters.get(id) as T | undefined;
+    if (!formatter) {
+        formatter = make();
+        formatters.set(id, formatter);
+    }
+    return formatter;
+}
+
+function pluralRules(): Intl.PluralRules {
+    return cached("plural", () => new Intl.PluralRules(current));
+}
+
+// English lists as the game wrote them before there were languages: "a, b and c"
 export function list(items: string[]): string {
     try {
-        return new Intl.ListFormat(current, { style: "long", type: "conjunction" }).format(items);
+        const locale = current === "en" ? "en-GB" : current;
+        const format = cached(
+            "list",
+            () => new Intl.ListFormat(locale, { style: "long", type: "conjunction" }),
+        );
+        return format.format(items);
     } catch (e) {
         return items.join(", ");
     }
@@ -253,8 +321,14 @@ export function list(items: string[]): string {
 
 export function fmtNum(n: number, opts?: Intl.NumberFormatOptions): string {
     try {
-        return new Intl.NumberFormat(current, opts).format(n);
+        const id = opts ? "number" + JSON.stringify(opts) : "number";
+        return cached(id, () => new Intl.NumberFormat(current, opts)).format(n);
     } catch (e) {
         return String(n);
     }
+}
+
+// The locale for dates and times: in English the browser's own, as before there were languages
+export function dateLocale(): string | undefined {
+    return current === "en" ? undefined : current;
 }

@@ -340,6 +340,10 @@ straight off the definition. After adding or renaming content, run
 `bun run tsx scripts/i18n/extract.ts` to regenerate `src/game/i18n/locales/en/*.json`. See
 `docs/DEVELOPMENT.md`, Languages.
 
+Write it in English only: never translate it into another language unless the developer asks you
+to (CLAUDE.md, Conventions). The other languages show the English until their translators add
+theirs.
+
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { GameClient } from "../client/GameClient";
 import { SaveBlock } from "../client/GameStore";
 import { SaveData } from "../core/save";
-import { getLang, t } from "../i18n";
+import { dateLocale, t } from "../i18n";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
 import {
@@ -170,7 +170,7 @@ export function ExportReminder({
                 {last === undefined
                     ? t("save.export_reminder_first")
                     : t("save.export_reminder", {
-                          date: new Date(last).toLocaleDateString(getLang()),
+                          date: new Date(last).toLocaleDateString(dateLocale()),
                       })}
             </span>
             <span className="ui-export-reminder-buttons">

@@ -31,7 +31,12 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
-import { CHARACTERS, getCharacter } from "../content/characters";
+import {
+    CHARACTERS,
+    characterDescription,
+    characterName,
+    getCharacter,
+} from "../content/characters";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
 import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
@@ -44,20 +49,21 @@ import {
     SEASONAL_MAPS,
     getMap,
     getMapCharacter,
+    mapDescription,
     mapFinalBossWarning,
     mapName,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
-import { SHOP_UPGRADES } from "../content/shop";
+import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { SCABARAS } from "../content/tombs";
-import { TROPHY_BY_ID } from "../content/trophies";
+import { TROPHY_BY_ID, trophyName } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
-import { WEAPONS, getWeapon } from "../content/weapons";
+import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
@@ -72,7 +78,7 @@ import {
     isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
-import { fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
+import { dateLocale, fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
@@ -89,6 +95,7 @@ import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
 import { InvocationBoard, InvocationsButton } from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
+import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
@@ -189,8 +196,10 @@ export function GameUi({ store, client }: Props): JSX.Element {
             onClickCapture={onClickCapture}
         >
             {screen}
-            {ui.saveBlock && !ui.saveBlockClosed && (
+            {ui.saveBlock && !ui.saveBlockClosed ? (
                 <SaveBlockPanel block={ui.saveBlock} client={client} />
+            ) : (
+                <LanguageNotice />
             )}
             {isCoarsePointer && <RotateNotice />}
         </div>
@@ -575,7 +584,7 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
     return (
         <>
             {ui.unreadableSaves.map(({ key, time }) => {
-                const when = new Date(time).toLocaleString();
+                const when = new Date(time).toLocaleString(dateLocale());
                 return (
                     <Setting
                         key={key}
@@ -978,7 +987,7 @@ function TitleHint(): JSX.Element {
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
     const [board, setBoard] = useState(false);
-    const mapName = tr(`map.${ui.mapId}.name`, getMap(ui.mapId).name);
+    const shownMapName = mapName(getMap(ui.mapId));
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
     const expertShown = map.raid !== undefined && ui.coop.status === "offline";
     const endlessShown = ui.endless && !map.fun && !map.tombs;
@@ -1014,7 +1023,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
-                    <KeyHint pad="start" /> {t(enterKey, { map: mapName })}
+                    <KeyHint pad="start" /> {t(enterKey, { map: shownMapName })}
                 </button>
             </div>
             {board && map.tombs && (
@@ -1027,7 +1036,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
 // Endless runs for the map picked, once it's been beaten (fun maps are
 // always endless, and a boss fight never is)
 function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
-    const mapName = tr(`map.${ui.mapId}.name`, getMap(ui.mapId).name);
+    const shownMapName = mapName(getMap(ui.mapId));
     if (getMap(ui.mapId).fight) {
         return (
             <div className="ui-endless" title={t("ui.endless.tooltip.fight")}>
@@ -1051,7 +1060,7 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             title={
                 open
                     ? t("ui.endless.tooltip.open")
-                    : t("ui.endless.tooltip.locked", { map: mapName })
+                    : t("ui.endless.tooltip.locked", { map: shownMapName })
             }
         >
             <span className="ui-endless-name">{t("ui.endless.name")}</span>
@@ -1072,11 +1081,15 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
 // fun maps)
 function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isHardUnlocked(ui.save, ui.mapId);
-    const mapName = tr(`map.${ui.mapId}.name`, getMap(ui.mapId).name);
+    const shownMapName = mapName(getMap(ui.mapId));
     return (
         <div
             className={"ui-endless" + (open ? "" : " ui-endless-locked")}
-            title={open ? t("ui.hard.tooltip.open") : t("ui.hard.tooltip.locked", { map: mapName })}
+            title={
+                open
+                    ? t("ui.hard.tooltip.open")
+                    : t("ui.hard.tooltip.locked", { map: shownMapName })
+            }
         >
             <span className="ui-endless-name">{t("ui.hard.name")}</span>
             {open ? (
@@ -1149,7 +1162,7 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
                     {found.map((trophy) => (
                         <span key={trophy.id} className="ui-raid-chest-item">
                             <ItemIcon objId={trophy.objId} size={36} />
-                            {tr(`trophy.${trophy.id}.name`, trophy.name)}
+                            {trophyName(trophy)}
                         </span>
                     ))}
                 </div>
@@ -1263,12 +1276,14 @@ function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
 // their own style
 function ExpertSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isExpertUnlocked(ui.save, ui.mapId);
-    const mapName = tr(`map.${ui.mapId}.name`, getMap(ui.mapId).name);
+    const shownMapName = mapName(getMap(ui.mapId));
     return (
         <div
             className={"ui-endless" + (open ? "" : " ui-endless-locked")}
             title={
-                open ? t("ui.expert.tooltip.open") : t("ui.expert.tooltip.locked", { map: mapName })
+                open
+                    ? t("ui.expert.tooltip.open")
+                    : t("ui.expert.tooltip.locked", { map: shownMapName })
             }
         >
             <span className="ui-endless-name">{t("ui.expert.name")}</span>
@@ -1334,7 +1349,7 @@ export function AdventurerPanel({
                 <div className="ui-select-fixed-note">
                     <ItemIcon objId={getStartingWeaponIcon(getCharacter(fixed))} size={28} />
                     {t("ui.character.fixed_note", {
-                        name: tr(`char.${fixed}.name`, getCharacter(fixed).name),
+                        name: characterName(getCharacter(fixed)),
                     })}
                 </div>
             )}
@@ -1349,7 +1364,7 @@ export function AdventurerPanel({
                                     <span className="ui-style-treasure">
                                         {t("ui.character.might_find")}
                                         <span style={{ color: RARITIES.veryRare.color }}>
-                                            {tr(`weapon.${treasure.id}.name`, treasure.name)}
+                                            {weaponName(treasure)}
                                         </span>
                                     </span>
                                 )}
@@ -1445,16 +1460,16 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                 {found.map((pet) => {
                     const trophy = getPetTrophy(pet);
                     const selected = pet.id === chosen;
-                    const trophyName = tr(`trophy.${trophy.id}.name`, trophy.name);
+                    const shownTrophyName = trophyName(trophy);
                     return (
                         <button
                             key={pet.id}
                             className={
                                 "ui-card ui-pet-tile" + (selected ? " ui-card-selected" : "")
                             }
-                            aria-label={trophyName}
+                            aria-label={shownTrophyName}
                             aria-pressed={selected}
-                            title={trophyName}
+                            title={shownTrophyName}
                             onClick={() => client.selectPet(pet.id)}
                         >
                             <ItemIcon objId={trophy.objId} size={26} />
@@ -1484,9 +1499,7 @@ function AdventurerDetails({
             <div className="ui-select-details-head">
                 <ItemIcon objId={getStartingWeaponIcon(character)} size={36} />
                 <div>
-                    <div className="ui-card-title">
-                        {tr(`char.${character.id}.name`, character.name)}
-                    </div>
+                    <div className="ui-card-title">{characterName(character)}</div>
                     <div className="ui-card-style">{STYLE_NAMES[character.style]}</div>
                 </div>
                 {onFavourite && unlocked && (
@@ -1509,9 +1522,7 @@ function AdventurerDetails({
                     </button>
                 )}
             </div>
-            <div className="ui-card-text">
-                {tr(`char.${character.id}.desc`, character.description)}
-            </div>
+            <div className="ui-card-text">{characterDescription(character)}</div>
             {/* What they bring, a stat to a line */}
             {bonus.length > 0 && (
                 <div className="ui-select-bonus">
@@ -1530,6 +1541,7 @@ function AdventurerDetails({
 }
 
 interface MapGroup {
+    id: string;
     name: string;
     hint?: string;
     maps: MapDef[];
@@ -1539,40 +1551,13 @@ function getMapTabName(tabId: string, fallback: string): string {
     return tr(`ui.map.tab.${tabId}`, fallback);
 }
 
-function getMapGroupName(name: string): string {
-    switch (name) {
-        case "Seasonal":
-            return t("ui.map.group.seasonal");
-        case "Campaign":
-            return t("ui.map.group.campaign");
-        case "Boss fights":
-            return t("ui.map.group.boss_fights");
-        case "Raids":
-            return t("ui.map.group.raids");
-        case "Fun maps":
-            return t("ui.map.group.fun_maps");
-        case "Dev maps":
-            return t("ui.map.group.dev_maps");
-        default:
-            return name;
-    }
+// A group's name and hint, by its id: ui.map.group.<id> and ui.map.group.<id>_hint
+function getMapGroupName(group: MapGroup): string {
+    return tr(`ui.map.group.${group.id}`, group.name);
 }
 
-function getMapGroupHint(hint?: string): string | undefined {
-    switch (hint) {
-        case "open from the start":
-            return t("ui.map.group.seasonal_hint");
-        case "once their map's beaten":
-            return t("ui.map.group.boss_fights_hint");
-        case "room by room, open from the start":
-            return t("ui.map.group.raids_hint");
-        case "endless, open from the start":
-            return t("ui.map.group.fun_maps_hint");
-        case "dev server only":
-            return t("ui.map.group.dev_maps_hint");
-        default:
-            return hint;
-    }
+function getMapGroupHint(group: MapGroup): string | undefined {
+    return group.hint && tr(`ui.map.group.${group.id}_hint`, group.hint);
 }
 
 // The map screen's tabs, each a list or two of maps in the order they open
@@ -1581,27 +1566,39 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
         id: "campaign",
         name: "Campaign",
         groups: [
-            { name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
-            { name: "Campaign", maps: CAMPAIGN_MAPS },
+            { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
+            { id: "campaign", name: "Campaign", maps: CAMPAIGN_MAPS },
         ],
     },
     {
         id: "bosses",
         name: "Bosses",
         groups: [
-            { name: "Boss fights", hint: "once their map's beaten", maps: FIGHT_MAPS },
-            { name: "Raids", hint: "room by room", maps: RAID_MAPS },
+            {
+                id: "boss_fights",
+                name: "Boss fights",
+                hint: "once their map's beaten",
+                maps: FIGHT_MAPS,
+            },
+            { id: "raids", name: "Raids", hint: "room by room", maps: RAID_MAPS },
         ],
     },
     {
         id: "fun",
         name: "Fun",
-        groups: [{ name: "Fun maps", hint: "endless, open from the start", maps: FUN_MAPS }],
+        groups: [
+            {
+                id: "fun_maps",
+                name: "Fun maps",
+                hint: "endless, open from the start",
+                maps: FUN_MAPS,
+            },
+        ],
     },
     {
         id: "dev",
         name: "Dev",
-        groups: [{ name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
+        groups: [{ id: "dev_maps", name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
     },
 ]
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
@@ -1633,7 +1630,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     const beaten = CAMPAIGN_MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
     const tile = (map: MapDef) => {
         const selected = map.id === ui.mapId;
-        const mapName = tr(`map.${map.id}.name`, map.name);
+        const shownMapName = mapName(map);
         return (
             <button
                 key={map.id}
@@ -1652,7 +1649,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 }}
             >
                 <ItemIcon objId={map.iconObjId} size={20} />
-                <span className="ui-map-name">{mapName}</span>
+                <span className="ui-map-name">{shownMapName}</span>
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
@@ -1720,10 +1717,10 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                         {tab.groups.map((group) => (
                             <div key={group.name} className="ui-style-group">
                                 <div className="ui-style-name">
-                                    {getMapGroupName(group.name)}
+                                    {getMapGroupName(group)}
                                     {group.hint && (
                                         <span className="ui-style-treasure">
-                                            {getMapGroupHint(group.hint)}
+                                            {getMapGroupHint(group)}
                                         </span>
                                     )}
                                 </div>
@@ -1783,13 +1780,13 @@ function MapDetails({
     const endless = save.endlessBest[map.id];
     const hardWins = save.hardVictories[map.id] ?? 0;
     const hardEndless = save.hardEndlessBest[map.id];
-    const mapName = tr(`map.${map.id}.name`, map.name);
+    const shownMapName = mapName(map);
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
                 <ItemIcon objId={map.iconObjId} size={36} />
                 <div>
-                    <div className="ui-card-title">{mapName}</div>
+                    <div className="ui-card-title">{shownMapName}</div>
                     <div className={unlocked ? "ui-card-style" : "ui-card-cost"}>
                         {map.fun
                             ? map.fun.character
@@ -1807,7 +1804,7 @@ function MapDetails({
                                         map.fight?.requires ??
                                         MAPS[MAPS.indexOf(map) - 1].id;
                                     return t("ui.map.beat_to_unlock", {
-                                        map: tr(`map.${reqId}.name`, getMap(reqId).name),
+                                        map: mapName(getMap(reqId)),
                                     });
                                 })()
                               : map.stages
@@ -1879,7 +1876,7 @@ function MapDetails({
                 </div>
             </div>
             <div className="ui-card-text ui-card-description">
-                <RichText text={tr(`map.${map.id}.desc`, map.description)} />
+                <RichText text={mapDescription(map)} />
             </div>
             <MapTasks save={save} mapId={map.id} />
         </div>
@@ -2002,8 +1999,8 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                         const rank = page.upgrades[upgrade.id] ?? 0;
                         const cost = getNextUpgradeCost(save, upgrade.id, style);
                         const affordable = cost !== undefined && coins >= cost;
-                        const upgradeName = tr(`shop.${upgrade.id}.name`, upgrade.name);
-                        const upgradeDesc = tr(`shop.${upgrade.id}.desc`, upgrade.description);
+                        const upgradeName = shopUpgradeName(upgrade);
+                        const upgradeDesc = shopUpgradeDescription(upgrade);
                         return (
                             <div key={upgrade.id} className="ui-shop-entry">
                                 <button

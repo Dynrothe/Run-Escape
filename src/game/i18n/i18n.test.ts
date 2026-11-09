@@ -3,7 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POWER_UPS } from "../content/powerups";
 import { createVardhelmOpening } from "../scaperune/maps/vardhelmOpening";
 import { files, overrideMessages } from "./catalog";
-import { LANGS, fmtNum, getLang, list, setLang, subscribeLang, t, tl, tp, tr } from "./index";
+import {
+    LANGS,
+    dateLocale,
+    fmtNum,
+    getLang,
+    list,
+    setLang,
+    subscribeLang,
+    t,
+    tl,
+    tp,
+    tr,
+} from "./index";
 
 // The extractors for the generated namespaces (items, world, gen), if they're written yet
 const extractors = import.meta.glob<{ default: () => Record<string, string> }>(
@@ -164,8 +176,8 @@ describe("translating", () => {
         expect(tp("item.count", 1500, { n: "1,500" })).toBe("1,500 coins");
     });
 
-    it("list joins with the language's conjunction", () => {
-        expect(list(["a", "b", "c"])).toBe("a, b, and c");
+    it("list joins with the language's conjunction, English's as the game always wrote it", () => {
+        expect(list(["a", "b", "c"])).toBe("a, b and c");
         expect(list(["a", "b"])).toBe("a and b");
         expect(list(["a"])).toBe("a");
         expect(list([])).toBe("");
@@ -195,6 +207,77 @@ describe("translating", () => {
     it("tl only knows the English values, not those of other languages", () => {
         setLang("pt-BR");
         expect(tl("Você não passará!")).toBe("Você não passará!");
+    });
+
+    it("dates are the browser's own in English, and the language's otherwise", () => {
+        expect(dateLocale()).toBeUndefined();
+        setLang("pt-BR");
+        expect(dateLocale()).toBe("pt-BR");
+    });
+});
+
+describe("the sim's sentences", () => {
+    let restore: () => void;
+    beforeEach(() => {
+        setLang("en");
+        restore = overrideMessages({
+            en: {
+                "room.maiden": "The Maiden of Sugadinti",
+                "style.magic": "magic",
+                "notice.teleported.one": "Teleported to {room}. {n} teleport left.",
+                "notice.teleported.other": "Teleported to {room}. {n} teleports left.",
+                "notice.akkha_turns": "Akkha turns to {style}, and protects from {protects}!",
+                "notice.protects_from": "{boss} protects from {styles}!",
+                "notice.face": "{first} He'll face {side}!",
+                "notice.side.north": "north",
+            },
+            "pt-BR": {
+                "room.maiden": "A Donzela de Sugadinti",
+                "style.magic": "magia",
+                "notice.teleported.one": "Teleportado para {room}. {n} teletransporte restante.",
+                "notice.teleported.other":
+                    "Teleportado para {room}. {n} teletransportes restantes.",
+                "notice.protects_from": "{boss} protege contra {styles}!",
+                "notice.face": "{first} Ele ficará de frente para o {side}!",
+                "notice.side.north": "norte",
+            },
+        });
+    });
+    afterEach(() => {
+        restore();
+        setLang("en");
+    });
+
+    it("fills the language's sentence, with the plural and a name the sim put mid-sentence", () => {
+        setLang("pt-BR");
+        expect(tl("Teleported to the Maiden of Sugadinti. 1 teleport left.")).toBe(
+            "Teleportado para A Donzela de Sugadinti. 1 teletransporte restante.",
+        );
+        expect(tl("Teleported to the Maiden of Sugadinti. 2 teleports left.")).toBe(
+            "Teleportado para A Donzela de Sugadinti. 2 teletransportes restantes.",
+        );
+    });
+
+    it("joins styles the language's way, and translates a word from its own keys", () => {
+        setLang("pt-BR");
+        expect(tl("Zebak protects from magic and missiles!")).toBe(
+            "Zebak protege contra magia e missiles!",
+        );
+        expect(tl("The Wardens rise. He'll face north!")).toBe(
+            "The Wardens rise. Ele ficará de frente para o norte!",
+        );
+    });
+
+    // The "protects from" sentence would take "Akkha turns to magic, and" for his name
+    it("keeps a sentence the language hasn't translated whole, in English", () => {
+        setLang("pt-BR");
+        const akkha = "Akkha turns to magic, and protects from magic!";
+        expect(tl(akkha)).toBe(akkha);
+    });
+
+    it("leaves English as the sim wrote it", () => {
+        const text = "Teleported to the Maiden of Sugadinti. 1 teleport left.";
+        expect(tl(text)).toBe(text);
     });
 });
 

@@ -18,10 +18,27 @@ import { createWardensFloor } from "../../../src/game/content/wardensFloor";
 
 type Messages = Record<string, string>;
 
-function put(messages: Messages, key: string, text: string | undefined) {
+// A place in a list isn't a key: a line moved or added would hand its translation to another.
+// A key with a list index in it names its line by the line's text instead (enemy.<id>.chat.<id>),
+// so a changed line is a new key, and i18n.test fails on the old one's translations until
+// they're dropped.
+function listKey(key: string, text: string): string {
+    if (!/\.\d+(?=\.|$)/.test(key)) {
+        return key;
+    }
+    // FNV-1a, in base 36
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+    }
+    return key.replace(/\.\d+(?=\.|$)/g, "") + "." + (hash >>> 0).toString(36);
+}
+
+function put(messages: Messages, at: string, text: string | undefined) {
     if (text === undefined || text === "") {
         return;
     }
+    const key = listKey(at, text);
     if (messages[key] !== undefined && messages[key] !== text) {
         throw new Error(`world: ${key} has two texts: ${messages[key]} / ${text}`);
     }

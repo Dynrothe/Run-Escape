@@ -1,5 +1,17 @@
 // Translation: names in the language files (locales/<lang>/*.json), the English kept in the
-// code as the fallback. core/ doesn't import this; the views call tl() on what it emits.
+// code as the fallback. The sim emits English, and the views call tl() on it.
 export { LANGS } from "./types";
 export type { Lang } from "./types";
-export { fmtNum, getLang, list, setLang, subscribeLang, t, tl, tp, tr, useLang } from "./store";
+export {
+    dateLocale,
+    fmtNum,
+    getLang,
+    list,
+    setLang,
+    subscribeLang,
+    t,
+    tl,
+    tp,
+    tr,
+    useLang,
+} from "./store";

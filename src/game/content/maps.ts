@@ -610,7 +610,3 @@ export function mapDescription(map: MapDef): string {
 export function mapFinalBossWarning(map: MapDef): string {
     return tr(`map.${map.id}.warning`, map.finalBossWarning);
 }
-
-export function mapVictoryText(map: MapDef): string {
-    return tr(`map.${map.id}.victory`, map.victoryText);
-}

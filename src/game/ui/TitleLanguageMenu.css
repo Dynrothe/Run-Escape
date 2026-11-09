@@ -151,3 +151,14 @@
         animation: none !important;
     }
 }
+
+/* Who translated each language */
+.ui-title-language-credit {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: #b8aa8a;
+    text-shadow: 1px 1px 0 #000;
+    text-align: center;
+    padding-top: 4px;
+    border-top: 1px solid var(--ui-divider);
+}
