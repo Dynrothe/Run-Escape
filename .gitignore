@@ -27,6 +27,10 @@ yarn-error.log*
 
 caches/
 
+# Trailers the shot editor records (scripts/dev/trailer-server.ts), and any other video
+trailers/
+*.mp4
+
 # ScapeRune world index, made by scripts/scaperune/world-index.ts
 world.json
 

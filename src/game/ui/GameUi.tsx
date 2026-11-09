@@ -79,6 +79,7 @@ import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
+import { DirectorPanel } from "./DirectorPanel";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
@@ -1871,15 +1872,20 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
-            {ui.cinematic && (
-                // The opening cinematic: no HUD, and a click or tap anywhere skips it
-                <div
-                    className="ui-cinematic"
-                    onPointerDown={(e) => {
-                        e.preventDefault();
-                        client.skipCinematic();
-                    }}
-                />
+            {import.meta.env.DEV && ui.director ? (
+                // Dev only: the shot editor, over a cinematic held where it's put
+                <DirectorPanel director={ui.director} client={client} trailer={ui.trailer} />
+            ) : (
+                ui.cinematic && (
+                    // The opening cinematic: no HUD, and a click or tap anywhere skips it
+                    <div
+                        className="ui-cinematic"
+                        onPointerDown={(e) => {
+                            e.preventDefault();
+                            client.skipCinematic();
+                        }}
+                    />
+                )
             )}
             {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls

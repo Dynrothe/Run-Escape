@@ -138,8 +138,10 @@ export class CinematicView {
             ctx.fillRect(0, 0, overlay.width, bar);
             ctx.fillRect(0, overlay.height - bar, overlay.width, bar);
         }
-        // How to skip, faint, in the bottom bar
-        const hint = Math.min(1, (seconds - HINT_FROM) / 0.5, (left - HINT_UNTIL) / 0.5);
+        // How to skip, faint, in the bottom bar (not on a held clock: a screenshot, the shot editor)
+        const hint = player.held
+            ? 0
+            : Math.min(1, (seconds - HINT_FROM) / 0.5, (left - HINT_UNTIL) / 0.5);
         if (hint > 0 && bar > 12 * pixel) {
             ctx.font = `${12 * pixel}px "OSRS Small", sans-serif`;
             ctx.textAlign = "right";
