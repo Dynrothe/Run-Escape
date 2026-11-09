@@ -208,13 +208,17 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   Name only one phase's attacks to keep it to that phase (a finale's need names of their own).
   The bot finds the pocket between two strips (`sharedPocket` in `bossReads.ts`).
 - The Tombs' bosses: a surge into one of Ba-Ba's rocks (`leavesCover`) is stunned as a lunge
-  into a pillar is (a lunge only stops short of a rock); a guard with `pierce` lets its prayer down while it's open (Akkha's);
+  into a pillar is (a lunge only stops short of a rock); a guard with `pierce` lets its prayer
+  down while it's open (Akkha's);
   `phases.by: "shields"` steps Kephri's phases at her shields; `onlyWith` keeps an attack to an
   invocation, and `invoked.times` adds links to its chain; `AkkhaDef.orbAttacks` are all he
   uses while his orbs are out; `clearOfObelisk` keeps a Wardens attack off the obelisk's
   special; `raidEase` eases a boss off from a raid level up (hitpoints, hits, the time between
   its ambients), where the raid level's scale would make a wall. Each boss's stage in
   `docs/design/tombs-of-amascut.md` says what it uses.
+- A boss attack's `message` is what to do about it, said the first time it's used in a run, one
+  at a time with others (`GameClient.showInstruction`), never again that run. A warning for every
+  cast belongs in the attack's telegraph, not its message.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 

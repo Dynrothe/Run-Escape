@@ -38,6 +38,7 @@ import {
     RAMPAGE_FADE_TICKS,
     Sim,
     TICKS_PER_SECOND,
+    ZEBAK_SHELTER_SIDE,
     ZebakFight,
     yawFromVector,
     zebakShelters,
@@ -1081,12 +1082,13 @@ export class GameView {
         const rocks = going
             ? roared.rocks
             : sim.tombsCover.filter((rock) => rock.look === roar.look);
-        // Straight behind each, down the island from him, as wide as it shelters (a circle a tile
-        // across each side of its middle too)
+        // Straight behind each, down the island from him, as wide as it shelters: a circle a tile
+        // across on its middle, and one each side with its edge where the shelter's is
         for (const rock of rocks) {
             const away = rock.y >= from.y ? 1 : -1;
+            const side = rock.radius + ZEBAK_SHELTER_SIDE - 0.5;
             for (let out = rock.radius + 0.4; out <= roar.shelter + rock.radius; out += 1) {
-                for (const across of [-1, 0, 1]) {
+                for (const across of [-side, 0, side]) {
                     const y = rock.y + away * out;
                     this.drawGlowCircle(actors, sim, rock.x + across, y, ZEBAK_SHELTER_SCALE);
                 }
@@ -1589,8 +1591,18 @@ export class GameView {
         };
         for (let i = 0; i < AKKHA_SPRAY_ORBS; i++) {
             const n = i * 5;
-            const fromX = area.middle.x + (east ? 1 : -1) * (1 + pick(n) * (area.half - 2));
-            const fromY = area.middle.y + (north ? 1 : -1) * (1 + pick(n + 1) * (area.half - 2));
+            // From somewhere in the quadrant, on the floor's round (the one fill keeps to) and a
+            // tile in from its edge: a square's far corner is off it
+            let outX = 1 + pick(n) * (area.half - 2);
+            let outY = 1 + pick(n + 1) * (area.half - 2);
+            const out = Math.hypot(outX, outY);
+            const most = area.half - 1.5;
+            if (out > most) {
+                outX *= most / out;
+                outY *= most / out;
+            }
+            const fromX = area.middle.x + (east ? outX : -outX);
+            const fromY = area.middle.y + (north ? outY : -outY);
             const angle = pick(n + 2) * Math.PI * 2;
             const reach = AKKHA_SPRAY_REACH * (0.4 + 0.6 * pick(n + 3)) * t;
             const x = fromX + Math.cos(angle) * reach;

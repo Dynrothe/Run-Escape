@@ -412,7 +412,8 @@ animations from a lister of those whose model or animation is in the raid's rang
       one at a time (each beside the last, never across), the quadrant glowing with its element and
       its floor symbol lit in the element's colour (`AkkhaElementDef.glow`) in a funnel of light
       (darkness's own swirl, 2257, tinted for each). His room's in full light for the fight
-      (`AkkhaDef.ambient`), not the Tombs' dimmer light. Then, 2.4 seconds apart (1.2 with Feeling Special), every quadrant but the next in the order is
+      (`AkkhaDef.ambient`), not the Tombs' dimmer light. Then, 2.4 seconds apart (1.2 with
+      Feeling Special), every quadrant but the next in the order is
       blasted for nearly half your hitpoints and its element, each throwing up a spray of its
       element's orbs, bright in its colour (drawn only). Four steps, one more every two path
       levels.
@@ -518,19 +519,22 @@ animations from a lister of those whose model or animation is in the raid's rang
 - **The Crondis room** (`CRONDIS` in `content/tombs.ts`, `Sim.stepCrondis`): square 61,82 from local
   x 10, turned half round so it's entered from the east behind its barrier. Grow the Palm of
   Resourcefulness (11700 to 11704, a stage a quarter, never hurt, its bar its growth) with 300 water,
-  more for each of the party and each path level: each stage a casket and the next wave. - **Water**: stand at a running waterfall (out of the map, drawn running or dry by the client) to
-  fill your container, 100, and it's dry for 10 s after. Near the palm you pour it. - **Spears**: each corridor's crocodile statues thrust their spears out across a pair of rows at
-  a time, down the corridor, the side turning about, then rest; a tell first: the spear
-  glinting out a tile, and the tiles it'll reach marked on the floor (`GameView
-.drawCrondisSpearTells`, yellow, as the floor's red; players found the glint alone too hard
-  to time). **Poison** comes down each corridor from its waterfall's end every 9 s (less
-  with path levels): pale first, the dark cloud a second behind it. Under a waterfall (where
-  you fill) it doesn't reach you, running or dry, as in OSRS. It's the Spitting Scarab's
-  green splash (2155), faint for the pale: the room's own spot animations (2129 to 2131) draw
-  nothing, and its poison floor tiles' activation can't be baked (a loc bakes with its own
-  animation only). - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
-  (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
-  growth, never below the stage it's reached.
+  more for each of the party and each path level: each stage a casket and the next wave.
+    - **Water**: stand at a running waterfall (out of the map, drawn running or dry by the client) to
+      fill your container, 100, and it's dry for 10 s after. Near the palm you pour it.
+    - **Spears**: each corridor's crocodile statues thrust their spears out across a pair of rows at
+      a time, down the corridor, the side turning about, then rest; a tell first: the spear
+      glinting out a tile, and the tiles it'll reach marked on the floor
+      (`GameView.drawCrondisSpearTells`, yellow, as the floor's red; players found the glint
+      alone too hard to time). **Poison** comes down each corridor from its waterfall's end every
+      9 s (less with path levels): pale first, the dark cloud a second behind it. Under a
+      waterfall (where you fill) it doesn't reach you, running or dry, as in OSRS. It's the
+      Spitting Scarab's green splash (2155), faint for the pale: the room's own spot animations
+      (2129 to 2131) draw nothing, and its poison floor tiles' activation can't be baked (a loc
+      bakes with its own animation only).
+    - A trap's hit, or a crocodile's bite, spills half your water, and a trap weakens you. Crocodiles
+      (11705) come in from the palm room's corners; the hungry ones make for the palm and eat its
+      growth, never below the stage it's reached.
 - **Zebak** (`ZEBAK` in `content/tombs.ts`, `Sim.stepZebak`), the Crondis path's boss: the great
   crocodile (11730) lying in the water north of his island, never moving. His attacks are a pot
   that splits into red orbs, a rock that splinters, and acid sprayed. At 85, 70, 55 and 40% a

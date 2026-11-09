@@ -452,11 +452,12 @@ export function getPhaseBarFraction(boss: Enemy, index: number): number {
 }
 
 // Boss attacks' instructions (GameClient.showInstruction): each up this long, the next no sooner
-// than this after it (so two at most are up, the older going), and one that's waited longer than
-// this in play is dropped
+// than this after it (so two at most are up, the older going), one that's waited longer than
+// this in play is dropped, and one's been read once it's been up this long in play
 const INSTRUCTION_MS = 4500;
 const INSTRUCTION_GAP_MS = 3000;
 const INSTRUCTION_STALE_MS = 12000;
+const INSTRUCTION_READ_MS = 3000;
 const INSTRUCTION_FRAME_MS = 250;
 
 export class GameClient implements GameFrameHandler {
@@ -584,6 +585,8 @@ export class GameClient implements GameFrameHandler {
     // waiting too long are dropped: the attack they were for is long gone.
     private readonly instructionsSeen = new Set<string>();
     private instructions: { text: string; waited: number }[] = [];
+    // Those up now and not read yet: each one's toast, and how long it's been up in play
+    private instructionsUp: { text: string; toast: number; played: number }[] = [];
     private instructionShownAt = -Infinity;
     private instructionPumpedAt = 0;
 
@@ -596,13 +599,35 @@ export class GameClient implements GameFrameHandler {
     }
 
     // The next instruction, once the last has had its time, while the run's being played. One
-    // waits only while it's played (not behind a level up or the menu), and counts as seen once
-    // it's shown, so none is lost behind a pause.
+    // waits only while it's played (not behind a level up or the menu), and counts as read once
+    // it's been up long enough in play, so none is lost behind a pause.
     private showInstruction(now: number): void {
         const playing = this.isPlaying();
         // At most a moment's worth a frame: back from a hidden tab, the time away isn't waiting
         const since = Math.min(INSTRUCTION_FRAME_MS, Math.max(0, now - this.instructionPumpedAt));
         this.instructionPumpedAt = now;
+        if (playing) {
+            for (const up of this.instructionsUp) {
+                up.played += since;
+            }
+        }
+        this.instructionsUp = this.instructionsUp.filter((up) => up.played < INSTRUCTION_READ_MS);
+        // Not read yet, and gone or behind something: the level up or the menu covers it, or newer
+        // notices pushed it off (the store keeps four). Back to the front of the line, to come
+        // straight back once it's played again.
+        const toasts = this.store.getSnapshot().toasts;
+        const unread = this.instructionsUp.filter(
+            (up) => !playing || !toasts.some((t) => t.id === up.toast),
+        );
+        if (unread.length > 0) {
+            for (const up of unread) {
+                this.store.dismissToast(up.toast);
+                this.instructionsSeen.delete(up.text);
+            }
+            this.instructionsUp = this.instructionsUp.filter((up) => !unread.includes(up));
+            this.instructions.unshift(...unread.map((up) => ({ text: up.text, waited: 0 })));
+            this.instructionShownAt = -Infinity;
+        }
         if (playing) {
             for (const waiting of this.instructions) {
                 waiting.waited += since;
@@ -619,7 +644,8 @@ export class GameClient implements GameFrameHandler {
         const next = this.instructions.shift()!;
         this.instructionsSeen.add(next.text);
         this.instructionShownAt = now;
-        this.store.toast(next.text, INSTRUCTION_MS);
+        const toast = this.store.toast(next.text, INSTRUCTION_MS);
+        this.instructionsUp.push({ text: next.text, toast, played: 0 });
     }
 
     // A fight's own button's been used this session (MapDef.fight.ability): its hint's no longer
@@ -1728,6 +1754,7 @@ export class GameClient implements GameFrameHandler {
         // A new run's bosses explain themselves again
         this.instructionsSeen.clear();
         this.instructions = [];
+        this.instructionsUp = [];
         const runCinematic = getRunCinematic(map, sim.stage);
         this.cinematic = cinematic && runCinematic ? new CinematicPlayer(runCinematic) : undefined;
         this.view.cinematic = this.cinematic;

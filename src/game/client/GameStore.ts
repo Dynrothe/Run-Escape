@@ -532,13 +532,23 @@ export class GameStore {
         }
     }
 
-    toast(text: string, ms = 3500): void {
+    // Its id, to find it again or take it down early (a boss's instruction: GameClient)
+    toast(text: string, ms = 3500): number {
         const now = performance.now();
         // The same message twice at once (three Jads turning up together)
         // shows once
         const toasts = this.snapshot.toasts.filter((t) => t.until > now && t.text !== text);
-        toasts.push({ id: this.nextToastId++, text, until: now + ms });
+        const id = this.nextToastId++;
+        toasts.push({ id, text, until: now + ms });
         this.set({ toasts: toasts.slice(-4) });
+        return id;
+    }
+
+    dismissToast(id: number): void {
+        const toasts = this.snapshot.toasts;
+        if (toasts.some((t) => t.id === id)) {
+            this.set({ toasts: toasts.filter((t) => t.id !== id) });
+        }
     }
 
     expireToasts(): void {

@@ -1965,92 +1965,146 @@ describe("invocation presets", () => {
 
 describe("boss attacks' instructions", () => {
     function createClient() {
+        const now = vi.spyOn(performance, "now").mockReturnValue(0);
+        const store = new GameStore(createSave());
         const shown: { text: string; ms?: number }[] = [];
+        const toast = store.toast.bind(store);
+        store.toast = (text: string, ms?: number) => {
+            shown.push({ text, ms });
+            return toast(text, ms);
+        };
         let playing = true;
         const client: GameClient = Object.create(GameClient.prototype);
         Object.assign(client, {
             instructionsSeen: new Set<string>(),
             instructions: [],
+            instructionsUp: [],
             instructionShownAt: -Infinity,
             instructionPumpedAt: 0,
             isPlaying: () => playing,
-            store: { toast: (text: string, ms?: number) => shown.push({ text, ms }) },
+            store,
         });
-        const queue = (text: string) =>
-            (client as unknown as { queueInstruction(text: string): void }).queueInstruction(text);
-        const pump = (now: number) =>
-            (client as unknown as { showInstruction(now: number): void }).showInstruction(now);
-        return { shown, queue, pump, pause: (on: boolean) => (playing = !on) };
+        const inner = client as unknown as {
+            queueInstruction(text: string): void;
+            showInstruction(now: number): void;
+        };
+        // A frame at t, as GameClient.update has it: toasts past their time go, then the next
+        // instruction
+        const frame = (t: number) => {
+            now.mockReturnValue(t);
+            store.expireToasts();
+            inner.showInstruction(t);
+        };
+        return {
+            store,
+            shown,
+            texts: () => shown.map((s) => s.text),
+            queue: (text: string) => inner.queueInstruction(text),
+            frame,
+            // Frames from one time to another, 100 ms apart
+            play: (from: number, to: number) => {
+                for (let t = from; t <= to; t += 100) {
+                    frame(t);
+                }
+            },
+            pause: (on: boolean) => (playing = !on),
+            restore: () => now.mockRestore(),
+        };
     }
 
     test("show once a run, one after another, each held long enough to read", () => {
-        const now = vi.spyOn(performance, "now");
+        const c = createClient();
         try {
-            const { shown, queue, pump } = createClient();
-            now.mockReturnValue(1000);
-            queue("Dodge the spears!");
-            queue("Hide behind a rock!");
-            queue("Dodge the spears!");
-            expect(shown.map((s) => s.text)).toEqual(["Dodge the spears!"]);
-            expect(shown[0].ms).toBeGreaterThanOrEqual(4000);
+            c.frame(1000);
+            c.queue("Dodge the spears!");
+            c.queue("Hide behind a rock!");
+            c.queue("Dodge the spears!");
+            expect(c.texts()).toEqual(["Dodge the spears!"]);
+            expect(c.shown[0].ms).toBeGreaterThanOrEqual(4000);
             // Not on top of the first
-            pump(2500);
-            expect(shown).toHaveLength(1);
-            pump(4100);
-            expect(shown.map((s) => s.text)).toEqual(["Dodge the spears!", "Hide behind a rock!"]);
+            c.play(1100, 3900);
+            expect(c.shown).toHaveLength(1);
+            c.play(4000, 4100);
+            expect(c.texts()).toEqual(["Dodge the spears!", "Hide behind a rock!"]);
             // Its attack again later: not said again this run
-            now.mockReturnValue(20000);
-            queue("Dodge the spears!");
-            pump(20000);
-            expect(shown).toHaveLength(2);
+            c.play(4200, 20000);
+            c.queue("Dodge the spears!");
+            c.play(20100, 25000);
+            expect(c.shown).toHaveLength(2);
         } finally {
-            now.mockRestore();
+            c.restore();
         }
     });
 
-    test("wait out a pause, and drop one that waited too long in play", () => {
-        const now = vi.spyOn(performance, "now");
+    test("come back after a level up that covered them, till they've been read", () => {
+        const c = createClient();
         try {
-            const { shown, queue, pump, pause } = createClient();
-            now.mockReturnValue(0);
-            pump(0);
-            queue("First");
-            queue("Second");
-            // A level up's choice, long: the second's still to come after it
-            pause(true);
-            pump(30000);
-            pause(false);
-            pump(30100);
-            expect(shown.map((s) => s.text)).toEqual(["First", "Second"]);
-            // One that waits too long while it's played is gone
-            now.mockReturnValue(33100);
-            queue("Third");
-            queue("Fourth");
-            // A frame at a time, as the game pumps it
-            for (let t = 33200; t <= 46000; t += 100) {
-                pump(t);
+            c.frame(0);
+            c.queue("First");
+            c.queue("Second");
+            c.play(100, 500);
+            expect(c.texts()).toEqual(["First"]);
+            // A level up's choice half a second after it came up: it's taken down, not read
+            c.pause(true);
+            c.frame(600);
+            expect(c.store.getSnapshot().toasts).toEqual([]);
+            c.play(700, 30000);
+            expect(c.texts()).toEqual(["First"]);
+            // Back in play: the first again straight away, then the second
+            c.pause(false);
+            c.play(30100, 33100);
+            expect(c.texts()).toEqual(["First", "First", "Second"]);
+            // Each read once it's been up long enough: a pause after that brings neither back
+            c.play(33200, 37000);
+            c.pause(true);
+            c.frame(37100);
+            c.pause(false);
+            c.play(37200, 45000);
+            expect(c.texts()).toEqual(["First", "First", "Second"]);
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("come again when newer notices push one off before it's read", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
+            c.queue("Get behind a boulder!");
+            c.play(100, 1000);
+            // Four of the game's other notices at once: the store keeps four
+            for (const text of ["Zebak roars!", "A casket drops!", "Power up!", "Level 5!"]) {
+                c.store.toast(text);
             }
-            expect(shown.map((s) => s.text)).toEqual(["First", "Second", "Third", "Fourth"]);
-            // But time away in a hidden tab isn't time waited
-            queue("Fifth");
-            queue("Sixth");
-            pump(46100);
-            pump(200000);
-            pump(203100);
-            expect(shown.map((s) => s.text).slice(-2)).toEqual(["Fifth", "Sixth"]);
+            c.frame(1100);
+            expect(c.texts().filter((t) => t === "Get behind a boulder!")).toHaveLength(2);
+            expect(c.store.getSnapshot().toasts.map((t) => t.text)).toContain(
+                "Get behind a boulder!",
+            );
+        } finally {
+            c.restore();
+        }
+    });
+
+    test("drop one that waited too long in play, but not for time in a hidden tab", () => {
+        const c = createClient();
+        try {
+            c.frame(0);
             // Six at once, 3 s apart: the fifth's and sixth's turns come after 12 s of play, too
             // late, and they go
-            now.mockReturnValue(210000);
-            pump(210000);
-            const six = ["A", "B", "C", "D", "E", "F"];
-            six.forEach(queue);
-            for (let t = 210100; t <= 230000; t += 100) {
-                pump(t);
-            }
-            expect(shown.map((s) => s.text).slice(-4)).toEqual(["A", "B", "C", "D"]);
-            expect(shown.some((s) => s.text === "E" || s.text === "F")).toBe(false);
+            ["A", "B", "C", "D", "E", "F"].forEach(c.queue);
+            c.play(100, 20000);
+            expect(c.texts()).toEqual(["A", "B", "C", "D"]);
+            // Time away in a hidden tab isn't time waited, or time read: back after minutes, the
+            // one that was up comes again, and the one behind it isn't dropped
+            c.queue("G");
+            c.queue("H");
+            c.frame(20100);
+            c.frame(200000);
+            c.play(200100, 203100);
+            expect(c.texts().slice(-3)).toEqual(["G", "G", "H"]);
         } finally {
-            now.mockRestore();
+            c.restore();
         }
     });
 });

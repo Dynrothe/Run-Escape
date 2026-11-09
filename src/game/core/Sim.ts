@@ -1233,6 +1233,10 @@ export type ZebakFight = {
     nextCloudTick: number;
 };
 
+// How far past a boulder's edge, each side, its shelter from Zebak's roar reaches (zebakShelters;
+// the glow that shows it goes by it too)
+export const ZEBAK_SHELTER_SIDE = 0.5;
+
 // Whether a boulder shelters (x, y) from Zebak's roar from (fromX, fromY): straight behind it,
 // down the island away from him (as OSRS's, not slanting off the line from him), within shelter
 // tiles of it and as wide as it is. The sim's (Sim.zebakSheltered) and the shockwave's drawing
@@ -1251,7 +1255,7 @@ export function zebakShelters(
         return (
             behind > 0 &&
             behind <= shelter + rock.radius &&
-            Math.abs(x - rock.x) <= rock.radius + 0.5
+            Math.abs(x - rock.x) <= rock.radius + ZEBAK_SHELTER_SIDE
         );
     });
 }

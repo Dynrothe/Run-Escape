@@ -12,29 +12,29 @@ the version in the corner).
 
 ### Changed
 
-- Boss instructions now show once per run, one at a time, and stay up long enough to read
-  (by Okaeri)
+- Boss instructions, by Okaeri: they show once per run, one at a time, and stay up long enough
+  to read.
 
 ### Fixed
 
-- On phones, the name of your special attack button was cut off. It now sits under the button
-  (by Okaeri)
-- Beating a boss in the Tombs of Amascut now heals your whole party to full (by Okaeri)
+- On phones, the name of your special attack button was cut off. It now sits under the button.
+  Fixed by Okaeri.
+- Beating a boss in the Tombs of Amascut now heals your whole party to full. Fixed by Okaeri.
 - Ba-Ba no longer gets stunned every time she charges into a boulder. Only her Rampage does that
-  now (by Okaeri)
-- In the Crondis room, standing under a waterfall now keeps you safe from the poison, like in OSRS
-  (by Okaeri)
-- In the Scabaras room, the matching tiles now show their symbols, like in OSRS (by Okaeri)
-- In the Crondis room, the floor now lights up where a spear statue is about to strike
-  (by Okaeri)
+  now. Fixed by Okaeri.
+- In the Crondis room, standing under a waterfall now keeps you safe from the poison, like in
+  OSRS. Fixed by Okaeri.
+- In the Scabaras room, the matching tiles now show their symbols, like in OSRS. Fixed by Okaeri.
+- In the Crondis room, the floor now lights up where a spear statue is about to strike. Fixed by
+  Okaeri.
 - Akkha's room is no longer dark. His symbols light up brightly in their own colours, and a
-  quadrant bursts into glowing orbs when it explodes (by Okaeri)
+  quadrant bursts into glowing orbs when it explodes. Fixed by Okaeri.
 - Zebak's roar: you're now safe straight behind a boulder, like in OSRS. The safe spots glow
-  before he roars, and a wave of dust shows the roar (by Okaeri)
+  before he roars, and a wave of dust shows the roar. Fixed by Okaeri.
 - Akkha could get stuck repeating Simon says forever once his shadows were out. He now follows
-  you into a quarter whose shadow you've killed (by Okaeri)
+  you into a quarter whose shadow you've killed. Fixed by Okaeri.
 - On phones, the Scabaras slate no longer covers the middle of the screen. It's a thin bar along
-  the top (by Okaeri)
+  the top. Fixed by Okaeri.
 
 ## 0.29.1 - 2026-11-08
 
