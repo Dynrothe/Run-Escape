@@ -11,6 +11,10 @@ the version in the corner).
   log already, and anything it unlocks was unlocked. The Theatre of Blood's and the Tombs of
   Amascut's chests now only give ones you haven't found, in co-op too. Once you have everything a
   chest holds, it says so. Fixed by Okaeri.
+- At high raid levels Akkha spent most of his fight doing Memory Blast, gone from the floor, one
+  after another. He now stays on the floor at least 8 seconds after each special, Memory Blast is
+  six steps at most, and once one of his shadows is dead he comes back from it in that shadow's
+  quarter, where he can be hurt, not out of reach in the middle. Fixed by Okaeri.
 
 ## 0.30.0 - 2026-11-09
 

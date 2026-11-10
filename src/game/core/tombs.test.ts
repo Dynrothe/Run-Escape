@@ -1766,7 +1766,8 @@ describe("Akkha", () => {
             }
             expect(killedAt).toBeGreaterThanOrEqual(0);
             expect(hurtAt).toBeGreaterThan(0);
-            expect((hurtAt - killedAt) / TICKS_PER_SECOND).toBeLessThan(25);
+            // The rest of the blast, then he reappears in its quarter, hurt at once
+            expect((hurtAt - killedAt) / TICKS_PER_SECOND).toBeLessThan(15);
         }
     });
 
@@ -1957,6 +1958,37 @@ describe("Akkha", () => {
             const plain = memory().tombsAkkha!.memory!.burst;
             const quick = memory(["feeling_special"]).tombsAkkha!.memory!.burst;
             expect(quick).toBe(Math.round(plain / 2));
+        });
+
+        it("reappears where he vanished, and is on the floor a while before the next", () => {
+            // Raid level 500's: every special a Memory Blast, an attack sooner, quick bursts
+            const sim = memory(["double_trouble", "stay_vigilant", "feeling_special"]);
+            const fight = sim.tombsAkkha!;
+            const plan = fight.memory!;
+            const middle = { x: akkha(sim).x, y: akkha(sim).y };
+            const done = plan.showEnd + plan.burst * plan.order.length;
+            expect(fight.readyTick).toBe(done + Math.round(DEF.specialGap * TICKS_PER_SECOND));
+            while (sim.tick <= done && fight.memory) {
+                seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
+            }
+            expect(fight.memory).toBeUndefined();
+            const boss = akkha(sim);
+            // No shadows up: back where he was, not in the middle
+            expect(Math.hypot(boss.x - plan.from.x, boss.y - plan.from.y)).toBeLessThan(0.2);
+            expect(plan.from).not.toEqual(middle);
+            // His attacks made already, no special till he's been back specialGap seconds
+            while (sim.tick < fight.readyTick - 1) {
+                special(sim);
+                sim.player.hp = sim.player.maxHp;
+                seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
+                expect(fight.memory).toBeUndefined();
+            }
+            for (let i = 0; i < 10 * TICKS_PER_SECOND && !fight.memory; i++) {
+                special(sim);
+                sim.player.hp = sim.player.maxHp;
+                seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
+            }
+            expect(fight.memory).toBeDefined();
         });
     });
 

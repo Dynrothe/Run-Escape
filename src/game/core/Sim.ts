@@ -1048,7 +1048,11 @@ export type AkkhaFight = {
         showEnd: number;
         burst: number;
         step: number;
+        // Where he vanished from, to reappear there (in the quarter he's been drawn into)
+        from: { x: number; y: number };
     };
+    // Not before this tick does his next special start (AkkhaDef.specialGap)
+    readyTick: number;
     orbsUntil: number;
     // Detonate: when the marked go off, and whether each's an X (Feeling Special) or a plus
     detonate?: { tick: number; cross: boolean[] };
@@ -5662,6 +5666,7 @@ export class Sim {
                         this.tombsAkkha = {
                             uid: enemy.uid,
                             attacks: 0,
+                            readyTick: 0,
                             orbsUntil: 0,
                             orbs: [],
                             lastTiles: [],
@@ -5895,7 +5900,8 @@ export class Sim {
             !boss.bossState!.windup &&
             !fight.memory &&
             !fight.detonate &&
-            this.tick >= fight.orbsUntil
+            this.tick >= fight.orbsUntil &&
+            this.tick >= fight.readyTick
         ) {
             fight.attacks = 0;
             this.startAkkhaSpecial(boss, fight, def);
@@ -5914,6 +5920,7 @@ export class Sim {
                 cross: this.heroes.map(() => special && this.rng.chance(0.5)),
             };
             this.emit({ type: "notice", message: def.detonate.message });
+            fight.readyTick = fight.detonate.tick + secondsToTicks(def.specialGap);
             const others = def.forms.filter((id) => id !== boss.def.id);
             this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
             return;
@@ -5927,6 +5934,11 @@ export class Sim {
             fight.lastTiles = this.heroes.map((hero) => this.akkhaTile(hero.player));
             this.emit({ type: "notice", message: def.orbs.message });
         }
+        // His next once he's been back on the floor a while, whichever this was
+        const ends = fight.memory
+            ? fight.memory.showEnd + fight.memory.burst * fight.memory.order.length
+            : fight.orbsUntil;
+        fight.readyTick = Math.max(ends, fight.orbsUntil) + secondsToTicks(def.specialGap);
         const others = def.forms.filter((id) => id !== boss.def.id);
         this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
     }
@@ -6019,7 +6031,8 @@ export class Sim {
         const gap = secondsToTicks(memory.gap);
         const showEnd = this.tick + steps * (flash + gap);
         const burst = secondsToTicks(this.invoked("feeling_special") ? memory.quick : memory.burst);
-        fight.memory = { order, start: this.tick, flash, gap, showEnd, burst, step: 0 };
+        const from = { x: boss.x, y: boss.y };
+        fight.memory = { order, start: this.tick, flash, gap, showEnd, burst, step: 0, from };
         // He's gone from the floor meanwhile: no attacks, nothing to hit
         const state = boss.bossState!;
         state.windup = undefined;
@@ -6102,11 +6115,40 @@ export class Sim {
         memory.step++;
         if (memory.step >= memory.order.length) {
             fight.memory = undefined;
+            // Back where he was, or with a shadow of his dead, just inside its quarter: he's drawn
+            // there meanwhile. Back in the middle (in no quarter) he was out of reach again, and
+            // walked so slowly between his volleys that the next blast came before he got there.
+            const at = this.akkhaReappear(fight, def, memory.from);
+            boss.x = boss.prevX = at.x;
+            boss.y = boss.prevY = at.y;
             boss.anim = "idle";
             boss.attackSeq = boss.def.attackSeq;
             boss.animStart = this.tick;
             this.emit({ type: "notice", message: "Akkha reappears!" });
         }
+    }
+
+    // Where he comes back after Memory Blast: in the dead shadow's quarter nearest where he
+    // vanished, a step past the lines (AkkhaDef.shadows.inside), or where he vanished
+    private akkhaReappear(
+        fight: AkkhaFight,
+        def: AkkhaDef,
+        from: { x: number; y: number },
+    ): { x: number; y: number } {
+        const dead = fight.shadows.filter(
+            (shadow) => !this.enemies.some((e) => e.uid === shadow.uid && !e.dead),
+        );
+        let best: { x: number; y: number } | undefined;
+        let bestDistance = Infinity;
+        for (const shadow of dead) {
+            const at = this.akkhaCorner(shadow.quadrant, def.shadows.inside + 1);
+            const distance = fm.hypot(at.x - from.x, at.y - from.y);
+            if (distance < bestDistance) {
+                best = at;
+                bestDistance = distance;
+            }
+        }
+        return best ?? from;
     }
 
     // His trailing orbs: one on every tile anyone leaves (and one ahead, with Feeling Special),

@@ -435,7 +435,11 @@ animations from a lister of those whose model or animation is in the raid's rang
       Feeling Special), every quadrant but the next in the order is
       blasted for nearly half your hitpoints and its element, each throwing up a spray of its
       element's orbs, bright in its colour (drawn only). Four steps, one more every two path
-      levels.
+      levels, six at most. He comes back where he vanished, or with a shadow of his dead, just
+      inside its quarter (`Sim.akkhaReappear`), and his next special waits till he's been back 8
+      seconds (`AkkhaDef.specialGap`), however many attacks he's made. At raid level 500 (Double
+      Trouble, Stay Vigilant, a seven-step blast) he was gone from the floor most of the fight,
+      and each blast put him back in the middle, out of reach of a dead shadow's quarter.
     - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
       leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
       Feeling Special drops one three tiles ahead too.
