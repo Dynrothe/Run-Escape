@@ -45,6 +45,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
+import { RealmRule } from "../../src/game/core/rules/RealmRule";
 import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
@@ -120,6 +121,10 @@ const SLOPPY_LAPSE = 3;
 const partySize = parseInt(process.env.PARTY ?? "1");
 // An act's map's step (content/acts.ts)
 const actStep = parseInt(process.env.STEP ?? "0");
+// A map of two worlds (RealmRule): whether the bot dives into puddles (REALM=0 never), and how well
+// it has to be to
+const REALM_DIVES = process.env.REALM !== "0";
+const REALM_DIVE_HP = 0.6;
 // A pet taken along (PET=butch): a fighting one's power plays (PetDef.power)
 const pet = process.env.PET || undefined;
 if (finalBoss) {
@@ -282,6 +287,21 @@ function botMove(sim: Sim): { x: number; y: number } {
             ay += (ry / len) * push;
         }
     }
+    // A map of two worlds (RealmRule): as a person would, into a puddle that opens near them while
+    // they're well (REALM=0 never), and in the realm after its lost souls, then into the portal
+    const realm = sim.realm;
+    if (realm && REALM_DIVES) {
+        const goal = realmGoal(sim, realm);
+        if (goal) {
+            const gx = goal.x - player.x;
+            const gy = goal.y - player.y;
+            const d = Math.hypot(gx, gy);
+            if (d > 0.05) {
+                ax += (gx / d) * goal.pull;
+                ay += (gy / d) * goal.pull;
+            }
+        }
+    }
     // Drift back towards the middle of the arena so the bot doesn't pin itself
     // against its edge
     const cx = ARENA.baseX + ARENA.sizeX / 2 - player.x;
@@ -293,6 +313,35 @@ function botMove(sim: Sim): { x: number; y: number } {
         return { x: 0, y: 0 };
     }
     return slide(sim, { x: ax / len, y: ay / len }, look);
+}
+
+// Where a map of two worlds takes the bot (RealmRule), and how hard: the puddle while it's well,
+// in the realm the nearest lost soul, then the portal home
+function realmGoal(sim: Sim, realm: RealmRule): { x: number; y: number; pull: number } | undefined {
+    const player = sim.player;
+    if (realm.layer === 0) {
+        const puddle = realm.puddle;
+        const well = player.hp >= player.maxHp * REALM_DIVE_HP;
+        if (puddle && well && Math.hypot(puddle.x - player.x, puddle.y - player.y) < 20) {
+            return { ...puddle, pull: 3 };
+        }
+        return undefined;
+    }
+    if (realm.portal) {
+        return { ...realm.portal, pull: 4 };
+    }
+    let best: { x: number; y: number; pull: number } | undefined;
+    let bestD = Infinity;
+    for (const enemy of sim.enemies) {
+        if (!enemy.dead && enemy.def.caught) {
+            const d = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+            if (d < bestD) {
+                bestD = d;
+                best = { x: enemy.x, y: enemy.y, pull: 2.5 };
+            }
+        }
+    }
+    return best;
 }
 
 // How far, walking, the bot goes to fetch bones when nothing's close: inside the
@@ -811,6 +860,11 @@ function runOnce(characterId: string, seed: number) {
     let fightTicks = 0;
     // Ticks stood on roots (MapDef.rule)
     let rootTicks = 0;
+    // A map of two worlds' (RealmRule): times into the realm, thrown back out of sanity, and ticks
+    // there
+    let dives = 0;
+    let lapses = 0;
+    let realmTicks = 0;
     // A boss's finale (its last stand), counted on its own, not in its last phase
     let finaleTicks = 0;
     // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
@@ -921,6 +975,9 @@ function runOnce(characterId: string, seed: number) {
         if (sim.rule?.hurtsAt(sim.player.x, sim.player.y)) {
             rootTicks++;
         }
+        if (sim.realm?.layer === 1) {
+            realmTicks++;
+        }
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
             if (!enemy.boss || !state || enemy.leaving) {
@@ -976,6 +1033,12 @@ function runOnce(characterId: string, seed: number) {
                 recentHits.push({ tick: sim.tick, event });
             } else if (event.type === "powerUp") {
                 powerUps++;
+            } else if (event.type === "worldTurned") {
+                if (event.layer === 1) {
+                    dives++;
+                } else if (event.lapse) {
+                    lapses++;
+                }
             } else if (event.type === "bossAbsorbBlast") {
                 absorbed.push(event.absorbed);
             } else if (event.type === "bossGuard" && event.cause.endsWith(" (broken)")) {
@@ -1001,6 +1064,9 @@ function runOnce(characterId: string, seed: number) {
                     // on it
                     (sim.rule instanceof RootRule
                         ? `  roots ${Math.round(sim.rule.cover * 100)}% (on ${Math.round((100 * rootTicks) / Math.max(1, sim.tick))}%)`
+                        : "") +
+                    (sim.realm
+                        ? `  realm ${dives} dives, ${lapses} lapses, ${Math.round((100 * realmTicks) / Math.max(1, sim.tick))}% there`
                         : ""),
             );
             if (endless) {
@@ -1117,6 +1183,10 @@ function runOnce(characterId: string, seed: number) {
             (endless ? `round ${result.round}, ` : "") +
             `level ${result.level}, ${result.kills} kills, ${result.coins} coins, ${chests} caskets, ` +
             `${powerUps} power-ups, stuck ${Math.round(pinnedTicks / TICKS_PER_SECOND)}s ` +
+            (sim.realm
+                ? `realm ${dives} dives ${lapses} lapses ${sim.realm.realmCaskets} caskets ` +
+                  `${Math.round((100 * realmTicks) / Math.max(1, sim.tick))}% `
+                : "") +
             `(${(ms / sim.tick).toFixed(3)}ms per tick)`,
     );
     return result;
