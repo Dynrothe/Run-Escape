@@ -224,6 +224,12 @@ worst it can be): its world at most about 59k. The heaviest pieces were the ruin
 1,600 triangles each), its pillars and walls, and trees. `view-weight.ts` counts locs alone and comes out under the game's
 own count where walls are heavy, so measure with `frameProbe.sample` in the game.
 
+The town was then dressed again (2026-11-10): its huts' low walls and its tents' lower pieces are put back as the
+cheap low wall (48620, 194 triangles), half the huts' and a third of the tents', paid for by the town's pillars (all
+but Vardorvis's), its bushes and two thirds of its ferns. Its black squares were cellar entries (48722, 48723, 48745, 48746) and black floor tiles (overlay 36) left under the thinned pieces: the entries are left out and each such tile
+takes its neighbour's floor. Measured in the game, every open cell rooted, the heaviest view is the ruins' at 66.6k,
+and the town's are 58k to 64k.
+
 ## 4. The Lassar Undercity (the Whisperer)
 
 ### 4.1 Found in the cache: the Shadow Realm is a real twin

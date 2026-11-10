@@ -17,6 +17,15 @@ the version in the corner).
 - The Forester, for beating the Stranglewood: a bronze 2h sword, and Timber!, a tree felled along
   the ground every 25 kills. Beating Vardorvis also finds the Executioner's axe head.
 
+### Changed
+
+- The Stranglewood's ruined town has its walls back: low walls round its huts' yards and its
+  tents' lower walls, still light enough for a phone.
+
+### Fixed
+
+- Black squares in the Stranglewood's town, where cellar entries and dark floor were left behind.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added

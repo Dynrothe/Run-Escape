@@ -3,6 +3,7 @@
 //
 //   bun run tsx scripts/game/simulate-run.ts                 # every character once
 //   bun run tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
+//   bun run tsx scripts/game/simulate-run.ts wizard,monk 3   # some characters
 //   bun run tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
 //   MAP=barrows bun run tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
 //   UNLOCKS=none bun run tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
@@ -76,7 +77,7 @@ const invocations =
     process.env.INVOCATIONS === "all"
         ? INVOCATIONS.map((i) => i.id)
         : (process.env.INVOCATIONS ?? "").split(",").filter(Boolean);
-const characters = characterArg ? [characterArg] : CHARACTERS.map((c) => c.id);
+const characters = characterArg ? characterArg.split(",") : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
 // Cells round it, each way, the bot looks at for roots to keep off
 const ROOT_LOOK = 3;
