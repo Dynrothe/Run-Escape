@@ -557,6 +557,32 @@ export const CHARACTERS: CharacterDef[] = [
         },
         unlock: { kind: "beatMap", mapId: "ghorrock" },
     },
+    {
+        id: "lantern_bearer",
+        name: "Lantern-bearer",
+        description:
+            "Starts with Fire Strike. **Lantern.** Enemies within 3 tiles of her, in her " +
+            "lantern's glow, take 20% more from every hit and are 10% slower. Where it's dark, " +
+            "her light's twice the size.",
+        style: "magic",
+        startingWeapon: "fire_spells",
+        // Ancient d'hide coif and body, the Abyssal lantern in her hand
+        equipment: {
+            [EquipSlot.HEAD]: 12496,
+            [EquipSlot.TORSO]: 12492,
+            [EquipSlot.SHIELD]: 26822,
+        },
+        bonus: {},
+        trait: {
+            kind: "lantern",
+            name: "Lantern",
+            reach: 3,
+            damage: 0.2,
+            slow: 0.1,
+            light: 2,
+        },
+        unlock: { kind: "beatMap", mapId: "scar" },
+    },
     // The fun maps' adventurers, one for a task on each
     {
         id: "scammer",

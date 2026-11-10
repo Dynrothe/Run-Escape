@@ -962,6 +962,8 @@ export type Debuff = {
     stats: Partial<Stats>;
     startTick: number;
     endTick: number;
+    // A dim (PlayerEffectDef dim): tiles off the player's light, or no more than to tiles
+    light?: { off: number; to?: number };
 };
 
 export type PassiveState = {

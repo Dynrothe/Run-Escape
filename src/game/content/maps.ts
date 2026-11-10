@@ -10,6 +10,7 @@ import {
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { LASSAR_CATHEDRAL, LASSAR_RECIPE, TWIN_SQUARES } from "../scaperune/maps/lassarUndercity";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
+import { SCAR_BOSS_ARENA, SCAR_RECIPE, scarWorld } from "../scaperune/maps/scar";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
 import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
@@ -21,6 +22,7 @@ import { LASSAR_EVENTS, LASSAR_REALM, LASSAR_WAVES } from "./lassar";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
+import { SCAR_EVENTS, SCAR_LIGHTING, SCAR_POOL_WORLD, SCAR_WAVES } from "./scar";
 import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
 import { CinematicDef, EnemyDef, MapDef } from "./types";
 import {
@@ -68,6 +70,9 @@ import {
     ZACHARIAH_STRIKE_LEVEL,
     ZACHARIAH_STRIKE_REACH,
 } from "./zachariah";
+
+// The Leviathan's fight's square, in world tiles
+const SCAR_ARENA_WORLD = scarWorld(SCAR_BOSS_ARENA);
 
 // The maps, in the order they open up: beating one unlocks the next. Arenas
 // are whole map squares (64 tiles), in world tiles. Seasonal maps go last: they're
@@ -466,6 +471,43 @@ export const MAPS: MapDef[] = [
         music: "Prison Break",
         // The Duke's, from 15:00
         bossMusic: "Eye See You",
+    },
+    {
+        id: "scar",
+        name: "The Scar",
+        description:
+            "Imps, leeches, walkers and the Scar's demons and hellhounds in the dark of the " +
+            "Leviathan's lair. There's a light round you, and your weapons only aim at what's " +
+            "lit: carry the light to them. Pick up lanterns, kill light leeches for the light " +
+            "they leave, and fight by the fires. Abyssal leeches dim your light. The Scarred " +
+            "black demon and Persten the Deceitful come one by one, and the Leviathan rises in " +
+            "its pool at the end.",
+        // The Leviathan's lure, its
+        iconObjId: 28325,
+        // The real Scar, its sea drained to the flesh under it (scaperune/maps/scar.ts)
+        arena: getRecipeArena(SCAR_RECIPE),
+        spawn: getRecipeWorldTile(SCAR_RECIPE, SCAR_RECIPE.spawn.x, SCAR_RECIPE.spawn.y),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 4.2, damage: 2.9 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: SCAR_WAVES,
+        events: SCAR_EVENTS,
+        finalBossWarning: "The sludge stirs... The Leviathan is rising!",
+        victoryText: "The Leviathan sinks into its pool! The Scar is still.",
+        // The ground round his pool: he rises in its middle
+        bossArena: {
+            baseX: SCAR_ARENA_WORLD.x,
+            baseY: SCAR_ARENA_WORLD.y,
+            size: SCAR_BOSS_ARENA.size,
+        },
+        features: { rise: SCAR_POOL_WORLD },
+        scaperune: true,
+        act: { id: "fallen_empire", requires: "inferno" },
+        lighting: SCAR_LIGHTING,
+        // The Scar's track; the recording goes in src/media/music (see GameClient)
+        music: "Scar Tissue",
+        // The Leviathan's, from 15:00
+        bossMusic: "Colossus of the Deep",
     },
     {
         id: "halloween",

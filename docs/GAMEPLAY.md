@@ -113,6 +113,7 @@ version and how to run it.
     | Shadow walker       | Magic       | Shadow Burst           | Step between (a trait, below)                     | Beating the Lassar Undercity                         |
     | Treasure hunter     | Ranged      | Bronze throwing knives | Dig site (a trait, below)                         | Opening 5 caskets in the Shadow Realm in one run     |
     | Snow ranger         | Ranged      | Shortbow               | Shatter (a trait, below)                          | Beating Ghorrock                                     |
+    | Lantern-bearer      | Magic       | Fire Strike            | Lantern (a trait, below)                          | Beating the Scar                                     |
     | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange           |
     | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock              |
     | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                            |
@@ -134,7 +135,9 @@ version and how to run it.
   every fourth hit of hers chills what it hits for a second (at half its pace), and anything she
   kills while it's chilled or frozen bursts, its shards hitting everything within 3 tiles for a
   quarter of its hitpoints (a tenth of an elite's or a boss's). Under Ghorrock's cold she never
-  slides on ice, and her cold rises 40% slower.
+  slides on ice, and her cold rises 40% slower. The **Lantern-bearer**'s is **Lantern**: enemies
+  within 3 tiles of her take 20% more from her hits and are 10% slower, and where it's dark her
+  light's twice the size.
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
   a Very rare one, offered in about one run in twenty, and Rare ones. A new weapon is always
@@ -212,6 +215,7 @@ version and how to run it.
     | Stranglewood       | The Forester, the Executioner's axe head         |                                                                                                      |
     | Lassar Undercity   | The Shadow walker, the Siren's staff             | The Treasure hunter (5 caskets opened in the Shadow Realm in one run)                                |
     | Ghorrock           | The Snow ranger, the Eye of the Duke             |                                                                                                      |
+    | The Scar           | The Lantern-bearer, the Leviathan's lure         |                                                                                                      |
     | Awakened Vardorvis | Butch                                            |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
@@ -372,6 +376,13 @@ version and how to run it.
       vents. Ice warriors, Ice spiders from 2:00, Icefiends from 3:00 whose hits chill you, Ice
       wolves from 4:00 and Ice giants, slow and heavy, from 5:00; Pyrefiends and from 8:00 the
       Flaming pyrelord are its fire elites. Played by its **cold** (below).
+    - **The Scar** (Act II, open once the Inferno's beaten): the Leviathan's lair, the real Scar
+      with its sea of sludge drained to the flesh under it, the sludge left in pools and along its
+      shore, the brain's ridges west and the Abyssal Rift's island north-west, nerves, brain
+      matter and broken boats over the floor. Scarred imps, Abyssal leeches from 1:00 whose hits
+      dim your light, Abyssal walkers from 3:00, slow and tough, Scarred lesser demons from 4:00,
+      Scarred hellhounds from 6:00, and Abyssal antibodies swarming late on; Scarred greater
+      demons are its elites. Light leeches wander among them. Played in **the dark** (below).
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
@@ -401,8 +412,8 @@ version and how to run it.
       of him, to Blood Rush. It can't be endless; it has a hard mode once it's beaten. Beating him
       finds **Butch**, his pet, every time.
 - **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
-  Inferno. Its four maps (the Stranglewood, the Lassar Undercity and Ghorrock now; the Scar shown
-  as coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
+  Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
+  played in any order, each a normal fifteen-minute run with a rule of its own. Each is
   a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno
   (enemies 4.2 times the hitpoints, 2.9 times the damage), up to step 3 (4.65 and 3.2), and each
   step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
@@ -444,6 +455,15 @@ version and how to run it.
   a second and a half after a second's warning, hurting 2% of your hitpoints every 0.6 seconds in
   the cloud. The **pools** are ice: you slide on them. In co-op the braziers are the party's and
   each player's cold their own.
+- **The dark** (the Scar's rule): everything's drawn dark but a light of 5 tiles round each
+  player, the nine fires (3 tiles each) and what else gives off light, and your weapons only aim
+  at what's in a light (half a tile of grace); their shots carry on and hit whatever they meet.
+  The minimap only shows what's lit, and faint arrows show what's coming at you out of the dark.
+  **Lanterns** are a power-up (two lie by the start): 4 tiles more light for 30 seconds,
+  shrinking back over the last 5. **Light leeches** wander off from you with a light of their
+  own; killed, their light (4 tiles) stays where they fell for 20 seconds. An **Abyssal leech**'s
+  hit takes a tile off your light for 8 seconds, up to three at once. In co-op each player has
+  their own light, and anyone's light is everyone's to aim by.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
@@ -597,6 +617,15 @@ version and how to run it.
       vent nearest it puffing, and his **freezing gaze**: the yard lights up and the statues in
       front of him cast shadows; anyone not in one when it lands is hit hard and frozen. He drops
       the Eye of the Duke the first time.
+    - **The Scar**: the **Scarred black demon** at 5:00, clawing and breathing fire, whose roar
+      snuffs the light of everyone near it down to 2 tiles for 6 seconds; **Persten the
+      Deceitful** at 10:00, burning, who lights false lanterns round you: they've no beam, and
+      they burst when they're walked into. At 15:00 **the Leviathan** rises in its pool and never
+      leaves it: volleys of orbs, ranged, magic and melee, and after each a roar and debris falling
+      round you. The debris stays a while, and its orbs break on it: get behind it. Up close, its
+      tail. At a third of its hitpoints the dark takes every light but the **Abyssal
+      pathfinder**'s, going round its pool: inside it you hit half again as hard, out of it its
+      hits hurt twice as much. It drops the Leviathan's lure the first time.
     - **Hallowed Night**: **Slash Bash**, whose disease stacks up to four times and whose bile leaves
       pools for 7 seconds, and **The Mimic**, which lies on the map as a master casket until you walk
       onto it or 25 seconds pass, then bites, flings candy that brings its Third Age minions, and

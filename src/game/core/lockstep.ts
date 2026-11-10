@@ -219,6 +219,10 @@ export function syncHash(sim: Sim): number {
     if (sim.rule) {
         values.push(sim.rule.hash());
     }
+    // A boss's debris (BossAttackDef.debris), while there is any
+    if (sim.debris.length > 0) {
+        values.push(sim.debris.length, sim.debris[0].x, sim.debris[0].y);
+    }
     for (const hero of sim.heroes) {
         values.push(
             hero.player.x,

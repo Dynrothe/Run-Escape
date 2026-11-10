@@ -2003,6 +2003,13 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   (`ColdRuleDef`) and the `MapDef`'s `features`. What the game draws in their place (the braziers, which it lights and
   puts out) is blocked in the grid and handed on as `standIns`, so `view-weight.ts` counts it. Its ice is painted with
   an overlay here and given to the sim as an effect mask from the same shapes (`core/world/EffectMask.ts`).
+- A cut whose real ground is mostly blocked (the Scar's sea of sludge, `maps/scar.ts`) can be drained: take its
+  overlay off what's to be walked, clear `TILE_BLOCKED`, then paint it back where it's wanted with `paintField`. Mind
+  what lay on it: the sludge's ripples are floor decoration that only reads on sludge. An island's raised rim may be a
+  level of its own (a bridge's deck in the map's terms): clear the upper levels' tiles and flags with its locs. Masses
+  built of hundreds of one-tile pieces (the Scar's brain) can be hollowed to their rims, a hollow blocked, so the
+  ground that's walked doesn't change; check-maps holds the cache's bridges to being roads, so cover them with
+  `closedRoads`.
 - `bossArena` on the `MapDef` gives a phased boss a square of its own. The player's brought to its middle and
   can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
 - Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay

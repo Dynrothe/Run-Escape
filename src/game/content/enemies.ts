@@ -6,6 +6,7 @@ import { GHORROCK_ENEMIES } from "./ghorrock";
 import { LASSAR_ENEMIES } from "./lassar";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
+import { SCAR_ENEMIES } from "./scar";
 import { STRANGLEWOOD_ENEMIES } from "./stranglewood";
 import { getTheatreBosses } from "./theatre";
 import { TOMBS_ENEMIES } from "./tombs";
@@ -8377,6 +8378,7 @@ export const ENEMIES: EnemyDef[] = [
     ...STRANGLEWOOD_ENEMIES,
     ...LASSAR_ENEMIES,
     ...GHORROCK_ENEMIES,
+    ...SCAR_ENEMIES,
     ...VARDORVIS_ENEMIES,
 ];
 

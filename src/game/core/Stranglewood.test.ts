@@ -168,7 +168,12 @@ describe("the Stranglewood", () => {
 describe("Act II", () => {
     test("opens once the Inferno's beaten, its maps in any order", () => {
         const act = MAPS.filter((map) => map.act);
-        expect(act.map((map) => map.id)).toEqual(["stranglewood", "lassar_undercity", "ghorrock"]);
+        expect(act.map((map) => map.id)).toEqual([
+            "stranglewood",
+            "lassar_undercity",
+            "ghorrock",
+            "scar",
+        ]);
         expect(act.every((map) => map.act!.requires === FALLEN_EMPIRE.requires)).toBe(true);
         expect(getMap(FALLEN_EMPIRE.requires).act).toBeUndefined();
     });

@@ -1438,6 +1438,16 @@ windups, loot beams) was never lit.
   on a boss lights it while its guard's down (a core exposed).
 - **The scene getting darker**: `phases: [{ ... }, { ..., light: 0.1 }]` on a boss, or
   `sim.dimTo(0.1, 2)` and back with `sim.dimTo(sim.baseAmbient, 2)`.
+- **A player's light smaller for a while**: a `dim` effect (`PlayerEffectDef`), on an enemy's
+  `touches` or a boss attack's `effect`: `tiles` off it a dose, stacking to `stacks` (the Scar's
+  Abyssal leeches), or `to` a cap (its black demon's roar). It's shown with the debuffs
+  (`Debuff.light`), and a light's never under 1.5 tiles. The Lantern-bearer's trait
+  (`CharacterTraitDef` lantern) makes her own `light` times the size.
+- **One light and nothing else**: `onlyLight: { inside, outside }` on an enemy with a `light`.
+  While it's up `stepLights` makes only its light, so the players', the map's and what's left go
+  dark; hits from inside it do `inside` times, and a boss's hits on anyone out of it `outside`
+  times. With `circles: { radius, speed }` it goes round the final boss (the Leviathan's
+  pathfinder). A boss bigger than two tiles counts as lit by its edge, not its middle.
 
 `scaperune_dark` is a dark map with the rule, fires and lanterns; `scaperune_glow` is a map at its
 usual brightness with glowing scenery, a blue light of its own and the wizard's fire spells.

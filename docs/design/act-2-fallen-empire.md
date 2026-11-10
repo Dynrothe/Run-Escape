@@ -627,6 +627,74 @@ light leeches and fires.
 A plus: what's in the dark needn't be drawn in detail. Culling the scene past the lights' reach could make the Scar
 one of the cheapest maps on a phone.
 
+### 6.9 As built (2026-11-10)
+
+Built in #159 as build order step 12. Where it differs from the above, and why:
+
+- **The arena isn't open.** The Scar in the cache is a sea of abyssal sludge (overlay 302, a grey-green that hides
+  what's under it) with islands of flesh in it, and the sea is blocked: of the 2 by 2 squares only about a thousand
+  tiles are walked, in pieces. The 11,264 tiles above counted the floor, not what's walkable. So the map
+  (`scaperune/maps/scar.ts`) cuts squares 31 to 32 by 99 to 100 whole and sets them down at squares 62 to 65 by 120 to
+  123 with a square of margin, then drains the sea to the flesh under it and lays the Scar's own floor cracks over
+  it (49247 to 49282, as its islands have; 49376 to 49385 are the sludge's ripples, and come off what's drained). The
+  sludge comes back as a band along the arena's edge running out into the margin's sea and six pools, blocked, and
+  the Leviathan's pool. The islands stay as they are: the brain's ridges
+  west and north (a wall, about two fifths of the arena), the Abyssal Rift's island north-west with its nerves and
+  fires. Over the drained floor the Scar's kit is scattered: nerves, nerve formations, brain matter, broken boats,
+  broken pillars and vents. About 7,300 tiles are open.
+- **The Leviathan's island** is a ring of the brain's rim round his pool, its top a walkway on a level of its own: it
+  comes off, so his pool's fought from open ground (the rim's north half kept behind him was 80k triangles in a
+  phone's view). His pool is sludge, radius 4, and not blocked: he stands in it, solid.
+- **The dark** is the lighting (`content/scar.ts`, `SCAR_LIGHTING`): ambient 0.3 a little blue (0.19, the dev map's,
+  left the flesh black outside the lights), a light of 5 round
+  each player, nine fires (49342, the Scar's own) as lights of 3 that weapons aim by, lanterns at weight 6 among the
+  power-ups and two lying by the start. It isn't a `RunRuleDef`: everything it needs is in the lighting and the
+  enemies, so the Dark remix (step 13) can put it on any map as lighting.
+- **Abyssal leeches**: their hit is a `dim` (`PlayerEffectDef`), a tile off your light for 8 seconds, stacking to 3,
+  shown with the debuffs. A light never goes below 1.5 tiles.
+- **Light leeches** wander off from you (`EnemyDef.flees`, 4 tiles) with a pale green light of 2.5; killed, a light
+  of 4 stays where they fell for 20 seconds. One in six of the first minute's crowd is one, one in forty or so later,
+  and three come as elites.
+- **The Scarred black demon**'s roar is a swing 10 tiles round it with a `dim` to 2 tiles for 6 seconds, every 12
+  seconds or so; a lantern doesn't help through it.
+- **Persten the Deceitful** lights three false lanterns 5 tiles round you every 14 seconds or so: the Abyssal
+  lantern's model, lit, but with no beam (a real one's a power-up, which has one). Walked into, one bursts for 6
+  in 2 tiles; left, it's gone after 20 seconds. They're enemies (`EnemyDef.caught` with `explodes`).
+- **The Leviathan** is drawn at 0.8 of his size and never moves. Three volleys, ranged, magic and melee orbs
+  (spot animations 2487 to 2489, beside his model in the cache), and after each a roar and four pieces of debris
+  falling round you (`BossAttackDef.debris`: a Broken Pillar, 49343, standing 14 seconds, ten at most). His orbs
+  break on debris. Debris doesn't block walking. Up close, his tail. He glows the abyss's teal (a light of 5 on him),
+  so he's seen and can be aimed at from round his pool, and the camera leans to keep him in view (`BossLookDef.lean`).
+- **His enrage**: at a third of his hitpoints the Abyssal pathfinder (12220) comes, going round him 7 tiles out a tile
+  a second (`EnemyDef.circles`), with a light of 4, and while it's up it's the only light (`EnemyDef.onlyLight`):
+  players' lights, the fires and what's left go dark. Hits from inside its light do 1.5 times, his hits on anyone
+  out of it twice.
+- **What a player sees**: enemies in the dark are drawn dark, the minimap only shows what's lit, and faint arrows
+  show what's coming out of the dark (the lighting step's).
+- **The Lantern-bearer**: Fire Strike (the wizard's Fire spells), the Ancient d'hide coif and body and the Abyssal
+  lantern in her hand. Lantern: enemies within 3 tiles take 20% more from all her hits and are 10% slower; her light
+  on a map with players' lights is twice the size (10 tiles on the Scar).
+- **The bot** (`simulate-run.ts`): keeps clear of false lanterns, goes after a light leech when nothing near's lit
+  (or it's dimmed), to the nearest fire or left light while it's dimmed, and stays in the pathfinder's circle;
+  `DARK=0` none of it.
+- **Music**: Scar Tissue, and Colossus of the Deep from 15:00.
+- **Numbers after the sims**: the crowd's lesser demons 30 hitpoints and 4 damage, hellhounds 26 and 4, walkers 44
+  and 3; a ring of 16 hellhounds at 7:30. The black demon comes with 4,400 hitpoints, claws for 5, breathes 3 three at
+  a time and roars for 3. Persten attacks every 2.8 seconds, her fire wave 4 (every other attack at most) and her
+  flames 4. The first pass (demons and hounds 3 damage, Persten's wave every attack at 5) ended most runs at Persten
+  (10:13 to 10:30) and few before 10:00.
+- **Sims** (`META=max ARMOURY=max`, 8 adventurers by 3 seeds, the bot in the dark): at step 0, 1 win of 24 with a
+  median end of 7:01 and 15 deaths before 10:00, against the Stranglewood's 1, 6:31 and 14, Lassar's 1, 10:05 and 12
+  and Ghorrock's 1, 8:14 and 15; at step 1, 0 wins, 7:06 and 15, against 2, 7:11 and 14, 0, 7:46 and 14 and 0, 8:28 and 14. The black demon at 5:00 is its wall (about a third of the runs end there), as Kasonde is the Stranglewood's. The
+  bot's light was dimmed about 5% of the run (median). With `DARK=0` (the bot doing nothing about the dark) step 0
+  was 0 wins, 8:04 and 14: the same within the sims' spread, which is wide (two sweeps of the same map a tweak apart
+  gave medians of 5:42 and 7:46).
+- **Phones** (`frameProbe` at 844 by 390 on the phone camera): the brain's masses are hollowed to a tile round the
+  ground that's walked, their hollows sludge, and the islands' kit thinned (`KEPT` in `maps/scar.ts`): the heaviest
+  view was 220k by `view-weight.ts` before, 44k after. In the game the heaviest is a crowd of 52 on the rift's island,
+  64.4k (35k of it the world); the Leviathan's fight is 40.8k up and 49.6k enraged with a crowd. The light map costs
+  the same as on any lit map; nothing past the lights is culled.
+
 ## 7. The finale: the Awakened
 
 The finale is two things, both built now: **four separate Awakened fights**, each opened by beating its Act II map,
@@ -910,7 +978,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger. Built (5.11)                                    | 2            | 3 weeks    |
 | 10  | The Frozen remix                                                                                                                          | 5, 9         | 3 days     |
 | 11  | Awakened Duke Sucellus, Baron                                                                                                             | 3, 9         | 2 weeks    |
-| 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer                                                         | 1, 2         | 1.5 weeks  |
+| 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer. Built (6.9)                                            | 1, 2         | 1.5 weeks  |
 | 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
 | 14  | Awakened Leviathan, Lil'viathan, the act's ending                                                                                         | 3, 12        | 2 weeks    |
 | 15  | **The Forgotten Four** gauntlet                                                                                                           | 3, 8, 11, 14 | 1.5 weeks  |

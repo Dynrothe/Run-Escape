@@ -239,6 +239,13 @@ export type EnemyDef = {
     // for seconds. A sim light: on a map with lighting.litTargetsOnly, weapons can aim by it. Off a
     // map with lighting it does nothing.
     light?: LightLook & { left?: LightLook & { seconds: number } };
+    // Goes round the final boss radius tiles out from its middle, speed tiles a second, never
+    // stopping (the Abyssal pathfinder round the Leviathan's pool). Stationary otherwise.
+    circles?: { radius: number; speed: number };
+    // While it's up, its own light (light) is the only one: the players', the map's and what's
+    // been left go dark. A player's hits from inside it do inside times their damage, and a
+    // boss's hits on someone out of it outside times theirs (the Leviathan's enrage).
+    onlyLight?: { inside: number; outside: number };
     // What it is, for the weapons that hit some things harder
     tags?: EnemyTag[];
     // Runs from the player when they're within range tiles instead of coming
@@ -378,6 +385,20 @@ export type EnemyShotDef = {
 export type PlayerEffectDef =
     // Can't move for a moment (the King Black Dragon's ice breath)
     | { kind: "freeze"; seconds: number }
+    // Their light (LightingDef.player) smaller for a while, shown with the debuffs: tiles off it a
+    // dose, stacking up to stacks, each dose starting the clock again (an Abyssal leech's); or
+    // to: no more than that many tiles (a Scarred black demon's roar). Nothing on a map without
+    // lights round players.
+    | {
+          kind: "dim";
+          id: string;
+          name: string;
+          iconObjId: number;
+          seconds: number;
+          tiles?: number;
+          stacks?: number;
+          to?: number;
+      }
     // Damage every second for a while (poison breath)
     | { kind: "poison"; damage: number; seconds: number }
     // Stats lowered for a while (Karil's tainted shot, Ahrim's curses).
@@ -874,6 +895,9 @@ export type BossAttackDef = {
     // radius tiles either side of it; vent, under the cold (ColdRuleDef), the gas vent nearest
     // the spot it's aimed at puffs as it lands. Nothing on a map without a rule.
     rule?: { heart?: boolean; lane?: number; vent?: boolean };
+    // Ground attacks: each spot leaves a piece of debris, locId, standing seconds, most at once
+    // (the oldest goes first): cover the boss's projectiles break on. Not in anyone's way.
+    debris?: { locId: number; seconds: number; most: number };
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -1960,6 +1984,16 @@ export type CharacterTraitDef =
           eliteShare: number;
           coldRise: number;
           spotAnim?: number;
+      }
+    // lantern (the Lantern-bearer's): enemies within reach tiles of her take damage more from
+    // every hit and are slow slower; her own light (LightingDef.player) is light times the size
+    | {
+          kind: "lantern";
+          name: string;
+          reach: number;
+          damage: number;
+          slow: number;
+          light: number;
       };
 
 export type ShopUpgradeDef = {

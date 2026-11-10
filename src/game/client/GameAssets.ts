@@ -770,7 +770,12 @@ export class GameAssets {
         // Scenery its attacks grow, here rather than in what every run bakes
         for (const attack of enemy.boss?.attacks ?? []) {
             const quarters = attack.quarters;
-            for (const locId of [quarters?.safeLocId, quarters?.hurtLocId, attack.ground?.locId]) {
+            for (const locId of [
+                quarters?.safeLocId,
+                quarters?.hurtLocId,
+                attack.ground?.locId,
+                attack.debris?.locId,
+            ]) {
                 if (locId !== undefined) {
                     requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
                 }

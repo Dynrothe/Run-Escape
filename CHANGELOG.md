@@ -8,8 +8,8 @@ the version in the corner).
 ### Added
 
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
-  maps to play in any order, each harder the more of the others you've beaten. The Stranglewood,
-  the Lassar Undercity and Ghorrock are in; the Scar is coming.
+  maps to play in any order, each harder the more of the others you've beaten: the Stranglewood,
+  the Lassar Undercity, Ghorrock and the Scar.
 - The Stranglewood: the Strangled, their boars, lynxes and bears in the real wood round
   Vardorvis's arena, with Kasonde, a great Strangled Bear and Vardorvis himself. Roots creep in
   from the wood, slowing and hurting you: cut them back with your hits, and kill the root hearts
@@ -40,6 +40,18 @@ the version in the corner).
 - The Snow ranger, for beating Ghorrock: a shortbow, and Shatter, every fourth hit chilling, and
   what's killed chilled or frozen bursting into shards. On ice she never slides, and the cold
   gets to her slower. Beating Duke Sucellus also finds the Eye of the Duke.
+- The Scar: imps, leeches, abyssal walkers and antibodies, the Scar's demons and hellhounds in the
+  dark of the Leviathan's lair, the real Scar with its sea drained to the flesh under it. There's
+  a light round you, and your weapons only aim at what's lit, so bring the light to them: pick up
+  lanterns, kill light leeches for the light they leave where they die, and fight by the fires.
+  Abyssal leeches dim your light. The Scarred black demon roars your light down to almost
+  nothing, Persten the Deceitful lights false lanterns that burst (they have no beam), and the
+  Leviathan rises in its pool, its orbs breaking on the debris its roars bring down. In its last
+  third only its pathfinder's circle of light is left: hit harder inside it, get hurt more out of
+  it. With its own music, Scar Tissue and Colossus of the Deep.
+- The Lantern-bearer, for beating the Scar: Fire Strike, and Lantern, enemies close to her taking
+  20% more and slowed; where it's dark, her light's twice the size. Beating the Leviathan also
+  finds the Leviathan's lure.
 - Butch, Awakened Vardorvis's pet, the first pet that fights: take him along and every few
   seconds he leaps on an enemy near you, hitting everything round where he lands.
 

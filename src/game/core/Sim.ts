@@ -360,6 +360,10 @@ const MAX_CROWD_CHECKS = 60;
 // phase changes the scene's ambient (and back as it falls)
 const LIGHT_GRACE = 0.5;
 const LEFT_LIGHT_FADE = 3;
+// How far round a piece of debris (BossAttackDef.debris) a projectile breaks on it, tiles
+const DEBRIS_RADIUS = 0.8;
+// However dimmed, a player's light is never less than this, tiles
+const MIN_PLAYER_LIGHT = 1.5;
 const PHASE_LIGHT_SECONDS = 2;
 // Ticks a fallen rock lies there before it's gone
 const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
@@ -1442,6 +1446,16 @@ export class Sim {
     // what enemies carry and leave. Empty on any other map.
     lights: Light[] = [];
     private leftLights: LeftLight[] = [];
+    // Whether any enemy here can be the only light (EnemyDef.onlyLight), and what goes round the
+    // final boss's angles (EnemyDef.circles), by uid
+    private readonly hasOnlyLight: boolean;
+    private readonly circleAngles = new Map<number, number>();
+    // A Lantern-bearer's in the party (CharacterTraitDef lantern)
+    private hasLanterns = false;
+    // This tick's only light (stepLights), if there is one
+    private onlyLight: Enemy | undefined;
+    // Debris a boss's ground attack left (BossAttackDef.debris): its projectiles break on it
+    debris: { x: number; y: number; locId: number; until: number; from: number }[] = [];
     // The scene's ambient as it changes over time (dimTo): from, to, over these ticks
     private dim = { from: 1, to: 1, startTick: 0, endTick: 0 };
 
@@ -1908,6 +1922,11 @@ export class Sim {
         this.map = getMap(options.mapId ?? "lumbridge");
         this.lighting = this.map.lighting;
         this.litTargetsOnly = this.lighting?.litTargetsOnly === true;
+        this.hasOnlyLight =
+            this.lighting !== undefined &&
+            [...ENEMY_BY_ID.values()].some(
+                (e) => e.onlyLight !== undefined && e.light !== undefined,
+            );
         this.dim.from = this.dim.to = this.lighting?.ambient ?? 1;
         this.rng = new Rng(options.seed);
         this.floor = this.map.floor
@@ -1986,6 +2005,9 @@ export class Sim {
         party.forEach((hero, index) => {
             this.heroes.push(this.createHero(hero, index, options.spawnX, options.spawnY));
         });
+        this.hasLanterns = this.heroes.some(
+            (hero) => getCharacter(hero.characterId).trait?.kind === "lantern",
+        );
         for (const hero of this.heroes) {
             this.use(hero);
             this.addWeapon(getCharacter(hero.characterId).startingWeapon);
@@ -3244,6 +3266,7 @@ export class Sim {
         this.stepChat();
         this.rebuildEnemyHash();
         this.stepEnemies();
+        this.stepCircling();
         this.stepGlyphs();
         if (this.lighting) {
             this.stepLights();
@@ -4368,6 +4391,13 @@ export class Sim {
                 });
 
                 const touching = distance < enemy.radius + player.radius + 0.1;
+                // Something that bursts as it's walked into (EnemyDef.caught with explodes: one
+                // of Persten's false lanterns)
+                if (touching && enemy.def.caught && enemy.def.explodes) {
+                    this.explode(enemy);
+                    this.vanish(enemy);
+                    continue;
+                }
                 // A lost soul's caught by walking into it (EnemyDef.caught)
                 if (touching && enemy.def.caught && this.realm) {
                     this.realm.onCaught(this.ruleHost, enemy.uid, player.x, player.y);
@@ -4396,6 +4426,10 @@ export class Sim {
                     // Chilled (the Snow ranger's Shatter): half pace
                     if (enemy.chilled !== undefined && this.tick < enemy.chilled) {
                         pace *= CHILL_PACE;
+                    }
+                    // In the Lantern-bearer's glow (CharacterTraitDef lantern)
+                    if (this.hasLanterns) {
+                        pace *= this.lanternPace(enemy);
                     }
                     // A pouncer's rush, the last few tiles (EnemyDef.pounce)
                     const pounce = enemy.def.pounce;
@@ -13948,6 +13982,10 @@ export class Sim {
     ): void {
         const { attack, x, y, radius } = hazard;
         const grab = attack.ground?.grab;
+        // What stays where it fell (BossAttackDef.debris): cover the boss's projectiles break on
+        if (show && attack.debris) {
+            this.leaveDebris(attack.debris, x, y);
+        }
         if (show && attack.impact) {
             // Its spot animations at every mark, and one shake and flash for all that land at once
             const first = this.impactTick !== this.tick;
@@ -16671,6 +16709,33 @@ export class Sim {
         }
     }
 
+    // A piece of debris down at x, y (BossAttackDef.debris), the oldest gone past the most
+    private leaveDebris(debris: NonNullable<BossAttackDef["debris"]>, x: number, y: number): void {
+        this.debris = this.debris.filter((d) => d.until > this.tick);
+        this.debris.push({
+            x,
+            y,
+            locId: debris.locId,
+            from: this.tick,
+            until: this.tick + secondsToTicks(debris.seconds),
+        });
+        if (this.debris.length > debris.most) {
+            this.debris.shift();
+        }
+    }
+
+    // Whether a spot's on debris (BossAttackDef.debris)
+    private onDebris(x: number, y: number): boolean {
+        for (const d of this.debris) {
+            const dx = x - d.x;
+            const dy = y - d.y;
+            if (d.until > this.tick && dx * dx + dy * dy <= DEBRIS_RADIUS * DEBRIS_RADIUS) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private stepEnemyProjectiles(): void {
         for (const projectile of this.enemyProjectiles) {
             projectile.prevX = projectile.x;
@@ -16711,6 +16776,20 @@ export class Sim {
             }
             if (projectile.attack.blockable && this.hitsGlyph(projectile)) {
                 projectile.life = 0;
+                continue;
+            }
+            // It breaks on debris (BossAttackDef.debris)
+            if (this.debris.length > 0 && this.onDebris(projectile.x, projectile.y)) {
+                projectile.life = 0;
+                if (projectile.attack.impactSpotAnim !== undefined) {
+                    this.addEffect(
+                        projectile.attack.impactSpotAnim,
+                        projectile.x,
+                        projectile.y,
+                        0,
+                        30,
+                    );
+                }
                 continue;
             }
             const reach = projectile.radius + player.radius;
@@ -16772,8 +16851,14 @@ export class Sim {
         if (showImpact && attack.impactSpotAnim !== undefined) {
             this.addEffect(attack.impactSpotAnim, player.x, player.y, 0, 30);
         }
+        // Out of the only light (EnemyDef.onlyLight), a boss's hits hurt more
+        const only = this.onlyLight;
+        const dark =
+            only && enemy?.boss && !this.inOnlyLight(player.x, player.y)
+                ? only.def.onlyLight!.outside
+                : 1;
         const amount = this.damagePlayer(
-            damage,
+            damage * dark,
             enemyId,
             false,
             attack.hitSound,
@@ -16846,6 +16931,27 @@ export class Sim {
                 );
                 player.poisonEnd = this.tick + ticks;
                 break;
+            case "dim": {
+                // Only where players carry a light (LightingDef.player)
+                if (!this.lighting?.player) {
+                    break;
+                }
+                const had = this.debuffs.find((d) => d.id === effect.id)?.stacks ?? 0;
+                const stacks = Math.min(effect.stacks ?? 1, had + 1);
+                this.debuffs = this.debuffs
+                    .filter((d) => d.id !== effect.id)
+                    .concat({
+                        id: effect.id,
+                        name: stacks > 1 ? `${effect.name} x${stacks}` : effect.name,
+                        iconObjId: effect.iconObjId,
+                        stats: {},
+                        stacks,
+                        light: { off: (effect.tiles ?? 0) * stacks, to: effect.to },
+                        startTick: this.tick,
+                        endTick: this.tick + ticks,
+                    });
+                break;
+            }
             case "debuff":
                 this.debuffs = this.debuffs
                     .filter((d) => d.id !== effect.id)
@@ -17156,6 +17262,7 @@ export class Sim {
                     soaked *
                     (1 + drain) *
                     prayed *
+                    (poison ? 1 : this.darkScale(enemy)) *
                     this.rng.range(0.85, 1.15),
             ),
         );
@@ -17859,6 +17966,57 @@ export class Sim {
         this.damageSource = previous;
     }
 
+    // What the dark does to the hero's hits: the Lantern-bearer's glow (CharacterTraitDef
+    // lantern) on what's near her, and the only light's (EnemyDef.onlyLight) on hits from inside it
+    private darkScale(enemy: Enemy): number {
+        let scale = 1;
+        const player = this.player;
+        const trait = this.trait;
+        if (trait?.kind === "lantern") {
+            const reach = trait.reach + enemy.radius;
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                scale *= 1 + trait.damage;
+            }
+        }
+        const only = this.onlyLight;
+        if (only && this.inOnlyLight(player.x, player.y)) {
+            scale *= only.def.onlyLight!.inside;
+        }
+        return scale;
+    }
+
+    // How fast an enemy goes in a Lantern-bearer's glow (CharacterTraitDef lantern): slower
+    // within her reach
+    private lanternPace(enemy: Enemy): number {
+        for (const hero of this.heroes) {
+            const trait = getCharacter(hero.characterId).trait;
+            if (trait?.kind !== "lantern" || !this.isUp(hero)) {
+                continue;
+            }
+            const reach = trait.reach + enemy.radius;
+            const dx = enemy.x - hero.player.x;
+            const dy = enemy.y - hero.player.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                return 1 - trait.slow;
+            }
+        }
+        return 1;
+    }
+
+    // Whether a spot's in this tick's only light (EnemyDef.onlyLight)
+    private inOnlyLight(x: number, y: number): boolean {
+        const only = this.onlyLight;
+        if (!only || only.dead) {
+            return false;
+        }
+        const reach = only.def.light!.radius + LIGHT_GRACE;
+        const dx = x - only.x;
+        const dy = y - only.y;
+        return dx * dx + dy * dy <= reach * reach;
+    }
+
     // The hero's adventurer's trait (CharacterDef.trait), if they have one
     private get trait(): CharacterTraitDef | undefined {
         return getCharacter(this.hero.characterId).trait;
@@ -18497,6 +18655,25 @@ export class Sim {
     private stepLights(): void {
         const lighting = this.lighting!;
         const lights: Light[] = [];
+        // While something's the only light (EnemyDef.onlyLight: the Leviathan's pathfinder), that's
+        // all there is
+        const only = this.onlyLightEnemy();
+        this.onlyLight = only;
+        if (only) {
+            const look = only.def.light!;
+            lights.push({
+                kind: "enemy",
+                id: only.uid,
+                x: only.x,
+                y: only.y,
+                radius: look.radius,
+                look,
+                enemy: only,
+            });
+            this.lights = lights;
+            this.markLit();
+            return;
+        }
         for (const hero of this.heroes) {
             if (hero.left) {
                 continue;
@@ -18542,11 +18719,48 @@ export class Sim {
             });
         }
         this.lights = lights;
-        // What weapons can aim at, worked out once a tick rather than on every search
+        this.markLit();
+    }
+
+    // What weapons can aim at, worked out once a tick rather than on every search: anything
+    // with some of it in a light (a big boss by its edge)
+    private markLit(): void {
         if (this.litTargetsOnly) {
             for (const enemy of this.enemies) {
-                enemy.lit = this.isLit(enemy.x, enemy.y);
+                enemy.lit = this.isLit(enemy.x, enemy.y, enemy.radius > 1 ? enemy.radius : 0);
             }
+        }
+    }
+
+    // The enemy that's the only light while it's up (EnemyDef.onlyLight), if there is one
+    onlyLightEnemy(): Enemy | undefined {
+        if (!this.hasOnlyLight) {
+            return undefined;
+        }
+        return this.enemies.find((e) => !e.dead && e.def.onlyLight !== undefined && e.def.light);
+    }
+
+    // What goes round the final boss (EnemyDef.circles: the Leviathan's pathfinder), a step a
+    // tick, from where it came on
+    private stepCircling(): void {
+        const middle = this.enemies.find(
+            (e) => !e.dead && e.boss && e.def.circles === undefined && e.def.stationary,
+        );
+        for (const enemy of this.enemies) {
+            const circles = enemy.def.circles;
+            if (!circles || enemy.dead || !middle) {
+                continue;
+            }
+            let angle = this.circleAngles.get(enemy.uid);
+            if (angle === undefined) {
+                angle = fm.atan2(enemy.y - middle.y, enemy.x - middle.x);
+            }
+            angle += circles.speed / circles.radius / TICKS_PER_SECOND;
+            this.circleAngles.set(enemy.uid, angle);
+            enemy.prevX = enemy.x;
+            enemy.prevY = enemy.y;
+            enemy.x = middle.x + fm.cos(angle) * circles.radius;
+            enemy.y = middle.y + fm.sin(angle) * circles.radius;
         }
     }
 
@@ -18572,18 +18786,32 @@ export class Sim {
                 look ??= effect.look ?? { radius: effect.bonus };
             }
         }
-        const radius = (lighting.player?.radius ?? 0) + bonus;
+        // The Lantern-bearer's own is bigger (CharacterTraitDef lantern)
+        const trait = getCharacter(this.heroes[heroIndex].characterId).trait;
+        const own = (lighting.player?.radius ?? 0) * (trait?.kind === "lantern" ? trait.light : 1);
+        let radius = own + bonus;
+        // Dimmed (PlayerEffectDef dim): an Abyssal leech's tiles off, a roar's cap
+        for (const debuff of this.heroes[heroIndex].debuffs) {
+            if (debuff.light) {
+                radius -= debuff.light.off;
+                if (debuff.light.to !== undefined) {
+                    radius = Math.min(radius, debuff.light.to);
+                }
+            }
+        }
+        radius = Math.max(radius, lighting.player ? MIN_PLAYER_LIGHT : 0);
         return look && radius > 0 ? { radius, look } : undefined;
     }
 
     // Whether a spot's in a sim light, or near enough to its edge (LIGHT_GRACE): always, on a map
     // without the rule (LightingDef.litTargetsOnly)
-    isLit(x: number, y: number): boolean {
+    // radius: some of something that big (an enemy's) is in it
+    isLit(x: number, y: number, radius = 0): boolean {
         if (!this.litTargetsOnly) {
             return true;
         }
         for (const light of this.lights) {
-            const reach = light.radius + Math.min(LIGHT_GRACE, light.radius);
+            const reach = light.radius + Math.min(LIGHT_GRACE, light.radius) + radius;
             const dx = x - light.x;
             const dy = y - light.y;
             if (dx * dx + dy * dy <= reach * reach) {

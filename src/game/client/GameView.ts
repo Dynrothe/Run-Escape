@@ -221,6 +221,8 @@ const ROCK_FALL_HEIGHT = 14;
 const MARK_STRIKE_LOOK = { scale: 1.6 };
 const SHOT_LOOK = { scale: 2.5, flash: 0.3 };
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
+// A boss's debris (BossAttackDef.debris) sinks away over this many ticks
+const DEBRIS_SINK_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
 const REVIVE_TICKS = REVIVE_SECONDS * TICKS_PER_SECOND;
 // How long a fairy ring takes to open
@@ -756,6 +758,10 @@ export class GameView {
             this.drawRock(actors, sim, rock);
         }
 
+        for (const debris of sim.debris) {
+            this.drawDebris(actors, sim, debris);
+        }
+
         for (const rampage of sim.rampages) {
             this.drawRampage(actors, sim, rampage, alpha);
         }
@@ -1040,6 +1046,28 @@ export class GameView {
             alpha: Math.max(0, fade),
             unlit: 1,
         });
+    }
+
+    // A boss's debris where it fell (BossAttackDef.debris): settling as it lands, sinking into
+    // the floor over its last second
+    private drawDebris(actors: ActorRenderer, sim: Sim, debris: Sim["debris"][number]): void {
+        const model = this.assets.get("loc:" + debris.locId);
+        if (!model || sim.tick >= debris.until) {
+            return;
+        }
+        const left = debris.until - sim.tick;
+        const sink = left < DEBRIS_SINK_TICKS ? (1 - left / DEBRIS_SINK_TICKS) * 96 : 0;
+        const yaw = (Math.round(debris.x * 7 + debris.y * 13) * 331) & 2047;
+        actors.draw(
+            model,
+            model.anims[0],
+            0,
+            debris.x,
+            this.ground(sim, debris.x, debris.y) + sink,
+            debris.y,
+            yaw,
+            { scale: 1 },
+        );
     }
 
     // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock

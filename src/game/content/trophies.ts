@@ -97,6 +97,13 @@ export const TROPHIES: TrophyDef[] = [
         how: "From Duke Sucellus, the first time he's beaten in Ghorrock.",
         from: { kind: "boss", enemyId: "duke_sucellus", mapId: "ghorrock", chance: 1 },
     },
+    {
+        id: "leviathans_lure",
+        name: "Leviathan's lure",
+        objId: 28325,
+        how: "From the Leviathan, the first time it's beaten in the Scar.",
+        from: { kind: "boss", enemyId: "the_leviathan", mapId: "scar", chance: 1 },
+    },
     // Awakened Vardorvis's pet, certain: the fight's the gate (act-2-fallen-empire.md, 7.2)
     {
         id: "butch",

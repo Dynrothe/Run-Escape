@@ -52,6 +52,8 @@ go stale. Add anything that cost you time to work out.
 | Ghorrock: its enemies, bosses, the yard and its cold   | `content/ghorrock.ts`, `scaperune/maps/ghorrock.ts`                    |
 | The cold: braziers, embers, vents, each player's cold  | `core/rules/ColdRule.ts`, `Sim.stepCold`, `GameView.drawCold`          |
 | The effect mask: tile effects on any map (ice)         | `core/world/EffectMask.ts`                                             |
+| The Scar: its enemies, bosses, the drained sea         | `content/scar.ts`, `scaperune/maps/scar.ts`                            |
+| A dimmed light, the only light, a boss's debris        | `PlayerEffectDef` dim, `EnemyDef.onlyLight`, `BossAttackDef.debris`    |
 | Adventurers' traits (Timber!, Shatter and the rest)    | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
 | Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
 | Fighting pets (Butch's leap)                           | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |

@@ -70,6 +70,7 @@ export const FALLEN_EMPIRE: ActDef = {
             iconObjId: 28321,
         },
         {
+            mapId: "scar",
             name: "The Scar",
             boss: "The Leviathan",
             rule: "Darkness, with a light round you.",
