@@ -206,6 +206,7 @@
     "ui.map.tab.dev": "Dev",
     "ui.map.tab.fallen_empire": "Act II",
     "ui.map.tab.fun": "Fun",
+    "ui.pet.power_leap": "Leaps on an enemy within {reach} tiles of you every {every} s, hitting everything round where he lands. Not in boss fights.",
     "ui.pet.label": "Pet:",
     "ui.pet.none_aria": "No pet",
     "ui.quest.done": "Done",

@@ -7,7 +7,7 @@ export type Loadout = {
     metaStats: Record<string, number>;
     unlockedItems: string[];
     armoury: Record<string, number>;
-    // Their pet (pets.ts), only for looks: the sim never sees it
+    // Their pet (pets.ts): looks only, but a fighting one's (PetDef.power) in everyone's sim
     pet?: string;
     // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby. Only
     // shown: the start carries the party's (GameStart.invocations), and the relay passes it as is

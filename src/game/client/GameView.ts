@@ -429,6 +429,9 @@ export class GameView {
         for (const event of events) {
             this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
+                case "petLeap":
+                    this.pets.leap(event.owner, event.x, event.y, sim.tick);
+                    break;
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
                     const model =

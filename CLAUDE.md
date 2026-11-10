@@ -48,6 +48,8 @@ go stale. Add anything that cost you time to work out.
 | A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |
 | The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
 | Adventurers' traits (the Forester's Timber!)           | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
+| Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
+| Fighting pets (Butch's leap)                           | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |

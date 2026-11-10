@@ -51,6 +51,7 @@ import {
 import { CASKETS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
+import { PET_BY_ID, PetDef } from "../content/pets";
 import {
     LANTERN_ID,
     POWER_UPS,
@@ -695,6 +696,8 @@ export type SimOptions = {
     // An act's map (MapDef.act): how many of the act's other maps had been beaten as it started
     // (the host's, in co-op), which sets its toughness (content/acts.ts). 0 when unset.
     actStep?: number;
+    // The solo hero's pet (SaveData.pet); a party's are each hero's (HeroOptions.pet)
+    pet?: string;
 };
 
 export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
@@ -773,9 +776,21 @@ export type RunStats = {
 // One adventurer in a run: everything that's theirs rather than the party's.
 // A run on your own has one; co-op has one for each player, and the run's
 // level, XP, coins and kills are shared.
+// A hero's pet, if it's one that fights (PetDef.power): looks-only pets are the client's alone
+function fightingPet(id: string | undefined): { pet?: PetDef; petReadyTick: number } {
+    const pet = id === undefined ? undefined : PET_BY_ID.get(id);
+    if (!pet?.power) {
+        return { petReadyTick: 0 };
+    }
+    return { pet, petReadyTick: secondsToTicks(pet.power.every) };
+}
+
 export type Hero = {
     // Where it is in Sim.heroes
     index: number;
+    // A fighting pet taken along (PetDef.power), and the tick it can next leap
+    pet?: PetDef;
+    petReadyTick: number;
     // A raid's points, for its supply chest, and damage taken before this room, which it's
     // scored on
     raidPoints: number;
@@ -944,6 +959,8 @@ export type HeroOptions = {
     unlockedItems?: ReadonlySet<string>;
     trophiesFound?: ReadonlySet<string>;
     armoury?: ArmouryUpgrades;
+    // The pet taken along (SaveData.pet): only a fighting one (PetDef.power) does anything here
+    pet?: string;
 };
 
 // The Apmeken room (content/tombs.ts): the wave it's on (its group's uids, and when it came), the
@@ -1922,6 +1939,7 @@ export class Sim {
                 unlockedItems: options.unlockedItems,
                 trophiesFound: options.trophiesFound,
                 armoury: options.armoury,
+                pet: options.pet,
             },
         ];
         this.weaponDamageMultipliers = Object.fromEntries(
@@ -2006,6 +2024,7 @@ export class Sim {
             unlockedItems: options.unlockedItems,
             trophiesFound: options.trophiesFound,
             armoury: options.armoury,
+            ...fightingPet(options.pet),
             player: {
                 x: start.x,
                 y: start.y,
@@ -3212,6 +3231,7 @@ export class Sim {
         this.stepPendingHits();
         this.stepTurrets();
         this.stepThralls();
+        this.stepPets();
         this.stepRocks();
         this.stepRampages();
         this.stepRings();
@@ -4908,15 +4928,22 @@ export class Sim {
             // Kephri's Soldier Scarab: her shield, or her hitpoints on her last
             const feed = target.def.boss?.kephri?.shields.soldierFeed ?? 0;
             this.restoreKephri(target, kephri, feed, heals.fraction);
-        } else if (phase) {
+        } else if (phase && phase.stage !== "hp") {
             // Only its shield can be fed
             phase.shield = Math.min(
                 phase.shieldMax,
                 phase.shield + Math.max(1, Math.round(phase.shieldMax * heals.fraction)),
             );
         } else {
+            // A fight on its hitpoints (Awakened Vardorvis's captors) heals no further than the
+            // top of the phase it's in
+            const phases = target.def.boss?.phases?.phases;
+            const top =
+                phase && phases && phase.index > 0
+                    ? (phases[phase.index - 1].until ?? 1) * target.maxHp
+                    : target.maxHp;
             target.hp = Math.min(
-                target.maxHp,
+                Math.max(target.hp, top),
                 target.hp + Math.max(1, Math.round(target.maxHp * heals.fraction)),
             );
         }
@@ -15108,7 +15135,8 @@ export class Sim {
         }
         const ready = this.tick >= this.hero.abilityReadyTick;
         return (
-            (ready && this.abilityTarget(ability) !== undefined) || this.abilityNearlyReady(ability)
+            (ready && (this.abilityTarget(ability) !== undefined || this.abilityCuts(ability))) ||
+            this.abilityNearlyReady(ability)
         );
     }
 
@@ -15155,6 +15183,11 @@ export class Sim {
         return this.isExposed(boss) ? (ability.openReach ?? ability.reach) : ability.reach;
     }
 
+    // A button that clears the rule round you (FightAbilityDef.cut) goes off with no boss in reach
+    private abilityCuts(ability: FightAbilityDef): boolean {
+        return ability.cut !== undefined && !this.intro;
+    }
+
     // The fight's button going off for the current hero, if it can now
     private fireAbility(ability: FightAbilityDef): boolean {
         const hero = this.hero;
@@ -15163,7 +15196,7 @@ export class Sim {
         }
         const boss = this.abilityTarget(ability);
         if (!boss) {
-            return false;
+            return this.fireCut(ability);
         }
         hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
         const player = this.player;
@@ -15200,7 +15233,57 @@ export class Sim {
             this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
         }
         this.breakChannel(boss);
+        this.cutWithAbility(ability, boss);
         return true;
+    }
+
+    // A cutting button (FightAbilityDef.cut) with the boss out of reach: it clears the rule round
+    // the hero all the same, and hits whatever else is in reach
+    private fireCut(ability: FightAbilityDef): boolean {
+        if (!this.abilityCuts(ability)) {
+            return false;
+        }
+        const hero = this.hero;
+        const player = this.player;
+        hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
+        if (ability.playerSeq !== undefined) {
+            player.attackSeq = ability.playerSeq;
+            player.attackStart = this.tick;
+        }
+        this.showImpact(ability.impact, player.x, player.y);
+        this.emit({
+            type: "ability",
+            abilityId: ability.id,
+            enemyId: "",
+            sound: ability.sound ?? -1,
+            x: player.x,
+            y: player.y,
+            opened: false,
+        });
+        this.damageSource = `ability:${ability.id}`;
+        this.cutWithAbility(ability, undefined);
+        return true;
+    }
+
+    // What a cutting button does besides its blow on the boss: the rule cleared round the hero,
+    // and everything else in its reach hit
+    private cutWithAbility(ability: FightAbilityDef, boss: Enemy | undefined): void {
+        if (ability.cut === undefined) {
+            return;
+        }
+        const player = this.player;
+        this.rule?.onSwing(player.x, player.y, 1, 0, ability.cut, Math.PI, 0);
+        for (const enemy of [...this.enemies]) {
+            if (
+                enemy === boss ||
+                enemy.dead ||
+                enemy.bossState ||
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) > ability.reach + enemy.def.radius
+            ) {
+                continue;
+            }
+            this.damageEnemy(enemy, ability.damage, 0, player.x, player.y);
+        }
     }
 
     private tombsAbilityBosses(): Enemy[] {
@@ -15329,6 +15412,45 @@ export class Sim {
             }
         }
         return best;
+    }
+
+    // Each hero's fighting pet (PetDef.power): Butch's leap onto the nearest enemy near them, with
+    // a cleave where he lands. Not in a boss fight, where the kit is the whole run.
+    private stepPets(): void {
+        if (this.map.fight) {
+            return;
+        }
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            const power = hero.pet?.power;
+            if (!power || this.tick < hero.petReadyTick || !this.isUp(hero)) {
+                continue;
+            }
+            this.use(hero);
+            const player = this.player;
+            const target = this.nearestEnemies(player.x, player.y, power.reach, 1)[0];
+            if (!target) {
+                continue;
+            }
+            hero.petReadyTick = this.tick + secondsToTicks(power.every);
+            const { x, y } = target;
+            this.emit({ type: "petLeap", owner: hero.index, x, y });
+            const hit: Enemy[] = [];
+            this.queryTouching(x, y, power.cleave + 1, (enemy) => {
+                if (
+                    !enemy.dead &&
+                    fm.hypot(enemy.x - x, enemy.y - y) <= power.cleave + enemy.radius
+                ) {
+                    hit.push(enemy);
+                }
+            });
+            this.damageSource = `pet:${hero.pet!.id}`;
+            const damage = power.damage * this.powerUpDamageScale();
+            for (const enemy of hit) {
+                this.damageEnemy(enemy, damage, 0, x, y);
+            }
+        }
+        this.use(current);
     }
 
     // Seconds until a hero's button can be used again

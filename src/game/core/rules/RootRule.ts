@@ -92,6 +92,7 @@ export class RootRule implements RunRule {
         this.open = new Uint8Array(count);
         const solid = new Uint8Array(count);
         const safe = def.safe;
+        const ring = def.ring;
         let open = 0;
         for (let cy = 0; cy < this.cellsY; cy++) {
             for (let cx = 0; cx < this.cellsX; cx++) {
@@ -111,7 +112,11 @@ export class RootRule implements RunRule {
                 }
                 const { x, y } = this.cellMiddle(i);
                 const inSafe = safe && fm.hypot(x - safe.x, y - safe.y) < safe.radius;
-                if (tiles >= OPEN_TILES && !inSafe) {
+                const outside = ring && fm.hypot(x - ring.x, y - ring.y) >= ring.radius;
+                if (outside) {
+                    // Past a fight's ring is the wood, as blocked ground is
+                    solid[i] = 1;
+                } else if (tiles >= OPEN_TILES && !inSafe) {
                     this.open[i] = 1;
                     open++;
                 }

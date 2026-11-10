@@ -881,6 +881,8 @@ export type DamageSource =
     | `powerUp:${string}`
     // A fight's button (MapDef.fight.ability), and its arena's attacks that turned on the boss
     | `ability:${string}`
+    // A fighting pet's (PetDef.power)
+    | `pet:${string}`
     | "court"
     | "recoil"
     | "other";
@@ -1042,6 +1044,8 @@ type SimEventBody =
     // A statue the fight draws (BossAttackDef.statues) starts this animation:
     // the one of locId whose south-west tile is x, y
     | { type: "statueSeq"; locId: number; x: number; y: number; seq: number }
+    // A hero's fighting pet leaps onto an enemy there (PetDef.power), for the follower to show
+    | { type: "petLeap"; owner: number; x: number; y: number }
     // Its totems' blast, from each totem to the boss
     | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
     // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it

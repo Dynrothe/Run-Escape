@@ -1,8 +1,9 @@
 import { TROPHY_BY_ID } from "./trophies";
 
-// Pets: a trophy that follows its finder around once it's taken along (SaveData.pet). They're
-// looks only, drawn by the game (client/PetFollowers.ts) and nothing to do with the run, so a
-// pet never changes how a run plays, solo or in co-op.
+// Pets: a trophy that follows its finder around once it's taken along (SaveData.pet), drawn by
+// the game (client/PetFollowers.ts). Most are looks only. Act II's Awakened fights' pets fight
+// (PetDef.power): the sim plays that for the hero who took it, on its own ticks, in co-op too,
+// and never in a boss fight. A run with a looks-only pet, or none, plays exactly as without.
 export type PetDef = {
     // Its trophy's id: finding the trophy is what earns it
     id: string;
@@ -11,6 +12,10 @@ export type PetDef = {
     npcId: number;
     idleSeq: number;
     walkSeq: number;
+    // What it does in a run (act-2-fallen-empire.md, 8.4). leap: every `every` seconds, when an
+    // enemy's within reach tiles of its hero, it leaps on the nearest and hits everything within
+    // cleave tiles of where it lands for damage, scaled as power-ups' damage is
+    power?: { kind: "leap"; every: number; reach: number; cleave: number; damage: number };
 };
 
 export const PETS: PetDef[] = [
@@ -23,6 +28,14 @@ export const PETS: PetDef[] = [
     { id: "lil_xarp", npcId: 10874, idleSeq: 9033, walkSeq: 9033 },
     { id: "dark_squirrel", npcId: 9637, idleSeq: 7309, walkSeq: 7310 },
     { id: "tumekens_guardian", npcId: 11812, idleSeq: 9655, walkSeq: 9651 },
+    // Awakened Vardorvis's: his own model, small, and he leaps in with an axe
+    {
+        id: "butch",
+        npcId: 12158,
+        idleSeq: 10337,
+        walkSeq: 10339,
+        power: { kind: "leap", every: 6, reach: 5, cleave: 1.5, damage: 20 },
+    },
 ];
 
 export const PET_BY_ID: Map<string, PetDef> = new Map(PETS.map((p) => [p.id, p]));

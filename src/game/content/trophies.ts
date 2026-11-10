@@ -83,6 +83,19 @@ export const TROPHIES: TrophyDef[] = [
         how: "From Vardorvis, the first time he's beaten in the Stranglewood.",
         from: { kind: "boss", enemyId: "vardorvis", mapId: "stranglewood", chance: 1 },
     },
+    // Awakened Vardorvis's pet, certain: the fight's the gate (act-2-fallen-empire.md, 7.2)
+    {
+        id: "butch",
+        name: "Butch",
+        objId: 28248,
+        how: "From Awakened Vardorvis, the first time he's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_vardorvis",
+            mapId: "awakened_vardorvis",
+            chance: 1,
+        },
+    },
 ];
 
 // The Theatre of Blood's uniques, weighted as the real raid's are, and its pet off Verzik

@@ -1161,7 +1161,10 @@ export type FightAbilityDef = {
     playerSeq?: number;
     // Coaches the player (AbilityButton): early in a fight, until it's used, a hint says what it's
     // for, and while the guard's down it pulses with a tag saying so. The Tombs' and their quest's.
-    guide?: boolean;
+    guide?: boolean; // Clears the map's rule (its roots) within this many tiles of the player as it goes, and so goes
+    // off with the boss out of reach too, hitting whatever else is in reach (Awakened Vardorvis's
+    // Chop: his captors and his head)
+    cut?: number;
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
@@ -2093,6 +2096,9 @@ export type RootsRuleDef = {
     sprout: number;
     // The circle roots never take (a final fight's clearing), in world tiles
     safe?: { x: number; y: number; radius: number };
+    // The circle they're kept in (a boss fight's clearing), in world tiles: nothing roots outside
+    // it, and they creep in from its edge as from the wood
+    ring?: { x: number; y: number; radius: number };
     // On roots: a player's this much slower, and after grace seconds on them loses share of their
     // hitpoints every `every` seconds; enemies are haste faster (not fliers)
     slow: number;

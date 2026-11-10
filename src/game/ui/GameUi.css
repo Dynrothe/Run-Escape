@@ -859,6 +859,13 @@
     color: #ffffff;
 }
 
+/* What a fighting pet does (PetDef.power), under its row */
+.ui-pet-power {
+    flex-basis: 100%;
+    color: #c8c8c8;
+    font-size: 0.85em;
+}
+
 .ui-pet-tiles {
     display: flex;
     flex-wrap: wrap;

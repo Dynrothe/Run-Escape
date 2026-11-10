@@ -16,9 +16,16 @@ the version in the corner).
   that make them grow. With its own music, Strangled and Blood Rush.
 - The Forester, for beating the Stranglewood: a bronze 2h sword, and Timber!, a tree felled along
   the ground every 25 kills. Beating Vardorvis also finds the Executioner's axe head.
+- Awakened Vardorvis, Act II's first Awakened fight, on the Bosses tab once the Stranglewood's
+  beaten: you play the Forester in his clearing, with Chop, a button that hits hard and clears
+  the roots round you. Make his dart miss, or run it into a pillar, and cut down his captors
+  before they heal him.
+- Butch, Awakened Vardorvis's pet, the first pet that fights: take him along and every few
+  seconds he leaps on an enemy near you, hitting everything round where he lands.
 
 ### Changed
 
+- Act II is harder: its first map is now tougher than the Inferno, and each step after it too.
 - The Stranglewood's ruined town has its walls back: low walls round its huts' yards and its
   tents' lower walls, still light enough for a phone.
 

@@ -564,6 +564,24 @@ export function pressButton(sim: Sim, sloppy = false): void {
     const target = sees && sim.ability ? sim.abilityTarget() : undefined;
     if (target && sim.isExposed(target)) {
         sim.useAbility();
+        return;
+    }
+    // A button that cuts the roots (Awakened Vardorvis's Chop): when ready, on roots or with one of
+    // the boss's own (a captor, his head) in reach
+    const ability = sim.ability;
+    if (!sees || ability?.cut === undefined || sim.abilitySecondsLeft() !== 0) {
+        return;
+    }
+    const player = sim.player;
+    const onRoots = sim.rule?.hurtsAt(player.x, player.y) ?? false;
+    const inReach = sim.enemies.some(
+        (enemy) =>
+            !enemy.dead &&
+            !enemy.bossState &&
+            Math.hypot(enemy.x - player.x, enemy.y - player.y) <= ability.reach + enemy.radius,
+    );
+    if (onRoots || inReach) {
+        sim.useAbility();
     }
 }
 

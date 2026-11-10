@@ -11,6 +11,7 @@
 //   ARMOURY=max bun run tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
 //   ENDLESS=1 bun run tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
 //   HARD=1 bun run tsx scripts/game/simulate-run.ts          # on hard mode
+//   PET=butch bun run tsx scripts/game/simulate-run.ts       # with a fighting pet along
 //   EXPERT=1 MAP=theatre_of_blood ...  # a raid's expert mode (hard, and the Nylocas's colours)
 //   WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
 //   FINAL_BOSS=the_nightmare BOSS_ARENA=48 bun run tsx ...   # another final boss, on a square of the map
@@ -119,6 +120,8 @@ const SLOPPY_LAPSE = 3;
 const partySize = parseInt(process.env.PARTY ?? "1");
 // An act's map's step (content/acts.ts)
 const actStep = parseInt(process.env.STEP ?? "0");
+// A pet taken along (PET=butch): a fighting one's power plays (PetDef.power)
+const pet = process.env.PET || undefined;
 if (finalBoss) {
     map.events = map.events.map((e) =>
         e.kind === "finalBoss" ? { at: e.at, kind: e.kind, enemyId: finalBoss, hp: e.hp } : e,
@@ -471,10 +474,10 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // that's into the square's edge
         const windup = state.windup;
         const square = sim.map.bossArena;
-        // Phosani's and Zachariah's fights (one-fight maps, not the quest's) are read as they
-        // always were: bullets before a lunge, no orbs of their own, and the near side of a strip
-        // whatever the square says (their squares are smaller than the floor they're fought on)
-        const older = sim.map.fight !== undefined && !sim.map.stages;
+        // Phosani's and Zachariah's fights are read as they always were: bullets before a lunge, no
+        // orbs of their own, and the near side of a strip whatever the square says (their squares
+        // are smaller than the floor they're fought on). Later fights get everything below.
+        const older = sim.map.id === "phosani" || sim.map.id === "zachariah";
         const room = older ? () => true : inSquare(sim);
         const across = (x: number, y: number, dirX: number, dirY: number, half: number) =>
             stripStep(sim, x, y, dirX, dirY, half, room);
@@ -775,6 +778,7 @@ function runOnce(characterId: string, seed: number) {
         expert,
         armoury,
         invocations,
+        pet,
         // A fight in parts (MapDef.stages): which, STAGE=0 for the first
         stage: parseInt(process.env.STAGE ?? "0"),
     });
@@ -1140,6 +1144,7 @@ function runParty(characterId: string, seed: number) {
             metaStats,
             unlockedItems,
             armoury,
+            pet,
         })),
     });
     const maxTicks = (endless ? 90 * 60 : runSeconds()) * TICKS_PER_SECOND;

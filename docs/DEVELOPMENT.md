@@ -1219,9 +1219,19 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
 ### Pets
 
 A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
-never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
+never sees where one is: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
 `GameClient.update`, and `GameView` only draws it (on the menus, `GameClient.submitActors` stands
-it beside the character). So a pet can't change a run, and co-op's copies agree without it.
+it beside the character). So a looks-only pet can't change a run, and co-op's copies agree without
+it.
+
+- **Fighting pets** (`PetDef.power`, Act II's Awakened fights' pets, Butch first) are the
+  exception. The pet's id goes in as `SimOptions.pet` (solo) or `HeroOptions.pet` (each co-op
+  player's, from their `Loadout.pet`, kept only if the game has that pet), and `Sim.stepPets`
+  plays its power on the sim's ticks for that hero: Butch's leap onto the nearest enemy within
+  `reach` every `every` seconds, a cleave where he lands scaled as power-ups' damage is
+  (`pet:butch` in `damageBySource`). It emits `petLeap`, and `PetFollowers.leap` flies the
+  follower there and walks it back. Not on a boss fight map (`MapDef.fight`). A run with a
+  looks-only pet or none plays as before (`Vardorvis.test.ts`). The bot takes one with `PET=butch`.
 
 - **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
   is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks

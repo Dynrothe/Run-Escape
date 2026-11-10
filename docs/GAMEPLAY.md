@@ -184,20 +184,21 @@ version and how to run it.
   on hover what to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there
   from the start.
 
-    | Map            | For beating it                                   | For its bosses                                                                                       |
-    | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
-    | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
-    | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
-    | Varlamore      | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
-    | Morytania      | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
-    | God Wars       | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
-    | Prifddinas     | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
-    | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
-    | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
-    | Phosani's      |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
-    | Stranglewood   | The Forester, the Executioner's axe head         |                                                                                                      |
+    | Map                | For beating it                                   | For its bosses                                                                                       |
+    | ------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+    | Desert             | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
+    | Fremennik          | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
+    | Karamja            | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
+    | Kourend            | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Varlamore          | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
+    | Morytania          | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
+    | God Wars           | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
+    | Prifddinas         | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
+    | Inferno            |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
+    | Hallowed Night     |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
+    | Phosani's          |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
+    | Stranglewood       | The Forester, the Executioner's axe head         |                                                                                                      |
+    | Awakened Vardorvis | Butch                                            |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -209,7 +210,7 @@ version and how to run it.
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
-  Sands), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+  Sands, Awakened Vardorvis), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -274,8 +275,11 @@ version and how to run it.
 - **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, Lil' Zik from
   Verzik with its looks from expert clears, and the Dark squirrel from Justiciar Zachariah) can be
   taken along, picked under the adventurers. It
-  follows just behind you, keeping clear of your thralls, on every map. It's only for looks, and
-  in co-op the party sees each other's.
+  follows just behind you, keeping clear of your thralls, on every map. Most are only for looks,
+  and in co-op the party sees each other's. **Butch**, from Awakened Vardorvis, fights: every 6
+  seconds, with an enemy within 5 tiles of you, he leaps on the nearest and hits everything round
+  where he lands (a tile and a half), about what a power-up does, growing as the enemies do. Not in
+  boss fights, where your kit is the whole run.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
@@ -364,11 +368,17 @@ version and how to run it.
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
       can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark squirrel, a
       pet, 1 time in 10, and every time on hard mode.
+    - **Awakened Vardorvis** (a boss fight, open once the Stranglewood's beaten: Act II's first
+      Awakened fight): nothing but him, in his clearing in the Stranglewood, the fight kept to the
+      square round his ring of pillars. No waves, no picks, no items: you play the Forester with
+      his 2h sword at its top level and **Chop**. He rises in the clearing's middle with you south
+      of him, to Blood Rush. It can't be endless; it has a hard mode once it's beaten. Beating him
+      finds **Butch**, his pet, every time.
 - **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
   Inferno. Its four maps (the Stranglewood now; the Lassar Undercity, Ghorrock and the Scar shown as
   coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
-  a step harder for every other Act II map you've beaten: step 0 is a little past the Inferno
-  (enemies 3.9 times the hitpoints, 2.8 times the damage), up to step 3 (4.35 and 3.1), and each
+  a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno
+  (enemies 4.2 times the hitpoints, 2.9 times the damage), up to step 3 (4.65 and 3.2), and each
   step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
   step it was won at, and an easier one shows its step until it's beaten at a harder one.
 - **Roots** (the Stranglewood's rule): from 0:30, roots creep in from the wood, a few fronts at a
@@ -623,6 +633,23 @@ version and how to run it.
       guard's down; a press a moment early is held till it can go off. His lightning hurts only within the
       swirl on each cell, and never him, and the knights' swords fly right across the court. A boss fight has no
       items, so no item bar, and its results have Retry.
+    - **Awakened Vardorvis**: the man of the Stranglewood, awakened, quick and close. Three
+      phases on his hitpoints, each a bar of its own (kneeling a moment at 70% and 35%). His
+      **Strike** is a wedge in front of him; his **Dart**, a strip two wide and eight long that
+      carries him down it and roots the ground he crosses, with a ring of **bleeding vines**
+      bursting round where you stood; his **Swinging axes** come in from two of the square's
+      corners at where you stood, across and back. From the second phase his **Strangle**, a
+      tendril along the ground that drags whoever it catches to his feet and holds them for two
+      blows, and **the roots rise**: the roots round you erupt. At 35% his head tears free and
+      shoots from the clearing's edge (it can be cut down), and he darts twice in a row. A dart or a
+      strangle that misses leaves his guard down for two seconds (double damage); a dart into one
+      of his pillars sticks him there, stunned (not again for 8 s). The **roots** close in from the
+      square's edge from the start, quicker over three minutes, and from 0:40 a **blood captor**
+      comes up at their front every 30 seconds (two at most) and heals him while it stands.
+      **Chop**, the fight's button (Space, a controller's A, or the round button on a touch screen),
+      brings the sword down overhead: a heavy blow on him from within 3 tiles (4 with his guard
+      down, and doubled), the same on a captor or his head in reach, and it clears the roots
+      within 3 tiles of you whether he's there or not, every four seconds.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

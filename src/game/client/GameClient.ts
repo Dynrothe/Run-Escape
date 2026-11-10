@@ -368,6 +368,7 @@ export function cleanLoadout(loadout: Loadout | undefined): {
     unlockedItems: Set<string>;
     trophiesFound: Set<string>;
     armoury: Record<string, number>;
+    pet?: string;
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
     const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
@@ -381,6 +382,8 @@ export function cleanLoadout(loadout: Loadout | undefined): {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
         trophiesFound: new Set(getEveryTimeTrophiesFound(trophies.slice(0, 100))),
         armoury,
+        // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
+        ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
     };
 }
 
@@ -1634,6 +1637,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
             trophiesFound: new Set(getEveryTimeTrophiesFound(this.save.trophies)),
+            pet: this.save.pet,
             endless,
             hard,
             expert,

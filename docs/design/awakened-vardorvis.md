@@ -3,10 +3,10 @@
 The design of Act II's first Awakened fight, written 2026-11-06 on the `act-2` branch (pull
 request #159), build-order step 3 of `act-2-fallen-empire.md`. It's in the shape of
 `justiciar-zachariah.md`, and keeps what Dynny said works there (its section 1). The data in
-`src/game/content/vardorvis.ts` is the truth if these drift; the arena is
-`src/game/scaperune/maps/vardorvisArena.ts`. Every id was looked up in the cache
-(`osrs-241_2026-09-30`) with `scripts/cache/`. The numbers are a first pass from arithmetic and
-the bot (section 10), not a playtest.
+`src/game/content/vardorvis.ts` is the truth if these drift; the arena is the Stranglewood's own
+(`src/game/scaperune/maps/stranglewood.ts`). Every id was looked up in the cache with
+`scripts/cache/`. The numbers are a first pass from arithmetic and the bot (section 10), not a
+playtest.
 
 ## 1. What the fight is
 
@@ -53,18 +53,20 @@ worked:
 
 ## 2. The arena
 
-His real room, cut from the cache with the wood round it: map square 17,53 (world 1088,3392 to
-1151,3455) with a square of the real Stranglewood each side for its margin, as a ScapeRune recipe
-(`vardorvis`, at squares 99 to 101 by 66 to 68, clear of every other recipe). The room is the
-clearing inside his fence (loc 85, world 1118,3406 to 1140,3430): about 21 by 23 tiles of pale
-floor, bones and blood, with the low stone border drawn round it (floor decorations 48470 to 48494)
-and his ring of pillars (48434, 48438) inside it. The fence is what keeps the fight in, and the
-low border is where it's drawn, so the edge is where you see it. Past it is the real wood,
-thinned for phones as the Stranglewood's is, all of it blocked (nothing can be walked to from the
-start). He rises where he stands in OSRS (1128,3417), and the player starts six tiles south.
+**His clearing in the Stranglewood**, the map's own recipe, not a cut of its own. The fight is kept
+to the 20 by 20 square round his spot (`MapDef.bossArena`, confined while his phases are up), the
+square the Stranglewood's own Vardorvis fights in. Inside it stand his ring of eight pillars (locs
+48419-48428, at 4 to 6 tiles from his spot, kept by the recipe's thinning), which stop his dart;
+the square's four corners are where his axes come from. He rises on his spot, as in OSRS, and the
+player starts six tiles south, as the map starts them.
 
-The map exports what the fight reads (`VARDORVIS_ARENA`), turned into the map's `features` in
-world tiles: the pillars (which stop his dash) and the four corners his axes are swung from.
+The roots are the Stranglewood's, kept to a circle inside the square (`RootsRuleDef.ring`): past
+it is the wood, and they creep in from its edge. Its view is the clearing's, measured with the map
+(54k world, 7k roots all rooted, on a phone), so it costs nothing new to draw.
+
+The draft planned its own recipe (map square 17,53 with the fence kept); reusing the map was
+quicker to build and measure, and loads what the player's already loaded for the map. The cost is
+that the square's edge isn't a fence you can see: the roots creeping in from it are the edge.
 
 ## 3. The fight
 
@@ -78,24 +80,24 @@ and rises into the next.
 | 2     | 70-35%    | The wood wakes | Strangle, the roots rise on their own, blood captors come up at the root front |
 | 3     | 35-0%     | Severed        | His head tears free and gazes; double darts; everything quicker                |
 
-He starts an attack every 1.5 s, times the phase's tempo (1, 0.9, 0.8), and walks after the
-player at 3 tiles a second (the Forester's is 3.3), quicker by the phase.
+He has 4,400 hitpoints. He starts an attack every 1.4 s, times the phase's tempo (1, 0.9, 0.8),
+and walks after the player at 3 tiles a second (the Forester's is 3.3), quicker by the phase.
 
 ### His attacks, and the dodge arithmetic
 
 The Forester has 25 hitpoints, moves 3.33 tiles a second and is 0.35 across. A big hit takes about
 a third.
 
-| Attack                                                                                       | Damage                                             | Warning                    | To be clear                                  | Takes |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------- | -------------------------------------------- | ----- |
-| Strike: a wedge 3 tiles out in front, and under him                                          | 5                                                  | 0.7 s                      | out of the wedge, a step back or to the side | 0.3 s |
-| Dart: a strip 2 wide and 8 long; he dashes down it                                           | 7                                                  | 0.9 s (0.65 the second)    | 1.35 tiles sideways                          | 0.4 s |
-| Bleeding vines: a ring of six bursts round where you stood, 0.2 s after a dart               | 3                                                  | 1.1 s                      | out of the ring, or stay between its bursts  | 0.4 s |
-| Swinging axes: two axes from two of the arena's corners, at where you stood, across and back | 4 each way                                         | 1.1 s (he raises his arms) | 1.35 tiles off each line                     | 0.4 s |
-| Strangle: a tendril whipped along the ground at you, 7 tiles a second                        | 2, then bound 1.5 s and struck twice (3 each)      | 1 s, then its flight       | 0.95 tiles sideways                          | 0.3 s |
-| The roots rise: tendrils burst from up to 8 rooted cells within 8 tiles of you               | 4                                                  | 1.3 s (the roots stir)     | off the cell                                 | 0.3 s |
-| His head's gaze: a shot every 2.5 s                                                          | 3                                                  | its flight                 | a step                                       |       |
-| Roots underfoot                                                                              | 1% every 0.5 s after 0.5 s on them, and 25% slower | the sprouting, 1.5 s       | off them, or cut them                        |       |
+| Attack                                                                                   | Damage                                             | Warning                    | To be clear                                 | Takes |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------- | ------------------------------------------- | ----- |
+| Strike: a wedge 2.5 tiles out in front (short of the sword's 2.75), and under him        | 4                                                  | 0.75 s                     | at its tip, or to his side                  | 0.3 s |
+| Dart: a strip 2 wide and 8 long; he dashes down it                                       | 6                                                  | 0.9 s (0.65 the second)    | 1.35 tiles sideways                         | 0.4 s |
+| Bleeding vines: a ring of six bursts round where you stood, 0.2 s after a dart           | 2                                                  | 1.1 s                      | out of the ring, or stay between its bursts | 0.4 s |
+| Swinging axes: an axe from a corner (both, severed), at where you stood, across and back | 3 each way                                         | 1.1 s (he raises his arms) | 1.35 tiles off each line                    | 0.4 s |
+| Strangle: a tendril whipped along the ground at you, 7 tiles a second                    | 2, then bound 1.5 s and struck twice (3 each)      | 1 s, then its flight       | 0.95 tiles sideways                         | 0.3 s |
+| The roots rise: tendrils burst from up to 8 rooted cells within 8 tiles of you           | 4                                                  | 1.3 s (the roots stir)     | off the cell                                | 0.3 s |
+| His head's gaze: a shot every 3.5 s                                                      | 2                                                  | its flight                 | a step                                      |       |
+| Roots underfoot                                                                          | 1% every 0.5 s after 0.5 s on them, and 25% slower | the sprouting, 1.5 s       | off them, or cut them                       |       |
 
 **Dart** is the lunge of Zachariah's fight with the Stranglewood in it: he dashes down the strip,
 his axes sweeping, to its end (stopping at whoever it hits), and the ground he crossed takes root
@@ -109,14 +111,15 @@ OSRS, where they swing in from its edges. They fly right across to the far side 
 stood. Caught, you're dragged to his feet and held, and he strikes twice. Dodged, his guard drops.
 
 **The roots** are the Stranglewood's rule (`RootsRuleDef`), on his arena: they creep in from the
-wood round it from 5 s, quicker as the fight goes on, two fronts at first and four by three
-minutes. The ring they make is what closes the arena in, phase by phase. Root hearts are the
-fight's **blood captors**: a Large Tendril (12225) comes up at the root front every 30 s from
-the second phase on (at most two), and while it stands it heals him 1% of his hitpoints every
-1.5 s and its roots creep twice as fast. Killed, it clears 5 tiles round it.
+clearing's edge from 5 s, quicker as the fight goes on (a spread every 3 s, every 1.8 s by three
+minutes), two fronts at first and three by then. The ring they make is what closes the arena in,
+phase by phase. Root hearts are the fight's **blood captors**: a Large Tendril (12225, 120
+hitpoints) comes up at the root front every 30 s from 0:40 (at most two), and while it stands it
+heals him half a percent of his hitpoints every 2 s (no higher than the top of the phase he's in)
+and its roots creep twice as fast. Killed, it clears 5 tiles round it.
 
 **His head** (12226) tears free at 35%, as in OSRS, and floats at the arena's edge gazing at you:
-a shot every 2.5 s. It can be cut down (it has its own small bar), or lived with.
+a shot every 3.5 s. It can be cut down (300 hitpoints, its own small bar), or lived with.
 
 ## 4. Fighting back
 
@@ -153,19 +156,30 @@ first fighting pet (`act-2-fallen-empire.md` 8.4). The pet slot is the one there
 taken into any run, chosen on the adventurer screen's Pet row (`SaveData.pet`).
 
 - **What he does**: every 6 s, if an enemy is within 5 tiles of you, he leaps at the nearest and
-  cleaves round where he lands (1.5 tiles), for 30. About a Common weapon's worth: his damage
+  cleaves round where he lands (1.5 tiles), for 20. About a Common weapon's worth: his damage
   scales as power-ups' do, with the enemies' hitpoints over the run, the map's difficulty and hard
   mode, so he's as much use at 14:00 as at 1:00, and never more.
 - **Can't be hurt or targeted**: nothing in the sim knows he's there but his own leap. Enemies
   don't look at him, and he walks where the player's pets always have (on screen only).
 - **In the sim** like a thrall: the leap and its damage are the sim's, on its ticks, with its
   hero's index, deterministic and the same on every co-op player's copy (each player's pet is in
-  their loadout, as now). Where he's drawn between leaps is the client's, as every pet's is.
+  their loadout, as now). Where he's drawn between leaps is the client's, as every pet's is: the
+  sim's `petLeap` flies him straight to where he landed in four ticks (no arc), he stands there a
+  moment and walks back.
 - **Not in boss fights**: the kit is the whole run there, so on a fight map he's along for the
   look only, as he is before he's found.
 - A run with a looks-only pet, or none, plays exactly as before (`runHash.test.ts`'s pins).
 - **The drop**: he's his fight's trophy (`trophies.ts`), certain on every win, so the first win
   always gives him (Dynny: "Yes, as long as the fight is hard"). Dying rolls nothing.
+
+### Butch by the bot
+
+The Stranglewood at step 0, the same 8 adventurers and 3 seeds as Act II's retune (`META=max
+ARMOURY=max`), with `PET=butch`: without him 1 win in 24, median end 6:31, 14 dead before 10:00;
+with him at 30 a leap, 1 win, median 10:26, 8 dead before 10:00; at 20 (as built), 2 wins, median
+10:25, 8 before 10:00. Most runs without him end at Kasonde (5:00), and a little more damage
+round you carries the bot past him, so the median moves a lot either way. Whether he's still
+small is a playtest call; his damage is the knob.
 
 ## 6. Hard mode
 
@@ -193,9 +207,9 @@ tendril bursts of his own (2512, 2514), the Corporeal Beast's stomp ring (318).
 
 ## 8. Phones
 
-The room's view is the clearing's, which the Stranglewood measured (54k world, 7k roots, all
-rooted), with the margin's wood thinned as there. Measured with `frameProbe.sample` at 844 by
-390 in section 10.
+The fight's view is the clearing's, which the Stranglewood measured on a phone (54k world, 7k
+roots all rooted, 844 by 390): the same map, the same view, so it wasn't measured again. A boss,
+a head and two captors are lighter than the map's crowd.
 
 ## 9. Decisions
 
@@ -207,13 +221,45 @@ rooted), with the margin's wood thinned as there. Measured with `frameProbe.samp
   fastest), which closes the ring as the phases go by without a rule that reads the boss.
 - **Captors are the rule's root hearts**, healing him: one mechanic, already drawn and taught on
   the map.
+- **His clearing, not a cut of its own** (section 2): the Stranglewood's map and square, the roots
+  kept to a ring in it (`RootsRuleDef.ring`). A default to confirm.
+- **Captors from 0:40, by the clock**, not from the second phase: the rule's hearts come by time.
+  Phase 1 takes the bot about 30 s, so they come in the second phase anyway.
+- **Chop goes off with him out of reach** (`FightAbilityDef.cut`): it clears the roots round you and
+  hits a captor or his head in reach, so it's worth pressing to cut your way out.
 - **Not in the fight**: the Strangled (no waves), Kasonde and the bear (the map's), the prayer
   switching of the real head (there are no prayers).
 
 ## 10. Numbers from the bot
 
-To be filled in from `FLAT=1 MAP=vardorvis DODGE=1 bun run tsx scripts/game/simulate-run.ts forester 3`.
+`MAP=awakened_vardorvis DODGE=1 bun run tsx scripts/game/simulate-run.ts forester 6`, with
+`HARD=1` for hard mode, on the Stranglewood's real collision. The careful bot stays by him, steps
+out of his strikes, strips and rings (the reads the quest's fights get: Phosani's and Zachariah's
+keep their old ones), Chops while his guard's down, on roots, or with a captor or his head in
+reach, and never goes after his head. Seeds 1 to 6, 2026-11-10:
+
+| Round | What changed                                          | Normal                              | Hard           |
+| ----- | ----------------------------------------------------- | ----------------------------------- | -------------- |
+| 1     | The draft's numbers (5,600 hp)                        | died 0:18-0:32, phase 1, all Strike | died 0:10-0:19 |
+| 2     | The newer bot reads for this fight                    | died 0:28-2:23, phase 1-2           |                |
+| 3     | Strike short of the sword (2.5 tiles, 4)              | died 1:04-2:10, phase 2, axes       | died 0:34-1:29 |
+| 5     | 4,800 hp, one axe till severed, softer axes and vines | died 1:48-2:45, 2 of 6 to phase 3   | died 1:22-2:05 |
+| 6     | Captors heal half as much, twice as slow              | died 1:34-1:49, all to phase 3      | phase 2        |
+| 7     | Roots slower (3 s to 1.8 s), his head softer          | died 1:18-2:21                      | died 1:06-1:56 |
+| 9     | 4,400 hp, his dart 6                                  | died 1:19-2:18, all to phase 3      | died 0:58-1:25 |
+
+**The bar is met: no bot win in 6 on normal, none on hard** (at most 1 in 3 on normal, none on
+hard). Phase 1 takes 25 to 36 s, phase 2 37 to 56 s, and the bot dies in phase 3, 8 to 46 s in,
+mostly to his head's shots and the double darts: it never cuts the head down, which a player
+would. So by the bot it's above Zachariah (his careful bot won 1 in 3); whether a person can win
+it is the playtest's question, and the first knobs are his hitpoints and his head.
 
 ## 11. Not verified
 
 - How it feels to a person: the bot is a density meter, not a player.
+- How any of it looks: nothing of the fight was drawn in a browser here (his rising, the axes from
+  the corners, the captors, Chop, Butch's leap). The models and animations are the Stranglewood's
+  Vardorvis's (Awakened Vardorvis is npc 12223 on the same skeleton).
+- Chop's player animation (7644, a godsword's special brought down) and sound (2500) on the 2h
+  sword; his axes' seq (10346) is also his death's, as the Stranglewood's Vardorvis has it.
+- Co-op: the fight runs as any fight map does, untried with a party.

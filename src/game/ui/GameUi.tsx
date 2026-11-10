@@ -1440,7 +1440,8 @@ export function AdventurerPanel({
     );
 }
 
-// The pet to take along, from those found (looks only): none until one's been found
+// The pet to take along, from those found: none until one's been found. Most are looks only; a
+// fighting one (PetDef.power) says what it does
 function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
     const found = getFoundPets(ui.save.trophies);
     if (found.length === 0) {
@@ -1453,6 +1454,7 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
               getPetTrophy(PET_BY_ID.get(chosen)!).name,
           )
         : t("ui.common.none");
+    const power = chosen ? PET_BY_ID.get(chosen)?.power : undefined;
     return (
         <div className="ui-pet-row">
             <span className="ui-pet-label">
@@ -1488,6 +1490,11 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     );
                 })}
             </div>
+            {power && (
+                <span className="ui-pet-power">
+                    {t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
+                </span>
+            )}
         </div>
     );
 }

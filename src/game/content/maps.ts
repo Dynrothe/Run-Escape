@@ -14,6 +14,16 @@ import { RANDOM_EVENTS } from "./randomEvents";
 import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
 import { CinematicDef, EnemyDef, MapDef } from "./types";
 import {
+    AWAKENED_VARDORVIS_ID,
+    VARDORVIS_BOSS_ARENA,
+    VARDORVIS_CHOP,
+    VARDORVIS_FEATURES,
+    VARDORVIS_HITPOINTS,
+    VARDORVIS_ROOTS,
+    VARDORVIS_START_DISTANCE,
+    VARDORVIS_SWORD_LEVEL,
+} from "./vardorvis";
+import {
     BARROWS_EVENTS,
     BARROWS_WAVES,
     DESERT_EVENTS,
@@ -456,6 +466,49 @@ export const MAPS: MapDef[] = [
             ability: ZACHARIAH_SMITE,
         },
         music: "Blade of Forgotten Justice",
+    },
+    {
+        id: "awakened_vardorvis",
+        name: "Awakened Vardorvis",
+        description:
+            "Vardorvis, awakened, in his clearing in the Stranglewood. No waves, no picks and no " +
+            "items: the Forester, his 2h sword and Chop. The roots close in from the wood, his " +
+            "dart roots the ground it crosses and his captors heal him: cut them back, and make " +
+            "his dart miss.",
+        // Butch, his pet
+        iconObjId: 28248,
+        arena: getRecipeArena(STRANGLEWOOD_RECIPE),
+        // South of his spot, as the Stranglewood starts you
+        spawn: {
+            x: STRANGLEWOOD_CLEARING.x,
+            y: STRANGLEWOOD_CLEARING.y - VARDORVIS_START_DISTANCE,
+        },
+        // His hitpoints come from the event, his hits are tuned to the Forester's hitpoints
+        difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [
+            {
+                at: 0,
+                kind: "finalBoss",
+                enemyId: AWAKENED_VARDORVIS_ID,
+                hp: VARDORVIS_HITPOINTS,
+            },
+        ],
+        finalBossWarning: "",
+        victoryText: "Awakened Vardorvis falls, and the Stranglewood is still.",
+        bossArena: VARDORVIS_BOSS_ARENA,
+        features: VARDORVIS_FEATURES,
+        scaperune: true,
+        rule: VARDORVIS_ROOTS,
+        // Opened by beating his map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "stranglewood",
+            character: "forester",
+            weaponLevel: VARDORVIS_SWORD_LEVEL,
+            ability: VARDORVIS_CHOP,
+        },
+        music: "Blood Rush",
     },
     // A quest in four parts after the desert, which opens the Tombs of Amascut
     BENEATH_CURSED_SANDS,
