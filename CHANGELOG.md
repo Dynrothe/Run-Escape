@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Item descriptions, by Jp66600: a potion lists its stats a line each, with their icons, and how
+  long they last, and the bag's descriptions say an item's rarity and kind, as a casket does. The
+  icons in item descriptions show in every language, not only English.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added

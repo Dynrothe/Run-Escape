@@ -10,7 +10,10 @@ import {
     HudNumbers,
     HudView,
 } from "../client/GameStore";
+import { getItemView } from "../client/ItemViews";
+import { getItem } from "../content/items";
 import { createSave } from "../core/save";
+import { setLang, tp } from "../i18n";
 import { ChestModal } from "./ChestModal";
 import { ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
@@ -212,6 +215,48 @@ describe("stat icons on the screens that show stats", () => {
             expect(changes[1].closest(".ui-bad")).not.toBeNull();
             expect(changes[1].querySelector(".ui-icon")).not.toBeNull();
         } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    test("a casket's potion shows its stats with their icons in any language, and how long they last", () => {
+        vi.useFakeTimers();
+        try {
+            setLang("pt-BR");
+            const store = new GameStore(createSave());
+            const client = createMockClient(store, { playChestSound: vi.fn() });
+            const item = getItemView(getItem("battlemage_potion"));
+            const chest: ChestView = {
+                uid: 1,
+                tierColor: "#ffd700",
+                rarity: "rare",
+                casketObjId: 2724,
+                casketName: "Hard casket",
+                coins: 100,
+                alchCoins: 50,
+                isGear: false,
+                item,
+                changes: [],
+                carried: 0,
+                canStash: true,
+                instant: false,
+                recommended: "take",
+                queued: 0,
+            };
+            const view = render(
+                <ChestModal chest={chest} rerolls={0} banishes={0} client={client} />,
+            );
+            act(() => {
+                vi.advanceTimersByTime(2500);
+            });
+            const lines = [...view.container.querySelectorAll(".ui-chest-lines .ui-stat-line")];
+            expect(lines.map((line) => line.textContent)).toEqual([
+                ...item.lines,
+                tp("canvas.lasts", 30),
+            ]);
+            expect(lines.filter((line) => !line.querySelector(".ui-icon"))).toEqual([]);
+        } finally {
+            setLang("en");
             vi.useRealTimers();
         }
     });

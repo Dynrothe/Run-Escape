@@ -11,7 +11,6 @@ import {
 } from "../content/items";
 import { RARITIES, RARITY_ORDER, Rarity, rollRarityFrom } from "../content/rarity";
 import { SETS, countSetPieces, getItemSet, getSetPieces } from "../content/sets";
-import { formatStats } from "../content/stats";
 import { CasketTier, GearSlot, ItemDef, SetDef, StatKey } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { Rng } from "./Rng";
@@ -378,11 +377,6 @@ export function getAlchValue(item: ItemDef, greed: number, upgrades = 0): number
             (1 + upgrades * GEAR_UPGRADE) *
             (1 + greed),
     );
-}
-
-// What an item does, a line per stat or effect
-export function describeItem(item: ItemDef, upgrades = 0): string[] {
-    return item.kind === "gear" ? formatStats(getGearStats(item, upgrades)) : [item.description];
 }
 
 // The slot a utility item would go in: its own stack, else the first empty one

@@ -15,10 +15,10 @@ import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
-import { diffStats } from "../content/stats";
+import { diffStats, formatStatLines } from "../content/stats";
 import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
-import { describeItem, shouldWear } from "../core/Loot";
+import { shouldWear } from "../core/Loot";
 import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { t, tl, tr } from "../i18n";
 import {
@@ -37,6 +37,12 @@ import {
 export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): ItemView {
     const rarity = RARITIES[item.rarity];
     const set = getItemSet(item);
+    // A potion that lasts a while is its stats, a line each, as gear is, rather than its sentence
+    const buff = item.kind === "utility" && item.use.kind === "buff" ? item.use : undefined;
+    const stats =
+        item.kind === "gear"
+            ? formatStatLines(getGearStats(item, upgrades))
+            : buff && formatStatLines(buff.stats);
     return {
         id: item.id,
         name: upgradedName(tl(item.name), upgrades),
@@ -46,7 +52,11 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
             item.kind === "gear"
                 ? t("canvas.gear_slot", { slot: tl(GEAR_SLOT_BY_ID.get(item.slot)!.name) })
                 : t("canvas.utility"),
-        lines: item.kind === "gear" ? describeItem(item, upgrades) : [utilityDescription(item)],
+        lines:
+            stats?.map((line) => line.text) ??
+            (item.kind === "utility" ? [utilityDescription(item)] : []),
+        ...(stats && { lineStats: stats.map((line) => line.key) }),
+        ...(buff && { seconds: buff.seconds }),
         ...(set && {
             set: {
                 text: describeSetProgress(set, setWorn),

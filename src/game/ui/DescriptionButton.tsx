@@ -13,6 +13,8 @@ import { createPortal } from "react-dom";
 
 import { ItemView } from "../client/GameStore";
 import { TAP_SLOP } from "../client/GameTouch";
+import { DURATION_ICON } from "../content/statIcons";
+import { t, tl, tp } from "../i18n";
 import { StatLine } from "./StatLine";
 
 const LONG_PRESS_MS = 500;
@@ -324,22 +326,28 @@ function screenRect(element: HTMLElement): DOMRect {
 }
 
 // An item's name in its rarity's colour, what it does, and its set: the bag,
-// worn gear and the Armoury. children add lines after.
+// worn gear and the Armoury. kind: its rarity and kind under the name, as a casket
+// shows them (the bag's). children add lines after.
 export function ItemDescription({
     item,
+    kind = false,
     setClassName,
     children,
 }: {
     item: ItemView;
+    kind?: boolean;
     setClassName?: string;
     children?: ReactNode;
 }): JSX.Element {
     return (
         <>
             <span style={{ color: item.rarity.color }}>{item.name}</span>
-            {item.lines.map((line) => (
-                <StatLine key={line} text={line} />
-            ))}
+            {kind && (
+                <span className="ui-description-kind">
+                    {t("chest.kind", { rarity: tl(item.rarity.name), kind: item.kindLabel })}
+                </span>
+            )}
+            <ItemLines item={item} />
             {item.set && (
                 <StatLine
                     text={item.set.text}
@@ -347,6 +355,35 @@ export function ItemDescription({
                 />
             )}
             {children}
+        </>
+    );
+}
+
+// What an item does, a line for each stat or effect with its icon, then how long a potion's
+// stats last: a tooltip's and a casket's
+export function ItemLines({
+    item,
+    wrap = (line) => line,
+}: {
+    item: ItemView;
+    // Each line in something of its own (a casket's list)
+    wrap?: (line: JSX.Element, key: number) => JSX.Element;
+}): JSX.Element {
+    return (
+        <>
+            {item.lines.map((line, i) =>
+                wrap(<StatLine key={i} text={line} statKey={item.lineStats?.[i]} />, i),
+            )}
+            {item.seconds !== undefined &&
+                wrap(
+                    <StatLine
+                        key="lasts"
+                        text={tp("canvas.lasts", item.seconds)}
+                        icon={DURATION_ICON}
+                        className="ui-item-lasts"
+                    />,
+                    item.lines.length,
+                )}
         </>
     );
 }

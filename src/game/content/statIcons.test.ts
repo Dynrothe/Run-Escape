@@ -1,4 +1,3 @@
-import { describeItem } from "../core/Loot";
 import { ITEMS } from "./items";
 import { PASSIVES, formatPassiveValue } from "./passives";
 import { RAID_SUPPLIES } from "./raids";
@@ -48,11 +47,12 @@ describe("stat icons", () => {
         expectOneIcon("bonus", statIconFor(`${formatWeaponBonus(0.15)} damage`));
     });
 
-    // Descriptions are written by hand: one that leads with a stat's number gets its icon
+    // Descriptions are written by hand: one that leads with a stat's number gets its icon. Gear's
+    // lines are its stats, which the first test covers.
     test("item and raid supply descriptions that lead with a stat resolve", () => {
         const lines: [string, string][] = [
-            ...ITEMS.flatMap((item) =>
-                describeItem(item).map((line): [string, string] => [item.id, line]),
+            ...ITEMS.flatMap((item): [string, string][] =>
+                item.kind === "utility" ? [[item.id, item.description]] : [],
             ),
             ...RAID_SUPPLIES.map((supply): [string, string] => [supply.id, supply.description]),
         ];

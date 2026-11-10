@@ -1,5 +1,5 @@
 import { Rarity } from "../content/rarity";
-import { GearSlot } from "../content/types";
+import { GearSlot, StatKey } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult, ScabarasPuzzleState } from "../core/Sim";
@@ -49,6 +49,11 @@ export type ItemView = {
     kindLabel: string;
     // What it does, a line per stat or effect
     lines: string[];
+    // The stat each line is about, where it's one: its icon, which going by the text would only
+    // find in English
+    lineStats?: StatKey[];
+    // A potion's stats last this long
+    seconds?: number;
     // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
     // whether its bonus is on
     set?: { text: string; active: boolean };

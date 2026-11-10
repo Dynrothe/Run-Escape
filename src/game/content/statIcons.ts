@@ -27,6 +27,9 @@ const JAVELIN = obj(830); // Rune javelin
 const SCIMITAR = obj(1333); // Rune scimitar
 const VENOM = obj(12934); // Zulrah's scales
 
+// How long a potion lasts: a pocket watch, as the hourglass is effect duration's
+export const DURATION_ICON: StatIconRef = obj(2575); // Watch
+
 // Labels as the player reads them (lower case, without the number or sign in front),
 // from STAT_INFO, weaponStats and the passives' effects
 const ICONS: Record<string, StatIconRef> = {
@@ -119,7 +122,9 @@ export function statIconFor(text: string): StatIconRef | undefined {
 // sprites, which it keeps only if the game's lists name them
 export const STAT_ICON_OBJ_IDS: number[] = [
     ...new Set(
-        Object.values(ICONS).flatMap((icon) => (icon.objId !== undefined ? [icon.objId] : [])),
+        [...Object.values(ICONS), DURATION_ICON].flatMap((icon) =>
+            icon.objId !== undefined ? [icon.objId] : [],
+        ),
     ),
 ];
 export const STAT_ICON_SPRITE_IDS: number[] = [

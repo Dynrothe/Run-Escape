@@ -19,10 +19,10 @@ import {
 import { MAPS, getMap, hasPoison } from "../content/maps";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { SETS, getSetPieces } from "../content/sets";
+import { formatStats } from "../content/stats";
 import { CasketTier, GearSlot } from "../content/types";
 import {
     SET_PIECE_CHANCE,
-    describeItem,
     findInventorySlot,
     getAlchValue,
     getStartedSet,
@@ -297,7 +297,7 @@ describe("upgraded gear", () => {
         expect(upgraded.speed).toBeCloseTo(helmet.stats.speed! * 2);
         // Movement speed is capped
         expect(upgraded.moveSpeed).toBe(helmet.stats.moveSpeed);
-        expect(describeItem(helmet, 2)).toContain("+10% damage");
+        expect(formatStats(upgraded)).toContain("+10% damage");
         expect(getAlchValue(helmet, 0, 2)).toBe(getAlchValue(helmet, 0) * 2);
     });
 

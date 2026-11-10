@@ -70,11 +70,16 @@ export function formatStat(key: StatKey, value: number): string {
 }
 
 export function formatStats(stats: Partial<Stats>): string[] {
-    const lines: string[] = [];
+    return formatStatLines(stats).map((line) => line.text);
+}
+
+// The same lines with the stat each is about, so a menu can give it its icon in any language
+export function formatStatLines(stats: Partial<Stats>): { key: StatKey; text: string }[] {
+    const lines: { key: StatKey; text: string }[] = [];
     for (const key of STAT_ORDER) {
         const value = stats[key];
         if (value) {
-            lines.push(formatStat(key, value));
+            lines.push({ key, text: formatStat(key, value) });
         }
     }
     return lines;

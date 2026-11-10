@@ -3254,7 +3254,11 @@ function PauseModal({
                                                         </span>
                                                         <span className="ui-pause-detail">
                                                             {item.lines.map((line, i) => (
-                                                                <StatLine key={i} text={line} />
+                                                                <StatLine
+                                                                    key={i}
+                                                                    text={line}
+                                                                    statKey={item.lineStats?.[i]}
+                                                                />
                                                             ))}
                                                             {item.set && (
                                                                 <span
