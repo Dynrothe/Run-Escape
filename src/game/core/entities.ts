@@ -151,6 +151,8 @@ export type BossState = {
     leap?: { toX: number; toY: number; switchTick: number; endTick: number };
     // It stands still until this tick, as its volleys go out
     channelEnd: number;
+    // Its rings that hold (BulletPatternDef.hold) are in by this tick, and no new one starts sooner
+    ringsUntil?: number;
     // BossDef.naps: down until this tick (-1 when it's up), and when it next goes down
     napEnd?: number;
     nextNap?: number;

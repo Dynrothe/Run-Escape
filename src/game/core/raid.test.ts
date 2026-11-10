@@ -4,7 +4,7 @@ import { getEnemy } from "../content/enemies";
 import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
-import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
+import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED, RING_REST } from "../content/theatre";
 import {
     TROPHIES,
     TROPHY_BY_ID,
@@ -638,6 +638,64 @@ describe("the Theatre's bullet shapes", () => {
         expect(at()).not.toEqual(formed);
     });
 
+    it("an enraged Maiden's rings come one at a time, each in and rested before the next", () => {
+        const sim = raid();
+        sim.player.invulnerable = 1e9;
+        const def = getEnemy("maiden_of_sugadinti");
+        const maiden = sim.spawnEnemy(def, "boss", { x: 1018.5, y: 1040.5 })!;
+        maiden.bossState!.enraged = true;
+        const rings: { tick: number; interval: number }[] = [];
+        const fire = sim["fireVolley"].bind(sim);
+        sim["fireVolley"] = (...args: Parameters<typeof fire>) => {
+            const pattern = args[0].attack.pattern!;
+            if (pattern.shape === "closing") {
+                rings.push({ tick: sim.tick, interval: pattern.interval });
+            }
+            fire(...args);
+        };
+        for (let i = 0; i < 90 * TICKS_PER_SECOND; i++) {
+            sim.player.x = sim.player.prevX = 1018.5;
+            sim.player.y = sim.player.prevY = 1030.5;
+            maiden.hp = maiden.maxHp;
+            sim.step();
+        }
+        expect(rings.length).toBeGreaterThan(4);
+        for (let i = 1; i < rings.length; i++) {
+            const gap = rings[i].tick - rings[i - 1].tick;
+            // A tick's rounding
+            expect(gap).toBeGreaterThanOrEqual(
+                Math.round(rings[i - 1].interval * TICKS_PER_SECOND) - 1,
+            );
+        }
+    });
+
+    it("every closing ring has closed in and rested before its next volley", () => {
+        const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
+        let checked = 0;
+        for (const id of TEST_BOSS_IDS) {
+            for (const attack of getEnemy(id).boss!.attacks) {
+                const pattern = attack.pattern;
+                if (pattern?.shape !== "closing") {
+                    continue;
+                }
+                const { bullets } = volley(attack.name, id);
+                let ticks = 0;
+                while (bullets.count > 0) {
+                    bullets.step(targets);
+                    ticks++;
+                }
+                const rest = Math.round(RING_REST * TICKS_PER_SECOND);
+                const name = `${id}: ${attack.name}`;
+                // The next volley, a tick's rounding either way
+                expect(ticks + rest, name).toBeLessThanOrEqual(
+                    Math.round(pattern.interval * TICKS_PER_SECOND) + 1,
+                );
+                checked++;
+            }
+        }
+        expect(checked).toBeGreaterThanOrEqual(5);
+    });
+
     it("a closing ring hurts whoever walks into it while it stands", () => {
         const { attack, shot, bullets, sim, boss } = volley("Blood tide", "maiden_of_sugadinti");
         // The source a real attack would have taken (Sim.startPattern)
@@ -744,11 +802,13 @@ describe("the Theatre's bosses", () => {
             fired = sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid);
         }
         expect(fired).toBe(true);
+        const pattern = swarm.pattern!;
+        const patternTicks = Math.ceil(pattern.volleys * pattern.interval * TICKS_PER_SECOND);
         bloat.bossState!.nextNap = sim.tick;
         sim.step();
         expect(sim["isNapping"](bloat)).toBe(false);
         // Down once the last ring's out, with nothing new started meanwhile
-        for (let i = 0; i < 5 * TICKS_PER_SECOND && !sim["isNapping"](bloat); i++) {
+        for (let i = 0; i < patternTicks && !sim["isNapping"](bloat); i++) {
             sim.step();
             expect(bloat.bossState!.windup).toBeUndefined();
         }

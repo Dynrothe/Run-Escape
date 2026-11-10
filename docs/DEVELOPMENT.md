@@ -1133,9 +1133,13 @@ slams are as wide, so there's no ring round a still boss to hit it from untouche
 something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
 them. A closing ring stands where it formed for `RING_HOLD` (`BulletPatternDef.hold`, a bullet's
 `wait` in `BulletPool`) before it comes in, hurting whoever walks into it meanwhile, and as long
-on hard and expert. Only a closing ring can take a `hold` (a test checks). Each boss has
-a mechanic of its own that makes the fight longer by making it harder, not by more hitpoints: the
-Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
+on hard and expert. Only a closing ring can take a `hold` (a test checks). `closingRing` in
+`theatre.ts` sets each ring's `interval` to its hold and time to close in plus `RING_REST`, so a
+ring's next volley forms only once the last is in. The boss stands only for its `channel` (as long
+as before), then attacks between the rings, but a boss with a ring that holds starts no other
+such attack until its last ring is in (`ringsUntil` on its state, in `Sim.startPattern`). Each
+boss has a mechanic of its own that makes the fight longer by making it harder, not by more
+hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
