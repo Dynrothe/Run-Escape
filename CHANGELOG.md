@@ -5,11 +5,20 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Play again, by Jp66600: the results of any map you play on your own can start it again, not
+  only a boss fight's.
+
 ### Changed
 
 - Easier to read, by Jp66600: secondary text, locked items and disabled buttons are lighter.
   Penalties, defeats and unreached goals share one red, quests not started a brighter one, and
   what's written over the world and quest names have a black outline.
+
+### Fixed
+
+- The results' buttons stay in view when there's more to show than fits. Fixed by Jp66600.
 
 ## 0.30.0 - 2026-11-09
 

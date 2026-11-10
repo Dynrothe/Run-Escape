@@ -903,7 +903,8 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
     - A checker's cells can hurt only within the circle drawn on them (`GroundPatternDef.round`),
       and a `boomerang` with `toEdge` flies to where its line leaves the `bossArena`
       (`Sim.throwReach`, `boxExit`), which the view's line uses too. A boss fight's HUD and
-      touch screen have no item bar, and its results a Retry (`GameClient.retry`).
+      touch screen have no item bar. Results played on your own, a boss fight's or any other's,
+      have a button to go again (`GameClient.retry`).
     - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button, and `TombsDef.ability`
       the raid's (`Sim.ability` reads either; in the Tombs it lands on the path's boss, or the
       Wardens' second- and third-phase Warden, and `damageShare` hits for a share of its
@@ -2328,7 +2329,8 @@ in `i18n/store.ts`.
   `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
   `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is
   keyed by its text, not its place, so a changed line is a new key and the test fails on the old
-  one's translations until they're removed. `ui.json` and `ui-misc.json` are written by hand.
+  one's translations until they're removed. `ui.json`, `ui-misc.json` and `ui-ux.json` are written
+  by hand.
 - Numbers go through `fmtNum`, lists through `list` (in English as the game always wrote them, "a,
   b and c") and dates through `dateLocale()` (in English, the browser's own format). Their `Intl`
   formatters are kept, as numbers are formatted every frame.
