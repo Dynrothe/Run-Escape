@@ -1,4 +1,5 @@
 import { describeItem } from "../core/Loot";
+import { setLang } from "../i18n";
 import { ITEMS } from "./items";
 import { PASSIVES, formatPassiveValue } from "./passives";
 import { RAID_SUPPLIES } from "./raids";
@@ -87,5 +88,22 @@ describe("stat icons", () => {
         expect(statIconFor("Rune scimitar")).toBeUndefined();
         expect(statIconFor("+5% luckiness")).toBeUndefined();
         expect(statIconFor("12")).toBeUndefined();
+    });
+});
+
+describe("icons in another language", () => {
+    afterEach(() => setLang("en"));
+
+    it("finds the same icons by the translated labels", () => {
+        setLang("pt-BR");
+        for (const [translated, english] of [
+            ["+10% dano", "+10% damage"],
+            ["+1 armadura", "+1 armour"],
+            ["+0,5 armadura", "+0.5 armour"],
+            ["+10% velocidade de ataque", "+10% weapon speed"],
+        ]) {
+            expect(statIconFor(translated)).toBeDefined();
+            expect(statIconFor(translated)).toEqual(statIconFor(english));
+        }
     });
 });

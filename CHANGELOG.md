@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Stat icons on tooltips, cards and the pause menu now show in Português (BR) too.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added

@@ -1,3 +1,4 @@
+import { getLang, tr } from "../i18n";
 import { STAT_INFO } from "./stats";
 import { StatKey } from "./types";
 
@@ -90,12 +91,43 @@ const ICONS: Record<string, StatIconRef> = {
 // Longest first, so "ranged damage" wins over "damage"
 const LABELS = Object.keys(ICONS).sort((a, b) => b.length - a.length);
 
+// The labels in the active language, each with its icon: the lines the game shows are
+// translated, so the English labels above alone match nothing there. Built once a language.
+let localized: { lang: string; labels: [string, StatIconRef][] } | undefined;
+
+function localizedLabels(): [string, StatIconRef][] {
+    const lang = getLang();
+    if (localized?.lang === lang) {
+        return localized.labels;
+    }
+    const found = new Map<string, StatIconRef>();
+    for (const label of LABELS) {
+        // A stat's label is stat.<key>.label, a weapon stat's weaponstat.<label_with_underscores>
+        const keys = (Object.keys(STAT_INFO) as StatKey[]).filter(
+            (key) => STAT_INFO[key].label === label,
+        );
+        const names = [
+            ...keys.map((key) => tr(`stat.${key}.label`, label)),
+            tr(`weaponstat.${label.replace(/ /g, "_")}`, label),
+        ];
+        for (const name of names) {
+            const lower = name.toLowerCase();
+            if (lower !== label && !found.has(lower)) {
+                found.set(lower, ICONS[label]);
+            }
+        }
+    }
+    const labels = [...found].sort((a, b) => b[0].length - a[0].length);
+    localized = { lang, labels };
+    return labels;
+}
+
 // "+24% ranged damage" -> "ranged damage", "Damage 10 → 13" -> "damage 10 → 13"
 function stripLead(text: string): string {
     return text
         .trim()
         .toLowerCase()
-        .replace(/^[+\-−]?\s*\d+(\.\d+)?%?\s*/, "");
+        .replace(/^[+\-−]?\s*\d[\d.,]*%?\s*/, "");
 }
 
 // The icon for a stat by its key, for a menu that knows which stat it's showing
@@ -108,8 +140,15 @@ export function statKeyIcon(key: StatKey): StatIconRef | undefined {
 export function statIconFor(text: string): StatIconRef | undefined {
     const rest = stripLead(text);
     for (const label of LABELS) {
-        if (rest.startsWith(label) && !/[a-z]/.test(rest[label.length] ?? "")) {
+        if (rest.startsWith(label) && !/\p{L}/u.test(rest[label.length] ?? "")) {
             return { ...ICONS[label] };
+        }
+    }
+    if (getLang() !== "en") {
+        for (const [label, icon] of localizedLabels()) {
+            if (rest.startsWith(label) && !/\p{L}/u.test(rest[label.length] ?? "")) {
+                return { ...icon };
+            }
         }
     }
     return undefined;
