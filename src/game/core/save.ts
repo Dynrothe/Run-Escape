@@ -302,6 +302,7 @@ export function migrateSave(raw: unknown): SaveData {
     }
     if (data.scabarasBeaten === true) {
         save.scabarasBeaten = true;
+
     }
     if (
         typeof data.favouriteCharacter === "string" &&

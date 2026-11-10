@@ -643,6 +643,7 @@ export function getCharacter(id: string): CharacterDef {
     return character;
 }
 
+
 // Unlike a fight's forced adventurer, both of these must be selected by the player.
 export function characterMapRestriction(characterId: string, mapId: string): string | undefined {
     const character = getCharacter(characterId);
@@ -654,6 +655,7 @@ export function characterMapRestriction(characterId: string, mapId: string): str
     }
     return undefined;
 }
+
 
 export function characterName(character: CharacterDef): string {
     return tr(`char.${character.id}.name`, character.name);

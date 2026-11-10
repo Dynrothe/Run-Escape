@@ -597,8 +597,10 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 {isHost && (
                     <button
                         className="ui-button ui-button-go ui-select-go"
+
                         disabled={!everyoneReady || restriction !== undefined}
                         title={restriction ?? (everyoneReady ? undefined : t("coop.waiting_ready"))}
+
                         onClick={() => client.startCoopRun()}
                     >
                         {room.hard

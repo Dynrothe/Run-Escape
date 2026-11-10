@@ -19,6 +19,7 @@ import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 import { iconCache } from "./ItemIcon";
 
+
 const device = vi.hoisted(() => ({ coarse: false }));
 
 vi.mock("../../util/DeviceUtil", async (importOriginal) => ({
@@ -33,6 +34,7 @@ vi.mock("./TouchControls", () => ({
     RotateNotice: () => null,
     enterFullscreen: vi.fn(),
 }));
+
 
 vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
 
