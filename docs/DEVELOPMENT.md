@@ -2339,6 +2339,15 @@ in `i18n/store.ts`.
 - The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
   whatever the machine's language (`src/setupTests.ts`).
 
+### Menus' keys
+
+A screen answers Escape and Enter through `useMenuKeys` (`ui/menuKeys.ts`). Enter on a button
+reached with Tab or the arrows is that button's; on one that was only clicked it's the screen's, so
+a player can click a map and press Enter. A controller's Enter is left out, as its south button
+already presses what's highlighted. Results pass `guardMs`, because Escape is also the pause key
+and a run can end just as it's pressed. After a click, buttons call `releaseFocus` rather than
+`blur()`, which leaves a press from the keyboard or a controller where it is.
+
 ### Text colours
 
 Text on the stone and cards takes its colour from the `--ui-text-*` and `--ui-green-text`

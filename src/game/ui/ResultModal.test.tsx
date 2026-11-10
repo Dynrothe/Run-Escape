@@ -97,6 +97,7 @@ const client = { leaveRun: vi.fn(), retry: vi.fn() } as unknown as GameClient;
 afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.useRealTimers();
 });
 
 test("on your own, Play again is the main button", () => {
@@ -114,6 +115,16 @@ test("a party goes back together: no Play again", () => {
     render(<ResultModal ui={createUi()} client={client} />);
     expect(screen.queryByRole("button", { name: /Play again/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Back to the party" })).toHaveClass("ui-button-go");
+});
+
+test("Escape leaves the results, but not in the moment they come up", () => {
+    vi.useFakeTimers();
+    render(<ResultModal ui={createUi(true)} client={client} />);
+    fireEvent.keyDown(window, { code: "Escape" });
+    expect(client.leaveRun).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(700);
+    fireEvent.keyDown(window, { code: "Escape" });
+    expect(client.leaveRun).toHaveBeenCalledOnce();
 });
 
 test("starts on your own stats and cycles every player with themed buttons and arrow keys", () => {

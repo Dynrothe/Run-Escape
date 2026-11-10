@@ -8,6 +8,7 @@ import { dateLocale, fmtNum, t } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
+import { releaseFocus } from "./menuKeys";
 
 const PROBLEMS: Record<CloudProblem, string> = {
     offline: "cloud.problem.offline",
@@ -90,7 +91,7 @@ export function CloudSaveSettings({
         return null;
     }
     const busy = cloud.working || !saving;
-    const blur = (e: React.MouseEvent<HTMLElement>) => e.currentTarget.blur();
+    const blur = releaseFocus;
     const problem = describeProblem(cloud);
     // A deleted code's saves can come back
     const restore = cloud.problem === "deleted" && (
@@ -384,7 +385,7 @@ export function CloudSaveButton({
             title={t("cloud.button.label", { status: status ?? "" })}
             aria-label={t("cloud.button.label", { status: status ?? "" })}
             onClick={(e) => {
-                e.currentTarget.blur();
+                releaseFocus(e);
                 if (cloud.choice) {
                     client.cloud?.reopenChoice();
                 } else {

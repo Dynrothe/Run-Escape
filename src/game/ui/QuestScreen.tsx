@@ -7,6 +7,7 @@ import { SaveData, getQuestProgress, isMapUnlocked } from "../core/save";
 import { fmtNum, t, tl } from "../i18n";
 import { Coins } from "./Coins";
 import "./QuestScreen.css";
+import { useMenuKeys } from "./menuKeys";
 
 // The quest list, map by map like the client's quest tab: red until started,
 // yellow while under way, green once done. Each shows how far it's got and
@@ -30,6 +31,7 @@ function getQuestGroups(): { mapId?: string; quests: QuestDef[] }[] {
 
 export function QuestScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-quests">

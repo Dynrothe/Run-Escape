@@ -18,6 +18,7 @@ import {
     presetName,
 } from "../content/invocations";
 import { ItemIcon } from "./ItemIcon";
+import { useMenuKeys } from "./menuKeys";
 
 // The Tombs of Amascut's raid level, and the way to its invocation board
 export function InvocationsButton({
@@ -67,6 +68,7 @@ export function InvocationBoard({
     // Decided as it's pressed, before the press focuses it (which shows it)
     const readOnly = useRef(false);
     const touch = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    useMenuKeys({ onBack: onClose, onConfirm: onClose });
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-invocations">
