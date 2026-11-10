@@ -45,6 +45,7 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
+import { ColdRule } from "../../src/game/core/rules/ColdRule";
 import { RealmRule } from "../../src/game/core/rules/RealmRule";
 import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
@@ -125,6 +126,13 @@ const actStep = parseInt(process.env.STEP ?? "0");
 // it has to be to
 const REALM_DIVES = process.env.REALM !== "0";
 const REALM_DIVE_HP = 0.6;
+// Under the cold (ColdRule): the bot goes to warm itself from this cold (COLD=0 never), until it's
+// down to the next, and steps out of a vent's gas
+const COLD_SEEKS = process.env.COLD !== "0";
+const COLD_GO = 45;
+const COLD_DONE = 15;
+// Whether it's on its way to warm itself, by hero
+const warming = new Map<number, boolean>();
 // A pet taken along (PET=butch): a fighting one's power plays (PetDef.power)
 const pet = process.env.PET || undefined;
 if (finalBoss) {
@@ -302,6 +310,40 @@ function botMove(sim: Sim): { x: number; y: number } {
             }
         }
     }
+    // Under the cold (ColdRule): to a brazier when it's cold (lit, or out to relight), and out of
+    // a vent's gas
+    const cold = sim.cold;
+    if (cold && COLD_SEEKS) {
+        const goal = coldGoal(sim, cold);
+        if (goal) {
+            const gx = goal.x - player.x;
+            const gy = goal.y - player.y;
+            const d = Math.hypot(gx, gy);
+            if (d > 0.05) {
+                ax += (gx / d) * goal.pull;
+                ay += (gy / d) * goal.pull;
+            }
+        }
+        // Off the embers (they burn), but by them
+        for (const ember of cold.embers) {
+            const ex = player.x - ember.x;
+            const ey = player.y - ember.y;
+            const d = Math.hypot(ex, ey);
+            if (d < 2 && d > 0.01) {
+                ax += (ex / d) * 2;
+                ay += (ey / d) * 2;
+            }
+        }
+        for (const vent of cold.vents) {
+            const vx = player.x - vent.x;
+            const vy = player.y - vent.y;
+            const d = Math.hypot(vx, vy);
+            if (d < 3 && d > 0.01 && cold.ventState(vent, sim.tick)) {
+                ax += (vx / d) * 3;
+                ay += (vy / d) * 3;
+            }
+        }
+    }
     // Drift back towards the middle of the arena so the bot doesn't pin itself
     // against its edge
     const cx = ARENA.baseX + ARENA.sizeX / 2 - player.x;
@@ -339,6 +381,44 @@ function realmGoal(sim: Sim, realm: RealmRule): { x: number; y: number; pull: nu
                 bestD = d;
                 best = { x: enemy.x, y: enemy.y, pull: 2.5 };
             }
+        }
+    }
+    return best;
+}
+
+// Where the cold takes the bot (ColdRule), and how hard: once it's cold, to the nearest lit brazier
+// (or the nearest out, to relight), staying until it's warm again
+function coldGoal(sim: Sim, cold: ColdRule): { x: number; y: number; pull: number } | undefined {
+    const player = sim.player;
+    const level = cold.coldOf(sim.focus);
+    let going = warming.get(sim.focus) ?? false;
+    if (!going && level >= COLD_GO) {
+        going = true;
+    } else if (going && level <= COLD_DONE) {
+        going = false;
+    }
+    warming.set(sim.focus, going);
+    if (!going) {
+        return undefined;
+    }
+    let best: { x: number; y: number; pull: number } | undefined;
+    let bestD = Infinity;
+    for (const brazier of cold.braziers) {
+        // An out one costs a relight: count it further off
+        const lit = cold.isLit(brazier, sim.tick);
+        const d = Math.hypot(brazier.midX - player.x, brazier.midY - player.y) + (lit ? 0 : 10);
+        if (d < bestD) {
+            bestD = d;
+            // Beside it, not into it
+            const dx = player.x - brazier.midX;
+            const dy = player.y - brazier.midY;
+            const len = Math.hypot(dx, dy) || 1;
+            best = {
+                x: brazier.midX + (dx / len) * 1.8,
+                y: brazier.midY + (dy / len) * 1.8,
+                // Harder the colder it is: a melee bot otherwise fights on until it freezes
+                pull: 3.5 + Math.max(0, level - COLD_GO) / 8,
+            };
         }
     }
     return best;
@@ -865,6 +945,9 @@ function runOnce(characterId: string, seed: number) {
     let dives = 0;
     let lapses = 0;
     let realmTicks = 0;
+    // Under the cold (ColdRule): times frozen solid, and ticks at 50 or over
+    let freezes = 0;
+    let coldTicks = 0;
     // A boss's finale (its last stand), counted on its own, not in its last phase
     let finaleTicks = 0;
     // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
@@ -978,6 +1061,9 @@ function runOnce(characterId: string, seed: number) {
         if (sim.realm?.layer === 1) {
             realmTicks++;
         }
+        if (sim.cold && sim.cold.coldOf(sim.focus) >= 50) {
+            coldTicks++;
+        }
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
             if (!enemy.boss || !state || enemy.leaving) {
@@ -1033,6 +1119,8 @@ function runOnce(characterId: string, seed: number) {
                 recentHits.push({ tick: sim.tick, event });
             } else if (event.type === "powerUp") {
                 powerUps++;
+            } else if (event.type === "frozenSolid") {
+                freezes++;
             } else if (event.type === "worldTurned") {
                 if (event.layer === 1) {
                     dives++;
@@ -1067,6 +1155,9 @@ function runOnce(characterId: string, seed: number) {
                         : "") +
                     (sim.realm
                         ? `  realm ${dives} dives, ${lapses} lapses, ${Math.round((100 * realmTicks) / Math.max(1, sim.tick))}% there`
+                        : "") +
+                    (sim.cold
+                        ? `  cold ${Math.round(sim.cold.coldOf(sim.focus))}, ${freezes} frozen, ${Math.round((100 * coldTicks) / Math.max(1, sim.tick))}% over 50`
                         : ""),
             );
             if (endless) {
@@ -1186,6 +1277,9 @@ function runOnce(characterId: string, seed: number) {
             (sim.realm
                 ? `realm ${dives} dives ${lapses} lapses ${sim.realm.realmCaskets} caskets ` +
                   `${Math.round((100 * realmTicks) / Math.max(1, sim.tick))}% `
+                : "") +
+            (sim.cold
+                ? `cold ${freezes} frozen ${Math.round((100 * coldTicks) / Math.max(1, sim.tick))}% over 50 `
                 : "") +
             `(${(ms / sim.tick).toFixed(3)}ms per tick)`,
     );
