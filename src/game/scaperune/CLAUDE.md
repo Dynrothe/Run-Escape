@@ -2006,10 +2006,14 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
 - A cut whose real ground is mostly blocked (the Scar's sea of sludge, `maps/scar.ts`) can be drained: take its
   overlay off what's to be walked, clear `TILE_BLOCKED`, then paint it back where it's wanted with `paintField`. Mind
   what lay on it: the sludge's ripples are floor decoration that only reads on sludge. An island's raised rim may be a
-  level of its own (a bridge's deck in the map's terms): clear the upper levels' tiles and flags with its locs. Masses
-  built of hundreds of one-tile pieces (the Scar's brain) can be hollowed to their rims, a hollow blocked, so the
-  ground that's walked doesn't change; check-maps holds the cache's bridges to being roads, so cover them with
-  `closedRoads`.
+  level of its own (a bridge's deck in the map's terms): take off all of it that's joined, not a circle of it, or
+  stubs of rim stand about; check-maps holds the cache's bridges to being roads, so cover any left with
+  `closedRoads`. Paint the sludge back over the islands' bare floor too, or each island stands on squares of its own
+  floor. Masses built of thousands of one-tile pieces (the Scar's brain) are hollowed by depth from their own edge,
+  wherever it faces, never from what's walked: a hollow that follows the walked ground leaves walls with nothing
+  behind them. What's past the depth shows the cache's floor under it (the brain's is hidden, so black, as its
+  filler is). Thinning a wall's pieces at random leaves holes and stubs; draw them lighter instead
+  (`MODEL_SIMPLIFY` in `LocOverrides.ts`, which `view-weight.ts` counts too).
 - `bossArena` on the `MapDef` gives a phased boss a square of its own. The player's brought to its middle and
   can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
 - Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay

@@ -638,13 +638,16 @@ Built in #159 as build order step 12. Where it differs from the above, and why:
   123 with a square of margin, then drains the sea to the flesh under it and lays the Scar's own floor cracks over
   it (49247 to 49282, as its islands have; 49376 to 49385 are the sludge's ripples, and come off what's drained). The
   sludge comes back as a band along the arena's edge running out into the margin's sea and six pools, blocked, and
-  the Leviathan's pool. The islands stay as they are: the brain's ridges
-  west and north (a wall, about two fifths of the arena), the Abyssal Rift's island north-west with its nerves and
-  fires. Over the drained floor the Scar's kit is scattered: nerves, nerve formations, brain matter, broken boats,
-  broken pillars and vents. About 7,300 tiles are open.
+  the Leviathan's pool. The shore runs on over the islets' own floor, so they stand in it as in the cache, and the
+  sludge lies level, a little under the floor (each body at the lowest of its shore, less 6), with the darker of the
+  cache's two fleshes for two tiles round it. The islands stay as they are: the brain west and north (a wall, about
+  two fifths of the arena), the Abyssal Rift's island north-west with its nerves and fires. Over the drained floor
+  the Scar's kit is scattered: nerves, nerve formations, brain matter, broken boats, broken pillars and vents. About
+  7,800 tiles are open.
 - **The Leviathan's island** is a ring of the brain's rim round his pool, its top a walkway on a level of its own: it
-  comes off, so his pool's fought from open ground (the rim's north half kept behind him was 80k triangles in a
-  phone's view). His pool is sludge, radius 4, and not blocked: he stands in it, solid.
+  comes off whole (every piece of the rim joined to his pool), so his pool's fought from open ground (the rim's north
+  half kept behind him was 80k triangles in a phone's view). His pool is sludge, radius 4, and not blocked: he
+  stands in it, solid.
 - **The dark** is the lighting (`content/scar.ts`, `SCAR_LIGHTING`): ambient 0.3 a little blue (0.19, the dev map's,
   left the flesh black outside the lights), a light of 5 round
   each player, nine fires (49342, the Scar's own) as lights of 3 that weapons aim by, lanterns at weight 6 among the
@@ -689,11 +692,19 @@ Built in #159 as build order step 12. Where it differs from the above, and why:
   bot's light was dimmed about 5% of the run (median). With `DARK=0` (the bot doing nothing about the dark) step 0
   was 0 wins, 8:04 and 14: the same within the sims' spread, which is wide (two sweeps of the same map a tweak apart
   gave medians of 5:42 and 7:46).
-- **Phones** (`frameProbe` at 844 by 390 on the phone camera): the brain's masses are hollowed to a tile round the
-  ground that's walked, their hollows sludge, and the islands' kit thinned (`KEPT` in `maps/scar.ts`): the heaviest
-  view was 220k by `view-weight.ts` before, 44k after. In the game the heaviest is a crowd of 52 on the rift's island,
-  64.4k (35k of it the world); the Leviathan's fight is 40.8k up and 49.6k enraged with a crowd. The light map costs
-  the same as on any lit map; nothing past the lights is culled.
+- **Phones** (`frameProbe` at 844 by 390 on the phone camera): the brain in the cache is walls (49223) and the tops of
+  its rims (49232 to 49235) round a middle of black filler (49236) on a hidden floor, thousands of one-tile pieces
+  of 340 to 520 triangles: a view of the rift's island was 180k. So it's drawn two tiles in from its edge, wherever
+  that edge faces, then a ring of the filler, and past that the hidden floor, black as the filler is; and its
+  pieces are drawn lighter (`MODEL_SIMPLIFY` in `LocOverrides.ts`, `ModelData.simplify`: the walls a fifth of their
+  faces, the tops an eighth, the filler a fifth, the shortest edges collapsed first, never one on a tile's edge, so
+  pieces still meet), as is the kit (two fifths). The islands' kit is still thinned (`KEPT`). The heaviest view is
+  38.7k by `view-weight.ts`. In the game the heaviest is a crowd of 51 on the rift's island, 63.0k (34.4k of it the
+  world); the heaviest world alone is 42.0k, on the rift's island; the Leviathan's fight is 27.0k up and 38.3k
+  enraged with a crowd. The light map costs the same as on any lit map;
+  nothing past the lights is culled. The first build (2026-11-10) hollowed the brain to a tile round the ground
+  that's walked, filled its hollows with sludge and thinned its walls to two fifths: stubs of wall, flat squares of
+  sludge and holes, which this replaced.
 
 ## 7. The finale: the Awakened
 

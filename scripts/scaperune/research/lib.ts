@@ -10,6 +10,7 @@ import {
 } from "../../../src/game/scaperune/format";
 import { CacheSystem } from "../../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../../src/rs/cache/loader/CacheLoaderFactory";
+import { MODEL_SIMPLIFY } from "../../../src/rs/config/loctype/LocOverrides";
 import type { LocTypeLoader } from "../../../src/rs/config/loctype/LocTypeLoader";
 import { loadGameCache } from "../../cache/scene-util";
 
@@ -165,6 +166,8 @@ export function createShapes(w: World): (id: number, locType: number) => Shape {
         for (const modelId of getModelIds(type, locType)) {
             const model = models.getModel(modelId);
             if (!model) continue;
+            const simplify = MODEL_SIMPLIFY.get(modelId);
+            if (simplify) model.simplify(simplify.keep, simplify.seams);
             shape.tris += model.faceCount;
             for (let v = 0; v < model.verticesCount; v++) {
                 const up = -model.verticesY[v] * scaleY;

@@ -12,9 +12,10 @@ import type { BuildContext, MapPoint, MapRecipe } from "../recipe";
 // of abyssal sludge with islands of flesh in it, walked only on the islands: three quarters of it
 // is sludge, blocked. So the sea's drained here to the flesh under it, the Scar's cracked floor
 // laid over it, and the sludge left in pools and along the shore, a band round the arena that
-// runs out into the margin's sea. The islands stay as they are: the Abyssal Rift's in the
-// north-west, the brain's ridges west, and the Leviathan's island south-east, its pool in a ring
-// of ridges. Its kit (nerves, brain matter, broken boats and pillars, vents) is scattered over
+// runs out into the margin's sea, its islets standing in it. The islands stay as they are: the
+// Abyssal Rift's in the north-west and the brain, west and north, whole along its edge and black
+// in its middle as in the cache; the Leviathan's island comes off, his pool left in the open. Its
+// models are drawn lighter (LocOverrides.ts MODEL_SIMPLIFY) so a phone can show it all. Its kit (nerves, brain matter, broken boats and pillars, vents) is scattered over
 // what's drained, and its fires stand where the map's lights are (content/scar.ts).
 //
 // What the rule and the bosses read off it is exported here, in grid tiles: the fires, the
@@ -37,19 +38,28 @@ const toGrid = (realX: number, realY: number): Tile => ({
     y: realY - REAL.y + ARENA_0,
 });
 
-// Floors, as the map files store them: the sludge (a grey-green that hides what's under it)
+// Floors, as the map files store them: the sludge (a grey-green that hides what's under it), the
+// darker flesh (the cache's other, 186, is lighter), and the cache's hidden floor (drawn as
+// nothing), under the brain
 const SLUDGE = 302;
+const FLESH = 185;
+const HIDDEN = 42;
 
 // The Leviathan's island: the brain's rim round his pool, its walls and its bits. It comes off
-// (ISLAND_OPEN), so the pool's fought from open ground: the rim's walkway is a level of its own
-// over the floor, and a view of what's left of it was 80k triangles on a phone.
+// whole (islandTiles), so the pool's fought from open ground: the rim's walkway is a level of its
+// own over the floor, and a view of it was 80k triangles on a phone. Cut at a radius, it left
+// stubs of rim standing in a ring.
 const ISLAND_RIM = new Set([49224, 49225, 49226, 49227, 49370, 47593, 47594, 49354, 49355, 49356]);
 const ISLAND_OPEN = 12;
+// and as far as it reaches, so the islets round it stay
+const ISLAND_MAX = 18;
 
-// The brain's masses and walls (all unnamed in the cache), and how many tiles of them stand round
-// open ground (hollowBrain)
+// The brain's pieces (all unnamed in the cache): its walls (49223), the tops of its rims (49232 to
+// 49235), the islets' low rims (49224 to 49227) and the black filler of its middle (49236). It's
+// drawn BRAIN_DEPTH tiles in from its edge, then a ring of the filler (hollowBrain)
 const BRAIN = new Set([49223, 49224, 49225, 49226, 49227, 49232, 49233, 49234, 49235, 49236]);
-const BRAIN_RIM = 1;
+const BRAIN_FILLER = 49236;
+const BRAIN_DEPTH = 2;
 
 // The Scar's kit, all the cache's own
 const FIRE = 49342;
@@ -60,21 +70,22 @@ const BRAIN_MATTER = [49354, 49355, 49356];
 const BROKEN_BOATS = [49244, 49245, 49246];
 const BROKEN_PILLARS = [49239, 49240];
 const VENT = 49388;
+const DRIP = 15727;
+const BUBBLES = [45538, 45539];
 // The cracks in the Scar's floor, walked over (its islands' own), and the ripples on its sludge,
 // which come off what's drained
 const CRACKS = Array.from({ length: 36 }, (_, i) => 49247 + i);
 // Of the drained floor's tiles, cracked
 const CRACK_SHARE = 0.1;
 const RIPPLES = new Set([49376, 49377, 49378, 49379, 49380, 49381, 49382, 49383, 49384, 49385]);
+// How far under the floor round it the sludge lies (height units)
+const SLUDGE_DIP = 6;
+// and how many tiles round it the flesh is the darker of the cache's two
+const SHORE_DARK = 2;
 
 // Thinned for phones (view-weight.ts PHONE=1, then frameProbe): the share of each heavy piece of
 // the islands' kept, by id
 const KEPT: Record<number, number> = {
-    // The brain's walls and the masses on its rims
-    49223: 0.4,
-    49232: 0.6,
-    49233: 0.6,
-    49236: 0.6,
     // The floor's cracks: dozens in a view, many triangles each
     ...Object.fromEntries(CRACKS.map((id) => [id, 0.35])),
     // Brain matter, and its lumps
@@ -157,6 +168,51 @@ function islandOpen(x: number, y: number): boolean {
     return dx * dx + dy * dy <= ISLAND_OPEN * ISLAND_OPEN;
 }
 
+// The Leviathan's island, whole: the open circle round his pool, and every tile of its rim (or its
+// deck) joined to it, so none of it's left standing in pieces
+function islandTiles(scar: Scar): Uint8Array {
+    const { ground } = scar;
+    const rim = new Uint8Array(SIZE * SIZE);
+    for (const loc of ground.grid.locs) {
+        if (loc.level === 0 && ISLAND_RIM.has(loc.id) && !BRAIN_MATTER.includes(loc.id)) {
+            rim[ground.tile(loc.x, loc.y)] = 1;
+        }
+    }
+    for (const upper of ground.grid.levels.slice(1)) {
+        for (let i = 0; i < rim.length; i++) {
+            if (upper.underlays[i] || upper.overlays[i]) {
+                rim[i] = 1;
+            }
+        }
+    }
+    const island = new Uint8Array(SIZE * SIZE);
+    const front: number[] = [];
+    for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+            if (islandOpen(x, y)) {
+                island[ground.tile(x, y)] = 1;
+                front.push(ground.tile(x, y));
+            }
+        }
+    }
+    while (front.length > 0) {
+        const i = front.pop()!;
+        const x = i % SIZE;
+        const y = Math.floor(i / SIZE);
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const j = ground.tile(x + dx, y + dy);
+                const far = Math.hypot(x + dx - SCAR_POOL.x, y + dy - SCAR_POOL.y) > ISLAND_MAX;
+                if (ground.inside(x + dx, y + dy) && rim[j] && !island[j] && !far) {
+                    island[j] = 1;
+                    front.push(j);
+                }
+            }
+        }
+    }
+    return island;
+}
+
 function inArena(x: number, y: number): boolean {
     return x >= ARENA_0 && x <= ARENA_1 && y >= ARENA_0 && y <= ARENA_1;
 }
@@ -187,6 +243,8 @@ class Scar {
     // Tiles kept clear of scenery: the start, the fires, his island
     readonly keep = new Uint8Array(SIZE * SIZE);
     blocked = new Uint8Array(SIZE * SIZE);
+    // Next to what the cache has standing (Scar.occupied), where the kit doesn't go
+    near?: Uint8Array;
 
     constructor(readonly context: BuildContext) {}
 
@@ -207,7 +265,7 @@ class Scar {
                     return false;
                 }
                 const i = this.ground.tile(tx, ty);
-                if (this.keep[i] || this.blocked[i]) {
+                if (this.keep[i] || this.blocked[i] || this.near?.[i]) {
                     return false;
                 }
             }
@@ -233,6 +291,34 @@ class Scar {
         return true;
     }
 
+    // The tiles under anything standing, and those round them: where floor decoration would
+    // fight with it
+    occupied(): Uint8Array {
+        const { ground } = this;
+        const occupied = new Uint8Array(SIZE * SIZE);
+        for (const loc of ground.grid.locs) {
+            if (loc.level !== 0 || loc.type === 22) {
+                continue;
+            }
+            const [sizeX, sizeY] = this.footprint(loc);
+            for (let ty = loc.y - 1; ty <= loc.y + sizeY; ty++) {
+                for (let tx = loc.x - 1; tx <= loc.x + sizeX; tx++) {
+                    if (ground.inside(tx, ty)) {
+                        occupied[ground.tile(tx, ty)] = 1;
+                    }
+                }
+            }
+        }
+        return occupied;
+    }
+
+    footprint(loc: PlacedLoc): [number, number] {
+        const info = this.context.locs(loc.id);
+        const turned = loc.rotation % 2 === 1;
+        const big = loc.type === 10 || loc.type === 11;
+        return big ? (turned ? [info.sizeY, info.sizeX] : [info.sizeX, info.sizeY]) : [1, 1];
+    }
+
     // Walked over, a crack in the floor
     decal(id: number, x: number, y: number, rotation: number): void {
         this.ground.grid.locs.push({ id, type: 22, rotation, level: 0, x, y });
@@ -248,26 +334,47 @@ function drain(scar: Scar): Uint8Array {
         flatten: false,
         height: 0,
         anchor: 0,
-        skipLoc: (loc) =>
-            (loc.level > 0 || ISLAND_RIM.has(loc.id)) &&
-            islandOpen(loc.x + ARENA_0, loc.y + ARENA_0),
     });
     const level = ground.level0;
-    // The rim's top is a level of its own over the floor (a bridge's deck, in the map's terms):
-    // gone with it
-    for (let y = 0; y < SIZE; y++) {
-        for (let x = 0; x < SIZE; x++) {
-            if (!islandOpen(x, y)) {
-                continue;
+    // The island comes off whole, so nothing's left of its rim standing about: its top's a level
+    // of its own over the floor (a bridge's deck, in the map's terms), gone with it
+    const island = islandTiles(scar);
+    ground.grid.locs = ground.grid.locs.filter(
+        (loc) => !island[ground.tile(loc.x, loc.y)] || (loc.level === 0 && !ISLAND_RIM.has(loc.id)),
+    );
+    // The cache has drips falling into its bubbling pools (45538, 45539), in one plane with them
+    const bubbling = new Uint8Array(SIZE * SIZE);
+    for (const loc of ground.grid.locs) {
+        if (BUBBLES.includes(loc.id)) {
+            const [sizeX, sizeY] = scar.footprint(loc);
+            for (let ty = loc.y; ty < loc.y + sizeY; ty++) {
+                for (let tx = loc.x; tx < loc.x + sizeX; tx++) {
+                    bubbling[ground.tile(tx, ty)] = 1;
+                }
             }
-            const i = ground.tile(x, y);
-            level.flags[i] &= ~TILE_BLOCKED;
-            for (const upper of ground.grid.levels.slice(1)) {
-                upper.overlays[i] = 0;
-                upper.underlays[i] = 0;
-                upper.shapes[i] = 0;
-                upper.flags[i] = 0;
-            }
+        }
+    }
+    ground.grid.locs = ground.grid.locs.filter(
+        (loc) => loc.id !== DRIP || !bubbling[ground.tile(loc.x, loc.y)],
+    );
+    for (let i = 0; i < island.length; i++) {
+        if (!island[i]) {
+            continue;
+        }
+        level.flags[i] &= ~TILE_BLOCKED;
+        // What was under the rim is the flesh, as round it
+        if (level.overlays[i] === HIDDEN) {
+            level.overlays[i] = 0;
+            level.shapes[i] = 0;
+        }
+        if (!level.underlays[i]) {
+            level.underlays[i] = FLESH;
+        }
+        for (const upper of ground.grid.levels.slice(1)) {
+            upper.overlays[i] = 0;
+            upper.underlays[i] = 0;
+            upper.shapes[i] = 0;
+            upper.flags[i] = 0;
         }
     }
     // Where the sea was: drained, but for what's painted back
@@ -276,7 +383,7 @@ function drain(scar: Scar): Uint8Array {
         for (let x = 0; x < SIZE; x++) {
             const i = ground.tile(x, y);
             if (!inArena(x, y)) {
-                level.underlays[i] = 185;
+                level.underlays[i] = FLESH;
                 continue;
             }
             if (level.overlays[i] === SLUDGE) {
@@ -285,6 +392,10 @@ function drain(scar: Scar): Uint8Array {
                 level.rotations[i] = 0;
                 level.flags[i] &= ~TILE_BLOCKED;
                 drained[i] = 1;
+                // A few of the sea's tiles have no ground under the sludge
+                if (!level.underlays[i]) {
+                    level.underlays[i] = FLESH;
+                }
             }
         }
     }
@@ -305,12 +416,14 @@ function drain(scar: Scar): Uint8Array {
             field[x + y * (SIZE + 1)] = sludgeField(x, y, shoreNoise);
         }
     }
-    // Only over the drained sea and the margin: the islands keep their own edges
+    // Over the drained sea, the margin and the islands' own floor, so the shore runs on round an
+    // island, its rims standing in it as in the cache, rather than stopping in a step at its
+    // tiles: not over the brain's hidden floor or an island's deck
     const skip = new Uint8Array(SIZE * SIZE);
+    const upper = ground.grid.levels[1];
     for (let i = 0; i < skip.length; i++) {
-        const x = i % SIZE;
-        const y = Math.floor(i / SIZE);
-        skip[i] = inArena(x, y) && !drained[i] ? 1 : 0;
+        const hidden = level.overlays[i] === HIDDEN || upper.underlays[i] || upper.overlays[i];
+        skip[i] = inArena(i % SIZE, Math.floor(i / SIZE)) && !drained[i] && hidden ? 1 : 0;
     }
     const painted = ground.paintField(field, SLUDGE, true, skip);
     for (let y = 0; y <= SIZE; y++) {
@@ -327,11 +440,94 @@ function drain(scar: Scar): Uint8Array {
             level.flags[i] &= ~TILE_BLOCKED;
         }
     }
-    // The sludge's ripples off what's drained
+    // The sludge's ripples off what's drained, and on what's painted back now and then
     ground.grid.locs = ground.grid.locs.filter(
         (loc) => !RIPPLES.has(loc.id) || level.overlays[ground.tile(loc.x, loc.y)] === SLUDGE,
     );
+    levelSludge(scar);
+    // The flesh darkens to its shore: the cache's darker flesh (its islands are both) for a
+    // couple of tiles round the sludge, which the underlays' blending runs into the floor
+    const isSludge = (x: number, y: number) =>
+        ground.inside(x, y) && level.overlays[ground.tile(x, y)] === SLUDGE;
+    for (let y = ARENA_0; y <= ARENA_1; y++) {
+        for (let x = ARENA_0; x <= ARENA_1; x++) {
+            let near = false;
+            for (let dy = -SHORE_DARK; dy <= SHORE_DARK && !near; dy++) {
+                for (let dx = -SHORE_DARK; dx <= SHORE_DARK && !near; dx++) {
+                    near = isSludge(x + dx, y + dy);
+                }
+            }
+            if (near) {
+                level.underlays[ground.tile(x, y)] = FLESH;
+            }
+        }
+    }
     return drained;
+}
+
+// The sludge lies level, a little under the floor round it, as water does: the ground the cache
+// has under it rolls, and slopes catch the light, so a sludge rolling with it shows streaks. Each
+// body of it (corners with sludge all round, joined) is set at the lowest of its shore's corners
+// in the arena, less SLUDGE_DIP, so its edge is a bank down to it; the sea in the margin with it
+function levelSludge(scar: Scar): void {
+    const { ground } = scar;
+    const level = ground.level0;
+    const C = SIZE + 1;
+    const isSludge = (x: number, y: number) =>
+        ground.inside(x, y) && level.overlays[ground.tile(x, y)] === SLUDGE;
+    const under = new Uint8Array(C * C);
+    for (let y = 1; y < SIZE; y++) {
+        for (let x = 1; x < SIZE; x++) {
+            const all =
+                isSludge(x, y) &&
+                isSludge(x - 1, y) &&
+                isSludge(x, y - 1) &&
+                isSludge(x - 1, y - 1);
+            const any =
+                isSludge(x, y) ||
+                isSludge(x - 1, y) ||
+                isSludge(x, y - 1) ||
+                isSludge(x - 1, y - 1);
+            under[x + y * C] = all ? 2 : any ? 1 : 0;
+        }
+    }
+    const seen = new Uint8Array(C * C);
+    for (let start = 0; start < under.length; start++) {
+        if (under[start] !== 2 || seen[start]) {
+            continue;
+        }
+        const body = [start];
+        seen[start] = 1;
+        let low = Infinity;
+        for (let h = 0; h < body.length; h++) {
+            const x = body[h] % C;
+            const y = Math.floor(body[h] / C);
+            for (const [dx, dy] of [
+                [1, 0],
+                [-1, 0],
+                [0, 1],
+                [0, -1],
+            ]) {
+                const j = x + dx + (y + dy) * C;
+                if (x + dx < 0 || y + dy < 0 || x + dx > SIZE || y + dy > SIZE) {
+                    continue;
+                }
+                const shore = x + dx >= ARENA_0 && x + dx <= ARENA_1 + 1 && y + dy >= ARENA_0;
+                if (under[j] === 1 && shore && y + dy <= ARENA_1 + 1) {
+                    low = Math.min(low, ground.getHeight(x + dx, y + dy));
+                } else if (under[j] === 2 && !seen[j]) {
+                    seen[j] = 1;
+                    body.push(j);
+                }
+            }
+        }
+        const surface =
+            (low === Infinity ? ground.getHeight(start % C, Math.floor(start / C)) : low) -
+            SLUDGE_DIP;
+        for (const at of body) {
+            ground.setHeight(at % C, Math.floor(at / C), surface);
+        }
+    }
 }
 
 // The Scar's floor over what's drained: its cracks, and now and then its kit
@@ -350,6 +546,7 @@ function dress(scar: Scar, drained: Uint8Array): void {
         SCAR_BOSS_ARENA.size - 8,
         0,
     );
+    scar.near = scar.occupied();
     for (const fire of SCAR_FIRES) {
         scar.solid(FIRE, fire.x, fire.y, 0, false);
     }
@@ -358,9 +555,6 @@ function dress(scar: Scar, drained: Uint8Array): void {
             const i = scar.ground.tile(x, y);
             if (!drained[i]) {
                 continue;
-            }
-            if (hash(x, y, 7) < CRACK_SHARE) {
-                scar.decal(CRACKS[Math.floor(hash(x, y, 11) * CRACKS.length)], x, y, turn());
             }
             const roll = rng();
             if (roll < 0.004) {
@@ -380,24 +574,47 @@ function dress(scar: Scar, drained: Uint8Array): void {
             }
         }
     }
+    // The cracks, last, and never under anything (its faces and theirs would fight)
+    const { ground } = scar;
+    const occupied = scar.occupied();
+    for (let y = ARENA_0 + 2; y <= ARENA_1 - 2; y++) {
+        for (let x = ARENA_0 + 2; x <= ARENA_1 - 2; x++) {
+            const i = ground.tile(x, y);
+            if (drained[i] && !occupied[i] && hash(x, y, 7) < CRACK_SHARE) {
+                const id = CRACKS[Math.floor(hash(x, y, 11) * CRACKS.length)];
+                scar.decal(id, x, y, Math.floor(hash(x, y, 13) * 4));
+            }
+        }
+    }
 }
 
-// The brain's masses are hundreds of pieces of a few hundred triangles each, and a view of the
-// rift's island took 220k of them: far too many for a phone. Only their rims are ever near
-// anyone, and in the dark the rest is shapes at most, so a piece more than BRAIN_RIM tiles from
-// ground that's walked comes off, its tile blocked. The islands' kit is thinned (KEPT) the same
-// way, what's gone still blocking (view-weight.ts PHONE=1, then frameProbe)
-function hollowBrain(scar: Scar): void {
+// The brain's masses are thousands of one-tile pieces, and a view of the rift's island took 220k
+// triangles of them: far too many for a phone. So the brain's kept whole only BRAIN_DEPTH tiles
+// in from its edge, wherever that edge faces (the floor, the sludge): its walls, the masses on
+// its rims, and masses behind them, so it's seen whole from anywhere it's seen. Deeper, the
+// masses come off and show what the cache has under them, its hidden floor, drawn as nothing:
+// as black as the dark round it, and further than any light reaches. The islands' kit is
+// thinned (KEPT) the same way, what's gone still blocking (view-weight.ts PHONE=1, then
+// frameProbe)
+function hollowBrain(scar: Scar): Uint8Array {
     const { ground } = scar;
-    const far = new Uint8Array(SIZE * SIZE).fill(255);
+    const level = ground.level0;
+    const brain = new Uint8Array(SIZE * SIZE);
+    for (const loc of ground.grid.locs) {
+        if (loc.level === 0 && BRAIN.has(loc.id)) {
+            brain[ground.tile(loc.x, loc.y)] = 1;
+        }
+    }
+    // Its depth: tiles from the nearest that isn't brain, in the arena (past it, nothing's seen)
+    const depth = new Uint8Array(SIZE * SIZE).fill(255);
     let front: number[] = [];
-    for (let i = 0; i < far.length; i++) {
-        if (!scar.blocked[i] && inArena(i % SIZE, Math.floor(i / SIZE))) {
-            far[i] = 0;
+    for (let i = 0; i < depth.length; i++) {
+        if (!brain[i] && inArena(i % SIZE, Math.floor(i / SIZE))) {
+            depth[i] = 0;
             front.push(i);
         }
     }
-    for (let d = 1; d <= BRAIN_RIM && front.length > 0; d++) {
+    for (let d = 1; d <= BRAIN_DEPTH + 1 && front.length > 0; d++) {
         const next: number[] = [];
         for (const i of front) {
             const x = i % SIZE;
@@ -405,8 +622,8 @@ function hollowBrain(scar: Scar): void {
             for (let dy = -1; dy <= 1; dy++) {
                 for (let dx = -1; dx <= 1; dx++) {
                     const j = ground.tile(x + dx, y + dy);
-                    if (ground.inside(x + dx, y + dy) && far[j] > d) {
-                        far[j] = d;
+                    if (ground.inside(x + dx, y + dy) && depth[j] > d) {
+                        depth[j] = d;
                         next.push(j);
                     }
                 }
@@ -414,17 +631,30 @@ function hollowBrain(scar: Scar): void {
         }
         front = next;
     }
-    const level = ground.level0;
+    // The brain's hollow, drawn as nothing
+    const hollow = new Uint8Array(SIZE * SIZE);
+    const filled = new Set<number>();
     ground.grid.locs = ground.grid.locs.filter((loc) => {
         const i = ground.tile(loc.x, loc.y);
-        const thinned = hash(loc.x, loc.y, loc.id) >= (KEPT[loc.id] ?? 1);
-        if (BRAIN.has(loc.id) ? far[i] <= BRAIN_RIM && !thinned : !thinned) {
-            return true;
-        }
-        // A mass's hollow shows the floor under it: sludge, as between the islands
-        if (BRAIN.has(loc.id) && far[i] > BRAIN_RIM) {
-            level.overlays[i] = SLUDGE;
+        if (BRAIN.has(loc.id)) {
+            if (depth[i] <= BRAIN_DEPTH) {
+                return true;
+            }
+            // A ring of the cache's black filler behind what's kept, as in the brain's own middle,
+            // so the rims' backs don't show against the hollow
+            if (depth[i] === BRAIN_DEPTH + 1 && !filled.has(i)) {
+                filled.add(i);
+                Object.assign(loc, { id: BRAIN_FILLER, type: LOC_NORMAL, rotation: 0 });
+                return true;
+            }
+            hollow[i] = 1;
+            level.overlays[i] = HIDDEN;
             level.shapes[i] = 0;
+            level.flags[i] |= TILE_BLOCKED;
+            return false;
+        }
+        if (hash(loc.x, loc.y, loc.id) < (KEPT[loc.id] ?? 1)) {
+            return true;
         }
         // What stood there still blocks, so the ground that's walked stays as it was
         if (loc.type !== 22) {
@@ -446,6 +676,29 @@ function hollowBrain(scar: Scar): void {
         }
         return false;
     });
+    // Anything else on the hollow comes off with it
+    ground.grid.locs = ground.grid.locs.filter(
+        (loc) => loc.level > 0 || !hollow[ground.tile(loc.x, loc.y)],
+    );
+    // The margin goes on as what's at the arena's edge: the brain's hollow, or the sea
+    for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+            if (inArena(x, y)) {
+                continue;
+            }
+            const edge = ground.tile(
+                Math.min(Math.max(x, ARENA_0), ARENA_1),
+                Math.min(Math.max(y, ARENA_0), ARENA_1),
+            );
+            if (hollow[edge] || brain[edge]) {
+                const i = ground.tile(x, y);
+                hollow[i] = 1;
+                level.overlays[i] = HIDDEN;
+                level.shapes[i] = 0;
+            }
+        }
+    }
+    return hollow;
 }
 
 function build(context: BuildContext): GeneratedMap {
@@ -486,9 +739,6 @@ function build(context: BuildContext): GeneratedMap {
         falls: [],
         waterfalls: [],
         designed: [{ x0: 0, y0: 0, x1: SIZE - 1, y1: SIZE - 1 }],
-        // The cache's own bridges (the islands' walkways) aren't roads of ours: check-maps.ts holds a
-        // road to being walkable
-        closedRoads: [{ x0: ARENA_0, y0: ARENA_0, x1: ARENA_1, y1: ARENA_1, shownBy: "rubble" }],
     };
 }
 
