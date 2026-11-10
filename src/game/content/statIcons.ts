@@ -1,4 +1,5 @@
-import { englishOf, getLang, tr } from "../i18n";
+import { englishOf, getLang, tr, translationsOf } from "../i18n";
+import { getMessages } from "../i18n/catalog";
 import { STAT_INFO } from "./stats";
 import { StatKey } from "./types";
 
@@ -93,11 +94,12 @@ const LABELS = Object.keys(ICONS).sort((a, b) => b.length - a.length);
 
 // The labels in the active language, each with its icon: the lines the game shows are
 // translated, so the English labels above alone match nothing there. Built once a language.
-let localized: { lang: string; labels: [string, StatIconRef][] } | undefined;
+let localized: { messages: object; labels: [string, StatIconRef][] } | undefined;
 
 function localizedLabels(): [string, StatIconRef][] {
-    const lang = getLang();
-    if (localized?.lang === lang) {
+    // Keyed by the language's messages themselves, so swapped-in messages (tests) rebuild it too
+    const messages = getMessages(getLang());
+    if (localized?.messages === messages) {
         return localized.labels;
     }
     const found = new Map<string, StatIconRef>();
@@ -109,6 +111,8 @@ function localizedLabels(): [string, StatIconRef][] {
         const names = [
             ...keys.map((key) => tr(`stat.${key}.label`, label)),
             tr(`weaponstat.${label.replace(/ /g, "_")}`, label),
+            // Any other key worded as the label in English (a passive's effect, say)
+            ...translationsOf(label),
         ];
         for (const name of names) {
             const lower = name.toLowerCase();
@@ -118,21 +122,37 @@ function localizedLabels(): [string, StatIconRef][] {
         }
     }
     const labels = [...found].sort((a, b) => b[0].length - a[0].length);
-    localized = { lang, labels };
+    localized = { messages, labels };
     return labels;
 }
 
-// "+24% ranged damage" -> "ranged damage", "Damage 10 → 13" -> "damage 10 → 13"
+// "+24% ranged damage" -> "ranged damage", "Damage 10 → 13" -> "damage 10 → 13". The number is
+// any language's: digits of any script, "," or "." between them, "%" with or without a space.
 function stripLead(text: string): string {
     return text
         .trim()
         .toLowerCase()
-        .replace(/^[+\-−]?\s*\d[\d.,]*%?\s*/, "");
+        .replace(/^[+\-−]?\s*\p{Nd}[\p{Nd}.,]*\s*[%٪]?\s*/u, "");
 }
 
-// The icon for a stat by its key, for a menu that knows which stat it's showing
+// Where a label ends, as a whole word. Scripts written without spaces (Chinese, Japanese, Thai)
+// run words together, so a letter after the label there doesn't make it part of a longer word.
+const UNSPACED =
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+function endsWord(text: string, at: number): boolean {
+    const next = text[at];
+    return next === undefined || !/\p{L}/u.test(next) || UNSPACED.test(next);
+}
+
+// The icon for a stat by its key, for a menu that knows which stat it's showing. The key's label
+// is English, so it goes straight to the English labels, whatever the active language.
 export function statKeyIcon(key: StatKey): StatIconRef | undefined {
-    return statIconFor(STAT_INFO[key].label);
+    return matchLabel(stripLead(STAT_INFO[key].label), englishLabels());
+}
+
+function englishLabels(): [string, StatIconRef][] {
+    return LABELS.map((label) => [label, ICONS[label]]);
 }
 
 // The icon for a stat line as shown to the player, by the label it starts with.
@@ -142,20 +162,14 @@ export function statIconFor(text: string): StatIconRef | undefined {
     // that goes by the file's key, whatever the language words it with
     const english = englishOf(text);
     if (english !== undefined && english !== text) {
-        const found = matchLabel(
-            stripLead(english),
-            LABELS.map((l) => [l, ICONS[l]]),
-        );
-        if (found) {
-            return found;
-        }
+        // The English decides, even when it has no icon: "Veneno mais forte" starts with a
+        // label in Portuguese only because the words are the other way round in English
+        return matchLabel(stripLead(english), englishLabels());
     }
     const rest = stripLead(text);
     return (
-        matchLabel(
-            rest,
-            LABELS.map((label) => [label, ICONS[label]]),
-        ) ?? (getLang() === "en" ? undefined : matchLabel(rest, localizedLabels(), true))
+        matchLabel(rest, englishLabels()) ??
+        (getLang() === "en" ? undefined : matchLabel(rest, localizedLabels(), true))
     );
 }
 
@@ -168,10 +182,11 @@ function matchLabel(
     labels: readonly (readonly [string, StatIconRef])[],
     skipShort = false,
 ): StatIconRef | undefined {
-    const attempts = skipShort ? [rest, rest.replace(/^(\p{L}{1,3}['’]?\s*)+/u, "")] : [rest];
+    // A short word counts only when set off by a space or an apostrophe: never a slice of a word
+    const attempts = skipShort ? [rest, rest.replace(/^(\p{L}{1,3}(?:['’]|\s+))+/u, "")] : [rest];
     for (const attempt of attempts) {
         for (const [label, icon] of labels) {
-            if (attempt.startsWith(label) && !/\p{L}/u.test(attempt[label.length] ?? "")) {
+            if (attempt.startsWith(label) && endsWord(attempt, label.length)) {
                 return { ...icon };
             }
         }

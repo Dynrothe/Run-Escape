@@ -1,6 +1,11 @@
 import { useSyncExternalStore } from "react";
 
-import { englishForTranslation, getMessages, keyForEnglish } from "./catalog";
+import {
+    englishForTranslation,
+    getMessages,
+    keyForEnglish,
+    translationsOfEnglish,
+} from "./catalog";
 import { LANGS, Lang, Params } from "./types";
 
 // The language the game is shown in: kept in localStorage beside the save, and read by
@@ -146,6 +151,11 @@ export function tl(text: string): string {
     const key = keyForEnglish(text);
     const found = key !== undefined ? getMessages(current)[key] : undefined;
     return found ?? translateSentence(text) ?? text;
+}
+
+// Every way the active language words a text that is English in the files
+export function translationsOf(english: string): string[] {
+    return current === "en" ? [] : translationsOfEnglish(current, english);
 }
 
 // The reverse of tl(): the English a translated text was written from, or undefined

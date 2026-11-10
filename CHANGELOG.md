@@ -7,7 +7,8 @@ the version in the corner).
 
 ### Fixed
 
-- Stat icons on tooltips, cards and the pause menu now show in Português (BR) too.
+- Stat icons on tooltips, cards and the pause menu now show in other languages, Português (BR)
+  included.
 
 ## 0.30.0 - 2026-11-09
 

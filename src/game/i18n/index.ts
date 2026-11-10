@@ -14,5 +14,6 @@ export {
     tl,
     tp,
     tr,
+    translationsOf,
     useLang,
 } from "./store";
