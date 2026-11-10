@@ -477,6 +477,55 @@ export const CHARACTERS: CharacterDef[] = [
         },
         unlock: { kind: "beatMap", mapId: "stranglewood" },
     },
+    {
+        id: "shadow_walker",
+        name: "Shadow walker",
+        description:
+            "Starts with Shadow Burst. **Step between.** Once every 30 seconds, a hit that would " +
+            "take over a fifth of her hitpoints takes her into the shadows instead: a moment out " +
+            "of reach, and out 3 tiles on. In Lassar, a step in the city takes her to the realm.",
+        style: "magic",
+        startingWeapon: "shadow_burst",
+        // The ancient robes
+        equipment: {
+            [EquipSlot.HEAD]: 12203,
+            [EquipSlot.TORSO]: 12193,
+            [EquipSlot.LEGS]: 12195,
+            [EquipSlot.CAPE]: 12197,
+        },
+        bonus: {},
+        trait: {
+            kind: "step",
+            name: "Step between",
+            every: 30,
+            share: 0.2,
+            seconds: 1.5,
+            distance: 3,
+            // The dark that ripples out as Lassar's world turns
+            spotAnim: 2450,
+        },
+        unlock: { kind: "beatMap", mapId: "lassar_undercity" },
+    },
+    {
+        id: "treasure_hunter",
+        name: "Treasure hunter",
+        description:
+            "Starts with bronze throwing knives. **Dig site.** A casket left on the ground buries " +
+            "itself. Dug up again (walk back over it) after 20 seconds, it's a tier better; " +
+            "after 60 seconds it's gone.",
+        style: "ranged",
+        startingWeapon: "throwing_knives",
+        // A pith helmet, an explorer's backpack and desert clothes
+        equipment: {
+            [EquipSlot.HEAD]: 12516,
+            [EquipSlot.CAPE]: 12514,
+            [EquipSlot.TORSO]: 1833,
+            [EquipSlot.LEGS]: 1835,
+        },
+        bonus: {},
+        trait: { kind: "dig", name: "Dig site", buries: 3, ready: 20, gone: 60 },
+        unlock: { kind: "realmCaskets", mapId: "lassar_undercity", count: 5 },
+    },
     // The fun maps' adventurers, one for a task on each
     {
         id: "scammer",

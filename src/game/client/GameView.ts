@@ -58,6 +58,7 @@ import {
     Thrall,
     Visitor,
 } from "../core/entities";
+import type { RealmHole } from "../core/rules/RealmRule";
 import { t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
 import { BossFightView } from "./BossFightView";
@@ -73,6 +74,7 @@ import {
     getPickupModelKey,
     getPileLook,
     getPropKey,
+    getRealmLocKey,
     getShieldedModelKey,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
@@ -703,6 +705,10 @@ export class GameView {
                 scale = pile.scale;
             } else if (pickup.kind === "food") {
                 scale = 1.1;
+            } else if (pickup.kind === "casket" && sim.digState(pickup) === "buried") {
+                // Buried (the Treasure hunter's dig site): its lid just showing
+                scale = 1.3;
+                height += 0.3;
             } else if (pickup.kind === "casket") {
                 scale = 1.3;
                 unlit = 1;
@@ -794,6 +800,7 @@ export class GameView {
         this.floor.submitActors(actors, sim, alpha);
         const focus = (sim.heroes[this.viewHero] ?? sim.heroes[sim.focus]).player;
         this.roots.submitActors(actors, sim, focus.x, focus.y);
+        this.drawRealmHoles(actors, sim);
         this.trees = this.trees.filter((tree) => sim.tick - tree.start < TREE_TICKS);
         for (const tree of this.trees) {
             this.drawTree(actors, sim, tree);
@@ -825,6 +832,44 @@ export class GameView {
                     ? { scale: (fit * 128) / Math.max(1, model.radius), unlit: 1 }
                     : UNLIT,
             );
+        }
+    }
+
+    // A map of two worlds' puddle into the realm, and its portal back (RealmRuleDef.look), playing
+    // their own animations; the puddle blinks its last seconds
+    private drawRealmHoles(actors: ActorRenderer, sim: Sim): void {
+        const realm = sim.realm;
+        if (!realm) {
+            return;
+        }
+        const look = realm.def.look;
+        const tick = sim.tick;
+        const holes: [RealmHole | undefined, number][] = [
+            [realm.puddle, look.puddleLocId],
+            [realm.portal, look.portalLocId],
+        ];
+        for (const [hole, locId] of holes) {
+            if (!hole) {
+                continue;
+            }
+            const model = this.assets.get(getRealmLocKey(locId));
+            if (!model) {
+                continue;
+            }
+            const left = (hole.closeTick - tick) / TICKS_PER_SECOND;
+            const pulled = locId === look.puddleLocId && realm.pullTick >= 0;
+            if (!pulled && left < realm.def.puddles.blink && Math.floor(tick / 5) % 2 === 0) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const clientTicks = Math.floor(((tick - hole.openTick) / TICKS_PER_SECOND) * 50);
+            const frame = anim ? anim.getFrame(clientTicks) : 0;
+            // Opening out of nothing over its first half second
+            const grow = Math.min(1, (tick - hole.openTick) / (TICKS_PER_SECOND * 0.5));
+            actors.draw(model, anim, frame, hole.x, this.ground(sim, hole.x, hole.y), hole.y, 0, {
+                scale: grow * (pulled ? 1.2 : 1),
+                unlit: 1,
+            });
         }
     }
 

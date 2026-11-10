@@ -2418,7 +2418,7 @@ describe("enemy mechanics", () => {
 
         test("only ghosts and the Ankou go through walls; bats and aviansies fly", () => {
             const ghosts = ENEMIES.filter((def) => def.ghost).map((def) => def.id);
-            expect(ghosts.sort()).toEqual(["ankou", "ghost"]);
+            expect(ghosts.sort()).toEqual(["ankou", "ghost", "lassar_ghost"]);
             for (const id of ["giant_bat", "crystalline_bat", "jal_mejrah", "aviansie"]) {
                 expect(getEnemy(id).flies).toBe(true);
             }

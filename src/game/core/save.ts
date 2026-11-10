@@ -506,6 +506,8 @@ export type RunSummary = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills?: Record<string, number>;
     caskets?: number;
+    // Of those, the ones opened in a map's Shadow Realm (RealmRuleDef)
+    realmCaskets?: number;
     // The Scabaras room was beaten: its puzzle helper's unlocked
     scabarasBeaten?: boolean;
 };
@@ -664,7 +666,7 @@ export function isActRecord(save: SaveData, run: RunSummary): boolean {
 }
 
 // Beating a map counts from any run so far; the rest need doing in one run
-function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean {
+export function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean {
     switch (task.kind) {
         case "beatMap":
             return ((task.hard ? save.hardVictories : save.mapVictories)[task.mapId] ?? 0) > 0;
@@ -677,6 +679,8 @@ function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean
                 save.trophies.includes(task.trophyId) ||
                 (run?.trophies ?? []).includes(task.trophyId)
             );
+        case "realmCaskets":
+            return run?.mapId === task.mapId && (run.realmCaskets ?? 0) >= task.count;
     }
 }
 

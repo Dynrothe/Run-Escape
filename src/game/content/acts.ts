@@ -54,6 +54,7 @@ export const FALLEN_EMPIRE: ActDef = {
             iconObjId: 28319,
         },
         {
+            mapId: "lassar_undercity",
             name: "The Lassar Undercity",
             boss: "The Whisperer",
             rule: "Black puddles open into the Shadow Realm.",

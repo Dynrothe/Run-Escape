@@ -338,6 +338,48 @@ The city is heavy: 3,000 to 3,600 locs in each of its middle squares (40,99 and 
 time, so the twin costs memory, not triangles. Measure the busiest street and the cathedral's forecourt first. If they're
 over budget, the realm's tentacles are the first thing to cut (each is a few hundred triangles).
 
+### 4.11 As built (2026-11-10)
+
+Built in #159 as build order step 6. Where it differs from the above, and why:
+
+- **The arena** is a ScapeRune cut (`scaperune/maps/lassarUndercity.ts`) of squares 40 to 42 by 98 to 100, with 43 east
+  of it for the margin, set down at squares 62 to 66 by 104 to 108; the realm is the same cut of 36 to 39, set down six
+  squares west of it (`MapRecipe.twin`, `MapDef.twin`). The city's one-tile clutter (crates, barrels, rubble, stalls'
+  shelves) and doors come off, but its lamps and braziers: in OSRS they cut its streets into pockets that don't join, and
+  without them it's one piece of 21,900 open tiles. Ground a rise south of it hides from the camera (its steps down to
+  the water) is blocked. The realm's locs come off wherever their city twins do, so both are drawn alike.
+- **The twin on screen**: the renderer keeps both sets of squares loaded and, while the party's in the realm, draws each
+  city square's twin in its place (`MapManager.twin`, `WebGLMapSquare.drawAt`). The swap is instant, with the realm's
+  brightness (0.6 of the city's) and violet wash. Memory: both sets are loaded, about twice a one-world map's geometry.
+- **The start** is the forecourt at the top of the causeway to the cathedral's island, and the Whisperer rises on the
+  island (her arena in OSRS); the island's floor is the cache's near-black navy, so the map's drawn at brightness 1.6.
+- **The way back**: the third soul opens the Anima Portal where it was caught, and it takes a second's standing in it to
+  go through (one at your feet would otherwise take you back the moment the last soul's caught, leaving no choice). If
+  it closes unused, three more souls come.
+- **The waiting world**: both worlds wait, the realm as well as the city (its crowd and drops are kept for your next
+  dive), but its lost souls, which come new each time. While the party's in the realm the city's elites and rings wait
+  too; its bosses don't. On a lapse the realm's ground is cleared.
+- **Co-op**: the first player whose sanity runs out takes the whole party back (the party's always in one world).
+- **The Tentacle** in the realm is a riser (`RealmRuleDef.risers`): one comes up 3 to 6 tiles from the party every 8
+  seconds there, two at most, and lashes out at whoever comes within 5 tiles (a shot, not the X). The Whisperer's
+  tentacles are a cross round you (the ground attacks' `cross`), not an X.
+- **The realm's elites**: from 4:00 each dive brings a Shadow Keeper in as an elite (`RealmRuleDef.elite`), so the
+  Treasure hunter's five caskets in one run can be done; by the bot's sweeps it's at most one a run without it.
+- **The Forsaken Assassin** goes between the worlds with the party (`EnemyDef.realm` both), and his dart lands out of
+  nowhere with a mark on the ground first.
+- **Soul Siphon**: at 80%, 55% and 30% she pulls everyone into the realm, and six souls come to her from 12 tiles out,
+  each healing her 2.5% as it reaches her (`EnemyHealsDef.once`); catching them counts towards the way back.
+- **Sanity's whisper** below 30 isn't in: the edges close in, without a sound.
+- **The bot** (`simulate-run.ts`) walks into a puddle near it while it's over 60% hitpoints (`REALM=0` never), chases
+  lost souls in the realm and takes the portal home.
+- **Music**: The Fallen Empire in the city, Lassar Silence (the area's near-silent track) in the realm, Song of the
+  Silent Choir from 15:00.
+- **The Shadow walker**: her step lasts 1.5 seconds, out 3 tiles on the way she faces; enemies don't lose her beyond
+  that. **The Treasure hunter**: a casket buries itself after 3 seconds on the ground.
+- **Phones**: thinned for the busiest views (the ruined houses' walls to a fifth and less, lamps to a quarter, furniture
+  to a third), measured with `frameProbe` at 844 by 390 on the phone camera: the heaviest view is 64k in the city and
+  66.4k in the realm, souls in view.
+
 ## 5. Ghorrock (Duke Sucellus)
 
 ### 5.1 Found in the cache: the prison is too cramped
@@ -808,7 +850,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 3   | **Awakened Vardorvis**, with fighting pets (Butch first), and its design doc. Built, first pass (`awakened-vardorvis.md`); playtest next  | 2            | 2 weeks    |
 | 4   | **Invocations and relics** (tier 1 opens with the Stranglewood)                                                                           | 2            | 1.5 weeks  |
 | 5   | The Overgrown remix, with the remix switches, sets and records                                                                            | 2            | 4 days     |
-| 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter                        | 2            | 2.5 weeks  |
+| 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter. Built (4.11)          | 2            | 2.5 weeks  |
 | 7   | The Shadow remix                                                                                                                          | 5, 6         | 3 days     |
 | 8   | Awakened Whisperer, Wisp                                                                                                                  | 3, 6         | 2 weeks    |
 | 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger                                                  | 2            | 3 weeks    |

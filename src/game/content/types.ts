@@ -261,6 +261,11 @@ export type EnemyDef = {
     // then master). The flag carrier's flag is worth a second; a Pest Control
     // portal's is smaller, as there are four of them.
     caskets?: CasketTier[];
+    // On a map of two worlds (RealmRuleDef): both, it goes between them with the party (a boss of
+    // both); drags, it pulls the party into the realm as it comes, and stays there
+    realm?: "both" | "drags";
+    // Caught by walking into it, not killed (a lost soul, RealmRuleDef.souls)
+    caught?: boolean;
 };
 
 export type EnemySpawnsDef = {
@@ -295,6 +300,8 @@ export type EnemyHealsDef = {
     seek?: number;
     // Shown on what it heals
     spotAnim?: number;
+    // Heals once and is gone into what it heals (the Whisperer's siphoned souls)
+    once?: boolean;
 };
 
 export type EnemyRevivesDef = {
@@ -1422,6 +1429,8 @@ export type BossDef = {
         distance?: number;
         message?: string;
         shout?: string;
+        // Pulls the party into the realm first, on a map of two worlds (RealmRuleDef)
+        realm?: boolean;
     }[];
     // A shield that slides back and forth between the boss and the player,
     // which its blockable attacks can't get through (like TzKal-Zuk's
@@ -1841,7 +1850,9 @@ export type UnlockTask =
     // Last this many seconds in a run on the map
     | { kind: "survive"; mapId: string; seconds: number }
     // Find this trophy in the raid's chest on the map (trophies.ts says when it can come)
-    | { kind: "raidChest"; mapId: string; trophyId: string };
+    | { kind: "raidChest"; mapId: string; trophyId: string }
+    // Open this many caskets in one run on the map, in its Shadow Realm (RealmRuleDef)
+    | { kind: "realmCaskets"; mapId: string; count: number };
 
 // What a quest asks for, counted over every run since quests came in
 export type QuestObjective =
@@ -1899,19 +1910,36 @@ export type CharacterDef = {
 // strip `length` tiles long and `width` across ahead of them, hitting everything in it for
 // `damage` times the swing's own, drawn as locId falling over; and their swings cut what a map's
 // rule lays (roots) cutReach tiles further out.
-export type CharacterTraitDef = {
-    kind: "timber";
-    name: string;
-    every: number;
-    length: number;
-    width: number;
-    damage: number;
-    cutReach: number;
-    locId: number;
-    sound?: number;
-    // What it throws up as it lands, along the strip (ImpactDef)
-    impact?: ImpactDef;
-};
+export type CharacterTraitDef =
+    | {
+          kind: "timber";
+          name: string;
+          every: number;
+          length: number;
+          width: number;
+          damage: number;
+          cutReach: number;
+          locId: number;
+          sound?: number;
+          // What it throws up as it lands, along the strip (ImpactDef)
+          impact?: ImpactDef;
+      }
+    // step (the Shadow walker's): once every `every` seconds, a hit that would take over share of
+    // her hitpoints takes her into the shadows instead, seconds she can't be touched, and out
+    // distance tiles on the way she's facing; on a map of two worlds (RealmRuleDef), in the
+    // city, into the realm
+    | {
+          kind: "step";
+          name: string;
+          every: number;
+          share: number;
+          seconds: number;
+          distance: number;
+          spotAnim?: number;
+      }
+    // dig (the Treasure hunter's): a casket left on the ground buries itself after buries
+    // seconds; dug up (walked over) from ready seconds it's a tier better, and at gone it's lost
+    | { kind: "dig"; name: string; buries: number; ready: number; gone: number };
 
 export type ShopUpgradeDef = {
     id: string;
@@ -2068,6 +2096,9 @@ export type MapDef = {
     // The rule it's played by (RunRuleDef, core/rules): what makes it that map, run by the sim
     // every tick
     rule?: RunRuleDef;
+    // A twin of the map drawn in its place while the party's in the other world (RealmRuleDef):
+    // its squares are dx tiles west or east (ScapeRune's MapRecipe.twin). The sim never sees it.
+    twin?: { dx: number };
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
@@ -2077,7 +2108,7 @@ export type MapDef = {
 // map's grid and what's here, never an Act II map's own data, so it works on any map (the remixes
 // put them on old ones). Shared things (roots) are the party's; what it does to a player is each
 // player's own.
-export type RunRuleDef = RootsRuleDef;
+export type RunRuleDef = RootsRuleDef | RealmRuleDef;
 
 // The Stranglewood's: roots creep in from the wood (the arena's blocked ground), slowing and
 // hurting whoever's on them and speeding enemies; hits cut them back, and root hearts make them
@@ -2128,6 +2159,58 @@ export type RootsRuleDef = {
         loops: number[];
         recolor?: [from: number, to: number][];
         cutSpotAnim: number;
+    };
+};
+
+// The Lassar Undercity's: the city and its Shadow Realm (core/rules/RealmRule.ts). Black puddles open
+// in the city; walk into one and the whole party's pulled into the realm, where other enemies come,
+// drops are richer and each player's sanity drains. Catching lost souls opens the way back; at no
+// sanity a player's thrown back, hurt, and what's on the realm's ground is lost. Whichever world the
+// party isn't in waits as it was. On a map with a twin (MapDef.twin) the realm is drawn as that; on
+// any other, as the look's brightness and wash alone.
+export type RealmRuleDef = {
+    kind: "realm";
+    // A puddle opens every `every` seconds from `from`, at a spot min to max tiles from a player, for
+    // open seconds (blinking its last blink), radius tiles across; walked into, the party follows
+    // after pull seconds
+    puddles: {
+        from: number;
+        every: number;
+        distance: [min: number, max: number];
+        open: number;
+        blink: number;
+        radius: number;
+        pull: number;
+    };
+    // Each player's, 0 to max: refills refill a second in the city, drains drain a second in the
+    // realm, and an enemy's hit there takes hit more. Under low the screen's edges darken. At 0
+    // they're thrown back with lapse of their hitpoints gone.
+    sanity: { max: number; refill: number; drain: number; hit: number; low: number; lapse: number };
+    // count lost souls (enemyId) come into the realm with the party, min to max tiles off; catch
+    // them all (walk into them) and a portal opens at the catcher's feet for portal.seconds,
+    // portal.radius tiles across; missed, the souls come again
+    souls: { enemyId: string; count: number; distance: [min: number, max: number] };
+    portal: { seconds: number; radius: number };
+    // What drops are worth in the realm: bones' experience and coins times these, and a casket
+    // this much likelier
+    drops: { bones: number; coins: number; caskets: number };
+    // The realm's own waves, by the map's clock, in the city's place while the party's there
+    waves: WaveDef[];
+    // Now and then something of the realm's rises near the party there (a tentacle): enemyId,
+    // every `every` seconds in the realm, at most max at once, min to max tiles off
+    risers?: { enemyId: string; every: number; max: number; distance: [min: number, max: number] };
+    // From `from` seconds, each dive brings one of these in as an elite (its casket the realm's
+    // surest), min to max tiles off
+    elite?: { enemyId: string; from: number; distance: [min: number, max: number] };
+    // How it's drawn: the realm's brightness and wash over the world, its music, the puddle's and
+    // the portal's scenery, and the ripple as the world turns
+    look: {
+        brightness: number;
+        wash: string;
+        music?: string;
+        puddleLocId: number;
+        portalLocId: number;
+        flipSpotAnim?: number;
     };
 };
 

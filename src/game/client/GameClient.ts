@@ -76,7 +76,7 @@ import { ArenaGrid } from "../core/world/ArenaGrid";
 import { fmtNum, t, tl, tp } from "../i18n";
 import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
-import { installRecipe } from "../scaperune/squares";
+import { getRecipe, installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
     CinematicCamera,
@@ -244,6 +244,24 @@ function getRegionInput(map: MapDef): RegionDataInput {
     const locs = map.lighting?.locs;
     const region = getArenaRegion(map);
     return locs ? { ...region, glowLocs: Object.keys(locs).map(Number) } : region;
+}
+
+// A map of two worlds' squares and its twin's (MapDef.twin, MapManager.twin): its recipe's
+// squares, or those under its arena
+function getTwinSquares(map: MapDef) {
+    if (!map.twin) {
+        return undefined;
+    }
+    const recipe = getRecipe(map.id);
+    const { baseX, baseY, sizeX, sizeY } = map.arena;
+    return {
+        x0: recipe ? recipe.mapX : Math.floor(baseX / 64),
+        y0: recipe ? recipe.mapY : Math.floor(baseY / 64),
+        x1: recipe ? recipe.mapX + recipe.squaresX - 1 : Math.floor((baseX + sizeX - 1) / 64),
+        y1: recipe ? recipe.mapY + recipe.squaresY - 1 : Math.floor((baseY + sizeY - 1) / 64),
+        dx: Math.round(map.twin.dx / 64),
+        shown: false,
+    };
 }
 
 // The world fades out past the arena's edge. A ScapeRune map's world carries on: it
@@ -1782,6 +1800,7 @@ export class GameClient implements GameFrameHandler {
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
         this.renderer.setLighting(map.lighting !== undefined);
+        this.renderer.setTwin(getTwinSquares(map));
         this.sceneLights.reset();
         this.minimap.setMap(map);
         const music = map.music && musicFor(map.music);
@@ -2173,6 +2192,7 @@ export class GameClient implements GameFrameHandler {
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
         this.renderer.setLighting(false);
+        this.renderer.setTwin(undefined);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -2569,10 +2589,18 @@ export class GameClient implements GameFrameHandler {
             sim.map.raid && sim.raidStage === "waves"
                 ? sim.map.raid.rooms[sim.raidRoom].hall
                 : undefined;
-        const hallBrightness = hall?.brightness;
-        if (hall?.wash !== this.shownWash) {
-            this.shownWash = hall?.wash;
-            this.renderer.setWash(hall?.wash);
+        // A map of two worlds' realm (RealmRuleDef.look): its twin drawn in the city's place, darker
+        // and washed with its colour
+        const realm = sim.realm?.layer === 1 ? sim.realm.def.look : undefined;
+        if (sim.map.twin) {
+            this.renderer.setTwinShown(realm !== undefined);
+        }
+        const hallBrightness =
+            hall?.brightness ?? (realm && realm.brightness * (sim.map.brightness ?? 1));
+        const wash = hall?.wash ?? realm?.wash;
+        if (wash !== this.shownWash) {
+            this.shownWash = wash;
+            this.renderer.setWash(wash);
         }
         // A gaze's light, brought up as it winds up and let down after (BossAttackDef.cover),
         // eased both ways so it never steps
@@ -3116,6 +3144,37 @@ export class GameClient implements GameFrameHandler {
                 case "roundStarted":
                     this.store.toast(describeRound(sim), 7000);
                     break;
+                case "worldTurned": {
+                    // The realm's quiet, and back in the city its track (or the final boss's)
+                    const look = sim.realm?.def.look;
+                    const track =
+                        event.layer === 1
+                            ? look?.music
+                            : sim.bossSpawned
+                              ? (sim.map.bossMusic ?? sim.map.music)
+                              : sim.map.music;
+                    const music = track && musicFor(track);
+                    if (music) {
+                        this.audio.playMusic(music);
+                    }
+                    this.store.toast(
+                        t(
+                            event.layer === 1
+                                ? "toast.realm_in"
+                                : event.lapse
+                                  ? "toast.realm_lapse"
+                                  : "toast.realm_out",
+                        ),
+                    );
+                    break;
+                }
+                case "soulCaught":
+                    if (event.left > 0) {
+                        this.store.toast(tp("toast.souls_left", event.left));
+                    } else {
+                        this.store.toast(t("toast.portal_open"));
+                    }
+                    break;
                 case "powerUp":
                     this.store.toast(tl(event.message));
                     break;
@@ -3528,6 +3587,8 @@ export class GameClient implements GameFrameHandler {
                 !sim.tombsWardens,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
+            sanity: sim.realm && Math.ceil(sim.realm.sanityOf(sim.focus)),
+            sanityMax: sim.realm?.def.sanity.max,
             poisoned: sim.player.poisonEnd !== -1,
             xpFraction: Math.min(
                 1,

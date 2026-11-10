@@ -25,6 +25,8 @@ const SHIPPED_HASHES: Record<string, string> = {
     theatre_of_blood: "e846bfdc8dc8abf583ebe7de484d248c1cd31ba35393ada5b24893517c510973",
     zachariah: "9486e1585cc223d81ed5ddc042d01a189265aa84e3f0de61bf32d41a0747a508",
     stranglewood: "933870d4549c12b99897d02a53df4bacaa7ca194f32fa0708068799b39641ef4",
+    // The city and its Shadow Realm (MapRecipe.twin) together
+    lassar_undercity: "e63d1ae21372ae38ee1522e756b561b474a8b30df23701858d76f5d6ae63fe6a",
     tombs_of_amascut: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
     // The raid's squares under the quest's id: the same build
     beneath_cursed_sands: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
@@ -44,6 +46,12 @@ for (const id of ids) {
         throw new Error(`No recipe called ${id}`);
     }
     const squares = buildRecipeSquares(recipe, context);
+    // Its twin's squares too (MapRecipe.twin: Lassar's Shadow Realm), drawn in its place
+    if (recipe.twin) {
+        for (const [square, data] of buildRecipeSquares(recipe.twin, context)) {
+            squares.set(square, data);
+        }
+    }
     const whole = crypto.createHash("sha256");
     for (const [square, { terrain, locs }] of [...squares].sort((a, b) => a[0] - b[0])) {
         const one = crypto.createHash("sha256").update(terrain).update(locs).digest("hex");

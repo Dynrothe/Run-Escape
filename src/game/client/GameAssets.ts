@@ -314,7 +314,9 @@ export function getSpotAnimIds(): number[] {
     }
     for (const map of ALL_MAPS) {
         // What a cut through a map's roots throws up (MapDef.rule)
-        add(map.rule?.look.cutSpotAnim);
+        // and the ripple as a map of two worlds turns
+        const rule = map.rule;
+        add(rule?.kind === "roots" ? rule.look.cutSpotAnim : rule?.look.flipSpotAnim);
         // What plays in its cinematics (MapDef.cinematic, and a fight's parts')
         add(...getMapCinematics(map).flatMap((def) => def.cues.map((cue) => cue.spotAnim)));
         // A floor's slabs (the Wardens')
@@ -514,6 +516,11 @@ export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): Floor
 // A map's roots' scenery (RootsRuleDef.look, client/RootsView.ts), with the look's colours swapped
 export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): string {
     return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
+}
+
+// A map of two worlds' puddle or portal (RealmRuleDef.look), animated
+export function getRealmLocKey(locId: number): string {
+    return "realmloc:" + locId;
 }
 
 // An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
@@ -834,8 +841,13 @@ export class GameAssets {
         }
         // A map's roots (MapDef.rule, client/RootsView.ts), their colours swapped
         const rootLooks = new Set<string>();
+        const realmLocs = new Set<number>();
         for (const map of ALL_MAPS) {
-            const look = map.rule?.look;
+            // A map of two worlds' puddles and portal (RealmRuleDef.look), as they move
+            if (map.rule?.kind === "realm") {
+                realmLocs.add(map.rule.look.puddleLocId).add(map.rule.look.portalLocId);
+            }
+            const look = map.rule?.kind === "roots" ? map.rule.look : undefined;
             for (const locId of [...(look?.runners ?? []), ...(look?.loops ?? [])]) {
                 const key = getRootLookKey(locId, look!);
                 if (!rootLooks.has(key)) {
@@ -844,10 +856,13 @@ export class GameAssets {
                 }
             }
         }
+        for (const locId of realmLocs) {
+            requests.push({ kind: "loc", key: getRealmLocKey(locId), locId, animated: true });
+        }
         // The tree an adventurer's trait fells (CharacterDef.trait)
         const traitLocs = new Set<number>();
         for (const character of CHARACTERS) {
-            if (character.trait) {
+            if (character.trait?.kind === "timber") {
                 traitLocs.add(character.trait.locId);
             }
         }

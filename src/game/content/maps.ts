@@ -1,6 +1,7 @@
 import { tr } from "../i18n";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
+import { LASSAR_CATHEDRAL, LASSAR_RECIPE, TWIN_SQUARES } from "../scaperune/maps/lassarUndercity";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
 import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
@@ -8,6 +9,7 @@ import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
+import { LASSAR_EVENTS, LASSAR_REALM, LASSAR_WAVES } from "./lassar";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
@@ -368,6 +370,47 @@ export const MAPS: MapDef[] = [
         music: "Strangled",
         // Vardorvis's, from 15:00
         bossMusic: "Blood Rush",
+    },
+    {
+        id: "lassar_undercity",
+        name: "The Lassar Undercity",
+        description:
+            "Crawling hands, ghosts, leeches and the city's ancient guardians. Black puddles open " +
+            "into the Shadow Realm: walk in and the city waits while you're there, with other " +
+            "enemies, richer drops and your sanity draining. Catch three lost souls to get back. " +
+            "The Shadow Keeper and the Forsaken Assassin come one by one, and the Whisperer " +
+            "rises in her cathedral at the end.",
+        // The Siren's staff, the Whisperer's
+        iconObjId: 28323,
+        // The real sunken city, its streets cleared of clutter (scaperune/maps/lassarUndercity.ts)
+        arena: getRecipeArena(LASSAR_RECIPE),
+        // The cathedral's forecourt, at the top of the causeway to her island
+        spawn: getRecipeWorldTile(LASSAR_RECIPE, LASSAR_RECIPE.spawn.x, LASSAR_RECIPE.spawn.y),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 4.2, damage: 2.9 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: LASSAR_WAVES,
+        events: LASSAR_EVENTS,
+        finalBossWarning: "The cathedral's bells toll... The Whisperer is waking!",
+        victoryText: "The Whisperer is silenced! Lassar sleeps again.",
+        // Her cathedral: she rises in its middle
+        bossArena: {
+            baseX: Math.floor(LASSAR_CATHEDRAL.x) - 10,
+            baseY: Math.floor(LASSAR_CATHEDRAL.y) - 10,
+            size: 20,
+        },
+        scaperune: true,
+        // Its floors are the cache's dark slate and navy: drawn brighter, as the game's lighting
+        // shows them
+        brightness: 1.6,
+        act: { id: "fallen_empire", requires: "inferno" },
+        rule: LASSAR_REALM,
+        // Its Shadow Realm, drawn in the city's place while the party's there
+        twin: { dx: TWIN_SQUARES * 64 },
+        // The city's track; the realm's quiet is its own (RealmRuleDef.look)
+        music: "The Fallen Empire",
+        // The Whisperer's, from 15:00
+        bossMusic: "Song of the Silent Choir",
     },
     {
         id: "halloween",

@@ -1158,6 +1158,19 @@ export class BossFightView {
         if (boss?.def.boss?.intro && !boss.dead && !sim.intro && vignette !== null) {
             this.vignette(ctx, width, height, vignette ?? "rgba(10, 0, 20, 0.5)");
         }
+        // Low on sanity in the Shadow Realm (RealmRuleDef.sanity.low): the edges close in, darker
+        // the lower it is, and breathing
+        const realm = sim.realm;
+        if (realm?.layer === 1) {
+            const low = realm.def.sanity.low;
+            const sanity = realm.sanityOf(sim.focus);
+            if (sanity < low) {
+                const depth = 1 - sanity / low;
+                const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * 2.4);
+                const alpha = 0.3 + 0.4 * depth + 0.1 * pulse;
+                this.vignette(ctx, width, height, `rgba(20, 0, 40, ${alpha.toFixed(3)})`);
+            }
+        }
         const curse = sim.curse;
         if (curse) {
             // Quicker on its last attack, so the end's seen coming

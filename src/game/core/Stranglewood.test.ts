@@ -3,7 +3,7 @@ import { getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { MAPS, getMap } from "../content/maps";
 import { STRANGLEWOOD_ROOTS } from "../content/stranglewood";
-import { emptyStats } from "../content/types";
+import { CharacterTraitDef, emptyStats } from "../content/types";
 import { HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { usePortableMath } from "./fmath";
 import { syncHash } from "./lockstep";
@@ -59,9 +59,9 @@ describe("the Stranglewood", () => {
 
     test("is played by its roots, and nothing else is", () => {
         expect(createSim().rule?.def).toBe(STRANGLEWOOD_ROOTS);
-        // Awakened Vardorvis's clearing has its own (Vardorvis.test.ts)
+        // Awakened Vardorvis's clearing has its own (Vardorvis.test.ts), and Lassar its realm (Lassar.test.ts)
         for (const map of MAPS.filter(
-            (m) => !["stranglewood", "awakened_vardorvis"].includes(m.id),
+            (m) => !["stranglewood", "awakened_vardorvis", "lassar_undercity"].includes(m.id),
         )) {
             expect(createSim({ mapId: map.id }).rule).toBeUndefined();
         }
@@ -165,7 +165,7 @@ describe("the Stranglewood", () => {
 describe("Act II", () => {
     test("opens once the Inferno's beaten, its maps in any order", () => {
         const act = MAPS.filter((map) => map.act);
-        expect(act.map((map) => map.id)).toEqual(["stranglewood"]);
+        expect(act.map((map) => map.id)).toEqual(["stranglewood", "lassar_undercity"]);
         expect(act.every((map) => map.act!.requires === FALLEN_EMPIRE.requires)).toBe(true);
         expect(getMap(FALLEN_EMPIRE.requires).act).toBeUndefined();
     });
@@ -213,7 +213,10 @@ describe("Act II", () => {
 describe("the Forester", () => {
     test("fells a tree every so many kills, and cuts roots further out", () => {
         const sim = createSim({ characterId: "forester" });
-        const trait = getCharacter("forester").trait!;
+        const trait = getCharacter("forester").trait as Extract<
+            CharacterTraitDef,
+            { kind: "timber" }
+        >;
         expect(sim.weapons.map((w) => w.def.id)).toEqual(["two_handed_sword"]);
         sim.heroes[0].traitKills = trait.every - 1;
         const victim = sim.spawnEnemy(getEnemy("strangled"), "normal", {

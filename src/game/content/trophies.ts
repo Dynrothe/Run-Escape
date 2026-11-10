@@ -83,6 +83,13 @@ export const TROPHIES: TrophyDef[] = [
         how: "From Vardorvis, the first time he's beaten in the Stranglewood.",
         from: { kind: "boss", enemyId: "vardorvis", mapId: "stranglewood", chance: 1 },
     },
+    {
+        id: "sirens_staff",
+        name: "Siren's staff",
+        objId: 28323,
+        how: "From the Whisperer, the first time she's beaten in the Lassar Undercity.",
+        from: { kind: "boss", enemyId: "whisperer", mapId: "lassar_undercity", chance: 1 },
+    },
     // Awakened Vardorvis's pet, certain: the fight's the gate (act-2-fallen-empire.md, 7.2)
     {
         id: "butch",

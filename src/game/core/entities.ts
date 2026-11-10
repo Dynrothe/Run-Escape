@@ -654,6 +654,8 @@ export type Pickup = {
     pileUid: number;
     // Caskets only
     tier?: CasketTier;
+    // Dug up a tier better (the Treasure hunter's trait, CharacterTraitDef dig)
+    dug?: boolean;
     // Power-ups only: which one
     powerUp?: string;
     // A casket that's really a boss (EnemyDef.disguise)
@@ -1137,6 +1139,11 @@ type SimEventBody =
     // or was brought back by the teammate at index by
     | { type: "heroDown" }
     | { type: "heroLeft" }
+    // The party's turned to the other world (RealmRule): 1 the realm, 0 the city; lapse, thrown
+    // back out of sanity
+    | { type: "worldTurned"; layer: 0 | 1; lapse: boolean }
+    // A lost soul caught, and how many of this lot are left
+    | { type: "soulCaught"; left: number }
     | { type: "heroRevived"; by: number }
     // Co-op: a hero found or bought an extra revive
     | { type: "extraRevive" };

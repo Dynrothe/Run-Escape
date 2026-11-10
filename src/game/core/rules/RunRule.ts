@@ -1,5 +1,6 @@
 import type { RunRuleDef } from "../../content/types";
 import type { ArenaGrid } from "../world/ArenaGrid";
+import { RealmRule } from "./RealmRule";
 import { RootRule } from "./RootRule";
 
 // A map's rule (MapDef.rule, RunRuleDef): something that changes how the map's played, run by the
@@ -16,10 +17,17 @@ export interface RuleHost {
     readonly mapSeconds: number;
     // Where the heroes who are up are, x then y
     heroPositions(): number[];
-    // An enemy of the rule's own brought in at a spot (a root heart): its uid, or undefined when it
-    // can't be
-    spawnRuleEnemy(enemyId: string, x: number, y: number): number | undefined;
+    // An enemy of the rule's own brought in at a spot (a root heart; elite, as an elite, casket and
+    // all): its uid, or undefined when it can't be
+    spawnRuleEnemy(enemyId: string, x: number, y: number, elite?: boolean): number | undefined;
     isEnemyAlive(uid: number): boolean;
+    // The heroes who are up: index, x, y, and the next's
+    upHeroes(): number[];
+    // The final boss is up
+    readonly finalBossUp: boolean;
+    // The party turns to the other world (RealmRule): what the sim keeps of each, swapped. lapse:
+    // the hero thrown back, out of sanity
+    turnWorld(to: 0 | 1, lapse?: number): void;
 }
 
 export interface RunRule {
@@ -65,5 +73,7 @@ export function createRunRule(
     switch (def.kind) {
         case "roots":
             return new RootRule(def, grid, seed, ticksPerSecond);
+        case "realm":
+            return new RealmRule(def, grid, seed, ticksPerSecond);
     }
 }

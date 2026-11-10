@@ -2139,6 +2139,32 @@
     transform-origin: left;
 }
 
+/* Sanity, under hitpoints on a map of two worlds: the Shadow Realm's violet */
+.ui-sanity {
+    position: relative;
+    width: min(280px, calc(60vw / var(--ui-scale)));
+    height: 12px;
+    margin-top: 2px;
+    background: #1a0f2a;
+    border: 2px solid #000;
+}
+
+.ui-sanity-fill {
+    height: 100%;
+    background: #8a6ad8;
+    transform-origin: left;
+}
+
+.ui-sanity span {
+    position: absolute;
+    inset: 0;
+    text-align: center;
+    font-size: 11px;
+    line-height: 12px;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+}
+
 /* Poisoned: a sicker green, like the client's hitpoints orb */
 .ui-hp-poisoned {
     border-color: #2f5f00;

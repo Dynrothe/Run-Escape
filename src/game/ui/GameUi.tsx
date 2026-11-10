@@ -2597,6 +2597,7 @@ const Hud = memo(function Hud({
                     <AbilityButton client={client} />
                 </div>
                 <HpBar client={client} />
+                <SanityBar client={client} />
             </div>
         </>
     );
@@ -2894,6 +2895,22 @@ function HpBar({ client }: { client: GameClient }): JSX.Element | null {
             <span>
                 {hp} / {maxHp}
             </span>
+        </div>
+    );
+}
+
+// Sanity, under hitpoints, on a map of two worlds (RealmRuleDef.sanity): full in the city, draining
+// in the Shadow Realm
+function SanityBar({ client }: { client: GameClient }): JSX.Element | null {
+    const sanity = useHudNumber(client, (n) => n.sanity);
+    const max = useHudNumber(client, (n) => n.sanityMax);
+    if (sanity === undefined || !max) {
+        return null;
+    }
+    return (
+        <div className="ui-sanity" title={t("ui.hud.sanity")}>
+            <div className="ui-sanity-fill" style={{ transform: `scaleX(${sanity / max})` }} />
+            <span>{t("ui.hud.sanity_value", { sanity, max })}</span>
         </div>
     );
 }

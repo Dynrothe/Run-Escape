@@ -2,6 +2,7 @@ import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBak
 import { tr } from "../i18n";
 import { CURSED_SANDS_ENEMIES } from "./cursedSands";
 import { FUN_ENEMIES } from "./fun/enemies";
+import { LASSAR_ENEMIES } from "./lassar";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
 import { STRANGLEWOOD_ENEMIES } from "./stranglewood";
@@ -8373,6 +8374,7 @@ export const ENEMIES: EnemyDef[] = [
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
     ...STRANGLEWOOD_ENEMIES,
+    ...LASSAR_ENEMIES,
     ...VARDORVIS_ENEMIES,
 ];
 

@@ -196,6 +196,9 @@ export type HudNumbers = {
     devWardens?: boolean;
     hp: number;
     maxHp: number;
+    // Sanity, on a map of two worlds (RealmRuleDef.sanity), and its most: a bar under hitpoints
+    sanity?: number;
+    sanityMax?: number;
     // The hitpoints bar turns green, like the client's orb
     poisoned: boolean;
     // Progress to the next level, 0-1

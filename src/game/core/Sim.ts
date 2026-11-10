@@ -48,7 +48,7 @@ import {
     getRaidLevel,
     getRaidLevelScale,
 } from "../content/invocations";
-import { CASKETS, getGear, getItem } from "../content/items";
+import { CASKETS, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { PET_BY_ID, PetDef } from "../content/pets";
@@ -288,6 +288,7 @@ import {
     TYPE_FRAGILE,
 } from "./floorLayout";
 import { fm } from "./fmath";
+import { RealmLayer, RealmRule } from "./rules/RealmRule";
 import { RuleHost, RunRule, createRunRule } from "./rules/RunRule";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
@@ -757,6 +758,8 @@ export type RunResult = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills: Record<string, number>;
     caskets: number;
+    // Of those, the ones opened in a map's Shadow Realm (RealmRuleDef)
+    realmCaskets?: number;
     stats: RunStats;
 };
 
@@ -925,6 +928,8 @@ export type Hero = {
     // Their adventurer's trait (CharacterDef.trait): kills towards it, and whether it's ready
     traitKills: number;
     traitReady: boolean;
+    // A trait on a clock of its own (the Shadow walker's step): the tick it's ready again
+    traitNext: number;
     // What they're pressing, for the next tick
     moveX: number;
     moveY: number;
@@ -1405,6 +1410,13 @@ export class Sim {
     floor: ArenaFloor | undefined;
     // The map's rule (MapDef.rule, core/rules): roots creeping in
     readonly rule: RunRule | undefined;
+    // The same, on a map of two worlds (RealmRuleDef): which the party's in, and what's kept of the
+    // other while it's away (its enemies and what's on its ground), standing still
+    readonly realm: RealmRule | undefined;
+    private otherEnemies: Enemy[] = [];
+    private otherPickups: Pickup[] = [];
+    // A step between in the city (the Shadow walker's trait): into the realm when the rule's next
+    private stepIntoRealm = false;
     // An act's map: the step it's played at, and its toughness there (the map's own off an act)
     readonly actStep: number;
     readonly difficulty: { hp: number; damage: number };
@@ -1896,6 +1908,7 @@ export class Sim {
         this.rule = this.map.rule
             ? createRunRule(this.map.rule, this.grid, options.seed, TICKS_PER_SECOND)
             : undefined;
+        this.realm = this.rule instanceof RealmRule ? this.rule : undefined;
         this.actStep = this.map.act ? Math.max(0, Math.floor(options.actStep ?? 0)) : 0;
         this.difficulty = getStepDifficulty(this.map, this.actStep);
         // Building it takes a while, so it's done here, with the map, rather
@@ -2107,6 +2120,7 @@ export class Sim {
             ruleHurtNext: 0,
             traitKills: 0,
             traitReady: false,
+            traitNext: 0,
             moveX: 0,
             moveY: 0,
             down: false,
@@ -2375,6 +2389,7 @@ export class Sim {
             trophies: [...this.trophies],
             enemyKills: { ...this.enemyKills },
             caskets: this.casketsOpened,
+            ...(this.realm && { realmCaskets: this.realm.realmCaskets }),
             stats: this.getRunStats(),
         };
     }
@@ -3448,6 +3463,11 @@ export class Sim {
         const events = this.raidRoomDef?.events ?? this.mapEvents;
         while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
             const event = events[this.eventIndex];
+            // The city's crowd waits while the party's in the realm (RealmRule): its elites and
+            // rings come when it's back. Bosses don't wait.
+            if (this.realm?.layer === 1 && (event.kind === "elite" || event.kind === "ring")) {
+                break;
+            }
             this.useSpawnHero();
             if (event.kind === "elite") {
                 for (let i = 0; i < (this.hard ? HARD_ELITES : 1); i++) {
@@ -3464,6 +3484,9 @@ export class Sim {
             ) {
                 // Nowhere to put it this tick; bosses can't be skipped
                 break;
+            } else if (getEnemy(event.enemyId).realm === "drags" && this.realm?.layer === 0) {
+                // It pulls the party into the realm with it (EnemyDef.realm)
+                this.realm.turn(this.ruleHost, 1);
             }
             this.eventIndex++;
         }
@@ -4333,6 +4356,16 @@ export class Sim {
                 });
 
                 const touching = distance < enemy.radius + player.radius + 0.1;
+                // A lost soul's caught by walking into it (EnemyDef.caught)
+                if (touching && enemy.def.caught && this.realm) {
+                    this.realm.onCaught(this.ruleHost, enemy.uid, player.x, player.y);
+                    this.vanish(enemy);
+                    if (enemy.def.spawnSpotAnim !== undefined) {
+                        this.addEffect(enemy.def.spawnSpotAnim, enemy.x, enemy.y, 0, 40);
+                    }
+                    this.emit({ type: "soulCaught", left: this.realm.soulsLeft });
+                    continue;
+                }
                 if (lapping) {
                     moveX += dirX * enemy.speed * this.laps!.speed;
                     moveY += dirY * enemy.speed * this.laps!.speed;
@@ -4651,6 +4684,10 @@ export class Sim {
         ) {
             return 0;
         }
+        // An enemy's hit in the realm takes sanity too (RealmRuleDef.sanity.hit)
+        if (this.realm?.layer === 1 && ENEMY_BY_ID.has(enemyId)) {
+            this.realm.onHurt(this.hero.index);
+        }
         // Quiet Prayers: armour stops less. Deadly Prayers: a hit leaves the player open, so the
         // next within a second does more.
         const stops = this.stats.armor * (this.invoked("quiet_prayers") ? QUIET_PRAYERS : 1);
@@ -4668,6 +4705,9 @@ export class Sim {
         const opened =
             this.invoked("deadly_prayers") && this.tick <= openUntil ? DEADLY_PRAYERS : 1;
         const amount = Math.max(1, Math.round(damage * opened - armor));
+        if (this.stepBetween(amount)) {
+            return 0;
+        }
         if (this.invoked("deadly_prayers")) {
             this.tombsOpenUntil.set(this.hero.index, this.tick + secondsToTicks(1));
         }
@@ -4949,6 +4989,10 @@ export class Sim {
         }
         if (heals.spotAnim !== undefined) {
             this.addEffect(heals.spotAnim, target.x, target.y, 0, 40, target.uid);
+        }
+        if (heals.once) {
+            this.vanish(enemy);
+            return;
         }
         enemy.anim = "attack";
         enemy.animStart = tick;
@@ -5601,6 +5645,9 @@ export class Sim {
                 ];
             }
             return [this.apmekenTrickle(room.wave)];
+        }
+        if (this.realm?.layer === 1) {
+            return this.realm.def.waves;
         }
         return this.raidRoomDef?.waves ?? this.map.waves;
     }
@@ -13326,8 +13373,15 @@ export class Sim {
         if (!rule) {
             return;
         }
+        if (this.stepIntoRealm) {
+            this.stepIntoRealm = false;
+            this.realm?.turn(this.ruleHost, 1);
+        }
         rule.step(this.ruleHost);
         const def = rule.def;
+        if (def.kind !== "roots") {
+            return;
+        }
         const grace = secondsToTicks(def.hurt.grace);
         const every = Math.max(1, secondsToTicks(def.hurt.every));
         this.forEachHeroInReach(() => {
@@ -13370,10 +13424,69 @@ export class Sim {
             }
             return out;
         },
-        spawnRuleEnemy: (enemyId, x, y) =>
-            sim.spawnEnemy(getEnemy(enemyId), "normal", sim.walkableSpot(x, y))?.uid,
+        spawnRuleEnemy: (enemyId, x, y, elite) =>
+            sim.spawnEnemy(getEnemy(enemyId), elite ? "elite" : "normal", sim.walkableSpot(x, y))
+                ?.uid,
         isEnemyAlive: (uid) => sim.enemies.some((enemy) => enemy.uid === uid && !enemy.dead),
+        upHeroes: () => {
+            const out: number[] = [];
+            for (const hero of sim.heroes) {
+                if (sim.isUp(hero)) {
+                    out.push(hero.index, hero.player.x, hero.player.y);
+                }
+            }
+            return out;
+        },
+        get finalBossUp() {
+            return sim.bossSpawned;
+        },
+        turnWorld: (to, lapse) => sim.turnWorld(to, lapse),
     }))(this);
+
+    // The party turns to the other world (RealmRule.turn): the world it leaves stands still, kept
+    // aside as it is, and the one it comes to carries on from where it was. What goes with the
+    // party (EnemyDef.realm both, a boss of both worlds; drags, one that pulls it in, into the
+    // realm only) is moved across. What's in the air is gone. lapse: the hero whose sanity ran
+    // out, thrown back hurt, and what's on the realm's ground is lost.
+    turnWorld(to: RealmLayer, lapse?: number): void {
+        const goes = (enemy: Enemy) =>
+            !enemy.dead &&
+            (enemy.def.realm === "both" || (to === 1 && enemy.def.realm === "drags"));
+        // The realm's lost souls don't wait: new ones come each time
+        if (to === 0) {
+            for (const enemy of this.enemies) {
+                if (enemy.def.caught) {
+                    this.vanish(enemy);
+                }
+            }
+        }
+        const leaving = this.enemies.filter((enemy) => !enemy.dead && !goes(enemy));
+        const coming = this.otherEnemies.filter((enemy) => !enemy.dead);
+        const along = this.enemies.filter(goes);
+        this.otherEnemies = leaving;
+        this.enemies = [...coming, ...along];
+        const ground = this.pickups.filter((pickup) => pickup.value >= 0);
+        this.pickups = this.otherPickups;
+        this.otherPickups = ground;
+        if (lapse !== undefined) {
+            this.otherPickups = [];
+            const hero = this.heroes[lapse];
+            if (hero && this.isUp(hero)) {
+                this.as(lapse, () => {
+                    const share = this.realm!.def.sanity.lapse;
+                    const damage = Math.max(1, Math.round(this.player.maxHp * share));
+                    this.damagePlayer(damage, "realm", false, -1, true, false);
+                });
+            }
+        }
+        this.projectiles = [];
+        this.enemyProjectiles = [];
+        this.hazards = [];
+        this.pools = [];
+        this.pendingHits = [];
+        this.rebuildEnemyHash();
+        this.emit({ type: "worldTurned", layer: to, lapse: lapse !== undefined });
+    }
 
     // The floor's tiles that do something to whoever's on them (FloorEffect): burning and healing
     // players every so often, and burning enemies
@@ -16346,6 +16459,10 @@ export class Sim {
         ) {
             const summon = summonsAt[state.summonsDone];
             const summoned = getEnemy(summon.enemyId);
+            // Into the realm first, everyone (the Whisperer's Soul Siphon)
+            if (summon.realm && this.realm?.layer === 0) {
+                this.realm.turn(this.ruleHost, 1);
+            }
             let spawned = 0;
             for (let i = 0; i < summon.count; i++) {
                 const distance = summon.distance ?? 2;
@@ -17311,7 +17428,9 @@ export class Sim {
             }
             return;
         }
-        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp);
+        // The realm's richer (RealmRuleDef.drops)
+        const realm = this.realm?.drops;
+        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1));
         if (!last) {
             return;
         }
@@ -17345,11 +17464,14 @@ export class Sim {
             );
         } else if (
             !enemy.boss &&
-            this.rng.chance(CASKET_DROP_CHANCE * luck * this.partyScale.caskets)
+            this.rng.chance(
+                CASKET_DROP_CHANCE * luck * this.partyScale.caskets * (realm?.caskets ?? 1),
+            )
         ) {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
         } else if (this.rng.chance(0.03 * luck)) {
-            this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
+            const coins = (1 + this.rng.int(5)) * (realm?.coins ?? 1);
+            this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, coins);
         } else if (!this.invoked("on_a_diet") && this.rng.chance(FOOD_DROP_CHANCE * luck)) {
             this.dropPickup("food", enemy.x - 0.3, enemy.y, Math.round(FOOD_HEAL * this.healScale));
         }
@@ -17572,6 +17694,76 @@ export class Sim {
     // The hero's adventurer's trait (CharacterDef.trait), if they have one
     private get trait(): CharacterTraitDef | undefined {
         return getCharacter(this.hero.characterId).trait;
+    }
+
+    // Step between (the Shadow walker's trait): a hit this big, with it ready, takes her into the
+    // shadows instead, out of reach for a moment and out a few tiles on the way she faces; in the
+    // city of a map of two worlds, into its realm. Whether it did.
+    private stepBetween(amount: number): boolean {
+        const trait = this.trait;
+        const player = this.player;
+        if (
+            trait?.kind !== "step" ||
+            this.tick < this.hero.traitNext ||
+            amount <= player.maxHp * trait.share
+        ) {
+            return false;
+        }
+        this.hero.traitNext = this.tick + secondsToTicks(trait.every);
+        player.invulnerable = Math.max(player.invulnerable, secondsToTicks(trait.seconds));
+        if (trait.spotAnim !== undefined) {
+            this.addEffect(trait.spotAnim, player.x, player.y, 0, 40);
+        }
+        // Out a few tiles on, as far as the ground goes
+        const length = fm.hypot(player.facingX, player.facingY) || 1;
+        const dirX = player.facingX / length;
+        const dirY = player.facingY / length;
+        for (let reach = trait.distance; reach > 0; reach -= 0.5) {
+            const x = player.x + dirX * reach;
+            const y = player.y + dirY * reach;
+            if (!this.grid.isSolid(Math.floor(x), Math.floor(y))) {
+                player.x = x;
+                player.y = y;
+                break;
+            }
+        }
+        if (trait.spotAnim !== undefined) {
+            this.addEffect(trait.spotAnim, player.x, player.y, 0, 40);
+        }
+        this.emit({ type: "notice", message: `${trait.name}!` });
+        // Into the realm at the rule's turn of the tick, not in the middle of whatever hit her
+        if (this.realm?.layer === 0) {
+            this.stepIntoRealm = true;
+        }
+        return true;
+    }
+
+    // Dig site (the Treasure hunter's trait, anyone's in the party): what a casket left on the
+    // ground is doing, by how long it's been there
+    digState(pickup: Pickup): "open" | "buried" | "dug" | "gone" {
+        const dig = this.digSite;
+        if (!dig || pickup.kind !== "casket" || pickup.disguise) {
+            return "open";
+        }
+        const age = (this.tick - pickup.spawnTick) / TICKS_PER_SECOND;
+        return age >= dig.gone
+            ? "gone"
+            : age >= dig.ready
+              ? "dug"
+              : age >= dig.buries
+                ? "buried"
+                : "open";
+    }
+
+    // The party's Treasure hunter's trait, if there's one in it
+    get digSite(): Extract<CharacterTraitDef, { kind: "dig" }> | undefined {
+        for (const hero of this.heroes) {
+            const trait = getCharacter(hero.characterId).trait;
+            if (trait?.kind === "dig") {
+                return trait;
+            }
+        }
+        return undefined;
     }
 
     private countTraitKill(): void {
@@ -19660,6 +19852,20 @@ export class Sim {
                 pickup.value = -1;
                 continue;
             }
+            // Buried, it waits to be dug up a tier better, or it's lost (CharacterTraitDef dig)
+            const dig = this.digState(pickup);
+            if (dig === "gone") {
+                pickup.value = -1;
+                continue;
+            }
+            if (dig === "buried") {
+                continue;
+            }
+            if (dig === "dug" && !pickup.dug && pickup.tier) {
+                pickup.dug = true;
+                const at = CASKET_TIERS.indexOf(pickup.tier);
+                pickup.tier = CASKET_TIERS[Math.min(at + 1, CASKET_TIERS.length - 1)];
+            }
             // Whoever's nearest gets it
             this.use(this.nearestUpHero(pickup.x, pickup.y));
             const player = this.player;
@@ -20586,6 +20792,9 @@ export class Sim {
         this.gainCoins(coins);
         this.casketsOpened++;
         this.hero.casketsOpened++;
+        if (this.realm?.layer === 1) {
+            this.realm.realmCaskets++;
+        }
         const picker = this.hero;
         this.offerCasketItem(tier, coins);
         for (const hero of this.heroes) {

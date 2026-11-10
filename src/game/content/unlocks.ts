@@ -71,6 +71,8 @@ export const UNLOCK_MESSAGES: Record<string, string> = {
     "unlock.kill_boss.in": "Kill {enemy} in {map}",
     "unlock.survive": "Survive {time}",
     "unlock.survive.in": "Survive {time} in {map}",
+    "unlock.realm_caskets": "Open {count} caskets in the Shadow Realm in one run",
+    "unlock.realm_caskets.in": "Open {count} caskets in the Shadow Realm in one run in {map}",
     "unlock.survive.minutes.other": "{n} minutes",
     "unlock.survive.clock": "{minutes}:{seconds}",
     "unlock.raid_chest": "Find a {trophy} in its chest",
@@ -105,6 +107,8 @@ export function describeUnlockTask(task: UnlockTask, withMap = true): string {
         }
         case "survive":
             return t(`unlock.survive${suffix}`, { time: describeSurvival(task.seconds), map });
+        case "realmCaskets":
+            return t(`unlock.realm_caskets${suffix}`, { count: task.count, map });
         case "raidChest": {
             // A thing to do, as the rest are: callers build sentences on it ("... to unlock")
             const trophy = TROPHY_BY_ID.get(task.trophyId)!;

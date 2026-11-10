@@ -110,6 +110,8 @@ version and how to run it.
     | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                  |
     | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                    |
     | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                             |
+    | Shadow walker       | Magic       | Shadow Burst           | Step between (a trait, below)                     | Beating the Lassar Undercity                         |
+    | Treasure hunter     | Ranged      | Bronze throwing knives | Dig site (a trait, below)                         | Opening 5 caskets in the Shadow Realm in one run     |
     | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange           |
     | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock              |
     | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                            |
@@ -122,7 +124,12 @@ version and how to run it.
 - **Traits**: Act II's adventurers have a trait, a way to play, rather than a bonus. The
   **Forester**'s is **Timber!**: every 25 kills his next swing fells a Strangled Tree along the
   ground ahead of him, 8 tiles long, for four times the swing's damage, and his swings cut roots 2
-  tiles further out than they reach.
+  tiles further out than they reach. The **Shadow walker**'s is **Step between**: once every 30
+  seconds, a hit that would take over a fifth of her hitpoints takes her into the shadows instead,
+  a second and a half out of reach and 3 tiles on the way she faces; in the Lassar Undercity's
+  city it takes her (and her party) into the Shadow Realm. The **Treasure hunter**'s is **Dig
+  site**: a casket left on the ground buries itself after 3 seconds; walked over again from 20
+  seconds it's a tier better, and at 60 seconds it's lost.
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
   a Very rare one, offered in about one run in twenty, and Rare ones. A new weapon is always
@@ -198,6 +205,7 @@ version and how to run it.
     | Hallowed Night     |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
     | Phosani's          |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
     | Stranglewood       | The Forester, the Executioner's axe head         |                                                                                                      |
+    | Lassar Undercity   | The Shadow walker, the Siren's staff             | The Treasure hunter (5 caskets opened in the Shadow Realm in one run)                                |
     | Awakened Vardorvis | Butch                                            |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
@@ -346,6 +354,12 @@ version and how to run it.
       round its edge and in thickets. The Strangled, Strangled Boars from 2:00, Strangled Lynxes
       from 4:00 that rush the last few tiles, and the Strangled Bear, an elite that leaves roots
       behind it. Played by its **roots** (below).
+    - **The Lassar Undercity** (Act II, open once the Inferno's beaten): the real sunken city
+      under Ice Mountain, its streets cleared of clutter so there's room to fight, round the
+      drowned middle where the Whisperer's cathedral stands on its island. Crawling hands,
+      Wighted Leeches from 2:00 whose bite drains a while, Ghosts from 4:00 that go through walls,
+      and Ancient Guardians, slow and hard, which are its elites too. Played by its **Shadow
+      Realm** (below).
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
@@ -375,8 +389,8 @@ version and how to run it.
       of him, to Blood Rush. It can't be endless; it has a hard mode once it's beaten. Beating him
       finds **Butch**, his pet, every time.
 - **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
-  Inferno. Its four maps (the Stranglewood now; the Lassar Undercity, Ghorrock and the Scar shown as
-  coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
+  Inferno. Its four maps (the Stranglewood and the Lassar Undercity now; Ghorrock and the Scar
+  shown as coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
   a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno
   (enemies 4.2 times the hitpoints, 2.9 times the damage), up to step 3 (4.65 and 3.2), and each
   step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
@@ -392,6 +406,19 @@ version and how to run it.
   twice as fast, and killing it clears 7 tiles round it, where nothing grows for 40 seconds, and
   drops an elite casket. The clearing where the run starts is never taken. Left alone the roots
   close in on it; roots don't block, so you're never stuck, only slowed and hurt.
+- **The Shadow Realm** (the Lassar Undercity's rule): from 1:30, every minute a black puddle opens
+  8 to 12 tiles from you for 15 seconds, blinking its last 3. Walk into it and a second and a half
+  later the whole party is pulled into the Shadow Realm, the cache's own twin of the city, drawn
+  darker and violet. The city waits as it was while you're away: its crowd stands still, and its
+  elites and rings wait for you to come back (its bosses don't). In the realm its Shadows come,
+  Shadow Keepers later on, and Tentacles rise near you now and then and lash out; bones and coins
+  are worth double and caskets are half as likely again. Your **sanity** (the bar under your
+  hitpoints) drains 4 a second there and 5 more for each hit, and refills 10 a second in the city;
+  below 30 the screen's edges close in. Catch the three **lost souls** (walk into them; they run)
+  and an Anima Portal opens where the last was caught for 5 seconds: stand in it a moment to go
+  back, or let it close and the souls come again. At no sanity you're thrown back with a quarter of
+  your hitpoints gone, and whatever was lying on the realm's ground is lost. In co-op each player's
+  sanity is their own; the first whose runs out takes the party back.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
@@ -528,6 +555,15 @@ version and how to run it.
       dart and the vines that burst round where it lands, and the roots you left uncut within 8
       tiles of you erupting. At a third of his hitpoints his head tears free and shoots at you.
       He drops the Executioner's axe head the first time.
+    - **The Lassar Undercity**: the **Shadow Keeper** at 5:00, who drags the party into the Shadow
+      Realm as he comes and stays there (he has to be killed in his world: thrown back, you meet
+      him again on your next dive), grasping, bursting shadow and calling shadows in; **the
+      Forsaken Assassin** at 10:00, who goes between the worlds with you, stabs, fades and darts in
+      out of the other world, a shadow on the ground first; at 15:00 **the Whisperer** rises in
+      her cathedral, in both worlds: three-shot volleys, a cross of tentacles bursting up round you
+      and shadow bursts, and at 80%, 55% and 30% she pulls everyone into the realm and siphons its
+      souls, six coming to her and each that reaches her healing her: catch them first. She drops
+      the Siren's staff the first time.
     - **Hallowed Night**: **Slash Bash**, whose disease stacks up to four times and whose bile leaves
       pools for 7 seconds, and **The Mimic**, which lies on the map as a master casket until you walk
       onto it or 25 seconds pass, then bites, flings candy that brings its Third Age minions, and
