@@ -129,6 +129,10 @@ const REALM_DIVE_HP = 0.6;
 // Under the cold (ColdRule): the bot goes to warm itself from this cold (COLD=0 never), until it's
 // down to the next, and steps out of a vent's gas
 const COLD_SEEKS = process.env.COLD !== "0";
+// In the dark (LightingDef.litTargetsOnly): the bot keeps clear of Persten's false lanterns,
+// goes for a light leech when there's nothing lit to fight, by a fire when it's dimmed, and stays
+// in the pathfinder's circle through the Leviathan's last third (DARK=0 none of it)
+const DARK_SEEKS = process.env.DARK !== "0";
 const COLD_GO = 45;
 const COLD_DONE = 15;
 // Whether it's on its way to warm itself, by hero
@@ -344,6 +348,31 @@ function botMove(sim: Sim): { x: number; y: number } {
             }
         }
     }
+    if (sim.litTargetsOnly && DARK_SEEKS) {
+        const goal = darkGoal(sim);
+        if (goal) {
+            const gx = goal.x - player.x;
+            const gy = goal.y - player.y;
+            const d = Math.hypot(gx, gy);
+            if (d > 0.05) {
+                ax += (gx / d) * goal.pull;
+                ay += (gy / d) * goal.pull;
+            }
+        }
+        // A lantern with no beam is a false one: give it room
+        for (const enemy of sim.enemies) {
+            if (enemy.dead || !enemy.def.caught || !enemy.def.explodes) {
+                continue;
+            }
+            const ex = player.x - enemy.x;
+            const ey = player.y - enemy.y;
+            const d = Math.hypot(ex, ey);
+            if (d < enemy.def.explodes.radius + 1 && d > 0.01) {
+                ax += (ex / d) * 3;
+                ay += (ey / d) * 3;
+            }
+        }
+    }
     // Drift back towards the middle of the arena so the bot doesn't pin itself
     // against its edge
     const cx = ARENA.baseX + ARENA.sizeX / 2 - player.x;
@@ -385,6 +414,56 @@ function realmGoal(sim: Sim, realm: RealmRule): { x: number; y: number; pull: nu
     }
     return best;
 }
+
+// Where the dark takes the bot (LightingDef.litTargetsOnly), and how hard: into the only light
+// while there is one (the Leviathan's pathfinder), after a light leech within 9 tiles when nothing
+// near's lit and it's well, by the nearest fire or left light while its own's dimmed
+function darkGoal(sim: Sim): { x: number; y: number; pull: number } | undefined {
+    const player = sim.player;
+    const only = sim.onlyLightEnemy();
+    if (only) {
+        return { x: only.x, y: only.y, pull: 4 };
+    }
+    const own = sim.lights.find((l) => l.kind === "player" && l.id === sim.focus);
+    const base = sim.lighting?.player?.radius ?? 0;
+    const dimmed = own !== undefined && own.radius < base - 0.5;
+    let litNear = false;
+    let leech: { x: number; y: number } | undefined;
+    let leechD = 9;
+    for (const enemy of sim.enemies) {
+        if (enemy.dead) {
+            continue;
+        }
+        const d = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (enemy.def.light && !enemy.def.caught && !enemy.boss && d < leechD) {
+            leechD = d;
+            leech = enemy;
+        } else if (d < 6 && sim.isEnemyLit(enemy) && !enemy.def.caught) {
+            litNear = true;
+        }
+    }
+    // Not when hurt: a leech runs, and a chase into the dark is a chase into the crowd
+    if (leech && (!litNear || dimmed) && player.hp > player.maxHp * 0.5) {
+        return { x: leech.x, y: leech.y, pull: 0.8 };
+    }
+    if (dimmed) {
+        let best: { x: number; y: number; pull: number } | undefined;
+        let bestD = 12;
+        for (const light of sim.lights) {
+            if (light.kind !== "map" && light.kind !== "left") {
+                continue;
+            }
+            const d = Math.hypot(light.x - player.x, light.y - player.y);
+            if (d < bestD) {
+                bestD = d;
+                best = { x: light.x, y: light.y, pull: d > light.radius - 1 ? 1.5 : 0 };
+            }
+        }
+        return best;
+    }
+    return undefined;
+}
+let dimTicks = 0;
 
 // Where the cold takes the bot (ColdRule), and how hard: once it's cold, to the nearest lit brazier
 // (or the nearest out, to relight), staying until it's warm again
@@ -948,6 +1027,7 @@ function runOnce(characterId: string, seed: number) {
     // Under the cold (ColdRule): times frozen solid, and ticks at 50 or over
     let freezes = 0;
     let coldTicks = 0;
+    dimTicks = 0;
     // A boss's finale (its last stand), counted on its own, not in its last phase
     let finaleTicks = 0;
     // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
@@ -1064,6 +1144,12 @@ function runOnce(characterId: string, seed: number) {
         if (sim.cold && sim.cold.coldOf(sim.focus) >= 50) {
             coldTicks++;
         }
+        if (sim.lighting?.player) {
+            const own = sim.lights.find((l) => l.kind === "player" && l.id === sim.focus);
+            if (own && own.radius < sim.lighting.player.radius - 0.5) {
+                dimTicks++;
+            }
+        }
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
             if (!enemy.boss || !state || enemy.leaving) {
@@ -1158,6 +1244,9 @@ function runOnce(characterId: string, seed: number) {
                         : "") +
                     (sim.cold
                         ? `  cold ${Math.round(sim.cold.coldOf(sim.focus))}, ${freezes} frozen, ${Math.round((100 * coldTicks) / Math.max(1, sim.tick))}% over 50`
+                        : "") +
+                    (sim.litTargetsOnly
+                        ? `  dark ${Math.round((100 * dimTicks) / Math.max(1, sim.tick))}% dimmed`
                         : ""),
             );
             if (endless) {
@@ -1280,6 +1369,9 @@ function runOnce(characterId: string, seed: number) {
                 : "") +
             (sim.cold
                 ? `cold ${freezes} frozen ${Math.round((100 * coldTicks) / Math.max(1, sim.tick))}% over 50 `
+                : "") +
+            (sim.litTargetsOnly
+                ? `dark ${Math.round((100 * dimTicks) / Math.max(1, sim.tick))}% dimmed `
                 : "") +
             `(${(ms / sim.tick).toFixed(3)}ms per tick)`,
     );
