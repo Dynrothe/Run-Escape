@@ -22,6 +22,8 @@ the version in the corner).
 - The keyboard's controls, by Jp66600: the pause menu and Settings list them, and the pause menu
   shows the run's last messages too.
 - Quest list, by Jp66600: it can hide the finished quests, and those under way come first.
+- Map modes, by Jp66600: a map's details say what endless, hard and expert do there, or what
+  opens them.
 
 ### Changed
 
@@ -36,6 +38,8 @@ the version in the corner).
   looks out of reach, and a line under the cards says how to refund a rank.
 - Settings, by Jp66600: your progress comes first, with when you last exported it, and the game
   section is split into groups.
+- Picking a map, by Jp66600: a map beaten on hard has a double tick, the adventurer picked is
+  marked more clearly, and a map's name that's cut off shows whole on hover.
 
 ### Fixed
 
