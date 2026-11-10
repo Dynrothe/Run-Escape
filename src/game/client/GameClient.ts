@@ -10,7 +10,13 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
-import { getRaidBand, saveInvocationPreset, toggleInvocation } from "../content/invocations";
+import {
+    RUN_SET,
+    getRaidBand,
+    isHardInvocation,
+    saveInvocationPreset,
+    toggleInvocation,
+} from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
@@ -26,6 +32,8 @@ import {
     isCoopMap,
     isDevMap,
     isFunMap,
+    takesInvocations,
+    takesRelics,
 } from "../content/maps";
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
@@ -34,6 +42,7 @@ import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity, rarityName } from "../content/rarity";
+import { RelicTier, cleanRelics, getOpenRelicTiers, pickRelic } from "../content/relics";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
@@ -54,6 +63,7 @@ import {
     SaveStore,
     buyArmouryUpgrade,
     buyUpgrade,
+    cleanRunInvocations,
     exportSave,
     getEarnedUnlocks,
     getFightStage,
@@ -66,6 +76,7 @@ import {
     isEndlessRecord,
     isEndlessUnlocked,
     isExpertUnlocked,
+    isHardRecord,
     isHardUnlocked,
     isMapUnlocked,
     recordRun,
@@ -387,6 +398,7 @@ export function cleanLoadout(loadout: Loadout | undefined): {
     trophiesFound: Set<string>;
     armoury: Record<string, number>;
     pet?: string;
+    relics?: string[];
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
     const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
@@ -402,6 +414,8 @@ export function cleanLoadout(loadout: Loadout | undefined): {
         armoury,
         // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
         ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
+        // Their relics, each player's own (the Sim keeps them off maps that take none)
+        ...(Array.isArray(loadout?.relics) && { relics: cleanRelics(loadout.relics) }),
     };
 }
 
@@ -935,6 +949,46 @@ export class GameClient implements GameFrameHandler {
         this.persist();
     }
 
+    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET): on if it
+    // was off, off if it was on. Hard mode's are the Hard switch's, not the board's.
+    toggleRunInvocation(id: string): void {
+        if (isHardInvocation(id)) {
+            this.toggleHard();
+            return;
+        }
+        this.save.runInvocations = cleanRunInvocations(
+            toggleInvocation(this.save.runInvocations ?? [], id, RUN_SET),
+        );
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    clearRunInvocations(): void {
+        this.save.runInvocations = [];
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    // A relic picked for its tier (content/relics.ts), or the tier left empty; only an open tier's
+    selectRelic(tier: RelicTier, relicId: string | undefined): void {
+        if (tier > getOpenRelicTiers(this.save.mapVictories)) {
+            return;
+        }
+        const relics = pickRelic(this.save.relics ?? [], tier, relicId);
+        this.save.relics = relics.length > 0 ? relics : undefined;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
+    // The relics a run here starts with: the open tiers' picks, on a map that takes them
+    private runRelics(map: MapDef): string[] | undefined {
+        if (!takesRelics(map)) {
+            return undefined;
+        }
+        const relics = cleanRelics(this.save.relics, getOpenRelicTiers(this.save.mapVictories));
+        return relics.length > 0 ? relics : undefined;
+    }
+
     // In a room, the lobby's told (its raid level goes by the host's: Loadout.invocations)
     private invocationsChanged(): void {
         if (this.coop.room) {
@@ -1144,9 +1198,14 @@ export class GameClient implements GameFrameHandler {
                 ...this.save.armoury,
             },
             this.save.pet,
-            // A Tombs room's lobby shows the host's raid level
-            room && getMap(room.mapId).tombs ? [...(this.save.invocations ?? [])] : undefined,
+            // A Tombs room's lobby shows the host's raid level, and a run's its invocation points
+            room && getMap(room.mapId).tombs
+                ? [...(this.save.invocations ?? [])]
+                : room && takesInvocations(getMap(room.mapId))
+                  ? [...(this.save.runInvocations ?? [])]
+                  : undefined,
             getEveryTimeTrophiesFound(this.save.trophies),
+            room ? this.runRelics(getMap(room.mapId)) : undefined,
         );
     }
 
@@ -1181,8 +1240,10 @@ export class GameClient implements GameFrameHandler {
             // An act's map is at the host's step (content/acts.ts)
             ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             stage: getFightStage(this.save, map.id),
-            // The Tombs' raid level is the host's, as the invocation board set it
+            // The Tombs' raid level is the host's, as the invocation board set it, and so are a
+            // run's invocations (the room's Hard is hard mode's)
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
+            ...(takesInvocations(map) && { invocations: this.save.runInvocations ?? [] }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1663,7 +1724,12 @@ export class GameClient implements GameFrameHandler {
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
             actStep: getActStep(map, this.save.mapVictories),
-            invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
+            invocations: map.tombs
+                ? (this.save.invocations ?? [])
+                : takesInvocations(map)
+                  ? (this.save.runInvocations ?? [])
+                  : undefined,
+            relics: this.runRelics(map),
             stage: this.chosenStage(mapId),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
@@ -1927,6 +1993,14 @@ export class GameClient implements GameFrameHandler {
                     this.sounds.denied();
                 }
                 break;
+            case "keep":
+            case "takeKept":
+                if (done) {
+                    this.syncOverlay();
+                } else {
+                    this.sounds.denied();
+                }
+                break;
             case "item":
                 if (done) {
                     this.handleEvents(sim, sim.takeEvents());
@@ -2055,6 +2129,26 @@ export class GameClient implements GameFrameHandler {
             return false;
         }
         return this.act(index === undefined ? { kind: "banishChest" } : { kind: "banish", index });
+    }
+
+    // Reloaded (content/relics.ts): the level up's offer kept for later, or a kept one taken now.
+    // Checked here in co-op too, as with a reroll (see reroll).
+    keepOffer(): boolean {
+        const sim = this.sim;
+        if (!sim || (this.coopRun && !sim.canKeepOffer)) {
+            this.sounds.denied();
+            return false;
+        }
+        return this.act({ kind: "keep" });
+    }
+
+    takeKept(): boolean {
+        const sim = this.sim;
+        if (!sim || (this.coopRun && !sim.canTakeKept)) {
+            this.sounds.denied();
+            return false;
+        }
+        return this.act({ kind: "takeKept" });
     }
 
     // Takes none of the level up's rewards, for coins from the run. False when
@@ -2258,7 +2352,7 @@ export class GameClient implements GameFrameHandler {
         const lockedItems = LOCKABLE_ITEMS.filter((i) => !this.save.unlockedItems.includes(i.id));
         const endlessRecord = result.endless && isEndlessRecord(this.save, result);
         const firstHardWin =
-            result.hard &&
+            isHardRecord(result) &&
             result.victory &&
             !isDevMap(sim.map.id) &&
             !this.save.hardVictories[sim.map.id];
@@ -3668,6 +3762,15 @@ export class GameClient implements GameFrameHandler {
             banishes: sim.banishesLeft,
             skip: sim.canSkip
                 ? { cost: sim.skipCost, affordable: sim.coins >= sim.skipCost }
+                : undefined,
+            // Reloaded: keeping this offer, and taking a kept one
+            keep: sim.hasRelic("reloaded", sim.heroes[sim.focus])
+                ? {
+                      left: sim.heroes[sim.focus].relics.keepsLeft,
+                      kept: sim.heroes[sim.focus].relics.kept.length,
+                      canKeep: sim.canKeepOffer,
+                      canTake: sim.canTakeKept,
+                  }
                 : undefined,
         };
         const previous = this.store.getSnapshot().hud;

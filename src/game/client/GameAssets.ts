@@ -22,7 +22,12 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
-import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
+import {
+    INVOCATIONS,
+    OFF_SPRITE,
+    RAID_BAND_SPRITES,
+    RUN_INVOCATIONS,
+} from "../content/invocations";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
@@ -197,8 +202,11 @@ export function getGameSpriteIds(): number[] {
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
-        // The Tombs of Amascut's invocation board: each icon lit and dark, and Amascut's faces
-        ...INVOCATIONS.flatMap((invocation) => [invocation.icon, invocation.icon + OFF_SPRITE]),
+        // The invocation boards (the Tombs and a run's): each icon lit and dark, and Amascut's faces
+        ...[...INVOCATIONS, ...RUN_INVOCATIONS].flatMap((invocation) => [
+            invocation.icon,
+            invocation.icon + OFF_SPRITE,
+        ]),
         ...Object.values(RAID_BAND_SPRITES),
     ];
     return [...new Set(ids)];

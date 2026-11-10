@@ -37,6 +37,8 @@ go stale. Add anything that cost you time to work out.
 | Level up choices, and when a weapon can evolve         | `src/game/core/Upgrades.ts`                                            |
 | Evolution recipes, for the UI                          | `src/game/content/evolutions.ts`                                       |
 | Hard mode's numbers (each map's are on its `MapDef`)   | `src/game/content/hard.ts`                                             |
+| A run's invocations, hard mode's preset, coin bonuses  | `content/invocations.ts` (`RUN_SET`), `maps.ts` (`takesInvocations`)   |
+| Relics: tiers, picks, each one's rule on its hero      | `content/relics.ts`, `Sim.ts` (Relics), `ui/Relics.tsx`                |
 | Co-op's numbers: the party's scaling, boss copies      | `src/game/content/coop.ts`                                             |
 | Caskets and the inventory                              | `src/game/core/Loot.ts`                                                |
 | Phosani's Nightmare, the one-fight map (its arena too) | `src/game/content/phosani.ts`, `scaperune/maps/sisterhoodSanctuary.ts` |

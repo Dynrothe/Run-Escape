@@ -26,6 +26,10 @@
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
 //   MAP=tombs_of_amascut ...   # the Tombs of Amascut, the whole raid (tombsBot.ts)
+//   INVOCATIONS=run_glass_cannon,run_blood_moon MAP=desert ...  # a run's invocations, on a map
+//                                          # from the Desert on (INVOCATIONS=all for all nine;
+//                                          # HARD=1 is hard mode's preset)
+//   RELICS=trickster,globetrotter ...      # relics on (content/relics.ts)
 //   INVOCATIONS=walk_for_it,insanity ...   # its invocations (INVOCATIONS=all for every one the
 //                                          # board allows: one of a group that's one at a time)
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
@@ -34,7 +38,7 @@
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
-import { INVOCATIONS } from "../../src/game/content/invocations";
+import { INVOCATIONS, RUN_INVOCATIONS } from "../../src/game/content/invocations";
 import { CASKET_GEAR, getGear } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
@@ -75,11 +79,14 @@ import { loadRegionData } from "./collision-snapshot";
 import { TombsLog, chestAction, tombsMove, useItems } from "./tombsBot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
-// The Tombs' invocations
+// The Tombs' invocations, or a run's (all: every one but hard mode's, which HARD=1 is)
 const invocations =
     process.env.INVOCATIONS === "all"
-        ? INVOCATIONS.map((i) => i.id)
+        ? process.env.MAP === "tombs_of_amascut"
+            ? INVOCATIONS.map((i) => i.id)
+            : RUN_INVOCATIONS.filter((i) => !i.hard).map((i) => i.id)
         : (process.env.INVOCATIONS ?? "").split(",").filter(Boolean);
+const relics = (process.env.RELICS ?? "").split(",").filter(Boolean);
 const characters = characterArg ? characterArg.split(",") : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
 // Cells round it, each way, the bot looks at for roots to keep off
@@ -987,6 +994,7 @@ function runOnce(characterId: string, seed: number) {
         armoury,
         invocations,
         pet,
+        relics,
         // A fight in parts (MapDef.stages): which, STAGE=0 for the first
         stage: parseInt(process.env.STAGE ?? "0"),
     });
@@ -1401,6 +1409,7 @@ function runParty(characterId: string, seed: number) {
             unlockedItems,
             armoury,
             pet,
+            relics,
         })),
     });
     const maxTicks = (endless ? 90 * 60 : runSeconds()) * TICKS_PER_SECOND;

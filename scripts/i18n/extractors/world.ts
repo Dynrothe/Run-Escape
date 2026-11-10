@@ -1,7 +1,7 @@
 // The world's English (locales/en/world.json): what enemies, bosses, maps, raids, random events,
 // the pumpkins and the floors say. The texts stay in the content's .ts files; this reads them off
 // the definitions. Keys: enemy.*, boss.*, fun.*, map.*, raid.*, event.*, nightmare.*, phosani.*,
-// zachariah.*, tob.*, pumpkin.*, floor.*, act.*
+// zachariah.*, tob.*, pumpkin.*, floor.*, act.*, invocation.* (a run's), relic.*
 //
 // The Sim emits these texts as they are in English and the drawing layer calls tl(text) on them,
 // so each one is here with the literal the Sim emits. Boss attacks' own names
@@ -10,9 +10,11 @@ import { ACTS, actSlotKey } from "../../../src/game/content/acts";
 import { ENEMIES } from "../../../src/game/content/enemies";
 import * as demos from "../../../src/game/content/floorDemos";
 import { FUN_MAPS } from "../../../src/game/content/fun/maps";
+import { RUN_INVOCATIONS } from "../../../src/game/content/invocations";
 import { MAPS } from "../../../src/game/content/maps";
 import { RAID_MAPS, RAID_SUPPLIES, RAID_SUPPLY_CHEST } from "../../../src/game/content/raids";
 import { RANDOM_EVENTS } from "../../../src/game/content/randomEvents";
+import { RELICS } from "../../../src/game/content/relics";
 import { PUMPKIN_OUTCOMES } from "../../../src/game/content/trickOrTreat";
 import type { EnemyDef, MapDef, RandomEventDef } from "../../../src/game/content/types";
 import { createWardensFloor } from "../../../src/game/content/wardensFloor";
@@ -231,6 +233,21 @@ function actMessages(): Messages {
     return messages;
 }
 
+// A run's invocations (content/invocations.ts, RUN_INVOCATIONS; the Tombs' board is English only
+// for now) and the relics (content/relics.ts): each one's name and what it does
+function invocationAndRelicMessages(): Messages {
+    const messages: Messages = {};
+    for (const invocation of RUN_INVOCATIONS) {
+        put(messages, `invocation.${invocation.id}.name`, invocation.name);
+        put(messages, `invocation.${invocation.id}.desc`, invocation.description);
+    }
+    for (const relic of RELICS) {
+        put(messages, `relic.${relic.id}.name`, relic.name);
+        put(messages, `relic.${relic.id}.desc`, relic.description);
+    }
+    return messages;
+}
+
 export default function extract(): Messages {
     const messages: Messages = {
         ...enemyMessages(),
@@ -239,6 +256,7 @@ export default function extract(): Messages {
         ...pumpkinMessages(),
         ...floorMessages(),
         ...actMessages(),
+        ...invocationAndRelicMessages(),
     };
     for (const event of [...RANDOM_EVENTS, RAID_SUPPLY_CHEST]) {
         Object.assign(messages, eventMessages(event));

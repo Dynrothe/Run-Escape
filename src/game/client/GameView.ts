@@ -471,7 +471,12 @@ export class GameView {
                     const hero = event.hero ?? sim.focus;
                     const player = sim.heroes[hero].player;
                     this.addHitsplat({
-                        kind: event.type === "playerHit" ? "damage" : "poison",
+                        kind:
+                            event.type === "playerHit"
+                                ? event.missed
+                                    ? "block"
+                                    : "damage"
+                                : "poison",
                         x: player.x,
                         y: player.y,
                         amount: event.amount,

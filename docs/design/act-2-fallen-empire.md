@@ -968,6 +968,55 @@ shows invocation points, and hard-mode, remix and weekly Vault records are relic
 Each relic is a small sim rule on the hero (deterministic, in co-op each player's own), and the adventurer screen gets
 a row of four slots. About a week for the two systems, with invocations' card switches.
 
+### 9.3 As built (2026-11-10)
+
+**One system, two boards.** The Tombs' invocations were generalised rather than copied: an invocation set
+(`content/invocations.ts`, `InvocationSet`) is a board's list and groups, and cleaning, toggling and points work on
+any set. The Tombs keep their own set, raid level, presets, save field (`invocations`) and co-op field as they were.
+A run's set is `RUN_SET`, ids `run_*` (the Tombs already have a Walk the Path, an Upset Stomach and so on that mean
+other things there), saved as `SaveData.runInvocations`, and sent in co-op in the same `GameStart.invocations` (the
+Sim cleans it by the map's board). Which maps take them is `takesInvocations(map, remixed)` in `maps.ts`: campaign
+maps from the Desert on and the Act II maps; `remixed` is the hook for remixes on the earlier maps.
+
+**Hard mode's preset** is four invocations, so a hard run is the same run: Hardened Foes (the map's hard hitpoints
+and damage, and the weapons' hard-mode balance, 90 points), Thronging (the crowd x1.25, bones' experience x0.9, 40),
+Elite Guard (two elites, 25) and Short Fuse (bosses enrage at 65%, attack 15% faster, fire the map's hard bullets,
+and co-op's more copies, 25). Together 180 points, so the nine above (120) and hard mode come to 300, the top badge.
+They pay hard mode's +25% coins between them (each 6.25%), not 1.5% a point. Checked: the pinned hard Inferno run is
+the same hash with the preset alone (`runHash.test.ts`), and seeded bot runs on hard (the Desert x4, the Inferno, the
+Stranglewood) print the same, line for line, before and after. The Hard switch turns all four on and off; they
+aren't picked one by one on the board for now (a row of their own, lit with the switch), so a hard record is always
+the whole preset. Off the board's maps (Lumbridge to the Wilderness, boss fights, raids) Hard is the switch it was.
+
+**Coins** add together now: 1 + (hard mode or the invocations' + an act's step), up to +300% (`COIN_BONUS_CAP`).
+Before, hard mode multiplied the act's step; that changes only hard runs on Act II's later steps.
+
+**How a few read in the sim.** Hardcore's "no getting back up" is co-op's revives. Ancient Haste runs the map's
+clock (`mapSeconds`: waves, events, the ramp, endless rounds) 25% fast; the run's time stays real. Blood Moon moves
+every boss and final boss event a minute earlier. Upset Stomach is the Tombs' On a Diet for runs, and keeps the
+Sandwich lady away.
+
+**Relics** (`content/relics.ts`, rules in `Sim.ts` under Relics, the row in `ui/Relics.tsx`): tier N opens with N Act
+II maps beaten, so all four can be open. Picks are `SaveData.relics`; a run takes the open tiers' picks, and in co-op
+each player's come in their loadout. They're on campaign and Act II maps (`takesRelics`), and off in boss fights,
+raids, the Tombs, quests in parts, the seasonal and fun maps. How the less obvious ones read:
+
+- Production Prodigy's "auto rules" are Auto equip's (`shouldAutoEquip`), in the sim: better gear is worn, the rest
+  alched (for 25% more), a utility item taken.
+- Fairy's Flight: the player was never held back by a crowd (they shove it), so the push is a knockback: walking with
+  4 or more enemies within 1.5 tiles throws them aside, every 10 s.
+- Specialist's "25% harder" is +25% might. Grimoire's weapon is a Common of the class's damage style, by the seed.
+- Last Recall comes after a Ring of life, and stuns (freezes) everything within 8 tiles of the start for 3 s.
+- Reloaded: twice a run, Keep for later puts a level up's offer by (that level up goes by); at a later level up,
+  Take kept offer plays it first as an extra pick, then the level up's own. What can't be had as offered any more
+  (a weapon level already taken) drops off it.
+
+**Records.** `SaveData.invocationBest` keeps each map's win at the most points (ties to the quicker), with its
+relics; the card shows it and the badges, and the map list shows the highest badge. Act records and endless records
+keep the points and relics they were set with. A win with a relic on counts as a win, but sets no hard-mode (or
+expert) record or win, so those stay relic-free (13.2); the remix and weekly records will do the same when they
+come.
+
 ## 10. Build order
 
 Everything lands on one branch, `act-2`, in one pull request (#159), at Dynny's word. Lighting came first, then the
@@ -981,7 +1030,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 1   | **Lighting**, as an engine feature: lights from any source, a changeable darkness, `litTargetsOnly` (6.8). Done                           | -            | done       |
 | 2   | **Stranglewood**, with the act's screen, `act.requires`, Act II's steps, `RunRuleDef`, roots, the Forester. Done                          | -            | done       |
 | 3   | **Awakened Vardorvis**, with fighting pets (Butch first), and its design doc. Built, first pass (`awakened-vardorvis.md`); playtest next  | 2            | 2 weeks    |
-| 4   | **Invocations and relics** (tier 1 opens with the Stranglewood)                                                                           | 2            | 1.5 weeks  |
+| 4   | **Invocations and relics** (tier 1 opens with the Stranglewood). Built (9.3)                                                              | 2            | 1.5 weeks  |
 | 5   | The Overgrown remix, with the remix switches, sets and records                                                                            | 2            | 4 days     |
 | 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter. Built (4.11)          | 2            | 2.5 weeks  |
 | 7   | The Shadow remix                                                                                                                          | 5, 6         | 3 days     |

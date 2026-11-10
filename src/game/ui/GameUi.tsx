@@ -48,8 +48,10 @@ import {
     getCharacter,
 } from "../content/characters";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
+import { getInvocationBadge } from "../content/invocations";
 import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
+    ACT_MAPS,
     CAMPAIGN_MAPS,
     DEV_MAPS,
     FIGHT_MAPS,
@@ -63,9 +65,11 @@ import {
     mapDescription,
     mapFinalBossWarning,
     mapName,
+    takesInvocations,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
+import { RELIC_BY_ID, relicName } from "../content/relics";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
@@ -78,6 +82,7 @@ import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
+    RecordSetup,
     SaveData,
     getFightStage,
     getNextUpgradeCost,
@@ -104,13 +109,20 @@ import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
-import { InvocationBoard, InvocationsButton } from "./Invocations";
+import {
+    InvocationBadges,
+    InvocationBoard,
+    InvocationsButton,
+    RunInvocationBoard,
+    RunInvocationsButton,
+} from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
 import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
+import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
@@ -998,6 +1010,8 @@ function TitleHint(): JSX.Element {
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
     const [board, setBoard] = useState(false);
+    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET)
+    const runBoard = takesInvocations(map);
     const shownMapName = mapName(getMap(ui.mapId));
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
     const expertShown = map.raid !== undefined && ui.coop.status === "offline";
@@ -1028,6 +1042,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                         {!map.raid && <EndlessSwitch ui={ui} client={client} />}
                         <HardSwitch ui={ui} client={client} />
                         {expertShown && <ExpertSwitch ui={ui} client={client} />}
+                        {runBoard && <RunInvocationsButton ui={ui} onOpen={() => setBoard(true)} />}
                     </>
                 )}
                 <button
@@ -1039,6 +1054,9 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
             </div>
             {board && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            )}
+            {board && runBoard && (
+                <RunInvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
         </div>
     );
@@ -1430,6 +1448,9 @@ export function AdventurerPanel({
                 })}
             </div>
             <PetRow ui={ui} client={client} />
+            {ACT_MAPS.some((m) => isMapUnlocked(ui.save, m.id)) && (
+                <RelicRow ui={ui} client={client} />
+            )}
             <AdventurerDetails
                 key={shown}
                 save={ui.save}
@@ -1684,6 +1705,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
             >
                 <ItemIcon objId={map.iconObjId} size={20} />
                 <span className="ui-map-name">{shownMapName}</span>
+                <InvocationBadge points={save.invocationBest?.[map.id]?.points ?? 0} />
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
@@ -1896,10 +1918,65 @@ function ActDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
                               step: best.step,
                           })
                         : t("ui.act.best", { time: formatTime(best.seconds) })}
+                    <RecordSetupText record={best} />
                 </div>
             )}
         </>
     );
+}
+
+// A map's best at invocations (SaveData.invocationBest) and its badges, on a map that takes them
+function InvocationDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element | null {
+    if (!takesInvocations(map)) {
+        return null;
+    }
+    const best = save.invocationBest?.[map.id];
+    return (
+        <div className="ui-card-style ui-invocation-record">
+            {best
+                ? t("ui.invocations.best", {
+                      points: best.points,
+                      time: formatTime(best.seconds),
+                  })
+                : t("ui.invocations.none_yet")}
+            {best && <RecordSetupText record={{ relics: best.relics }} />}
+            <InvocationBadges best={best?.points ?? 0} />
+        </div>
+    );
+}
+
+// What a record was set with, after it: its invocation points and relics (save.ts, RecordSetup)
+function RecordSetupText({ record }: { record: RecordSetup }): JSX.Element | null {
+    const parts = [
+        ...(record.points ? [t("ui.invocations.points", { points: record.points })] : []),
+        ...(record.relics && record.relics.length > 0
+            ? [
+                  t("ui.relics.with", {
+                      relics: list(
+                          record.relics.flatMap((id) => {
+                              const relic = RELIC_BY_ID.get(id);
+                              return relic ? [relicName(relic)] : [];
+                          }),
+                      ),
+                  }),
+              ]
+            : []),
+    ];
+    return parts.length > 0 ? <span className="ui-record-setup"> ({parts.join(", ")})</span> : null;
+}
+
+// The highest invocation badge a map's been beaten at, on its list card
+function InvocationBadge({ points }: { points: number }): JSX.Element | null {
+    const badge = getInvocationBadge(points);
+    return badge > 0 ? (
+        <span
+            className="ui-invocation-badge ui-invocation-badge-won ui-invocation-badge-small"
+            aria-label={t("ui.invocations.badge_aria", { points: badge })}
+            title={t("ui.invocations.badge_aria", { points: badge })}
+        >
+            {badge}
+        </span>
+    ) : null;
 }
 
 // The result screen's button back into a boss fight: a fight in parts (MapDef.stages) goes on to
@@ -2010,12 +2087,14 @@ function MapDetails({
                         </div>
                     )}
                     {unlocked && <ActDetails save={save} map={map} />}
+                    {unlocked && <InvocationDetails save={save} map={map} />}
                     {endless && (
                         <div className="ui-card-style">
                             {t("ui.map.endless_best", {
                                 round: endless.round,
                                 time: formatTime(endless.seconds),
                             })}
+                            <RecordSetupText record={endless} />
                         </div>
                     )}
                     {hardWins > 0 && (
@@ -2031,6 +2110,7 @@ function MapDetails({
                                 round: hardEndless.round,
                                 time: formatTime(hardEndless.seconds),
                             })}
+                            <RecordSetupText record={hardEndless} />
                         </div>
                     )}
                 </div>
@@ -3202,6 +3282,27 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                 onSkip={() => client.skip()}
                             />
                         )}
+                        {/* Reloaded (content/relics.ts) */}
+                        {ui.hud?.keep && ui.hud.keep.kept > 0 && (
+                            <button
+                                className="ui-button"
+                                disabled={!ui.hud.keep.canTake}
+                                title={t("ui.levelup.take_kept_tooltip")}
+                                onClick={() => client.takeKept()}
+                            >
+                                {t("ui.levelup.take_kept", { kept: ui.hud.keep.kept })}
+                            </button>
+                        )}
+                        {ui.hud?.keep && ui.hud.keep.left > 0 && (
+                            <button
+                                className="ui-button"
+                                disabled={!ui.hud.keep.canKeep}
+                                title={t("ui.levelup.keep_tooltip")}
+                                onClick={() => client.keepOffer()}
+                            >
+                                {t("ui.levelup.keep", { left: ui.hud.keep.left })}
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -3681,6 +3782,9 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 )}
                 {result?.tombs && <TombsBoardView tombs={result.tombs} />}
                 {result?.raidChest && <RaidChestView chest={result.raidChest} />}
+                {result?.hard && result.victory && result.relics && (
+                    <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
+                )}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
                         {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
@@ -3844,6 +3948,29 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                                 {result.expert
                                                     ? t("ui.expert.name")
                                                     : t("ui.hard.name")}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {result.points !== undefined && (
+                                        <tr>
+                                            <td>{t("ui.result.stat.invocations")}</td>
+                                            <td>
+                                                {t("ui.invocations.points", {
+                                                    points: result.points,
+                                                })}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {result.relics && (
+                                        <tr>
+                                            <td>{t("ui.result.stat.relics")}</td>
+                                            <td>
+                                                {list(
+                                                    result.relics.flatMap((id) => {
+                                                        const relic = RELIC_BY_ID.get(id);
+                                                        return relic ? [relicName(relic)] : [];
+                                                    }),
+                                                )}
                                             </td>
                                         </tr>
                                     )}

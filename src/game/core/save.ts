@@ -6,7 +6,13 @@ import {
 } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
-import { InvocationPreset, cleanInvocationPresets, cleanInvocations } from "../content/invocations";
+import {
+    InvocationPreset,
+    RUN_SET,
+    cleanInvocationPresets,
+    cleanInvocations,
+    isHardInvocation,
+} from "../content/invocations";
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
     ALL_MAPS,
@@ -21,6 +27,7 @@ import {
 } from "../content/maps";
 import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
+import { cleanRelics } from "../content/relics";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getPageCost, getUpgradeCost } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
 import {
@@ -111,6 +118,14 @@ export type SaveData = {
     invocations?: string[];
     // Saved setups of the invocation board, to load in one go (content/invocations.ts)
     invocationPresets?: InvocationPreset[];
+    // A run's invocations, as last picked on a map's card (content/invocations.ts, RUN_SET): not
+    // hard mode's, which the Hard switch is
+    runInvocations?: string[];
+    // Map id -> its win at the most invocation points (as many and quicker, of those), with the
+    // relics it was set with
+    invocationBest?: Record<string, InvocationRecord>;
+    // The relics picked, one a tier (content/relics.ts); only the open tiers' go on a run
+    relics?: string[];
     // The Scabaras room's been beaten once: its puzzle helper's unlocked (DisplaySettings.puzzleHelper)
     scabarasBeaten?: boolean;
     // The pet taken along on runs (pets.ts), one of the trophies found
@@ -125,11 +140,18 @@ export type SaveData = {
     lastExported?: number;
 };
 
+// What a record was set with: its run's invocation points and the relics on (content/relics.ts),
+// when there were any
+export type RecordSetup = { points?: number; relics?: string[] };
+
 // The round reached, and how long the run lasted (on an act's map, at which step)
-export type EndlessRecord = { round: number; seconds: number; step?: number };
+export type EndlessRecord = { round: number; seconds: number; step?: number } & RecordSetup;
 
 // A win on an act's map: how long it took, at which step
-export type ActRecord = { seconds: number; step: number };
+export type ActRecord = { seconds: number; step: number } & RecordSetup;
+
+// A win at invocation points (SaveData.invocationBest)
+export type InvocationRecord = { points: number; seconds: number; relics?: string[] };
 
 export function createSave(): SaveData {
     return {
@@ -164,6 +186,23 @@ export function createSave(): SaveData {
 }
 
 // Brings any older save up to the current version, filling in what's missing
+// A run's invocations as the card keeps them: the board's own, not hard mode's (the Hard switch's)
+export function cleanRunInvocations(ids: readonly unknown[]): string[] {
+    return cleanInvocations(ids, RUN_SET).filter((id) => !isHardInvocation(id));
+}
+
+// What a record was set with, from a save: points a whole number above 0, relics this game knows
+function cleanSetup(record: unknown): RecordSetup {
+    const { points, relics } = (record ?? {}) as { points?: unknown; relics?: unknown };
+    const kept = cleanRelics(relics);
+    return {
+        ...(typeof points === "number" && Number.isFinite(points) && points > 0
+            ? { points: Math.floor(points) }
+            : {}),
+        ...(kept.length > 0 && { relics: kept }),
+    };
+}
+
 export function migrateSave(raw: unknown): SaveData {
     const save = createSave();
     if (!raw || typeof raw !== "object") {
@@ -253,7 +292,7 @@ export function migrateSave(raw: unknown): SaveData {
             for (const [id, record] of Object.entries(from)) {
                 const round = num(record?.round, 0);
                 if (ALL_MAPS.some((m) => m.id === id) && round > 0) {
-                    to[id] = { round, seconds: num(record?.seconds, 0) };
+                    to[id] = { round, seconds: num(record?.seconds, 0), ...cleanSetup(record) };
                     if (typeof record.step === "number" && record.step >= 0) {
                         to[id].step = Math.floor(record.step);
                     }
@@ -307,7 +346,21 @@ export function migrateSave(raw: unknown): SaveData {
             const seconds = num(record?.seconds, 0);
             if (MAP_BY_ID.get(id)?.act && seconds > 0) {
                 save.actBest ??= {};
-                save.actBest[id] = { seconds, step: Math.max(0, Math.floor(num(record?.step, 0))) };
+                save.actBest[id] = {
+                    seconds,
+                    step: Math.max(0, Math.floor(num(record?.step, 0))),
+                    ...cleanSetup(record),
+                };
+            }
+        }
+    }
+    if (data.invocationBest && typeof data.invocationBest === "object") {
+        for (const [id, record] of Object.entries(data.invocationBest)) {
+            const points = Math.floor(num(record?.points, 0));
+            const seconds = num(record?.seconds, 0);
+            if (MAP_BY_ID.has(id) && points > 0 && seconds > 0) {
+                save.invocationBest ??= {};
+                save.invocationBest[id] = { points, seconds, ...cleanSetup(record) };
             }
         }
     }
@@ -317,6 +370,13 @@ export function migrateSave(raw: unknown): SaveData {
     const presets = cleanInvocationPresets(data.invocationPresets);
     if (presets.length > 0) {
         save.invocationPresets = presets;
+    }
+    if (Array.isArray(data.runInvocations)) {
+        save.runInvocations = cleanRunInvocations(data.runInvocations);
+    }
+    const relics = cleanRelics(data.relics);
+    if (relics.length > 0) {
+        save.relics = relics;
     }
     if (data.scabarasBeaten === true) {
         save.scabarasBeaten = true;
@@ -492,6 +552,9 @@ export type RunSummary = {
     expert?: boolean;
     // An act's map: the step it was played at (content/acts.ts)
     actStep?: number;
+    // A run's invocation points, and the player's relics (Sim's RunResult)
+    points?: number;
+    relics?: string[];
     victory: boolean;
     seconds: number;
     level: number;
@@ -532,23 +595,37 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     if (run.victory && beatsMap(run)) {
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
-        if (run.hard) {
+        // A win with relics on still counts, but sets only the map's ordinary records
+        // (act-2-fallen-empire.md, 13.2): not hard mode's
+        if (isHardRecord(run)) {
             save.hardVictories[run.mapId] = (save.hardVictories[run.mapId] ?? 0) + 1;
         }
-        if (run.expert) {
+        if (run.expert && isRelicFree(run)) {
             save.expertVictories[run.mapId] = (save.expertVictories[run.mapId] ?? 0) + 1;
         }
         if (!run.endless && isActRecord(save, run)) {
             save.actBest ??= {};
-            save.actBest[run.mapId] = { seconds: run.seconds, step: run.actStep ?? 0 };
+            save.actBest[run.mapId] = {
+                seconds: run.seconds,
+                step: run.actStep ?? 0,
+                ...runSetup(run),
+            };
+        }
+        if (!run.endless && isInvocationRecord(save, run)) {
+            save.invocationBest ??= {};
+            save.invocationBest[run.mapId] = {
+                points: run.points!,
+                seconds: run.seconds,
+                ...(run.relics && run.relics.length > 0 && { relics: [...run.relics] }),
+            };
         }
     }
     save.totalKills += run.kills;
     save.bestSeconds = Math.max(save.bestSeconds, run.seconds);
     save.bestLevel = Math.max(save.bestLevel, run.level);
     if (run.endless && isEndlessRecord(save, run)) {
-        const records = run.hard ? save.hardEndlessBest : save.endlessBest;
-        records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds };
+        const records = isHardRecord(run) ? save.hardEndlessBest : save.endlessBest;
+        records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds, ...runSetup(run) };
         if (MAP_BY_ID.get(run.mapId)?.act) {
             records[run.mapId].step = run.actStep ?? 0;
         }
@@ -649,9 +726,38 @@ export function isEndlessRecord(save: SaveData, run: RunSummary): boolean {
     if (isDevMap(run.mapId)) {
         return false;
     }
-    const best = (run.hard ? save.hardEndlessBest : save.endlessBest)[run.mapId];
+    const best = (isHardRecord(run) ? save.hardEndlessBest : save.endlessBest)[run.mapId];
     const round = run.round ?? 1;
     return !best || round > best.round || (round === best.round && run.seconds > best.seconds);
+}
+
+// No relics on (content/relics.ts): hard mode's records are relic-free
+export function isRelicFree(run: RunSummary): boolean {
+    return !run.relics || run.relics.length === 0;
+}
+
+// A hard run that sets hard mode's records: one with no relics on
+export function isHardRecord(run: RunSummary): boolean {
+    return run.hard === true && isRelicFree(run);
+}
+
+// What a record keeps of the run that set it
+function runSetup(run: RunSummary): RecordSetup {
+    return {
+        ...(run.points !== undefined && run.points > 0 && { points: run.points }),
+        ...(run.relics && run.relics.length > 0 && { relics: [...run.relics] }),
+    };
+}
+
+// Whether a win is its map's best at invocations (SaveData.invocationBest): at more points than the
+// one kept, or as many and quicker
+export function isInvocationRecord(save: SaveData, run: RunSummary): boolean {
+    const points = run.points ?? 0;
+    if (!run.victory || points <= 0 || isDevMap(run.mapId)) {
+        return false;
+    }
+    const best = save.invocationBest?.[run.mapId];
+    return !best || points > best.points || (points === best.points && run.seconds < best.seconds);
 }
 
 // Whether a win on an act's map is its best (SaveData.actBest): at a higher step than the one

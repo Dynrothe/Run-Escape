@@ -9,9 +9,12 @@ export type Loadout = {
     armoury: Record<string, number>;
     // Their pet (pets.ts): looks only, but a fighting one's (PetDef.power) in everyone's sim
     pet?: string;
-    // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby. Only
-    // shown: the start carries the party's (GameStart.invocations), and the relay passes it as is
+    // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby (and
+    // in a run's room, its invocation points). Only shown: the start carries the party's
+    // (GameStart.invocations), and the relay passes it as is
     invocations?: string[];
+    // Their relics (content/relics.ts), the open tiers' picks, for their own hero
+    relics?: string[];
     // The trophies they've found that a raid's chest gives one of every time (expert mode's Lil'
     // Zik looks), so theirs gives one they haven't got. Ready for co-op's expert mode: rooms don't
     // carry expert yet (GameStart), so no co-op chest goes by it so far
@@ -89,7 +92,8 @@ export type GameStart = {
     actStep?: number;
     // A fight in parts (MapDef.stages): which, the host's next
     stage?: number;
-    // The Tombs of Amascut: the host's invocations, the party's raid level (Sim cleans the ids)
+    // The Tombs of Amascut: the host's invocations, the party's raid level; or a run's, the host's
+    // (Sim cleans the ids by the map's board)
     invocations?: string[];
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };

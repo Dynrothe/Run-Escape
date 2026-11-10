@@ -41,15 +41,28 @@ import {
 } from "../content/hard";
 import {
     ACCELERATION,
+    AERIAL_ASSAULT,
+    ANCIENT_HASTE,
+    BLOOD_MOON,
+    COIN_BONUS_CAP,
     DEADLY_PRAYERS,
+    FEELING_SPECIAL_ENRAGE,
+    GLASS_CANNON_HP,
+    HARD_PRESET,
     QUIET_PRAYERS,
+    RUN_SET,
     TOMBS_ATTEMPTS,
+    TOMBS_SET,
+    WALK_THE_PATH,
     cleanInvocations,
+    getInvocationCoins,
+    getInvocationPoints,
     getRaidLevel,
     getRaidLevelScale,
+    hasHardPreset,
 } from "../content/invocations";
 import { CASKETS, CASKET_TIERS, getGear, getItem } from "../content/items";
-import { getMap, hasFliers, hasPoison } from "../content/maps";
+import { getMap, hasFliers, hasPoison, takesInvocations, takesRelics } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { PET_BY_ID, PetDef } from "../content/pets";
 import {
@@ -89,6 +102,18 @@ import {
     getQuizGroups,
 } from "../content/randomEvents";
 import { RARITIES, RARITY_ORDER } from "../content/rarity";
+import {
+    BLOODTHIRSTY,
+    ENDLESS_HARVEST,
+    FAIRYS_FLIGHT,
+    GLOBETROTTER,
+    LAST_RECALL,
+    PRODUCTION_PRODIGY,
+    RELOADED,
+    SPECIALIST,
+    TRICKSTER,
+    cleanRelics,
+} from "../content/relics";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
 import { SHOP_UPGRADES } from "../content/shop";
 import { SOUNDS } from "../content/sounds";
@@ -184,6 +209,7 @@ import {
     emptyStats,
 } from "../content/types";
 import type { CharacterTraitDef, ColdRuleDef } from "../content/types";
+import { isAvailable } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
@@ -201,6 +227,7 @@ import {
     rollBossCasketTier,
     rollCasketItem,
     rollCasketTier,
+    shouldAutoEquip,
 } from "./Loot";
 import { MovementRules, movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
 import { Rng } from "./Rng";
@@ -706,6 +733,8 @@ export type SimOptions = {
     actStep?: number;
     // The solo hero's pet (SaveData.pet); a party's are each hero's (HeroOptions.pet)
     pet?: string;
+    // The solo hero's relics (SaveData.relics); a party's are each hero's (HeroOptions.relics)
+    relics?: readonly string[];
 };
 
 export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
@@ -744,6 +773,11 @@ export type RunResult = {
     actStep?: number;
     // The Tombs of Amascut's board
     tombs?: TombsSummary;
+    // A run's invocations (content/invocations.ts, RUN_SET), hard mode's preset among them, and
+    // the points they come to; and the player's relics (content/relics.ts). Each only when any.
+    invocations?: string[];
+    points?: number;
+    relics?: string[];
     // The Scabaras room was beaten (Sim.scabarasBeaten)
     scabarasBeaten?: boolean;
     // The round reached (1 outside endless runs)
@@ -965,6 +999,26 @@ export type Hero = {
     // that couldn't go off yet is held till this one (ABILITY_BUFFER_SECONDS)
     abilityReadyTick: number;
     abilityHeldUntil: number;
+    // Their relics (content/relics.ts) and what each has to keep
+    relics: RelicState;
+};
+
+// A hero's relics on this run (none where the map takes none), and their clocks and counts
+export type RelicState = {
+    ids: string[];
+    // Trickster: the tick the next hit's missed from
+    trickReady: number;
+    // Fairy's Flight: the tick the next push through a crowd's ready
+    pushReady: number;
+    // Bloodthirsty: kills towards the next heal
+    kills: number;
+    // Last Recall: used this run
+    recalled: boolean;
+    // Reloaded: the offers kept for later, the keeps left, and the offer put by while a kept one's
+    // taken (it comes back next)
+    kept: UpgradeChoice[][];
+    keepsLeft: number;
+    resume?: UpgradeChoice[];
 };
 
 // A player in a co-op run, as SimOptions.party has them
@@ -977,6 +1031,8 @@ export type HeroOptions = {
     armoury?: ArmouryUpgrades;
     // The pet taken along (SaveData.pet): only a fighting one (PetDef.power) does anything here
     pet?: string;
+    // Their relics (SaveData.relics), on the maps that take them (maps.ts, takesRelics)
+    relics?: readonly string[];
 };
 
 // The Apmeken room (content/tombs.ts): the wave it's on (its group's uids, and when it came), the
@@ -1436,9 +1492,24 @@ export class Sim {
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
-    // The Tombs of Amascut: the invocations on, and the raid level they come to
+    // The invocations on (content/invocations.ts): the Tombs of Amascut's, and the raid level they
+    // come to; or a run's (RUN_SET, maps from the Desert on), hard mode's preset among them
     readonly invocations: string[];
     readonly raidLevel: number;
+    // A run's invocation points (0 off a map that takes them), for its records
+    readonly invocationPoints: number;
+    // Hard mode's parts (HARD_PRESET): each a run invocation on maps that take them, and all hard
+    // mode elsewhere
+    private readonly hardFoes: boolean;
+    private readonly hardCrowd: boolean;
+    private readonly hardElites: boolean;
+    private readonly hardBosses: boolean;
+    // Ancient Haste: how fast the run's clock goes (mapSeconds)
+    private readonly clockRate: number;
+    // Blood Moon: the map's events with its bosses a minute early (mapEvents), made once
+    private earlyEvents?: { stage: number; events: RunEventDef[] };
+    // Where the run started (SimOptions.spawnX/Y), for Last Recall
+    private readonly start: Vec2;
     // A map's lights (MapDef.lighting), and whether weapons only aim at what's lit
     readonly lighting: LightingDef | undefined;
     readonly litTargetsOnly: boolean;
@@ -1948,9 +2019,24 @@ export class Sim {
         // Fun maps are endless from the start
         this.endless = (options.endless ?? false) || this.map.fun !== undefined;
         this.expert = (options.expert ?? false) && this.map.raid !== undefined;
-        // The Tombs go by their invocations instead
-        this.hard = ((options.hard ?? false) || this.expert) && !this.map.tombs;
-        this.invocations = this.map.tombs ? cleanInvocations(options.invocations ?? []) : [];
+        // The Tombs go by their invocations instead. A map with the runs' board has hard mode as a
+        // preset of them, so its hard runs play as they always have.
+        const board = this.map.tombs ? TOMBS_SET : takesInvocations(this.map) ? RUN_SET : undefined;
+        const picked = board ? cleanInvocations(options.invocations ?? [], board) : [];
+        const runBoard = board === RUN_SET;
+        this.invocations =
+            runBoard && options.hard
+                ? cleanInvocations([...picked, ...HARD_PRESET], RUN_SET)
+                : picked;
+        this.hard = runBoard
+            ? hasHardPreset(this.invocations)
+            : ((options.hard ?? false) || this.expert) && !this.map.tombs;
+        this.invocationPoints = runBoard ? getInvocationPoints(this.invocations) : 0;
+        this.hardFoes = runBoard ? this.invoked("run_hard_foes") : this.hard;
+        this.hardCrowd = runBoard ? this.invoked("run_hard_crowd") : this.hard;
+        this.hardElites = runBoard ? this.invoked("run_hard_elites") : this.hard;
+        this.hardBosses = runBoard ? this.invoked("run_hard_bosses") : this.hard;
+        this.clockRate = this.invoked("run_ancient_haste") ? ANCIENT_HASTE : 1;
         const stage = Math.floor(options.stage ?? 0);
         this.stage = Number.isFinite(stage)
             ? Math.max(0, Math.min(stage, (this.map.stages?.length ?? 1) - 1))
@@ -1965,14 +2051,15 @@ export class Sim {
         }
         this.hardScale = this.map.tombs
             ? getRaidLevelScale(this.raidLevel)
-            : this.hard
+            : this.hardFoes
               ? { ...getHardScale(this.map), bossHp: getHardScale(this.map).hp }
               : { hp: 1, damage: 1, bossHp: 1 };
-        this.bulletScale = this.map.tombs
-            ? getRaidLevelScale(this.raidLevel).bullets
-            : this.hard
-              ? (this.map.hard?.bullets ?? 1)
-              : 1;
+        this.bulletScale =
+            (this.map.tombs
+                ? getRaidLevelScale(this.raidLevel).bullets
+                : this.hardBosses
+                  ? (this.map.hard?.bullets ?? 1)
+                  : 1) * (this.invoked("run_aerial_assault") ? AERIAL_ASSAULT : 1);
         const party: HeroOptions[] = options.party ?? [
             {
                 name: "",
@@ -1982,12 +2069,13 @@ export class Sim {
                 trophiesFound: options.trophiesFound,
                 armoury: options.armoury,
                 pet: options.pet,
+                relics: options.relics,
             },
         ];
         this.weaponDamageMultipliers = Object.fromEntries(
             WEAPONS.map((weapon) => [
                 `weapon:${weapon.id}`,
-                getWeaponDamageMultiplier(weapon, party.length, this.hard, options.balance),
+                getWeaponDamageMultiplier(weapon, party.length, this.hardFoes, options.balance),
             ]),
         );
         this.partyScale = getPartyScale(party.length);
@@ -2002,6 +2090,7 @@ export class Sim {
                 this.nextPlayerChatSeconds = this.rng.range(...fun.playerChat.every);
             }
         }
+        this.start = { x: options.spawnX, y: options.spawnY };
         party.forEach((hero, index) => {
             this.heroes.push(this.createHero(hero, index, options.spawnX, options.spawnY));
         });
@@ -2011,6 +2100,7 @@ export class Sim {
         for (const hero of this.heroes) {
             this.use(hero);
             this.addWeapon(getCharacter(hero.characterId).startingWeapon);
+            this.grimoire();
             // A boss fight's kit: the weapon at its level, and nothing more ever
             if (this.map.fight) {
                 this.weapons[0].level = this.map.fight.weaponLevel;
@@ -2021,10 +2111,13 @@ export class Sim {
             }
             this.updateStats();
             hero.player.hp = hero.player.maxHp;
-            hero.revivesLeft = hero.stats.revival;
-            hero.rerollsLeft = BASE_REROLLS + hero.stats.reroll;
+            // Hardcore: no Ring of life. Overly Draining: no rerolls or banishes.
+            hero.revivesLeft = this.invoked("run_hardcore") ? 0 : hero.stats.revival;
+            hero.rerollsLeft = this.invoked("run_overly_draining")
+                ? 0
+                : BASE_REROLLS + hero.stats.reroll;
             hero.rerollsAtStart = hero.rerollsLeft;
-            hero.banishesLeft = hero.stats.banish;
+            hero.banishesLeft = this.invoked("run_overly_draining") ? 0 : hero.stats.banish;
             // Testing: the starting weapon at its max too
             if (this.testing?.maxLevelUps) {
                 this.maxEverything();
@@ -2165,6 +2258,15 @@ export class Sim {
             immuneEndTick: 0,
             abilityReadyTick: 0,
             abilityHeldUntil: -1,
+            relics: {
+                ids: takesRelics(this.map) ? cleanRelics(options.relics ?? []) : [],
+                trickReady: 0,
+                pushReady: 0,
+                kills: 0,
+                recalled: false,
+                kept: [],
+                keepsLeft: RELOADED.keeps,
+            },
         };
     }
 
@@ -2204,8 +2306,11 @@ export class Sim {
         return hero.down && !hero.left && this.revivesLeftFor(hero) > 0;
     }
 
-    // Co-op: the times a hero can still be revived, for the UI
+    // Co-op: the times a hero can still be revived, for the UI (none with Hardcore on)
     revivesLeftFor(hero: Hero): number {
+        if (this.invoked("run_hardcore")) {
+            return 0;
+        }
         return Math.max(0, REVIVES_PER_PLAYER + hero.extraRevives - hero.revived);
     }
 
@@ -2380,7 +2485,7 @@ export class Sim {
     // endless runs, and an endless run's later rounds start some way in
     get mapSeconds(): number {
         const start = this.round > 1 ? LATER_ROUND_START : 0;
-        return start + this.seconds - this.roundStartTick / TICKS_PER_SECOND;
+        return start + (this.seconds - this.roundStartTick / TICKS_PER_SECOND) * this.clockRate;
     }
 
     get xpForNextLevel(): number {
@@ -2397,7 +2502,25 @@ export class Sim {
 
     // The map's events, or this part's of a fight in parts
     get mapEvents(): RunEventDef[] {
-        return this.map.stages?.[this.stage]?.events ?? this.map.events;
+        const events = this.map.stages?.[this.stage]?.events ?? this.map.events;
+        if (!this.invoked("run_blood_moon")) {
+            return events;
+        }
+        // Blood Moon: every boss a minute early, in order with the rest
+        if (this.earlyEvents?.stage !== this.stage) {
+            const early = events.map((event) =>
+                event.kind === "boss" || event.kind === "finalBoss"
+                    ? { ...event, at: Math.max(0, event.at - BLOOD_MOON) }
+                    : event,
+            );
+            this.earlyEvents = { stage: this.stage, events: early.sort((a, b) => a.at - b.at) };
+        }
+        return this.earlyEvents.events;
+    }
+
+    // Upset Stomach (a run's) and On a Diet (the Tombs'): no food drops
+    private get noFood(): boolean {
+        return this.invoked("on_a_diet") || this.invoked("run_upset_stomach");
     }
 
     getResult(): RunResult {
@@ -2410,6 +2533,12 @@ export class Sim {
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
             ...(this.map.act && { actStep: this.actStep }),
             ...(this.map.tombs && { tombs: this.tombsSummary() }),
+            ...(!this.map.tombs &&
+                this.invocations.length > 0 && {
+                    invocations: [...this.invocations],
+                    points: this.invocationPoints,
+                }),
+            ...(this.hero.relics.ids.length > 0 && { relics: [...this.hero.relics.ids] }),
             ...(this.scabarasBeaten && { scabarasBeaten: true }),
             round: this.round,
             victory: this.state === "victory",
@@ -2508,12 +2637,28 @@ export class Sim {
         for (const debuff of this.debuffs) {
             addStats(stats, debuff.stats);
         }
+        // Relics that are stats (content/relics.ts)
+        if (this.hasRelic("fairys_flight")) {
+            stats.moveSpeed += FAIRYS_FLIGHT.moveSpeed;
+        }
+        if (this.hasRelic("globetrotter")) {
+            stats.powerUpRate += GLOBETROTTER.rate;
+        }
+        if (this.hasRelic("specialist")) {
+            stats.weaponSlots -= SPECIALIST.slots;
+            stats.might += SPECIALIST.might;
+        }
         // Grows with every level gained (the Gauntlet runner starts weak), up
         // to about where a normal run ends, so it doesn't run away in endless
         stats.might += stats.levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS);
         this.stats = stats;
         const player = this.player;
-        const maxHp = Math.round(PLAYER_BASE_HP * (1 + stats.maxHp));
+        // Glass Cannon: half the hitpoints
+        const maxHp = Math.round(
+            PLAYER_BASE_HP *
+                (1 + stats.maxHp) *
+                (this.invoked("run_glass_cannon") ? GLASS_CANNON_HP : 1),
+        );
         if (maxHp !== player.maxHp) {
             // Swapping off max hitpoints never kills
             player.hp = Math.max(Math.min(player.hp, 1), player.hp + maxHp - player.maxHp);
@@ -2576,8 +2721,11 @@ export class Sim {
     private nextLevelUp(): void {
         this.pendingLevelUps--;
         this.choices = [];
+        // Reloaded: the offer put by for a kept one comes back as it was
+        const resume = this.hero.relics.resume;
+        this.hero.relics.resume = undefined;
         if (this.pendingLevelUps > 0) {
-            this.choices = this.roll();
+            this.choices = resume ?? this.roll();
         } else {
             this.settle();
         }
@@ -2935,7 +3083,10 @@ export class Sim {
         const item = getItem(chest.itemId);
         if (action === "alch") {
             this.declineSetPiece(item.id);
-            const coins = this.alchValue(item.id, chest.upgrades);
+            const coins = Math.round(
+                this.alchValue(item.id, chest.upgrades) *
+                    (this.hasRelic("production_prodigy") ? PRODUCTION_PRODIGY.alch : 1),
+            );
             this.gainCoins(coins);
             this.emit({ type: "alch", itemId: item.id, coins });
             return;
@@ -3093,10 +3244,18 @@ export class Sim {
     // What coins found in the run are worth: less in endless runs, and less
     // again in their later rounds (see endless.ts), and more on hard mode
     get coinScale(): number {
-        const scale =
-            (this.endless ? endlessCoinScale(this.round) : 1) * (this.hard ? HARD_COINS : 1);
-        // An act's later steps pay more (content/acts.ts)
-        return this.map.act ? scale * (1 + getStepCoins(this.map, this.actStep)) : scale;
+        // The bonuses add together, up to the cap (act-2-fallen-empire.md, 8.3): hard mode (in its
+        // preset's invocations where the map has the board), the invocations, an act's later steps
+        const bonus =
+            (this.invocations.length > 0 && !this.map.tombs
+                ? getInvocationCoins(this.invocations)
+                : this.hard
+                  ? HARD_COINS - 1
+                  : 0) + (this.map.act ? getStepCoins(this.map, this.actStep) : 0);
+        return (
+            (this.endless ? endlessCoinScale(this.round) : 1) *
+            (1 + Math.min(COIN_BONUS_CAP, bonus))
+        );
     }
 
     // Coins for high alching an item, as the run pays them
@@ -3293,6 +3452,7 @@ export class Sim {
         this.stepBossFight();
         this.stepFloor();
         this.stepRule();
+        this.stepRelics();
         this.stepPickups();
         this.stepRandomEvents();
         this.cleanUp();
@@ -3505,7 +3665,7 @@ export class Sim {
             }
             this.useSpawnHero();
             if (event.kind === "elite") {
-                for (let i = 0; i < (this.hard ? HARD_ELITES : 1); i++) {
+                for (let i = 0; i < (this.hardElites ? HARD_ELITES : 1); i++) {
                     this.spawnEnemy(getEnemy(event.enemyId), "elite");
                 }
             } else if (event.kind === "ring") {
@@ -3555,7 +3715,7 @@ export class Sim {
         const wave = this.currentWave();
         // Endless runs' later rounds bring bigger crowds, and so do hard mode
         // and co-op's players
-        const soloCrowd = roundCrowd(this.round) * (this.hard ? HARD_CROWD : 1);
+        const soloCrowd = roundCrowd(this.round) * (this.hardCrowd ? HARD_CROWD : 1);
         const crowd = soloCrowd * this.partyScale.crowd;
         const alive = this.countAlive();
         const maxAlive = Math.min(Math.round(wave.maxAlive * crowd), MAX_ENEMIES);
@@ -3750,7 +3910,7 @@ export class Sim {
         const square = inArena ? this.map.bossArena : undefined;
         const points = this.bossSpawnPoints(
             def,
-            bossCopies(this.heroes.length, this.hard),
+            bossCopies(this.heroes.length, this.hardBosses),
             square ? ARENA_SPAWN_MIN_DISTANCE : BOSS_SPAWN_MIN_DISTANCE,
             square ? ARENA_SPAWN_MAX_DISTANCE : BOSS_SPAWN_MAX_DISTANCE,
             def.spawnAt,
@@ -3892,7 +4052,10 @@ export class Sim {
         let scale = def.scale ?? 1;
         let tint = 0xffffff;
         let xp =
-            def.xp * roundScale(ROUND_XP, this.round) * this.partyXp * (this.hard ? HARD_XP : 1);
+            def.xp *
+            roundScale(ROUND_XP, this.round) *
+            this.partyXp *
+            (this.hardCrowd ? HARD_XP : 1);
         if (type === "elite") {
             hp *= 8;
             hitScale *= 1.25;
@@ -3943,7 +4106,11 @@ export class Sim {
             hp: Math.max(1, Math.round(hp)),
             maxHp: Math.max(1, Math.round(hp)),
             damage: Math.round(def.damage * hitScale),
-            speed: (def.speed * (type === "elite" ? 0.85 : 1)) / TICKS_PER_SECOND,
+            speed:
+                (def.speed *
+                    (type === "elite" ? 0.85 : 1) *
+                    (this.invoked("run_walk_the_path") ? WALK_THE_PATH : 1)) /
+                TICKS_PER_SECOND,
             radius: def.radius,
             scale,
             tint,
@@ -4732,6 +4899,14 @@ export class Sim {
             this.isImmune(this.hero) ||
             this.devGod
         ) {
+            return 0;
+        }
+        // Trickster: it misses
+        if (this.trickedHit()) {
+            if (grace) {
+                player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+            }
+            this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
             return 0;
         }
         // An enemy's hit in the realm takes sanity too (RealmRuleDef.sanity.hit)
@@ -14377,7 +14552,12 @@ export class Sim {
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
         // A fight in phases gets harder by the phase instead
-        const enrageAt = def.enrage.at ?? (this.hard ? HARD_ENRAGE_AT : ENRAGE_AT);
+        const enrageAt =
+            def.enrage.at ??
+            Math.max(
+                this.hardBosses ? HARD_ENRAGE_AT : ENRAGE_AT,
+                this.invoked("run_feeling_special") ? FEELING_SPECIAL_ENRAGE : 0,
+            );
         if (!def.phases && !state.enraged && enemy.hp <= enemy.maxHp * enrageAt) {
             this.enrage(enemy);
         }
@@ -14856,7 +15036,7 @@ export class Sim {
             def.attackInterval *
             tempo *
             (state.enraged ? (state.furyTempo ?? ENRAGED_INTERVAL) : 1) *
-            (this.hard ? HARD_BOSS_INTERVAL : 1) *
+            (this.hardBosses ? HARD_BOSS_INTERVAL : 1) *
             drowsy;
         enemy.attackCooldown = Math.round((interval ?? usual) * TICKS_PER_SECOND);
         // Timed to strike as it lands (BossAttackDef.strikeAt), what it does first before that
@@ -17030,6 +17210,9 @@ export class Sim {
             this.emit({ type: "revive" });
             return;
         }
+        if (this.lastRecall()) {
+            return;
+        }
         player.hp = 0;
         player.deathTick = this.tick;
         this.hero.down = true;
@@ -17412,6 +17595,7 @@ export class Sim {
         if (!byEnemy && !enemy.noDrops) {
             this.kills++;
             this.countTraitKill();
+            this.countRelicKill();
             if (lastCopy) {
                 this.enemyKills[enemy.def.id] = (this.enemyKills[enemy.def.id] ?? 0) + 1;
             }
@@ -17697,7 +17881,7 @@ export class Sim {
         } else if (this.rng.chance(0.03 * luck)) {
             const coins = (1 + this.rng.int(5)) * (realm?.coins ?? 1);
             this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, coins);
-        } else if (!this.invoked("on_a_diet") && this.rng.chance(FOOD_DROP_CHANCE * luck)) {
+        } else if (!this.noFood && this.rng.chance(FOOD_DROP_CHANCE * luck)) {
             this.dropPickup("food", enemy.x - 0.3, enemy.y, Math.round(FOOD_HEAL * this.healScale));
         }
         if (!enemy.boss) {
@@ -17711,7 +17895,7 @@ export class Sim {
     private nextRound(): void {
         this.round++;
         this.roundStartTick = this.tick;
-        const events = this.map.events;
+        const events = this.mapEvents;
         const first = events.findIndex((e) => e.at >= LATER_ROUND_START);
         this.eventIndex = first === -1 ? events.length : first;
         this.bossSpawned = false;
@@ -19798,7 +19982,7 @@ export class Sim {
         // Its copies in co-op lie in wait one each, near the players
         const points = this.bossSpawnPoints(
             def,
-            bossCopies(this.heroes.length, this.hard),
+            bossCopies(this.heroes.length, this.hardBosses),
             DISGUISE_MIN_DISTANCE,
             DISGUISE_MAX_DISTANCE,
             undefined,
@@ -20177,7 +20361,7 @@ export class Sim {
         x: number,
         y: number,
         value: number,
-        extra: Pick<Pickup, "tier" | "powerUp" | "disguise"> = {},
+        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts"> = {},
     ): void {
         const limit = MAX_PILES[kind];
         // (only counted when there could be that many)
@@ -20233,6 +20417,10 @@ export class Sim {
         // there when this started
         const pickups = this.pickups;
         const pickupCount = pickups.length;
+        // Banker's Note: coins anywhere go to whoever has it (the nearest of them)
+        const bankers = this.heroes.filter(
+            (hero) => this.isUp(hero) && this.hasRelic("bankers_note", hero),
+        );
         for (const pickup of pickups) {
             pickup.prevX = pickup.x;
             pickup.prevY = pickup.y;
@@ -20243,7 +20431,8 @@ export class Sim {
             if (
                 pickup.kind === "powerUp" &&
                 !pickup.attracted &&
-                this.tick - pickup.spawnTick >= POWER_UP_LIFETIME * TICKS_PER_SECOND
+                this.tick - pickup.spawnTick >=
+                    POWER_UP_LIFETIME * (pickup.lasts ?? 1) * TICKS_PER_SECOND
             ) {
                 pickup.value = -1;
                 continue;
@@ -20263,7 +20452,12 @@ export class Sim {
                 pickup.tier = CASKET_TIERS[Math.min(at + 1, CASKET_TIERS.length - 1)];
             }
             // Whoever's nearest gets it
-            this.use(this.nearestUpHero(pickup.x, pickup.y));
+            const banked = pickup.kind === "coins" && bankers.length > 0;
+            this.use(
+                banked
+                    ? this.nearest(pickup.x, pickup.y, (hero) => bankers.includes(hero))
+                    : this.nearestUpHero(pickup.x, pickup.y),
+            );
             const player = this.player;
             const magnet = BASE_MAGNET * (1 + this.stats.magnet);
             const dx = player.x - pickup.x;
@@ -20271,7 +20465,7 @@ export class Sim {
             const distance = fm.hypot(dx, dy);
             // Caskets and power-ups need walking over
             const magnetic = pickup.kind !== "casket" && pickup.kind !== "powerUp";
-            if (!pickup.attracted && magnetic && distance < magnet) {
+            if (!pickup.attracted && magnetic && (distance < magnet || banked)) {
                 pickup.attracted = true;
                 pickup.speed = 0.05;
             }
@@ -20424,7 +20618,9 @@ export class Sim {
         this.lastPowerUpTick = this.tick;
         this.lastPowerUpId = id;
         const spot = this.walkableSpot(x, y);
-        this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: id });
+        // Globetrotter: it waits longer for whoever's kill dropped it
+        const lasts = this.hasRelic("globetrotter") ? GLOBETROTTER.lasts : undefined;
+        this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: id, ...(lasts && { lasts }) });
     }
 
     // Power-ups' damage keeps up with the enemies' hitpoints
@@ -20803,6 +20999,230 @@ export class Sim {
         return killed;
     }
 
+    // ---- Relics (content/relics.ts) ----
+
+    // Grimoire: a second weapon to start with, a Common of the adventurer's class that they could
+    // be offered (picked by the run's seed)
+    private grimoire(): void {
+        if (!this.hasRelic("grimoire")) {
+            return;
+        }
+        const style = getCharacter(this.characterId).style;
+        const options = WEAPONS.filter(
+            (weapon) =>
+                weapon.rarity === "common" &&
+                getWeaponStyle(weapon) === style &&
+                !weapon.evolved &&
+                !weapon.pickOnly &&
+                !this.weapons.some(
+                    (w) =>
+                        w.def.id === weapon.id ||
+                        (weapon.family !== undefined && w.def.family === weapon.family),
+                ) &&
+                isAvailable(weapon, this.unlockedItems),
+        );
+        if (options.length > 0 && this.weapons.length < this.maxWeapons) {
+            this.addWeapon(options[this.rng.int(options.length)].id);
+        }
+    }
+
+    // Whether a hero (the current one by default) has a relic on this run
+    hasRelic(id: string, hero: Hero = this.hero): boolean {
+        return hero.relics.ids.includes(id);
+    }
+
+    // The relics that go by a clock, each hero's own: Endless Harvest's bones, Fairy's Flight's push
+    private stepRelics(): void {
+        const harvest = this.tick > 0 && this.tick % secondsToTicks(ENDLESS_HARVEST.every) === 0;
+        for (const hero of this.heroes) {
+            if (hero.relics.ids.length === 0 || !this.isUp(hero)) {
+                continue;
+            }
+            const player = hero.player;
+            if (harvest && this.hasRelic("endless_harvest", hero)) {
+                const reach = ENDLESS_HARVEST.range;
+                for (const pickup of this.pickups) {
+                    if (
+                        pickup.kind === "bones" &&
+                        !pickup.attracted &&
+                        fm.hypot(pickup.x - player.x, pickup.y - player.y) <= reach
+                    ) {
+                        pickup.attracted = true;
+                        pickup.speed = 0.05;
+                    }
+                }
+            }
+            if (
+                player.moving &&
+                this.tick >= hero.relics.pushReady &&
+                this.hasRelic("fairys_flight", hero)
+            ) {
+                this.pushThrough(hero);
+            }
+        }
+    }
+
+    // Fairy's Flight: walking into a crowd throws the enemies round you aside, as a hit's knockback
+    // does (bosses and what doesn't move stay put)
+    private pushThrough(hero: Hero): void {
+        const player = hero.player;
+        const reach = FAIRYS_FLIGHT.reach + player.radius;
+        const crowd = this.enemies.filter(
+            (enemy) =>
+                !enemy.dead &&
+                !enemy.boss &&
+                !enemy.def.stationary &&
+                !enemy.def.solid &&
+                (enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2 <= reach * reach,
+        );
+        if (crowd.length < FAIRYS_FLIGHT.crowd) {
+            return;
+        }
+        for (const enemy of crowd) {
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const length = fm.hypot(dx, dy);
+            if (length > 0.001) {
+                const push = FAIRYS_FLIGHT.push * (1 - (enemy.def.knockbackResist ?? 0));
+                enemy.vx += (dx / length) * push;
+                enemy.vy += (dy / length) * push;
+            }
+        }
+        hero.relics.pushReady = this.tick + secondsToTicks(FAIRYS_FLIGHT.every);
+    }
+
+    // Bloodthirsty: a share of their hitpoints back every so many kills (the current hero's kill)
+    private countRelicKill(): void {
+        if (!this.hasRelic("bloodthirsty")) {
+            return;
+        }
+        const relics = this.hero.relics;
+        relics.kills++;
+        if (relics.kills >= BLOODTHIRSTY.kills) {
+            relics.kills = 0;
+            this.heal(this.player.maxHp * BLOODTHIRSTY.heal);
+        }
+    }
+
+    // Trickster: the next hit misses, once its clock's round again. True when this one does.
+    private trickedHit(): boolean {
+        const relics = this.hero.relics;
+        if (!this.hasRelic("trickster") || this.tick < relics.trickReady) {
+            return false;
+        }
+        relics.trickReady = this.tick + secondsToTicks(TRICKSTER.every);
+        return true;
+    }
+
+    // Last Recall: once a run, a fall takes the hero back to the start with half their hitpoints,
+    // and what's round the start is stunned. True when it did.
+    private lastRecall(): boolean {
+        const relics = this.hero.relics;
+        if (!this.hasRelic("last_recall") || relics.recalled) {
+            return false;
+        }
+        relics.recalled = true;
+        const player = this.player;
+        const spot = findFreeSpot(this.grid, this.start.x, this.start.y, player.radius);
+        player.x = player.prevX = spot.x;
+        player.y = player.prevY = spot.y;
+        player.hp = Math.max(1, Math.round(player.maxHp * LAST_RECALL.hp));
+        player.invulnerable = Math.max(player.invulnerable, 3 * TICKS_PER_SECOND);
+        player.poisonEnd = -1;
+        player.poisonDamage = 0;
+        const stun = secondsToTicks(LAST_RECALL.stun);
+        const reach = LAST_RECALL.radius;
+        for (const enemy of this.enemies) {
+            if (
+                !enemy.dead &&
+                !enemy.boss &&
+                (enemy.x - spot.x) ** 2 + (enemy.y - spot.y) ** 2 <= reach * reach
+            ) {
+                enemy.frozen = Math.max(enemy.frozen, stun);
+            }
+        }
+        this.updateFlowField();
+        this.emit({ type: "revive" });
+        return true;
+    }
+
+    // Reloaded: the level up's offer kept for later, with this level up gone by (twice a run)
+    get canKeepOffer(): boolean {
+        return (
+            this.isChoosing() &&
+            this.hasRelic("reloaded") &&
+            this.hero.relics.keepsLeft > 0 &&
+            !this.choosingHilt
+        );
+    }
+
+    keepOffer(): boolean {
+        if (!this.canKeepOffer) {
+            return false;
+        }
+        const relics = this.hero.relics;
+        relics.kept.push(this.choices);
+        relics.keepsLeft--;
+        this.nextLevelUp();
+        return true;
+    }
+
+    // A kept offer, to take at a later level up: as an extra pick before this one's, which comes
+    // back after. Only what can still be taken of it stays on it.
+    get canTakeKept(): boolean {
+        return (
+            this.isChoosing() &&
+            this.hero.relics.kept.length > 0 &&
+            !this.choosingHilt &&
+            this.hero.relics.resume === undefined
+        );
+    }
+
+    takeKept(): boolean {
+        if (!this.canTakeKept) {
+            return false;
+        }
+        const relics = this.hero.relics;
+        const kept = relics.kept.shift()!.filter((choice) => this.stillOffered(choice));
+        if (kept.length === 0) {
+            return true;
+        }
+        relics.resume = this.choices;
+        this.pendingLevelUps++;
+        this.choices = kept;
+        return true;
+    }
+
+    // A kept offer's reward that can still be had as it was offered: a weapon or passive not carried
+    // yet with room for it, the next level of one carried, an evolution or hilt of one still carried
+    private stillOffered(choice: UpgradeChoice): boolean {
+        switch (choice.kind) {
+            case "newWeapon":
+                return (
+                    !this.weapons.some((w) => w.def.id === choice.weaponId) &&
+                    this.weapons.length < this.maxWeapons
+                );
+            case "weaponLevel":
+                return this.weapons.some(
+                    (w) => w.def.id === choice.weaponId && w.level === choice.level - 1,
+                );
+            case "evolve":
+            case "hilt":
+                return this.weapons.some((w) => w.def.id === choice.weaponId);
+            case "newPassive":
+                return (
+                    !this.passives.some((p) => p.id === choice.passiveId) &&
+                    this.passives.length < this.maxPassives
+                );
+            case "passiveLevel":
+                return this.passives.some(
+                    (p) => p.id === choice.passiveId && p.level === choice.level - 1,
+                );
+            default:
+                return true;
+        }
+    }
+
     // ---- Random events ----
 
     private stepRandomEvents(): void {
@@ -20850,6 +21270,8 @@ export class Sim {
                         ? event.weight
                         : 0
                     : event.id === this.lastRandomEventId ||
+                        // Upset Stomach: no sandwiches
+                        (event.id === "sandwich_lady" && this.noFood) ||
                         this.seconds < (event.minSeconds ?? 0) ||
                         (event.effect.kind === "ambush" && bossOut)
                       ? 0
@@ -21207,7 +21629,18 @@ export class Sim {
     private offerCasketItem(tier: CasketTier, coins: number): void {
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
-        this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });
+        const chest = { uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins };
+        // Production Prodigy: no stop, the item worn or used if it's better, alched if not
+        if (this.hasRelic("production_prodigy")) {
+            const item = getItem(itemId);
+            const take =
+                item.kind === "gear"
+                    ? shouldAutoEquip(this.gear, this.gearUpgrades, item, upgrades)
+                    : true;
+            this.applyChest(chest, take ? "take" : "alch");
+            return;
+        }
+        this.chests.push(chest);
         this.emit({ type: "chest", tier, itemId, coins });
         if (this.state === "playing") {
             this.state = "chest";

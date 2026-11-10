@@ -1071,6 +1071,7 @@ export function makeLoadout(
     pet?: string,
     invocations?: string[],
     trophies?: string[],
+    relics?: string[],
 ): Loadout {
     // Only what's been bought, so it stays small
     const bought = Object.fromEntries(Object.entries(metaStats).filter(([, value]) => value !== 0));
@@ -1081,5 +1082,6 @@ export function makeLoadout(
         ...(pet && { pet }),
         ...(invocations && { invocations }),
         ...(trophies && trophies.length > 0 && { trophies }),
+        ...(relics && relics.length > 0 && { relics }),
     };
 }

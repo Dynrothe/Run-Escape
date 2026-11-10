@@ -237,7 +237,33 @@ version and how to run it.
   and bosses enrage at 65% of their hitpoints and attack 15% faster. How much tougher depends on the map: the early ones gain the most, as a player who's
   bought everything walks through them, and the late ones the least. Experience from bones is 10%
   lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
-  records of its own. A win counts as a win on the map, and turns its tick gold.
+  records of its own. A win counts as a win on the map, and turns its tick gold. From the Desert
+  on, and on Act II's maps, hard mode is a preset of four invocations (below) worth 180 points.
+- **Invocations**: on a map from the Desert on, and on Act II's maps, the Invocations button beside
+  Hard opens a board of opt-in handicaps, as the Tombs of Amascut's: Walk the Path (enemies 15%
+  faster, 10 points), Upset Stomach (no food drops, no Sandwich lady, 15), Overly Draining (no
+  rerolls or banishes, 10), Glass Cannon (half your hitpoints, 20), Hardcore (no Ring of life, and no
+  getting back up in co-op, 15), Feeling Special? (bosses enrage at 75%, 10), Aerial Assault (bosses'
+  patterns half as many bullets again, 15), Ancient Haste (the run's clock 25% faster, the final boss
+  at 12:00, 10) and Blood Moon (every boss a minute early, 15). Hard mode's four are a row of their
+  own that the Hard switch turns on together. Each point adds 1.5% to the run's coins (hard mode's
+  four pay its 25% between them); every coin bonus (invocations, hard mode, Act II's steps) adds
+  together, up to +300%. A map's card shows its best win at invocations, and badges for winning at
+  100, 200 and 300 points. In co-op the host's invocations count. Boss fights, raids and the
+  gauntlet don't take them (their Hard is their own).
+- **Relics**: once Act II is open, a row of four slots on the adventurer screen. Each Act II map
+  beaten opens the next tier, and one relic a tier stays picked across runs: tier 1 Endless Harvest
+  (bones within 10 tiles fly to you every 20 s), Production Prodigy (caskets never stop the run:
+  better gear's worn, the rest alched for 25% more) or Trickster (every 15 s the next hit misses);
+  tier 2 Globetrotter (power-ups 20% more often, and they wait twice as long), Banker's Note (coins
+  come to you from anywhere) or Fairy's Flight (10% faster, and every 10 s walking into a crowd
+  throws it aside); tier 3 Bloodthirsty (every 50 kills heal 5%), Specialist (a weapon slot fewer,
+  weapons hit 25% harder) or Grimoire (start with a second weapon, a Common of your class); tier 4
+  Last Recall (once a run, falling takes you back to the start with half your hitpoints and stuns
+  what's there) or Reloaded (twice a run, keep a level up's offer and take it at a later level up).
+  They're on campaign and Act II maps, each player's own in co-op, and off in boss fights, raids and
+  the Tombs. A win with a relic on counts, but sets no hard-mode record; records show the relics
+  they were set with.
 - **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
   would drop only has a 25% chance to, and only 25 can lie on the ground at once. A round's master
   casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there

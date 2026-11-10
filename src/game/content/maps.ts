@@ -662,6 +662,30 @@ export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter(
 // The acts' maps (MapDef.act, content/acts.ts): each act's open once its map's beaten, in any order
 export const ACT_MAPS: MapDef[] = MAPS.filter((map) => map.act);
 
+// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on campaign maps from the Desert on, and
+// on the acts' maps. A remix (act-2-fallen-empire.md, 8.3) will take them on any campaign map:
+// `remixed` is for it. Boss fights, raids, the Tombs (their own board), quests in parts, the seasonal
+// and fun maps don't.
+const FIRST_INVOCATION_MAP = CAMPAIGN_MAPS.findIndex((map) => map.id === "desert");
+export function takesInvocations(map: MapDef, remixed = false): boolean {
+    if (map.act) {
+        return true;
+    }
+    const index = CAMPAIGN_MAPS.indexOf(map);
+    return index >= 0 && (remixed || index >= FIRST_INVOCATION_MAP) && isPlainRun(map);
+}
+
+// Relics (content/relics.ts) are on every campaign map and the acts' maps (and remixes), and off in
+// boss fights, raids, the Tombs and the rest (act-2-fallen-empire.md, 9.2)
+export function takesRelics(map: MapDef): boolean {
+    return (map.act !== undefined || CAMPAIGN_MAPS.includes(map)) && isPlainRun(map);
+}
+
+// A survival run: waves and a final boss, not a fight, a raid or a quest's parts
+function isPlainRun(map: MapDef): boolean {
+    return !map.fight && !map.raid && !map.tombs && !map.stages && !map.fun && !map.dev;
+}
+
 // Open from the start, between the campaign and the fun maps
 export const SEASONAL_MAPS: MapDef[] = MAPS.filter((map) => map.seasonal);
 

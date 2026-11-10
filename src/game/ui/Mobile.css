@@ -591,6 +591,12 @@
         flex-shrink: 0;
     }
 
+    /* The relics' row as the pet's: one line */
+    .ui-relic-row {
+        flex-shrink: 0;
+        padding: 0 2px;
+    }
+
     .ui-map-pages {
         flex: 1 1 0;
     }
@@ -1096,6 +1102,11 @@
 /* The Tombs' invocation board as tall as the screen at most, kept clear of the notch: its middle
    scrolls, so Reset All and Done stay in view */
 @media (pointer: coarse) and (max-height: 520px) {
+    .ui-relic-picker {
+        width: min(460px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
     .ui-invocations {
         width: min(620px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
         max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);

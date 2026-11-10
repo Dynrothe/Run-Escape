@@ -1,4 +1,5 @@
 import { fm } from "../core/fmath";
+import { tr } from "../i18n";
 import { TROPHIES } from "./trophies";
 
 // The Tombs of Amascut's invocations (docs/design/tombs-of-amascut.md): picked before the raid,
@@ -21,7 +22,10 @@ export type InvocationGroup =
     | "akkha"
     | "kephri"
     | "zebak"
-    | "wardens";
+    | "wardens"
+    // A run's (RUN_INVOCATIONS): Act II's, and hard mode's
+    | "run"
+    | "hard";
 
 export type InvocationDef = {
     id: string;
@@ -470,23 +474,27 @@ export const INVOCATION_BY_ID: Map<string, InvocationDef> = new Map(
     INVOCATIONS.map((invocation) => [invocation.id, invocation]),
 );
 
-function groupOf(id: string): InvocationGroupDef | undefined {
-    const invocation = INVOCATION_BY_ID.get(id);
-    return INVOCATION_GROUPS.find((group) => group.id === invocation?.group);
+function groupOf(id: string, set: InvocationSet): InvocationGroupDef | undefined {
+    const invocation = set.byId.get(id);
+    return set.groups.find((group) => group.id === invocation?.group);
 }
 
-// What a list of ids comes to: only invocations this game knows, each once, and the last picked
-// of a group that allows one. Another player's game, or an old save, could send anything.
-export function cleanInvocations(ids: readonly unknown[]): string[] {
+// What a list of ids comes to: only invocations this game knows (of the board's set: the Tombs' by
+// default), each once, and the last picked of a group that allows one. Another player's game, or
+// an old save, could send anything.
+export function cleanInvocations(
+    ids: readonly unknown[],
+    set: InvocationSet = TOMBS_SET,
+): string[] {
     const out: string[] = [];
     for (const id of ids) {
-        if (typeof id !== "string" || !INVOCATION_BY_ID.has(id) || out.includes(id)) {
+        if (typeof id !== "string" || !set.byId.has(id) || out.includes(id)) {
             continue;
         }
-        const group = groupOf(id);
+        const group = groupOf(id, set);
         if (group?.one) {
             for (let i = out.length - 1; i >= 0; i--) {
-                if (groupOf(out[i])?.id === group.id) {
+                if (groupOf(out[i], set)?.id === group.id) {
                     out.splice(i, 1);
                 }
             }
@@ -497,18 +505,19 @@ export function cleanInvocations(ids: readonly unknown[]): string[] {
 }
 
 // On if it was off, taking off anything it can't be on with; off if it was on
-export function toggleInvocation(ids: readonly string[], id: string): string[] {
+export function toggleInvocation(
+    ids: readonly string[],
+    id: string,
+    set: InvocationSet = TOMBS_SET,
+): string[] {
     if (ids.includes(id)) {
         return ids.filter((other) => other !== id);
     }
-    return cleanInvocations([...ids, id]);
+    return cleanInvocations([...ids, id], set);
 }
 
 export function getRaidLevel(ids: readonly string[]): number {
-    return cleanInvocations(ids).reduce(
-        (sum, id) => sum + (INVOCATION_BY_ID.get(id)?.level ?? 0),
-        0,
-    );
+    return getInvocationPoints(ids, TOMBS_SET);
 }
 
 // OSRS's bands: Entry under 150, Normal under 300, Expert from there
@@ -622,3 +631,218 @@ export function cleanInvocationPresets(data: unknown): InvocationPreset[] {
     }
     return out;
 }
+
+// ---- Runs' invocations (act-2-fallen-empire.md, 9.1) ----
+// The same board on a survival run: opt-in handicaps on any map from the Desert on (maps.ts,
+// takesInvocations), each worth points. The points add coins (RUN_INVOCATION_COINS a point, with the
+// run's other bonuses, up to COIN_BONUS_CAP) and badges on the map's card (INVOCATION_BADGES), and
+// a record shows the points it was set at. The Tombs keep their own board and raid level above:
+// an invocation set is the board a map has, so the same cleaning, toggling and points work for
+// both. Hard mode on these maps is HARD_PRESET, so a hard run plays as it always has.
+
+export type InvocationSet = {
+    invocations: InvocationDef[];
+    groups: InvocationGroupDef[];
+    byId: Map<string, InvocationDef>;
+};
+
+export const TOMBS_SET: InvocationSet = {
+    invocations: INVOCATIONS,
+    groups: INVOCATION_GROUPS,
+    byId: INVOCATION_BY_ID,
+};
+
+// A run's invocation: its coins when they aren't RUN_INVOCATION_COINS a point (hard mode's), and
+// whether it's one of hard mode's (HARD_PRESET), which the Hard switch turns on together
+export type RunInvocationDef = InvocationDef & { coins?: number; hard?: true };
+
+// What each point adds to a run's coins
+export const RUN_INVOCATION_COINS = 0.015;
+// All of a run's coin bonuses together (invocations, hard mode, an act's steps and, later, remixes)
+// go up to this: +300%
+export const COIN_BONUS_CAP = 3;
+// The points a map's card gives a badge for, beaten at as many or more
+export const INVOCATION_BADGES = [100, 200, 300];
+
+// The names and what they do are Act II's (9.1); what they're made of is the run's. The icons are
+// the Tombs' board's, as the boards are one idea.
+export const RUN_INVOCATIONS: RunInvocationDef[] = [
+    {
+        id: "run_walk_the_path",
+        icon: 8737,
+        name: "Walk the Path",
+        group: "run",
+        level: 10,
+        description: "Enemies move 15% faster.",
+    },
+    {
+        id: "run_upset_stomach",
+        icon: 8742,
+        name: "Upset Stomach",
+        group: "run",
+        level: 15,
+        description: "No food drops, and the Sandwich lady doesn't come.",
+    },
+    {
+        id: "run_overly_draining",
+        icon: 8735,
+        name: "Overly Draining",
+        group: "run",
+        level: 10,
+        description: "No rerolls and no banishes.",
+    },
+    {
+        id: "run_glass_cannon",
+        icon: 8736,
+        name: "Glass Cannon",
+        group: "run",
+        level: 20,
+        description: "Half your hitpoints.",
+    },
+    {
+        id: "run_hardcore",
+        icon: 8731,
+        name: "Hardcore",
+        group: "run",
+        level: 15,
+        description: "No Ring of life, and in co-op no getting back up.",
+    },
+    {
+        id: "run_feeling_special",
+        icon: 8727,
+        name: "Feeling Special?",
+        group: "run",
+        level: 10,
+        description: "Bosses enrage at 75% of their hitpoints, not 50%.",
+    },
+    {
+        id: "run_aerial_assault",
+        icon: 8726,
+        name: "Aerial Assault",
+        group: "run",
+        level: 15,
+        description: "Bosses' patterns fire half as many bullets again.",
+    },
+    {
+        id: "run_ancient_haste",
+        icon: 8732,
+        name: "Ancient Haste",
+        group: "run",
+        level: 10,
+        description: "The run's clock goes 25% faster: the final boss comes at 12:00.",
+    },
+    {
+        id: "run_blood_moon",
+        icon: 8730,
+        name: "Blood Moon",
+        group: "run",
+        level: 15,
+        description: "Every boss comes a minute early.",
+    },
+    // Hard mode, in four: together they're what hard mode has always been (hard.ts), and pay its
+    // +25% coins between them. The Hard switch turns them on and off together.
+    {
+        id: "run_hard_foes",
+        icon: 8723,
+        name: "Hardened Foes",
+        group: "hard",
+        level: 90,
+        coins: 0.0625,
+        hard: true,
+        description: "Enemies have the map's hard-mode hitpoints and damage.",
+    },
+    {
+        id: "run_hard_crowd",
+        icon: 8738,
+        name: "Thronging",
+        group: "hard",
+        level: 40,
+        coins: 0.0625,
+        hard: true,
+        description: "A quarter more enemies about, for a little less experience each.",
+    },
+    {
+        id: "run_hard_elites",
+        icon: 8739,
+        name: "Elite Guard",
+        group: "hard",
+        level: 25,
+        coins: 0.0625,
+        hard: true,
+        description: "Two elites come where there'd be one.",
+    },
+    {
+        id: "run_hard_bosses",
+        icon: 8744,
+        name: "Short Fuse",
+        group: "hard",
+        level: 25,
+        coins: 0.0625,
+        hard: true,
+        description: "Bosses enrage at 65% and attack 15% faster, and co-op brings more of them.",
+    },
+];
+
+export const RUN_INVOCATION_GROUPS: InvocationGroupDef[] = [
+    { id: "run", name: "Invocations" },
+    { id: "hard", name: "Hard mode" },
+];
+
+export const RUN_SET: InvocationSet = {
+    invocations: RUN_INVOCATIONS,
+    groups: RUN_INVOCATION_GROUPS,
+    byId: new Map(RUN_INVOCATIONS.map((invocation) => [invocation.id, invocation])),
+};
+
+// Hard mode on a map that takes invocations: these on together
+export const HARD_PRESET: string[] = RUN_INVOCATIONS.filter((i) => i.hard).map((i) => i.id);
+
+export function isHardInvocation(id: string): boolean {
+    return (RUN_SET.byId.get(id) as RunInvocationDef | undefined)?.hard === true;
+}
+
+// Whether a run's invocations have all of hard mode's: a hard run, for its records
+export function hasHardPreset(ids: readonly string[]): boolean {
+    return HARD_PRESET.every((id) => ids.includes(id));
+}
+
+// What a run's invocations come to: points (as the Tombs' raid level), and what they add to coins
+export function getInvocationPoints(ids: readonly string[], set: InvocationSet = RUN_SET): number {
+    return cleanInvocations(ids, set).reduce((sum, id) => sum + (set.byId.get(id)?.level ?? 0), 0);
+}
+
+export function getInvocationCoins(ids: readonly string[]): number {
+    return cleanInvocations(ids, RUN_SET).reduce((sum, id) => {
+        const def = RUN_SET.byId.get(id) as RunInvocationDef;
+        return sum + (def.coins ?? def.level * RUN_INVOCATION_COINS);
+    }, 0);
+}
+
+// The highest badge a win at these points earns (0 for none)
+export function getInvocationBadge(points: number): number {
+    return INVOCATION_BADGES.filter((badge) => points >= badge).pop() ?? 0;
+}
+
+// The board's: an invocation's name and what it does, in the player's language (the sim and the
+// Tombs' board read the English)
+export function invocationName(def: InvocationDef): string {
+    return tr(`invocation.${def.id}.name`, def.name);
+}
+
+export function invocationDescription(def: InvocationDef): string {
+    return tr(`invocation.${def.id}.desc`, def.description);
+}
+
+// What the runs' invocations go by
+// Walk the Path: enemies' pace
+export const WALK_THE_PATH = 1.15;
+// Feeling Special?: bosses enrage below this share of their hitpoints
+export const FEELING_SPECIAL_ENRAGE = 0.75;
+// Aerial Assault: bosses' patterns' bullets
+export const AERIAL_ASSAULT = 1.5;
+// Ancient Haste: the run's clock (Sim.mapSeconds)
+export const ANCIENT_HASTE = 1.25;
+// Blood Moon: how many seconds early every boss comes
+export const BLOOD_MOON = 60;
+// Glass Cannon: hitpoints
+export const GLASS_CANNON_HP = 0.5;

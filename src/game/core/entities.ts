@@ -662,6 +662,8 @@ export type Pickup = {
     powerUp?: string;
     // A casket that's really a boss (EnemyDef.disguise)
     disguise?: DisguisedBoss;
+    // Power-ups only: how many times as long as usual it waits to be picked up (Globetrotter)
+    lasts?: number;
 };
 
 // Co-op: a boss's copies (content/coop.ts bossCopies), with one boss's
@@ -1004,7 +1006,15 @@ type SimEventBody =
     // A projectile hit something and has a sound for it
     | { type: "impact"; sound: number; x: number; y: number }
     // sound: the boss attack's hit sound, instead of the enemy's attack sound
-    | { type: "playerHit"; amount: number; enemyId: string; elite: boolean; sound?: number }
+    // missed: Trickster's (content/relics.ts), a hit that didn't land
+    | {
+          type: "playerHit";
+          amount: number;
+          enemyId: string;
+          elite: boolean;
+          sound?: number;
+          missed?: boolean;
+      }
     | { type: "playerPoisoned"; amount: number }
     // A boss attack was used (a swing landed, or projectiles were fired)
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }

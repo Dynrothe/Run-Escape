@@ -3108,6 +3108,125 @@
     gap: 4px;
 }
 
+/* A run's board (Invocations.tsx, RunInvocationBoard): Act II's invocations, then hard mode's row */
+.ui-invocations-groups {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ui-invocations-group-title {
+    color: #ff981f;
+    font-size: 13px;
+}
+
+.ui-invocation-locked {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* The badges at 100, 200 and 300 points: lit once a map's been beaten at as many */
+.ui-invocation-badges {
+    display: flex;
+    gap: 4px;
+}
+
+.ui-invocation-badge {
+    min-width: 30px;
+    padding: 0 3px;
+    border: 1px solid #4a4336;
+    background: rgba(0, 0, 0, 0.3);
+    color: #777777;
+    font-size: 12px;
+    text-align: center;
+}
+
+.ui-invocation-badge-on {
+    border-color: var(--ui-yellow);
+}
+
+.ui-invocation-badge-won {
+    border-color: #b08a3a;
+    background: rgba(176, 138, 58, 0.25);
+    color: var(--ui-yellow);
+}
+
+/* On a map's list card, beside its name */
+.ui-invocation-badge-small {
+    min-width: 0;
+    margin-left: auto;
+    font-size: 10px;
+    line-height: 13px;
+}
+
+.ui-invocation-record {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+}
+
+.ui-record-setup {
+    color: #c8c8c8;
+}
+
+/* The adventurer screen's relics (Relics.tsx): a slot a tier, as the pet's row */
+.ui-relic-row {
+    display: flex;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 4px 2px;
+}
+
+.ui-relic-slots {
+    display: flex;
+    gap: 4px;
+}
+
+.ui-relic-slot {
+    justify-content: center;
+    width: 36px;
+    height: 34px;
+    padding: 0;
+}
+
+.ui-relic-tier {
+    color: #888888;
+    font-size: 12px;
+}
+
+.ui-relic-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(460px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.ui-relic-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ui-relic-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    text-align: left;
+}
+
+.ui-relic-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 /* A phone: the reward potential goes under the icons */
 @media (max-width: 560px) {
     .ui-invocations-body {

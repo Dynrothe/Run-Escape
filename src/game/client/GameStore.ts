@@ -148,6 +148,8 @@ export type HudView = {
     banishes: number;
     // What skipping the level up's rewards costs, while they can be skipped
     skip?: { cost: number; affordable: boolean };
+    // Reloaded (content/relics.ts): keeps left and offers kept, and whether each can be done now
+    keep?: { left: number; kept: number; canKeep: boolean; canTake: boolean };
 };
 
 // The HUD's numbers that change as the run's played, 10 times a second. They're
