@@ -2190,6 +2190,7 @@ export class GameClient implements GameFrameHandler {
             party: [],
             waitingOn: [],
             revive: undefined,
+            toastLog: [],
         });
     }
 

@@ -24,5 +24,22 @@
     "ui.shop.help_coins": "Each preset has its own balance: what you spend on one doesn't come out of the others, so it can be more than the coins on the title screen.",
     "ui.shop.hint.mouse": "Click a skill to buy a rank · right-click to refund one",
     "ui.shop.hint.touch": "Tap a skill to buy a rank · tap its icon to refund one",
-    "armoury.legend.not_found": "Not found yet"
+    "armoury.legend.not_found": "Not found yet",
+    "settings.group.general": "General",
+    "settings.group.camera": "Camera",
+    "settings.group.run": "During a run",
+    "settings.group.coop": "Co-op",
+    "settings.group.performance": "Performance",
+    "settings.section.keyboard": "Keyboard",
+    "settings.save.last_copy": "Last copy exported: {date}.",
+    "settings.save.no_copy": "No copy exported yet.",
+    "pause.heading.keyboard": "Keyboard",
+    "pause.heading.recent": "Recent messages",
+    "controls.keyboard.move": "Move",
+    "controls.keyboard.items": "Use items 1 to 4, or pick a reward on a level up",
+    "controls.keyboard.ability": "Use a fight's own button",
+    "controls.keyboard.pause": "Pause and resume",
+    "controls.keyboard.sound": "Sound on or off",
+    "controls.key.move": "WASD / Arrows",
+    "controls.key.space": "Space"
 }

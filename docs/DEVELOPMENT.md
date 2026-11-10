@@ -2137,7 +2137,8 @@ of its own.
   have.
 - **What each button does** is listed by `PadControls` (`ui/PadHint.tsx`) in the pause menu and
   Settings while a pad's in use, and the title's hint shows its buttons. Change it with `RUN_KEYS`
-  or `MENU_KEYS`.
+  or `MENU_KEYS`. With no pad, and not on a touch screen, `KeyboardControls` lists the
+  keyboard's keys there instead, which follow `GameClient.onKeyPress`.
 
 The tests fake `navigator.getGamepads`. In a browser, an init script that replaces it does the same.
 

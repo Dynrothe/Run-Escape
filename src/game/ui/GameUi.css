@@ -456,6 +456,21 @@
     color: var(--ui-text-dim);
 }
 
+/* A line of its own under a setting's text: when the save was last copied */
+.ui-setting-note {
+    display: block;
+    color: var(--ui-text);
+}
+
+/* A kind of setting, inside a section */
+.ui-settings-group {
+    margin: 8px 0 0;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 15px;
+    color: var(--ui-yellow);
+}
+
 .ui-setting-control {
     display: flex;
     align-items: center;
@@ -2453,10 +2468,24 @@
     margin-top: 10px;
 }
 
+/* The columns scroll, and Give up and Resume stay in view under them */
 .ui-pause {
+    display: flex;
+    flex-direction: column;
     width: min(920px, calc(94vw / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
     overflow-y: auto;
+}
+
+.ui-pause > .ui-pause-columns {
+    flex: 1 1 auto;
+    min-height: 120px;
+    padding-right: 4px;
+    overflow-y: auto;
+}
+
+.ui-pause > :not(.ui-pause-columns) {
+    flex-shrink: 0;
 }
 
 /* The run (weapons, passives and worn equipment) on the left, the quests and
@@ -2572,6 +2601,18 @@
 
 .ui-pause-set-on {
     color: var(--ui-green-text);
+}
+
+/* What the toasts said this run */
+.ui-pause-recent {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+    color: var(--ui-text);
 }
 
 /* The stats scroll, and the buttons stay in view under them */
@@ -2806,6 +2847,14 @@
 
 .ui-pad-control-text {
     color: var(--ui-white);
+}
+
+/* The keyboard's list of the same */
+.ui-pad-control-keys {
+    flex-shrink: 0;
+    min-width: 100px;
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
 }
 
 /* The favourite adventurer, which the game starts on: at the end of the details' head */
