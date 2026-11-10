@@ -15,6 +15,8 @@ the version in the corner).
 - Confirmations, by Jp66600: giving up asks first, in the game's own window, then shows what the
   run found. So do refunding every skill, disbanding a party, importing a save and cloud save's
   actions.
+- Coins short, by Jp66600: Skills, the Armoury and the Skip button say how many coins you're
+  short.
 
 ### Changed
 
@@ -25,6 +27,8 @@ the version in the corner).
   or a controller keeps your place.
 - Windows, by Jp66600: screen readers announce them and the run's messages, and what's behind a
   window can't be reached until it closes.
+- Skills, by Jp66600: the preset's own balance is labelled and explained, a maxed skill no longer
+  looks out of reach, and a line under the cards says how to refund a rank.
 
 ### Fixed
 

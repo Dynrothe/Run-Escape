@@ -66,11 +66,8 @@ async function refundAll(): Promise<void> {
 test("skills explain how combat-style presets are used", () => {
     renderShop({});
     expect(screen.getByRole("tablist", { name: "Skill presets" })).toBeInTheDocument();
-    expect(
-        screen.getByText(
-            "Melee, Ranged and Magic are separate skill presets, used automatically by adventurers of that combat style.",
-        ),
-    ).toBeVisible();
+    expect(screen.getByText(/^Melee, Ranged and Magic are separate skill presets/)).toBeVisible();
+    expect(screen.getByText(/^Each preset has its own balance/)).toBeVisible();
 });
 
 test("switching class pages keeps purchases and single-rank refunds isolated", async () => {
@@ -217,6 +214,17 @@ test("Refund all asks first, and cancelling leaves everything as it was", async 
     });
     expect(actions.refundUpgrades).not.toHaveBeenCalled();
     expect(actions.save.skillPages.melee.upgrades).toEqual({ strength: 2 });
+});
+
+test("an out-of-reach skill says how much it's short, and a maxed one doesn't look out of reach", () => {
+    expect.hasAssertions();
+    renderShop({ strength: 5 }, 0);
+    const maxed = screen.getByRole("button", { name: /^Strength\b/ });
+    expect(maxed).toHaveClass("ui-shop-card-maxed");
+    expect(maxed).not.toHaveClass("ui-card-dim");
+    const short = screen.getByRole("button", { name: /^Ring of life\b/ });
+    expect(short).toHaveClass("ui-card-dim");
+    expect(short).toHaveTextContent(/short/);
 });
 
 test("Refund all clears ranks that have no spending recorded", async () => {

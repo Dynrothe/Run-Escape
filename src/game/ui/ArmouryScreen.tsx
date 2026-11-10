@@ -212,14 +212,23 @@ function ArmouryDetails({
                         {t("armoury.to_unlock", { task: describeUnlockTask(step.locked) })}
                     </div>
                 ) : (
-                    <button
-                        className="ui-button ui-button-go ui-armoury-buy"
-                        data-silent
-                        disabled={save.coins < step.cost}
-                        onClick={() => client.upgradeGear(itemId)}
-                    >
-                        {t("armoury.upgrade")} <Coins amount={step.cost} />
-                    </button>
+                    <>
+                        <button
+                            className="ui-button ui-button-go ui-armoury-buy"
+                            data-silent
+                            disabled={save.coins < step.cost}
+                            onClick={() => client.upgradeGear(itemId)}
+                        >
+                            {t("armoury.upgrade")} <Coins amount={step.cost} />
+                        </button>
+                        {save.coins < step.cost && (
+                            <div className="ui-card-short">
+                                {t("ui.common.short_by", {
+                                    n: fmtNum(step.cost - save.coins),
+                                })}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         );
