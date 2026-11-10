@@ -1994,6 +1994,10 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   difficulty order and unique enemies tests.
 - A recipe only writes a loc's id, type and rotation. To scale a model, or lift one off the ground so it floats, give a loc nothing else uses a new model
   and size, or a `height`, in `src/rs/config/loctype/LocOverrides.ts`. Check the world index first.
+- A map drawn as two worlds (the Lassar Undercity and its Shadow Realm, `maps/lassarUndercity.ts`) gives its recipe a
+  `twin`: a second recipe on squares of its own, installed with it and pinned in `grid-hash.ts` with it, which the game
+  draws in the map's place while the party's in the other world (`MapDef.twin`, `MapManager.twin`). Only the map's own
+  collision is used, so build the twin from the same cut, its locs off where the map's twins are.
 - `bossArena` on the `MapDef` gives a phased boss a square of its own. The player's brought to its middle and
   can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
 - Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay

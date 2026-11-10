@@ -58,6 +58,9 @@ export type MapRecipe = {
     regions?: MapRegion[];
     // Tiles check-maps.ts holds to being open and reachable, beside the spawn
     points?: MapPoint[];
+    // A twin of it on squares of its own, drawn in its place now and then (MapDef.twin: the Lassar
+    // Undercity's Shadow Realm), installed with it; its collision is never used
+    twin?: MapRecipe;
     // Banned locs (catalogue.ts) this map uses on purpose, as ranges of ids: a raid's or a boss
     // room's own, on a shipped map made of one. check-maps.ts holds it to the rest of the list.
     allowLocs?: [from: number, to: number][];

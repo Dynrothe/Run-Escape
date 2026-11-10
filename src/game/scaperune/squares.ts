@@ -74,7 +74,14 @@ export async function installRecipe(mapViewer: MapViewer, mapId: string): Promis
         return;
     }
     const context = createBuildContext(mapViewer.mapFileLoader, mapViewer.locTypeLoader);
-    await mapViewer.addCustomMapSquares(buildRecipeSquares(recipe, context));
+    const squares = buildRecipeSquares(recipe, context);
+    // Its twin's squares too, drawn in its place (MapDef.twin)
+    if (recipe.twin) {
+        for (const [id, square] of buildRecipeSquares(recipe.twin, context)) {
+            squares.set(id, square);
+        }
+    }
+    await mapViewer.addCustomMapSquares(squares);
     installed.add(mapId);
 }
 
@@ -86,5 +93,8 @@ export function installRecipeInSceneBuilder(sceneBuilder: SceneBuilder, mapId: s
         const { mapFileLoader, locTypeLoader } = sceneBuilder;
         const context = createBuildContext(mapFileLoader, locTypeLoader);
         addCustomMapSquares(mapFileLoader, buildRecipeSquares(recipe, context));
+        if (recipe.twin) {
+            addCustomMapSquares(mapFileLoader, buildRecipeSquares(recipe.twin, context));
+        }
     }
 }
