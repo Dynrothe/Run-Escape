@@ -31,9 +31,9 @@ import {
 import { ReleaseSource } from "./releaseSource";
 
 export const MANIFEST_NAME = "game-manifest.json";
-const MARKER_NAME = "verified.json";
+export const MARKER_NAME = "verified.json";
 const CHECK_TIMEOUT_MS = 5000;
-const STALL_TIMEOUT_MS = 20000;
+export const STALL_TIMEOUT_MS = 20000;
 const MAX_REDIRECTS = 5;
 // Chunks downloaded at once in a split update
 const CHUNK_DOWNLOADS = 4;
@@ -162,7 +162,7 @@ function findSplitUpdate(
 
 // Streams a download to a file and gives back its sha256. Gives up if nothing arrives for a while,
 // rather than leaving the player at a progress bar.
-async function download(
+export async function download(
     url: string,
     source: ReleaseSource,
     file: string,
@@ -222,7 +222,7 @@ async function extractZip(zipFile: string, target: string, signal: AbortSignal):
 }
 
 // An antivirus scanner holding a new file makes a rename fail on Windows, for a moment
-async function renameWithRetries(from: string, to: string): Promise<void> {
+export async function renameWithRetries(from: string, to: string): Promise<void> {
     for (let attempt = 0; ; attempt++) {
         try {
             return await rename(from, to);
@@ -260,7 +260,7 @@ export async function readInstalledGames(dataDir: string): Promise<GameFolder[]>
 }
 
 // Where one of the folders has the chunk as it should be
-async function findChunk(file: string, folders: string[]): Promise<string | undefined> {
+export async function findChunk(file: string, folders: string[]): Promise<string | undefined> {
     for (const folder of folders) {
         const source = chunkPath(folder, file);
         const data = await readFile(source).catch(() => undefined);
@@ -323,7 +323,7 @@ async function installSplit(
 
 // Every chunk caches.json lists is in the folder: a game that's missing one stops partway through
 // loading
-async function checkChunks(folder: string): Promise<void> {
+export async function checkChunks(folder: string): Promise<void> {
     const caches: unknown = JSON.parse(
         await readFile(path.join(folder, "caches", "caches.json"), "utf8"),
     );

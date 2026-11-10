@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The Windows app keeps to the website's version of the game, by trippy22: Windows and website
+  players can always play co-op together. Download the new app once to get it.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added

@@ -32,8 +32,23 @@ const isSha256 = (sha256: unknown): sha256 is string =>
     typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256);
 
 // A set of game files: the ones bundled with the launcher, or an update in the user data folder.
-// The bundled ones have no minLauncher, as they came with this launcher.
-export type GameFolder = { version: string; path: string; minLauncher?: string };
+// The bundled ones have no minLauncher, as they came with this launcher. fromSite is the website's
+// build (siteUpdate.ts) rather than a release.
+export type GameFolder = {
+    version: string;
+    path: string;
+    minLauncher?: string;
+    fromSite?: boolean;
+};
+
+// Whether this launcher can run a folder's files. The bundled ones came with it.
+export const canRun = (folder: GameFolder, launcherVersion: string) =>
+    !folder.minLauncher || compareVersions(folder.minLauncher, launcherVersion) <= 0;
+
+// Whether a file in dist/ is part of the game. Source maps are for debugging a hosted build, and
+// they're as big as the game's code, and .htaccess is the web server's.
+export const isShipped = (file: string) =>
+    !file.endsWith(".map") && path.basename(file) !== ".htaccess";
 
 export function isVersion(version: unknown): version is string {
     return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version);
@@ -86,7 +101,8 @@ export function parseManifest(text: string): GameManifest {
 
 // The newest game files this launcher can run. A folder needing a newer launcher is left out: a
 // player can unzip an older launcher over the same user data. Bundled files win a tie, and when
-// they're newer, which they are after unzipping a newer launcher.
+// they're newer, which they are after unzipping a newer launcher, except against the website's
+// build: on the same version, that's the one the website was last seen on.
 export function pickGameFolder(
     bundled: GameFolder,
     installed: GameFolder[],
@@ -94,9 +110,9 @@ export function pickGameFolder(
 ): GameFolder {
     let best = bundled;
     for (const folder of installed) {
-        const runnable =
-            !folder.minLauncher || compareVersions(folder.minLauncher, launcherVersion) <= 0;
-        if (runnable && compareVersions(folder.version, best.version) > 0) {
+        const order = compareVersions(folder.version, best.version);
+        const newer = order > 0 || (order === 0 && folder.fromSite && !best.fromSite);
+        if (canRun(folder, launcherVersion) && newer) {
             best = folder;
         }
     }
