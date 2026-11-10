@@ -373,7 +373,8 @@ describe("class weapons", () => {
     test("are only offered to their own class", () => {
         for (const style of ["melee", "ranged", "magic"] as CombatStyle[]) {
             const offered = newWeaponOffers(style, [weapon("throwing_knives")]);
-            for (const def of WEAPONS.filter((w) => w.style && !w.evolved)) {
+            // Not those only picked (the jewelled keris partisans), which are never offered
+            for (const def of WEAPONS.filter((w) => w.style && !w.evolved && !w.pickOnly)) {
                 if (def.style === style) {
                     expect(offered.get(def.id) ?? 0).toBeGreaterThan(0);
                 } else {

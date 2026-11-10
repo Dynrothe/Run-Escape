@@ -2881,6 +2881,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
+    const jewel = ui.choices.some((choice) => choice.isJewel);
     const banishes = ui.hud?.banishes ?? 0;
     return (
         <div className="ui-modal">
@@ -2888,16 +2889,20 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                 <h2>
                     {spell
                         ? t("ui.levelup.title.spell")
-                        : hilt
-                          ? t("ui.levelup.title.hilt")
-                          : t("ui.levelup.title.regular")}
+                        : jewel
+                          ? t("ui.levelup.title.jewel")
+                          : hilt
+                            ? t("ui.levelup.title.hilt")
+                            : t("ui.levelup.title.regular")}
                 </h2>
                 <p className="ui-subtle">
                     {spell
                         ? t("ui.levelup.sub.spell")
-                        : hilt
-                          ? t("ui.levelup.sub.hilt")
-                          : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
+                        : jewel
+                          ? t("ui.levelup.sub.jewel")
+                          : hilt
+                            ? t("ui.levelup.sub.hilt")
+                            : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (
@@ -2946,7 +2951,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                             <span className="ui-tag ui-tag-evolve">
                                                 {choice.isSpell
                                                     ? t("ui.levelup.tag.spell")
-                                                    : t("ui.levelup.tag.hilt")}
+                                                    : choice.isJewel
+                                                      ? t("ui.levelup.tag.jewel")
+                                                      : t("ui.levelup.tag.hilt")}
                                             </span>
                                         )}
                                     </div>

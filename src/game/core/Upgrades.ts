@@ -253,14 +253,18 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
         case "hilt": {
             // The hilted weapon's description, without the sweep it shares
             // with the blade: "Every third swing is The Judgement..."
-            // (no stats: the hilts all share the blade's)
+            // (no stats: the hilts all share the blade's). Keeping what it is (the plain keris)
+            // shows the whole of it.
             const into = getWeapon(choice.into);
             return {
                 title: weaponName(into),
-                text: withoutSharedOpening(
-                    weaponDescription(into),
-                    weaponDescription(getWeapon(choice.weaponId)),
-                ),
+                text:
+                    choice.into === choice.weaponId
+                        ? weaponDescription(into)
+                        : withoutSharedOpening(
+                              weaponDescription(into),
+                              weaponDescription(getWeapon(choice.weaponId)),
+                          ),
                 iconObjId: choice.hiltObjId,
             };
         }

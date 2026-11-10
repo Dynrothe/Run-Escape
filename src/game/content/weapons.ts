@@ -197,10 +197,22 @@ function evolvedLevels(
 
 // The keris partisans: quick stabs that hit kalphites and scarabs (Kephri too) a third harder.
 // The plain one comes from the Kalphite Queen; each jewel from the Tombs of Amascut's chest brings
-// in its own, as the Theatre's rapier comes from its chest. One a run (family).
+// in its own, as the Theatre's rapier comes from its chest. One a run (family). Only the plain one
+// is offered on a level up: at its pick level it takes a jewel found (KERIS_PICK), as a burst
+// picks the run's Ancient spell, so the jewelled ones are pickOnly.
 const KERIS_STAB = 381; // HUMAN_DSPEAR_STAB
 const KERIS_KALPHITES = { tags: ["kalphite" as const], damage: 0.33 };
-const kerisLevels = (objId: number): WeaponLevel[] =>
+const KERIS_PICK = {
+    level: HILT_LEVEL,
+    into: [
+        { weaponId: "keris_partisan", hiltObjId: 25979 },
+        { weaponId: "keris_partisan_of_breaching", hiltObjId: 25981 },
+        { weaponId: "keris_partisan_of_corruption", hiltObjId: 27287 },
+        { weaponId: "keris_partisan_of_the_sun", hiltObjId: 27291 },
+        { weaponId: "keris_partisan_of_amascut", hiltObjId: 30891 },
+    ],
+};
+const kerisLevels = (objId: number, second = "+5 damage."): WeaponLevel[] =>
     levels(
         {
             damage: 22,
@@ -213,7 +225,7 @@ const kerisLevels = (objId: number): WeaponLevel[] =>
             knockback: 0.3,
             objId,
         },
-        { damage: 27, description: "+5 damage." },
+        { damage: 27, description: second },
         { area: 2.8, description: "+12% reach." },
         { cooldown: 0.72, description: "Stabs a little faster." },
         { damage: 33, description: "+6 damage." },
@@ -261,6 +273,8 @@ const KERIS_PARTISANS: WeaponDef[] = [
         iconObjId: 25979,
         rarity: "rare",
         unlock: { kind: "killBoss", mapId: "desert", enemyId: "kalphite_queen_risen" },
+        hilts: KERIS_PICK,
+        levels: kerisLevels(25979, "+5 damage, and pick a jewel you've found for it."),
     }),
     keris({
         id: "keris_partisan_of_breaching",
@@ -275,6 +289,7 @@ const KERIS_PARTISANS: WeaponDef[] = [
             mapId: "tombs_of_amascut",
             trophyId: "breach_of_the_scarab",
         },
+        pickOnly: true,
     }),
     keris({
         id: "keris_partisan_of_corruption",
@@ -289,6 +304,7 @@ const KERIS_PARTISANS: WeaponDef[] = [
             mapId: "tombs_of_amascut",
             trophyId: "eye_of_the_corruptor",
         },
+        pickOnly: true,
     }),
     keris({
         id: "keris_partisan_of_the_sun",
@@ -310,6 +326,7 @@ const KERIS_PARTISANS: WeaponDef[] = [
             effect: { kind: "restore" },
         },
         unlock: { kind: "raidChest", mapId: "tombs_of_amascut", trophyId: "jewel_of_the_sun" },
+        pickOnly: true,
     }),
     keris({
         id: "keris_partisan_of_amascut",
@@ -323,6 +340,7 @@ const KERIS_PARTISANS: WeaponDef[] = [
         killHeal: SUN_KILL_HEAL,
         lowHealth: SUN_LOW_HEALTH,
         unlock: { kind: "raidChest", mapId: "tombs_of_amascut", trophyId: "jewel_of_amascut" },
+        pickOnly: true,
     }),
 ];
 
