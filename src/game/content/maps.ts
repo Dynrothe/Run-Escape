@@ -339,7 +339,7 @@ export const MAPS: MapDef[] = [
             STRANGLEWOOD_RECIPE.spawn.y,
         ),
         // Act II's first step (its others are in acts.ts)
-        difficulty: { hp: 3.9, damage: 2.8 },
+        difficulty: { hp: 4.2, damage: 2.9 },
         hard: { hp: 1.4, damage: 1.2 },
         waves: STRANGLEWOOD_WAVES,
         events: STRANGLEWOOD_EVENTS,

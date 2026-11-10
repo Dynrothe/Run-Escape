@@ -36,13 +36,13 @@ export const FALLEN_EMPIRE: ActDef = {
     id: "fallen_empire",
     name: "The Fallen Empire",
     requires: "inferno",
-    // The Inferno is 3.75 and 2.7: the first step's a small one up from it, and the last map
-    // played is always the hardest
+    // The Inferno is 3.75 and 2.7: the first step's harder than it (the bot wins fewer runs and
+    // dies sooner, Kasonde at 5:00 its first wall), and the last map played is always the hardest
     steps: [
-        { hp: 3.9, damage: 2.8, coins: 0 },
-        { hp: 4.05, damage: 2.9, coins: 0.1 },
-        { hp: 4.2, damage: 3.0, coins: 0.2 },
-        { hp: 4.35, damage: 3.1, coins: 0.3 },
+        { hp: 4.2, damage: 2.9, coins: 0 },
+        { hp: 4.35, damage: 3.0, coins: 0.1 },
+        { hp: 4.5, damage: 3.1, coins: 0.2 },
+        { hp: 4.65, damage: 3.2, coins: 0.3 },
     ],
     slots: [
         {

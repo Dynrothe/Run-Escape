@@ -65,12 +65,15 @@ the chain moves.
 
 | Other Act II maps beaten | Enemies' hitpoints | Their damage | Coins  |
 | ------------------------ | ------------------ | ------------ | ------ |
-| 0 (the first you play)   | 3.9                | 2.8          | as now |
-| 1                        | 4.05               | 2.9          | +10%   |
-| 2                        | 4.2                | 3.0          | +20%   |
-| 3 (the last)             | 4.35               | 3.1          | +30%   |
+| 0 (the first you play)   | 4.2                | 2.9          | as now |
+| 1                        | 4.35               | 3.0          | +10%   |
+| 2                        | 4.5                | 3.1          | +20%   |
+| 3 (the last)             | 4.65               | 3.2          | +30%   |
 
-The Inferno is 3.75 and 2.7, so the first step is a small one up. Hard mode multiplies on top as the Inferno's does
+The Inferno is 3.75 and 2.7. The first draft's step 0 (3.9 and 2.8) was a small step up, and the bot won and lasted
+longer on it than in the Inferno, so it was raised (2026-11-10): Act II's first map is harder than the first campaign's
+last (the numbers are in #159). Damage is the steep one: 3.0 at step 0 put a wall at Kasonde, with most runs ending
+there. Hard mode multiplies on top as the Inferno's does
 (`{ hp: 1.4, damage: 1.2 }`). Whatever the order, the last map is the hardest, and a map you go back to after
 finishing the act is always at step 3, so every player ends up on the same footing.
 
@@ -802,7 +805,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------- |
 | 1   | **Lighting**, as an engine feature: lights from any source, a changeable darkness, `litTargetsOnly` (6.8). Done                           | -            | done       |
 | 2   | **Stranglewood**, with the act's screen, `act.requires`, Act II's steps, `RunRuleDef`, roots, the Forester. Done                          | -            | done       |
-| 3   | **Awakened Vardorvis**, with fighting pets (Butch first), and its design doc. Early, so its playtest rounds run beside the next steps     | 2            | 2 weeks    |
+| 3   | **Awakened Vardorvis**, with fighting pets (Butch first), and its design doc. Built, first pass (`awakened-vardorvis.md`); playtest next  | 2            | 2 weeks    |
 | 4   | **Invocations and relics** (tier 1 opens with the Stranglewood)                                                                           | 2            | 1.5 weeks  |
 | 5   | The Overgrown remix, with the remix switches, sets and records                                                                            | 2            | 4 days     |
 | 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter                        | 2            | 2.5 weeks  |

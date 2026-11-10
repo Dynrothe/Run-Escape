@@ -59,7 +59,10 @@ describe("the Stranglewood", () => {
 
     test("is played by its roots, and nothing else is", () => {
         expect(createSim().rule?.def).toBe(STRANGLEWOOD_ROOTS);
-        for (const map of MAPS.filter((m) => m.id !== "stranglewood")) {
+        // Awakened Vardorvis's clearing has its own (Vardorvis.test.ts)
+        for (const map of MAPS.filter(
+            (m) => !["stranglewood", "awakened_vardorvis"].includes(m.id),
+        )) {
             expect(createSim({ mapId: map.id }).rule).toBeUndefined();
         }
     });
@@ -186,8 +189,8 @@ describe("Act II", () => {
     test("a step's enemies are tougher and its coins worth more", () => {
         const first = createSim({ actStep: 0 });
         const last = createSim({ actStep: 3 });
-        expect(first.difficulty).toEqual({ hp: 3.9, damage: 2.8 });
-        expect(last.difficulty).toEqual({ hp: 4.35, damage: 3.1 });
+        expect(first.difficulty).toEqual({ hp: 4.2, damage: 2.9 });
+        expect(last.difficulty).toEqual({ hp: 4.65, damage: 3.2 });
         expect(first.coinScale).toBe(1);
         expect(last.coinScale).toBeCloseTo(1.3);
         const goblin = (sim: Sim) => sim.spawnEnemy(getEnemy("strangled"), "normal")!.maxHp;
@@ -195,7 +198,7 @@ describe("Act II", () => {
         // A boss's own hitpoints too
         const boss = (sim: Sim) =>
             sim.spawnEnemy(getEnemy("kasonde"), "boss", undefined, 3600)!.maxHp;
-        expect(boss(last) / boss(first)).toBeCloseTo(4.35 / 3.9, 2);
+        expect(boss(last) / boss(first)).toBeCloseTo(4.65 / 4.2, 2);
         expect(last.getResult().actStep).toBe(3);
     });
 
