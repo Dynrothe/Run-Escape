@@ -350,7 +350,7 @@ Built in #159 as build order step 6. Where it differs from the above, and why:
   the water) is blocked. The realm's locs come off wherever their city twins do, so both are drawn alike.
 - **The twin on screen**: the renderer keeps both sets of squares loaded and, while the party's in the realm, draws each
   city square's twin in its place (`MapManager.twin`, `WebGLMapSquare.drawAt`). The swap is instant, with the realm's
-  brightness (0.6 of the city's) and violet wash. Memory: both sets are loaded, about twice a one-world map's geometry.
+  brightness (0.75 of the city's: 0.6 hid its Shadows) and violet wash. Memory: both sets are loaded, about twice a one-world map's geometry.
 - **The start** is the forecourt at the top of the causeway to the cathedral's island, and the Whisperer rises on the
   island (her arena in OSRS); the island's floor is the cache's near-black navy, so the map's drawn at brightness 1.6.
 - **The way back**: the third soul opens the Anima Portal where it was caught, and it takes a second's standing in it to
@@ -376,6 +376,10 @@ Built in #159 as build order step 6. Where it differs from the above, and why:
   Silent Choir from 15:00.
 - **The Shadow walker**: her step lasts 1.5 seconds, out 3 tiles on the way she faces; enemies don't lose her beyond
   that. **The Treasure hunter**: a casket buries itself after 3 seconds on the ground.
+- **Sims** (`META=max ARMOURY=max`, 8 adventurers by 3 seeds, the bot diving): at step 0, 1 win of 24 with a median end of
+  10:05 and 12 deaths before 10:00, against the Stranglewood's 1, 6:31 and 14 (its Kasonde wall at 5:00; Lassar's
+  deaths spread from 5:09 to 17:00, the Forsaken Assassin at 10:00 the most); at step 1, 0 wins, 7:46 and 14 against 2,
+  7:11 and 14. The bot went in 4 times a run (median), was thrown back twice, and spent about an eighth of the run there.
 - **Phones**: thinned for the busiest views (the ruined houses' walls to a fifth and less, lamps to a quarter, furniture
   to a third), measured with `frameProbe` at 844 by 390 on the phone camera: the heaviest view is 64k in the city and
   66.4k in the realm, souls in view.

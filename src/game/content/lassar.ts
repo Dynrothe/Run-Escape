@@ -362,8 +362,8 @@ export const LASSAR_ENEMIES: EnemyDef[] = [
         radius: 0.9,
         xp: 3000,
         sounds: WHISPERER_SOUNDS,
-        // Three tiles across in OSRS
-        scale: 0.75,
+        // Three tiles across in OSRS, and towering: drawn bigger, so she reads as the boss she is
+        scale: 1.3,
         knockbackResist: 1,
         realm: "both",
         spawnMessage: "The Whisperer rises in the cathedral!",
@@ -559,7 +559,7 @@ export const LASSAR_REALM: RealmRuleDef = {
     // A Shadow Keeper with each dive from 4:00, and its casket: the Treasure hunter's way in
     elite: { enemyId: "shadow_keeper", from: 240, distance: [6, 10] },
     look: {
-        brightness: 0.6,
+        brightness: 0.75,
         wash: "#a898d8",
         music: "Lassar Silence",
         // Lassar's own dark puddle, and the Anima Portal

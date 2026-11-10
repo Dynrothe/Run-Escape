@@ -201,6 +201,8 @@ const TREE_FALL_TICKS = 20;
 const TREE_LIE_TICKS = 25;
 const TREE_FADE_TICKS = 20;
 const TREE_TICKS = TREE_FALL_TICKS + TREE_LIE_TICKS + TREE_FADE_TICKS;
+// A map of two worlds' Anima Portal, drawn this much bigger than it is (RealmRuleDef.look)
+const PORTAL_SCALE = 1.5;
 const ROCK_FALL_HEIGHT = 14;
 // The Wardens' charged shots, drawn this much bigger than their spot animations
 // The Wardens' marks that strike (WardensFight marks)
@@ -866,8 +868,10 @@ export class GameView {
             const frame = anim ? anim.getFrame(clientTicks) : 0;
             // Opening out of nothing over its first half second
             const grow = Math.min(1, (tick - hole.openTick) / (TICKS_PER_SECOND * 0.5));
+            // The portal's a small flame of a thing: shown bigger, so it's seen in the crowd
+            const size = locId === look.portalLocId ? PORTAL_SCALE : pulled ? 1.2 : 1;
             actors.draw(model, anim, frame, hole.x, this.ground(sim, hole.x, hole.y), hole.y, 0, {
-                scale: grow * (pulled ? 1.2 : 1),
+                scale: grow * size,
                 unlit: 1,
             });
         }
