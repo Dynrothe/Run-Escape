@@ -438,6 +438,8 @@ export type UiSnapshot = {
     // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
     cinematic?: boolean;
     choices: ChoiceView[];
+    // Level ups still to choose after the one showing
+    levelUpsLeft: number;
     chest?: ChestView;
     event?: EventView;
     // unlockedMap: the name of the map this run's win opened up;
@@ -500,6 +502,7 @@ export class GameStore {
             party: [],
             waitingOn: [],
             choices: [],
+            levelUpsLeft: 0,
             toasts: [],
             toastLog: [],
             debug: false,

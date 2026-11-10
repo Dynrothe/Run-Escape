@@ -40,6 +40,13 @@ the version in the corner).
   section is split into groups.
 - Picking a map, by Jp66600: a map beaten on hard has a double tick, the adventurer picked is
   marked more clearly, and a map's name that's cut off shows whole on hover.
+- The HUD, by Jp66600: being poisoned says so on the hitpoints bar, and a level up says how many
+  more are coming.
+- The co-op room, by Jp66600: the host's button shows the room's state instead of "Open: Off",
+  a long name shows whole on hover, and the host sees why Start waits.
+- Easier to press, by Jp66600: the collection log's tabs, the version, the quest tracker's and
+  damage meter's buttons and the volume sliders, and a phone's weapon and passive slots.
+- A failed start, by Jp66600: the game says it couldn't start, with a button to reload.
 
 ### Fixed
 
@@ -47,6 +54,8 @@ the version in the corner).
 - The Armoury's Back button no longer needs scrolling to. Fixed by Jp66600.
 - The pause menu's Give up and Resume stay in view when there's more to show than fits. Fixed by
   Jp66600.
+- The evolve pulse, a boss's new phase and the XP bar hold still with the system's "reduce
+  motion" setting. Fixed by Jp66600.
 
 ## 0.30.0 - 2026-11-09
 

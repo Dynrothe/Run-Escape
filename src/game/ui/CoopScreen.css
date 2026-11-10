@@ -292,6 +292,13 @@
     color: var(--ui-green-text);
 }
 
+/* Why Start can't be pressed yet */
+.ui-coop-start-hint {
+    margin-top: 8px;
+    text-align: center;
+    color: var(--ui-text-dim);
+}
+
 .ui-coop-kick:hover:not(:disabled) {
     color: #ff6050;
 }

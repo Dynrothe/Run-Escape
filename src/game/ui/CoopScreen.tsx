@@ -361,12 +361,15 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     </button>
                     {isHost ? (
                         <span className="ui-coop-open" title={openRoomTitle(ui)}>
-                            {t("coop.open")}
-                            <Toggle
-                                on={room.open}
-                                label={t("coop.open_to_all")}
-                                onToggle={() => client.setRoomOpen(!room.open)}
-                            />
+                            {/* The room as it is, as "Open: Off" read like a contradiction */}
+                            <button
+                                className={
+                                    "ui-button ui-button-small" + (room.open ? " ui-toggle-on" : "")
+                                }
+                                onClick={() => client.setRoomOpen(!room.open)}
+                            >
+                                {room.open ? t("coop.open") : t("coop.invite_only")}
+                            </button>
                         </span>
                     ) : (
                         <span className="ui-coop-open">
@@ -383,22 +386,25 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                     : CHARACTERS[0].id),
                         );
                         const host = member.id === room.hostId;
+                        const tag =
+                            member.id === you && host
+                                ? t("coop.tag_you_host")
+                                : member.id === you
+                                  ? t("coop.tag_you")
+                                  : host
+                                    ? t("coop.tag_host")
+                                    : undefined;
                         return (
                             <div key={member.id} className="ui-coop-member">
                                 <ItemIcon objId={getStartingWeaponIcon(character)} size={28} />
                                 <span className="ui-coop-member-name">
-                                    <span className="ui-card-title">
+                                    {/* A long name cuts this off */}
+                                    <span
+                                        className="ui-card-title"
+                                        title={tag ? `${member.name} ${tag}` : member.name}
+                                    >
                                         {member.name}
-                                        {(member.id === you || host) && (
-                                            <span className="ui-coop-you">
-                                                {" "}
-                                                {member.id === you && host
-                                                    ? t("coop.tag_you_host")
-                                                    : member.id === you
-                                                      ? t("coop.tag_you")
-                                                      : t("coop.tag_host")}
-                                            </span>
-                                        )}
+                                        {tag && <span className="ui-coop-you"> {tag}</span>}
                                     </span>
                                     {/* Under the name, which needs the room */}
                                     <span className="ui-card-style">
@@ -474,7 +480,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                                       name: without.name,
                                                       map: tl(m.name),
                                                   })
-                                                : undefined
+                                                : tl(m.name)
                                         }
                                         onClick={() => client.selectMap(m.id)}
                                     >
@@ -524,6 +530,9 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     </div>
                 )}
                 {ui.coop.error && <div className="ui-coop-error">{tl(ui.coop.error)}</div>}
+                {isHost && !everyoneReady && (
+                    <div className="ui-coop-start-hint">{t("coop.waiting_ready")}</div>
+                )}
             </div>
             <div className="ui-panel rs-border rs-background ui-select-bar ui-coop-bar">
                 <button className="ui-button" onClick={() => client.leaveRoom()}>

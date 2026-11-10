@@ -44,5 +44,9 @@
     "controls.keyboard.pause": "Pause and resume",
     "controls.keyboard.sound": "Sound on or off",
     "controls.key.move": "WASD / Arrows",
-    "controls.key.space": "Space"
+    "controls.key.space": "Space",
+    "ui.hud.poisoned": "Poisoned",
+    "ui.levelup.more_after.one": "{n} more after this",
+    "ui.levelup.more_after.other": "{n} more after this",
+    "canvas.start_failed": "The game couldn't start."
 }

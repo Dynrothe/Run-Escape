@@ -516,6 +516,12 @@
         bottom: calc(var(--safe-bottom) + 4px);
     }
 
+    .ui-title-dev {
+        left: auto;
+        right: calc(var(--safe-right) + 10px);
+        bottom: calc(var(--safe-bottom) + 4px);
+    }
+
     .ui-title-link {
         padding: 8px;
     }
@@ -713,6 +719,13 @@
 
     .ui-hud-left {
         zoom: 0.72;
+    }
+
+    /* Taller to press than they're drawn, as there's no room to draw them bigger */
+    .ui-slot::before {
+        content: "";
+        position: absolute;
+        inset: -6px 0;
     }
 
     .ui-gear-slots,
