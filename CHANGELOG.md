@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- The sound's orb, by Jp66600: an orb by the minimap, where the client's hitpoints orb is, and on
+  the title screen shows the Music tab's harp, crossed out while the sound's off, and turns it off
+  or on. Pressing M in a run also says which way it went.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added

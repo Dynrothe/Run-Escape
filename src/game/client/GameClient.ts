@@ -1269,9 +1269,20 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ audio: this.audio.settings });
     }
 
+    // M, the sound setting or the sound-off orb. In a run it says which way it went: there's no
+    // setting in sight, and the orb's off at the side.
     toggleMute(): void {
         this.audio.setSettings({ muted: !this.audio.settings.muted });
         this.store.set({ audio: this.audio.settings });
+        if (this.sim) {
+            this.store.toast(
+                !this.audio.settings.muted
+                    ? t("canvas.sound_on")
+                    : isCoarsePointer
+                      ? t("canvas.sound_off")
+                      : t("canvas.sound_off_key"),
+            );
+        }
     }
 
     toggleMenuSpin(): void {

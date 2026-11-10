@@ -795,6 +795,19 @@
         zoom: 0.56;
     }
 
+    /* The sound's orb near its own size beside the smaller minimap, under the pause button, which
+       has its place by the minimap (its zoom scales its own offsets too) */
+    .ui-minimap .ui-sound-orb {
+        zoom: 1.6;
+        left: -39px;
+        top: 67px;
+    }
+
+    .ui-title-sound {
+        top: calc(var(--safe-top) + 8px);
+        right: calc(var(--safe-right) + 8px);
+    }
+
     .ui-touch-pause {
         right: calc(var(--safe-right) + 116px);
         top: calc(var(--safe-top) + 18px);
