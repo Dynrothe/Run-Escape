@@ -1,4 +1,4 @@
-import { getLang, tr } from "../i18n";
+import { englishOf, getLang, tr } from "../i18n";
 import { STAT_INFO } from "./stats";
 import { StatKey } from "./types";
 
@@ -138,15 +138,40 @@ export function statKeyIcon(key: StatKey): StatIconRef | undefined {
 // The icon for a stat line as shown to the player, by the label it starts with.
 // undefined when it isn't a stat.
 export function statIconFor(text: string): StatIconRef | undefined {
-    const rest = stripLead(text);
-    for (const label of LABELS) {
-        if (rest.startsWith(label) && !/\p{L}/u.test(rest[label.length] ?? "")) {
-            return { ...ICONS[label] };
+    // A line the language files translate whole is best found by the English it came from:
+    // that goes by the file's key, whatever the language words it with
+    const english = englishOf(text);
+    if (english !== undefined && english !== text) {
+        const found = matchLabel(
+            stripLead(english),
+            LABELS.map((l) => [l, ICONS[l]]),
+        );
+        if (found) {
+            return found;
         }
     }
-    if (getLang() !== "en") {
-        for (const [label, icon] of localizedLabels()) {
-            if (rest.startsWith(label) && !/\p{L}/u.test(rest[label.length] ?? "")) {
+    const rest = stripLead(text);
+    return (
+        matchLabel(
+            rest,
+            LABELS.map((label) => [label, ICONS[label]]),
+        ) ?? (getLang() === "en" ? undefined : matchLabel(rest, localizedLabels(), true))
+    );
+}
+
+// The icon of the first label the text starts with, as a whole word. Labels go longest first.
+// Other languages often put a short word between the number and what it counts ("+2 de
+// armadura", "+2 d'armure"), so with skipShort, words of up to three letters are skipped when
+// nothing matches. English keeps to its labels: "Get armour" isn't a stat line.
+function matchLabel(
+    rest: string,
+    labels: readonly (readonly [string, StatIconRef])[],
+    skipShort = false,
+): StatIconRef | undefined {
+    const attempts = skipShort ? [rest, rest.replace(/^(\p{L}{1,3}['’]?\s*)+/u, "")] : [rest];
+    for (const attempt of attempts) {
+        for (const [label, icon] of labels) {
+            if (attempt.startsWith(label) && !/\p{L}/u.test(attempt[label.length] ?? "")) {
                 return { ...icon };
             }
         }

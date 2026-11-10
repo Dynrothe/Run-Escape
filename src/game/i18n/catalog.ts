@@ -61,14 +61,35 @@ export function keyForEnglish(text: string): string | undefined {
     return reverseEn.get(text);
 }
 
+// A language's text back to the English it was written from, for what only knows the English
+// (a stat icon found by wording). Built the first time it's asked for, for each language.
+const reverseLang = new Map<Lang, Map<string, string>>();
+
+export function englishForTranslation(lang: Lang, text: string): string | undefined {
+    let reverse = reverseLang.get(lang);
+    if (!reverse) {
+        reverse = new Map();
+        for (const [key, value] of Object.entries(catalogs[lang])) {
+            const english = catalogs.en[key];
+            if (english !== undefined && !reverse.has(value)) {
+                reverse.set(value, english);
+            }
+        }
+        reverseLang.set(lang, reverse);
+    }
+    return reverse.get(text);
+}
+
 // Swaps in other messages (for tests, which can't lean on the real files being filled
 // in). Languages not given keep theirs. Returns what puts them back.
 export function overrideMessages(messages: Partial<Record<Lang, Messages>>): () => void {
     const before = catalogs;
     catalogs = { ...catalogs, ...messages } as Record<Lang, Messages>;
     reverseEn = undefined;
+    reverseLang.clear();
     return () => {
         catalogs = before;
         reverseEn = undefined;
+        reverseLang.clear();
     };
 }

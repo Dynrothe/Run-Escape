@@ -1,5 +1,5 @@
 import { describeItem } from "../core/Loot";
-import { setLang } from "../i18n";
+import { setLang, tl } from "../i18n";
 import { ITEMS } from "./items";
 import { PASSIVES, formatPassiveValue } from "./passives";
 import { RAID_SUPPLIES } from "./raids";
@@ -104,6 +104,21 @@ describe("icons in another language", () => {
         ]) {
             expect(statIconFor(translated)).toBeDefined();
             expect(statIconFor(translated)).toEqual(statIconFor(english));
+        }
+    });
+
+    it("gives a translated hand-written line the icon of its English", () => {
+        setLang("pt-BR");
+        const lines = [
+            ...ITEMS.flatMap((item) => describeItem(item)),
+            ...RAID_SUPPLIES.map((supply) => supply.description),
+            ...PASSIVES.map((passive) => formatPassiveValue(passive, passive.perLevel)),
+        ];
+        for (const english of new Set(lines)) {
+            const icon = statIconFor(english);
+            if (icon) {
+                expect(statIconFor(tl(english)), english).toEqual(icon);
+            }
         }
     });
 });
