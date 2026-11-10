@@ -1,15 +1,22 @@
 import { afterAll, describe, expect, it } from "vitest";
 
 import { getEnemy } from "../content/enemies";
+import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
-import { getRoomPoints } from "../content/raids";
-import { EXPERT_HAGIOS_KEEP } from "../content/theatre";
-import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
+import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
+import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
+import {
+    TROPHIES,
+    TROPHY_BY_ID,
+    getEveryTimeTrophiesFound,
+    isEveryTimeTrophy,
+} from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
 import { describeUnlockTask } from "../content/unlocks";
+import { LUMBRIDGE_WAVES } from "../content/waves";
 import { getWeapon } from "../content/weapons";
 import { yawFromVector } from "./PlayerMovement";
-import { Sim, TICKS_PER_SECOND } from "./Sim";
+import { PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
 import { fm } from "./fmath";
 import {
     createSave,
@@ -71,11 +78,17 @@ afterAll(() => {
 });
 
 // raidTeleports: with a teleporter in every hall, as if each boss had been killed before
-function raid(expert = false, raidTeleports = 0, raidPortals?: boolean[]): Sim {
+function raid(
+    expert = false,
+    raidTeleports = 0,
+    raidPortals?: boolean[],
+    trophiesFound?: ReadonlySet<string>,
+): Sim {
     const sim = new Sim({
         grid: makeGrid(field(), 1000, 1000),
         mapId: TEST_RAID.id,
         expert,
+        trophiesFound,
         raidTeleports,
         raidPortals: raidPortals ?? TEST_RAID.raid!.rooms.map(() => raidTeleports > 0),
         characterId: "warrior",
@@ -220,6 +233,49 @@ describe("raids", () => {
         expect(many).toBeGreaterThan(100);
     });
 
+    it("gives a Lil' Zik look not found yet from expert's chest, till there are none left", () => {
+        const sim = raid(true);
+        Object.assign(sim, { map: getMap("theatre_of_blood") });
+        const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
+        expect(looks).toHaveLength(5);
+        const lookIn = () => [...sim.trophies].filter((id) => looks.includes(id));
+        // Five chests in a row, each run's found kept: all five, none twice
+        const found = new Set<string>();
+        for (let i = 0; i < looks.length; i++) {
+            sim.trophies.clear();
+            sim.heroes[0].trophiesFound = new Set(found);
+            sim["openRaidChest"]();
+            const got = lookIn();
+            expect(got).toHaveLength(1);
+            expect(found.has(got[0])).toBe(false);
+            found.add(got[0]);
+        }
+        expect([...found].sort()).toEqual([...looks].sort());
+        // Once they're all found, still one every time, and any of the five
+        sim.heroes[0].trophiesFound = new Set(found);
+        const given = new Set<string>();
+        for (let i = 0; i < 20; i++) {
+            sim.trophies.clear();
+            sim["openRaidChest"]();
+            const got = lookIn();
+            expect(got).toHaveLength(1);
+            given.add(got[0]);
+        }
+        expect(given.size).toBeGreaterThan(1);
+        // And the last one missing is the one given, with the found ones brought in as a run
+        // starts
+        const last = raid(true, 0, undefined, new Set(looks.slice(1)));
+        Object.assign(last, { map: getMap("theatre_of_blood") });
+        for (let i = 0; i < 20; i++) {
+            last.trophies.clear();
+            last["openRaidChest"]();
+            expect([...last.trophies].filter((id) => looks.includes(id))).toEqual([looks[0]]);
+        }
+        expect(getEveryTimeTrophiesFound(["lil_bloat", "ghrazi_rapier", "lil_zik"])).toEqual([
+            "lil_bloat",
+        ]);
+    });
+
     it("keeps a raid's wins, normal and hard, when the save's loaded again", () => {
         const save = createSave();
         save.mapVictories.theatre_of_blood = 1;
@@ -347,7 +403,8 @@ describe("raids", () => {
     });
 
     it("lists its raids' rooms in order, each with a boss", () => {
-        for (const map of RAID_MAPS) {
+        // The Theatre's rooms; the Tombs of Amascut's paths are its own (MapDef.tombs)
+        for (const map of RAID_MAPS.filter((m) => m.raid)) {
             const rooms = map.raid!.rooms;
             expect(rooms.length).toBeGreaterThan(1);
             const bossEvents = map.events.filter(
@@ -372,6 +429,43 @@ const TEST_BOSS_IDS = [
     "tob_verzik_vitur_risen",
     "tob_verzik_vitur_spider",
 ];
+
+describe("the Theatre's Nylocas", () => {
+    it("are the raid's own copies, slower than the campaign's by RAID_NYLOCAS_SPEED", () => {
+        // Everything the raid can bring on: its waves, elites, rings, and its bosses' summons and
+        // splits
+        const ids = getMapEnemies(getMap("theatre_of_blood")).map((def) => def.id);
+        // The three that chase you (the Matomenos crawl to the Maiden)
+        const nylocas = ids.filter((id) => /ischyros|toxobolos|hagios/.test(id));
+        expect(nylocas.length).toBe(6);
+        for (const id of nylocas) {
+            expect(id.startsWith("tob_"), id).toBe(true);
+            const campaign = getEnemy(id.slice("tob_".length));
+            expect(getEnemy(id).speed, id).toBeCloseTo(campaign.speed * RAID_NYLOCAS_SPEED);
+            expect(getEnemy(id).speed, id).toBeLessThan(PLAYER_SPEED * TICKS_PER_SECOND);
+        }
+    });
+
+    it("come to their hall NYLOCAS_HALL_CROWD as many as the raid's pace, and to its ring", () => {
+        // Most of them shoot, so the raid's pace for the third hall swamped players with them
+        expect(NYLOCAS_HALL_CROWD).toBeLessThan(1);
+        const rooms = getMap("theatre_of_blood").raid!.rooms;
+        const index = rooms.findIndex((room) => room.boss === "nylocas_vasilias");
+        const hall = rooms[index];
+        hall.waves.forEach((wave, i) => {
+            // The pace roomWaves keeps: room n starts at Lumbridge's wave 2.5n
+            const pace =
+                LUMBRIDGE_WAVES[Math.min(Math.round(index * 2.5) + i, LUMBRIDGE_WAVES.length - 1)];
+            expect(wave.spawnRate, `wave ${i}`).toBeCloseTo(pace.spawnRate * NYLOCAS_HALL_CROWD);
+            expect(wave.minAlive, `wave ${i}`).toBe(Math.round(pace.minAlive * NYLOCAS_HALL_CROWD));
+            expect(wave.maxAlive, `wave ${i}`).toBe(Math.round(pace.maxAlive * NYLOCAS_HALL_CROWD));
+        });
+        const ring = hall.events.find((e) => e.kind === "ring");
+        expect(ring?.kind === "ring" && ring.count).toBe(
+            Math.round(NYLOCAS_RING * NYLOCAS_HALL_CROWD),
+        );
+    });
+});
 
 describe("the Theatre's bullet shapes", () => {
     // One volley of a boss's attack, from its own spot
@@ -406,7 +500,7 @@ describe("the Theatre's bullet shapes", () => {
                 vy: bullets.vy[slot],
             });
         }
-        return { attack, shot };
+        return { attack, shot, bullets, sim, boss };
     }
 
     it("a wall is a line across, all going one way, with its gap left out", () => {
@@ -519,6 +613,47 @@ describe("the Theatre's bullet shapes", () => {
             expect(Math.hypot(dx, dy)).toBeCloseTo(pattern.distance!);
             // Heading for the middle
             expect(dx * bullet.vx + dy * bullet.vy).toBeLessThan(0);
+        }
+    });
+
+    it("every closing ring stands where it forms for its hold before it comes in", () => {
+        for (const id of TEST_BOSS_IDS) {
+            for (const attack of getEnemy(id).boss!.attacks) {
+                if (attack.pattern?.shape === "closing") {
+                    expect(attack.pattern.hold ?? 0, `${id}: ${attack.name}`).toBeGreaterThan(0);
+                }
+            }
+        }
+        const { attack, bullets } = volley("Blood tide", "maiden_of_sugadinti");
+        const hold = Math.round(attack.pattern!.hold! * TICKS_PER_SECOND);
+        const slot = bullets.order[0];
+        const at = () => [bullets.x[slot], bullets.y[slot]];
+        const formed = at();
+        const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
+        for (let i = 0; i < hold; i++) {
+            bullets.step(targets);
+        }
+        expect(at()).toEqual(formed);
+        bullets.step(targets);
+        expect(at()).not.toEqual(formed);
+    });
+
+    it("a closing ring hurts whoever walks into it while it stands", () => {
+        const { attack, shot, bullets, sim, boss } = volley("Blood tide", "maiden_of_sugadinti");
+        // The source a real attack would have taken (Sim.startPattern)
+        sim.bulletSources[0] = { attack, enemy: boss };
+        sim.player.invulnerable = 0;
+        const slot = bullets.order[0];
+        sim.player.x = sim.player.prevX = bullets.x[slot];
+        sim.player.y = sim.player.prevY = bullets.y[slot];
+        sim["stepBullets"]();
+        expect(sim.damageByAttack[attack.name]).toBeGreaterThan(0);
+        // Spent on the hit, and the rest still where they formed
+        expect(bullets.count).toBe(shot.length - 1);
+        for (let i = 0; i < bullets.count; i++) {
+            const other = bullets.order[i];
+            expect(bullets.x[other]).toBe(bullets.prevX[other]);
+            expect(bullets.y[other]).toBe(bullets.prevY[other]);
         }
     });
 });
@@ -770,14 +905,14 @@ describe("expert mode", () => {
 
     it("lets each colour of Nylocas take only its own style, and only on expert", () => {
         const expert = raid(true);
-        expect(hits(expert, "nylocas_ischyros", "twisted_bow")).toBe(0);
-        expect(hits(expert, "nylocas_ischyros", "scythe_of_vitur")).toBeGreaterThan(0);
-        expect(hits(expert, "nylocas_toxobolos", "scythe_of_vitur")).toBe(0);
-        expect(hits(expert, "nylocas_toxobolos", "twisted_bow")).toBeGreaterThan(0);
-        expect(hits(expert, "nylocas_hagios", "twisted_bow")).toBe(0);
-        expect(hits(expert, "nylocas_hagios", "sanguinesti_staff")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_ischyros", "twisted_bow")).toBe(0);
+        expect(hits(expert, "tob_nylocas_ischyros", "scythe_of_vitur")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_toxobolos", "scythe_of_vitur")).toBe(0);
+        expect(hits(expert, "tob_nylocas_toxobolos", "twisted_bow")).toBeGreaterThan(0);
+        expect(hits(expert, "tob_nylocas_hagios", "twisted_bow")).toBe(0);
+        expect(hits(expert, "tob_nylocas_hagios", "sanguinesti_staff")).toBeGreaterThan(0);
         // Anywhere else, any style will do
-        expect(hits(raid(false), "nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
+        expect(hits(raid(false), "tob_nylocas_ischyros", "twisted_bow")).toBeGreaterThan(0);
     });
 
     it("has a wave's Nylocas take more from their own style on expert, but not Vasilias", () => {
@@ -796,11 +931,11 @@ describe("expert mode", () => {
         };
         const ratio = (id: string, weapon: string) =>
             dealt(true, id, weapon) / dealt(false, id, weapon);
-        const bonus = getEnemy("nylocas_hagios").expertOwnStyle!;
+        const bonus = getEnemy("tob_nylocas_hagios").expertOwnStyle!;
         expect(bonus).toBeGreaterThan(1);
-        expect(ratio("nylocas_hagios", "sanguinesti_staff")).toBeCloseTo(bonus, 1);
+        expect(ratio("tob_nylocas_hagios", "sanguinesti_staff")).toBeCloseTo(bonus, 1);
         expect(ratio("tob_nylocas_toxobolos", "twisted_bow")).toBeCloseTo(bonus, 1);
-        expect(ratio("nylocas_ischyros", "scythe_of_vitur")).toBeCloseTo(bonus, 1);
+        expect(ratio("tob_nylocas_ischyros", "scythe_of_vitur")).toBeCloseTo(bonus, 1);
         // Nylocas Vasilias keeps hers: a colour's own style, no more than off expert
         expect(ratio("nylocas_vasilias_magic", "sanguinesti_staff")).toBeLessThan(1.5);
     });
@@ -1045,8 +1180,21 @@ describe("expert mode", () => {
         expect(boss.hp).toBe(boss.maxHp - 10000 + Math.round(boss.maxHp * smother.heal));
         expect(sim.hazards).not.toContain(left);
         expect(boss.bossState!.ordeal!.left).toBe(exhumes.count);
+        // A step's enough: walked across at a player's speed, even off its middle, one's smothered
+        // (they come up in threes, tiles apart)
+        const home = { x: sim.player.x, y: sim.player.y };
+        for (const off of [0, 0.8]) {
+            const stepped = exhumed(home.x, home.y + off);
+            for (let x = home.x - 3; x <= home.x + 3; x += PLAYER_SPEED) {
+                sim.player.x = x;
+                sim["stepHazards"]();
+            }
+            expect(sim.hazards, `${off} off its middle`).not.toContain(stepped);
+        }
+        sim.player.x = home.x;
         // Each one stood on is smothered, and once they all are he rises
-        for (let i = 0; i < exhumes.count; i++) {
+        for (let still = exhumes.count - 2; still > 0; still--) {
+            expect(boss.bossState!.ordeal!.left).toBe(still);
             const one = exhumed(sim.player.x, sim.player.y);
             for (let t = 0; t <= Math.round(smother.seconds * TICKS_PER_SECOND); t++) {
                 sim["stepHazards"]();
@@ -1128,9 +1276,7 @@ describe("expert mode", () => {
         Object.assign(sim, { map: getMap("theatre_of_blood") });
         sim.trophies.clear();
         sim["openRaidChest"]();
-        const looks = TROPHIES.filter((t) => t.from.kind === "raid" && t.from.expert).map(
-            (t) => t.id,
-        );
+        const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
         expect([...sim.trophies].some((id) => looks.includes(id))).toBe(true);
     });
 
@@ -1205,7 +1351,7 @@ describe("expert mode", () => {
 
     it("leaves a Nylocas a weapon can't hurt alone: no aiming at it, and no venom", () => {
         const sim = raid(true);
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 2,
             y: sim.player.y,
         })!;
@@ -1227,7 +1373,7 @@ describe("expert mode", () => {
         sim.weapons = [];
         sim.addWeapon("twisted_bow");
         sim.addWeapon("scythe_of_vitur");
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 1,
             y: sim.player.y,
         })!;
@@ -1251,7 +1397,7 @@ describe("expert mode", () => {
 
     it("stops a weapon's venom once the enemy's colour is one it can't hurt", () => {
         const sim = raid(true);
-        const grey = sim.spawnEnemy(getEnemy("nylocas_ischyros"), "normal", {
+        const grey = sim.spawnEnemy(getEnemy("tob_nylocas_ischyros"), "normal", {
             x: sim.player.x + 6,
             y: sim.player.y,
         })!;

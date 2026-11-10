@@ -126,6 +126,26 @@ export function inStrip(
     return along >= -radius && along <= length + radius && across <= width / 2 + radius;
 }
 
+// The square of how far a point is from the segment (ax, ay) to (bx, by): a tether between two
+// bosses (BossAttackDef.tether)
+export function segmentDistanceSq(
+    px: number,
+    py: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+): number {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lengthSq = dx * dx + dy * dy;
+    const t =
+        lengthSq > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq)) : 0;
+    const ox = px - (ax + dx * t);
+    const oy = py - (ay + dy * t);
+    return ox * ox + oy * oy;
+}
+
 export type CheckerCell = { cx: number; cy: number; x: number; y: number; colour: number };
 
 // Every cell of a checker, its middle and colour

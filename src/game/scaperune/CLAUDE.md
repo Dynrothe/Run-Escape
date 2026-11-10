@@ -1738,6 +1738,8 @@ generator's). The Theatre's halls and boss rooms are.
 Three maps are whole worked examples, each going further than this one:
 
 - `maps/vardhelm.ts`: land carved by hand from a massif, a road up a cliff in hairpins, and prefabs of its own.
+  Its `mapDef` has an opening cinematic too (`maps/vardhelmOpening.ts`), with knights at the keep's door as props:
+  see Props and opening cinematics in `docs/DEVELOPMENT.md`.
 - `maps/kaluasWake.ts`: coasts drawn as splines, a `Build` of its own with the generator's parts run in its order, sea
   bridges and a raised village. `paintThinRock` puts back the colour on cliffs too thin for `paintRock`.
 - `maps/shatteredRealm.ts`: land over a void, its own waves, events and bosses, and terrain as architecture.
@@ -1950,8 +1952,8 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Squares must be free.** Nothing in the cache uses x 70-99, y 66-199, and the map manager stops at x 100,
   y 200. Each recipe needs its own, and nothing checks that: see `devMaps.ts` and each map's `mapX`, `mapY`. The
-  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74 and the Owl's Court at
-  x 82-84, y 76-78. The
+  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74, the Owl's Court at
+  x 82-84, y 76-78 and the Tombs of Amascut (and Beneath Cursed Sands, the same squares) at x 86-93, y 66-69. The
   map generator's screen, and scripts given settings, have x 70-99 from y 134 on.
 - **A loc on a scene's outermost tile is skipped.** It doesn't matter inside a grid, but don't stand
   anything on the outer edge of one.

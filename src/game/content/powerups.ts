@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { PowerUpDef, ThrallDef } from "./types";
 
 // Power-ups drop now and then from enemies and are used as soon as they're
@@ -205,7 +206,7 @@ export const POWER_UPS: PowerUpDef[] = [
         // LightingDef.lanternWeight
         id: LANTERN_ID,
         name: "Abyssal lantern",
-        description: "Your light reaches 4 tiles further for 30 seconds.",
+        description: "Lights up 4 more tiles round you for 30 seconds.",
         objId: 26822,
         weight: 0,
         price: 0,
@@ -275,4 +276,12 @@ export function getPowerUp(id: string): PowerUpDef {
         throw new Error("Unknown power-up " + id);
     }
     return powerUp;
+}
+
+export function powerUpName(powerUp: PowerUpDef): string {
+    return tr(`powerup.${powerUp.id}.name`, powerUp.name);
+}
+
+export function powerUpDescription(powerUp: PowerUpDef): string {
+    return tr(`powerup.${powerUp.id}.desc`, powerUp.description);
 }

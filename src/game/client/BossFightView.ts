@@ -1,6 +1,7 @@
 import { ActorAnim, ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { getEnemy } from "../content/enemies";
 import { getBossPrayerStyles, isPrayerIgnored } from "../content/raidBosses";
+import { ZEBAK } from "../content/tombs";
 import { ArenaStatue, BossAttackDef, EnemyDef } from "../content/types";
 import { FREEZE_SPOTANIM, Sim, TICKS_PER_SECOND, yawFromVector } from "../core/Sim";
 import { SHADOW_SOFT, cycleStage, shadowOutline, statueMiddle } from "../core/arena";
@@ -12,6 +13,7 @@ import {
     SimEvent,
     SurgeLane,
 } from "../core/entities";
+import { tl } from "../i18n";
 import {
     GameAssets,
     HINT_ARROW_SPRITE,
@@ -33,6 +35,8 @@ const VIEW_REACH = 44;
 // A long edge is split into pieces this long, to lie on the ground
 const GROUND_STEP = 3;
 const BULLET_HEIGHT = 0.9;
+// Ba-Ba's boulders' rocks, drawn this much past the size they block, as their edges are rough
+const ROCK_FIT = 1.25;
 // Her flowers are all that says which quarter's safe, so they stand out
 const FLOWER_SCALE = 1.7;
 // Tiles from her that petals start gathering, and end up; radians a tick they turn
@@ -79,6 +83,8 @@ const LANE_SHOW_SECONDS = 1;
 const LANE_SHOW_ALPHA = 0.6;
 // Pixels, at a scale of 1
 const TOTEM_ARROW = 14;
+// Tiles from the player the floor arrow sits, the way the Apmeken room's issue is (drawGroundArrow)
+const GROUND_ARROW_REACH = 2.5;
 // The hint arrow: how many times its 25 pixels it's drawn, how far over the
 // top of what it marks in tiles, and how far it bobs in pixels
 const HINT_ARROW_SCALE = 1.2;
@@ -195,6 +201,7 @@ export class BossFightView {
             this.drawFlowers(actors, sim, quarters);
         }
         this.drawBullets(actors, sim, alpha);
+        this.drawFalling(actors, sim, alpha);
         this.drawStatues(actors, sim);
         this.drawFires(actors, sim);
         this.drawGathering(actors, sim);
@@ -273,12 +280,105 @@ export class BossFightView {
         }
     }
 
+    // What a blast drops (BossAttackDef.falls), falling faster and faster into each of its
+    // circles, to land as the blast does
+    private drawFalling(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        // Into each of a ground attack's marks (Ba-Ba's rockfall)
+        for (const hazard of sim.hazards) {
+            const falls = hazard.attack.falls;
+            if (!falls || sim.tick >= hazard.landTick) {
+                continue;
+            }
+            const def = getEnemy(falls.look);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            if (!model) {
+                continue;
+            }
+            const anim = model.getAnim(def.walkSeq);
+            const t = Math.min(
+                1,
+                Math.max(
+                    0,
+                    (sim.tick + alpha - hazard.startTick) /
+                        Math.max(1, hazard.landTick - hazard.startTick),
+                ),
+            );
+            const drop = falls.height * (1 - t * t);
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(sim.tick - hazard.startTick, true),
+                hazard.x,
+                this.ground(sim, hazard.x, hazard.y) - drop,
+                hazard.y,
+                (hazard.uid * 331) & 2047,
+                { scale: falls.scale },
+            );
+        }
+        // Ba-Ba's boulders' rocks, to take cover by, and Zebak's boulders, gone as he roars but
+        // drawn on through its shockwave (GameView.drawZebakRoar)
+        const roared = sim.tombsZebak?.roared;
+        const shaking =
+            roared && sim.tick - roared.tick < ZEBAK.roar.shockwave.seconds * TICKS_PER_SECOND;
+        const cover = shaking ? [...sim.tombsCover, ...roared.rocks] : sim.tombsCover;
+        cover.forEach((rock) => {
+            // An enemy's model, or a loc's (Kephri's dung)
+            const model = rock.look.startsWith("loc:")
+                ? this.assets.get(rock.look)
+                : this.assets.get(getEnemyModelKey(getEnemy(rock.look), 0));
+            if (model) {
+                const anim = model.anims[0];
+                actors.draw(
+                    model,
+                    anim,
+                    0,
+                    rock.x,
+                    this.ground(sim, rock.x, rock.y),
+                    rock.y,
+                    (Math.floor(rock.x * 7 + rock.y * 13) * 331) & 2047,
+                    // As big as it stands in the way
+                    { scale: (rock.radius * 128 * ROCK_FIT) / Math.max(1, model.radius) },
+                );
+            }
+        });
+        for (const enemy of sim.enemies) {
+            const windup = enemy.bossState?.windup;
+            const falls = windup?.attack.falls;
+            if (!windup || !falls || enemy.dead) {
+                continue;
+            }
+            const def = getEnemy(falls.look);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            if (!model) {
+                continue;
+            }
+            const anim = model.getAnim(def.walkSeq);
+            const t = Math.min(
+                1,
+                Math.max(
+                    0,
+                    (sim.tick + alpha - windup.startTick) /
+                        Math.max(1, windup.landTick - windup.startTick),
+                ),
+            );
+            const frame = anim.getFrame(sim.tick - windup.startTick, true);
+            const drop = falls.height * (1 - t * t);
+            for (const { x, y } of windup.targets) {
+                actors.draw(model, anim, frame, x, this.ground(sim, x, y) - drop, y, 0, {
+                    scale: falls.scale,
+                });
+            }
+        }
+    }
+
     // Her real shots, each pointing the way it's going. Drawn at their hit size.
     private drawBullets(actors: ActorRenderer, sim: Sim, alpha: number): void {
         const bullets = sim.bullets;
         const { prevX, prevY, x, y, vx, vy, radius, source, startTick, order } = bullets;
         const tick = sim.tick;
-        const options = { scale: 1, flash: 0 };
+        // Seen in the dark at full strength, as projectiles are: a hazard has to read on any floor.
+        // Only a lit map's dark changes for it (ActorDrawOptions.unlit): the Tombs and its quest.
+        const options = { scale: 1, flash: 0, unlit: 1 };
         for (let i = 0; i < bullets.count; i++) {
             const slot = order[i];
             // A bullet in the air keeps its source (Sim.freeBulletSources)
@@ -287,21 +387,23 @@ export class BossFightView {
             if (!look) {
                 continue;
             }
-            const { model, anim } = look;
+            const { model, anim, rolls } = look;
+            const still = attack.pattern?.still;
             const wx = lerp(prevX[slot], x[slot], alpha);
             const wy = lerp(prevY[slot], y[slot], alpha);
-            const pattern = attack.pattern!;
+            // A blast's shards (BossAttackDef.shards) are bullets with no pattern
+            const pattern = attack.pattern;
+            const fits = (radius[slot] * 128) / Math.max(1, model.radius);
             // Never smaller than what it hits, however it's scaled to be seen:
-            // what looks like a miss has to be one
-            options.scale = Math.max(
-                pattern.scale ?? 1,
-                (radius[slot] * 128) / Math.max(1, model.radius),
-            );
-            options.flash = pattern.bright ?? 0;
+            // what looks like a miss has to be one. A rolling look is its own size.
+            options.scale = rolls
+                ? fits * (attack.shards?.scale ?? 1)
+                : Math.max(pattern?.scale ?? attack.shards?.scale ?? 1, fits);
+            options.flash = pattern?.bright ?? attack.shards?.bright ?? 0;
             actors.draw(
                 model,
                 anim,
-                anim.getFrame(tick - startTick[slot]),
+                anim.getFrame(still ?? tick - startTick[slot], true),
                 wx,
                 this.ground(sim, wx, wy) - BULLET_HEIGHT,
                 wy,
@@ -311,22 +413,32 @@ export class BossFightView {
         }
     }
 
-    // What a bullet's drawn as: its spot animation, or an NPC (BossAttackDef.lookId)
-    private bulletLook(attack: BossAttackDef): { model: ActorModel; anim: ActorAnim } | undefined {
+    // What a bullet's drawn as: an enemy's model rolling (BulletPatternDef.look, or a blast's
+    // shards'), an NPC playing its idle (BossAttackDef.lookId), or its spot animation (a blast's
+    // shards can have one of their own)
+    private bulletLook(
+        attack: BossAttackDef,
+    ): { model: ActorModel; anim: ActorAnim; rolls: boolean } | undefined {
+        const rolling = attack.pattern?.look ?? attack.shards?.look;
+        if (rolling !== undefined) {
+            const def = getEnemy(rolling);
+            const model = this.assets.get(getEnemyModelKey(def, 0));
+            return model && { model, anim: model.getAnim(def.walkSeq), rolls: true };
+        }
         if (attack.lookId !== undefined) {
             const look = getEnemy(attack.lookId);
             const model = this.assets.get(getEnemyModelKey(look, 0));
-            return model && { model, anim: model.getAnim(look.idleSeq) };
+            return model && { model, anim: model.getAnim(look.idleSeq), rolls: false };
         }
-        const model = this.assets.get("spot:" + attack.spotAnim);
-        return model && { model, anim: model.anims[0] };
+        const model = this.assets.get("spot:" + (attack.shards?.spotAnim ?? attack.spotAnim));
+        return model && { model, anim: model.anims[0], rolls: false };
     }
 
     // The bosses whose arena this is: the map's final boss from the start (its
     // statues stand before it rises), and whoever's shown
     private fightBosses(sim: Sim): EnemyDef[] {
         const defs: EnemyDef[] = [];
-        const event = sim.map.events.find((e) => e.kind === "finalBoss");
+        const event = sim.mapEvents.find((e) => e.kind === "finalBoss");
         const final = event && getEnemy(event.enemyId);
         if (final?.boss) {
             defs.push(final);
@@ -944,6 +1056,15 @@ export class BossFightView {
         const attack = windup.attack;
         const radius = attack.radius ?? 2;
         const cone = attack.cone!;
+        // Two rules, not one scale: with coneAlpha unset (Phosani's cones) the wedge and the
+        // circle under her are as faint as any warning (WARNING_ALPHA, a tenth). Set at all, even
+        // to 1, they're drawn at full strength, as a lunge's strip is, and coneAlpha multiplies
+        // both: no multiplier alone could lift them past that tenth.
+        const plain = attack.coneAlpha !== undefined;
+        const solid = attack.coneAlpha ?? 1;
+        if (plain) {
+            ctx.globalAlpha = 1;
+        }
         const base = Math.atan2(windup.dirY, windup.dirX);
         const steps = 8;
         const wedge = (reach: number) => {
@@ -958,16 +1079,16 @@ export class BossFightView {
             this.traceGround(overlay, sim, points);
         };
         wedge(radius);
-        ctx.fillStyle = `rgba(200, 20, 20, ${0.14 + 0.14 * t})`;
+        ctx.fillStyle = `rgba(200, 20, 20, ${Math.min(1, (0.14 + 0.14 * t) * solid)})`;
         ctx.fill();
-        ctx.lineWidth = Math.max(2, 3 * scale);
-        ctx.strokeStyle = `rgba(255, 70, 50, ${0.6 + 0.4 * t})`;
+        ctx.lineWidth = Math.max(2, 3 * scale * Math.min(solid, 2));
+        ctx.strokeStyle = `rgba(255, 70, 50, ${Math.min(1, (0.6 + 0.4 * t) * solid)})`;
         ctx.stroke();
         wedge(radius * t);
-        ctx.fillStyle = `rgba(255, 40, 20, ${0.28 * t})`;
+        ctx.fillStyle = `rgba(255, 40, 20, ${Math.min(1, 0.28 * t * solid)})`;
         ctx.fill();
         this.traceCircle(overlay, sim, enemy.x, enemy.y, attack.underRadius ?? 0);
-        ctx.fillStyle = `rgba(255, 40, 20, ${0.16 + 0.16 * t})`;
+        ctx.fillStyle = `rgba(255, 40, 20, ${Math.min(1, (0.16 + 0.16 * t) * solid)})`;
         ctx.fill();
         ctx.stroke();
     }
@@ -1014,11 +1135,20 @@ export class BossFightView {
 
     // ---- Over the whole screen ----
 
-    drawScreen(overlay: Overlay, sim: Sim, alpha: number, now: number, scale: number): void {
+    // viewPose: where the hero the camera's on is drawn this frame, when something's drawn from
+    // them (the Apmeken room's floor arrow)
+    drawScreen(
+        overlay: Overlay,
+        sim: Sim,
+        alpha: number,
+        now: number,
+        scale: number,
+        viewPose?: { x: number; y: number },
+    ): void {
         this.drawBeams(overlay, sim, now, scale);
         this.drawTotemArrows(overlay, sim, scale);
         this.drawOverheads(overlay, sim, alpha, scale);
-        this.drawHintArrows(overlay, sim, alpha, now, scale);
+        this.drawHintArrows(overlay, sim, alpha, now, scale, viewPose);
         const boss = sim.shownBoss;
         const width = overlay.width;
         const height = overlay.height;
@@ -1158,6 +1288,57 @@ export class BossFightView {
         ctx.stroke();
     }
 
+    // A yellow arrow on the floor beside the player, a couple of tiles out the way something off
+    // the screen is, pointing along the ground at it (the Apmeken room's pillar or vent): where the
+    // player's looking, not out at the screen's edge. It nudges the way it points as it bobs (0 to
+    // 1, with the hint arrows').
+    private drawGroundArrow(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        size: number,
+        bob: number,
+        viewPose: { x: number; y: number } | undefined,
+    ): void {
+        // From where the hero's drawn this frame (smoothed, and predicted for a co-op guest), so
+        // it moves with them rather than ticking after
+        const player = viewPose ?? sim.player;
+        const dx = x - player.x;
+        const dy = y - player.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance < 0.001) {
+            return;
+        }
+        const ux = dx / distance;
+        const uy = dy / distance;
+        const reach = Math.min(GROUND_ARROW_REACH, Math.max(1, distance - 1));
+        const ax = player.x + ux * reach;
+        const ay = player.y + uy * reach;
+        const at = overlay.project(ax, this.ground(sim, ax, ay), ay, this.a);
+        const ahead = overlay.project(ax + ux, this.ground(sim, ax + ux, ay + uy), ay + uy, this.b);
+        if (at.behind || ahead.behind) {
+            return;
+        }
+        const length = Math.max(0.001, Math.hypot(ahead.x - at.x, ahead.y - at.y));
+        const dirX = (ahead.x - at.x) / length;
+        const dirY = (ahead.y - at.y) / length;
+        const nudge = bob * size * 0.5;
+        const tipX = at.x + dirX * nudge;
+        const tipY = at.y + dirY * nudge;
+        const ctx = overlay.ctx;
+        ctx.beginPath();
+        ctx.moveTo(tipX + dirX * size, tipY + dirY * size);
+        ctx.lineTo(tipX - dirX * size - dirY * size * 0.8, tipY - dirY * size + dirX * size * 0.8);
+        ctx.lineTo(tipX - dirX * size + dirY * size * 0.8, tipY - dirY * size - dirX * size * 0.8);
+        ctx.closePath();
+        ctx.fillStyle = "#ffd76a";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.stroke();
+    }
+
     // On the screen, gap tiles over the top of an enemy's model, where it is this frame: what's
     // drawn over its head (its overhead prayer, a hint arrow) sits on this
     private overHead(overlay: Overlay, sim: Sim, enemy: Enemy, alpha: number, gap: number) {
@@ -1211,6 +1392,7 @@ export class BossFightView {
         alpha: number,
         now: number,
         scale: number,
+        viewPose: { x: number; y: number } | undefined,
     ): void {
         const sprite = this.assets.getSprite(HINT_ARROW_SPRITE);
         const ctx = overlay.ctx;
@@ -1234,6 +1416,29 @@ export class BossFightView {
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(sprite, Math.round(p.x - w / 2), Math.round(p.y - h - bob), w, h);
             ctx.imageSmoothingEnabled = true;
+        }
+        // The Tombs' Apmeken room: over the pillar or vent that needs fixing
+        const issue = sim.tombsIssue;
+        if (issue) {
+            const top = this.ground(sim, issue.x, issue.y) - (issue.kind === "pillar" ? 3.2 : 1.6);
+            const p = overlay.project(issue.x, top, issue.y, this.a);
+            if (p.behind || p.x < 0 || p.y < 0 || p.x > width || p.y > height) {
+                this.drawGroundArrow(
+                    overlay,
+                    sim,
+                    issue.x,
+                    issue.y,
+                    TOTEM_ARROW * scale,
+                    bob / (HINT_ARROW_BOB * scale),
+                    viewPose,
+                );
+            } else if (sprite) {
+                const w = sprite.width * HINT_ARROW_SCALE * scale;
+                const h = sprite.height * HINT_ARROW_SCALE * scale;
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(sprite, Math.round(p.x - w / 2), Math.round(p.y - h - bob), w, h);
+                ctx.imageSmoothingEnabled = true;
+            }
         }
     }
 
@@ -1280,15 +1485,15 @@ export class BossFightView {
         // anything nearer the middle is on top of the player
         const y = height * 0.72;
         ctx.fillStyle = "#000000";
-        ctx.fillText(def.title, width / 2 + pixel, y + pixel);
+        ctx.fillText(tl(def.title), width / 2 + pixel, y + pixel);
         ctx.fillStyle = look?.title ?? "#ff9ae6";
-        ctx.fillText(def.title, width / 2, y);
+        ctx.fillText(tl(def.title), width / 2, y);
         if (def.subtitle) {
             ctx.font = `${12 * pixel}px "OSRS Bold", sans-serif`;
             ctx.fillStyle = "#000000";
-            ctx.fillText(def.subtitle, width / 2 + pixel, y + 18 * pixel + pixel);
+            ctx.fillText(tl(def.subtitle), width / 2 + pixel, y + 18 * pixel + pixel);
             ctx.fillStyle = look?.subtitle ?? "#e8d0ff";
-            ctx.fillText(def.subtitle, width / 2, y + 18 * pixel);
+            ctx.fillText(tl(def.subtitle), width / 2, y + 18 * pixel);
         }
         ctx.globalAlpha = 1;
     }

@@ -41,7 +41,7 @@ void main() {
     }
 #endif
 #ifdef LIGHTS
-    // Only a dark map's programs have this (GameWebGLRenderer.setDarkness)
+    // Only a lit map's programs have this (GameWebGLRenderer.setLighting)
     fragColor.rgb = applyLight(fragColor.rgb, v_lightPos.xy, v_lightPos.z);
 #endif
 #ifdef ACTOR_EDGE

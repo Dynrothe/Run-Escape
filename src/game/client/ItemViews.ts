@@ -1,14 +1,26 @@
+import { getCharacter } from "../content/characters";
 import { EXTRA_REVIVE_ITEM } from "../content/coop";
 import { getGearStats, upgradedName } from "../content/endless";
-import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { getPowerUp } from "../content/powerups";
+import {
+    CASKETS,
+    GEAR_SLOTS,
+    GEAR_SLOT_BY_ID,
+    getItem,
+    itemName,
+    utilityDescription,
+} from "../content/items";
+import { getPowerUp, powerUpDescription, powerUpName } from "../content/powerups";
 import { getRaidSupply } from "../content/raids";
+import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
+import { SHOP_UPGRADE_BY_ID } from "../content/shop";
 import { diffStats } from "../content/stats";
+import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
-import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { t, tl, tr } from "../i18n";
 import {
     BuffView,
     ChestView,
@@ -27,12 +39,14 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
     const set = getItemSet(item);
     return {
         id: item.id,
-        name: upgradedName(item.name, upgrades),
+        name: upgradedName(tl(item.name), upgrades),
         objId: item.objId,
         rarity: { name: rarity.name, color: rarity.color },
         kindLabel:
-            item.kind === "gear" ? `${GEAR_SLOT_BY_ID.get(item.slot)!.name} slot` : "Utility",
-        lines: describeItem(item, upgrades),
+            item.kind === "gear"
+                ? t("canvas.gear_slot", { slot: tl(GEAR_SLOT_BY_ID.get(item.slot)!.name) })
+                : t("canvas.utility"),
+        lines: item.kind === "gear" ? describeItem(item, upgrades) : [utilityDescription(item)],
         ...(set && {
             set: {
                 text: describeSetProgress(set, setWorn),
@@ -51,10 +65,10 @@ function getRoundLines(sim: Sim, item: ItemDef): string[] {
     const times = (n: number) => `${Math.round(n * 10) / 10}x`;
     const use = item.use;
     if (use.kind === "heal" || (use.kind === "cure" && use.heal)) {
-        return [`Heals ${times(sim.roundDamage)} as much in round ${sim.round}.`];
+        return [t("canvas.round_heal", { times: times(sim.roundDamage), round: sim.round })];
     }
     if (use.kind === "blast") {
-        return [`Hits ${times(sim.roundHp)} as hard in round ${sim.round}.`];
+        return [t("canvas.round_hit", { times: times(sim.roundHp), round: sim.round })];
     }
     return [];
 }
@@ -168,20 +182,20 @@ export function getEventView(sim: Sim): EventView | undefined {
     const forPoints = offer.options.some((option) => option.kind === "supply");
     return {
         uid: offer.uid,
-        name: offer.def.name,
-        speech: offer.def.speech ?? "",
-        leaveLabel: effect.leaveLabel,
+        name: eventName(offer.def),
+        speech: tr(`event.${offer.def.id}.speech`, offer.def.speech ?? ""),
+        leaveLabel: tr(`event.${offer.def.id}.leave_label`, effect.leaveLabel),
         points: forPoints ? sim.raidPoints : undefined,
         options: offer.options.map((option) => {
             if (option.kind === "answer") {
                 const item = getItem(option.itemId);
-                return { title: item.name, iconObjId: item.objId, enabled: true };
+                return { title: itemName(item), iconObjId: item.objId, enabled: true };
             }
             if (option.kind === "revive") {
                 const item = getItem(EXTRA_REVIVE_ITEM);
                 return {
-                    title: "Extra revive",
-                    text: item.kind === "utility" ? item.description : "",
+                    title: t("canvas.extra_revive"),
+                    text: item.kind === "utility" ? utilityDescription(item) : "",
                     iconObjId: item.objId,
                     price: option.price,
                     sold: option.sold,
@@ -190,18 +204,38 @@ export function getEventView(sim: Sim): EventView | undefined {
             }
             if (option.kind === "teleport") {
                 return {
-                    title: "Teleport",
-                    text: "Uses one of this raid's teleports.",
+                    title: t("canvas.teleport"),
+                    text: t("canvas.teleport_desc"),
                     // A teleport tablet
                     iconObjId: 8013,
+                    enabled: true,
+                };
+            }
+            if (option.kind === "bundle") {
+                // One of the Helpful Spirit's, free: what's in it
+                const bundle = TOMBS_SPIRIT_BUNDLES.find((b) => b.id === option.bundleId)!;
+                const contents = option.items
+                    .map((item) => `${item.count} ${getRaidSupply(item.supplyId).name}`)
+                    .join(", ");
+                // Kinds it'd need a new slot for, against the slots free: what won't fit is used
+                const kinds = option.items.filter(
+                    (item) => !sim.inventory.some((slot) => slot?.itemId === item.supplyId),
+                ).length;
+                const room = kinds <= sim.inventory.filter((slot) => !slot).length;
+                return {
+                    title: bundle.name,
+                    text:
+                        `${bundle.description} ${contents}.` +
+                        (room ? "" : " No room for all of it: what won't fit is used at once."),
+                    iconObjId: bundle.objId,
                     enabled: true,
                 };
             }
             if (option.kind === "supply") {
                 const supply = getRaidSupply(option.supplyId);
                 return {
-                    title: supply.name,
-                    text: supply.description,
+                    title: tr(`raid.supply.${supply.id}.name`, supply.name),
+                    text: tr(`raid.supply.${supply.id}.desc`, supply.description),
                     iconObjId: supply.objId,
                     price: option.price,
                     sold: option.sold,
@@ -210,8 +244,8 @@ export function getEventView(sim: Sim): EventView | undefined {
             }
             const powerUp = getPowerUp(option.powerUpId);
             return {
-                title: powerUp.name,
-                text: powerUp.description,
+                title: powerUpName(powerUp),
+                text: powerUpDescription(powerUp),
                 iconObjId: powerUp.objId,
                 price: option.price,
                 sold: option.sold,
@@ -258,5 +292,36 @@ export function getBuffViews(sim: Sim): BuffView[] {
             harmful: true,
         });
     }
+    // One for each kind of revive left, with no timer
+    for (const revive of new Set(getRevivesLeft(sim.heroes[sim.focus]))) {
+        buffs.push({ ...revive, harmful: false });
+    }
     return buffs;
+}
+
+export type ReviveLook = { id: string; name: string; objId: number };
+
+// A hero's revives left, in the order they'll be used: their adventurer's own
+// (the Pyromancer's phoenix) first, then the shop's Ring of life. The sim
+// counts them as one, so this is only for showing them
+export function getRevivesLeft(hero: Hero, left = hero.revivesLeft): ReviveLook[] {
+    const character = getCharacter(hero.characterId);
+    const ring = SHOP_UPGRADE_BY_ID.get("ring_of_life")!;
+    const ringLook = { id: ring.id, name: ring.name, objId: ring.objId! };
+    if (!character.reviveLook) {
+        return Array<ReviveLook>(Math.max(0, left)).fill(ringLook);
+    }
+    const own = character.bonus.revival ?? 0;
+    const rings = hero.stats.revival - own;
+    const ownLeft = Math.max(0, Math.min(own, left - rings));
+    const ownLook = { id: "revive:" + character.id, ...character.reviveLook };
+    return [
+        ...Array<ReviveLook>(ownLeft).fill(ownLook),
+        ...Array<ReviveLook>(Math.max(0, left - ownLeft)).fill(ringLook),
+    ];
+}
+
+// The revive that just saved a hero, once the sim's counted it
+export function getUsedRevive(hero: Hero): ReviveLook {
+    return getRevivesLeft(hero, hero.revivesLeft + 1)[0];
 }

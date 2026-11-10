@@ -22,6 +22,7 @@ import { GameStore } from "./client/GameStore";
 import { SaveLock } from "./client/SaveLock";
 import { MAPS } from "./content/maps";
 import { LocalSaveStore } from "./core/save";
+import { t } from "./i18n";
 import { GameWebGLRenderer } from "./render/GameWebGLRenderer";
 import { GameUi } from "./ui/GameUi";
 import { iconCache } from "./ui/ItemIcon";
@@ -124,13 +125,14 @@ export function GameApp(): JSX.Element {
     useEffect(() => {
         const abortController = new AbortController();
         loadViewer(abortController.signal, (progress: DownloadProgress) => {
+            const doing = progress.saving ? "canvas.saving_cache" : "canvas.downloading_cache";
             store.set({
-                loadingText: `Downloading cache (${formatBytes(progress.total)})`,
+                loadingText: t(doing, { size: formatBytes(progress.total) }),
                 loadingProgress: ((progress.current / progress.total) * 100) | 0,
             });
         })
             .then((loaded) => {
-                store.set({ loadingText: "Loading Lumbridge", loadingProgress: 0 });
+                store.set({ loadingText: t("canvas.loading_lumbridge"), loadingProgress: 0 });
                 setLoaded(loaded);
                 if (import.meta.env.DEV) {
                     (window as any).mapViewer = loaded.mapViewer;
@@ -176,6 +178,18 @@ export function GameApp(): JSX.Element {
                 created = gameClient;
                 loaded.renderer.game = gameClient;
                 setClient(gameClient);
+                if (params.has("movementDiagnostics")) {
+                    gameClient.setMovementDiagnostics(true);
+                    (window as any).movementDiagnostics = {
+                        start: () => gameClient.setMovementDiagnostics(true),
+                        snapshot: () => gameClient.getMovementDiagnostics(),
+                        stop: () => {
+                            const snapshot = gameClient.getMovementDiagnostics();
+                            gameClient.setMovementDiagnostics(false);
+                            return snapshot;
+                        },
+                    };
+                }
                 if (import.meta.env.DEV) {
                     (window as any).game = gameClient;
                     import("./render/FrameProbe").then(({ FrameProbe }) => {
@@ -190,6 +204,7 @@ export function GameApp(): JSX.Element {
         return () => {
             disposed = true;
             created?.dispose();
+            if (params.has("movementDiagnostics")) delete (window as any).movementDiagnostics;
         };
     }, [loaded, store, saveStore]);
 
@@ -228,15 +243,14 @@ export function GameApp(): JSX.Element {
             ) : graphicsLost ? (
                 <div className="game-status game-status-lost content-text">
                     <p>
-                        Your device took the game's graphics away, as it can when it's short of
-                        memory, and they can't come back without reloading.
-                        {graphicsLost === "solo" && " Your run is paused."}
+                        {t("canvas.graphics_lost")}
+                        {graphicsLost === "solo" && t("canvas.run_paused")}
                         {graphicsLost === "none"
-                            ? " Reload to carry on."
-                            : " Reload to play again: the coins and quests from this run are kept."}
+                            ? t("canvas.reload_continue")
+                            : t("canvas.reload_kept")}
                     </p>
                     <button className="ui-button" onClick={reloadAfterLoss}>
-                        Reload
+                        {t("save.reload")}
                     </button>
                 </div>
             ) : (

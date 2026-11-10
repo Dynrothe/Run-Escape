@@ -33,6 +33,29 @@ const UNDER_WALL = 45120;
 // The Tombs' gold, as the light under the floor
 const GLOW = 0xffb040;
 
+// The crater in OSRS's last room (square 61,80, the plates 45650 to 45710 round it, the Warden's
+// platform 45718 to 45720 in it): the Warden's
+// platform in the floor's middle, where the obelisk stands in the first room, and the V torn open
+// behind it. Row spans from the floor's south-west corner (the floor's 29 by 31); the Warden
+// stands on the platform's middle, WARDENS_CRATER_WARDEN. The three rows of rubble in front of it
+// are floor.
+export const WARDENS_CRATER: { y: number; x0: number; x1: number }[] = [
+    ...[13, 14, 15, 16, 17].map((y) => ({ y, x0: 11, x1: 17 })),
+    { y: 18, x0: 10, x1: 18 },
+    { y: 19, x0: 9, x1: 19 },
+    { y: 20, x0: 8, x1: 20 },
+    { y: 21, x0: 7, x1: 21 },
+    { y: 22, x0: 6, x1: 22 },
+    { y: 23, x0: 5, x1: 23 },
+    ...[24, 25, 26].map((y) => ({ y, x0: 4, x1: 24 })),
+];
+export const WARDENS_CRATER_WARDEN = { x: 14.5, y: 15.5 };
+
+// The crater's spans in world tiles, for a floor whose south-west corner is at (x0, y0)
+export function wardensCrater(x0: number, y0: number): FloorDef["holes"] {
+    return WARDENS_CRATER.map((row) => ({ y: y0 + row.y, x0: x0 + row.x0, x1: x0 + row.x1 }));
+}
+
 export const side = (side: "east" | "west" | "both", rowSeconds: number): FloorPatternDef => ({
     kind: "side",
     side,

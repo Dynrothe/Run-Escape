@@ -8,6 +8,7 @@ import {
     readChunk,
 } from "./ChunkedCache";
 import { MemoryStore } from "./store/MemoryStore";
+import { FakeCache } from "./testCache";
 
 // MemoryStore only needs the meta index's id from it, and the rest pulls in a wasm decompressor
 // that vitest can't load
@@ -113,28 +114,6 @@ describe("buildCacheFiles", () => {
         );
     });
 });
-
-// A stand-in for the Cache API, keyed by URL
-class FakeCache {
-    readonly entries = new Map<string, Uint8Array>();
-
-    async match(url: string): Promise<Response | undefined> {
-        const data = this.entries.get(url);
-        return data && new Response(data.slice());
-    }
-
-    async put(url: string, response: Response): Promise<void> {
-        this.entries.set(url, new Uint8Array(await response.arrayBuffer()));
-    }
-
-    async delete(request: string | Request): Promise<boolean> {
-        return this.entries.delete(typeof request === "string" ? request : request.url);
-    }
-
-    async keys(): Promise<Request[]> {
-        return [...this.entries.keys()].map((url) => new Request(url));
-    }
-}
 
 const BASE = "https://game.test/caches/chunks/";
 

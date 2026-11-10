@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import "./NoticePanel.css";
 import { Notice } from "./notice";
 import { renderBold } from "./renderBold";
@@ -28,7 +29,7 @@ export function NoticePanel({ notice, onClose }: Props): JSX.Element {
                 </div>
                 <div className="ui-notice-close">
                     <button className="ui-button" onClick={onClose}>
-                        Got it
+                        {t("save.got_it")}
                     </button>
                 </div>
             </div>

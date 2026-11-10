@@ -25,6 +25,8 @@ export class BulletPool {
     readonly radius = new Float32Array(MAX_BULLETS);
     readonly damage = new Float32Array(MAX_BULLETS);
     readonly life = new Int32Array(MAX_BULLETS);
+    // Ticks it stays where it was fired before it moves (and before its life runs down)
+    readonly wait = new Int32Array(MAX_BULLETS);
     readonly startTick = new Int32Array(MAX_BULLETS);
     // Which of attacks fired it
     readonly source = new Uint16Array(MAX_BULLETS);
@@ -51,6 +53,7 @@ export class BulletPool {
         life: number,
         source: number,
         tick: number,
+        wait = 0,
     ): number {
         if (this.count === MAX_BULLETS) {
             return -1;
@@ -65,6 +68,7 @@ export class BulletPool {
         this.radius[slot] = radius;
         this.damage[slot] = damage;
         this.life[slot] = life;
+        this.wait[slot] = wait;
         this.source[slot] = source;
         this.startTick[slot] = tick;
         return slot;
@@ -75,7 +79,8 @@ export class BulletPool {
     // A spared target can't be hit, and they pass straight through it rather
     // than being used up.
     step(targets: readonly BulletTarget[]): void {
-        const { x, y, prevX, prevY, vx, vy, turnCos, turnSin, radius, life, order, hits } = this;
+        const { x, y, prevX, prevY, vx, vy, turnCos, turnSin, radius, life, wait, order, hits } =
+            this;
         hits.length = targets.length;
         hits.fill(-1);
         let i = 0;
@@ -83,16 +88,21 @@ export class BulletPool {
             const slot = order[i];
             prevX[slot] = x[slot];
             prevY[slot] = y[slot];
-            const cos = turnCos[slot];
-            if (cos !== 1) {
-                const sin = turnSin[slot];
-                const nextVx = vx[slot] * cos - vy[slot] * sin;
-                vy[slot] = vx[slot] * sin + vy[slot] * cos;
-                vx[slot] = nextVx;
+            if (wait[slot] > 0) {
+                // Still waiting where it was fired, but it hurts whoever walks into it
+                wait[slot]--;
+            } else {
+                const cos = turnCos[slot];
+                if (cos !== 1) {
+                    const sin = turnSin[slot];
+                    const nextVx = vx[slot] * cos - vy[slot] * sin;
+                    vy[slot] = vx[slot] * sin + vy[slot] * cos;
+                    vx[slot] = nextVx;
+                }
+                x[slot] += vx[slot];
+                y[slot] += vy[slot];
+                life[slot]--;
             }
-            x[slot] += vx[slot];
-            y[slot] += vy[slot];
-            life[slot]--;
             // The first of them it reaches that it hasn't hit yet this tick
             for (let t = 0; t < targets.length; t++) {
                 const target = targets[t];

@@ -14,8 +14,9 @@ import compass from "../../components/rs/minimap/compass.png";
 import minimapFrame from "../../components/rs/minimap/minimap-frame.png";
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { cloudKeepsCopy } from "../client/CloudSave";
 import { FRAME_RATES, FrameRate } from "../client/DisplaySettings";
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import { padLabel } from "../client/GamePad";
 import {
     BuffView,
@@ -30,8 +31,24 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
-import { ActDef, FALLEN_EMPIRE, getAct, getActMapIds, getActStep } from "../content/acts";
-import { CHARACTERS, getCharacter } from "../content/characters";
+import {
+    ActDef,
+    FALLEN_EMPIRE,
+    actName,
+    actSlotBoss,
+    actSlotName,
+    getAct,
+    getActMapIds,
+    getActStep,
+} from "../content/acts";
+import {
+    CHARACTERS,
+    characterDescription,
+    characterName,
+    getCharacter,
+} from "../content/characters";
+import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
+import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     CAMPAIGN_MAPS,
     DEV_MAPS,
@@ -43,21 +60,28 @@ import {
     SEASONAL_MAPS,
     getMap,
     getMapCharacter,
+    mapDescription,
+    mapFinalBossWarning,
+    mapName,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
-import { SHOP_UPGRADES } from "../content/shop";
+import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
+import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
-import { TROPHY_BY_ID } from "../content/trophies";
+import { SCABARAS } from "../content/tombs";
+import { TROPHY_BY_ID, trophyName } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
-import { WeaponStatLine } from "../content/weaponStats";
-import { WEAPONS, getWeapon } from "../content/weapons";
-import type { RaidChest } from "../core/Sim";
+import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
+import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
+import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
+    getFightStage,
     getNextUpgradeCost,
+    getReachedStages,
     getSkillCoins,
     importSave,
     isEndlessUnlocked,
@@ -65,25 +89,33 @@ import {
     isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
+import { dateLocale, fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
+import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
+import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
+import { InvocationBoard, InvocationsButton } from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
+import { LanguageNotice } from "./LanguageNotice";
+import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
+import { StatLine } from "./StatLine";
+import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
@@ -117,12 +149,18 @@ function useUiScale(): number {
 }
 
 export function GameUi({ store, client }: Props): JSX.Element {
+    useLang();
     const ui = useSyncExternalStore(store.subscribe, store.getSnapshot);
     const scale = useUiScale();
 
     if (ui.screen === "loading" || !client) {
         return (
-            <div className="ui-fill ui-center ui-loading">
+            <div
+                className="ui-fill ui-center ui-loading"
+                // The opening cinematic's squares loading: a click or tap skips it, as it would
+                // once it plays
+                onPointerDown={ui.cinematic && client ? () => client.skipCinematic() : undefined}
+            >
                 <OsrsLoadingBar text={ui.loadingText} progress={ui.loadingProgress} />
             </div>
         );
@@ -169,8 +207,10 @@ export function GameUi({ store, client }: Props): JSX.Element {
             onClickCapture={onClickCapture}
         >
             {screen}
-            {ui.saveBlock && !ui.saveBlockClosed && (
+            {ui.saveBlock && !ui.saveBlockClosed ? (
                 <SaveBlockPanel block={ui.saveBlock} client={client} />
+            ) : (
+                <LanguageNotice />
             )}
             {isCoarsePointer && <RotateNotice />}
         </div>
@@ -220,7 +260,7 @@ export function Toggle({
                 e.currentTarget.blur();
             }}
         >
-            {on ? "On" : "Off"}
+            {on ? t("ui.common.on") : t("ui.common.off")}
         </button>
     );
 }
@@ -235,20 +275,24 @@ function SoundSettings({
     return (
         <>
             <Setting
-                name="Sound"
-                text={isCoarsePointer ? undefined : "M turns it on and off at any time"}
+                name={t("settings.sound.name")}
+                text={isCoarsePointer ? undefined : t("settings.sound.hint")}
             >
-                <Toggle on={!muted} label="Sound" onToggle={() => client.toggleMute()} />
+                <Toggle
+                    on={!muted}
+                    label={t("settings.sound.name")}
+                    onToggle={() => client.toggleMute()}
+                />
             </Setting>
             <VolumeSetting
-                name="Volume"
+                name={t("settings.volume.name")}
                 value={volume}
                 muted={muted}
                 onChange={(value) => client.setVolume(value)}
             />
             {music && (
                 <VolumeSetting
-                    name="Music"
+                    name={t("settings.music.name")}
                     value={ui.audio.music}
                     muted={muted}
                     onChange={(value) => client.setMusicVolume(value)}
@@ -290,12 +334,16 @@ function VolumeSetting({
 function AutoPauseSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
         <Setting
-            name="Auto-pause"
-            text={`Pause the run when you ${isCoarsePointer ? "leave" : "click away from"} the game`}
+            name={t("settings.auto_pause.name")}
+            text={t(
+                isCoarsePointer
+                    ? "settings.auto_pause.desc.touch"
+                    : "settings.auto_pause.desc.mouse",
+            )}
         >
             <Toggle
                 on={ui.display.pauseOnBlur}
-                label="Auto-pause"
+                label={t("settings.auto_pause.name")}
                 onToggle={() => client.toggleAutoPause()}
             />
         </Setting>
@@ -304,14 +352,33 @@ function AutoPauseSetting({ ui, client }: ScreenProps): JSX.Element {
 
 function PickupTimerSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
-        <Setting
-            name="Power-up timers"
-            text="A circle over each power-up on the ground shows how long it has left"
-        >
+        <Setting name={t("settings.pickup_timers.name")} text={t("settings.pickup_timers.desc")}>
             <Toggle
                 on={ui.display.pickupTimers}
-                label="Power-up timers"
+                label={t("settings.pickup_timers.name")}
                 onToggle={() => client.togglePickupTimers()}
+            />
+        </Setting>
+    );
+}
+
+// The Scabaras room's puzzle helper: on at Entry, and at any raid level once the room's been
+// beaten (SaveData.scabarasBeaten). The toggle's always there, so it can be turned off at Entry too.
+function PuzzleHelperSetting({ ui, client }: ScreenProps): JSX.Element {
+    const unlocked = ui.save.scabarasBeaten === true;
+    return (
+        <Setting
+            name="Puzzle helper"
+            text={
+                unlocked
+                    ? "In the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA plugin does"
+                    : "In the Tombs of Amascut's Scabaras room, marks what to step on: at Entry for now, at any raid level once you've beaten the room"
+            }
+        >
+            <Toggle
+                on={ui.display.puzzleHelper}
+                label="Puzzle helper"
+                onToggle={() => client.togglePuzzleHelper()}
             />
         </Setting>
     );
@@ -319,10 +386,10 @@ function PickupTimerSetting({ ui, client }: ScreenProps): JSX.Element {
 
 function AutoAlchSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
-        <Setting name="Auto alch" text="High alch every casket as you open it, without stopping">
+        <Setting name={t("settings.auto_alch.name")} text={t("settings.auto_alch.desc")}>
             <Toggle
                 on={ui.display.autoAlch}
-                label="Auto alch"
+                label={t("settings.auto_alch.name")}
                 onToggle={() => client.toggleAutoAlch()}
             />
         </Setting>
@@ -332,12 +399,12 @@ function AutoAlchSetting({ ui, client }: ScreenProps): JSX.Element {
 function MovePredictionSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
         <Setting
-            name="Movement prediction"
-            text="Joining a co-op game, you move as soon as you press, then correct to the host"
+            name={t("settings.movement_prediction.name")}
+            text={t("settings.movement_prediction.desc")}
         >
             <Toggle
                 on={ui.display.movePrediction}
-                label="Movement prediction"
+                label={t("settings.movement_prediction.name")}
                 onToggle={() => client.toggleMovePrediction()}
             />
         </Setting>
@@ -346,13 +413,10 @@ function MovePredictionSetting({ ui, client }: ScreenProps): JSX.Element {
 
 function CoopFlagSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
-        <Setting
-            name="Co-op flag"
-            text="Other co-op players see your country's flag (an open room shows its host's either way)"
-        >
+        <Setting name={t("settings.coop_flag.name")} text={t("settings.coop_flag.desc")}>
             <Toggle
                 on={ui.display.coopFlag}
-                label="Co-op flag"
+                label={t("settings.coop_flag.name")}
                 onToggle={() => client.toggleCoopFlag()}
             />
         </Setting>
@@ -365,13 +429,10 @@ function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
         return null;
     }
     return (
-        <Setting
-            name="Share run stats"
-            text="When a run ends, send its map, mode, adventurers and result, with no name or save, to help balance the game"
-        >
+        <Setting name={t("settings.run_stats.name")} text={t("settings.run_stats.desc")}>
             <Toggle
                 on={ui.display.runStats}
-                label="Share run stats"
+                label={t("settings.run_stats.name")}
                 onToggle={() => client.toggleRunStats()}
             />
         </Setting>
@@ -380,32 +441,19 @@ function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
 
 function AutoEquipSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
-        <Setting
-            name="Auto equip"
-            text="Equip casket gear into empty slots or when no bonus drops and at least one improves. Always ask before replacing a set piece. Auto alch takes priority."
-        >
+        <Setting name={t("settings.auto_equip.name")} text={t("settings.auto_equip.desc")}>
             <Toggle
                 on={ui.display.autoEquip}
-                label="Auto equip"
+                label={t("settings.auto_equip.name")}
                 onToggle={() => client.toggleAutoEquip()}
             />
         </Setting>
     );
 }
 
-const FRAME_RATE_NAMES: Record<FrameRate, string> = {
-    auto: "Auto",
-    "30": "30",
-    "60": "60",
-    unlimited: "Unlimited",
-};
-
 function FrameRateSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
-        <Setting
-            name="Frame rate"
-            text="Frames a second at most. Auto is 60 on a phone or tablet, as many as the screen shows otherwise"
-        >
+        <Setting name={t("settings.frame_rate.name")} text={t("settings.frame_rate.desc")}>
             {FRAME_RATES.map((rate) => (
                 <button
                     key={rate}
@@ -420,7 +468,7 @@ function FrameRateSetting({ ui, client }: ScreenProps): JSX.Element {
                         e.currentTarget.blur();
                     }}
                 >
-                    {FRAME_RATE_NAMES[rate]}
+                    {t(`settings.frame_rate.${rate}`)}
                 </button>
             ))}
         </Setting>
@@ -438,8 +486,8 @@ function GitHubLink(): JSX.Element {
             href={GITHUB_REPOSITORY}
             target="_blank"
             rel="noopener noreferrer"
-            title="See the code on GitHub"
-            aria-label="See the code on GitHub"
+            title={t("ui.title.github")}
+            aria-label={t("ui.title.github")}
             onClick={(e) => e.currentTarget.blur()}
         >
             <svg className="ui-title-link-logo" viewBox="0 0 24 24" aria-hidden="true">
@@ -456,8 +504,8 @@ function DiscordLink(): JSX.Element {
             href={DISCORD_INVITE}
             target="_blank"
             rel="noopener noreferrer"
-            title="Join the Discord"
-            aria-label="Join the Discord"
+            title={t("ui.title.discord")}
+            aria-label={t("ui.title.discord")}
             onClick={(e) => e.currentTarget.blur()}
         >
             <svg className="ui-title-link-logo" viewBox="0 0 24 24" aria-hidden="true">
@@ -479,9 +527,7 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
         }
         // Nothing's being saved, so an import wouldn't be kept
         if (ui.saveBlock) {
-            window.alert(
-                "The game isn't saving right now (see the notice on the title screen), so an imported save wouldn't be kept.",
-            );
+            window.alert(t("settings.save.alert_save_block"));
             return;
         }
         let save: SaveData;
@@ -490,26 +536,29 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
         } catch (e) {
             window.alert(
                 e instanceof NewerSaveError
-                    ? `${file.name} is from a newer version of Run Escape. Reload to get it, then import.`
-                    : `${file.name} isn't a Run Escape save.`,
+                    ? t("settings.save.newer_version", { file: file.name })
+                    : t("settings.save.invalid_file", { file: file.name }),
             );
             return;
         }
         const describe = (s: SaveData) =>
-            `${s.coins.toLocaleString()} coins, ${s.runs} runs, ${s.victories} wins`;
+            t("settings.save.describe", {
+                coins: fmtNum(s.coins),
+                runs: s.runs,
+                wins: s.victories,
+            });
         const replace = window.confirm(
-            `Replace your save (${describe(ui.save)}) with this one (${describe(save)})?\n\n` +
-                "Export yours first if you want to keep it.",
+            t("settings.save.confirm_replace", {
+                current: describe(ui.save),
+                imported: describe(save),
+            }),
         );
         if (replace) {
             client.replaceSave(save);
         }
     };
     return (
-        <Setting
-            name="Your progress"
-            text="Kept in this browser. Export a copy to keep it safe or take it to another one."
-        >
+        <Setting name={t("settings.save.name")} text={t("settings.save.desc")}>
             <button
                 className="ui-button ui-button-small"
                 onClick={(e) => {
@@ -517,18 +566,18 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                     e.currentTarget.blur();
                 }}
             >
-                Export
+                {t("settings.save.export")}
             </button>
             <button
                 className="ui-button ui-button-small"
                 disabled={ui.saveBlock !== undefined}
-                title={ui.saveBlock && "Nothing's being saved right now, so it wouldn't be kept"}
+                title={ui.saveBlock ? t("settings.save.import_disabled_title") : undefined}
                 onClick={(e) => {
                     fileInput.current?.click();
                     e.currentTarget.blur();
                 }}
             >
-                Import
+                {t("settings.save.import")}
             </button>
             <input
                 ref={fileInput}
@@ -546,12 +595,12 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
     return (
         <>
             {ui.unreadableSaves.map(({ key, time }) => {
-                const when = new Date(time).toLocaleString();
+                const when = new Date(time).toLocaleString(dateLocale());
                 return (
                     <Setting
                         key={key}
-                        name="Unreadable save"
-                        text={`From ${when}. Export it to mend by hand or ask for help on the Discord.`}
+                        name={t("settings.unreadable.name")}
+                        text={t("settings.unreadable.desc", { when })}
                     >
                         <button
                             className="ui-button ui-button-small"
@@ -560,18 +609,22 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
                                 e.currentTarget.blur();
                             }}
                         >
-                            Export
+                            {t("settings.save.export")}
                         </button>
                         <button
                             className="ui-button ui-button-small"
                             onClick={(e) => {
                                 e.currentTarget.blur();
-                                if (window.confirm(`Delete the save from ${when} for good?`)) {
+                                if (
+                                    window.confirm(
+                                        t("settings.unreadable.confirm_delete", { when }),
+                                    )
+                                ) {
                                     client.deleteUnreadableSave(key);
                                 }
                             }}
                         >
-                            Delete
+                            {t("settings.unreadable.delete")}
                         </button>
                     </Setting>
                 );
@@ -589,32 +642,37 @@ function SettingsPanel({
     const padKind = usePadKind();
     return (
         <div className="ui-panel rs-border rs-background ui-settings">
-            <h2>Settings</h2>
+            <h2>{t("settings.title")}</h2>
             <div className="ui-settings-body">
                 <section className="ui-settings-section">
-                    <h3>Sound</h3>
+                    <h3>{t("settings.section.sound")}</h3>
                     <SoundSettings ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
-                    <h3>Game</h3>
+                    <h3>{t("settings.section.game")}</h3>
+                    <LanguageSetting />
                     <Setting
-                        name="Camera spin"
-                        text="The camera circles your adventurer on the menus"
+                        name={t("settings.camera_spin.name")}
+                        text={t("settings.camera_spin.desc")}
                     >
                         <Toggle
                             on={ui.display.menuSpin}
-                            label="Camera spin"
+                            label={t("settings.camera_spin.name")}
                             onToggle={() => client.toggleMenuSpin()}
                         />
                     </Setting>
-                    <Setting name="Screen shake" text="The camera shakes when a boss's blow lands">
+                    <Setting
+                        name={t("settings.screen_shake.name")}
+                        text={t("settings.screen_shake.desc")}
+                    >
                         <Toggle
                             on={ui.display.screenShake}
-                            label="Screen shake"
+                            label={t("settings.screen_shake.name")}
                             onToggle={() => client.toggleScreenShake()}
                         />
                     </Setting>
                     <PickupTimerSetting ui={ui} client={client} />
+                    <PuzzleHelperSetting ui={ui} client={client} />
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
                     <AutoEquipSetting ui={ui} client={client} />
@@ -625,19 +683,20 @@ function SettingsPanel({
                 </section>
                 {padKind && (
                     <section className="ui-settings-section">
-                        <h3>Controller</h3>
+                        <h3>{t("settings.section.controller")}</h3>
                         <PadControls />
                     </section>
                 )}
                 <section className="ui-settings-section">
-                    <h3>Save</h3>
+                    <h3>{t("settings.section.save")}</h3>
                     <SaveSetting ui={ui} client={client} />
+                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
                     <UnreadableSaveSettings ui={ui} client={client} />
                 </section>
             </div>
             <div className="ui-row">
                 <button className="ui-button" onClick={onClose}>
-                    Back
+                    {t("ui.common.back")}
                 </button>
             </div>
         </div>
@@ -677,8 +736,12 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     // The panel saying the game isn't saving is over everything, so the title's
     // own wait till it's gone
     const savePanel = ui.saveBlock !== undefined && !ui.saveBlockClosed;
+    // The cloud has a different save, and asks which to keep
+    const cloudChoice = ui.cloud?.choice !== undefined && !ui.cloud.choice.closed;
     const [changelogOpen, setChangelogOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    // Cloud save's own panel, from its button
+    const [cloudOpen, setCloudOpen] = useState(false);
     // The notice, until it's closed (once for each new one)
     const [notice, setNotice] = useState<Notice>();
     useEffect(() => {
@@ -702,6 +765,10 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         const onKey = (e: KeyboardEvent) => {
             if (savePanel) {
                 return;
+            } else if (cloudChoice) {
+                if (e.code === "Escape") {
+                    client.cloud?.later();
+                }
             } else if (ui.unreadableSave) {
                 if (e.code === "Escape") {
                     client.closeUnreadableNotice();
@@ -710,10 +777,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 if (e.code === "Enter" || e.code === "Space" || e.code === "Escape") {
                     closeNotice();
                 }
-            } else if (changelogOpen || settingsOpen) {
+            } else if (changelogOpen || settingsOpen || cloudOpen) {
                 if (e.code === "Escape") {
                     setChangelogOpen(false);
                     setSettingsOpen(false);
+                    setCloudOpen(false);
                 }
             } else if (
                 e.code === "Space" ||
@@ -725,11 +793,28 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [client, changelogOpen, settingsOpen, notice, closeNotice, ui.unreadableSave, savePanel]);
+    }, [
+        client,
+        changelogOpen,
+        settingsOpen,
+        cloudOpen,
+        notice,
+        closeNotice,
+        ui.unreadableSave,
+        savePanel,
+        cloudChoice,
+    ]);
+    // Over the title's own panels too: Sync now or a code linked from Settings or cloud save's
+    // panel can be what asks
+    const choicePanel =
+        !savePanel && cloudChoice && ui.cloud ? (
+            <CloudChoicePanel cloud={ui.cloud} save={save} client={client} />
+        ) : undefined;
     if (changelogOpen) {
         return (
             <div className="ui-fill ui-center">
                 <ChangelogPanel onClose={() => setChangelogOpen(false)} />
+                {choicePanel}
             </div>
         );
     }
@@ -737,6 +822,20 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         return (
             <div className="ui-fill ui-center">
                 <SettingsPanel ui={ui} client={client} onClose={() => setSettingsOpen(false)} />
+                {choicePanel}
+            </div>
+        );
+    }
+    if (cloudOpen) {
+        return (
+            <div className="ui-fill ui-center">
+                <CloudSavePanel
+                    cloud={ui.cloud}
+                    client={client}
+                    saving={!ui.saveBlock}
+                    onClose={() => setCloudOpen(false)}
+                />
+                {choicePanel}
             </div>
         );
     }
@@ -744,10 +843,7 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
         <div className="ui-fill ui-title">
             <div className="ui-title-logo">
                 <h1>Run Escape</h1>
-                <p>
-                    Survive fifteen minutes and beat the boss. Wins and tasks bring new places and
-                    adventurers.
-                </p>
+                <p>{t("ui.title.tagline")}</p>
             </div>
             <div className="ui-title-bottom">
                 <div className="ui-panel rs-border rs-background ui-title-menu">
@@ -759,50 +855,57 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                                 client.showScreen("characters");
                             }}
                         >
-                            Singleplayer
+                            {t("ui.title.singleplayer")}
                         </button>
                         {ui.coop.available && (
                             <button
                                 className="ui-button ui-button-big"
                                 onClick={() => client.openCoop()}
                             >
-                                Multiplayer
+                                {t("ui.title.multiplayer")}
                             </button>
                         )}
                     </div>
                     <div className="ui-title-tiles">
                         <TitleTile
-                            name="Skills"
+                            name={t("ui.title.skills")}
                             spriteId={TITLE_TAB_SPRITES.skills}
                             onClick={() => client.showScreen("shop")}
                         />
                         <TitleTile
-                            name="Armoury"
+                            name={t("ui.title.armoury")}
                             spriteId={TITLE_TAB_SPRITES.armoury}
                             onClick={() => client.showScreen("armoury")}
                         />
                         <TitleTile
-                            name="Quests"
+                            name={t("ui.title.quests")}
                             spriteId={TITLE_TAB_SPRITES.quests}
                             onClick={() => client.showScreen("quests")}
                         />
                         <TitleTile
-                            name="Collection log"
+                            name={t("ui.title.collection_log")}
                             objId={COLLECTION_LOG_OBJ}
                             onClick={() => client.showScreen("collectionLog")}
                         />
                     </div>
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
-                        <TitleStat name="Runs" value={save.runs} />
-                        <TitleStat name="Wins" value={save.victories} />
-                        <TitleStat name="Best" value={formatTime(save.bestSeconds)} />
-                        <TitleStat name="Best level" value={save.bestLevel} />
+                        <TitleStat name={t("ui.title.stat.runs")} value={save.runs} />
+                        <TitleStat name={t("ui.title.stat.wins")} value={save.victories} />
+                        <TitleStat
+                            name={t("ui.title.stat.best")}
+                            value={formatTime(save.bestSeconds)}
+                        />
+                        <TitleStat name={t("ui.title.stat.best_level")} value={save.bestLevel} />
                     </div>
                 </div>
                 {/* Under the menu, so a controller's highlight still starts on
                     Singleplayer; not while nothing's saving, as that panel comes first */}
-                {!ui.saveBlock && <ExportReminder save={save} client={client} />}
+                {/* Nor while cloud save has a copy: only while it's on, synced, and nothing's
+                    wrong, as a code that's stopped working keeps none */}
+                {!ui.saveBlock && !cloudKeepsCopy(ui.cloud) && (
+                    <ExportReminder save={save} client={client} />
+                )}
                 <TitleHint />
             </div>
             <div className="ui-title-utils">
@@ -811,17 +914,23 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         className="ui-version ui-save-off"
                         onClick={() => client.showSaveBlock()}
                     >
-                        Not saving
+                        {t("ui.title.not_saving")}
                     </button>
                 )}
                 {import.meta.env.DEV && <MapGeneratorButton client={client} />}
                 <button className="ui-version" onClick={() => setChangelogOpen(true)}>
-                    v{GAME_VERSION} · What's new
+                    {t("ui.title.whats_new", { version: GAME_VERSION })}
                 </button>
+                <TitleLanguageMenu />
+                <CloudSaveButton
+                    cloud={ui.cloud}
+                    client={client}
+                    onOpen={() => setCloudOpen(true)}
+                />
                 <button
                     className="ui-title-link ui-title-settings"
-                    title="Settings"
-                    aria-label="Settings"
+                    title={t("ui.title.settings")}
+                    aria-label={t("ui.title.settings")}
                     onClick={() => setSettingsOpen(true)}
                 >
                     <ItemIcon objId={-1} spriteId={TITLE_TAB_SPRITES.settings} />
@@ -829,7 +938,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <DiscordLink />
                 <GitHubLink />
             </div>
-            {savePanel ? null : ui.unreadableSave ? (
+            {savePanel ? null : choicePanel ? (
+                choicePanel
+            ) : ui.unreadableSave ? (
                 <UnreadableSavePanel keptAs={ui.unreadableSave} client={client} />
             ) : (
                 notice && <NoticePanel notice={notice} onClose={closeNotice} />
@@ -838,11 +949,14 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
-const STYLE_NAMES: Record<CombatStyle, string> = {
-    melee: "Melee",
-    ranged: "Ranged",
-    magic: "Magic",
-};
+function getStyleName(style: CombatStyle): string {
+    return t(`ui.combat.${style}`);
+}
+
+const STYLE_NAMES = new Proxy({} as Record<CombatStyle, string>, {
+    get: (_, prop: string) =>
+        prop === "melee" || prop === "ranged" || prop === "magic" ? getStyleName(prop) : undefined,
+});
 
 const STYLES: CombatStyle[] = ["melee", "ranged", "magic"];
 
@@ -863,17 +977,18 @@ function TitleHint(): JSX.Element {
     if (pad) {
         return (
             <div className="ui-hint ui-hint-pad">
-                <PadIcon kind={pad} icon="move" label="Left stick" /> to move · weapons fire on
-                their own · <PadIcon kind={pad} icon="start" label={padLabel(pad, "start")} /> to
-                pause · <PadIcon kind={pad} icon="south" label={padLabel(pad, "south")} /> to pick
+                <PadIcon kind={pad} icon="move" label={t("ui.hint.left_stick")} />{" "}
+                {t("ui.hint.to_move")} · {t("ui.hint.weapons_fire")} ·{" "}
+                <PadIcon kind={pad} icon="start" label={padLabel(pad, "start")} />{" "}
+                {t("ui.hint.to_pause")} ·{" "}
+                <PadIcon kind={pad} icon="south" label={padLabel(pad, "south")} />{" "}
+                {t("ui.hint.to_pick")}
             </div>
         );
     }
     return (
         <div className="ui-hint">
-            {isCoarsePointer
-                ? "Drag anywhere to move · weapons fire on their own"
-                : "WASD to move · weapons fire on their own · Esc to pause · M to mute"}
+            {isCoarsePointer ? t("ui.hint.touch") : t("ui.hint.keyboard")}
         </div>
     );
 }
@@ -881,30 +996,50 @@ function TitleHint(): JSX.Element {
 // Adventurers on the left and maps on the right, so the adventurer picked
 // stands in view between them
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
+    const map = getMap(ui.mapId);
+    const [board, setBoard] = useState(false);
+    const shownMapName = mapName(getMap(ui.mapId));
+    // A raid's expert mode, solo only for now (GameClient.toggleExpert)
+    const expertShown = map.raid !== undefined && ui.coop.status === "offline";
+    const endlessShown = ui.endless && !map.fun && !map.tombs;
+    const mode = !map.tombs && ui.hard ? (ui.expert && expertShown ? "expert" : "hard") : undefined;
+    const enterKey = mode
+        ? endlessShown
+            ? `ui.select.enter.${mode}_endless`
+            : `ui.select.enter.${mode}`
+        : endlessShown
+          ? "ui.select.enter.endless"
+          : "ui.select.enter";
     return (
         <div className="ui-fill ui-select">
-            <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(getMap(ui.mapId))} />
+            <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(map)} />
             <MapPanel ui={ui} client={client} />
             <div className="ui-panel rs-border rs-background ui-select-bar">
                 <button className="ui-button" onClick={() => client.showScreen("title")}>
-                    Back
+                    {t("ui.common.back")}
                 </button>
                 <Coins amount={ui.save.coins} />
-                {/* A raid ends with its last room: no endless */}
-                {!getMap(ui.mapId).raid && <EndlessSwitch ui={ui} client={client} />}
-                <HardSwitch ui={ui} client={client} />
-                {getMap(ui.mapId).raid && ui.coop.status === "offline" && (
-                    <ExpertSwitch ui={ui} client={client} />
+                {map.tombs ? (
+                    // The Tombs go by their invocations instead of endless and hard mode
+                    <InvocationsButton ui={ui} onOpen={() => setBoard(true)} />
+                ) : (
+                    <>
+                        {/* A raid ends with its last room: no endless */}
+                        {!map.raid && <EndlessSwitch ui={ui} client={client} />}
+                        <HardSwitch ui={ui} client={client} />
+                        {expertShown && <ExpertSwitch ui={ui} client={client} />}
+                    </>
                 )}
                 <button
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
-                    <KeyHint pad="start" /> Enter {getMap(ui.mapId).name}
-                    {ui.hard && " hard"}
-                    {ui.endless && !getMap(ui.mapId).fun && " endless"}
+                    <KeyHint pad="start" /> {t(enterKey, { map: shownMapName })}
                 </button>
             </div>
+            {board && map.tombs && (
+                <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            )}
         </div>
     );
 }
@@ -912,22 +1047,20 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
 // Endless runs for the map picked, once it's been beaten (fun maps are
 // always endless, and a boss fight never is)
 function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
+    const shownMapName = mapName(getMap(ui.mapId));
     if (getMap(ui.mapId).fight) {
         return (
-            <div className="ui-endless" title="A boss fight is over when she is.">
-                <span className="ui-endless-name">Endless</span>
-                <span className="ui-endless-hint">One fight</span>
+            <div className="ui-endless" title={t("ui.endless.tooltip.fight")}>
+                <span className="ui-endless-name">{t("ui.endless.name")}</span>
+                <span className="ui-endless-hint">{t("ui.endless.one_fight")}</span>
             </div>
         );
     }
     if (getMap(ui.mapId).fun) {
         return (
-            <div
-                className="ui-endless"
-                title="Fun maps are endless: a new round every fifteen minutes."
-            >
-                <span className="ui-endless-name">Endless</span>
-                <span className="ui-endless-hint">Always</span>
+            <div className="ui-endless" title={t("ui.endless.tooltip.fun")}>
+                <span className="ui-endless-name">{t("ui.endless.name")}</span>
+                <span className="ui-endless-hint">{t("ui.endless.always")}</span>
             </div>
         );
     }
@@ -937,16 +1070,19 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             className={"ui-endless" + (open ? "" : " ui-endless-locked")}
             title={
                 open
-                    ? "Round after round, each tougher than the last, until you fall. " +
-                      "Your weapons, passives and gear keep getting stronger too."
-                    : `Beat ${getMap(ui.mapId).name} to play it endless`
+                    ? t("ui.endless.tooltip.open")
+                    : t("ui.endless.tooltip.locked", { map: shownMapName })
             }
         >
-            <span className="ui-endless-name">Endless</span>
+            <span className="ui-endless-name">{t("ui.endless.name")}</span>
             {open ? (
-                <Toggle on={ui.endless} label="Endless" onToggle={() => client.toggleEndless()} />
+                <Toggle
+                    on={ui.endless}
+                    label={t("ui.endless.name")}
+                    onToggle={() => client.toggleEndless()}
+                />
             ) : (
-                <span className="ui-endless-hint">Beat the map</span>
+                <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
             )}
         </div>
     );
@@ -956,21 +1092,25 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
 // fun maps)
 function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isHardUnlocked(ui.save, ui.mapId);
+    const shownMapName = mapName(getMap(ui.mapId));
     return (
         <div
             className={"ui-endless" + (open ? "" : " ui-endless-locked")}
             title={
                 open
-                    ? "More enemies, tougher and harder hitting, twice the elites, and bosses " +
-                      "that enrage sooner and attack faster. Coins are worth 25% more."
-                    : `Beat ${getMap(ui.mapId).name} to play it on hard`
+                    ? t("ui.hard.tooltip.open")
+                    : t("ui.hard.tooltip.locked", { map: shownMapName })
             }
         >
-            <span className="ui-endless-name">Hard</span>
+            <span className="ui-endless-name">{t("ui.hard.name")}</span>
             {open ? (
-                <Toggle on={ui.hard} label="Hard" onToggle={() => client.toggleHard()} />
+                <Toggle
+                    on={ui.hard}
+                    label={t("ui.hard.name")}
+                    onToggle={() => client.toggleHard()}
+                />
             ) : (
-                <span className="ui-endless-hint">Beat the map</span>
+                <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
             )}
         </div>
     );
@@ -985,25 +1125,21 @@ function RaidObjective({
     room: NonNullable<HudNumbers["raidRoom"]>;
     bossIn: number;
 }): JSX.Element {
-    const boss = room.name.replace(/^The /, "the ");
+    const bossName = tl(room.name);
+    const boss = getLang() === "en" ? bossName.replace(/^The /, "the ") : bossName;
     return (
         <div
             className={
                 bossIn <= 60 ? "ui-raid-objective ui-raid-objective-soon" : "ui-raid-objective"
             }
         >
-            <div>
-                Survive the waves: {boss} in {formatTime(Math.ceil(bossIn))}
-            </div>
+            <div>{t("ui.raid.survive_waves", { boss, time: formatTime(Math.ceil(bossIn)) })}</div>
             {room.portal && (
-                <div className="ui-raid-objective-hint">
-                    Or step into the portal to face {boss} now
-                </div>
+                <div className="ui-raid-objective-hint">{t("ui.raid.portal_hint", { boss })}</div>
             )}
             {room.first && room.number === 1 && (
                 <div className="ui-raid-objective-hint">
-                    {room.count} rooms, each with its waves and then its boss. Kill the boss to move
-                    on.
+                    {t("ui.raid.first_room_hint", { count: room.count })}
                 </div>
             )}
         </div>
@@ -1013,26 +1149,135 @@ function RaidObjective({
 // The chest at the end of a raid: what it was rolled with, and what came out
 function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
     const found = chest.found.map((id) => TROPHY_BY_ID.get(id)!).filter(Boolean);
+    // The Tombs' pet, Thread and jewels aren't purples
+    const purple = found.some((t) => t.from.kind !== "tombs" || t.from.weight !== undefined);
     return (
         <div className="ui-raid-chest">
             <div className="ui-raid-chest-title">
-                {found.length > 0 ? "A purple chest!" : "The raid's chest"}
+                {purple ? t("ui.raid.chest.purple") : t("ui.raid.chest.regular")}
             </div>
             <div className="ui-subtle">
-                {chest.points.toLocaleString("en-GB")} raid points: a{" "}
-                {Math.round(chest.chance * 100)}% chance of a unique
+                {t(
+                    chest.level !== undefined
+                        ? "ui.raid.chest.points_level"
+                        : "ui.raid.chest.points",
+                    {
+                        points: fmtNum(chest.points),
+                        level: chest.level ?? 0,
+                        chance: Math.round(chest.chance * 100),
+                    },
+                )}
             </div>
             {found.length > 0 ? (
                 <div className="ui-raid-chest-items">
                     {found.map((trophy) => (
                         <span key={trophy.id} className="ui-raid-chest-item">
                             <ItemIcon objId={trophy.objId} size={36} />
-                            {trophy.name}
+                            {trophyName(trophy)}
                         </span>
                     ))}
                 </div>
             ) : (
-                <div className="ui-subtle">No unique this time.</div>
+                <div className="ui-subtle">{t("ui.raid.chest.no_unique")}</div>
+            )}
+        </div>
+    );
+}
+
+// The Tombs of Amascut's board at the end, as OSRS's raid summary has it: the raid level and the
+// invocations that made it, each path's time and the Wardens', and the party's points and deaths
+function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
+    const band = getRaidBand(tombs.level);
+    const total =
+        tombs.paths.reduce((sum, path) => sum + path.seconds, 0) + (tombs.wardensSeconds ?? 0);
+    const party = tombs.party.reduce((sum, player) => sum + player.points, 0);
+    return (
+        <div className="ui-tombs-board">
+            <div className="ui-tombs-board-level">
+                <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={32} />
+                <span>
+                    Raid level <b>{tombs.level}</b> ({band})
+                </span>
+            </div>
+            {tombs.invocations.length > 0 && (
+                <div className="ui-tombs-board-invocations" aria-label="Invocations">
+                    {tombs.invocations.map((id) => {
+                        const invocation = INVOCATION_BY_ID.get(id);
+                        return invocation ? (
+                            <span key={id} title={invocation.name}>
+                                <ItemIcon objId={-1} spriteId={invocation.icon} size={24} />
+                            </span>
+                        ) : null;
+                    })}
+                </div>
+            )}
+            <div className="ui-tombs-board-columns">
+                <table className="ui-tombs-board-table">
+                    <thead>
+                        <tr>
+                            <th>Room</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tombs.paths.map((path) => (
+                            <tr key={path.id}>
+                                <td>{path.name}</td>
+                                <td>{formatTime(path.seconds)}</td>
+                            </tr>
+                        ))}
+                        {tombs.wardensSeconds !== undefined && (
+                            <tr>
+                                <td>The Wardens</td>
+                                <td>{formatTime(tombs.wardensSeconds)}</td>
+                            </tr>
+                        )}
+                        <tr className="ui-tombs-board-total">
+                            <td>Total</td>
+                            <td>{formatTime(total)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <table className="ui-tombs-board-table">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Points</th>
+                            <th>Deaths</th>
+                            <th>Purple</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tombs.party.map((player, i) => (
+                            <tr key={i} className={player.you ? "ui-tombs-board-you" : undefined}>
+                                <td>{player.name || "You"}</td>
+                                <td>{player.points.toLocaleString("en-GB")}</td>
+                                <td>{player.deaths}</td>
+                                <td>{Math.round(player.chance * 100)}%</td>
+                            </tr>
+                        ))}
+                        {tombs.party.length > 1 && (
+                            <tr className="ui-tombs-board-total">
+                                <td>Party</td>
+                                <td>{party.toLocaleString("en-GB")}</td>
+                                <td>{tombs.party.reduce((sum, p) => sum + p.deaths, 0)}</td>
+                                <td />
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            {tombs.timeLimit && (
+                <div className="ui-subtle">
+                    {tombs.timeLimit.met
+                        ? `Inside the ${tombs.timeLimit.minutes} minute time limit.`
+                        : `Past the ${tombs.timeLimit.minutes} minute time limit: the chest goes by raid level ${Math.max(0, tombs.level - tombs.timeLimit.drop)}.`}
+                </div>
+            )}
+            {tombs.wipes > 0 && (
+                <div className="ui-subtle">
+                    The party died {tombs.wipes} {tombs.wipes === 1 ? "time" : "times"}.
+                </div>
             )}
         </div>
     );
@@ -1042,22 +1287,25 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
 // their own style
 function ExpertSwitch({ ui, client }: ScreenProps): JSX.Element {
     const open = isExpertUnlocked(ui.save, ui.mapId);
+    const shownMapName = mapName(getMap(ui.mapId));
     return (
         <div
             className={"ui-endless" + (open ? "" : " ui-endless-locked")}
             title={
                 open
-                    ? "Hard mode, and the Nylocas only take damage from their own style: grey " +
-                      "melee, green ranged, blue magic. Nylocas Vasilias changes colour. Bring " +
-                      "all three. Twice the coins, and one of Lil' Zik's looks each clear."
-                    : `Beat ${getMap(ui.mapId).name} on hard to play it on expert`
+                    ? t("ui.expert.tooltip.open")
+                    : t("ui.expert.tooltip.locked", { map: shownMapName })
             }
         >
-            <span className="ui-endless-name">Expert</span>
+            <span className="ui-endless-name">{t("ui.expert.name")}</span>
             {open ? (
-                <Toggle on={ui.expert} label="Expert" onToggle={() => client.toggleExpert()} />
+                <Toggle
+                    on={ui.expert}
+                    label={t("ui.expert.name")}
+                    onToggle={() => client.toggleExpert()}
+                />
             ) : (
-                <span className="ui-endless-hint">Beat it on hard</span>
+                <span className="ui-endless-hint">{t("ui.expert.beat_hard")}</span>
             )}
         </div>
     );
@@ -1103,7 +1351,7 @@ export function AdventurerPanel({
             }}
         >
             <h2 className="ui-select-heading">
-                Adventurer
+                {t("ui.character.heading")}
                 <span className="ui-select-count">
                     {opened} / {roster.length}
                 </span>
@@ -1111,7 +1359,9 @@ export function AdventurerPanel({
             {fixed && (
                 <div className="ui-select-fixed-note">
                     <ItemIcon objId={getStartingWeaponIcon(getCharacter(fixed))} size={28} />
-                    Everyone plays the {getCharacter(fixed).name} here.
+                    {t("ui.character.fixed_note", {
+                        name: characterName(getCharacter(fixed)),
+                    })}
                 </div>
             )}
             <div className="ui-select-scroll" aria-hidden={fixed !== undefined}>
@@ -1123,9 +1373,9 @@ export function AdventurerPanel({
                                 {STYLE_NAMES[style]}
                                 {treasure && (
                                     <span className="ui-style-treasure">
-                                        might find the{" "}
+                                        {t("ui.character.might_find")}
                                         <span style={{ color: RARITIES.veryRare.color }}>
-                                            {treasure.name}
+                                            {weaponName(treasure)}
                                         </span>
                                     </span>
                                 )}
@@ -1135,6 +1385,10 @@ export function AdventurerPanel({
                                     .filter((c) => c.style === style)
                                     .map((character) => {
                                         const selected = character.id === ui.characterId;
+                                        const charName = tr(
+                                            `char.${character.id}.name`,
+                                            character.name,
+                                        );
                                         return (
                                             <button
                                                 key={character.id}
@@ -1145,7 +1399,7 @@ export function AdventurerPanel({
                                                         ? ""
                                                         : " ui-card-locked")
                                                 }
-                                                aria-label={character.name}
+                                                aria-label={charName}
                                                 aria-pressed={selected}
                                                 onMouseMove={() => setPeek(character.id)}
                                                 onFocus={() => setPeek(character.id)}
@@ -1193,34 +1447,40 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
         return null;
     }
     const chosen = ui.save.pet;
-    const name = chosen ? getPetTrophy(PET_BY_ID.get(chosen)!).name : "None";
+    const name = chosen
+        ? tr(
+              `trophy.${getPetTrophy(PET_BY_ID.get(chosen)!).id}.name`,
+              getPetTrophy(PET_BY_ID.get(chosen)!).name,
+          )
+        : t("ui.common.none");
     return (
         <div className="ui-pet-row">
             <span className="ui-pet-label">
-                Pet: <span className="ui-pet-name">{name}</span>
+                {t("ui.pet.label")} <span className="ui-pet-name">{name}</span>
             </span>
             <div className="ui-pet-tiles">
                 <button
                     className={"ui-card ui-pet-tile" + (chosen ? "" : " ui-card-selected")}
-                    aria-label="No pet"
+                    aria-label={t("ui.pet.none_aria")}
                     aria-pressed={!chosen}
-                    title="No pet"
+                    title={t("ui.pet.none_aria")}
                     onClick={() => client.selectPet(undefined)}
                 >
-                    <span className="ui-pet-none">None</span>
+                    <span className="ui-pet-none">{t("ui.common.none")}</span>
                 </button>
                 {found.map((pet) => {
                     const trophy = getPetTrophy(pet);
                     const selected = pet.id === chosen;
+                    const shownTrophyName = trophyName(trophy);
                     return (
                         <button
                             key={pet.id}
                             className={
                                 "ui-card ui-pet-tile" + (selected ? " ui-card-selected" : "")
                             }
-                            aria-label={trophy.name}
+                            aria-label={shownTrophyName}
                             aria-pressed={selected}
-                            title={trophy.name}
+                            title={shownTrophyName}
                             onClick={() => client.selectPet(pet.id)}
                         >
                             <ItemIcon objId={trophy.objId} size={26} />
@@ -1244,12 +1504,13 @@ function AdventurerDetails({
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
     const favourite = save.favouriteCharacter === character.id;
+    const bonus = formatStats(character.bonus);
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
                 <ItemIcon objId={getStartingWeaponIcon(character)} size={36} />
                 <div>
-                    <div className="ui-card-title">{character.name}</div>
+                    <div className="ui-card-title">{characterName(character)}</div>
                     <div className="ui-card-style">{STYLE_NAMES[character.style]}</div>
                 </div>
                 {onFavourite && unlocked && (
@@ -1261,29 +1522,55 @@ function AdventurerDetails({
                         }
                         title={
                             favourite
-                                ? "The game starts on this adventurer. Click to stop."
-                                : "Start the game on this adventurer"
+                                ? t("ui.character.favourite_remove")
+                                : t("ui.character.favourite_add")
                         }
                         onClick={onFavourite}
                     >
-                        {favourite ? "Favourite" : "Make favourite"}
+                        {favourite
+                            ? t("ui.character.favourite_on")
+                            : t("ui.character.favourite_off")}
                     </button>
                 )}
             </div>
             <div className="ui-card-text">
-                <RichText text={character.description} />
+                <RichText text={characterDescription(character)} />
             </div>
+            {/* What they bring, a stat to a line */}
+            {bonus.length > 0 && (
+                <div className="ui-select-bonus">
+                    {bonus.map((text) => (
+                        <StatLine key={text} text={text} />
+                    ))}
+                </div>
+            )}
             {!unlocked && character.unlock && (
-                <div className="ui-card-cost">{describeUnlockTask(character.unlock)} to unlock</div>
+                <div className="ui-card-cost">
+                    {describeUnlockTask(character.unlock)} {t("ui.common.to_unlock")}
+                </div>
             )}
         </div>
     );
 }
 
 interface MapGroup {
+    id: string;
     name: string;
     hint?: string;
     maps: MapDef[];
+}
+
+function getMapTabName(tabId: string, fallback: string): string {
+    return tr(`ui.map.tab.${tabId}`, fallback);
+}
+
+// A group's name and hint, by its id: ui.map.group.<id> and ui.map.group.<id>_hint
+function getMapGroupName(group: MapGroup): string {
+    return tr(`ui.map.group.${group.id}`, group.name);
+}
+
+function getMapGroupHint(group: MapGroup): string | undefined {
+    return group.hint && tr(`ui.map.group.${group.id}_hint`, group.hint);
 }
 
 // The map screen's tabs, each a list or two of maps in the order they open; an act's is its own
@@ -1293,16 +1580,21 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
         id: "campaign",
         name: "Campaign",
         groups: [
-            { name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
-            { name: "Campaign", maps: CAMPAIGN_MAPS },
+            { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
+            { id: "campaign", name: "Campaign", maps: CAMPAIGN_MAPS },
         ],
     },
     {
         id: "bosses",
         name: "Bosses",
         groups: [
-            { name: "Boss fights", hint: "once their map's beaten", maps: FIGHT_MAPS },
-            { name: "Raids", hint: "room by room, open from the start", maps: RAID_MAPS },
+            {
+                id: "boss_fights",
+                name: "Boss fights",
+                hint: "once their map's beaten",
+                maps: FIGHT_MAPS,
+            },
+            { id: "raids", name: "Raids", hint: "room by room", maps: RAID_MAPS },
         ],
     },
     // Beside Bosses, open once the Inferno's beaten
@@ -1311,6 +1603,7 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
         name: "Act II",
         groups: [
             {
+                id: "fallen_empire",
                 name: FALLEN_EMPIRE.name,
                 maps: getActMapIds(FALLEN_EMPIRE).map((id) => getMap(id)),
             },
@@ -1320,12 +1613,19 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
     {
         id: "fun",
         name: "Fun",
-        groups: [{ name: "Fun maps", hint: "endless, open from the start", maps: FUN_MAPS }],
+        groups: [
+            {
+                id: "fun_maps",
+                name: "Fun maps",
+                hint: "endless, open from the start",
+                maps: FUN_MAPS,
+            },
+        ],
     },
     {
         id: "dev",
         name: "Dev",
-        groups: [{ name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
+        groups: [{ id: "dev_maps", name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
     },
 ]
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
@@ -1357,6 +1657,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     const beaten = CAMPAIGN_MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
     const tile = (map: MapDef) => {
         const selected = map.id === ui.mapId;
+        const shownMapName = mapName(map);
         return (
             <button
                 key={map.id}
@@ -1375,12 +1676,15 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 }}
             >
                 <ItemIcon objId={map.iconObjId} size={20} />
-                <span className="ui-map-name">{map.name}</span>
+                <span className="ui-map-name">{shownMapName}</span>
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
-                    <span className="ui-beaten ui-beaten-hard" aria-label="Beaten on hard" />
+                    <span
+                        className="ui-beaten ui-beaten-hard"
+                        aria-label={t("ui.map.beaten_hard")}
+                    />
                 ) : (
                     (save.mapVictories[map.id] ?? 0) > 0 && (
-                        <span className="ui-beaten" aria-label="Beaten" />
+                        <span className="ui-beaten" aria-label={t("ui.map.beaten")} />
                     )
                 )}
             </button>
@@ -1392,15 +1696,15 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
             onMouseLeave={stopPeeking(setPeek)}
         >
             <h2 className="ui-select-heading">
-                Map
+                {t("ui.map.heading")}
                 <span className="ui-select-count">
-                    {beaten} / {CAMPAIGN_MAPS.length} beaten
+                    {t("ui.map.beaten_count", { beaten, total: CAMPAIGN_MAPS.length })}
                 </span>
             </h2>
             <div
                 className="ui-tabs ui-map-tabs"
                 role="tablist"
-                aria-label="Kinds of map"
+                aria-label={t("ui.map.kinds_of_map")}
                 onKeyDown={(event) => {
                     const next = getTabFromKey(event.key, MAP_TAB_IDS, open);
                     if (next) {
@@ -1423,7 +1727,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                         aria-controls={`map-page-${tab.id}`}
                         onClick={() => openTab(tab.id)}
                     >
-                        {tab.name}
+                        {getMapTabName(tab.id, tab.name)}
                     </button>
                 ))}
             </div>
@@ -1453,9 +1757,11 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                             tab.groups.map((group) => (
                                 <div key={group.name} className="ui-style-group">
                                     <div className="ui-style-name">
-                                        {group.name}
+                                        {getMapGroupName(group)}
                                         {group.hint && (
-                                            <span className="ui-style-treasure">{group.hint}</span>
+                                            <span className="ui-style-treasure">
+                                                {getMapGroupHint(group)}
+                                            </span>
                                         )}
                                     </div>
                                     <div className="ui-map-list">{group.maps.map(tile)}</div>
@@ -1465,7 +1771,15 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 ))}
             </div>
             {/* Its own for each map, so a long one scrolled down doesn't leave the next scrolled */}
-            <MapDetails key={peek ?? ui.mapId} save={save} map={getMap(peek ?? ui.mapId)} />
+            <MapDetails
+                key={peek ?? ui.mapId}
+                save={save}
+                map={getMap(peek ?? ui.mapId)}
+                picked={(peek ?? ui.mapId) === ui.mapId ? ui.fightStage : undefined}
+                onPick={
+                    (peek ?? ui.mapId) === ui.mapId ? (s) => client.pickFightStage(s) : undefined
+                }
+            />
         </div>
     );
 }
@@ -1513,29 +1827,32 @@ function ActPage({
                     >
                         <ItemIcon objId={slot.iconObjId} size={20} />
                         <span className="ui-act-card-text">
-                            <span className="ui-map-name">{slot.name}</span>
+                            <span className="ui-map-name">{actSlotName(act, slot)}</span>
                             <span className="ui-act-line">
-                                {map ? slot.boss : `${slot.boss}: coming soon`}
+                                {map
+                                    ? actSlotBoss(act, slot)
+                                    : t("ui.act.coming_soon", { boss: actSlotBoss(act, slot) })}
                             </span>
                         </span>
                         {(save.hardVictories[slot.mapId ?? ""] ?? 0) > 0 ? (
                             <span
                                 className="ui-beaten ui-beaten-hard"
-                                aria-label="Beaten on hard"
+                                aria-label={t("ui.map.beaten_hard")}
                             />
                         ) : (
-                            wins > 0 && <span className="ui-beaten" aria-label="Beaten" />
+                            wins > 0 && (
+                                <span className="ui-beaten" aria-label={t("ui.map.beaten")} />
+                            )
                         )}
                     </button>
                 );
             })}
             <div className="ui-card ui-act-middle" style={{ gridArea: "m" }}>
-                <span className="ui-map-name">{act.name}</span>
+                <span className="ui-map-name">{actName(act)}</span>
                 <span className="ui-act-line">
                     {open
-                        ? `${beaten} / ${act.slots.length} beaten, in any order. Each is harder ` +
-                          "the more of the others you've beaten."
-                        : `Beat ${getMap(act.requires).name} to open it.`}
+                        ? t("ui.act.beaten_any_order", { beaten, total: act.slots.length })
+                        : t("ui.act.beat_to_open", { map: mapName(getMap(act.requires)) })}
                 </span>
             </div>
         </div>
@@ -1555,68 +1872,164 @@ function ActDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
     return (
         <>
             <div className="ui-card-style">
-                {`${act.name}, step ${step} of ${last}` +
-                    (coins > 0 ? `: coins +${Math.round(coins * 100)}%` : "")}
+                {coins > 0
+                    ? t("ui.act.step_coins", {
+                          act: actName(act),
+                          step,
+                          last,
+                          coins: Math.round(coins * 100),
+                      })
+                    : t("ui.act.step", { act: actName(act), step, last })}
             </div>
             {best && (
                 <div className="ui-card-style">
-                    Best: {formatTime(best.seconds)}
-                    {best.step < last ? ` (at step ${best.step})` : ""}
+                    {best.step < last
+                        ? t("ui.act.best_at_step", {
+                              time: formatTime(best.seconds),
+                              step: best.step,
+                          })
+                        : t("ui.act.best", { time: formatTime(best.seconds) })}
                 </div>
             )}
         </>
     );
 }
 
-function MapDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element {
+// The result screen's button back into a boss fight: a fight in parts (MapDef.stages) goes on to
+// its next part once one's won ("Next fight"), or from the first again once the last has been;
+// anything else is tried again
+function nextFightLabel(map: MapDef, victory: boolean, stage: number | undefined): string {
+    if (!victory || !map.stages) {
+        return t("ui.result.retry");
+    }
+    return (stage ?? 0) + 1 < map.stages.length
+        ? t("ui.result.next_fight")
+        : t("ui.result.fight_again");
+}
+
+// What a win says: the part's own words in a fight in parts (MapDef.stages), else the map's
+function stageVictoryText(map: MapDef, stage: number | undefined): string {
+    return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
+}
+
+function MapDetails({
+    save,
+    map,
+    picked,
+    onPick,
+}: {
+    save: SaveData;
+    map: MapDef;
+    // A fight in parts: the part picked to play, and picking one (the selected map's only)
+    picked?: number;
+    onPick?: (stage: number | undefined) => void;
+}): JSX.Element {
     const wins = save.mapVictories[map.id] ?? 0;
     const unlocked = isMapUnlocked(save, map.id);
+    const reached = getReachedStages(save, map.id);
+    const stage = picked !== undefined && picked < reached ? picked : getFightStage(save, map.id);
     const endless = save.endlessBest[map.id];
     const hardWins = save.hardVictories[map.id] ?? 0;
     const hardEndless = save.hardEndlessBest[map.id];
+    const shownMapName = mapName(map);
     return (
         <div className="ui-select-details">
             <div className="ui-select-details-head">
                 <ItemIcon objId={map.iconObjId} size={36} />
                 <div>
-                    <div className="ui-card-title">{map.name}</div>
+                    <div className="ui-card-title">{shownMapName}</div>
                     <div className={unlocked ? "ui-card-style" : "ui-card-cost"}>
                         {map.fun
                             ? map.fun.character
-                                ? `Fun map, endless. You play as ${getCharacter(map.fun.character).name}.`
-                                : "Fun map, endless"
+                                ? t("ui.map.fun_char", {
+                                      name: tr(
+                                          `char.${map.fun.character}.name`,
+                                          getCharacter(map.fun.character).name,
+                                      ),
+                                  })
+                                : t("ui.map.fun_endless")
                             : !unlocked
-                              ? `Beat ${getMap(map.act?.requires ?? map.fight?.requires ?? MAPS[MAPS.indexOf(map) - 1].id).name} to unlock`
-                              : map.fight
-                                ? `Boss fight. You play as the ${getCharacter(map.fight.character).name}` +
-                                  (wins > 0
-                                      ? `, beaten ${wins === 1 ? "once" : `${wins} times`}.`
-                                      : ".")
-                                : wins > 0
-                                  ? `Beaten ${wins === 1 ? "once" : `${wins} times`}`
-                                  : "Not beaten yet"}
+                              ? (() => {
+                                    const reqId =
+                                        map.act?.requires ??
+                                        map.requires ??
+                                        map.fight?.requires ??
+                                        MAPS[MAPS.indexOf(map) - 1].id;
+                                    return t("ui.map.beat_to_unlock", {
+                                        map: mapName(getMap(reqId)),
+                                    });
+                                })()
+                              : map.stages
+                                ? t("ui.map.stage_status", {
+                                      part: stage + 1,
+                                      total: map.stages.length,
+                                      name: tl(map.stages[stage].name),
+                                  }) + (wins > 0 ? ` ${t("ui.map.stage_complete")}` : "")
+                                : map.fight
+                                  ? (() => {
+                                        const charName = tr(
+                                            `char.${map.fight.character}.name`,
+                                            getCharacter(map.fight.character).name,
+                                        );
+                                        return wins > 0
+                                            ? t("ui.map.boss_fight_beaten", {
+                                                  name: charName,
+                                                  times: tp("ui.map.beaten_times", wins),
+                                              })
+                                            : t("ui.map.boss_fight_char", { name: charName });
+                                    })()
+                                  : wins > 0
+                                    ? t("ui.map.beaten_status", {
+                                          times: tp("ui.map.beaten_times", wins),
+                                      })
+                                    : t("ui.map.not_beaten")}
                     </div>
+                    {map.stages && unlocked && onPick && reached > 1 && (
+                        <div className="ui-row ui-fight-parts">
+                            {map.stages.slice(0, reached).map((part, i) => (
+                                <button
+                                    key={part.name}
+                                    className={
+                                        "ui-button ui-button-small" +
+                                        (i === stage ? " ui-button-go" : "")
+                                    }
+                                    aria-pressed={i === stage}
+                                    title={tl(part.name)}
+                                    onClick={() => onPick(i)}
+                                >
+                                    {t("ui.map.part", { part: i + 1 })}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     {unlocked && <ActDetails save={save} map={map} />}
                     {endless && (
                         <div className="ui-card-style">
-                            Endless best: round {endless.round}, {formatTime(endless.seconds)}
+                            {t("ui.map.endless_best", {
+                                round: endless.round,
+                                time: formatTime(endless.seconds),
+                            })}
                         </div>
                     )}
                     {hardWins > 0 && (
                         <div className="ui-card-style">
-                            Beaten on hard {hardWins === 1 ? "once" : `${hardWins} times`}
+                            {t("ui.map.beaten_on_hard", {
+                                times: tp("ui.map.beaten_times", hardWins),
+                            })}
                         </div>
                     )}
                     {hardEndless && (
                         <div className="ui-card-style">
-                            Hard endless best: round {hardEndless.round},{" "}
-                            {formatTime(hardEndless.seconds)}
+                            {t("ui.map.hard_endless_best", {
+                                round: hardEndless.round,
+                                time: formatTime(hardEndless.seconds),
+                            })}
                         </div>
                     )}
                 </div>
             </div>
             <div className="ui-card-text ui-card-description">
-                <RichText text={map.description} />
+                <RichText text={mapDescription(map)} />
             </div>
             <MapTasks save={save} mapId={map.id} />
         </div>
@@ -1665,7 +2078,7 @@ function MapTasks({ save, mapId }: { save: SaveData; mapId: string }): JSX.Eleme
                                 spriteId={reward.iconSpriteId}
                                 size={20}
                             />
-                            {reward.name}
+                            {tl(reward.name)}
                         </span>
                     ))}
                 </div>
@@ -1697,15 +2110,12 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
-                <h2>Skills</h2>
-                <p className="ui-subtle ui-shop-help">
-                    Melee, Ranged and Magic are separate skill presets, used automatically by
-                    adventurers of that combat style.
-                </p>
+                <h2>{t("ui.shop.heading")}</h2>
+                <p className="ui-subtle ui-shop-help">{t("ui.shop.help")}</p>
                 <div
                     className="ui-row ui-tabs ui-shop-tabs"
                     role="tablist"
-                    aria-label="Skill presets"
+                    aria-label={t("ui.shop.presets_aria")}
                     onKeyDown={(event) => {
                         const next = getTabFromKey(event.key, STYLES, style);
                         if (next) {
@@ -1728,7 +2138,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                             aria-controls="skills-page"
                             onClick={() => setStyle(tab)}
                         >
-                            {STYLE_NAMES[tab]} preset
+                            {t("ui.shop.preset_tab", { style: STYLE_NAMES[tab] })}
                         </button>
                     ))}
                 </div>
@@ -1742,6 +2152,8 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                         const rank = page.upgrades[upgrade.id] ?? 0;
                         const cost = getNextUpgradeCost(save, upgrade.id, style);
                         const affordable = cost !== undefined && coins >= cost;
+                        const upgradeName = shopUpgradeName(upgrade);
+                        const upgradeDesc = shopUpgradeDescription(upgrade);
                         return (
                             <div key={upgrade.id} className="ui-shop-entry">
                                 <button
@@ -1751,7 +2163,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                     aria-disabled={!affordable}
                                     title={
                                         rank > 0 && !isCoarsePointer
-                                            ? "Right-click to refund one rank"
+                                            ? t("ui.shop.refund_tooltip")
                                             : undefined
                                     }
                                     onClick={() => {
@@ -1768,8 +2180,10 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                         }
                                     }}
                                 >
-                                    <div className="ui-card-title">{upgrade.name}</div>
-                                    <div className="ui-card-text">{upgrade.description}</div>
+                                    <div className="ui-card-title">{upgradeName}</div>
+                                    <div className="ui-card-text">
+                                        <StatLine text={upgradeDesc} statKey={upgrade.stat} />
+                                    </div>
                                     <div className="ui-pips">
                                         {Array.from({ length: upgrade.maxRank }, (_, i) => (
                                             <span
@@ -1779,14 +2193,18 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                         ))}
                                     </div>
                                     <div className="ui-card-cost">
-                                        {cost === undefined ? "Maxed" : <Coins amount={cost} />}
+                                        {cost === undefined ? (
+                                            t("ui.shop.maxed")
+                                        ) : (
+                                            <Coins amount={cost} />
+                                        )}
                                     </div>
                                 </button>
                                 {rank > 0 && (
                                     <button
                                         className="ui-shop-refund"
-                                        aria-label={`Refund one ${upgrade.name} rank`}
-                                        title={`Refund one ${upgrade.name} rank`}
+                                        aria-label={t("ui.shop.refund_rank", { name: upgradeName })}
+                                        title={t("ui.shop.refund_rank", { name: upgradeName })}
                                         onClick={() => client.refundUpgrade(upgrade.id, style)}
                                     >
                                         <span className="ui-shop-refund-icon" aria-hidden="true">
@@ -1804,7 +2222,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                 </div>
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
-                        Back
+                        {t("ui.common.back")}
                     </button>
                     <Coins amount={coins} />
                     <button
@@ -1812,7 +2230,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                         disabled={Object.keys(page.upgrades).length === 0}
                         onClick={() => client.refundUpgrades(style)}
                     >
-                        Refund all
+                        {t("ui.shop.refund_all")}
                     </button>
                 </div>
             </div>
@@ -1824,14 +2242,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
     return (
         <div className="ui-fill ui-run">
-            {hud && (
-                <Hud
-                    hud={hud}
-                    client={client}
-                    questTracker={ui.display.questTracker}
-                    damagePanel={ui.display.damagePanel}
-                />
-            )}
+            <ChoiceCountdown client={client} />
             {ui.party.length > 0 && <PartyFrames party={ui.party} />}
             {ui.waitingOn.length > 0 && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <WaitingNote names={ui.waitingOn} />
@@ -1839,11 +2250,31 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
-            {isCoarsePointer && hud && (
+            {ui.cinematic && (
+                // The opening cinematic: no HUD, and a click or tap anywhere skips it
+                <div
+                    className="ui-cinematic"
+                    onPointerDown={(e) => {
+                        e.preventDefault();
+                        client.skipCinematic();
+                    }}
+                />
+            )}
+            {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
                     inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
                     overlay={ui.overlay}
                     client={client}
+                />
+            )}
+            {/* The inspectable HUD slots sit above the touch movement zone. */}
+            {hud && !ui.cinematic && (
+                <Hud
+                    hud={hud}
+                    client={client}
+                    questTracker={ui.display.questTracker}
+                    damagePanel={ui.display.damagePanel}
+                    disabled={ui.overlay !== "none"}
                 />
             )}
             <div className="ui-toasts">
@@ -1885,6 +2316,25 @@ function useHudNumber<T>(client: GameClient, pick: (numbers: HudNumbers) => T): 
     });
 }
 
+function ChoiceCountdown({ client }: { client: GameClient }): JSX.Element | null {
+    const seconds = useHudNumber(client, (n) => n.decisionSeconds);
+    if (seconds === undefined) {
+        return null;
+    }
+    return (
+        <div
+            className={"ui-choice-countdown" + (seconds <= 5 ? " ui-choice-countdown-soon" : "")}
+            role="timer"
+            aria-label={t("ui.run.choice_countdown_aria", { seconds })}
+        >
+            <span className="ui-choice-countdown-label">{t("ui.run.choice_countdown_label")}</span>
+            <span className="ui-choice-countdown-time">
+                {t("ui.run.choice_countdown_time", { seconds })}
+            </span>
+        </div>
+    );
+}
+
 // A random event: what's for sale against the coins carried
 function RunEventModal({
     event,
@@ -1902,21 +2352,54 @@ function formatSlotLevel(slot: SlotView): string {
     if (slot.level > slot.maxLevel) {
         return `+${slot.level - slot.maxLevel}`;
     }
-    return slot.level === slot.maxLevel ? "max" : String(slot.level);
+    return slot.level === slot.maxLevel ? t("ui.hud.slot_max") : String(slot.level);
 }
 
 // A weapon or passive in the HUD, with what it does on a card shown while
 // it's pointed at
-const Slots = memo(function Slots({ slots, max }: { slots: SlotView[]; max: number }): JSX.Element {
+const Slots = memo(function Slots({
+    slots,
+    max,
+    disabled,
+}: {
+    slots: SlotView[];
+    max: number;
+    disabled: boolean;
+}): JSX.Element {
     return (
         <div className="ui-slots">
             {Array.from({ length: max }, (_, i) => {
                 const slot = slots[i];
                 return (
-                    <div
+                    <DescriptionButton
                         key={i}
+                        itemId={slot?.id}
+                        disabled={!slot || disabled}
+                        aria-label={
+                            slot?.name ? tl(slot.name) : t("ui.hud.empty_slot", { n: i + 1 })
+                        }
                         className={"ui-slot" + (slot?.evolution?.ready ? " ui-slot-evolve" : "")}
                         style={slot ? { borderColor: slot.rarityColor } : undefined}
+                        description={
+                            slot && (
+                                <>
+                                    <div style={{ color: slot.rarityColor }}>{tl(slot.name)}</div>
+                                    <div className="ui-slot-tip-level">
+                                        {slot.level >= slot.maxLevel
+                                            ? t("ui.hud.max_level")
+                                            : t("ui.hud.level_of", {
+                                                  level: slot.level,
+                                                  max: slot.maxLevel,
+                                              })}
+                                    </div>
+                                    {slot.stats?.map((line) => (
+                                        <StatLine key={line} text={line} />
+                                    ))}
+                                    {slot.detail && <div>{slot.detail}</div>}
+                                    {slot.evolution && <EvolutionLine {...slot.evolution} />}
+                                </>
+                            )
+                        }
                     >
                         {slot && (
                             <>
@@ -1926,22 +2409,9 @@ const Slots = memo(function Slots({ slots, max }: { slots: SlotView[]; max: numb
                                     size={30}
                                 />
                                 <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
-                                <div className="ui-slot-tip rs-border rs-background">
-                                    <div style={{ color: slot.rarityColor }}>{slot.name}</div>
-                                    <div className="ui-slot-tip-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? "Max level"
-                                            : `Level ${slot.level} of ${slot.maxLevel}`}
-                                    </div>
-                                    {slot.stats?.map((line) => (
-                                        <div key={line}>{line}</div>
-                                    ))}
-                                    {slot.detail && <div>{slot.detail}</div>}
-                                    {slot.evolution && <EvolutionLine {...slot.evolution} />}
-                                </div>
                             </>
                         )}
-                    </div>
+                    </DescriptionButton>
                 );
             })}
         </div>
@@ -1956,12 +2426,12 @@ function EvolutionLine({
     ready,
 }: NonNullable<SlotView["evolution"]>): JSX.Element {
     return ready ? (
-        <div className="ui-evolve-ready">Ready to evolve</div>
+        <div className="ui-evolve-ready">{t("ui.hud.evolve_ready")}</div>
     ) : (
         <div className="ui-evolve-line">
-            Evolves with:{" "}
+            {t("ui.hud.evolves_with")}
             <span className={maxed ? "ui-evolve-done" : undefined}>
-                {maxed ? "✓" : "✗"} Max level
+                {maxed ? "✓" : "✗"} {t("ui.hud.max_level")}
             </span>
             ,{" "}
             <span className={hasPassive ? "ui-evolve-done" : undefined}>
@@ -1972,27 +2442,38 @@ function EvolutionLine({
 }
 
 // Worn gear, small, under the weapons and passives
-const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): JSX.Element {
+const GearSlots = memo(function GearSlots({
+    gear,
+    disabled,
+}: {
+    gear: GearSlotView[];
+    disabled: boolean;
+}): JSX.Element {
     return (
         <div className="ui-slots ui-gear-slots">
             {gear.map((slot) => (
-                <div
+                <DescriptionButton
                     key={slot.slot}
-                    className="ui-slot ui-gear-slot"
-                    style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
-                    title={
-                        slot.item
-                            ? `${slot.item.name}: ${slot.item.lines.join(", ")}` +
-                              (slot.item.set ? `\n${slot.item.set.text}` : "")
-                            : `${slot.name} (empty)`
+                    itemId={slot.item?.id}
+                    disabled={!slot.item || disabled}
+                    aria-label={
+                        slot.item?.name
+                            ? tl(slot.item.name)
+                            : t("ui.hud.gear_empty", { name: tl(slot.name) })
                     }
+                    className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
+                    style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
+                    description={slot.item && <ItemDescription item={slot.item} />}
                 >
                     {slot.item ? (
                         <ItemIcon objId={slot.item.objId} size={22} />
                     ) : (
-                        <span className="ui-gear-empty">{slot.name[0]}</span>
+                        <ItemIcon
+                            spriteId={GEAR_SLOT_BY_ID.get(slot.slot)!.iconSpriteId}
+                            size={22}
+                        />
                     )}
-                </div>
+                </DescriptionButton>
             ))}
         </div>
     );
@@ -2002,14 +2483,22 @@ const GearSlots = memo(function GearSlots({ gear }: { gear: GearSlotView[] }): J
 const Inventory = memo(function Inventory({
     inventory,
     client,
+    disabled,
 }: {
     inventory: InventorySlotView[];
     client: GameClient;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <div className="ui-inventory">
             {inventory.map((slot, i) => (
-                <InventoryItem key={i} slot={slot} index={i} onUse={() => client.useItem(i)} />
+                <InventoryItem
+                    key={i}
+                    slot={slot}
+                    index={i}
+                    disabled={disabled}
+                    onUse={() => client.useItem(i)}
+                />
             ))}
         </div>
     );
@@ -2021,15 +2510,23 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
             {buffs.map((buff) => (
                 <div
                     key={buff.id}
-                    className={buff.harmful ? "ui-buff ui-buff-harmful" : "ui-buff"}
-                    title={buff.name}
+                    className={
+                        "ui-buff" +
+                        (buff.harmful ? " ui-buff-harmful" : "") +
+                        (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
+                    }
+                    title={tl(buff.name)}
                 >
                     <ItemIcon objId={buff.objId} size={24} />
-                    <span>{buff.secondsLeft}s</span>
-                    <div
-                        className="ui-buff-bar"
-                        style={{ transform: `scaleX(${buff.fraction})` }}
-                    />
+                    {buff.secondsLeft !== undefined && (
+                        <>
+                            <span>{buff.secondsLeft}s</span>
+                            <div
+                                className="ui-buff-bar"
+                                style={{ transform: `scaleX(${buff.fraction})` }}
+                            />
+                        </>
+                    )}
                 </div>
             ))}
         </div>
@@ -2043,27 +2540,41 @@ const Hud = memo(function Hud({
     client,
     questTracker,
     damagePanel,
+    disabled,
 }: {
     hud: HudView;
     client: GameClient;
     questTracker: boolean;
     damagePanel: boolean;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <>
             <XpBar level={hud.level} client={client} />
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={hud.maxWeapons} />
-                    <Slots slots={hud.passives} max={hud.maxPassives} />
-                    <GearSlots gear={hud.gear} />
+                    <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
+                    <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
+                    <GearSlots gear={hud.gear} disabled={disabled} />
                 </div>
                 <RunTimer client={client} />
+                <TombsScabarasReading client={client} />
                 <div className="ui-hud-right">
                     <Minimap client={client} />
                     <KillsAndCoins client={client} />
-                    {hud.round !== undefined && <div className="ui-round">Round {hud.round}</div>}
+                    {hud.round !== undefined && (
+                        <div className="ui-round">{t("ui.hud.round", { round: hud.round })}</div>
+                    )}
                     <RaidRoomInfo client={client} />
+                    <TombsWaveInfo client={client} />
+                    <TombsShadowsInfo client={client} />
+                    <TombsScabarasInfo client={client} />
+                    <TombsHetInfo client={client} />
+                    <TombsCrondisInfo client={client} />
+                    <TombsRoarInfo client={client} />
+                    {/* The dev server's testing buttons: a build drops them whole */}
+                    {import.meta.env.DEV && <DevGodButton client={client} />}
+                    {import.meta.env.DEV && <DevWardensButton client={client} />}
                     <HudQuests open={questTracker} client={client} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
@@ -2074,7 +2585,7 @@ const Hud = memo(function Hud({
                 <div className="ui-hud-actions">
                     {/* A boss fight has no items, only its own button */}
                     {!getMap(hud.mapId).fight && (
-                        <Inventory inventory={hud.inventory} client={client} />
+                        <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />
                 </div>
@@ -2090,7 +2601,7 @@ function XpBar({ level, client }: { level: number; client: GameClient }): JSX.El
     return (
         <div className="ui-xp">
             <div className="ui-xp-fill" style={{ transform: `scaleX(${xpFraction})` }} />
-            <span className="ui-xp-level">Level {level}</span>
+            <span className="ui-xp-level">{t("ui.hud.level", { level })}</span>
         </div>
     );
 }
@@ -2122,12 +2633,232 @@ function RaidRoomInfo({ client }: { client: GameClient }): JSX.Element | null {
     return (
         <>
             <div className="ui-round">
-                Room {room.number} / {room.count}
+                {t("ui.hud.room_progress", { number: room.number, count: room.count })}
             </div>
-            <div className="ui-raid-points" title="Raid points, for the supply chest">
-                {room.points} pts
+            <div className="ui-raid-points" title={t("ui.hud.raid_points_tooltip")}>
+                {t("ui.hud.points_pts", { points: room.points })}
             </div>
         </>
+    );
+}
+
+// Dev server only, with ?devtools: god mode, for watching a fight's mechanics without dying to them
+function DevGodButton({ client }: { client: GameClient }): JSX.Element | null {
+    const on = useHudNumber(client, (n) => n.devGod);
+    if (!client.devTools || on === undefined) {
+        return null;
+    }
+    return (
+        <button className="ui-button ui-button-small" onClick={() => client.toggleDevGod()}>
+            God mode (dev): {on ? "on" : "off"}
+        </button>
+    );
+}
+
+// Dev server only, with ?devtools, in the Tombs' Nexus: straight to any boss, for testing its mechanics (with
+// God mode, without dying to them). The path bosses as the run is, with the dev skip's bow; the
+// Wardens with the best of everything, or as the run is. Never in a build (GameClient.devTools).
+const DEV_TOMBS_BOSSES: { pathId: string; name: string }[] = [
+    { pathId: "apmeken", name: "Ba-Ba" },
+    { pathId: "het", name: "Akkha" },
+    { pathId: "scabaras", name: "Kephri" },
+    { pathId: "crondis", name: "Zebak" },
+];
+
+function DevWardensButton({ client }: { client: GameClient }): JSX.Element | null {
+    const shown = useHudNumber(client, (n) => n.devWardens);
+    if (!client.devTools || !shown) {
+        return null;
+    }
+    return (
+        <>
+            {DEV_TOMBS_BOSSES.map((boss) => (
+                <button
+                    key={boss.pathId}
+                    className="ui-button ui-button-small"
+                    onClick={() => client.devToTombsBoss(boss.pathId)}
+                >
+                    {boss.name} (dev)
+                </button>
+            ))}
+            <button className="ui-button ui-button-small" onClick={() => client.devToWardens()}>
+                Wardens, max kit (dev)
+            </button>
+            <button
+                className="ui-button ui-button-small"
+                onClick={() => client.devToWardens(false)}
+            >
+                Wardens, as you are (dev)
+            </button>
+        </>
+    );
+}
+
+// The Tombs' Apmeken room: always the wave it's on, so it's never a guess
+function TombsWaveInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const wave = useHudNumber(client, (n) => n.tombsWave);
+    if (!wave) {
+        return null;
+    }
+    return (
+        <>
+            <div className="ui-round">
+                {wave.done
+                    ? "Room done"
+                    : wave.waiting
+                      ? "Through the barrier to begin"
+                      : `${wave.label ?? "Wave"} ${wave.wave} / ${wave.of}`}
+            </div>
+            {/* Dev server only, with ?devtools: straight to the boss, for testing it */}
+            {client.devTools && !wave.done && (
+                <button
+                    className="ui-button ui-button-small"
+                    onClick={() => client.devSkipToTombsBoss()}
+                >
+                    Skip to boss (dev)
+                </button>
+            )}
+        </>
+    );
+}
+
+// Zebak's roar coming: how long there is to get behind a boulder
+function TombsRoarInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const seconds = useHudNumber(client, (n) => n.tombsRoar);
+    if (seconds === undefined) {
+        return null;
+    }
+    return <div className="ui-round">Zebak roars in {seconds}s: get behind a boulder!</div>;
+}
+
+// The Crondis room: your water, and the palm's growth
+function TombsCrondisInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsCrondis);
+    if (!info) {
+        return null;
+    }
+    return (
+        <div className="ui-round">
+            Water {info.water}: the palm has {info.growth} of {info.goal}
+        </div>
+    );
+}
+
+// The Het room: the mirrors you're holding, and the caster's charge till its beam goes
+function TombsHetInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsHet);
+    if (!info) {
+        return null;
+    }
+    const filled = Math.round(info.charge * 10);
+    return (
+        <div className="ui-round">
+            Mirrors held: {info.held} · Beam {"▰".repeat(filled)}
+            {"▱".repeat(10 - filled)}
+        </div>
+    );
+}
+
+// The Scabaras room's puzzles, each done, open or waiting on the others, with where it is (how
+// many are solved is the wave line's), and the Ancient tablet's number once it's read
+function TombsScabarasInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsScabaras);
+    if (!info) {
+        return null;
+    }
+    return (
+        <>
+            <div className="ui-scabaras-puzzles">
+                {info.puzzles.map(({ puzzle, state }) => (
+                    <div key={puzzle} className={"ui-scabaras-puzzle ui-scabaras-puzzle-" + state}>
+                        {SCABARAS_PUZZLES[puzzle].name}:{" "}
+                        {state === "solved"
+                            ? "done"
+                            : state === "open"
+                              ? SCABARAS_PUZZLES[puzzle].todo
+                              : SCABARAS_PUZZLES[puzzle].after}
+                    </div>
+                ))}
+            </div>
+            {info.readable && (
+                <div className="ui-round">
+                    The tablet says {info.target}: made {info.sum}
+                </div>
+            )}
+        </>
+    );
+}
+
+// The Scabaras room's puzzles as the HUD lists them: each one's name, what it wants and where
+// (the room as it's seen, walked up the screen), and what it waits on
+const SCABARAS_PUZZLES: Record<ScabarasPuzzle, { name: string; todo: string; after: string }> = {
+    sequence: {
+        name: "Sequence",
+        todo: "right hall, push the button and follow the plates",
+        after: "",
+    },
+    lights: { name: "Lights out", todo: "left hall, light the whole ring", after: "" },
+    addition: {
+        name: "Addition",
+        todo: "make the tablet's number",
+        after: "after Sequence and Lights out",
+    },
+    matching: {
+        name: "Matching",
+        todo: "far room, pair the symbols",
+        after: "after the other three",
+    },
+};
+
+// What a slate or the Ancient tablet in the Scabaras room says, on a screen of its own while
+// you're stood by it: the slates' nine symbols (the floor's own, from above) with what each is
+// worth, or the tablet's number
+function TombsScabarasReading({ client }: { client: GameClient }): JSX.Element | null {
+    const info = useHudNumber(client, (n) => n.tombsScabaras);
+    if (!info?.reading) {
+        return null;
+    }
+    if (info.reading === "tablet") {
+        return (
+            <div className="ui-panel rs-border rs-background ui-scabaras-reading">
+                <div className="ui-scabaras-title">Ancient tablet</div>
+                {info.readable ? (
+                    <>
+                        <div className="ui-scabaras-number">{info.target}</div>
+                        <div>So far: {info.sum}</div>
+                    </>
+                ) : (
+                    <div>Its markings are dark.</div>
+                )}
+            </div>
+        );
+    }
+    return (
+        <div className="ui-panel rs-border rs-background ui-scabaras-reading ui-scabaras-slate">
+            <div className="ui-scabaras-title">Ancient slate</div>
+            <div className="ui-scabaras-symbols">
+                {SCABARAS.symbolNames.map((name, i) => (
+                    <div key={name} className="ui-scabaras-symbol">
+                        <ItemIcon locId={SCABARAS.locs.symbols[i]} size={40} />
+                        <span className="ui-scabaras-value">{i + 1}</span>
+                        <span className="ui-scabaras-name">{name}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// Akkha's shadows: how many are left, and how long till those still up flood their quarters
+function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | null {
+    const shadows = useHudNumber(client, (n) => n.tombsShadows);
+    if (!shadows) {
+        return null;
+    }
+    return (
+        <div className="ui-round">
+            Shadows {shadows.left} / 4: they flood in {shadows.seconds}s
+        </div>
     );
 }
 
@@ -2174,21 +2905,29 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
         }
         return bossIn !== undefined && bossIn <= 60 ? (
             <div className="ui-boss-warning">
-                {getMap(mapId).finalBossWarning} {bossIn}s
+                {t("ui.hud.boss_warning", {
+                    warning: mapFinalBossWarning(getMap(mapId)),
+                    seconds: bossIn,
+                })}
             </div>
         ) : null;
     }
     return (
         <div className="ui-boss">
             <div className="ui-boss-name">
-                {boss.name}
-                {boss.enraged && <span className="ui-boss-enraged"> (enraged)</span>}
+                {tl(boss.name)}
+                {boss.enraged && (
+                    <span className="ui-boss-enraged">{t("ui.hud.boss_enraged")}</span>
+                )}
                 {boss.fight && (
                     // Keyed on the phase, so a new one plays its pulse from the start
                     <>
                         {" "}
                         <span key={boss.fight.phase} className="ui-boss-phase ui-boss-phase-new">
-                            Phase {boss.fight.phase}/{boss.fight.phases}
+                            {t("ui.hud.boss_phase", {
+                                phase: boss.fight.phase,
+                                phases: boss.fight.phases,
+                            })}
                         </span>
                     </>
                 )}
@@ -2219,24 +2958,27 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
             {boss.fight && (
                 <div className="ui-boss-status">
                     {boss.fight.outOfReach
-                        ? "Out of reach!"
+                        ? t("ui.hud.boss_status.out_of_reach")
                         : boss.fight.guard === "stunned"
-                          ? "Stunned!"
+                          ? t("ui.hud.boss_status.stunned")
                           : boss.fight.guard === "exposed"
-                            ? "Guard down!"
-                            : (boss.fight.status ??
+                            ? t("ui.hud.boss_status.guard_down")
+                            : ((boss.fight.status ? tl(boss.fight.status) : undefined) ??
                               (boss.fight.stage === "totems"
-                                  ? "Charge the totems!"
+                                  ? t("ui.hud.boss_status.charge_totems")
                                   : boss.fight.stage === "finale"
-                                    ? "Stay on your feet!"
-                                    : "Break her shield!"))}
+                                    ? t("ui.hud.boss_status.stay_on_feet")
+                                    : t("ui.hud.boss_status.break_shield")))}
                     {boss.fight.curseAttacks !== undefined && (
-                        <span className="ui-boss-curse"> Cursed: {boss.fight.curseAttacks}</span>
+                        <span className="ui-boss-curse">
+                            {t("ui.hud.boss_cursed", { attacks: boss.fight.curseAttacks })}
+                        </span>
                     )}
                     {boss.fight.parasiteSeconds !== undefined && (
                         <span className="ui-boss-curse">
-                            {" "}
-                            Parasite: {Math.ceil(boss.fight.parasiteSeconds)}s
+                            {t("ui.hud.boss_parasite", {
+                                seconds: Math.ceil(boss.fight.parasiteSeconds),
+                            })}
                         </span>
                     )}
                 </div>
@@ -2267,7 +3009,7 @@ function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
     return (
         <div className="ui-choice-stats">
             {stats.map((line) => (
-                <span key={line.label} className="ui-choice-stat">
+                <StatLine key={line.label} text={formatWeaponStat(line)} className="ui-choice-stat">
                     <span className="ui-choice-stat-label">{line.label}</span>{" "}
                     {line.from !== undefined && <>{line.from} → </>}
                     <span
@@ -2281,7 +3023,7 @@ function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
                     >
                         {line.value}
                     </span>
-                </span>
+                </StatLine>
             ))}
         </div>
     );
@@ -2298,17 +3040,17 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
             <div className="ui-panel rs-border rs-background ui-levelup">
                 <h2>
                     {spell
-                        ? "Choose your Ancient spell!"
+                        ? t("ui.levelup.title.spell")
                         : hilt
-                          ? "Your godsword needs a hilt!"
-                          : "Congratulations, you've advanced a level!"}
+                          ? t("ui.levelup.title.hilt")
+                          : t("ui.levelup.title.regular")}
                 </h2>
                 <p className="ui-subtle">
                     {spell
-                        ? "It keeps its level, and it's your only burst this run:"
+                        ? t("ui.levelup.sub.spell")
                         : hilt
-                          ? "Pick the god whose hilt it takes, and with it its special attack:"
-                          : `You are now level ${ui.hud?.level}. Choose a reward:`}
+                          ? t("ui.levelup.sub.hilt")
+                          : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (
@@ -2338,16 +3080,26 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                     <div className="ui-card-title">
                                         {choice.title}
                                         {choice.banished ? (
-                                            <span className="ui-tag ui-tag-banished">Banished</span>
+                                            <span className="ui-tag ui-tag-banished">
+                                                {t("ui.levelup.tag.banished")}
+                                            </span>
                                         ) : (
-                                            choice.isNew && <span className="ui-tag">New!</span>
+                                            choice.isNew && (
+                                                <span className="ui-tag">
+                                                    {t("ui.levelup.tag.new")}
+                                                </span>
+                                            )
                                         )}
                                         {choice.isEvolution && (
-                                            <span className="ui-tag ui-tag-evolve">Evolution!</span>
+                                            <span className="ui-tag ui-tag-evolve">
+                                                {t("ui.levelup.tag.evolution")}
+                                            </span>
                                         )}
                                         {choice.isHilt && (
                                             <span className="ui-tag ui-tag-evolve">
-                                                {choice.isSpell ? "Spell" : "Hilt"}
+                                                {choice.isSpell
+                                                    ? t("ui.levelup.tag.spell")
+                                                    : t("ui.levelup.tag.hilt")}
                                             </span>
                                         )}
                                     </div>
@@ -2381,7 +3133,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                             {/* Over the card's corner, under its rarity: a button can't go in a button */}
                             {choice.banishable && (
                                 <BanishButton
-                                    title={`Never offered ${choice.title} again this run`}
+                                    title={t("ui.levelup.banish_tooltip", { title: choice.title })}
                                     onBanish={() => client.banish(i)}
                                 />
                             )}
@@ -2390,7 +3142,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                 </div>
                 {banishes > 0 && (
                     <div className="ui-subtle ui-banishes">
-                        {banishes} {banishes === 1 ? "banish" : "banishes"} left
+                        {tp("ui.levelup.banishes_left", banishes)}
                     </div>
                 )}
                 {!hilt && (
@@ -2429,19 +3181,22 @@ function DamagePanel({
 }): JSX.Element {
     const totalDps = useHudNumber(client, (n) => n.dps) ?? 0;
     const otherDps = useHudNumber(client, (n) => n.otherDps) ?? 0;
+    // A touch screen's fight button over the items (the Tombs') is in this column's way: the DPS
+    // keeps left of them there (Mobile.css)
+    const besideAbility = useHudNumber(client, (n) => n.ability?.withItems) === true;
     const weaponDamage = useHudNumber(client, (n) => n.weaponDamage);
     const damageOf = (slot: SlotView) => weaponDamage?.[slot.id];
     const total = weapons.reduce((sum, w) => sum + (damageOf(w)?.dps ?? 0), otherDps);
     // Most damage a second first; ties (weapons yet to hit) keep the HUD's order
     const rows = [...weapons].sort((a, b) => (damageOf(b)?.dps ?? 0) - (damageOf(a)?.dps ?? 0));
     return (
-        <div className="ui-damage">
+        <div className={besideAbility ? "ui-damage ui-damage-beside-ability" : "ui-damage"}>
             <button
                 className="ui-dps"
                 onClick={() => client.toggleDamagePanel()}
-                title="Show or hide each weapon's damage (Tab)"
+                title={t("ui.damage.toggle_tooltip")}
             >
-                <span className="ui-dps-label">DPS</span> {formatCompact(totalDps)}{" "}
+                <span className="ui-dps-label">{t("ui.damage.dps")}</span> {formatCompact(totalDps)}{" "}
                 <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
             </button>
             {open && (
@@ -2449,9 +3204,9 @@ function DamagePanel({
                     <div className="ui-damage-head">
                         <span />
                         <span />
-                        <span>Share</span>
-                        <span>DPS</span>
-                        <span>Total</span>
+                        <span>{t("ui.damage.share")}</span>
+                        <span>{t("ui.damage.dps")}</span>
+                        <span>{t("ui.damage.total")}</span>
                     </div>
                     {rows.map((slot) => {
                         const dps = damageOf(slot)?.dps ?? 0;
@@ -2468,7 +3223,7 @@ function DamagePanel({
                                         className="ui-damage-name"
                                         style={{ color: slot.rarityColor }}
                                     >
-                                        {slot.name}
+                                        {tl(slot.name)}
                                     </span>
                                     <span className="ui-damage-bar">
                                         <span
@@ -2491,8 +3246,8 @@ function DamagePanel({
                     {otherDps >= 0.05 && (
                         <div className="ui-damage-row ui-damage-other">
                             <span />
-                            <span className="ui-damage-weapon" title="Items, power-ups and recoil">
-                                Other
+                            <span className="ui-damage-weapon" title={t("ui.damage.other_tooltip")}>
+                                {t("ui.damage.other")}
                             </span>
                             <span className="ui-damage-share">{formatShare(otherDps, total)}</span>
                             <span className="ui-damage-dps" title={exact(otherDps)}>
@@ -2527,9 +3282,9 @@ function QuestTracker({
             <button
                 className="ui-quest-tracker-title"
                 onClick={() => client.toggleQuestTracker()}
-                title="Show or hide the quests (Q)"
+                title={t("ui.quest.toggle_tooltip")}
             >
-                Quests {open ? "▾" : "▸"}
+                {t("ui.quest.heading")} {open ? "▾" : "▸"}
             </button>
             {open && quests.map((quest) => <QuestTrack key={quest.id} quest={quest} />)}
         </div>
@@ -2539,8 +3294,8 @@ function QuestTracker({
 // Kept from the last update while its progress is the same (shareUnchanged)
 const QuestTrack = memo(function QuestTrack({ quest }: { quest: QuestTrackView }): JSX.Element {
     return (
-        <div className={"ui-quest-track " + questTrackClass(quest)} title={quest.task}>
-            <span className="ui-quest-track-name">{quest.name}</span>
+        <div className={"ui-quest-track " + questTrackClass(quest)} title={tl(quest.task)}>
+            <span className="ui-quest-track-name">{tl(quest.name)}</span>
             <span className="ui-quest-track-progress">{formatQuestProgress(quest)}</span>
         </div>
     );
@@ -2554,7 +3309,7 @@ function questTrackClass(quest: QuestTrackView): string {
 
 function formatQuestProgress(quest: QuestTrackView): string {
     return quest.finished
-        ? "Done"
+        ? t("ui.quest.done")
         : `${quest.done.toLocaleString()} / ${quest.of.toLocaleString()}`;
 }
 
@@ -2579,15 +3334,15 @@ function PauseModal({
     return (
         <div className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
             <div className="ui-panel rs-border rs-background ui-pause">
-                <h2>{coop ? "Menu" : "Paused"}</h2>
-                {coop && <p className="ui-subtle">The run carries on while you're in here.</p>}
+                <h2>{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
+                {coop && <p className="ui-subtle">{t("pause.coop_warning")}</p>}
                 {ui.saveBlock && ui.saveBlockClosed && (
                     <p className="ui-subtle">
                         <button
                             className="ui-version ui-save-off"
                             onClick={() => client.showSaveBlock()}
                         >
-                            Not saving
+                            {t("ui.title.not_saving")}
                         </button>
                     </p>
                 )}
@@ -2603,58 +3358,72 @@ function PauseModal({
                                     />
                                     {/* The name, and what it does under it */}
                                     <span className="ui-pause-name">
-                                        <span style={{ color: slot.rarityColor }}>{slot.name}</span>
+                                        <span style={{ color: slot.rarityColor }}>
+                                            {tl(slot.name)}
+                                        </span>
                                         <span className="ui-pause-detail">
                                             {[...(slot.stats ?? []), slot.detail]
-                                                .filter((text) => text)
-                                                .join(", ")}
+                                                .filter((text): text is string => Boolean(text))
+                                                .map((text, i) => (
+                                                    <StatLine key={i} text={text} />
+                                                ))}
                                         </span>
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                     </span>
                                     <span className="ui-pause-level">
                                         {slot.level >= slot.maxLevel
-                                            ? "max"
-                                            : `level ${slot.level}`}
+                                            ? t("pause.slot_max")
+                                            : t("pause.slot_level", { level: slot.level })}
                                     </span>
                                 </div>
                             ))}
                         </div>
                         {hud.stats.length > 0 && (
                             <>
-                                <h3 className="ui-pause-heading">Your stats</h3>
+                                <h3 className="ui-pause-heading">
+                                    {t("pause.heading.your_stats")}
+                                </h3>
                                 <div className="ui-pause-stats">
                                     {hud.stats.map((line) => (
-                                        <span key={line}>{line}</span>
+                                        <StatLine key={line} text={line} />
                                     ))}
                                 </div>
                             </>
                         )}
                         {hud.gear.some((slot) => slot.item) && (
                             <>
-                                <h3 className="ui-pause-heading">Worn equipment</h3>
+                                <h3 className="ui-pause-heading">
+                                    {t("pause.heading.worn_equipment")}
+                                </h3>
                                 <div className="ui-pause-list">
                                     {hud.gear.map(
                                         ({ slot, item }) =>
                                             item && (
                                                 <div key={slot} className="ui-pause-item">
                                                     <ItemIcon objId={item.objId} size={28} />
-                                                    <span style={{ color: item.rarity.color }}>
-                                                        {item.name}
-                                                    </span>
-                                                    <span className="ui-pause-detail">
-                                                        {item.lines.join(", ")}
-                                                        {item.set && (
-                                                            <span
-                                                                className={
-                                                                    "ui-pause-set" +
-                                                                    (item.set.active
-                                                                        ? " ui-pause-set-on"
-                                                                        : "")
-                                                                }
-                                                            >
-                                                                {item.set.text}
-                                                            </span>
-                                                        )}
+                                                    <span className="ui-pause-name">
+                                                        <span style={{ color: item.rarity.color }}>
+                                                            {tl(item.name)}
+                                                        </span>
+                                                        <span className="ui-pause-detail">
+                                                            {item.lines.map((line, i) => (
+                                                                <StatLine key={i} text={line} />
+                                                            ))}
+                                                            {item.set && (
+                                                                <span
+                                                                    className={
+                                                                        "ui-pause-set" +
+                                                                        (item.set.active
+                                                                            ? " ui-pause-set-on"
+                                                                            : "")
+                                                                    }
+                                                                >
+                                                                    <StatLine
+                                                                        text={item.set.text}
+                                                                    />
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                     </span>
                                                 </div>
                                             ),
@@ -2666,15 +3435,17 @@ function PauseModal({
                     <div className="ui-pause-column">
                         {quests.length > 0 && (
                             <>
-                                <h3 className="ui-pause-heading">Quests</h3>
+                                <h3 className="ui-pause-heading">{t("pause.heading.quests")}</h3>
                                 <div className="ui-pause-list">
                                     {quests.map((quest) => (
                                         <div
                                             key={quest.id}
                                             className={"ui-pause-quest " + questTrackClass(quest)}
                                         >
-                                            <span className="ui-quest-name">{quest.name}</span>
-                                            <span className="ui-pause-detail">{quest.task}</span>
+                                            <span className="ui-quest-name">{tl(quest.name)}</span>
+                                            <span className="ui-pause-detail">
+                                                {tl(quest.task)}
+                                            </span>
                                             <span className="ui-quest-progress">
                                                 {formatQuestProgress(quest)}
                                             </span>
@@ -2685,18 +3456,22 @@ function PauseModal({
                         )}
                         {kickable.length > 0 && (
                             <>
-                                <h3 className="ui-pause-heading">Party</h3>
+                                <h3 className="ui-pause-heading">{t("pause.heading.party")}</h3>
                                 <div className="ui-pause-list">
                                     {kickable.map((member) => (
                                         <div key={member.id} className="ui-pause-item">
                                             <span className="ui-pause-name">{member.name}</span>
                                             <button
                                                 className="ui-button ui-button-small ui-coop-kick"
-                                                title={`Remove ${member.name} from the run`}
-                                                aria-label={`Kick ${member.name}`}
+                                                title={t("pause.party.kick_title", {
+                                                    name: member.name,
+                                                })}
+                                                aria-label={t("pause.party.kick_aria", {
+                                                    name: member.name,
+                                                })}
                                                 onClick={() => client.kickPlayer(member.id!)}
                                             >
-                                                Kick
+                                                {t("pause.party.kick_button")}
                                             </button>
                                         </div>
                                     ))}
@@ -2705,17 +3480,21 @@ function PauseModal({
                         )}
                         {padKind && (
                             <>
-                                <h3 className="ui-pause-heading">Controller</h3>
+                                <h3 className="ui-pause-heading">
+                                    {t("pause.heading.controller")}
+                                </h3>
                                 <PadControls />
                             </>
                         )}
-                        <h3 className="ui-pause-heading">Settings</h3>
+                        <h3 className="ui-pause-heading">{t("pause.heading.settings")}</h3>
+                        <LanguageSetting />
                         <SoundSettings
                             ui={ui}
                             client={client}
                             music={getMap(ui.mapId).music !== undefined}
                         />
                         <PickupTimerSetting ui={ui} client={client} />
+                        <PuzzleHelperSetting ui={ui} client={client} />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
                         <AutoEquipSetting ui={ui} client={client} />
@@ -2728,15 +3507,15 @@ function PauseModal({
                         className="ui-button"
                         title={
                             coop && ui.coop.room?.hostId === ui.coop.you
-                                ? "You're the host: leaving ends the run for everyone"
+                                ? t("pause.quit.host_warning")
                                 : undefined
                         }
                         onClick={() => client.quitRun()}
                     >
-                        {coop ? "Leave the run" : "Give up"}
+                        {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
                     </button>
                     <button className="ui-button ui-button-go" onClick={() => client.resume()}>
-                        Resume
+                        {t("pause.resume")}
                     </button>
                 </div>
             </div>
@@ -2749,13 +3528,18 @@ const MAX_LISTED_TEAMMATES = 3;
 
 // "Coif, Rune boots and Seers ring", or the first few "and 5 more"
 function listNames(names: string[], most = 3): string {
+    if (names.length === 0) {
+        return "";
+    }
     if (names.length === 1) {
         return names[0];
     }
-    const shown = names.length > most ? names.slice(0, most - 1) : names.slice(0, -1);
-    const rest =
-        names.length > most ? `${names.length - shown.length} more` : names[names.length - 1];
-    return `${shown.join(", ")} and ${rest}`;
+    const shown = names.length > most ? names.slice(0, most - 1) : names;
+    if (names.length > most) {
+        const rest = tp("ui.result.and_more", names.length - shown.length);
+        return list([...shown, rest]);
+    }
+    return list(names);
 }
 
 // Damage a second, with a decimal while it's small
@@ -2832,62 +3616,77 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
             <div className="ui-panel rs-border rs-background ui-result">
                 <h2 className={victory ? "ui-victory" : "ui-defeat"}>
                     {victory && result
-                        ? getMap(result.mapId).victoryText
-                        : (result?.endedEarly ?? "Oh dear, you are dead!")}
+                        ? tl(stageVictoryText(getMap(result.mapId), result.stage))
+                        : (result?.endedEarly ?? t("ui.result.dead"))}
                 </h2>
                 {result?.party && (
                     <p className="ui-subtle">
-                        With {listNames(result.party, MAX_LISTED_TEAMMATES)}
+                        {t("ui.result.with_party", {
+                            party: listNames(result.party, MAX_LISTED_TEAMMATES),
+                        })}
                     </p>
                 )}
                 {result?.endlessRecord && (
                     <p className="ui-unlocked">
-                        Your furthest {result.hard && "hard "}endless run in{" "}
-                        {getMap(result.mapId).name}!
+                        {result.hard
+                            ? t("ui.result.endless_record_hard", {
+                                  map: mapName(getMap(result.mapId)),
+                              })
+                            : t("ui.result.endless_record", { map: mapName(getMap(result.mapId)) })}
                     </p>
                 )}
+                {result?.tombs && <TombsBoardView tombs={result.tombs} />}
                 {result?.raidChest && <RaidChestView chest={result.raidChest} />}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
-                        You've beaten {getMap(result.mapId).name} on hard!
+                        {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
                     </p>
                 )}
                 {result?.unlockedMap && (
-                    <p className="ui-unlocked">{result.unlockedMap} is open to you now!</p>
+                    <p className="ui-unlocked">
+                        {t("ui.result.unlocked_map", { map: tl(result.unlockedMap) })}
+                    </p>
                 )}
                 {result?.unlockedCharacters.map((name) => (
                     <p key={name} className="ui-unlocked">
-                        The {name} joins you!
+                        {t("ui.result.unlocked_character", { name: tl(name) })}
                     </p>
                 ))}
                 {result?.unlockedItems.map((name) => (
                     <p key={name} className="ui-unlocked">
-                        {name} can be found now!
+                        {t("ui.result.unlocked_item", { name: tl(name) })}
                     </p>
                 ))}
                 {result && result.newTrophies.length > 0 && (
                     <p className="ui-unlocked">
-                        New in the Collection log: {listNames(result.newTrophies)}
+                        {t("ui.result.new_trophies", {
+                            trophies: listNames(result.newTrophies.map(tl)),
+                        })}
                     </p>
                 )}
                 {result && result.newGear.length > 0 && (
-                    <p className="ui-unlocked">New in the Armoury: {listNames(result.newGear)}</p>
+                    <p className="ui-unlocked">
+                        {t("ui.result.new_gear", {
+                            gear: listNames(result.newGear.map(tl)),
+                        })}
+                    </p>
                 )}
                 {result?.quests.map((quest) => (
                     <p key={quest.name} className="ui-unlocked">
-                        Quest complete: {quest.name}! <Coins amount={quest.coins} />
+                        {t("ui.result.quest_complete", { name: tl(quest.name) })}{" "}
+                        <Coins amount={quest.coins} />
                     </p>
                 ))}
                 {multiplayer && player && (
                     <div
                         className="ui-result-player-nav"
                         role="group"
-                        aria-label="Player stats navigation"
+                        aria-label={t("ui.result.player_nav_aria")}
                     >
                         <button
                             className="ui-button ui-result-arrow"
-                            aria-label="Previous player's stats"
-                            title="Previous player (Left arrow)"
+                            aria-label={t("ui.result.prev_player_aria")}
+                            title={t("ui.result.prev_player_title")}
                             onClick={() => changePlayer(-1)}
                         >
                             <span className="ui-result-arrow-left" aria-hidden="true" />
@@ -2895,17 +3694,24 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                         <div className="ui-result-player" aria-live="polite" aria-atomic="true">
                             <div className="ui-result-player-name">
                                 {player.name}
-                                {player.isLocal && " (you)"}
+                                {player.isLocal && t("ui.result.you")}
                             </div>
                             <div className="ui-result-player-detail">
-                                Player {playerIndex + 1} of {players.length}
-                                {player.left ? " · Left the run" : player.down ? " · Down" : ""}
+                                {t("ui.result.player_index", {
+                                    current: playerIndex + 1,
+                                    total: players.length,
+                                })}
+                                {player.left
+                                    ? t("ui.result.left_run")
+                                    : player.down
+                                      ? t("ui.result.down")
+                                      : ""}
                             </div>
                         </div>
                         <button
                             className="ui-button ui-result-arrow"
-                            aria-label="Next player's stats"
-                            title="Next player (Right arrow)"
+                            aria-label={t("ui.result.next_player_aria")}
+                            title={t("ui.result.next_player_title")}
                             onClick={() => changePlayer(1)}
                         >
                             <span className="ui-result-arrow-right" aria-hidden="true" />
@@ -2915,50 +3721,57 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 {result && player && (
                     <div className="ui-result-columns">
                         <div className="ui-result-column">
-                            {multiplayer && <h3 className="ui-pause-heading">Individual stats</h3>}
-                            <table className="ui-result-table" aria-label="Individual stats">
+                            {multiplayer && (
+                                <h3 className="ui-pause-heading">
+                                    {t("ui.result.individual_stats")}
+                                </h3>
+                            )}
+                            <table
+                                className="ui-result-table"
+                                aria-label={t("ui.result.individual_stats")}
+                            >
                                 <tbody>
                                     <tr>
-                                        <td>Adventurer</td>
-                                        <td>{player.characterName}</td>
+                                        <td>{t("ui.result.stat.adventurer")}</td>
+                                        <td>{tl(player.characterName)}</td>
                                     </tr>
                                     <tr>
-                                        <td>Kills</td>
+                                        <td>{t("ui.result.stat.kills")}</td>
                                         <td>
                                             <Big value={player.kills} />
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>Damage dealt</td>
+                                        <td>{t("ui.result.stat.damage_dealt")}</td>
                                         <td>
                                             <Big value={player.damageDealt} />
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>Biggest hit</td>
+                                        <td>{t("ui.result.stat.biggest_hit")}</td>
                                         <td>
                                             <Big value={player.highestHit} />
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>Damage taken</td>
+                                        <td>{t("ui.result.stat.damage_taken")}</td>
                                         <td>
                                             <Big value={player.damageTaken} />
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>Hitpoints healed</td>
+                                        <td>{t("ui.result.stat.healed")}</td>
                                         <td>
                                             <Big value={player.healed} />
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>Caskets opened</td>
+                                        <td>{t("ui.result.stat.caskets")}</td>
                                         <td>{player.caskets}</td>
                                     </tr>
                                     {(player.rerollsUsed > 0 || player.skips > 0) && (
                                         <tr>
-                                            <td>Rerolls / skips</td>
+                                            <td>{t("ui.result.stat.rerolls_skips")}</td>
                                             <td>
                                                 {player.rerollsUsed} / {player.skips}
                                             </td>
@@ -2967,43 +3780,53 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                 </tbody>
                             </table>
                             <h3 className="ui-pause-heading">
-                                {multiplayer ? "Party totals (shared)" : "Run totals"}
+                                {multiplayer
+                                    ? t("ui.result.party_totals")
+                                    : t("ui.result.run_totals")}
                             </h3>
                             <table
                                 className="ui-result-table"
-                                aria-label={multiplayer ? "Party totals" : "Run totals"}
+                                aria-label={
+                                    multiplayer
+                                        ? t("ui.result.party_totals_aria")
+                                        : t("ui.result.run_totals")
+                                }
                             >
                                 <tbody>
                                     {result.hard && (
                                         <tr>
-                                            <td>Difficulty</td>
-                                            <td>Hard</td>
+                                            <td>{t("ui.result.stat.difficulty")}</td>
+                                            <td>
+                                                {result.expert
+                                                    ? t("ui.expert.name")
+                                                    : t("ui.hard.name")}
+                                            </td>
                                         </tr>
                                     )}
                                     {result.endless && (
                                         <tr>
-                                            <td>Endless round</td>
+                                            <td>{t("ui.result.stat.endless_round")}</td>
                                             <td>{result.round}</td>
                                         </tr>
                                     )}
                                     <tr>
-                                        <td>Run time</td>
+                                        <td>{t("ui.result.stat.run_time")}</td>
                                         <td>{formatTime(result.seconds)}</td>
                                     </tr>
                                     <tr>
-                                        <td>Level</td>
+                                        <td>{t("ui.result.stat.level")}</td>
                                         <td>{result.level}</td>
                                     </tr>
                                     {multiplayer && (
                                         <>
                                             <tr>
-                                                <td>Kills</td>
+                                                <td>{t("ui.result.stat.kills")}</td>
                                                 <td>
                                                     <Big value={result.kills} />
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td>Damage dealt</td>
+                                                <td>{t("ui.result.stat.damage_dealt")}</td>
                                                 <td>
                                                     <Big
                                                         value={players.reduce(
@@ -3015,13 +3838,13 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td>Caskets opened</td>
+                                                <td>{t("ui.result.stat.caskets")}</td>
                                                 <td>{result.caskets}</td>
                                             </tr>
                                         </>
                                     )}
                                     <tr>
-                                        <td>Coins banked</td>
+                                        <td>{t("ui.result.stat.coins_banked")}</td>
                                         <td>
                                             <Coins amount={result.coins} />
                                         </td>
@@ -3031,13 +3854,15 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                             {result.bossKills.length > 0 && (
                                 <>
                                     <h3 className="ui-pause-heading">
-                                        {multiplayer ? "Party bosses" : "Bosses"}
+                                        {multiplayer
+                                            ? t("ui.result.party_bosses")
+                                            : t("ui.result.bosses")}
                                     </h3>
                                     <table className="ui-result-table">
                                         <tbody>
                                             {result.bossKills.map((boss, i) => (
                                                 <tr key={i}>
-                                                    <td>{boss.name}</td>
+                                                    <td>{tl(boss.name)}</td>
                                                     <td>{formatTime(boss.seconds)}</td>
                                                 </tr>
                                             ))}
@@ -3048,14 +3873,19 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                         </div>
                         {player.damage.length > 0 && (
                             <div className="ui-result-column">
-                                <h3 className="ui-pause-heading">Damage breakdown</h3>
-                                <table className="ui-result-damage" aria-label="Damage breakdown">
+                                <h3 className="ui-pause-heading">
+                                    {t("ui.result.damage_breakdown")}
+                                </h3>
+                                <table
+                                    className="ui-result-damage"
+                                    aria-label={t("ui.result.damage_breakdown")}
+                                >
                                     <thead>
                                         <tr>
                                             <th />
-                                            <th>Damage</th>
-                                            <th>Kills</th>
-                                            <th>DPS</th>
+                                            <th>{t("ui.result.damage")}</th>
+                                            <th>{t("ui.result.stat.kills")}</th>
+                                            <th>{t("ui.damage.dps")}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -3073,9 +3903,9 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                                         <span
                                                             className="ui-result-name"
                                                             style={{ color: row.color }}
-                                                            title={row.name}
+                                                            title={tl(row.name)}
                                                         >
-                                                            {row.name}
+                                                            {tl(row.name)}
                                                         </span>
                                                     </span>
                                                 </td>
@@ -3102,7 +3932,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     {/* A boss fight on your own: straight into it again */}
                     {!ui.coop.room && getMap(ui.mapId).fight && (
                         <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                            Retry
+                            {nextFightLabel(getMap(ui.mapId), victory, result?.stage)}
                         </button>
                     )}
                     <button
@@ -3113,7 +3943,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                         }
                         onClick={() => client.leaveRun()}
                     >
-                        {ui.coop.room ? "Back to the party" : "Back to the title"}
+                        {ui.coop.room ? t("ui.result.back_party") : t("ui.result.back_title")}
                     </button>
                 </div>
             </div>

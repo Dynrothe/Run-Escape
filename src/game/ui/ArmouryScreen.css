@@ -28,7 +28,7 @@
 
 .ui-armoury-slot-name {
     flex-shrink: 0;
-    width: 48px;
+    min-width: 48px;
     font-family: "OSRS Bold", sans-serif;
     font-size: 15px;
     color: var(--ui-white);
@@ -84,7 +84,7 @@
     color: var(--ui-white);
 }
 
-.ui-armoury-stats .ui-armoury-set {
+.ui-armoury-set {
     color: var(--ui-cyan);
 }
 
@@ -104,6 +104,8 @@
     border: 1px solid transparent;
     opacity: 0.45;
     filter: grayscale(0.7);
+    background: transparent;
+    cursor: help;
 }
 
 .ui-armoury-step-done {
@@ -172,4 +174,8 @@
     .ui-armoury-body {
         grid-template-columns: minmax(0, 1fr);
     }
+}
+
+.ui-armoury-stats li {
+    padding: 1px 0;
 }

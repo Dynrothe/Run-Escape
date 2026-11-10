@@ -1,5 +1,6 @@
 import { ENEMY_BY_ID } from "./enemies";
 import { RANDOM_EVENTS } from "./randomEvents";
+import { TOMBS_ENEMIES } from "./tombs";
 import { PUMPKIN_MAPS, PUMPKIN_OUTCOMES } from "./trickOrTreat";
 import { EnemyDef, MapDef } from "./types";
 
@@ -28,8 +29,20 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
     const pumpkins = PUMPKIN_MAPS.includes(map.id) ? PUMPKIN_OUTCOMES : [];
     // Random events go by their effects: the rest is names and lines of chat
     const randomEvents = RANDOM_EVENTS.map((event) => event.effect);
+    // The Tombs' rooms aren't waves, so their enemies are listed as they are
+    const tombs = map.tombs ? TOMBS_ENEMIES.map((enemy) => enemy.id) : [];
     collectEnemyIds(
-        [map.waves, map.events, map.fun?.bosses, map.raid, map.rule, pumpkins, randomEvents],
+        [
+            map.waves,
+            map.events,
+            map.stages,
+            map.fun?.bosses,
+            map.raid,
+            map.rule,
+            pumpkins,
+            randomEvents,
+            tombs,
+        ],
         ids,
         seen,
     );

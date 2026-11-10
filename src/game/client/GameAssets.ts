@@ -3,6 +3,7 @@ import {
     ActorBakeInput,
     ActorBakeResult,
     BakeRequest,
+    NpcBakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
@@ -21,28 +22,51 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
-import { CASKETS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { ALL_MAPS, MAPS } from "../content/maps";
+import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
+import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
-import { REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    AKKHA,
+    APMEKEN_BARRIER_LOC,
+    APMEKEN_SPOTANIMS,
+    CRONDIS,
+    HET,
+    JUNGLE_JAPES,
+    KEPHRI,
+    KEPHRI_ARCANE_BLAST,
+    KEPHRI_EGG_BLAST,
+    SARCOPHAGI,
+    SARCOPHAGUS_BLAST,
+    SCABARAS,
+    TOMBS_SPIRIT,
+    TOMBS_SPOTANIMS,
+    WARDENS,
+    ZEBAK,
+    getTombsFightSeqs,
+} from "../content/tombs";
 import {
     EnemyDef,
     EnemyOutfit,
     FloorSkinDef,
     GearSlot,
     ImpactDef,
+    MapDef,
     RootsRuleDef,
     WeaponDef,
 } from "../content/types";
-import { WEAPONS, getWeapon } from "../content/weapons";
+import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
 import { GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { getCinematicSeqs } from "./Cinematic";
 
 export const PLAYER_SEQS = {
     idle: 808,
@@ -50,6 +74,12 @@ export const PLAYER_SEQS = {
     run: 824,
     death: 836,
 };
+
+// Eating, whose interleave order is the cache's usual split of a player for
+// doing something while walking: the legs (and the body's root) from the
+// walk, the rest from what's being done. The game's attacks have none of
+// their own, so they're played over the run with this one's.
+export const PLAYER_INTERLEAVE_SEQ = 829;
 
 export const PICKUP_OBJS: Record<"food" | "casket", number> = {
     food: 2140,
@@ -150,20 +180,26 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's
-// tabs, the skills' refund button, co-op's flags and the overhead prayers
-// (every frame comes with the first) and the passives with a sprite for an
-// icon. The slim cache keeps these and no others, so a sprite the game shows
+// tabs and cloud save's button, empty equipment slots, the skills' refund button, co-op's flags and the
+// overhead prayers (every frame comes with the first) and the passives with a
+// sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
+        ...Object.values(CLOUD_SAVE_SPRITES),
+        ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
+        ...STAT_ICON_SPRITE_IDS,
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
+        // The Tombs of Amascut's invocation board: each icon lit and dark, and Amascut's faces
+        ...INVOCATIONS.flatMap((invocation) => [invocation.icon, invocation.icon + OFF_SPRITE]),
+        ...Object.values(RAID_BAND_SPRITES),
     ];
     return [...new Set(ids)];
 }
@@ -172,7 +208,7 @@ export function getGameSpriteIds(): number[] {
 // level up fireworks, a frozen player's ice, the bot nuke's explosions, the
 // Amulet of blood fury's heal, a random event's visitor coming and going, a
 // co-op revive's emote)
-function getSpotAnimIds(): number[] {
+export function getSpotAnimIds(): number[] {
     const ids = new Set<number>([
         53,
         199,
@@ -210,7 +246,7 @@ function getSpotAnimIds(): number[] {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
         add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim);
+        add(weapon.chain?.spotAnim, weapon.breach?.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -219,16 +255,69 @@ function getSpotAnimIds(): number[] {
     for (const { effect } of POWER_UPS) {
         add("spotAnim" in effect ? effect.spotAnim : undefined);
     }
+    // Apmeken's issues
+    add(...Object.values(APMEKEN_SPOTANIMS));
+    // Ba-Ba's sarcophagi's blasts, which are no attack of hers
+    add(SARCOPHAGUS_BLAST.spotAnim);
+    // The Het room's beam, along and across, and where it stops
+    add(HET.beamSpotAnims.across, HET.beamSpotAnims.along, HET.beamSpotAnims.impact);
+    // Kephri's shield (up, and taking a swarm), her flies, dung coming down, her eggs going
+    // off, the Arcane Scarab's charge, and what her specials' shards are drawn as
+    add(
+        TOMBS_SPOTANIMS.kephriShield,
+        TOMBS_SPOTANIMS.kephriShieldSwarm,
+        KEPHRI.dung.spotAnim,
+        KEPHRI.dung.dropSpotAnim,
+        KEPHRI.eggs.spotAnim,
+    );
+    add(KEPHRI.arcane.spotAnim, TOMBS_SPOTANIMS.arcaneCharge);
+    add(KEPHRI_ARCANE_BLAST.shards?.spotAnim, KEPHRI_EGG_BLAST.shards?.spotAnim);
+    // The Crondis room's poison, pale and dark, and its water poured
+    add(CRONDIS.spotAnims.pale, CRONDIS.spotAnims.dark, CRONDIS.spotAnims.pour);
+    // The Wardens: their seals as they discharge, their shots and where those land, and the one
+    // that loses blowing up
+    add(
+        ...Object.values(WARDENS.wardens).flatMap((w) => [
+            w.pyramidsSpotAnim,
+            w.shotSeal,
+            w.shotSpotAnim,
+        ]),
+        WARDENS.shot.impactSpotAnim,
+        TOMBS_SPOTANIMS.wardenBlowsUp,
+    );
+    // The obelisk's specials in the second phase (their warning rings, glows and strikes, its
+    // skulls and their shadows), and in the last, the siphons' skulls and beams, the phantoms
+    // coming, and the enraged lightning and its shadows
+    const { beam, windmill, skulls } = WARDENS.two;
+    add(beam.warnSpotAnim, beam.spotAnim, windmill.warnSpotAnim, windmill.glowSpotAnim);
+    add(windmill.spotAnim, skulls.warnSpotAnim, skulls.projectile, skulls.shadowSpotAnim);
+    add(skulls.spotAnim, WARDENS.three.siphon.beamSpotAnim, WARDENS.three.siphon.skull);
+    add(WARDENS.three.phantomSpotAnim);
+    // The Het room's circles to stand in, and the glow under a loose mirror
+    add(HET.circleSpotAnim);
+    add(WARDENS.three.enrage.lightning.shadowSpotAnim, WARDENS.three.enrage.lightning.spotAnim);
+    // Zebak's roar, and his jugs breaking and splashing
+    add(ZEBAK.roar.spotAnim, ZEBAK.jugs.breakSpotAnim, ZEBAK.jugs.splashSpotAnim);
+    // The Scabaras room's falling roof
+    add(SCABARAS.rockSpotAnim);
+    // Akkha's quadrants' elements, which are no attack of his
+    add(...AKKHA.elements.map((element) => element.spotAnim));
     const addImpact = (impact: ImpactDef | undefined) => {
         add(...(impact?.spots ?? []).map((spot) => spot.spotAnim), impact?.trail?.spotAnim);
     };
     for (const map of MAPS) {
         addImpact(map.fight?.ability?.impact);
     }
-    // A floor's slabs (a dev map's, so they're only there on the dev server)
+    // The Tombs' button
+    for (const map of ALL_MAPS) {
+        addImpact(map.tombs?.ability?.impact);
+    }
     for (const map of ALL_MAPS) {
         // What a cut through a map's roots throws up (MapDef.rule)
         add(map.rule?.look.cutSpotAnim);
+        // What plays in its cinematics (MapDef.cinematic, and a fight's parts')
+        add(...getMapCinematics(map).flatMap((def) => def.cues.map((cue) => cue.spotAnim)));
+        // A floor's slabs (the Wardens')
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -243,7 +332,12 @@ function getSpotAnimIds(): number[] {
         add(...(enemy.disguise?.warning?.spotAnims ?? []));
         add(enemy.shot?.castSpotAnim, enemy.shot?.spotAnim, enemy.shot?.impactSpotAnim);
         for (const attack of enemy.boss?.attacks ?? []) {
-            add(attack.castSpotAnim, attack.spotAnim, attack.impactSpotAnim);
+            add(
+                attack.castSpotAnim,
+                attack.spotAnim,
+                attack.impactSpotAnim,
+                attack.shards?.spotAnim,
+            );
             add(attack.ground?.spotAnim, attack.ground?.middleSpotAnim);
             // An exhumed's orb as it heals its boss, and its end as it's smothered
             add(attack.ground?.smother?.healSpotAnim, attack.ground?.smother?.smotheredSpotAnim);
@@ -267,16 +361,14 @@ function getSpotAnimIds(): number[] {
     return [...ids];
 }
 
-// Items drawn flying or circling: thrown knives, and orbiting runes
+// Items drawn flying or circling: bolts, thrown knives, and orbiting runes
 function getThrownObjIds(): number[] {
     const ids = new Set<number>();
     for (const weapon of WEAPONS) {
-        if (weapon.kind === "knives") {
-            for (const level of weapon.levels) {
-                const objId = level.projectileObjId ?? level.objId;
-                if (objId !== undefined) {
-                    ids.add(objId);
-                }
+        for (const level of weapon.levels) {
+            const objId = getProjectileObjId(weapon, level);
+            if (objId !== undefined) {
+                ids.add(objId);
             }
         }
         for (const objId of weapon.orbitObjIds ?? []) {
@@ -296,6 +388,28 @@ function getWeaponSeqs(weapons: WeaponDef[]): number[] {
 // reviver performs
 export function getPlayerAttackSeqs(): number[] {
     return [...new Set([...getWeaponSeqs(WEAPONS), REVIVE_SEQ])];
+}
+
+// The run poses of the weapon in the player's hand (WeaponDef.runPose), of
+// the swings a look is baked with. Only its, since the sim records no other
+// weapon's swing while the player moves. The look's weapon is the sim's
+// (Sim.getHeldWeapon, through getCurrentAppearance) as long as nothing else
+// is worn in the weapon slot, which a test checks.
+export function getHeldRunPoses(
+    appearance: PlayerAppearance,
+    attackSeqs: number[],
+): { seqId: number; frame: number }[] {
+    const held = appearance.equipment[EquipSlot.WEAPON];
+    if (held === undefined || held < 0) {
+        return [];
+    }
+    return WEAPONS.flatMap((weapon) =>
+        weapon.runPose !== undefined &&
+        attackSeqs.includes(weapon.playerSeq) &&
+        weapon.levels.some((level) => level.objId === held)
+            ? [{ seqId: weapon.playerSeq, frame: weapon.runPose }]
+            : [],
+    );
 }
 
 // The attack animations a hero's bake needs: their weapons', and in co-op the
@@ -400,6 +514,11 @@ export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): Floor
 // A map's roots' scenery (RootsRuleDef.look, client/RootsView.ts), with the look's colours swapped
 export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): string {
     return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
+}
+
+// An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
+export function getPropKey(npcId: number): string {
+    return "prop:" + npcId;
 }
 
 // A piece of what's under a floor (FloorDef.under)
@@ -567,6 +686,8 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
+    // Maps' props and cinematic casts baked or being baked, by model key (getPropKey)
+    private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
         readonly workerPool: RenderDataWorkerPool,
@@ -586,6 +707,7 @@ export class GameAssets {
             enemy.revives?.seq ?? -1,
             enemy.blinks?.seq ?? -1,
             enemy.blinks?.surface?.seq ?? -1,
+            enemy.echoes?.seq ?? -1,
             ...(enemy.boss?.attacks.map((a) => a.seq ?? -1) ?? []),
             enemy.boss?.intro?.seq ?? -1,
             enemy.boss?.surgeSeq ?? -1,
@@ -593,6 +715,7 @@ export class GameAssets {
             enemy.boss?.leash?.jump?.upSeq ?? -1,
             enemy.boss?.phases?.threshold?.seq ?? -1,
             enemy.boss?.phases?.threshold?.riseSeq ?? -1,
+            ...getTombsFightSeqs(enemy.id),
         ].filter((id, i, all) => id !== -1 && all.indexOf(id) === i);
         if (enemy.outfits) {
             return enemy.outfits.map(
@@ -731,7 +854,7 @@ export class GameAssets {
         for (const locId of traitLocs) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
-        // What's under a floor (a dev map's, as its slabs are)
+        // What's under a floor (the Wardens', as its slabs are)
         for (const map of ALL_MAPS) {
             for (const locId of Object.values(map.floor?.under ?? {})) {
                 requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
@@ -778,7 +901,8 @@ export class GameAssets {
                 });
             }
         }
-        for (const { id, npcId, idleSeq } of RANDOM_EVENTS) {
+        // The visitors, and the Tombs' Helpful Spirit drawn as one
+        for (const { id, npcId, idleSeq } of [...RANDOM_EVENTS, TOMBS_SPIRIT]) {
             if (npcId !== undefined && idleSeq !== undefined) {
                 requests.push({ kind: "npc", key: "visitor:" + id, npcId, seqIds: [idleSeq] });
             }
@@ -802,12 +926,90 @@ export class GameAssets {
                 locIds.add(powerUp.effect.locId);
             }
         }
+        // The Tombs of Amascut's
+        // Jungle Japes's banana peels
+        objIds.add(JUNGLE_JAPES.objId);
+        // Ba-Ba's sarcophagi, open
+        locIds.add(SARCOPHAGI.loc);
+        // Zebak's acid
+        locIds.add(ZEBAK.acid.loc);
+        // The Crondis room's spears
+        locIds.add(CRONDIS.locs.spear);
+        // Kephri's dung, a wall where it's dropped
+        locIds.add(KEPHRI.dung.pileLoc);
+        // The Scabaras room's plates, as they stand
+        const { locs: scabaras } = SCABARAS;
+        for (const id of [
+            scabaras.plate,
+            scabaras.lightsPlate,
+            scabaras.tablet,
+            scabaras.button,
+            ...scabaras.symbols,
+            ...scabaras.shown,
+        ]) {
+            locIds.add(id);
+        }
+        // The Wardens' charging platforms, empty to full
+        for (const id of WARDENS.charge.platforms) {
+            locIds.add(id);
+        }
+        // The Het room's mirrors (clean, dirty, fixed), their spots and its barriers
+        locIds.add(HET.mirrorLoc);
+        locIds.add(HET.dirtyLoc);
+        locIds.add(HET.fixedLoc);
+        locIds.add(HET.spotLoc);
+        locIds.add(HET.barrierLoc);
+        locIds.add(HET.wornLoc);
         for (const objId of objIds) {
             requests.push({ kind: "obj", key: "obj:" + objId, objId, count: 1 });
         }
         for (const locId of locIds) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
+        // The Tombs' barriers, glowing
+        requests.push({
+            kind: "loc",
+            key: "loc:" + APMEKEN_BARRIER_LOC,
+            locId: APMEKEN_BARRIER_LOC,
+            animated: true,
+        });
+
+        // The Crondis room's waterfalls, running and dry
+        for (const id of [CRONDIS.locs.waterfall, CRONDIS.locs.dry]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
+
+        // The Scabaras room's plates' glows
+        for (const id of [
+            SCABARAS.locs.plateLit,
+            SCABARAS.locs.platePressed,
+            SCABARAS.locs.lightsOn,
+            SCABARAS.locs.stepped,
+            SCABARAS.locs.matched,
+        ]) {
+            requests.push({ kind: "loc", key: "loc:" + id, locId: id, animated: true });
+        }
+
+        // The Wardens' pyramids, glowing
+        for (const { pyramid } of Object.values(WARDENS.wardens)) {
+            requests.push({
+                kind: "loc",
+                key: "loc:" + pyramid,
+                locId: pyramid,
+                animated: true,
+            });
+        }
+
+        // Akkha's symbols, glowing
+        for (const { symbolLoc } of AKKHA.elements) {
+            requests.push({
+                kind: "loc",
+                key: "loc:" + symbolLoc,
+                locId: symbolLoc,
+                animated: true,
+            });
+        }
+
         // A raid hall's teleporter, swirling
         requests.push({
             kind: "loc",
@@ -873,6 +1075,68 @@ export class GameAssets {
             waits.push(baking);
         }
         return Promise.all(waits).then(() => undefined);
+    }
+
+    // A map's NPCs posed as scenery (MapDef.props), and the cast of its opening cinematic
+    // (MapDef.cinematic) with everything they play: baked as the map's travelled to
+    static getPropRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
+        const seqs = new Map<number, number[]>();
+        const add = (npcId: number, seqIds: number[]) => {
+            const list = seqs.get(npcId) ?? [];
+            for (const seq of seqIds) {
+                if (!list.includes(seq)) {
+                    list.push(seq);
+                }
+            }
+            seqs.set(npcId, list);
+        };
+        for (const prop of maps.flatMap((map) => map.props ?? [])) {
+            add(prop.npcId, [prop.seq]);
+        }
+        for (const def of maps.flatMap(getMapCinematics)) {
+            for (const [npcId, seqIds] of getCinematicSeqs(def)) {
+                add(npcId, seqIds);
+            }
+        }
+        return [...seqs].map(([npcId, seqIds]) => ({
+            kind: "npc",
+            key: getPropKey(npcId),
+            npcId,
+            seqIds,
+        }));
+    }
+
+    // Bakes a map's props and cinematics' casts (its opening's and each part's), unless they're
+    // baked already or on their way. Each NPC's baked once, under one key, so it's baked with what
+    // every map plays on it (maps), as the slim cache has it: one map's alone would leave another's
+    // animations out.
+    loadProps(map: MapDef, maps: readonly MapDef[] = ALL_MAPS): Promise<void> {
+        const npcIds = new Set([
+            ...(map.props ?? []).map((prop) => prop.npcId),
+            ...getMapCinematics(map).flatMap((cinematic) =>
+                cinematic.cast.map((actor) => actor.npcId),
+            ),
+        ]);
+        if (npcIds.size === 0) {
+            return Promise.resolve();
+        }
+        // This map's own def first: a dev map's is made again for each run
+        const requests = GameAssets.getPropRequests([
+            map,
+            ...maps.filter((other) => other.id !== map.id),
+        ]).filter((request) => npcIds.has(request.npcId));
+        const missing = requests.filter((request) => !this.propBakes.has(request.key));
+        if (missing.length > 0) {
+            const baking = this.bakeInTasks(missing, this.loadBake).catch((e) =>
+                console.error("Couldn't bake", map.id, "props", e),
+            );
+            for (const request of missing) {
+                this.propBakes.set(request.key, baking);
+            }
+        }
+        return Promise.all(requests.map((request) => this.propBakes.get(request.key))).then(
+            () => undefined,
+        );
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready
@@ -1151,8 +1415,24 @@ export class GameAssets {
                     PLAYER_SEQS.death,
                     ...attackSeqs,
                 ].filter((id, i, all) => all.indexOf(id) === i);
+                // The held weapon's aim over the run, for a moment after each
+                // shot on the move
+                const poses = getHeldRunPoses(appearance, attackSeqs);
                 const bake = await this.bake([
-                    { kind: "player", key: "player", appearance, seqIds },
+                    {
+                        kind: "player",
+                        key: "player",
+                        appearance,
+                        seqIds,
+                        runPoses:
+                            poses.length > 0
+                                ? {
+                                      poses,
+                                      runSeqId: stance.run,
+                                      maskSeqId: PLAYER_INTERLEAVE_SEQ,
+                                  }
+                                : undefined,
+                    },
                     ...getPowerUpLookRequests(appearance),
                 ]);
                 this.renderer.updateTextureArray(bake.loadedTextures);

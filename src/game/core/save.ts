@@ -6,6 +6,7 @@ import {
 } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
+import { InvocationPreset, cleanInvocationPresets, cleanInvocations } from "../content/invocations";
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
     ALL_MAPS,
@@ -77,6 +78,9 @@ export type SaveData = {
     victories: number;
     // Map id -> times beaten; beating a map unlocks the next
     mapVictories: Record<string, number>;
+    // A fight in parts (MapDef.stages): how many of its parts have been beaten, kept between runs
+    // as OSRS keeps a quest's progress
+    fightStages?: Record<string, number>;
     // Map id -> the times of those that were on hard mode
     hardVictories: Record<string, number>;
     // A raid's expert mode wins, which also count as hard ones
@@ -103,6 +107,12 @@ export type SaveData = {
     evolutionsMade: string[];
     // The Collection log's trophies found (see trophies.ts)
     trophies: string[];
+    // The Tombs of Amascut's invocations, as last picked (content/invocations.ts)
+    invocations?: string[];
+    // Saved setups of the invocation board, to load in one go (content/invocations.ts)
+    invocationPresets?: InvocationPreset[];
+    // The Scabaras room's been beaten once: its puzzle helper's unlocked (DisplaySettings.puzzleHelper)
+    scabarasBeaten?: boolean;
     // The pet taken along on runs (pets.ts), one of the trophies found
     pet?: string;
     // An act's map id -> its best win (content/acts.ts): the quickest at the highest step it's
@@ -215,6 +225,16 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    if (data.fightStages && typeof data.fightStages === "object") {
+        save.fightStages = {};
+        for (const [id, parts] of Object.entries(data.fightStages)) {
+            const stages = MAP_BY_ID.get(id)?.stages;
+            const part = Math.floor(num(parts, 0));
+            if (winnable(id) && stages && part > 0 && part < stages.length) {
+                save.fightStages[id] = part;
+            }
+        }
+    }
     if (data.expertVictories && typeof data.expertVictories === "object") {
         for (const [id, wins] of Object.entries(data.expertVictories)) {
             if (isRaidMap(id) && num(wins, 0) > 0) {
@@ -290,6 +310,16 @@ export function migrateSave(raw: unknown): SaveData {
                 save.actBest[id] = { seconds, step: Math.max(0, Math.floor(num(record?.step, 0))) };
             }
         }
+    }
+    if (Array.isArray(data.invocations)) {
+        save.invocations = cleanInvocations(data.invocations);
+    }
+    const presets = cleanInvocationPresets(data.invocationPresets);
+    if (presets.length > 0) {
+        save.invocationPresets = presets;
+    }
+    if (data.scabarasBeaten === true) {
+        save.scabarasBeaten = true;
     }
     if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;
@@ -452,6 +482,8 @@ export function refundUpgrades(save: SaveData, style: CombatStyle = "melee"): vo
 
 export type RunSummary = {
     mapId: string;
+    // A fight in parts: which this run was (MapDef.stages)
+    stage?: number;
     // An endless run, and the round it got to
     endless?: boolean;
     round?: number;
@@ -474,6 +506,8 @@ export type RunSummary = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills?: Record<string, number>;
     caskets?: number;
+    // The Scabaras room was beaten: its puzzle helper's unlocked
+    scabarasBeaten?: boolean;
 };
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
@@ -486,7 +520,14 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     save.coins += run.coins;
     save.totalCoins += run.coins;
     save.runs++;
-    if (run.victory) {
+    // A fight in parts: a part beaten is kept, the next to play; past the last, from the first
+    // again (the map's beaten for good). Only the last beats the map.
+    const stages = MAP_BY_ID.get(run.mapId)?.stages;
+    if (run.victory && stages && (run.stage ?? 0) === getFightStage(save, run.mapId)) {
+        const next = (run.stage ?? 0) + 1;
+        save.fightStages = { ...save.fightStages, [run.mapId]: next >= stages.length ? 0 : next };
+    }
+    if (run.victory && beatsMap(run)) {
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
         if (run.hard) {
@@ -524,6 +565,10 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         if (!save.trophies.includes(id)) {
             save.trophies.push(id);
         }
+    }
+    // Won or not, the room was beaten
+    if (run.scabarasBeaten) {
+        save.scabarasBeaten = true;
     }
     const tallies = getQuestTallies(run);
     for (const [id, kills] of Object.entries(tallies.enemyKills)) {
@@ -575,9 +620,10 @@ export function getQuestProgress(save: SaveData, quest: QuestDef, run?: RunSumma
             return { done: Math.min(done, objective.count), of: objective.count };
         }
         case "beatMap": {
+            // A fight in parts is beaten by its last part only (as recordRun counts it)
             const won =
                 (save.mapVictories[objective.mapId] ?? 0) > 0 ||
-                (run?.victory === true && run.mapId === objective.mapId);
+                (run?.victory === true && run.mapId === objective.mapId && beatsMap(run));
             return { done: won ? 1 : 0, of: 1 };
         }
     }
@@ -661,11 +707,40 @@ export function applyUnlocks(save: SaveData, run?: RunSummary): void {
     save.unlockedItems.push(...earned.items.map((i) => i.id));
 }
 
+// Whether a won run beats its map: any win, but in a fight in parts only the last part's
+function beatsMap(run: RunSummary): boolean {
+    const stages = MAP_BY_ID.get(run.mapId)?.stages;
+    return !stages || (run.stage ?? 0) + 1 >= stages.length;
+}
+
+// The part of a fight in parts a run plays next (MapDef.stages): the first not beaten (from the
+// first again once the last has been)
+export function getFightStage(save: SaveData, mapId: string): number {
+    const stages = MAP_BY_ID.get(mapId)?.stages;
+    const next = save.fightStages?.[mapId] ?? 0;
+    return stages && Number.isInteger(next) && next > 0 && next < stages.length ? next : 0;
+}
+
+// How many of a fight in parts' parts can be played (MapDef.stages): all of them once it's been
+// beaten, or each up to the next not beaten yet, to be fought again
+export function getReachedStages(save: SaveData, mapId: string): number {
+    const stages = MAP_BY_ID.get(mapId)?.stages;
+    if (!stages) {
+        return 0;
+    }
+    return (save.mapVictories[mapId] ?? 0) > 0 ? stages.length : getFightStage(save, mapId) + 1;
+}
+
 // The first map is always open; each after it opens once the one before it
 // has been beaten, or once it's been beaten itself (a co-op guest can win on
 // a map the host had open). The fun and seasonal maps are open from the start.
 export function isMapUnlocked(save: SaveData, mapId: string): boolean {
-    if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId)) {
+    // Behind another map, whatever this one is (MapDef.requires)
+    const requires = MAP_BY_ID.get(mapId)?.requires;
+    if (requires) {
+        return (save.mapVictories[requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0;
+    }
+    if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId) || isDevMap(mapId)) {
         return true;
     }
     // An act's maps open together once the map it requires has been beaten, in any order
@@ -689,8 +764,10 @@ export function isMapUnlocked(save: SaveData, mapId: string): boolean {
 // A map can be played endless once it's been beaten; the fun maps are only
 // ever endless, and a boss fight never is (there's nothing after its boss)
 export function isEndlessUnlocked(save: SaveData, mapId: string): boolean {
-    // A raid ends with its last room: there's no round after it to come round again
-    if (MAP_BY_ID.get(mapId)?.fight || isRaidMap(mapId)) {
+    // A raid ends with its last room: there's no round after it to come round again. The Tombs of
+    // Amascut go by their invocations instead.
+    const map = MAP_BY_ID.get(mapId);
+    if (map?.fight || map?.tombs || isRaidMap(mapId)) {
         return false;
     }
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
@@ -699,6 +776,10 @@ export function isEndlessUnlocked(save: SaveData, mapId: string): boolean {
 // Hard mode opens the same way: once the map's been beaten, and from the start
 // on the fun maps, which can't be
 export function isHardUnlocked(save: SaveData, mapId: string): boolean {
+    // The Tombs of Amascut's invocations take hard mode's place
+    if (MAP_BY_ID.get(mapId)?.tombs) {
+        return false;
+    }
     return isFunMap(mapId) || (save.mapVictories[mapId] ?? 0) > 0;
 }
 

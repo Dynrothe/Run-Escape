@@ -2,8 +2,9 @@ import { Rarity } from "../content/rarity";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
-import { RunResult } from "../core/Sim";
+import { RunResult, ScabarasPuzzleState } from "../core/Sim";
 import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
+import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
@@ -61,12 +62,16 @@ export type BuffView = {
     id: string;
     name: string;
     objId: number;
-    secondsLeft: number;
-    // Time left, 1 when just drunk
-    fraction: number;
     // A boss attack's drain rather than a potion or power-up
     harmful: boolean;
-};
+} & (
+    | {
+          secondsLeft: number;
+          // Time left, 1 when just drunk
+          fraction: number;
+      }
+    | { secondsLeft?: never; fraction?: never }
+);
 
 // An opened reward casket, for the opening animation and the decision after
 export type ChestView = {
@@ -163,6 +168,32 @@ export type HudNumbers = {
         portal: boolean;
         first: boolean;
     };
+    // The Tombs' Apmeken room: the wave it's on, of how many, and whether it's still waiting for
+    // the party to walk through the barrier, or beaten
+    tombsWave?: { wave: number; of: number; waiting: boolean; done: boolean; label?: string };
+    // Akkha's shadows: how many are up, and seconds till they flood
+    tombsShadows?: { left: number; seconds: number };
+    // The Scabaras room's puzzles: how many are solved, and Addition's number and what's made
+    tombsScabaras?: {
+        solved: number;
+        of: number;
+        target: number;
+        sum: number;
+        readable: boolean;
+        reading?: "slate" | "tablet";
+        // Each puzzle: done, to be done now, or waiting on the others
+        puzzles: ScabarasPuzzleState[];
+    };
+    // The Het room: the mirrors you're holding, and how far the caster's charged (0 to 1)
+    tombsHet?: { held: number; charge: number };
+    // The Crondis room: your water, and the palm's growth against what it needs
+    tombsCrondis?: { water: number; growth: number; goal: number };
+    // Seconds till Zebak roars, while he's about to
+    tombsRoar?: number;
+    // Dev server only: god mode's on (GameClient.toggleDevGod)
+    devGod?: boolean;
+    // Dev only: in the Tombs' Nexus (or the Wardens' room), so the Wardens can be skipped to
+    devWardens?: boolean;
     hp: number;
     maxHp: number;
     // The hitpoints bar turns green, like the client's orb
@@ -171,6 +202,8 @@ export type HudNumbers = {
     xpFraction: number;
     // Whole seconds into the run
     seconds: number;
+    // Co-op's next automatic choice, using the host's wall clock rather than sim ticks.
+    decisionSeconds?: number;
     kills: number;
     coins: number;
     // Damage a second just now, every source counted
@@ -183,7 +216,7 @@ export type HudNumbers = {
     buffs: BuffView[];
     // enraged: below half its hitpoints, faster and with its enraged attacks
     boss?: BossView;
-    // A fight's own button (MapDef.fight.ability): how charged it is (0 to 1, by twentieths),
+    // A fight's own button (Sim.ability): how charged it is (0 to 1, by twentieths),
     // whether the boss is in its reach, and whether its guard's down, when it's worth most
     ability?: AbilityView;
     // The quests this run can get on with: this map's, then the ones done all
@@ -264,6 +297,12 @@ export type AbilityView = {
     charge: number;
     inReach: boolean;
     opened: boolean;
+    // It coaches (FightAbilityDef.guide): the hint, and the guard-down tag and pulse
+    guide: boolean;
+    // The run has items (not a one-fight map): on a touch screen it goes above their corner
+    withItems: boolean;
+    // Say what it's for (it's not been used yet this session, early in a fight)
+    hint: boolean;
 };
 
 // One player's own numbers for the results screen (a teammate who fell or
@@ -374,12 +413,17 @@ export type UiSnapshot = {
     unreadableSave?: string;
     // Saves that couldn't be read, kept to be exported
     unreadableSaves: UnreadableSave[];
+    // Cloud save, where the build has it and its Worker answers
+    cloud?: CloudView;
     characterId: string;
     // The map the next run is on, and whether it's endless and on hard mode
     // (once the map's been beaten)
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // A fight in parts: the part picked to play (one already reached, MapDef.stages), till the run
+    // it's for ends; the next not beaten when unset
+    fightStage?: number;
     // A raid's expert mode (solo for now)
     expert: boolean;
     hud?: HudView;
@@ -391,6 +435,8 @@ export type UiSnapshot = {
     waitingOn: string[];
     // Co-op: a revive you're part of, as the one down or the one reviving
     revive?: ReviveView;
+    // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
+    cinematic?: boolean;
     choices: ChoiceView[];
     chest?: ChestView;
     event?: EventView;
@@ -488,13 +534,23 @@ export class GameStore {
         }
     }
 
-    toast(text: string, ms = 3500): void {
+    // Its id, to find it again or take it down early (a boss's instruction: GameClient)
+    toast(text: string, ms = 3500): number {
         const now = performance.now();
         // The same message twice at once (three Jads turning up together)
         // shows once
         const toasts = this.snapshot.toasts.filter((t) => t.until > now && t.text !== text);
-        toasts.push({ id: this.nextToastId++, text, until: now + ms });
+        const id = this.nextToastId++;
+        toasts.push({ id, text, until: now + ms });
         this.set({ toasts: toasts.slice(-4) });
+        return id;
+    }
+
+    dismissToast(id: number): void {
+        const toasts = this.snapshot.toasts;
+        if (toasts.some((t) => t.id === id)) {
+            this.set({ toasts: toasts.filter((t) => t.id !== id) });
+        }
     }
 
     expireToasts(): void {

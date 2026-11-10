@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import type { MapDef } from "./types";
 
 // An act after the first campaign (MapDef.act): its maps open together once the map it requires is
@@ -125,4 +126,21 @@ export function getActStep(
     }
     const beaten = getActMapIds(act).filter((id) => id !== map.id && (wins[id] ?? 0) > 0).length;
     return Math.min(beaten, act.steps.length - 1);
+}
+
+// Names in the player's language (locales/<lang>/world.json, act.*): a slot's keys go by its name
+export function actSlotKey(act: ActDef, slot: ActSlotDef): string {
+    return `act.${act.id}.slot.${slot.name.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+}
+
+export function actName(act: ActDef): string {
+    return tr(`act.${act.id}.name`, act.name);
+}
+
+export function actSlotName(act: ActDef, slot: ActSlotDef): string {
+    return tr(actSlotKey(act, slot) + ".name", slot.name);
+}
+
+export function actSlotBoss(act: ActDef, slot: ActSlotDef): string {
+    return tr(actSlotKey(act, slot) + ".boss", slot.boss);
 }

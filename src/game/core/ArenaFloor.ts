@@ -21,6 +21,7 @@ export const FLOOR_SOUTH = 2;
 export const FLOOR_WEST = 3;
 
 const NONE = -1;
+// A hole's fall, long before anything: gone, and never drawn falling
 
 // Seconds a fallen tile takes to come back up into place (FloorPatternDef restore)
 export const RESTORE_SECONDS = 0.6;
@@ -62,6 +63,9 @@ export class ArenaFloor {
     // 1 where that's it rebuilding by itself (FloorDef.rebuild), warned from restoreAt less the
     // floor's rebuild warning, rather than put back by a pattern or an action
     readonly rebuilt: Uint8Array;
+    // Tiles of the box that are holes (FloorDef.holes): never floor, but walked on till a fight
+    // opens them (openHoles), as the map's ground is till then
+    readonly hole: Uint8Array;
     // Each trigger's state (FloorDef.triggers, by layout.triggerNames' index): armed, when it can
     // go off again, and whether a player's on it this tick
     readonly armed: Uint8Array;
@@ -153,14 +157,26 @@ export class ArenaFloor {
         this.hasLevels =
             this.layout.height.some((h) => h !== 0) ||
             this.layout.ramp.some((r) => r !== RAMP_NONE);
-        // The grid's kept between runs on a map; what isn't floor is the pit's from the start
+        this.hole = new Uint8Array(count);
+        for (const span of def.holes ?? []) {
+            for (let x = span.x0; x <= span.x1; x++) {
+                const i = this.index(x, span.y);
+                if (i >= 0) {
+                    this.hole[i] = 1;
+                }
+            }
+        }
+        // The grid's kept between runs on a map; what isn't floor is the pit's from the start (but
+        // the holes, till they're opened)
         grid.restoreAllTiles();
         // and a pillar blocks the way, as an object would
         for (let i = 0; i < count; i++) {
             const x = this.x0 + (i % this.sizeX);
             const y = this.y0 + Math.floor(i / this.sizeX);
             if (!this.layout.mask[i]) {
-                grid.dropTile(x, y);
+                if (!this.hole[i]) {
+                    grid.dropTile(x, y);
+                }
             } else if (this.layout.type[i] === TYPE_PILLAR) {
                 grid.dropTile(x, y, true);
             }
@@ -182,6 +198,18 @@ export class ArenaFloor {
                 if (Math.abs(a - b) > LEVEL) {
                     grid.addLedge(this.x0 + x, this.y0 + y, dir === FLOOR_EAST ? "east" : "north");
                 }
+            }
+        }
+    }
+
+    // The floor's holes, gone from the grid: walked round from now
+    openHoles(): void {
+        for (let i = 0; i < this.hole.length; i++) {
+            if (this.hole[i]) {
+                this.grid.dropTile(
+                    this.x0 + (i % this.sizeX),
+                    this.y0 + Math.floor(i / this.sizeX),
+                );
             }
         }
     }
@@ -637,11 +665,8 @@ export class ArenaFloor {
         return said;
     }
 
-    private start(
-        pattern: FloorPatternDef,
-        tick: number,
-        origin: () => { x: number; y: number },
-    ): void {
+    // A pattern, from this tick: the script's, or a fight's own (the Wardens' slams)
+    start(pattern: FloorPatternDef, tick: number, origin: () => { x: number; y: number }): void {
         const { sizeX, sizeY } = this;
         const { minX, maxX, minY, maxY } = this.layout;
         if (maxX < 0) {
@@ -655,8 +680,12 @@ export class ArenaFloor {
         switch (pattern.kind) {
             case "side": {
                 const step = this.ticks(pattern.rowSeconds);
-                for (let row = 0; row <= maxY - minY; row++) {
-                    const y = maxY - row;
+                // From the front (the north row), or both ways from the origin's row
+                const from = pattern.outward
+                    ? Math.min(Math.max(Math.floor(origin().y) - this.y0, minY), maxY)
+                    : maxY;
+                for (let y = minY; y <= maxY; y++) {
+                    const row = Math.abs(from - y);
                     for (let x = minX; x <= maxX; x++) {
                         const rises =
                             pattern.side === "east"
@@ -665,7 +694,13 @@ export class ArenaFloor {
                                   ? x <= middle
                                   : Math.abs(x - middle) > 1;
                         if (rises) {
-                            this.rise(x, y, first + row * step, FLOOR_SOUTH, tick);
+                            this.rise(
+                                x,
+                                y,
+                                first + row * step,
+                                y > from ? FLOOR_NORTH : FLOOR_SOUTH,
+                                tick,
+                            );
                         }
                     }
                 }
@@ -734,7 +769,7 @@ export class ArenaFloor {
             }
             case "dropRows": {
                 const step = this.ticks(pattern.rowSeconds);
-                const last = maxY - minY + 1 - this.def.drop.keepRows;
+                const last = maxY - minY + 1 - (pattern.keep ?? this.def.drop.keepRows);
                 for (let r = 0; r < pattern.rows && this.rowsDropped < last; r++) {
                     const y = minY + this.rowsDropped;
                     const row: number[] = [];
@@ -783,7 +818,11 @@ export class ArenaFloor {
             case "restore": {
                 const step = this.ticks(pattern.rowSeconds);
                 for (let i = 0; i < this.dropAt.length; i++) {
-                    if (this.dropAt[i] === NONE || this.restoreAt[i] !== NONE) {
+                    if (
+                        !this.layout.mask[i] ||
+                        this.dropAt[i] === NONE ||
+                        this.restoreAt[i] !== NONE
+                    ) {
                         continue;
                     }
                     const y = Math.floor(i / sizeX);

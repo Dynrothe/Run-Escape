@@ -1,4 +1,5 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
 import { CharacterDef } from "./types";
 
@@ -253,6 +254,8 @@ export const CHARACTERS: CharacterDef[] = [
             [EquipSlot.FEET]: 20710,
         },
         bonus: { revival: 1 },
+        // The Wintertodt's phoenix
+        reviveLook: { name: "Phoenix", objId: 20693 },
         unlock: { kind: "beatMap", mapId: "kourend" },
     },
     {
@@ -623,6 +626,27 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
         only: "zachariah",
     },
+    {
+        id: "sands_delver",
+        name: "Sands Delver",
+        description:
+            "Made for Beneath Cursed Sands, and everyone plays them there, and nowhere else: " +
+            "starts with the Crystal bow, moves 20% faster, has 30% more hitpoints and heals 10 " +
+            "hitpoints a minute.",
+        style: "ranged",
+        startingWeapon: "crystal_bow",
+        // The desert's own robes: the shirt, robe and boots
+        equipment: {
+            [EquipSlot.TORSO]: 1833,
+            [EquipSlot.LEGS]: 1835,
+            [EquipSlot.FEET]: 1837,
+        },
+        // Four long fights in a row, each its own run: feet to dodge, and hitpoints to learn them
+        // on. The damage is the bow's alone, at the level the map says, so the fights are as
+        // long as their hitpoints.
+        bonus: { moveSpeed: 0.2, maxHp: 0.3, regen: 10 },
+        only: "beneath_cursed_sands",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));
@@ -633,4 +657,12 @@ export function getCharacter(id: string): CharacterDef {
         throw new Error("Unknown character " + id);
     }
     return character;
+}
+
+export function characterName(character: CharacterDef): string {
+    return tr(`char.${character.id}.name`, character.name);
+}
+
+export function characterDescription(character: CharacterDef): string {
+    return tr(`char.${character.id}.desc`, character.description);
 }

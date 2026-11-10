@@ -50,26 +50,56 @@
         display: block;
     }
 
-    /* The stick and buttons do what the HUD's would */
+    /* The stick and buttons do what the HUD's would (the HUD's fight button with its tag, hint
+       and ring) */
     .ui-inventory,
-    .ui-hud-actions .ui-ability {
+    .ui-hud-actions .ui-ability-wrap {
         display: none;
     }
 
-    /* A fight's own button, big, above the items' corner (a fight has no items) */
-    .ui-touch-ability {
+    /* A fight's own button, big, in the items' corner (a one-fight map has no items). Its wrap's
+       placed, so the tag, the hint and the ring go by the button. The hint's above it, clear of the
+       stick (bottom left), the pause button (top) and the HP bar (bottom middle). */
+    .ui-ability-wrap-touch {
         position: absolute;
-        display: flex;
         right: calc(var(--safe-right) + 16px);
-        bottom: calc(var(--safe-bottom) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px + var(--touch-ability-name, 14px));
+    }
+
+    /* Its name, under the circle and as wide as it needs ("Point-blank volley") */
+    .ui-ability-name-under {
+        top: 100%;
+        bottom: auto;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        margin-top: 1px;
+        padding: 0 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        /* Straight on the floor now, not the button's face: a dark backing to read on any */
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
+    }
+
+    /* A run with items (the Tombs): above their two rows, in their column */
+    .ui-ability-wrap-touch.ui-ability-wrap-items {
+        right: calc(
+            var(--safe-right) + var(--touch-items-inset, 12px) +
+                (var(--touch-items-width, 122px) - 76px) / 2
+        );
+        bottom: calc(
+            var(--safe-bottom) + var(--touch-items-inset, 12px) + var(--touch-item-size, 58px) * 2 +
+                var(--touch-items-gap, 6px) + 10px + var(--touch-ability-name, 14px)
+        );
+    }
+
+    .ui-touch-ability {
+        display: flex;
         width: 76px;
         height: 76px;
         border-radius: 50%;
         touch-action: none;
-    }
-
-    .ui-slot {
-        pointer-events: none;
     }
 
     /* Keys don't mean anything here */
@@ -98,11 +128,12 @@
         touch-action: none;
     }
 
-    /* Still shown once the quest tracker's title is under the zone */
+    /* No z-index: the HUD comes after the zone, so it's above it already, and
+       a z-index would put these over the run's panels too. The damage panel
+       is placed by .ui-damage. */
     .ui-quest-tracker,
     .ui-damage {
         position: relative;
-        z-index: 1;
     }
 
     /* Big enough to tap */
@@ -267,6 +298,47 @@
 
     .ui-volume {
         height: 32px;
+    }
+
+    /* The Scabaras slate: one thin row along the top, under the clock, not over the floor round
+       the hero. With no zoom, the middle of the screen is the plates you're about to step on.
+       (The tablet's panel, with only its number, stays as it is.) */
+    .ui-scabaras-slate {
+        top: calc(var(--safe-top) + 34px);
+        width: auto;
+        max-width: calc((100vw - var(--safe-left) - var(--safe-right) - 16px) / var(--ui-scale));
+        padding: 3px 8px;
+        opacity: 0.92;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-title,
+    .ui-scabaras-slate .ui-scabaras-name {
+        display: none;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbols {
+        grid-template-columns: repeat(9, auto);
+        gap: 2px 5px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbol {
+        gap: 2px;
+    }
+
+    .ui-scabaras-slate .ui-icon {
+        width: auto;
+        height: 18px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-value {
+        font-size: 15px;
+    }
+
+    /* The Scabaras room's puzzles: only those to do now (two at most), as the line above counts
+       those done, so the column stays short beside the fight button */
+    .ui-scabaras-puzzle-solved,
+    .ui-scabaras-puzzle-waiting {
+        display: none;
     }
 }
 
@@ -448,7 +520,8 @@
         padding: 8px;
     }
 
-    .ui-title-settings {
+    .ui-title-settings,
+    .ui-title-language {
         width: 44px;
         height: 44px;
         padding: 0;
@@ -592,6 +665,13 @@
         height: 44px;
     }
 
+    .ui-armoury-step {
+        min-width: 44px;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+    }
+
     /* Quests and the collection log */
 
     .ui-quests > .ui-subtle,
@@ -641,6 +721,34 @@
         font-size: 24px;
     }
 
+    /* Co-op's countdown: one line where the clock was, so the boss bar, the
+       waiting note and the toasts keep their places under it */
+    .ui-choice-countdown {
+        top: calc(var(--safe-top) + 16px);
+        padding: 3px 8px;
+        font-size: 14px;
+        line-height: 18px;
+    }
+
+    .ui-choice-countdown-label {
+        display: none;
+    }
+
+    /* The panels under it, and clear of the home bar. Here they have their
+       padding and border inside their size. */
+    .ui-choice-countdown ~ .ui-modal {
+        padding-top: calc(var(--safe-top) + 46px);
+        padding-bottom: var(--safe-bottom);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-panel {
+        max-height: calc(100% - 12px);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-chest-card {
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 58px);
+    }
+
     .ui-hud-right {
         gap: 0;
         font-size: 15px;
@@ -660,6 +768,21 @@
         zoom: var(--damage-panel-zoom);
         grid-template-columns: 24px minmax(0, 1fr) auto auto;
         margin-top: 0;
+    }
+
+    /* The Tombs' fight button is in the item buttons' column, just where this column's lines
+       come down to, and a room's lines can take the DPS on to the items: it keeps left of that
+       column there. Its panel goes under it, not beside it: from there, beside it would reach
+       the middle of the screen, where the player is. */
+    .ui-damage-beside-ability {
+        margin-right: calc(
+            var(--touch-items-inset) + var(--touch-items-width) + 8px - var(--hud-inset)
+        );
+    }
+
+    .ui-damage-beside-ability .ui-damage-panel {
+        position: static;
+        margin-top: 4px;
     }
 
     .ui-damage-head,
@@ -896,7 +1019,8 @@
     }
 
     .ui-setting {
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 4px 10px;
         padding: 2px 0;
     }
 }
@@ -966,5 +1090,14 @@
     .ui-coop-bar .ui-endless {
         min-width: 0;
         gap: 4px;
+    }
+}
+
+/* The Tombs' invocation board as tall as the screen at most, kept clear of the notch: its middle
+   scrolls, so Reset All and Done stay in view */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-invocations {
+        width: min(620px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
     }
 }

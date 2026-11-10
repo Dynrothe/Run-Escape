@@ -13,6 +13,7 @@
 // Run it through a memory cap on a small machine: a big map is a few hundred MB.
 import { mat4, vec3 } from "gl-matrix";
 
+import { GAME_CACHE_NAME } from "../../src/game/cache";
 import { GameAssets, PLAYER_SEQS, getCharacterAppearance } from "../../src/game/client/GameAssets";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { ENEMIES } from "../../src/game/content/enemies";
@@ -741,9 +742,9 @@ function getPlayerBakeRequests(): BakeRequest[] {
 async function main(): Promise<void> {
     const args = process.argv.slice(2);
     const infos = loadCacheInfos();
-    const info = infos.find((c) => c.name.startsWith("osrs-241"));
+    const info = infos.find((c) => c.name === GAME_CACHE_NAME);
     if (!info) {
-        throw new Error("No game cache in caches/");
+        throw new Error(`Cache ${GAME_CACHE_NAME} isn't in caches/`);
     }
     const state = createWorkerState(loadCache(info), [], [], undefined as unknown as Cache);
     if (args.includes("--bake")) {

@@ -1,14 +1,18 @@
 import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
 import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
 import {
+    DIVINE_RUNE_POUCH,
     PASSIVES,
     canLevelPassive,
     formatPassiveNumber,
     getPassive,
     getPassiveGain,
+    passiveDescription,
+    passiveEffect,
+    passiveName,
 } from "../content/passives";
 import { RARITIES, Rarity, atLeast, rollRarity } from "../content/rarity";
-import { CombatStyle, PassiveDef } from "../content/types";
+import { CombatStyle, PassiveDef, WeaponDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import {
     WeaponStatLine,
@@ -16,7 +20,16 @@ import {
     weaponStatChanges,
     weaponStats,
 } from "../content/weaponStats";
-import { WEAPONS, getWeapon } from "../content/weapons";
+import {
+    WEAPONS,
+    getWeapon,
+    getWeaponStyle,
+    weaponDescription,
+    weaponLevelDescription,
+    weaponLevelName,
+    weaponName,
+} from "../content/weapons";
+import { list, t, tr } from "../i18n";
 import { Rng } from "./Rng";
 import { PassiveState, WeaponState } from "./entities";
 
@@ -98,7 +111,7 @@ export function getEvolutionHint(
             return undefined;
         }
         return {
-            text: `Evolves with ${evolution.passive.name}`,
+            text: t("ui.levelup.evolves_with", { name: passiveName(evolution.passive) }),
             held: passives.some((p) => p.id === evolution.passive.id),
         };
     }
@@ -114,9 +127,11 @@ export function getEvolutionHint(
             return undefined;
         }
         const names = shown.map((e) =>
-            e.weapons.length > 1 ? e.name.toLowerCase() : `the ${e.name}`,
+            e.weapons.length > 1
+                ? e.name.toLowerCase()
+                : t("ui.levelup.evolves_one", { name: e.name }),
         );
-        return { text: `Evolves ${names.join(" and ")}`, held: held.length > 0 };
+        return { text: t("ui.levelup.evolves", { names: list(names) }), held: held.length > 0 };
     }
     return undefined;
 }
@@ -124,7 +139,9 @@ export function getEvolutionHint(
 // The extra damage text for a weapon pick of this quality, if any
 function weaponBonusText(quality: Rarity): string {
     const bonus = RARITIES[quality].weaponBonus;
-    return bonus > 0 ? ` +${Math.round(bonus * 100)}% damage to this weapon.` : "";
+    return bonus > 0
+        ? " " + t("ui.levelup.weapon_bonus", { percent: Math.round(bonus * 100) })
+        : "";
 }
 
 // How much more damage a weapon level past the last brings, by quality
@@ -144,7 +161,7 @@ export function overlevelBonus(bonus: number, quality: Rarity): number {
 // tooltip shows it: "Damage bonus +477% → +564%"
 function bonusStat(value: number, before: number): WeaponStatLine {
     return {
-        label: "Damage bonus",
+        label: t("ui.levelup.damage_bonus"),
         value: formatWeaponBonus(value),
         from: formatWeaponBonus(before),
         better: value >= before,
@@ -155,7 +172,7 @@ function bonusStat(value: number, before: number): WeaponStatLine {
 // with what it was before, "Damage +25% → +30%"
 function passiveStat(passive: PassiveDef, value: number, before?: number): WeaponStatLine {
     return {
-        label: passive.effect[0].toUpperCase() + passive.effect.slice(1),
+        label: passiveEffect(passive)[0].toUpperCase() + passiveEffect(passive).slice(1),
         value: formatPassiveNumber(passive, value),
         ...(before !== undefined && {
             from: formatPassiveNumber(passive, before),
@@ -164,13 +181,20 @@ function passiveStat(passive: PassiveDef, value: number, before?: number): Weapo
     };
 }
 
+// A description without the first sentence it shares with another, in whatever language
+// they're shown in: a hilted godsword's, without the sweep it shares with the blade
+function withoutSharedOpening(text: string, other: string): string {
+    const end = text.indexOf(". ");
+    return end > 0 && other.startsWith(text.slice(0, end + 2)) ? text.slice(end + 2) : text;
+}
+
 export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
     switch (choice.kind) {
         case "newWeapon": {
             const weapon = getWeapon(choice.weaponId);
             return {
-                title: weapon.levels[0].name ?? weapon.name,
-                text: weapon.description + weaponBonusText(choice.quality),
+                title: weaponLevelName(weapon, 0) ?? weaponName(weapon),
+                text: weaponDescription(weapon) + weaponBonusText(choice.quality),
                 iconObjId: weapon.iconObjId,
                 quality: choice.quality,
                 stats: weaponStats(weapon, weapon.levels[0]),
@@ -184,8 +208,11 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
                 const top = weapon.levels[last - 1];
                 const damage = Math.round(getOverlevelDamage(choice.quality) * 100);
                 return {
-                    title: upgradedName(top.name ?? weapon.name, choice.level - last),
-                    text: `This weapon does ${damage}% more damage.`,
+                    title: upgradedName(
+                        weaponLevelName(weapon, last - 1) ?? weaponName(weapon),
+                        choice.level - last,
+                    ),
+                    text: t("ui.levelup.overlevel", { percent: damage }),
                     iconObjId: top.objId ?? weapon.iconObjId,
                     quality: choice.quality,
                     // What it adds up to once taken, since "15% more" at
@@ -199,8 +226,13 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
             }
             const level = weapon.levels[choice.level - 1];
             return {
-                title: `${level.name ?? weapon.name} (level ${choice.level})`,
-                text: level.description + weaponBonusText(choice.quality),
+                title: t("ui.levelup.level", {
+                    name: weaponLevelName(weapon, choice.level - 1) ?? weaponName(weapon),
+                    n: choice.level,
+                }),
+                text:
+                    weaponLevelDescription(weapon, choice.level - 1) +
+                    weaponBonusText(choice.quality),
                 iconObjId: level.objId ?? weapon.iconObjId,
                 quality: choice.quality,
                 stats:
@@ -212,8 +244,8 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
         case "evolve": {
             const into = getWeapon(choice.into);
             return {
-                title: into.name,
-                text: into.description,
+                title: weaponName(into),
+                text: weaponDescription(into),
                 iconObjId: into.iconObjId,
                 stats: weaponStats(into, into.levels[0]),
             };
@@ -224,8 +256,11 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
             // (no stats: the hilts all share the blade's)
             const into = getWeapon(choice.into);
             return {
-                title: into.name,
-                text: into.description.replace(/^A heavy two-handed sweep\. /, ""),
+                title: weaponName(into),
+                text: withoutSharedOpening(
+                    weaponDescription(into),
+                    weaponDescription(getWeapon(choice.weaponId)),
+                ),
                 iconObjId: choice.hiltObjId,
             };
         }
@@ -233,8 +268,8 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
             const passive = getPassive(choice.passiveId);
             const gain = getPassiveGain(passive, choice.quality);
             return {
-                title: passive.name,
-                text: passive.description,
+                title: passiveName(passive),
+                text: passiveDescription(passive),
                 iconObjId: passive.iconObjId,
                 iconSpriteId: passive.iconSpriteId,
                 quality: choice.quality,
@@ -248,9 +283,9 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
             return {
                 title:
                     past > 0
-                        ? upgradedName(passive.name, past)
-                        : `${passive.name} (level ${choice.level})`,
-                text: passive.description,
+                        ? upgradedName(passiveName(passive), past)
+                        : t("ui.levelup.level", { name: passiveName(passive), n: choice.level }),
+                text: passiveDescription(passive),
                 iconObjId: passive.iconObjId,
                 iconSpriteId: passive.iconSpriteId,
                 quality: choice.quality,
@@ -260,12 +295,16 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
         }
         case "coins":
             return {
-                title: `${choice.amount} coins`,
-                text: "Banked when the run ends.",
+                title: t("ui.levelup.coins", { n: choice.amount }),
+                text: t("ui.levelup.coins_text"),
                 iconObjId: 995,
             };
         case "food":
-            return { title: "Shark", text: `Heals ${choice.amount} hitpoints.`, iconObjId: 385 };
+            return {
+                title: tr("util.shark.name", "Shark"),
+                text: t("ui.levelup.heals", { n: choice.amount }),
+                iconObjId: 385,
+            };
     }
 }
 
@@ -300,6 +339,34 @@ export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>)
         into: weaponId,
         hiltObjId,
     }));
+}
+
+// With the Divine rune pouch (maxWeapons counting its slot), whether a new weapon fits: the
+// pouch's slot holds a magic weapon only, so the rest stay one fewer, and one magic weapon of
+// another class can be taken, for that slot. Magic is what its hits count as (getWeaponStyle, so
+// the fire spells too); another class is its class (WeaponDef.style). Only the level up keeps to
+// this: a weapon added some other way (the dev console) isn't checked.
+export function fitsWithPouch(
+    weapon: WeaponDef,
+    weapons: readonly WeaponState[],
+    style: CombatStyle,
+    maxWeapons: number,
+): boolean {
+    const isMagic = (def: WeaponDef) => getWeaponStyle(def) === "magic";
+    const offStyle = (def: WeaponDef) => !!def.style && def.style !== style;
+    if (weapons.length >= maxWeapons) {
+        return false;
+    }
+    if (isMagic(weapon)) {
+        return !offStyle(weapon) || !weapons.some((w) => offStyle(w.def));
+    }
+    if (offStyle(weapon)) {
+        return false;
+    }
+    // Something not magic: the slots but the pouch's, and the pouch's too once a magic weapon's
+    // in one of them
+    const magic = weapons.some((w) => isMagic(w.def));
+    return weapons.length + 1 <= maxWeapons - 1 + (magic ? 1 : 0);
 }
 
 export function rollChoices(
@@ -354,6 +421,7 @@ export function rollChoices(
         }
     }
     if (weapons.length < maxWeapons) {
+        const pouch = ownedPassives.has(DIVINE_RUNE_POUCH);
         for (const weapon of WEAPONS) {
             if (
                 weapon.evolved ||
@@ -364,11 +432,13 @@ export function rollChoices(
             ) {
                 continue;
             }
-            // Another class's weapon, or a second of a family (one godsword
-            // is enough)
+            // A second of a family (one godsword is enough), or one that doesn't fit: another
+            // class's weapon, or (with the pouch) a weapon that isn't magic in its magic slot
             if (
-                (weapon.style && weapon.style !== style) ||
-                (weapon.family && ownedFamilies.has(weapon.family))
+                (weapon.family && ownedFamilies.has(weapon.family)) ||
+                !(pouch
+                    ? fitsWithPouch(weapon, weapons, style, maxWeapons)
+                    : !weapon.style || weapon.style === style)
             ) {
                 continue;
             }

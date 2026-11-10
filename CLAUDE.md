@@ -30,6 +30,7 @@ go stale. Add anything that cost you time to work out.
 | Getting it running, controls, cache version            | `README.md`                                                            |
 | What changed in each version                           | `CHANGELOG.md`                                                         |
 | How to add a weapon, enemy, map and so on              | `.claude/rules/adding-content.md`                                      |
+| Languages, and the text in each one                    | `src/game/i18n/`, its `locales/<lang>/*.json`                          |
 | Weapons, enemies, items, maps, shop (plain data)       | `src/game/content/`                                                    |
 | Weapon damage controls                                 | `docs/BALANCE.md`                                                      |
 | The game itself: tick, combat, spawning, levels        | `src/game/core/Sim.ts`                                                 |
@@ -42,7 +43,7 @@ go stale. Add anything that cost you time to work out.
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
-| A floor that rises and falls away (dev map prototype)  | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
+| A floor that rises and falls away (the Wardens')       | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | Act II: its maps, steps and its tab on the map screen  | `content/acts.ts`, `ui/GameUi.tsx` (`ActPage`)                         |
 | A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |
 | The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
@@ -50,12 +51,16 @@ go stale. Add anything that cost you time to work out.
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |
+| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
+| A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
 | Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
+| Cloud save in the game: syncing, the choice, Settings  | `client/CloudSave.ts`, `ui/CloudSave.tsx`, `docs/DEVELOPMENT.md` Saves |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
@@ -63,22 +68,36 @@ go stale. Add anything that cost you time to work out.
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
+| Hover and hold descriptions: HUD, bag, Armoury         | `src/game/ui/DescriptionButton.tsx`                                    |
 | Weapon stat lines on cards, pause and tooltips         | `src/game/content/weaponStats.ts`                                      |
+| The icon beside each stat line, on every screen        | `content/statIcons.ts`, `ui/StatLine.tsx`                              |
 | How the player stands and runs with each weapon        | `src/game/content/stances.ts`                                          |
 | Stat names and types                                   | `src/game/content/stats.ts`, `types.ts`                                |
 | Balance bot                                            | `scripts/game/simulate-run.ts`                                         |
+| How both bots read a boss's shapes                     | `scripts/game/bossReads.ts`                                            |
 | Weapon attack benchmark                                | `scripts/game/measure-weapon-dps.ts`                                   |
 | Co-op: how it works, hosting its relay                 | `docs/DEVELOPMENT.md` (Co-op)                                          |
 | Co-op relay server                                     | `server/coop-relay.mjs`                                                |
+| The relays' checks on a run's frames                   | `server/coop-checks.mjs`                                               |
+| The relays' rows in the collector, for runs they flag  | `server/analytics/README.md` (Run checks)                              |
 | The same relay on Cloudflare, and its setup            | `server/cloudflare/`                                                   |
 | Run stats: a run's report, its collector, the viewer   | `client/RunAnalytics.ts`, `server/analytics/`                          |
+| Cloud saves' Worker: sync codes, revisions, backups    | `server/cloud-saves/`                                                  |
 | Co-op lockstep and rooms; the lobby UI                 | `src/game/client/coop/`, `ui/CoopScreen`                               |
 | Co-op flags: where players are from                    | `docs/DEVELOPMENT.md` (Co-op, Flags)                                   |
 | Finding ids in the cache                               | `scripts/cache/`                                                       |
+| Moving to a newer cache, and what changed in it        | `docs/DEVELOPMENT.md` (A newer cache), `compare-caches.ts`             |
 | The slim cache's chunks, and how the game loads them   | `src/rs/cache/ChunkedCache.ts`, `docs/DEVELOPMENT.md` (Hosting)        |
+| The full cache's download: parts, resuming, keeping it | `src/rs/cache/CacheFiles.ts`, `docs/DEVELOPMENT.md` (Hosting)          |
+| What the slim cache loads, and what it reuses          | `scripts/cache/slim-plan.ts`, `docs/DEVELOPMENT.md` (Hosting)          |
 | ScapeRune: making maps that aren't in OSRS             | `src/game/scaperune/CLAUDE.md`                                         |
 | Raids: rooms, points, chests, teleporters, expert      | `src/game/content/raids.ts`                                            |
 | The Theatre of Blood's bosses                          | `src/game/content/theatre.ts`                                          |
+| The Tombs of Amascut (a raid, behind its quest)        | `docs/design/tombs-of-amascut.md`, `content/invocations.ts`            |
+| The Tombs' bot, and its sim of puzzle rooms and bosses | `scripts/game/tombsBot.ts`, `scripts/game/simulate-tombs.ts`           |
+| The Scabaras room's puzzle helper, and what unlocks it | `content/scabarasHelper.ts`, `GameView.drawScabarasHelper`             |
+| Beneath Cursed Sands, the Tombs' quest (a boss fight)  | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
+| Its fights' design: four parts, each kept once won     | `docs/design/beneath-cursed-sands.md`                                  |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
 | Frame cap, lost graphics, the HUD's two stores         | `docs/DEVELOPMENT.md`, Keeping it light                                |
 
@@ -93,6 +112,12 @@ applied; preserve them when coalescing queued moves. Movement rules shared by si
 prediction live in `core/PlayerMovement.ts`. Keep the delayed-network tests in
 `MovementPrediction.test.ts` covering corrections, fallbacks, changes to movement, stalls and
 resends, and the camera's steadiness (an echo of an unchanged move mustn't re-time the picture).
+Stops bypass the move throttle; an axis starting, stopping or reversing (east to northeast too)
+spends bounded send credits. Keep inputs pending before the first host frame, until their real
+echoes arrive, but keep the prediction's clock moving meanwhile. Keep the rapid-input
+tests below the relay's input limit. `?movementDiagnostics` opts into local prediction counters
+and a bounded sample buffer (see Development, Measuring prediction); don't log or allocate per
+frame for diagnostics, or treat input-to-confirmation time as network ping.
 
 ## Commands
 
@@ -156,6 +181,10 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   can't win on some maps even on normal, and on early maps it lasts until the final boss either way.
 - The bot is simple. It doesn't play strike-based adventurers well, so don't judge those from a sim.
   Treat its numbers as a comparison, not as how a player would do.
+- Each run's line says how long the bot was `stuck`: pressing on without moving, against a wall
+  or held by a boss. A lot of it means the bot can't get round that map, not that the map is hard.
+- Without `DODGE=1` the bot ignores the bullets, rings and marks of a boss without phases (the
+  Theatre's): sim a change to those with it.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
   `src/` in the same checkout meanwhile, since each run reads the source when it starts.
 - **Run sweeps as one process per map.** The script already loops over adventurers and seeds, so
@@ -165,6 +194,14 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   the arena, `RegionDataLoader.ts` or `SceneBuilder.ts` changes. If you change collision anywhere
   else, delete that folder. ScapeRune's dev maps don't get one: they're built each time, from their
   recipes.
+
+The Tombs of Amascut has a sim of its own, `scripts/game/simulate-tombs.ts`: a puzzle
+room, a boss, the Wardens or the whole raid (`ROOM=scabaras`, `ROOM=zebak`, `ROOM=raid`), with what
+each puzzle room came to (mirrors turned, boards, trips and spills) and what hurt. Run it after any
+change to the raid, at a path level or two (`LEVEL=2`), with invocations and with `PARTY=2`.
+Without `KIT=max` it plays the raid up to the room asked for, as a run would get there. For the
+difficulty curve, `scripts/game/sweep-tombs.sh` runs rooms by raid level (`INVOCATIONS=level:N`)
+and kit; it's slow, so run it in the background.
 
 After a content change, also run the checks that apply:
 
@@ -196,14 +233,18 @@ desktop build.
 - **Never change its application ID (`io.jere.run_escape`) or its page's address**
   (`https://appassets.androidplatform.net/assets/game/`): Android players' saves belong to them. An
   ID can't have a hyphen.
-- **It's only published on GitHub's releases, and never updates itself.** Don't add an update
-  check, a download or an app store build: players install a new APK over the old one, as the
-  release notes (`android/release-notes.md`) and the app's About say.
+- **It's only published on GitHub's releases.** `AppUpdater.java` checks once on open and prompts
+  for a newer APK; Android handles the download and installation consent. A failed check must
+  never block the bundled game, and installing is always asked, never started by itself (it closes
+  the game mid-run). What it remembers between launches is `UpdatePlan.java`'s, which has tests
+  that need no device. See `docs/DEVELOPMENT.md`, Android, for the update flow.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
-- The app lets out only what the desktop app does (`RelayPolicy.java`, `desktop/gameServer.ts`):
-  the relay, and the run collector. A new address the game reaches needs adding to both.
+- The bundled game lets out only what the desktop app does (`RelayPolicy.java`,
+  `desktop/gameServer.ts`): the relay, the run collector, and the cloud-save Worker's `/v1/`. A
+  new address the game reaches needs adding to both. The updater's requests to GitHub are the
+  app's own, like the desktop launcher's.
 - Its generated game files, APKs and keys stay out of Git (`.gitignore`).
 - Pull requests only compile it and run its unit tests (`.github/workflows/android.yml`), and
   there's no Android SDK here. Touch, co-op and airplane mode need a phone with a current WebView:
@@ -216,6 +257,8 @@ desktop build.
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
+- `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
+  any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the
@@ -253,6 +296,11 @@ desktop build.
 - **Comments**: short, and they say why or what something's for. Match what's around them.
 - **Content** is plain data with real cache ids. Look ids up with the scripts, not from memory. OSRS
   names should be spelled as the cache spells them.
+- **Languages: never translate.** Don't write text in any language but English unless the developer
+  asks you to translate it. New and changed text goes in English only (in the code, or
+  `locales/en/`), and other languages show the English until their translator adds theirs. When
+  you change what an English text means, remove its key from the other languages' files rather
+  than rewording them, and say so in the pull request. See Languages in `docs/DEVELOPMENT.md`.
 - **Saves**: if `SaveData` changes shape, raise `SAVE_VERSION` and add a step to `migrateSave`.
   New shop upgrades, ids and optional fields don't need one, and nor does dropping an optional
   field that loading ignores. Write the save only through `GameClient.persist()`: it doesn't write

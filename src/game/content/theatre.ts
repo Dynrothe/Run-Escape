@@ -35,6 +35,10 @@ const ARMOR_CAP = 0.5;
 // a splat's on the ground it hurts
 const SPLAT_FIT = 0.8;
 
+// Seconds a ring closing in round you (the Maiden's blood, the Bloat's flies, Verzik's blasts and
+// green balls) stands where it formed first: finding the way out as it came in was too quick
+const RING_HOLD = 1;
+
 // Standing on a boss was safe from most of what it did. Each boss has an attack for whoever's up
 // close (its slam, stomp, bite or claws), used only within CLOSE_REACH tiles and picked about half
 // the time there. A slam marks the ground under the boss as it winds up, so there's time to step
@@ -131,6 +135,7 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         message: "The Maiden's blood closes in! Find the way out!",
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 20,
             volleys: 1,
             interval: 1,
@@ -155,6 +160,7 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         enraged: true,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 22,
             volleys: 3,
             interval: 1.1,
@@ -236,6 +242,7 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
         weight: 4,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 18,
             volleys: 3,
             interval: 0.9,
@@ -472,7 +479,9 @@ const XARPUS_ATTACKS: BossAttackDef[] = [
             radius: 0.9,
             locId: 32743,
             lingers: { seconds: 6, interval: 60, damage: 0 },
-            smother: { seconds: 1, heal: 0.04, healSpotAnim: 1550, smotheredSpotAnim: 1549 },
+            // A step on one smothers it (a full second of standing let three in four through,
+            // as they come up in threes several tiles apart), and one missed heals him a little
+            smother: { seconds: 0.4, heal: 0.02, healSpotAnim: 1550, smotheredSpotAnim: 1549 },
         },
     },
     // Acid all round his pool
@@ -561,6 +570,7 @@ const VERZIK_ONE_ATTACKS: BossAttackDef[] = [
         weight: 3,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 16,
             volleys: 2,
             interval: 1.2,
@@ -715,6 +725,7 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         weight: 4,
         pattern: {
             shape: "closing",
+            hold: RING_HOLD,
             count: 14,
             volleys: 1,
             interval: 1,
@@ -785,7 +796,7 @@ function vasilias(): EnemyDef {
             colours: { every: 8, forms: VASILIAS_FORMS, offStyle: 0.25, ownStyle: 0.35 },
             enrage: { message: "Nylocas Vasilias shrieks!" },
             summonsAt: [
-                { hp: 0.75, enemyId: "nylocas_ischyros", count: 6 },
+                { hp: 0.75, enemyId: "tob_nylocas_ischyros", count: 6 },
                 { hp: 0.5, enemyId: "tob_nylocas_toxobolos", count: 6 },
                 { hp: 0.25, enemyId: "tob_nylocas_hagios", count: 6 },
             ],
@@ -829,7 +840,8 @@ function raidVersion(
         boss: {
             ...base.boss!,
             ...extra,
-            // What it calls in is the raid's: its green and blue Nylocas shoot (RAID_NYLOCAS)
+            // What it calls in is the raid's: its Nylocas, slower, the green and blue ones shooting
+            // (RAID_NYLOCAS)
             attacks: oftener(all, tunedAt, interval).map((attack) =>
                 attack.summon
                     ? {
@@ -889,7 +901,14 @@ const HAGIOS_SHOT: EnemyShotDef = {
     sound: 3605,
     expertKeep: EXPERT_HAGIOS_KEEP,
 };
-const RAID_NYLOCAS: [string, EnemyShotDef][] = [
+export const RAID_NYLOCAS_SPEED = 0.85;
+
+// The raid's own Nylocas (the campaign's are as they were): its shooters' shots, and all of them
+// slower (RAID_NYLOCAS_SPEED). In its narrow halls they come from every side, and players found
+// themselves caught by them at Morytania's speed.
+const RAID_NYLOCAS: [string, EnemyShotDef | undefined][] = [
+    ["nylocas_ischyros", undefined],
+    ["big_nylocas_ischyros", undefined],
     ["nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1559, sound: 3605 }],
     ["big_nylocas_toxobolos", { range: 7, interval: 3, speed: 8, spotAnim: 1561, sound: 3605 }],
     ["nylocas_hagios", HAGIOS_SHOT],
@@ -904,7 +923,13 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
             const base = byId(id);
             // A big one splits into the raid's small ones
             const splits = base.splits && { ...base.splits, into: "tob_" + base.splits.into };
-            return { ...base, id: "tob_" + id, shot, ...(splits && { splits }) };
+            return {
+                ...base,
+                id: "tob_" + id,
+                speed: base.speed * RAID_NYLOCAS_SPEED,
+                ...(shot && { shot }),
+                ...(splits && { splits }),
+            };
         }),
         {
             id: "maiden_of_sugadinti",
@@ -1066,7 +1091,8 @@ function theatreBosses(byId: (id: string) => EnemyDef): EnemyDef[] {
                     // nothing
                     at: [0.8, 0.4],
                     count: 8,
-                    // Not forever, for whoever doesn't know to: he rises the better for each left
+                    // Not forever, for whoever doesn't know to: he rises the better for each left,
+                    // twice what one missed heals (smother.heal), as leaving them costs the most
                     seconds: 30,
                     leftHeal: 0.04,
                     attacks: ["Exhumeds", "Exhumeds", "Acid"],

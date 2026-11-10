@@ -16,7 +16,7 @@ import {
     getGear,
     getItem,
 } from "../content/items";
-import { MAPS, hasPoison } from "../content/maps";
+import { MAPS, getMap, hasPoison } from "../content/maps";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { SETS, getSetPieces } from "../content/sets";
 import { CasketTier, GearSlot } from "../content/types";
@@ -213,6 +213,8 @@ describe("caskets", () => {
             "prifddinas",
             "halloween",
         ]);
+        // The raid's poisons are in its own data, not its enemies' attacks
+        expect(hasPoison(getMap("tombs_of_amascut"))).toBe(true);
         const cures = new Set(UTILITY.filter((i) => i.use.kind === "cure").map((i) => i.id));
         const rolled = (poison: boolean) => {
             const rng = new Rng(5);

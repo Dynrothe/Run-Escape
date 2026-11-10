@@ -24,6 +24,15 @@ import {
     viaProxy,
     watchCloudflareRanges,
 } from "./client-ip.mjs";
+import {
+    RUN_CHECKS,
+    RunWatch,
+    checkReport,
+    checkReporter,
+    endsCaughtRuns,
+    heroIdsOf,
+    runOf,
+} from "./coop-checks.mjs";
 import { playerName, roomName } from "./name-gen.mjs";
 
 export const RELAY_PATH = "/coop";
@@ -139,6 +148,24 @@ export const MAX_LOADOUT_BYTES = 16 * 1024;
 const FULL_TEXT = "All rooms are taken right now. Try again when one opens.";
 const OTHER_BUILD_TEXT =
     "That room's on another version of the game. Reload the page to get the latest.";
+
+// What a member readies up with: changing it un-readies them (setMember).
+// Not the host's invocations, which only show in the lobby: the start
+// carries the party's. Their skill page is the map's adventurer's on a
+// map with its own (Durial321's), so switching to or from one changes it
+// too, and the host's start waits for their loadout as for a new pick
+function pickOf(member) {
+    const { invocations, ...loadout } = member.loadout ?? {};
+    return JSON.stringify([member.characterId, member.loadout && loadout]);
+}
+
+// The host's start, refused while someone's changed their pick since they
+// readied: the host's game may not have heard of the change yet
+function repickedText(member, host) {
+    return member === host
+        ? "Your pick changed, so you need to ready up again."
+        : `${member.name}'s pick changed, so they need to ready up again.`;
+}
 // The open rooms list comes a page at a time: this many to a page unless the
 // game asks for another size, up to the most
 const LIST_PAGE_SIZE = 8;
@@ -629,6 +656,15 @@ export function createRelay(limits = {}) {
         proxy = proxyMode(),
         // Rooms take players without their map (see isAnyMapOn)
         anyMap = isAnyMapOn(),
+        // A run whose host the run checks catch ends (see endsCaughtRuns)
+        endCaughtRuns = endsCaughtRuns(process.env),
+        // Sends a run the checks found anything in to the run analytics
+        // collector (server/analytics), when RUN_CHECKS_URL and its token are set
+        reportCheck = checkReporter({
+            url: process.env.RUN_CHECKS_URL,
+            token: process.env.RUN_CHECKS_TOKEN,
+            fetch: globalThis.fetch,
+        }),
         metrics = isMetricsOn(),
         metricsPort = metricsPortSetting(),
     } = limits;
@@ -637,9 +673,9 @@ export function createRelay(limits = {}) {
     let warnedProxy = false;
     const rooms = new Map();
     const clients = new Set();
-    // For the metrics: only connections, rooms being made and runs starting
-    // update these (counted whether or not they're served). Live counts come
-    // from the rooms when asked, never from game traffic.
+    // For the metrics: only connections, rooms being made, runs starting and
+    // the run checks update these (counted whether or not they're served).
+    // Live counts come from the rooms when asked.
     const counters = {
         startedAt: Date.now(),
         connections: 0,
@@ -647,6 +683,9 @@ export function createRelay(limits = {}) {
         runsStarted: 0,
         peakPlayers: 0,
         peakRooms: 0,
+        // Each kind the run checks logged, and hosts they caught
+        runChecks: {},
+        hostsCaught: 0,
     };
     let metricsServer;
     let stopMetrics = () => {};
@@ -738,6 +777,20 @@ export function createRelay(limits = {}) {
                 counters.peakPlayers,
             ),
             metric("coop_rooms_peak", "Most simultaneous rooms since startup.", counters.peakRooms),
+            ...RUN_CHECKS.map((kind) =>
+                metric(
+                    `coop_run_check_${kind}_total`,
+                    `Times the run checks logged ${kind}.`,
+                    counters.runChecks[kind] ?? 0,
+                    "counter",
+                ),
+            ),
+            metric(
+                "coop_run_check_hosts_caught_total",
+                "Hosts the run checks caught.",
+                counters.hostsCaught,
+                "counter",
+            ),
             metric(
                 "coop_connections_limit",
                 "Maximum simultaneous connections allowed.",
@@ -982,6 +1035,7 @@ export function createRelay(limits = {}) {
         }
         if (room.members.length === 0) {
             rooms.delete(room.code);
+            room.watch?.finish();
             listChanged();
             return;
         }
@@ -1004,6 +1058,8 @@ export function createRelay(limits = {}) {
 
     function disband(room, reason) {
         rooms.delete(room.code);
+        room.watch?.finish();
+        room.watch = undefined;
         listChanged();
         for (const member of room.members) {
             member.room = undefined;
@@ -1071,15 +1127,22 @@ export function createRelay(limits = {}) {
     // What a player's told the room about themselves. Their name isn't theirs
     // to say: the relay gives it.
     function setMember(client, message) {
+        const pick = pickOf(client);
         if (message.characterId !== undefined) {
             client.characterId = cleanId(message.characterId);
-        }
-        if (message.ready !== undefined) {
-            client.ready = message.ready === true;
         }
         if (message.loadout !== undefined) {
             const size = JSON.stringify(message.loadout)?.length ?? 0;
             client.loadout = size <= MAX_LOADOUT_BYTES ? message.loadout : undefined;
+        }
+        if (message.ready !== undefined) {
+            client.ready = message.ready === true;
+            client.repicked = false;
+        } else if (client.ready && pickOf(client) !== pick) {
+            // Ready with another pick: the host's view of them can still
+            // say ready, with the old one, so its start waits (see "start")
+            client.ready = false;
+            client.repicked = true;
         }
         if (message.unlocks !== undefined) {
             client.unlocks = cleanUnlocks(message.unlocks);
@@ -1131,6 +1194,36 @@ export function createRelay(limits = {}) {
             }
         }
         return undefined;
+    }
+
+    // The run's checks (coop-checks.mjs), for a start every game would play
+    function newWatch(room, game) {
+        const heroIds = heroIdsOf(game, MAX_PARTY);
+        if (!heroIds) {
+            return undefined;
+        }
+        const host = room.members.find((m) => m.id === room.hostId);
+        const watch = new RunWatch(heroIds, room.hostId, {
+            run: { room: room.code, ...runOf(room, game), build: host?.build },
+            names: new Map(room.members.map((m) => [m.id, m.name])),
+            log: (entry) => {
+                if (entry.kind === "caught") {
+                    counters.hostsCaught++;
+                } else if (RUN_CHECKS.includes(entry.kind)) {
+                    counters.runChecks[entry.kind] = (counters.runChecks[entry.kind] ?? 0) + 1;
+                }
+                // One line of JSON, for whatever reads the relay's output
+                console.warn(JSON.stringify(entry));
+                if (entry.kind === "summary") {
+                    const ended = endCaughtRuns && entry.caught !== null;
+                    reportCheck?.(checkReport(entry, "node", ended));
+                }
+            },
+            caught: () => {
+                watch.end = endCaughtRuns;
+            },
+        });
+        return watch;
     }
 
     // Whether a guest's input is the size and rate a game sends
@@ -1218,6 +1311,7 @@ export function createRelay(limits = {}) {
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
+                client.repicked = false;
                 const created = {
                     code: newCode(),
                     name: newRoomName(),
@@ -1304,6 +1398,7 @@ export function createRelay(limits = {}) {
                 leaveRoom(client);
                 setMember(client, message.me ?? {});
                 client.ready = false;
+                client.repicked = false;
                 target.members.push(client);
                 client.room = target;
                 roomChanged(target);
@@ -1396,11 +1491,17 @@ export function createRelay(limits = {}) {
                         error(versionError);
                         return;
                     }
+                    const repicked = room.members.find((member) => member.repicked);
+                    if (repicked) {
+                        error(repickedText(repicked, client));
+                        return;
+                    }
                     if (!hostCanSend(room, payload.length)) {
                         client.connection.close(1008);
                         return;
                     }
                     room.started = true;
+                    room.watch = newWatch(room, message.game);
                     const start = encodeFrame(
                         0x1,
                         Buffer.from(JSON.stringify({ t: "start", game: message.game }), "utf8"),
@@ -1408,6 +1509,7 @@ export function createRelay(limits = {}) {
                     counters.runsStarted++;
                     for (const member of room.members) {
                         member.ready = false;
+                        member.repicked = false;
                         member.connection.write(start);
                     }
                     roomChanged(room);
@@ -1417,6 +1519,8 @@ export function createRelay(limits = {}) {
                 // The host's back in the lobby: the room is again
                 if (isHost && room.started) {
                     room.started = false;
+                    room.watch?.finish();
+                    room.watch = undefined;
                     roomChanged(room);
                 }
                 return;
@@ -1427,7 +1531,12 @@ export function createRelay(limits = {}) {
                 // A guest's input, for the host, saying who it's from
                 if (room?.started && !isHost && allowUp(client, payload)) {
                     const host = room.members.find((m) => m.id === room.hostId);
-                    host?.connection.write(encodeFrame(0x1, withField(payload, "from", client.id)));
+                    if (host) {
+                        host.connection.write(
+                            encodeFrame(0x1, withField(payload, "from", client.id)),
+                        );
+                        room.watch?.up(client.id, message.d);
+                    }
                 }
                 return;
             case "down":
@@ -1442,6 +1551,13 @@ export function createRelay(limits = {}) {
                         if (member !== client) {
                             member.connection.write(frame);
                         }
+                    }
+                    room.watch?.down(message.d);
+                    if (room.watch?.end) {
+                        // Which ends the run for everyone, as the host leaving does
+                        room.watch.finish();
+                        room.watch = undefined;
+                        client.connection.close(1008);
                     }
                 }
                 return;

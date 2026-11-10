@@ -9,6 +9,9 @@ version and how to run it.
 - On a touch screen, drag anywhere to move: the stick appears under your thumb. Tap the buttons on
   screen to pause and use items, with the thumb still on the stick if you like. Tap the DPS for each
   weapon's damage. Phones play sideways, with gear and quests in the pause menu.
+- Your **revives** show beside your active effects, without a timer: a **Ring of life** from the
+  shop, and the Pyromancer's own as a **Phoenix**. The phoenix is used first, and each icon goes
+  once it's saved you. In co-op they're your own, not a teammate's.
 - Enemies drop **bones**; walk near them to collect their experience. Bones lying close together
   gather into one pile worth all of their experience, and it looks the part as it grows: Big
   bones, Dragon bones, Wyvern bones, Lava dragon bones, then Superior dragon bones. Coins gather
@@ -66,8 +69,8 @@ version and how to run it.
   Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
   its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
   recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with
-  finds of its own (the Hallowed Night, the Theatre of Blood, Justiciar Zachariah, Phosani's
-  Nightmare): the weapons it brings in, then its trophies.
+  finds of its own (the Hallowed Night, the Theatre of Blood, the Tombs of Amascut, Justiciar
+  Zachariah, Phosani's Nightmare): the weapons it brings in, then its trophies.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
@@ -138,8 +141,15 @@ version and how to run it.
       undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
       sides; and
       the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
-      everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
-      you, further out than any other melee weapon.
+      everything around you; **Dinh's bulwark**, a slow bash that hits everything around
+      you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
+      hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
+      Amascut's chest brings in a keris of its own: **of breaching** now and then finds a gap in
+      the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
+      every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
+      **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
+      hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
+      amascut** has all of it but Tumeken's Light. You carry one keris at most.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
@@ -150,11 +160,12 @@ version and how to run it.
       venom in what they hit, hurting it every second; it goes for enemies without venom first
       (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
       upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
-      the **Dragon hunter crossbow**, heavy bolts that hit bosses and elites again, and the
+      the **Dragon hunter crossbow**, dragon bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
-      crossbow**'s bolts go through what they hit and one in five is enchanted (a ruby takes a
-      share of what's left of its hitpoints, a diamond pierces more, a dragonstone burns), and
-      the **Crystal bow**'s arrows split into three where they first hit.
+      crossbow**'s bolts upgrade from bronze to steel, mithril, runite, then dragon. They go
+      through what they hit and one in five is enchanted (a ruby takes a share of what's left of
+      its hitpoints, a diamond pierces more, a dragonstone burns), and the **Crystal bow**'s
+      arrows split into three where they first hit.
     - **Magic**: **Tumeken's shadow** fires splashing shadow blasts and triples your damage
       bonus for them. The **Harmonised nightmare staff** casts Fire Surge faster than anything
       else. The **Sanguinesti staff** casts blood blasts, and one hit in six heals you for half
@@ -175,7 +186,7 @@ version and how to run it.
 
     | Map            | For beating it                                   | For its bosses                                                                                       |
     | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst)                                               |
+    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
     | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
     | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
@@ -197,8 +208,8 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
-- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
-  screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
+  Sands), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -392,10 +403,11 @@ version and how to run it.
       and feed her unless you kill them on the way; the Bloat only really takes damage while he's
       down; Nylocas Vasilias changes colour, and only its colour's style hurts it much; Sotetseg
       drags you into his shadow realm, where he can't be hurt and there's only his maze to get
-      through; Xarpus sinks into his pool, and can't be hurt until you've stood on his exhumeds to
-      smother them, those left healing him; and Verzik gets up twice, and as the great spider
+      through; Xarpus sinks into his pool, and can't be hurt until you've stepped on his exhumeds
+      to smother them, those left healing him; and Verzik gets up twice, and as the great spider
       throws her yellows, which only miss you in the glowing pool that comes with each. The
-      raid's green and blue Nylocas shoot from range.
+      raid's Nylocas are a little slower than Morytania's, and its green and blue ones shoot from
+      range, so fewer come in their hall than the raid's pace would bring.
     - **Teleporters**: once you've killed a room's boss, in any run, its hall has a portal that
       skips straight to it. Three a raid, solo only for now, so a run gets you back to the boss you
       died to quicker.
@@ -408,7 +420,38 @@ version and how to run it.
       colour), the Maiden's Nylocas feed her more, Xarpus stares one way, and a moment before he
       turns faces where he'll stare and says which side, and hurts whoever hits him from in front,
       and Verzik's spider throws a ball that kills anyone outside its glowing circle. Twice the
-      coins, and one of Lil' Zik's looks each clear.
+      coins, and one of Lil' Zik's looks each clear (one you haven't got, till you have all five).
+- **Beneath Cursed Sands**, the Tombs of Amascut's quest: a boss fight in four parts, open once the
+  desert's beaten, played alone as the Sands Delver (desert robes and a Crystal bow). Coenus the
+  Head Menaphite Guard, the two Scarab Mages, the Champion of Scabaras and the Menaphite Akh, each
+  a run of its own in a tomb beneath the sands. A part won is kept, so the next run starts at the
+  next part; beating the Akh beats the map and opens the Tombs of Amascut.
+- **The Tombs of Amascut**, on the Raids tab once its quest is done. Start in the Nexus and take
+  the four paths in any order, each a puzzle room and then its boss: Apmeken (fix what the
+  baboons break among their waves) and Ba-Ba; Het (turn mirrors to carry the beam to the seal) and
+  Akkha; Scabaras (sequence, lights, addition and matching boards, listed on the HUD with which
+  are open) and Kephri; Crondis (carry water
+  to the palm past spears, poison and crocodiles) and Zebak. Then the Wardens, three phases, the
+  last on a floor that rises and falls. The Helpful Spirit in the Nexus gives a free bundle of
+  supplies after the second path and the fourth.
+    - **Invocations** take hard mode's place: each makes the raid harder and adds to its raid
+      level, which scales every enemy and boss and the chest's odds. Entry is for an account
+      that's bought little, Normal (150) wants the shop and better gear, Expert (300) more, and
+      past that the bosses climb quicker and quicker. In co-op the host's invocations count.
+      Up to five setups save as presets on the board, named or by their raid level, each loaded
+      in one go. Saving under a name that's there saves over it, so one left blank replaces the
+      last saved at its level.
+    - **Guards and Amascut's bane**: every boss's guard drops when one of its big attacks misses
+      everyone, and the raid's button, Amascut's bane, hits a share of the boss's hitpoints, twice
+      as much while its guard's down.
+    - **The chest** after the Wardens rolls for a purple, more likely the higher the raid level and
+      the more points you earned: Osmumten's fang and the Lightbearer from raid level 50, the rest from
+      raid level 150, and Tumeken's guardian (a pet) now and then. They're Collection log trophies.
+      The Thread of Elidinis and the jewels are rolls of their own, and each brings something in:
+      the Thread the **Divine rune pouch**, a rare passive that gives one more weapon slot, for a
+      magic weapon, and offers magic weapons whatever your style; each jewel its keris partisan.
+      The end-of-raid board shows the raid level, each path's time, and every player's points,
+      deaths and purple chance.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle
   showing where they'll land, and projectiles fly where you stood, so keep moving.
@@ -740,3 +783,6 @@ version and how to run it.
   title screen's Settings stop it (it starts off stopped if your system asks for reduced motion).
 - **Power-up timers**: the circles over power-ups on the ground; Settings and the pause screen
   turn them off.
+- **Puzzle helper**: in the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA
+  plugin does in OSRS: on at Entry, and at any raid level once you've beaten the room. Settings and
+  the pause screen turn it off.

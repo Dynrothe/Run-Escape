@@ -140,6 +140,7 @@ describe("SceneLights", () => {
             enemyProjectiles: [],
             effects: [],
             enemies: [boss],
+            bullets: { count: 0 },
             hazards: [
                 {
                     uid: 3,

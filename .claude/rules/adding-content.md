@@ -46,6 +46,9 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   and the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
   a slash or sweep, and `special.aoe` hits all round.
+- An attack that hits what it touches (its range plus the enemy's `radius`) finds enemies with
+  `queryTouching`, not `enemyHash.query`: the hash goes by middles, so its search alone misses a
+  big enemy whose edge is in range.
 - Every other level of a slash or sweep adds knockback automatically, from the loop after
   `WEAPONS`. Don't add those steps by hand.
 - `burns.locId` is scenery for the flames on burning ground. `getBaseRequests` bakes it with the
@@ -56,8 +59,19 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
 - A swoosh colour goes in `SLASH_COLORS` in `client/GameView.ts`.
 - To change a missile's look as it levels, set each level's `projectileSpotAnim` to its cache
   projectile. `getBaseRequests` picks up every level for baking and the slim cache automatically.
+  Use `projectileObjId` for a real item model instead (the crossbows' bolts); these are baked at
+  every level too, without changing the held weapon or the projectile's hit size.
+  `getProjectileObjId` in `weapons.ts` says which item flies (a knife's the one in hand), for the
+  sim and the baking both. An item whose model is too small to see, or doesn't point the way it
+  flies, gets an entry in `PROJECTILE_ITEM_LOOKS` there: bolts are drawn 3x and turned half round,
+  as knives are, and the atlatl's dart lies at a slant. It goes by the item, so every weapon that
+  fires it looks the same, and it's drawing only. Check a new one in the browser, flying both
+  ways: none of these pointed the way they fly as they come from the cache.
 - Check the player's animation (`playerSeq`) in the browser. A seq id existing doesn't mean it
   suits the weapon.
+- `runPose` is a frame of `playerSeq`, the aim, that the upper body holds for a moment after each
+  shot while running, as the Armadyl crossbow's does. It's for a weapon players hold and kite with,
+  and costs a few frames per player: pick the frame in the browser, running.
 - If the item doesn't use the plain human stance, add it to `STANCES` in `stances.ts`. The cache
   doesn't say which stance an item has, so the file says where to look it up.
 
@@ -77,7 +91,9 @@ as the overhead prayers are), or the slim cache won't have it.
 ## Stat
 
 Add the key to `StatKey` and `emptyStats` in `types.ts`, and to `STAT_INFO` in `stats.ts`.
-TypeScript points out what's missing. A stat does nothing until `Sim.ts` reads it, from `this.stats`
+TypeScript points out what's missing. Give its label an icon in `content/statIcons.ts` (a test
+checks every stat has one), and the slim cache keeps what that file lists.
+A stat does nothing until `Sim.ts` reads it, from `this.stats`
 (everything added up) or `this.metaStats` (the shop's alone, and set before the constructor adds the
 starting weapon).
 
@@ -136,6 +152,8 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
 
 - `ghost` goes through everything, and is only for what's really a spirit. Anything with wings gets
   `flies`: over fences, walls, trees and water, and round terrain (`world/FlightGrid.ts`).
+- A `radius` over 1 (more than two tiles across) makes a big enemy: melee weapons go by its edge
+  for when to swing and where to aim, and attacks find it by its edge too (`Sim.bigEnemies`).
 - A `blinks.surface` seq is baked like `blinks.seq`, and needs to be one the NPC's model can play.
 - `holds` has an enemy pin the player where they stand once it reaches them (Phosani's husks), and
   a boss's `summon.scatter` brings its summons on wherever a wave's enemy would, so there's time to
@@ -161,12 +179,46 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   boss's `fallSeconds` how long its death plays before the victory screen, and a phased boss's
   phases each take an `ambient` pattern it keeps up on its own, a `tempo` and a `speed`, with a
   `finale` after the last blast. Without `totems` its phases go by its hitpoints instead
-  (`until`, `threshold`, Justiciar Zachariah's). Attacks that read the arena (`MapDef.features`:
+  (`until`, `threshold`, Justiciar Zachariah's), and a `finale` is a last stand at none (the
+  Menaphite Akh's). Attacks that read the arena (`MapDef.features`:
   a checker, pillars, bolt rows, knights, fires) and the statues a fight animates itself are
   under Arena fights there, with a boss whose `guard` drops when its attacks with `opens` miss
-  (and its arena's attacks with `turns` stun it), a fight's own button (`MapDef.fight.ability`)
+  (a lunge, a blast, a ground mark, a wave, a charge across; a lunge's `line.track` turns it
+  after the player first) (and its arena's attacks with `turns` stun it), a fight's own button
+  (`MapDef.fight.ability`, or the Tombs' `TombsDef.ability`: `Sim.ability` is either)
   and what a blow throws up (`impact`, an `ImpactDef`). Boss fights as data in
   `docs/DEVELOPMENT.md` has the lot.
+- Two bosses fought together (the Scarab Mages) are both `finalBoss` events, the second later
+  with `inArena` so it comes up in the square, and the first's intro without `alone` (which
+  holds back every event till it's dead). `enrage.partner` enrages one when its partner dies, and
+  an attack's `tether` is a beam to its partner that hurts to cross (Two bosses fought together,
+  in `docs/DEVELOPMENT.md`). Give each a `healthBar`: the top of the screen shows only one.
+  The fight's button lands on either. One can copy the other's lunge with `echoes` (only
+  while it's free). An attack with `channel` drops its guard while it's cast (a tether's, while
+  its beam runs), and the fight's button breaks it; a swing with `outside` hits all but its feet.
+  The bot needs to know a new one: both bots read a boss's shapes from
+  `scripts/game/bossReads.ts` (`shelter`, `exposedBoss`, strips, wedges, walls and the rest), so
+  a new shape's reader goes there.
+- A ground attack's `trail` spots land on where the player stood so many seconds ago (at most
+  `TRAIL_SECONDS`, kept on each `Hero`): the Champion of Scabaras's path that bursts behind you.
+- An enemy with `echoes` (the Menaphite Akh's shadow) copies a boss's lunges: as that boss
+  starts one of the named line swings, it winds up its own from where it stands at the nearest
+  player, with its own name, damage, seq (baked with it, so one its rig can play), impact and
+  strip `length` if it's shorter; `noDash` keeps a stationary one where it stands.
+  Name only one phase's attacks to keep it to that phase (a finale's need names of their own).
+  The bot finds the pocket between two strips (`sharedPocket` in `bossReads.ts`).
+- The Tombs' bosses: a surge into one of Ba-Ba's rocks (`leavesCover`) is stunned as a lunge
+  into a pillar is (a lunge only stops short of a rock); a guard with `pierce` lets its prayer
+  down while it's open (Akkha's);
+  `phases.by: "shields"` steps Kephri's phases at her shields; `onlyWith` keeps an attack to an
+  invocation, and `invoked.times` adds links to its chain; `AkkhaDef.orbAttacks` are all he
+  uses while his orbs are out; `clearOfObelisk` keeps a Wardens attack off the obelisk's
+  special; `raidEase` eases a boss off from a raid level up (hitpoints, hits, the time between
+  its ambients), where the raid level's scale would make a wall. Each boss's stage in
+  `docs/design/tombs-of-amascut.md` says what it uses.
+- A boss attack's `message` is what to do about it, said the first time it's used in a run, one
+  at a time with others (`GameClient.showInstruction`), never again that run. A warning for every
+  cast belongs in the attack's telegraph, not its message.
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's
   hitpoints, experience and loot. One with `spawnAt` gets no more copies than it has free spots.
 
@@ -197,17 +249,21 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   are no picks and no items: everyone plays `fight.character` there (`getMapCharacter` in `maps.ts`
   is what reads it, and a fun map's `character`), an adventurer made for the fight and kept to it
   (`only` on the `CharacterDef`: never in the roster, never unlocked), whose starting weapon
-  begins at `fight.weaponLevel`. Nothing in the fight drops
-  experience, so that kit is the whole run, and the boss's hitpoints (the event's `hp`) are tuned
-  to it. The spawn is the middle of the boss square, where the entrance puts the player anyway.
-  The bot keeps away from bosses, so with nothing but melee it walks up to a shielded one and
-  takes her swings: its numbers say how long the kit takes, not how a player fares. A fight can
-  open after another fight (Justiciar Zachariah after Phosani's), as long as the chain ends at a
-  map that isn't one. It's listed
-  under Boss fights on the map screen's Bosses tab, and can't be endless. Sim it with
+  begins at `fight.weaponLevel`. Nothing in the fight drops experience, so that kit is the whole
+  run, and the boss's hitpoints (the event's `hp`) are tuned to it. The spawn is the middle of
+  the boss square, where the entrance puts the player anyway. The bot keeps away from bosses, so
+  with nothing but melee it walks up to a shielded one and takes her swings: its numbers say how
+  long the kit takes, not how a player fares. A fight can open after another fight (Justiciar
+  Zachariah after Phosani's), as long as the chain ends at a map that isn't one. It's listed
+  under Boss fights on the map screen's Bosses tab, and can't be endless. `fight.solo` keeps it to
+  one player (the quest's fights): co-op's lobby leaves it out (`isCoopMap`). Sim it with
   `FLAT=1 MAP=phosani DODGE=1`, which needs no cache, and go by how long the bot lasts and what
   hits it (its `boss attacks that hit` line says which of the boss's attacks did it): it can't
   dodge as a person does.
+- A fight in parts (Beneath Cursed Sands) sets `MapDef.stages`: each part is a run of its own,
+  with its own `events` in place of the map's and its own `cinematic` (the boss's entrance, played
+  as its run starts but not on a retry). A run plays the first part not beaten yet, a win's kept
+  (`SaveData.fightStages`), and the map's beaten once the last part is.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
   uses the real collision, so a sim also shows whether a map plays at all.
 - Fun maps don't count towards quests.
@@ -227,6 +283,10 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   case in `createRunRule`, a view in `client/` and the bot taught to play it (`botMove`).
 - `hard` is what hard mode multiplies its enemies' hitpoints and damage by (`hard.ts` has the rest of
   hard mode, and the numbers for a map that doesn't set its own). Sim it against normal with `HARD=1`.
+- People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
+  `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
+  cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
+  one to copy. Check every shot's triangles at a phone's size, as it says.
 - Lights: a map opts in with `lighting` (`LightingDef`), and then anything can give off light: the
   map's own `lights`, glowing scenery by loc id (`locs`), each player's (`player`), an enemy's
   (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
@@ -252,9 +312,20 @@ it was. Expert mode's rules are fields on the enemies (`onlyStyle`, `expertAs`, 
 but `colours.offStyle` brings a boss's colours to normal too. A boss's own mechanic can be a while
 it can't be hurt: `shadowRealm` or `yellows` (for so many seconds) or `exhumes` (until so many of
 its smother ground marks are stood on, or its time's up), each at shares of its hitpoints, doing
-only the attacks they name meanwhile (`stepOrdeal` in `Sim.ts`); an attack with `ordeal` is used
+only the attacks they name meanwhile (`stepOrdeal` in `Sim.ts`), after its `opener` if it has one
+(the Champion of Scabaras lays his nests all at once that way); an attack with `ordeal` is used
 only then. The balance bot has to know how to play a new one (`fightMove` in `simulate-run.ts`), or
 its sims can't win the fight.
+
+The Tombs of Amascut (`scaperune/maps/tombsOfAmascut.ts`, to the plan in
+`docs/design/tombs-of-amascut.md`) is on the Raids tab, behind its quest, Beneath Cursed Sands
+(`MapDef.requires`). A new invocation goes in `INVOCATIONS`
+(`content/invocations.ts`), with its raid level and group.
+A new room or boss, or a mechanic in one, needs the Tombs' bot to know it
+(`scripts/game/tombsBot.ts`: the puzzle's steps, where to stand, what to step round), and its sim
+run on it
+(`scripts/game/simulate-tombs.ts`, `ROOM=` the room), solo and with `PARTY=2`: in co-op one player
+works a puzzle two would undo between them.
 
 ## Pet
 
@@ -268,14 +339,27 @@ offered once found, with nothing else to add. Pets never go in the sim: see Pets
 A trophy (`trophies.ts`) shows in the Collection log under the map its `from` names (a pumpkin's
 under the Hallowed Night), with a tab of its own for a new map, and so do weapons whose `unlock`
 names that map (`content/collectionLog.ts`). A boss fight map (`MapDef.fight`) whose boss brings
-in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't.
+in a weapon gets a tab too, trophy or not; a campaign map's boss drops don't. The Tombs of Amascut's
+chest's are under the raid.
+
+## Text and languages
+
+Names and descriptions are read through the accessors in `content/` (`tr(key, english)`), never
+straight off the definition. After adding or renaming content, run
+`bun run tsx scripts/i18n/extract.ts` to regenerate `src/game/i18n/locales/en/*.json`. See
+`docs/DEVELOPMENT.md`, Languages.
+
+Write it in English only: never translate it into another language unless the developer asks you
+to (CLAUDE.md, Conventions). The other languages show the English until their translators add
+theirs.
 
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`
 and usually an `unlock` task. Act II's have a `trait` (`CharacterTraitDef`), a way to play rather
 than a bonus, which the sim plays out for their hero (the Forester's `timber`: `fellTree` and
-`cutReach` in `Sim.ts`); a new kind needs its case there. A description can use `**bold**`.
+`cutReach` in `Sim.ts`); a new kind needs its case there. A `revival` bonus needs a
+`reviveLook`, the icon the HUD shows for it (a test checks). A description can use `**bold**`.
 
 ## Quest
 

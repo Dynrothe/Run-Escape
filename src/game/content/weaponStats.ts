@@ -1,3 +1,4 @@
+import { fmtNum, t, tp } from "../i18n";
 import { WEAPON_DAMAGE_BALANCE, WeaponDamageProfile } from "./balance";
 import { WeaponDef, WeaponLevel } from "./types";
 import { weaponDamageProfileScale } from "./weaponBalance";
@@ -15,10 +16,49 @@ export type WeaponStatLine = {
 // A weapon's damage bonus (0.15 = +15%) as the HUD's tooltip and the level up
 // cards show it: "+15%"
 export function formatWeaponBonus(bonus: number): string {
-    return `+${Math.round(bonus * 100)}%`;
+    return t("weaponstat.bonus", {
+        value: fmtNum(Math.round(bonus * 100), { useGrouping: false }),
+    });
 }
 
+// The weapon stats' words, for locales/en/gen.json: weaponstat.<stat> is a stat's label (also the
+// key of its StatField), and the rest are how a value reads, {value} being the number
+export const WEAPON_STAT_MESSAGES: Record<string, string> = {
+    "weaponstat.damage": "Damage",
+    "weaponstat.attacks": "Attacks",
+    "weaponstat.knockback": "Knockback",
+    "weaponstat.projectiles": "Projectiles",
+    "weaponstat.targets": "Targets",
+    "weaponstat.pierces": "Pierces",
+    "weaponstat.venom": "Venom",
+    "weaponstat.venom_lasts": "Venom lasts",
+    "weaponstat.freezes_for": "Freezes for",
+    "weaponstat.burns_for": "Burns for",
+    "weaponstat.weakens_for": "Weakens for",
+    "weaponstat.sides": "Sides",
+    "weaponstat.reach": "Reach",
+    "weaponstat.arc": "Arc",
+    "weaponstat.bounces": "Bounces",
+    "weaponstat.splash": "Splash",
+    "weaponstat.speed": "Speed",
+    "weaponstat.radius": "Radius",
+    "weaponstat.blast_radius": "Blast radius",
+    "weaponstat.lasts": "Lasts",
+    "weaponstat.spin_speed": "Spin speed",
+    "weaponstat.bonus": "+{value}%",
+    "weaponstat.value.per_second": "{value}/s",
+    "weaponstat.value.seconds": "{value}s",
+    "weaponstat.value.degrees": "{value}°",
+    "weaponstat.value.tiles.one": "{value} tile",
+    "weaponstat.value.tiles.other": "{value} tiles",
+    "weaponstat.value.none": "none",
+    "weaponstat.value.all": "all",
+    "weaponstat.change": "{label} {from} → {value}",
+    "weaponstat.line": "{label} {value}",
+};
+
 type StatField = {
+    // The key of the label in WEAPON_STAT_MESSAGES
     label: string;
     // undefined when the stat means nothing for this weapon
     get: (level: WeaponLevel) => number | undefined;
@@ -33,14 +73,18 @@ const DEFAULT_ARC = 1.1;
 
 // Rounds without trailing zeros: 2.2, 0.85, 13
 function round(value: number, digits = 1): string {
-    return String(Number(value.toFixed(digits)));
+    // (+ 0 turns a -0 into 0, as String did)
+    return fmtNum(Number(value.toFixed(digits)) + 0, {
+        useGrouping: false,
+        maximumFractionDigits: digits,
+    });
 }
 
 const always = () => true;
 const positive = (value: number) => value > 0;
 
 const damage: StatField = {
-    label: "Damage",
+    label: "weaponstat.damage",
     get: (level) => level.damage,
     format: (value) => round(value),
     listed: always,
@@ -48,14 +92,21 @@ const damage: StatField = {
 
 // Attacks a second rather than the cooldown, so bigger is better like the rest
 const rate: StatField = {
-    label: "Attacks",
+    label: "weaponstat.attacks",
     get: (level) => 1 / level.cooldown,
-    format: (value) => `${value.toFixed(2)}/s`,
+    format: (value) =>
+        t("weaponstat.value.per_second", {
+            value: fmtNum(Number(value.toFixed(2)), {
+                useGrouping: false,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }),
+        }),
     listed: always,
 };
 
 const knockback: StatField = {
-    label: "Knockback",
+    label: "weaponstat.knockback",
     get: (level) => level.knockback,
     format: (value) => round(value, 2),
 };
@@ -64,8 +115,11 @@ function tiles(label: string, listed?: StatField["listed"]): StatField {
     return {
         label,
         get: (level) => level.area,
+        // "1 tile" when it rounds to one, whatever the exact size
         format: (value) =>
-            value > 0 ? `${round(value, 2)} ${round(value, 2) === "1" ? "tile" : "tiles"}` : "none",
+            value > 0
+                ? tp("weaponstat.value.tiles", Number(value.toFixed(2)), { value: round(value, 2) })
+                : t("weaponstat.value.none"),
         listed,
     };
 }
@@ -74,13 +128,13 @@ function seconds(label: string, listed?: StatField["listed"]): StatField {
     return {
         label,
         get: (level) => level.duration,
-        format: (value) => `${round(value, 2)}s`,
+        format: (value) => t("weaponstat.value.seconds", { value: round(value, 2) }),
         listed,
     };
 }
 
 const projectiles: StatField = {
-    label: "Projectiles",
+    label: "weaponstat.projectiles",
     get: (level) => level.amount,
     format: (value) => round(value),
     listed: always,
@@ -88,16 +142,16 @@ const projectiles: StatField = {
 
 // Toktz-xil-ul's 99 is everything in the way
 const pierce: StatField = {
-    label: "Pierces",
+    label: "weaponstat.pierces",
     get: (level) => level.pierce,
-    format: (value) => (value >= 99 ? "all" : round(value)),
+    format: (value) => (value >= 99 ? t("weaponstat.value.all") : round(value)),
     listed: positive,
 };
 
 const venom: StatField = {
-    label: "Venom",
+    label: "weaponstat.venom",
     get: (level) => level.venom,
-    format: (value) => `${round(value)}/s`,
+    format: (value) => t("weaponstat.value.per_second", { value: round(value) }),
     listed: positive,
 };
 
@@ -105,13 +159,13 @@ const venom: StatField = {
 // ground, the drain or the venom
 function spellDuration(def: WeaponDef): StatField[] {
     if (def.freezes) {
-        return [seconds("Freezes for", positive)];
+        return [seconds("weaponstat.freezes_for", positive)];
     }
     if (def.burns) {
-        return [seconds("Burns for", positive)];
+        return [seconds("weaponstat.burns_for", positive)];
     }
     if (def.drain) {
-        return [seconds("Weakens for", positive)];
+        return [seconds("weaponstat.weakens_for", positive)];
     }
     return [];
 }
@@ -124,7 +178,7 @@ function venomFields(damageScale: number): StatField[] {
             get: (level) => (level.venom === undefined ? undefined : level.venom * damageScale),
         },
         {
-            ...seconds("Venom lasts", positive),
+            ...seconds("weaponstat.venom_lasts", positive),
             get: (level) => (level.venom ? level.duration : undefined),
         },
     ];
@@ -145,19 +199,23 @@ function statFields(def: WeaponDef, profile: WeaponDamageProfile | undefined): S
                 rate,
                 // Front, and behind too at 2
                 {
-                    label: "Sides",
+                    label: "weaponstat.sides",
                     get: (level) => Math.min(level.amount, 2),
                     format: (value) => round(value),
                     listed: (value) => value > 1,
                 },
-                tiles("Reach", always),
+                tiles("weaponstat.reach", always),
                 ...(def.kind === "sweep"
                     ? [
                           {
-                              label: "Arc",
+                              label: "weaponstat.arc",
                               get: (level: WeaponLevel) => level.arc ?? DEFAULT_ARC,
                               format: (value: number) =>
-                                  `${Math.round((value * 2 * 180) / Math.PI)}°`,
+                                  t("weaponstat.value.degrees", {
+                                      value: fmtNum(Math.round((value * 2 * 180) / Math.PI), {
+                                          useGrouping: false,
+                                      }),
+                                  }),
                           },
                       ]
                     : []),
@@ -173,7 +231,7 @@ function statFields(def: WeaponDef, profile: WeaponDamageProfile | undefined): S
                 ...(def.kind === "axes"
                     ? [
                           {
-                              label: "Bounces",
+                              label: "weaponstat.bounces",
                               get: (level: WeaponLevel) => level.bounce ?? 0,
                               format: (value: number) => round(value),
                               listed: positive,
@@ -181,16 +239,20 @@ function statFields(def: WeaponDef, profile: WeaponDamageProfile | undefined): S
                       ]
                     : []),
                 pierce,
-                tiles("Splash", positive),
+                tiles("weaponstat.splash", positive),
                 ...venomFields(scale),
-                { label: "Speed", get: (level) => level.speed, format: (value) => round(value) },
+                {
+                    label: "weaponstat.speed",
+                    get: (level) => level.speed,
+                    format: (value) => round(value),
+                },
                 knockback,
             ];
         case "aura":
             return [
                 tunedDamage,
                 rate,
-                tiles("Radius", always),
+                tiles("weaponstat.radius", always),
                 ...spellDuration(def),
                 ...venomFields(scale),
                 knockback,
@@ -199,8 +261,8 @@ function statFields(def: WeaponDef, profile: WeaponDamageProfile | undefined): S
             return [
                 tunedDamage,
                 rate,
-                { ...projectiles, label: "Targets" },
-                tiles("Blast radius", always),
+                { ...projectiles, label: "weaponstat.targets" },
+                tiles("weaponstat.blast_radius", always),
                 ...spellDuration(def),
                 ...venomFields(scale),
                 knockback,
@@ -210,10 +272,10 @@ function statFields(def: WeaponDef, profile: WeaponDamageProfile | undefined): S
                 tunedDamage,
                 rate,
                 projectiles,
-                seconds("Lasts", always),
-                tiles("Radius"),
+                seconds("weaponstat.lasts", always),
+                tiles("weaponstat.radius"),
                 {
-                    label: "Spin speed",
+                    label: "weaponstat.spin_speed",
                     get: (level) => level.speed,
                     format: (value) => round(value),
                 },
@@ -232,7 +294,7 @@ export function weaponStats(
     for (const field of statFields(def, profile)) {
         const value = field.get(level);
         if (value !== undefined && field.listed?.(value)) {
-            lines.push({ label: field.label, value: field.format(value) });
+            lines.push({ label: t(field.label), value: field.format(value) });
         }
     }
     return lines;
@@ -255,7 +317,7 @@ export function weaponStatChanges(
         const value = field.format(after);
         const was = field.format(before);
         if (value !== was) {
-            lines.push({ label: field.label, value, from: was, better: after > before });
+            lines.push({ label: t(field.label), value, from: was, better: after > before });
         }
     }
     return lines;
@@ -264,6 +326,6 @@ export function weaponStatChanges(
 // "Damage 10 → 13", for plain text
 export function formatWeaponStat(line: WeaponStatLine): string {
     return line.from === undefined
-        ? `${line.label} ${line.value}`
-        : `${line.label} ${line.from} → ${line.value}`;
+        ? t("weaponstat.line", { label: line.label, value: line.value })
+        : t("weaponstat.change", { label: line.label, from: line.from, value: line.value });
 }
