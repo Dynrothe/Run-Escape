@@ -487,6 +487,56 @@ About three weeks: the map is the long part.
 A hand-made map can be built to budget: `view-weight.ts PHONE=1` checks it as it's made. Braziers are the cost to
 watch, with a fire spot animation each.
 
+### 5.11 As built (2026-11-10)
+
+Built in #159 as build order step 9. Where it differs from the above, and why:
+
+- **The yard** is a hand-made recipe (`scaperune/maps/ghorrock.ts`) on squares 62 to 66 by 112 to 116, three by three of
+  arena with a square of margin round it: snow (underlays 58 and 216) at brightness 1.3 under a cold wash, so it's white
+  rather than the grey the game's lighting makes of it. North is the cliff the prison's cut into, in faces of 64 over two
+  tiles with two-tile ledges up to 160 (`map-depth.md`'s cliff wall north), the yard ending at its foot. In it, behind
+  the Duke, the prison's Heavy Door (49093) between two of its pillars (46628), with its flags (48950), cages (46634,
+  49452), iron maidens (48959) and racks (48947) along the foot. Across the yard: tables and smashed chairs (46675,
+  49087), skeletons, snow rocks (19686), ice-covered boulders (5039), snowy trees (1330 to 1332) and the snow's ice mounds
+  (60404, 60405). A fence (4246) on its other three sides, and a snowy wood past it.
+- **The ice**: ten frozen pools, about 13.5% of the yard, painted with overlay 151, a blue-grey (no overlay has the
+  floors' glassy ice texture, 53). The sim's ice is the **effect mask** (`core/world/EffectMask.ts`, one byte a tile over
+  any map's arena) painted from the same ellipses (`ColdRuleDef.ice`); the drawn ice's edges are smoothed, so the two
+  can differ by a tile at the rim. Enemies never slide (the ice wolves don't need anything of their own).
+- **Braziers**: the prison's own don't read: its unlit one (48122) is a dark block from above and its lit one (48901)
+  burns violet, not warm. Drawn instead is an iron brazier (46614) at 1.8 times its size with a fire (25155) in its bowl
+  while it's lit, its flames dying down over their last 10 seconds. Each is a stand-in blocking its 2 by 2. Standing by
+  one relights it while it's guttering too, so it can be tended. Two of the six stand in the Duke's square.
+- **Vents**: their jets are the cache's Steam Vent (15214) in the map; the Gas jet (49762) and the Gas (49761) are near
+  invisible on snow. As a vent frosts over the Gas shows; its puff is the Duke's own gas (spot animation 2431) over the 3
+  by 3. The gas hurts 2% every 0.6 seconds (the table's "a tick" read as a game tick), and the cold rises 5 a second in it.
+- **Embers** are five small fires (5249) over their 3 by 3. They burn 2% every half second.
+- **How the cold shows**: a bar under hitpoints (frosting at 80), your character pale from 50 and the frozen blue from
+  80, and the Ice Block (49144) round you while you're frozen. The breath puffs from 80 aren't in.
+- **Fire weapons**: Fire spells, Flames of Zamorak, Burning claws and Toktz-mej-tal. The Tome of fire is a passive
+  (weapons recharge faster), not a weapon; Burning claws is its evolution.
+- **Ketla** snuffs braziers within 3 tiles of her as she goes (`EnemyDef.plants`, what roots a Strangled Bear's trail on
+  the Stranglewood), and calls icefiends. **Jhallan**'s shadows are three of his unattackable twin (12355) at half his
+  hitpoints.
+- **Duke Sucellus** is drawn at 0.55 of his size (his arms span his whole room in OSRS) and never moves. He wakes at the
+  north edge of a 32-tile square in front of the prison, with seven of the prison's statues (49090) in it for cover, none
+  more than 9 tiles from anywhere in it. His slam, icicles (a ring of five and one under you, spot animation 2434), his
+  spit (three of the King Black Dragon's ice breaths, 396; his own spot animations nearby don't fly), gas spat at you
+  whose landing sets the nearest vent puffing (`BossAttackDef.rule.vent`), and the **freezing gaze**: Zachariah's
+  (`cover`), 12 damage and a 2-second freeze. It's every fifth attack or so, not counted: its cooldown is about five
+  attacks and it's the heaviest pick. His animations (10176 to 10180) are picked by length: they're skeletal, and
+  `classify-npc-seqs.ts` can't tell them apart.
+- **The bot** (`simulate-run.ts`) goes to the nearest lit brazier (an out one counts 10 tiles further, as it has to be
+  relit) once its cold reaches 45 (before it slows) and stays until 15, steps out of a vent's gas and off embers. `COLD=0` never warms.
+- **Sims** (`META=max ARMOURY=max`, 8 adventurers by 3 seeds, the bot warming itself): at step 0, 1 win of 24 with a
+  median end of 8:14 and 15 deaths before 10:00, against the Stranglewood's 1, 6:31 and 14 and Lassar's 1, 10:05 and 12;
+  at step 1, 0 wins, 8:28 and 14, against 2, 7:11 and 14 and 0, 7:46 and 14. The bot was frozen once a run (median) and
+  spent about a third of the run at 50 cold or more. The first pass was harder (6:14 and 21 before 10:00): Ketla's
+  frost came three at a time every 3 seconds, and the ice giants (44 hitpoints, 4 damage) walled the crowd from 6:00;
+  she now throws two every 4 seconds and calls three icefiends, and the giants are 40 and 3, one fewer at 6:00.
+- **Phones** (`frameProbe` at 844 by 390 on the phone camera): the yard's world is light, at most 12.5k in front of
+  the Duke's statues, 33k with its crowd; the heaviest view is the Duke's fight at 49k, 39k of it actors.
+
 ## 6. The Scar (the Leviathan)
 
 ### 6.1 The rule: the dark
@@ -857,7 +907,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter. Built (4.11)          | 2            | 2.5 weeks  |
 | 7   | The Shadow remix                                                                                                                          | 5, 6         | 3 days     |
 | 8   | Awakened Whisperer, Wisp                                                                                                                  | 3, 6         | 2 weeks    |
-| 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger                                                  | 2            | 3 weeks    |
+| 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger. Built (5.11)                                    | 2            | 3 weeks    |
 | 10  | The Frozen remix                                                                                                                          | 5, 9         | 3 days     |
 | 11  | Awakened Duke Sucellus, Baron                                                                                                             | 3, 9         | 2 weeks    |
 | 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer                                                         | 1, 2         | 1.5 weeks  |
@@ -944,7 +994,7 @@ Nothing is open now.
 - How any of the four cuts looks from the play camera, or what it costs a phone: nothing here was drawn.
 - The spot animations for Vardorvis's axes and vines, the puddle's ripple, the gas vents and the Soulreaper spin:
   each pull request looks them up.
-- Which brazier id reads as lit (48122 or 48901).
+- Which brazier id reads as lit (48122 or 48901): neither (5.11).
 - Whether the Scar's filler squares draw a floor.
 - Root growth's numbers against the bot, and every other number here.
 - The music tracks' assignments are from the OSRS Wiki's pages ("Blood Rush", "Song of the Silent Choir" and "Eye See

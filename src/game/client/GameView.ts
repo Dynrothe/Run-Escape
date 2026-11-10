@@ -83,6 +83,18 @@ import { PlayerPose, getPlayerPose } from "./PlayerPose";
 import { RootsView } from "./RootsView";
 
 const FROZEN_TINT = 0xa8d8ff;
+// How high an iron brazier's bowl is (ColdRuleDef.look), in tiles at its own size
+const BRAZIER_BOWL = 0.55;
+// A vent's puff, spread over its cloud (ColdRuleDef.vents): its middle and four round it
+const VENT_PUFFS = [
+    [0, 0],
+    [-0.9, -0.9],
+    [0.9, -0.9],
+    [-0.9, 0.9],
+    [0.9, 0.9],
+];
+// Cold, halfway to frozen (ColdRuleDef)
+const CHILLED_TINT = 0xd4ecff;
 // Tiles past a sheltered swing's shelter its storm's edge starts, closing in as it winds up
 // (BossAttackDef.outside)
 const STORM_EDGE = 9;
@@ -803,6 +815,7 @@ export class GameView {
         const focus = (sim.heroes[this.viewHero] ?? sim.heroes[sim.focus]).player;
         this.roots.submitActors(actors, sim, focus.x, focus.y);
         this.drawRealmHoles(actors, sim);
+        this.drawCold(actors, sim);
         this.trees = this.trees.filter((tree) => sim.tick - tree.start < TREE_TICKS);
         for (const tree of this.trees) {
             this.drawTree(actors, sim, tree);
@@ -834,6 +847,101 @@ export class GameView {
                     ? { scale: (fit * 128) / Math.max(1, model.radius), unlit: 1 }
                     : UNLIT,
             );
+        }
+    }
+
+    // The cold's (ColdRuleDef.look): braziers burning (shrinking as they gutter) or out, the gas
+    // out of a vent (a wisp as it frosts over, then its cloud), a fire elite's embers, and the ice
+    // block round whoever's frozen solid
+    private drawCold(actors: ActorRenderer, sim: Sim): void {
+        const cold = sim.cold;
+        if (!cold) {
+            return;
+        }
+        const look = cold.def.look;
+        const tick = sim.tick;
+        const bowl = this.assets.get(getRealmLocKey(look.brazierLocId));
+        const fire = this.assets.get(getRealmLocKey(look.fireLocId));
+        const gutter = cold.def.braziers.gutter * TICKS_PER_SECOND;
+        const clientTicks = Math.floor((tick / TICKS_PER_SECOND) * 50);
+        for (const brazier of cold.braziers) {
+            const { midX, midY } = brazier;
+            const ground = this.ground(sim, midX, midY);
+            if (bowl) {
+                actors.draw(bowl, bowl.anims[0], 0, midX, ground, midY, 0, {
+                    scale: look.brazierScale ?? 1,
+                });
+            }
+            if (!fire || !cold.isLit(brazier, tick)) {
+                continue;
+            }
+            const anim = fire.anims[0];
+            const frame = anim ? anim.getFrame(clientTicks, true) : 0;
+            // It dies down over its last seconds, and flares as it's lit
+            const left = brazier.litUntil - tick;
+            const flare = Math.max(0, 1 - (tick - brazier.litAt) / (TICKS_PER_SECOND * 0.6));
+            const dim = Math.min(1, 0.4 + (0.6 * left) / gutter) + flare * 0.3;
+            // Up in its bowl
+            const bowlTop = ground - BRAZIER_BOWL * (look.brazierScale ?? 1);
+            actors.draw(fire, anim, frame, midX, bowlTop, midY, 0, {
+                scale: (look.fireScale ?? 1) * dim,
+                unlit: 1,
+            });
+        }
+        // A vent frosts over (its gas, a wisp) and then puffs (the Duke's gas, filling the cloud)
+        const gas = this.assets.get(getRealmLocKey(look.gasLocId));
+        const puff = this.assets.get("spot:" + look.puffSpotAnim);
+        const cloud = cold.def.vents.size;
+        for (const vent of cold.vents) {
+            const state = cold.ventState(vent, tick);
+            const model = state === "puff" ? puff : state === "warn" ? gas : undefined;
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const frame = anim ? anim.getFrame(clientTicks + vent.offset, true) : 0;
+            const ground = this.ground(sim, vent.x, vent.y);
+            if (state === "warn") {
+                actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, { tint: FROZEN_TINT });
+                continue;
+            }
+            for (const [dx, dy] of VENT_PUFFS) {
+                const x = vent.x + (dx * cloud) / 3;
+                const y = vent.y + (dy * cloud) / 3;
+                actors.draw(model, anim, frame, x, ground, y, 0, { alpha: 0.9 });
+            }
+        }
+        // Embers: small fires over the patch, each a little out of step
+        const embers = this.assets.get(getRealmLocKey(look.embersLocId));
+        if (embers) {
+            const anim = embers.anims[0];
+            const half = cold.def.embers.size / 2 - 0.5;
+            for (const ember of cold.embers) {
+                const fade = Math.min(1, (ember.until - tick) / TICKS_PER_SECOND);
+                for (const [dx, dy] of VENT_PUFFS) {
+                    const x = ember.x + dx * half;
+                    const y = ember.y + dy * half;
+                    const frame = anim
+                        ? anim.getFrame(clientTicks + Math.floor(x * 7 + y * 3), true)
+                        : 0;
+                    actors.draw(embers, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                        scale: 0.8 * fade,
+                        unlit: 1,
+                    });
+                }
+            }
+        }
+        const block = this.assets.get(getRealmLocKey(look.iceBlockLocId));
+        if (block) {
+            for (const hero of sim.heroes) {
+                if (tick < hero.frozenSolid && sim.isUp(hero)) {
+                    const { x, y } = hero.player;
+                    actors.draw(block, block.anims[0], 0, x, this.ground(sim, x, y), y, 0, {
+                        scale: 0.8,
+                        alpha: 0.75,
+                    });
+                }
+            }
         }
     }
 
@@ -2090,6 +2198,11 @@ export class GameView {
         let flash = 0;
         if (player.flash > 0) {
             tint = PLAYER_HIT_TINT;
+        }
+        // Cold (ColdRuleDef): paler and bluer the colder they are, from halfway
+        const cold = sim.cold?.coldOf(hero) ?? 0;
+        if (cold >= 50) {
+            tint = cold >= 80 ? FROZEN_TINT : CHILLED_TINT;
         }
         if (player.frozen > 0) {
             tint = FROZEN_TINT;

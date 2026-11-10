@@ -8,8 +8,8 @@ the version in the corner).
 ### Added
 
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
-  maps to play in any order, each harder the more of the others you've beaten. The Stranglewood
-  and the Lassar Undercity are in; Ghorrock and the Scar are coming.
+  maps to play in any order, each harder the more of the others you've beaten. The Stranglewood,
+  the Lassar Undercity and Ghorrock are in; the Scar is coming.
 - The Stranglewood: the Strangled, their boars, lynxes and bears in the real wood round
   Vardorvis's arena, with Kasonde, a great Strangled Bear and Vardorvis himself. Roots creep in
   from the wood, slowing and hurting you: cut them back with your hits, and kill the root hearts
@@ -30,6 +30,16 @@ the version in the corner).
   dodged into the shadows every 30 seconds. And the Treasure hunter, for opening 5 caskets in the
   Shadow Realm in one run: her caskets left on the ground bury themselves and come up a tier
   better. Beating the Whisperer also finds the Siren's staff.
+- Ghorrock: ice warriors, spiders, wolves, icefiends and giants in the frozen yard of Ghorrock
+  Prison, with Ketla the Unworthy, Jhallan and Duke Sucellus, who wakes in the prison's mouth and
+  freezes whatever his gaze finds: hide behind the yard's statues. The cold rises all the time,
+  slowing you and then your weapons, and at its worst freezes you solid. Stay by the braziers and
+  relight them as they burn down; kill the pyrefiends for their embers; fire weapons warm you.
+  Gas vents puff, and the pools are ice you slide on. With its own music, Prison Break and Eye
+  See You.
+- The Snow ranger, for beating Ghorrock: a shortbow, and Shatter, every fourth hit chilling, and
+  what's killed chilled or frozen bursting into shards. On ice she never slides, and the cold
+  gets to her slower. Beating Duke Sucellus also finds the Eye of the Duke.
 - Butch, Awakened Vardorvis's pet, the first pet that fights: take him along and every few
   seconds he leaps on an enemy near you, hitting everything round where he lands.
 

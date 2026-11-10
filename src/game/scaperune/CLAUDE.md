@@ -1998,6 +1998,11 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   `twin`: a second recipe on squares of its own, installed with it and pinned in `grid-hash.ts` with it, which the game
   draws in the map's place while the party's in the other world (`MapDef.twin`, `MapManager.twin`). Only the map's own
   collision is used, so build the twin from the same cut, its locs off where the map's twins are.
+- A map whose rule reads places off it (Ghorrock's braziers, vents, ice pools and the statues that hide you from the
+  Duke's gaze, `maps/ghorrock.ts`) exports them in grid tiles, and the content turns them into world tiles for the rule
+  (`ColdRuleDef`) and the `MapDef`'s `features`. What the game draws in their place (the braziers, which it lights and
+  puts out) is blocked in the grid and handed on as `standIns`, so `view-weight.ts` counts it. Its ice is painted with
+  an overlay here and given to the sim as an effect mask from the same shapes (`core/world/EffectMask.ts`).
 - `bossArena` on the `MapDef` gives a phased boss a square of its own. The player's brought to its middle and
   can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
 - Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay

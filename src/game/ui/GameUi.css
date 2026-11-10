@@ -2165,6 +2165,38 @@
     text-shadow: 1px 1px 0 #000;
 }
 
+/* Cold (ColdRuleDef), under hitpoints: icy, frost creeping in from its edge as it fills */
+.ui-cold {
+    position: relative;
+    width: min(280px, calc(60vw / var(--ui-scale)));
+    height: 12px;
+    margin-top: 2px;
+    background: #0d1a26;
+    border: 2px solid #000;
+}
+
+.ui-cold-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6fb6e8, #d8f0ff);
+    transform-origin: left;
+}
+
+.ui-cold-high {
+    box-shadow:
+        inset 0 0 6px #e8f8ff,
+        0 0 6px #9fd8ff;
+}
+
+.ui-cold span {
+    position: absolute;
+    inset: 0;
+    text-align: center;
+    font-size: 11px;
+    line-height: 12px;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+}
+
 /* Poisoned: a sicker green, like the client's hitpoints orb */
 .ui-hp-poisoned {
     border-color: #2f5f00;

@@ -27,6 +27,7 @@ const SHIPPED_HASHES: Record<string, string> = {
     stranglewood: "933870d4549c12b99897d02a53df4bacaa7ca194f32fa0708068799b39641ef4",
     // The city and its Shadow Realm (MapRecipe.twin) together
     lassar_undercity: "e63d1ae21372ae38ee1522e756b561b474a8b30df23701858d76f5d6ae63fe6a",
+    ghorrock: "2bc1030c05a631ca65534e2f12f78c618566c16badbdca9f8eb45251d0600520",
     tombs_of_amascut: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
     // The raid's squares under the quest's id: the same build
     beneath_cursed_sands: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",

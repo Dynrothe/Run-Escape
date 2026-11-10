@@ -90,6 +90,13 @@ export const TROPHIES: TrophyDef[] = [
         how: "From the Whisperer, the first time she's beaten in the Lassar Undercity.",
         from: { kind: "boss", enemyId: "whisperer", mapId: "lassar_undercity", chance: 1 },
     },
+    {
+        id: "eye_of_the_duke",
+        name: "Eye of the Duke",
+        objId: 28321,
+        how: "From Duke Sucellus, the first time he's beaten in Ghorrock.",
+        from: { kind: "boss", enemyId: "duke_sucellus", mapId: "ghorrock", chance: 1 },
+    },
     // Awakened Vardorvis's pet, certain: the fight's the gate (act-2-fallen-empire.md, 7.2)
     {
         id: "butch",

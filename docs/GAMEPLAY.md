@@ -112,6 +112,7 @@ version and how to run it.
     | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                             |
     | Shadow walker       | Magic       | Shadow Burst           | Step between (a trait, below)                     | Beating the Lassar Undercity                         |
     | Treasure hunter     | Ranged      | Bronze throwing knives | Dig site (a trait, below)                         | Opening 5 caskets in the Shadow Realm in one run     |
+    | Snow ranger         | Ranged      | Shortbow               | Shatter (a trait, below)                          | Beating Ghorrock                                     |
     | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange           |
     | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock              |
     | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                            |
@@ -129,7 +130,11 @@ version and how to run it.
   a second and a half out of reach and 3 tiles on the way she faces; in the Lassar Undercity's
   city it takes her (and her party) into the Shadow Realm. The **Treasure hunter**'s is **Dig
   site**: a casket left on the ground buries itself after 3 seconds; walked over again from 20
-  seconds it's a tier better, and at 60 seconds it's lost.
+  seconds it's a tier better, and at 60 seconds it's lost. The **Snow ranger**'s is **Shatter**:
+  every fourth hit of hers chills what it hits for a second (at half its pace), and anything she
+  kills while it's chilled or frozen bursts, its shards hitting everything within 3 tiles for a
+  quarter of its hitpoints (a tenth of an elite's or a boss's). Under Ghorrock's cold she never
+  slides on ice, and her cold rises 40% slower.
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
   a Very rare one, offered in about one run in twenty, and Rare ones. A new weapon is always
@@ -206,6 +211,7 @@ version and how to run it.
     | Phosani's          |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
     | Stranglewood       | The Forester, the Executioner's axe head         |                                                                                                      |
     | Lassar Undercity   | The Shadow walker, the Siren's staff             | The Treasure hunter (5 caskets opened in the Shadow Realm in one run)                                |
+    | Ghorrock           | The Snow ranger, the Eye of the Duke             |                                                                                                      |
     | Awakened Vardorvis | Butch                                            |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
@@ -360,6 +366,12 @@ version and how to run it.
       Wighted Leeches from 2:00 whose bite drains a while, Ghosts from 4:00 that go through walls,
       and Ancient Guardians, slow and hard, which are its elites too. Played by its **Shadow
       Realm** (below).
+    - **Ghorrock** (Act II, open once the Inferno's beaten): the frozen yard of Ghorrock Prison,
+      built for the game (the prison itself is cells and corridors), under the cliff the prison's
+      cut into, with its Heavy Door, its flags, cages, iron maidens and dead, frozen pools and gas
+      vents. Ice warriors, Ice spiders from 2:00, Icefiends from 3:00 whose hits chill you, Ice
+      wolves from 4:00 and Ice giants, slow and heavy, from 5:00; Pyrefiends and from 8:00 the
+      Flaming pyrelord are its fire elites. Played by its **cold** (below).
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
@@ -389,8 +401,8 @@ version and how to run it.
       of him, to Blood Rush. It can't be endless; it has a hard mode once it's beaten. Beating him
       finds **Butch**, his pet, every time.
 - **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
-  Inferno. Its four maps (the Stranglewood and the Lassar Undercity now; Ghorrock and the Scar
-  shown as coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
+  Inferno. Its four maps (the Stranglewood, the Lassar Undercity and Ghorrock now; the Scar shown
+  as coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
   a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno
   (enemies 4.2 times the hitpoints, 2.9 times the damage), up to step 3 (4.65 and 3.2), and each
   step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
@@ -419,6 +431,19 @@ version and how to run it.
   back, or let it close and the souls come again. At no sanity you're thrown back with a quarter of
   your hitpoints gone, and whatever was lying on the realm's ground is lost. In co-op each player's
   sanity is their own; the first whose runs out takes the party back.
+- **The cold** (Ghorrock's rule): each player's **cold** (the bar under your hitpoints) rises 2 a
+  second, 5 on ice or in a vent's gas. From 50 you're 15% slower and tinted pale; from 80 30%
+  slower and your weapons 15% slower; at 100 you're frozen solid in an ice block for a second and
+  a half, losing a tenth of your hitpoints, and it drops back to 70. Within 3.5 tiles of a lit
+  **brazier** (six round the yard) it falls 15 a second. Each burns 40 seconds, its fire dying
+  down over the last 10, then goes out: stand beside one for a second and a half to light it
+  again (one guttering too), or kill a **fire elite** within 6 tiles of it. A fire elite leaves
+  **embers** where it falls for 12 seconds: within 2 tiles the cold falls 20 a second, but
+  standing on them burns. Every hit of a fire weapon (Fire spells, Flames of Zamorak, Burning
+  claws, Toktz-mej-tal) takes 0.4 off. Eight **gas vents** puff in turn, each every 7 seconds for
+  a second and a half after a second's warning, hurting 2% of your hitpoints every 0.6 seconds in
+  the cloud. The **pools** are ice: you slide on them. In co-op the braziers are the party's and
+  each player's cold their own.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
@@ -564,6 +589,14 @@ version and how to run it.
       and shadow bursts, and at 80%, 55% and 30% she pulls everyone into the realm and siphons its
       souls, six coming to her and each that reaches her healing her: catch them first. She drops
       the Siren's staff the first time.
+    - **Ghorrock**: **Ketla the Unworthy** at 5:00, snuffing every brazier she passes, grasping,
+      throwing frost and calling icefiends in; **Jhallan** at 10:00, slow and never giving up,
+      clawing and pouncing, whose shadows step out of the cold at half his hitpoints; at 15:00
+      **Duke Sucellus** wakes in the prison's mouth, never moving, and every brazier goes out. His
+      slam up close, icicles falling round you, his spit from range, gas spat at you that sets the
+      vent nearest it puffing, and his **freezing gaze**: the yard lights up and the statues in
+      front of him cast shadows; anyone not in one when it lands is hit hard and frozen. He drops
+      the Eye of the Duke the first time.
     - **Hallowed Night**: **Slash Bash**, whose disease stacks up to four times and whose bile leaves
       pools for 7 seconds, and **The Mimic**, which lies on the map as a master casket until you walk
       onto it or 25 seconds pass, then bites, flings candy that brings its Third Age minions, and

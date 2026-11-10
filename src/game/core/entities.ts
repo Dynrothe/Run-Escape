@@ -397,6 +397,8 @@ export type Enemy = {
     attackCooldown: number;
     // Ticks left frozen (Ice spells)
     frozen: number;
+    // Chilled, at half pace, until this tick (the Snow ranger's Shatter)
+    chilled?: number;
     // Under LightingDef.litTargetsOnly, whether it stood in a sim light as this tick's lights were
     // made, or as it came (Sim.isEnemyLit)
     lit?: boolean;
@@ -1144,6 +1146,8 @@ type SimEventBody =
     | { type: "worldTurned"; layer: 0 | 1; lapse: boolean }
     // A lost soul caught, and how many of this lot are left
     | { type: "soulCaught"; left: number }
+    // Frozen solid under the cold (ColdRuleDef), the hero by index
+    | { type: "frozenSolid"; hero: number }
     | { type: "heroRevived"; by: number }
     // Co-op: a hero found or bought an extra revive
     | { type: "extraRevive" };

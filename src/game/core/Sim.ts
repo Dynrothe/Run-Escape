@@ -183,7 +183,7 @@ import {
     ZebakDef,
     emptyStats,
 } from "../content/types";
-import type { CharacterTraitDef } from "../content/types";
+import type { CharacterTraitDef, ColdRuleDef } from "../content/types";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
@@ -288,6 +288,7 @@ import {
     TYPE_FRAGILE,
 } from "./floorLayout";
 import { fm } from "./fmath";
+import { ColdRule } from "./rules/ColdRule";
 import { RealmLayer, RealmRule } from "./rules/RealmRule";
 import { RuleHost, RunRule, createRunRule } from "./rules/RunRule";
 import { ArenaGrid } from "./world/ArenaGrid";
@@ -496,6 +497,8 @@ const CANNON_SPOTANIM = 53;
 const LEVEL_UP_SPOTANIM = 199;
 // Tiles from the player a strike (WeaponDef kind strike) finds its targets within
 const STRIKE_REACH = 12;
+// A chilled enemy's pace (CharacterTraitDef shatter)
+const CHILL_PACE = 0.5;
 // Ice Barrage's freeze, on a player frozen by a boss
 export const FREEZE_SPOTANIM = 369;
 const ENEMY_PROJECTILE_RADIUS = 0.35;
@@ -925,6 +928,10 @@ export type Hero = {
     // and when it next can
     ruleTicks: number;
     ruleHurtNext: number;
+    // Under the cold (ColdRuleDef): frozen solid in an ice block until this tick; and the Snow
+    // ranger's hits towards her next chill (CharacterTraitDef shatter)
+    frozenSolid: number;
+    traitHits: number;
     // Their adventurer's trait (CharacterDef.trait): kills towards it, and whether it's ready
     traitKills: number;
     traitReady: boolean;
@@ -1413,6 +1420,8 @@ export class Sim {
     // The same, on a map of two worlds (RealmRuleDef): which the party's in, and what's kept of the
     // other while it's away (its enemies and what's on its ground), standing still
     readonly realm: RealmRule | undefined;
+    // The same, under the cold (ColdRuleDef): braziers, vents, ice and each player's cold
+    readonly cold: ColdRule | undefined;
     private otherEnemies: Enemy[] = [];
     private otherPickups: Pickup[] = [];
     // A step between in the city (the Shadow walker's trait): into the realm when the rule's next
@@ -1909,6 +1918,7 @@ export class Sim {
             ? createRunRule(this.map.rule, this.grid, options.seed, TICKS_PER_SECOND)
             : undefined;
         this.realm = this.rule instanceof RealmRule ? this.rule : undefined;
+        this.cold = this.rule instanceof ColdRule ? this.rule : undefined;
         this.actStep = this.map.act ? Math.max(0, Math.floor(options.actStep ?? 0)) : 0;
         this.difficulty = getStepDifficulty(this.map, this.actStep);
         // Building it takes a while, so it's done here, with the map, rather
@@ -2120,6 +2130,8 @@ export class Sim {
             ruleHurtNext: 0,
             traitKills: 0,
             traitReady: false,
+            frozenSolid: 0,
+            traitHits: 0,
             traitNext: 0,
             moveX: 0,
             moveY: 0,
@@ -3325,7 +3337,7 @@ export class Sim {
                       ? this.ruleMovement()
                       : undefined,
         });
-        if (this.floor?.hasEffects) {
+        if (this.floor?.hasEffects || this.cold) {
             this.hero.glideX = player.x - player.prevX;
             this.hero.glideY = player.y - player.prevY;
         }
@@ -4381,6 +4393,10 @@ export class Sim {
                         : this.rule && !enemy.def.flies && !enemy.def.stationary
                           ? this.rule.enemyPace(enemy.x, enemy.y)
                           : 1;
+                    // Chilled (the Snow ranger's Shatter): half pace
+                    if (enemy.chilled !== undefined && this.tick < enemy.chilled) {
+                        pace *= CHILL_PACE;
+                    }
                     // A pouncer's rush, the last few tiles (EnemyDef.pounce)
                     const pounce = enemy.def.pounce;
                     if (pounce && distance <= pounce.range) {
@@ -4687,6 +4703,12 @@ export class Sim {
         // An enemy's hit in the realm takes sanity too (RealmRuleDef.sanity.hit)
         if (this.realm?.layer === 1 && ENEMY_BY_ID.has(enemyId)) {
             this.realm.onHurt(this.hero.index);
+        }
+        // An icefiend's hit chills (EnemyDef.chills, under the cold)
+        const chills = this.cold && ENEMY_BY_ID.get(enemyId)?.chills;
+        if (chills) {
+            const index = this.hero.index;
+            this.cold!.setCold(index, this.cold!.coldOf(index) + chills);
         }
         // Quiet Prayers: armour stops less. Deadly Prayers: a hit leaves the player open, so the
         // next within a second does more.
@@ -13379,24 +13401,27 @@ export class Sim {
         }
         rule.step(this.ruleHost);
         const def = rule.def;
-        if (def.kind !== "roots") {
+        if (def.kind === "cold") {
+            this.stepCold(this.cold!, def);
+        } else if (def.kind === "roots") {
+            const grace = secondsToTicks(def.hurt.grace);
+            const every = Math.max(1, secondsToTicks(def.hurt.every));
+            this.forEachHeroInReach(() => {
+                const { player } = this;
+                if (!this.isUp(this.hero) || !rule.hurtsAt(player.x, player.y)) {
+                    this.hero.ruleTicks = 0;
+                    return;
+                }
+                this.hero.ruleTicks++;
+                if (this.hero.ruleTicks >= grace && this.tick >= this.hero.ruleHurtNext) {
+                    this.hero.ruleHurtNext = this.tick + every;
+                    const damage = Math.max(1, Math.round(player.maxHp * def.hurt.share));
+                    this.damagePlayer(damage, def.kind, false, -1, true, false);
+                }
+            });
+        } else {
             return;
         }
-        const grace = secondsToTicks(def.hurt.grace);
-        const every = Math.max(1, secondsToTicks(def.hurt.every));
-        this.forEachHeroInReach(() => {
-            const { player } = this;
-            if (!this.isUp(this.hero) || !rule.hurtsAt(player.x, player.y)) {
-                this.hero.ruleTicks = 0;
-                return;
-            }
-            this.hero.ruleTicks++;
-            if (this.hero.ruleTicks >= grace && this.tick >= this.hero.ruleHurtNext) {
-                this.hero.ruleHurtNext = this.tick + every;
-                const damage = Math.max(1, Math.round(player.maxHp * def.hurt.share));
-                this.damagePlayer(damage, def.kind, false, -1, true, false);
-            }
-        });
         // What lays the rule's stuff as it goes (EnemyDef.plants: a bear's trail)
         if (this.tick % RULE_TRAIL_TICKS === 0) {
             for (const enemy of this.enemies) {
@@ -13405,6 +13430,55 @@ export class Sim {
                 }
             }
         }
+    }
+
+    // The cold (ColdRuleDef), each player's: it rises, faster on ice and in gas (slower for the
+    // Snow ranger), and falls by a lit brazier or embers. At the top they're frozen solid a moment,
+    // hurt, and it drops back. The gas and the embers hurt on a clock of their own.
+    private stepCold(cold: ColdRule, def: ColdRuleDef): void {
+        const tuning = def.cold;
+        const tick = this.tick;
+        const gasEvery = Math.max(1, secondsToTicks(def.vents.hurtEvery));
+        const emberEvery = Math.max(1, secondsToTicks(def.embers.every));
+        this.forEachHeroInReach(() => {
+            const { player, hero } = this;
+            if (!this.isUp(hero)) {
+                return;
+            }
+            const trait = this.trait;
+            const rise = trait?.kind === "shatter" ? trait.coldRise : 1;
+            const warmth = cold.warmthAt(player.x, player.y, tick);
+            const gas = cold.gasAt(player.x, player.y, tick);
+            const change =
+                warmth > 0
+                    ? -warmth
+                    : (gas || cold.iceAt(player.x, player.y) ? tuning.fast : tuning.rise) * rise;
+            let now = cold.coldOf(hero.index) + change / TICKS_PER_SECOND;
+            if (now >= tuning.max) {
+                // Frozen solid in an ice block
+                now = tuning.freeze.after;
+                const ticks = secondsToTicks(tuning.freeze.seconds);
+                player.frozen = Math.max(player.frozen, ticks);
+                hero.frozenSolid = tick + ticks;
+                this.addEffect(FREEZE_SPOTANIM, player.x, player.y, 0, 40);
+                const damage = Math.max(1, Math.round(player.maxHp * tuning.freeze.share));
+                this.damagePlayer(damage, "cold", false, -1, true, false);
+                this.emit({ type: "frozenSolid", hero: hero.index });
+            }
+            cold.setCold(hero.index, now);
+            if (tick < hero.ruleHurtNext) {
+                return;
+            }
+            if (gas) {
+                hero.ruleHurtNext = tick + gasEvery;
+                const damage = Math.max(1, Math.round(player.maxHp * def.vents.share));
+                this.damagePlayer(damage, "gas", false, -1, true, false);
+            } else if (cold.onEmbers(player.x, player.y)) {
+                hero.ruleHurtNext = tick + emberEvery;
+                const damage = Math.max(1, Math.round(player.maxHp * def.embers.share));
+                this.damagePlayer(damage, "embers", false, -1, true, false);
+            }
+        });
     }
 
     // What the map's rule can ask of the run (RuleHost)
@@ -13536,8 +13610,36 @@ export class Sim {
 
     // How the map's rule moves the player where they stand (on roots, slower), or nothing
     private ruleMovement(): MovementRules["floor"] {
+        const cold = this.cold;
+        if (cold) {
+            return this.coldMovement(cold);
+        }
         const pace = this.rule!.playerPace(this.player.x, this.player.y);
         return pace !== 1 ? { pace } : undefined;
+    }
+
+    // Under the cold (ColdRuleDef): slower the colder they are, and sliding on ice (the Snow
+    // ranger never does)
+    private coldMovement(cold: ColdRule): MovementRules["floor"] {
+        const player = this.player;
+        const pace = 1 - this.coldSlow(cold).pace;
+        if (cold.iceAt(player.x, player.y) && this.trait?.kind !== "shatter") {
+            const glide = { x: this.hero.glideX, y: this.hero.glideY, grip: cold.def.ice.grip };
+            return { pace, glide };
+        }
+        return pace !== 1 ? { pace } : undefined;
+    }
+
+    // What the hero's cold slows them by (ColdRuleDef.cold slows): the last step it's past
+    private coldSlow(cold: ColdRule): { pace: number; weapons: number } {
+        const level = cold.coldOf(this.hero.index);
+        let slow = { pace: 0, weapons: 0 };
+        for (const step of cold.def.cold.slows) {
+            if (level >= step.at) {
+                slow = { pace: step.pace, weapons: step.weapons ?? 0 };
+            }
+        }
+        return slow;
     }
 
     // How a floor's tile moves the player on it (FloorEffect haste, slow and ice), or nothing
@@ -15826,6 +15928,10 @@ export class Sim {
                 const at = attack.leap ? spots[0] : enemy;
                 this.rule.plantHeart(this.ruleHost, at.x, at.y);
             }
+            // Under the cold, the vent nearest where it lands puffs (BossAttackDef.rule vent)
+            if (attack.rule?.vent && this.cold && spots.length > 0) {
+                this.cold.puffNearest(spots[0].x, spots[0].y, this.tick);
+            }
             const radius = attack.radius ?? 2;
             // A lunge's strip (BossAttackDef.line), a blast's square (square)
             const line = attack.kind === "swing" ? attack.line : undefined;
@@ -17133,6 +17239,9 @@ export class Sim {
         if (this.rule && !poison && source !== "other") {
             this.rule.onHit(enemy.x, enemy.y);
         }
+        if (!poison && source.startsWith("weapon:")) {
+            this.weaponHitLanded(enemy, source);
+        }
         const resist = enemy.def.knockbackResist ?? 0;
         if (knockback > 0 && resist < 1 && !enemy.boss && !enemy.def.stationary) {
             const dx = enemy.x - fromX;
@@ -17214,6 +17323,15 @@ export class Sim {
             this.enragePartners(enemy);
         }
         this.rule?.onKill(enemy.uid, enemy.x, enemy.y);
+        // Under the cold, a fire elite's embers where it fell, and the braziers near it lit
+        if (this.cold && enemy.def.embers) {
+            this.cold.onFireKill(enemy.x, enemy.y, this.tick);
+            this.emit({ type: "notice", message: "The braziers flare up!" });
+        }
+        // Killed frozen or chilled by the Snow ranger: it shatters
+        if (cause === "player" && (enemy.frozen > 0 || this.tick < (enemy.chilled ?? -1))) {
+            this.shatter(enemy);
+        }
         this.emit({
             type: "kill",
             enemyUid: enemy.uid,
@@ -17535,7 +17653,12 @@ export class Sim {
     // bonus (a set's), the two together capped like the player's alone
     private cooldownTicks(seconds: number, speed = 0): number {
         const bonus = 1 - (1 - Math.min(this.stats.cooldown, 0.6)) * (1 - speed);
-        return Math.max(5, Math.round(seconds * TICKS_PER_SECOND * (1 - Math.min(bonus, 0.6))));
+        // Numb with cold (ColdRuleDef.cold slows weapons): slower
+        const numb = this.cold ? 1 + this.coldSlow(this.cold).weapons : 1;
+        return Math.max(
+            5,
+            Math.round(seconds * TICKS_PER_SECOND * (1 - Math.min(bonus, 0.6)) * numb),
+        );
     }
 
     // A weapon's level with what else changes it folded in: its bonus damage
@@ -17689,6 +17812,51 @@ export class Sim {
                 this.fireOrbit(def, level);
                 return true;
         }
+    }
+
+    // A hit of one of the hero's weapons landed (source, weapon:id): under the cold a fire
+    // weapon's warms them (ColdRuleDef.fire), and the Snow ranger's every so often chills
+    private weaponHitLanded(enemy: Enemy, source: string): void {
+        const cold = this.cold;
+        if (cold && cold.def.fire.weapons.includes(source.slice(7))) {
+            const index = this.hero.index;
+            cold.setCold(index, cold.coldOf(index) - cold.def.fire.perHit);
+        }
+        const trait = this.trait;
+        if (trait?.kind === "shatter" && !enemy.dead && ++this.hero.traitHits >= trait.every) {
+            this.hero.traitHits = 0;
+            enemy.chilled = this.tick + secondsToTicks(trait.chill);
+        }
+    }
+
+    // Shatter (the Snow ranger's trait): what's killed frozen or chilled bursts, its shards hitting
+    // everything near it for a share of its hitpoints. Only hers: anyone else's kill does nothing.
+    private shatter(enemy: Enemy): void {
+        const trait = this.trait;
+        if (trait?.kind !== "shatter") {
+            return;
+        }
+        const share = enemy.elite || enemy.boss ? trait.eliteShare : trait.share;
+        const damage = Math.max(1, Math.round(enemy.maxHp * share));
+        if (trait.spotAnim !== undefined) {
+            this.addEffect(trait.spotAnim, enemy.x, enemy.y, 0, 40);
+        }
+        const previous = this.damageSource;
+        this.damageSource = "other";
+        const near: Enemy[] = [];
+        this.enemyHash.query(enemy.x, enemy.y, trait.reach + 1, (other) => {
+            if (
+                other !== enemy &&
+                !other.dead &&
+                fm.hypot(other.x - enemy.x, other.y - enemy.y) <= trait.reach + other.radius
+            ) {
+                near.push(other);
+            }
+        });
+        for (const other of near) {
+            this.damageEnemy(other, damage, 0, enemy.x, enemy.y, 0);
+        }
+        this.damageSource = previous;
     }
 
     // The hero's adventurer's trait (CharacterDef.trait), if they have one

@@ -49,7 +49,10 @@ go stale. Add anything that cost you time to work out.
 | The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
 | The Lassar Undercity: its enemies, bosses, the realm   | `content/lassar.ts`, `scaperune/maps/lassarUndercity.ts`               |
 | A map of two worlds (the realm), its twin on screen    | `core/rules/RealmRule.ts`, `Sim.turnWorld`, `MapManager.twin`          |
-| Adventurers' traits (the Forester's Timber!)           | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
+| Ghorrock: its enemies, bosses, the yard and its cold   | `content/ghorrock.ts`, `scaperune/maps/ghorrock.ts`                    |
+| The cold: braziers, embers, vents, each player's cold  | `core/rules/ColdRule.ts`, `Sim.stepCold`, `GameView.drawCold`          |
+| The effect mask: tile effects on any map (ice)         | `core/world/EffectMask.ts`                                             |
+| Adventurers' traits (Timber!, Shatter and the rest)    | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
 | Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
 | Fighting pets (Butch's leap)                           | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |

@@ -2598,6 +2598,7 @@ const Hud = memo(function Hud({
                 </div>
                 <HpBar client={client} />
                 <SanityBar client={client} />
+                <ColdBar client={client} />
             </div>
         </>
     );
@@ -2911,6 +2912,25 @@ function SanityBar({ client }: { client: GameClient }): JSX.Element | null {
         <div className="ui-sanity" title={t("ui.hud.sanity")}>
             <div className="ui-sanity-fill" style={{ transform: `scaleX(${sanity / max})` }} />
             <span>{t("ui.hud.sanity_value", { sanity, max })}</span>
+        </div>
+    );
+}
+
+// Cold, under hitpoints, on a map that's cold (ColdRuleDef.cold): it fills as it rises, and frosts
+// over from 80, where weapons slow too
+function ColdBar({ client }: { client: GameClient }): JSX.Element | null {
+    const cold = useHudNumber(client, (n) => n.cold);
+    const max = useHudNumber(client, (n) => n.coldMax);
+    if (cold === undefined || !max) {
+        return null;
+    }
+    return (
+        <div
+            className={"ui-cold" + (cold >= max * 0.8 ? " ui-cold-high" : "")}
+            title={t("ui.hud.cold")}
+        >
+            <div className="ui-cold-fill" style={{ transform: `scaleX(${cold / max})` }} />
+            <span>{t("ui.hud.cold_value", { cold, max })}</span>
         </div>
     );
 }

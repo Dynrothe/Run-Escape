@@ -62,6 +62,7 @@ export const FALLEN_EMPIRE: ActDef = {
             iconObjId: 28323,
         },
         {
+            mapId: "ghorrock",
             name: "Ghorrock",
             boss: "Duke Sucellus",
             rule: "The cold rises. Stay by the braziers.",

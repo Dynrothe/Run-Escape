@@ -1,5 +1,12 @@
 import { tr } from "../i18n";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import {
+    GHORROCK_BOSS_ARENA,
+    GHORROCK_DUKE,
+    GHORROCK_PILLARS,
+    GHORROCK_RECIPE,
+    ghorrockWorld,
+} from "../scaperune/maps/ghorrock";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { LASSAR_CATHEDRAL, LASSAR_RECIPE, TWIN_SQUARES } from "../scaperune/maps/lassarUndercity";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
@@ -9,6 +16,7 @@ import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
+import { GHORROCK_COLD, GHORROCK_EVENTS, GHORROCK_WAVES } from "./ghorrock";
 import { LASSAR_EVENTS, LASSAR_REALM, LASSAR_WAVES } from "./lassar";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
@@ -411,6 +419,53 @@ export const MAPS: MapDef[] = [
         music: "The Fallen Empire",
         // The Whisperer's, from 15:00
         bossMusic: "Song of the Silent Choir",
+    },
+    {
+        id: "ghorrock",
+        name: "Ghorrock",
+        description:
+            "Ice warriors, spiders, wolves, icefiends and giants in the frozen yard of Ghorrock " +
+            "Prison. The cold rises all the time: it slows you, and at its worst freezes you " +
+            "solid. Stay by the braziers, relight them, and kill the fire elites for their " +
+            "embers. Gas vents puff and the pools are ice. Ketla and Jhallan come one by one, " +
+            "and Duke Sucellus wakes in the prison's mouth at the end.",
+        // The Eye of the Duke, his
+        iconObjId: 28321,
+        // A frozen prison yard, built by hand with the prison's own kit (scaperune/maps/ghorrock.ts)
+        arena: getRecipeArena(GHORROCK_RECIPE),
+        spawn: getRecipeWorldTile(
+            GHORROCK_RECIPE,
+            GHORROCK_RECIPE.spawn.x,
+            GHORROCK_RECIPE.spawn.y,
+        ),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 4.2, damage: 2.9 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: GHORROCK_WAVES,
+        events: GHORROCK_EVENTS,
+        finalBossWarning: "The ground shudders... Duke Sucellus is waking!",
+        victoryText: "Duke Sucellus is slain! Ghorrock's cold lifts.",
+        // The yard in front of the prison: he wakes in its mouth, at the square's north edge
+        bossArena: (({ x, y }) => ({ baseX: x, baseY: y, size: GHORROCK_BOSS_ARENA.size }))(
+            ghorrockWorld(GHORROCK_BOSS_ARENA),
+        ),
+        features: {
+            rise: ghorrockWorld({
+                x: GHORROCK_DUKE.x + Math.floor(GHORROCK_DUKE.size / 2),
+                y: GHORROCK_DUKE.y + Math.floor(GHORROCK_DUKE.size / 2),
+            }),
+            // The Ice Columns his gaze can't see through
+            pillars: GHORROCK_PILLARS.map((tile) => ({ ...ghorrockWorld(tile), size: 2 })),
+        },
+        scaperune: true,
+        // Its snow drawn as white as it is
+        brightness: 1.3,
+        act: { id: "fallen_empire", requires: "inferno" },
+        rule: GHORROCK_COLD,
+        // The prison's track; the recording goes in src/media/music (see GameClient)
+        music: "Prison Break",
+        // The Duke's, from 15:00
+        bossMusic: "Eye See You",
     },
     {
         id: "halloween",

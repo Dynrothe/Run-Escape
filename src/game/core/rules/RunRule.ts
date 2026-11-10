@@ -1,5 +1,6 @@
 import type { RunRuleDef } from "../../content/types";
 import type { ArenaGrid } from "../world/ArenaGrid";
+import { ColdRule } from "./ColdRule";
 import { RealmRule } from "./RealmRule";
 import { RootRule } from "./RootRule";
 
@@ -53,7 +54,8 @@ export interface RunRule {
     ): void;
     // A kill at x, y (heart: whether it was one of the rule's own)
     onKill(uid: number, x: number, y: number): void;
-    // Something lays the rule's stuff round x, y (a bear's trail, a charge's lane)
+    // Something lays the rule's stuff round x, y (a bear's trail, a charge's lane; under the cold,
+    // braziers snuffed)
     plant(x: number, y: number, radius: number): void;
     // A root heart (or the like) at x, y, at once
     plantHeart(host: RuleHost, x: number, y: number): void;
@@ -75,5 +77,7 @@ export function createRunRule(
             return new RootRule(def, grid, seed, ticksPerSecond);
         case "realm":
             return new RealmRule(def, grid, seed, ticksPerSecond);
+        case "cold":
+            return new ColdRule(def, grid, ticksPerSecond);
     }
 }

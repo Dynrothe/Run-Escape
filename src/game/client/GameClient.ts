@@ -2597,7 +2597,8 @@ export class GameClient implements GameFrameHandler {
         }
         const hallBrightness =
             hall?.brightness ?? (realm && realm.brightness * (sim.map.brightness ?? 1));
-        const wash = hall?.wash ?? realm?.wash;
+        // Under the cold, its cold light (ColdRuleDef.look)
+        const wash = hall?.wash ?? realm?.wash ?? sim.cold?.def.look.wash;
         if (wash !== this.shownWash) {
             this.shownWash = wash;
             this.renderer.setWash(wash);
@@ -3168,6 +3169,11 @@ export class GameClient implements GameFrameHandler {
                     );
                     break;
                 }
+                case "frozenSolid":
+                    if (event.hero === sim.focus) {
+                        this.store.toast(t("toast.frozen_solid"));
+                    }
+                    break;
                 case "soulCaught":
                     if (event.left > 0) {
                         this.store.toast(tp("toast.souls_left", event.left));
@@ -3589,6 +3595,8 @@ export class GameClient implements GameFrameHandler {
             maxHp: sim.player.maxHp,
             sanity: sim.realm && Math.ceil(sim.realm.sanityOf(sim.focus)),
             sanityMax: sim.realm?.def.sanity.max,
+            cold: sim.cold && Math.floor(sim.cold.coldOf(sim.focus)),
+            coldMax: sim.cold?.def.cold.max,
             poisoned: sim.player.poisonEnd !== -1,
             xpFraction: Math.min(
                 1,

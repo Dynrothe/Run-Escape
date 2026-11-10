@@ -202,8 +202,13 @@ export type EnemyDef = {
     // creature that share its animations (the Strangled's)
     looks?: number[];
     // Lays the map's rule's stuff (roots, MapDef.rule) this many tiles round it as it goes: a
-    // Strangled Bear's trail
+    // Strangled Bear's trail. Under the cold (ColdRuleDef), it snuffs braziers that near instead
+    // (Ketla's)
     plants?: number;
+    // Under the cold (ColdRuleDef): a fire elite, whose death leaves embers and relights the
+    // braziers near it; and a hit of its takes chills more off a player's warmth (an icefiend's)
+    embers?: boolean;
+    chills?: number;
     // Rushes the last range tiles to the player at speed times its pace (a Strangled Lynx's
     // pounce)
     pounce?: { range: number; speed: number };
@@ -866,8 +871,9 @@ export type BossAttackDef = {
     floor?: FloorActionDef;
     // What it does with the map's rule (MapDef.rule), as it lands: heart, a root heart where the
     // boss lands, the first time it's used; lane, roots laid along the way a surge or lunge went,
-    // radius tiles either side of it. Nothing on a map without a rule.
-    rule?: { heart?: boolean; lane?: number };
+    // radius tiles either side of it; vent, under the cold (ColdRuleDef), the gas vent nearest
+    // the spot it's aimed at puffs as it lands. Nothing on a map without a rule.
+    rule?: { heart?: boolean; lane?: number; vent?: boolean };
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -1939,7 +1945,22 @@ export type CharacterTraitDef =
       }
     // dig (the Treasure hunter's): a casket left on the ground buries itself after buries
     // seconds; dug up (walked over) from ready seconds it's a tier better, and at gone it's lost
-    | { kind: "dig"; name: string; buries: number; ready: number; gone: number };
+    | { kind: "dig"; name: string; buries: number; ready: number; gone: number }
+    // shatter (the Snow ranger's): every `every`th hit of hers chills what it hits for chill
+    // seconds (at half pace); anything killed frozen or chilled shatters, hitting everything within
+    // reach tiles for share of its hitpoints (eliteShare an elite's or a boss's). Under the cold
+    // (ColdRuleDef) she never slides on ice, and her cold rises coldRise as fast
+    | {
+          kind: "shatter";
+          name: string;
+          every: number;
+          chill: number;
+          reach: number;
+          share: number;
+          eliteShare: number;
+          coldRise: number;
+          spotAnim?: number;
+      };
 
 export type ShopUpgradeDef = {
     id: string;
@@ -2108,7 +2129,7 @@ export type MapDef = {
 // map's grid and what's here, never an Act II map's own data, so it works on any map (the remixes
 // put them on old ones). Shared things (roots) are the party's; what it does to a player is each
 // player's own.
-export type RunRuleDef = RootsRuleDef | RealmRuleDef;
+export type RunRuleDef = RootsRuleDef | RealmRuleDef | ColdRuleDef;
 
 // The Stranglewood's: roots creep in from the wood (the arena's blocked ground), slowing and
 // hurting whoever's on them and speeding enemies; hits cut them back, and root hearts make them
@@ -2211,6 +2232,82 @@ export type RealmRuleDef = {
         puddleLocId: number;
         portalLocId: number;
         flipSpotAnim?: number;
+    };
+};
+
+// Ghorrock's: the cold (core/rules/ColdRule.ts). Each player's cold rises all the time, faster on
+// ice and in freezing gas; it slows them, then their weapons, and at the top freezes them solid
+// for a moment, hurt. Braziers warm whoever's near one while it burns, and burn down: standing by
+// one relights it, as does killing a fire elite (EnemyDef.embers) near it, whose embers warm too.
+// Gas vents puff in turn, and ice (an effect mask on the map's tiles) slides. Every place is in
+// world tiles, so a remix can bring its own.
+export type ColdRuleDef = {
+    kind: "cold";
+    // Each player's, 0 to max: rises rise a second, fast on ice or in gas; from each slow's at
+    // they're pace slower (the last also weapons times slower); at max they're frozen for freeze
+    // seconds, losing share of their hitpoints, and it drops to after
+    cold: {
+        max: number;
+        rise: number;
+        fast: number;
+        slows: { at: number; pace: number; weapons?: number }[];
+        freeze: { seconds: number; share: number; after: number };
+    };
+    // Where the braziers stand (their south-west tiles, size tiles across): within reach tiles
+    // of a lit one the cold falls warm a second. Each burns burn seconds (guttering its last
+    // gutter), and is lit again by standing within relight.reach for relight.seconds, or by a fire
+    // elite killed within relight.kill tiles
+    braziers: {
+        at: { x: number; y: number }[];
+        size: number;
+        reach: number;
+        warm: number;
+        burn: number;
+        gutter: number;
+        relight: { reach: number; seconds: number; kill: number };
+    };
+    // A fire elite's embers: size tiles across for seconds, warming warm a second within reach
+    // tiles, and burning share of the hitpoints of whoever stands on them every `every` seconds
+    embers: {
+        size: number;
+        seconds: number;
+        reach: number;
+        warm: number;
+        share: number;
+        every: number;
+    };
+    // A hit by one of these weapons takes perHit off the cold
+    fire: { weapons: string[]; perHit: number };
+    // Gas vents: each puffs a cloud size tiles across every `every` seconds, out of step with the
+    // others, frosting over warn seconds first and lasting puff; inside, share of your hitpoints
+    // every hurtEvery seconds
+    vents: {
+        at: { x: number; y: number }[];
+        size: number;
+        every: number;
+        warn: number;
+        puff: number;
+        share: number;
+        hurtEvery: number;
+    };
+    // The ice (an effect mask: core/world/EffectMask.ts): ellipses of tiles, rx by ry about x, y,
+    // where a player slides, grip of the way to where they steer each tick
+    ice: { pools: { x: number; y: number; rx: number; ry: number }[]; grip: number };
+    // How it's drawn: a brazier, drawn brazierScale as big, with fire (fireScale as big) in it
+    // while it's lit; a vent's gas as it frosts over (its jet is the map's) and the spot animation
+    // of its puff; the ice block round someone frozen; the fire of a fire elite's embers; a wash
+    // over the whole map; and the spot animation a relight throws up
+    look: {
+        brazierLocId: number;
+        fireLocId: number;
+        brazierScale?: number;
+        fireScale?: number;
+        gasLocId: number;
+        puffSpotAnim: number;
+        iceBlockLocId: number;
+        embersLocId: number;
+        wash?: string;
+        relightSpotAnim?: number;
     };
 };
 

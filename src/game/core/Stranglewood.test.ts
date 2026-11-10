@@ -61,7 +61,10 @@ describe("the Stranglewood", () => {
         expect(createSim().rule?.def).toBe(STRANGLEWOOD_ROOTS);
         // Awakened Vardorvis's clearing has its own (Vardorvis.test.ts), and Lassar its realm (Lassar.test.ts)
         for (const map of MAPS.filter(
-            (m) => !["stranglewood", "awakened_vardorvis", "lassar_undercity"].includes(m.id),
+            (m) =>
+                !["stranglewood", "awakened_vardorvis", "lassar_undercity", "ghorrock"].includes(
+                    m.id,
+                ),
         )) {
             expect(createSim({ mapId: map.id }).rule).toBeUndefined();
         }
@@ -165,7 +168,7 @@ describe("the Stranglewood", () => {
 describe("Act II", () => {
     test("opens once the Inferno's beaten, its maps in any order", () => {
         const act = MAPS.filter((map) => map.act);
-        expect(act.map((map) => map.id)).toEqual(["stranglewood", "lassar_undercity"]);
+        expect(act.map((map) => map.id)).toEqual(["stranglewood", "lassar_undercity", "ghorrock"]);
         expect(act.every((map) => map.act!.requires === FALLEN_EMPIRE.requires)).toBe(true);
         expect(getMap(FALLEN_EMPIRE.requires).act).toBeUndefined();
     });

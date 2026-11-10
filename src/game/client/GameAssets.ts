@@ -314,9 +314,15 @@ export function getSpotAnimIds(): number[] {
     }
     for (const map of ALL_MAPS) {
         // What a cut through a map's roots throws up (MapDef.rule)
-        // and the ripple as a map of two worlds turns
+        // and the ripple as a map of two worlds turns; under the cold, a vent's puff and a relight
         const rule = map.rule;
-        add(rule?.kind === "roots" ? rule.look.cutSpotAnim : rule?.look.flipSpotAnim);
+        if (rule?.kind === "roots") {
+            add(rule.look.cutSpotAnim);
+        } else if (rule?.kind === "realm") {
+            add(rule.look.flipSpotAnim);
+        } else if (rule?.kind === "cold") {
+            add(rule.look.relightSpotAnim, rule.look.puffSpotAnim);
+        }
         // What plays in its cinematics (MapDef.cinematic, and a fight's parts')
         add(...getMapCinematics(map).flatMap((def) => def.cues.map((cue) => cue.spotAnim)));
         // A floor's slabs (the Wardens')
@@ -518,7 +524,8 @@ export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): strin
     return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
 }
 
-// A map of two worlds' puddle or portal (RealmRuleDef.look), animated
+// A map of two worlds' puddle or portal (RealmRuleDef.look), or the cold's braziers, gas and ice
+// block (ColdRuleDef.look): a rule's locs the game draws, animated
 export function getRealmLocKey(locId: number): string {
     return "realmloc:" + locId;
 }
@@ -846,6 +853,12 @@ export class GameAssets {
             // A map of two worlds' puddles and portal (RealmRuleDef.look), as they move
             if (map.rule?.kind === "realm") {
                 realmLocs.add(map.rule.look.puddleLocId).add(map.rule.look.portalLocId);
+            }
+            // The cold's braziers, lit and out, its vents' gas and the ice block (ColdRuleDef.look)
+            if (map.rule?.kind === "cold") {
+                const cold = map.rule.look;
+                realmLocs.add(cold.brazierLocId).add(cold.fireLocId).add(cold.gasLocId);
+                realmLocs.add(cold.iceBlockLocId).add(cold.embersLocId);
             }
             const look = map.rule?.kind === "roots" ? map.rule.look : undefined;
             for (const locId of [...(look?.runners ?? []), ...(look?.loops ?? [])]) {

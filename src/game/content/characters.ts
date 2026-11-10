@@ -526,6 +526,37 @@ export const CHARACTERS: CharacterDef[] = [
         trait: { kind: "dig", name: "Dig site", buries: 3, ready: 20, gone: 60 },
         unlock: { kind: "realmCaskets", mapId: "lassar_undercity", count: 5 },
     },
+    {
+        id: "snow_ranger",
+        name: "Snow ranger",
+        description:
+            "Starts with a shortbow. **Shatter.** Every fourth hit chills what it hits for a " +
+            "second, and anything killed frozen or chilled shatters, its shards hitting " +
+            "everything within 3 tiles for a quarter of its hitpoints (a tenth for elites and " +
+            "bosses). On ice she never slides, and her cold rises 40% slower.",
+        style: "ranged",
+        startingWeapon: "shortbow",
+        // Polar camouflage and a Fremennik helm
+        equipment: {
+            [EquipSlot.HEAD]: 3748,
+            [EquipSlot.TORSO]: 10065,
+            [EquipSlot.LEGS]: 10067,
+        },
+        bonus: {},
+        trait: {
+            kind: "shatter",
+            name: "Shatter",
+            every: 4,
+            chill: 1,
+            reach: 3,
+            share: 0.25,
+            eliteShare: 0.1,
+            coldRise: 0.6,
+            // Ice Barrage's shards
+            spotAnim: 369,
+        },
+        unlock: { kind: "beatMap", mapId: "ghorrock" },
+    },
     // The fun maps' adventurers, one for a task on each
     {
         id: "scammer",
