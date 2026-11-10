@@ -24,6 +24,7 @@ go stale. Add anything that cost you time to work out.
 | The Android app, its bundled game and release signing  | `android/`, `scripts/android/`, `docs/DEVELOPMENT.md`, Android         |
 | The app's main process and update code                 | `desktop/`                                                             |
 | The app keeping to the website's build                 | `desktop/siteUpdate.ts`, `docs/DEVELOPMENT.md` (Following the website) |
+| The Android app keeping to it, and serving it          | `android/.../SiteGames.java`, `SiteUpdater.java`, `GamePathHandler`    |
 | The release workflow                                   | `.github/workflows/release.yml`                                        |
 | The checks on a pull request                           | `.github/workflows/check.yml`                                          |
 | What review looks for, before you open a pull request  | `docs/PR-REVIEW.md`                                                    |
@@ -234,6 +235,13 @@ desktop build.
   never block the bundled game, and installing is always asked, never started by itself (it closes
   the game mid-run). What it remembers between launches is `UpdatePlan.java`'s, which has tests
   that need no device. See `docs/DEVELOPMENT.md`, Android, for the update flow.
+- **It keeps to the website's build**, when built with `-PgameSiteUrl` (`GAME_SITE_URL`), as the
+  Windows app does: `SiteUpdater.java` downloads it into `filesDir/site/<build>` off the UI thread,
+  and it's played from the next launch. `GamePathHandler.java` serves `/assets/game/` from that
+  folder or the APK, at the same address. What needs no device is in `SiteFiles.java` (the same
+  checks as `desktop/siteFiles.ts`: change one, change the other) and `SiteGames.java`, with tests.
+  It never follows a website older than the APK's own version. See `docs/DEVELOPMENT.md`,
+  Following the website on Android.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.

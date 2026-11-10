@@ -156,7 +156,9 @@ and co-op works when there's a connection. On opening, it checks GitHub for a ne
 offers to download its APK, then asks before installing it. Android asks you to allow installs from
 Run Escape, then confirm the update. If the check fails or you're offline, the current game keeps
 working. You can also install a new APK over the old one yourself (uninstalling first deletes your
-progress). It needs a current Android System
+progress). Like the Windows app, it also keeps to the website's version of the game, so it can
+always play co-op with the website's players: a newer one downloads in the background and plays
+the next time you open the app. It needs a current Android System
 WebView, and says so if the phone's is too old. Its saves are apart from a browser's too, and
 Export and Import carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#android) covers building it and setting up its releases.

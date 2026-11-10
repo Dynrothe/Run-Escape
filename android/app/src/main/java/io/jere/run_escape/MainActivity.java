@@ -83,6 +83,9 @@ public final class MainActivity extends Activity {
     private boolean destroyed;
     private int diagnosticGeneration;
     private AppUpdater updater;
+    private SiteUpdater siteUpdater;
+    // The website's build being played (SiteGames), or null for the APK's game
+    private File siteGame;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -126,8 +129,18 @@ public final class MainActivity extends Activity {
             root.addView(webView, new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
+            // Picked once, before the game loads: a build downloaded on this visit plays from the next
+            GamePathHandler games;
+            try {
+                siteGame = SiteUpdater.pickGame(this);
+                games = new GamePathHandler(this, siteGame);
+            } catch (RuntimeException exception) {
+                android.util.Log.w("SiteUpdater", "Playing the app's own game", exception);
+                siteGame = null;
+                games = new GamePathHandler(this, null);
+            }
             WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
-                    .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                    .addPathHandler("/assets/", games)
                     .build();
             webView.setWebViewClient(new OfflineClient(assetLoader));
             webView.setWebChromeClient(new OfflineChromeClient());
@@ -175,6 +188,8 @@ public final class MainActivity extends Activity {
                 showMissingGameScreen();
                 return;
             }
+            // Like the APK's check, once each time the app opens
+            if (savedInstanceState == null) siteUpdater = new SiteUpdater(this, siteGame);
             startDiagnostic();
         } catch (RuntimeException exception) {
             showCompatibilityScreen(false);
@@ -313,6 +328,7 @@ public final class MainActivity extends Activity {
                                             + "The app checks GitHub for updates when opened, and asks "
                                             + "before downloading one and before installing it. Co-op "
                                             + "needs everyone on the same version.\n\n"
+                                            + siteAbout()
                                             + "Use Android's Back action to reopen this menu.")
                                     .setNeutralButton("Licenses", (about, action) -> showLicenses())
                                     .setNegativeButton("New versions", (about, action) -> openReleases())
@@ -323,6 +339,15 @@ public final class MainActivity extends Activity {
                     }
                     hideSystemBars();
                 }).setOnDismissListener(dialog -> hideSystemBars()).show();
+    }
+
+    // What About says of the website's builds, when the app keeps to them
+    private String siteAbout() {
+        if (SiteUpdater.baseUrl() == null) return "";
+        return "The app also keeps to the website's game, so co-op matches it: a new one downloads "
+                + "in the background and plays the next time you open the app."
+                + (siteGame == null ? "" : " Playing the website's " + siteGame.getName() + ".")
+                + "\n\n";
     }
 
     // About's New versions button: the releases page, to install an APK by hand
@@ -640,6 +665,7 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         destroyed = true;
         if (updater != null) updater.close();
+        if (siteUpdater != null) siteUpdater.close();
         diagnosticGeneration++;
         handler.removeCallbacksAndMessages(null);
         if (webFileCallback != null) {
