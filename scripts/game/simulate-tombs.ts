@@ -34,7 +34,7 @@ import { WARDENS } from "../../src/game/content/tombs";
 import { CombatStyle, emptyStats } from "../../src/game/content/types";
 import { getWeapon, getWeaponStyle } from "../../src/game/content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
-import { UpgradeChoice } from "../../src/game/core/Upgrades";
+import { UpgradeChoice, kerisPickRank } from "../../src/game/core/Upgrades";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { loadRegionData } from "./collision-snapshot";
 import {
@@ -539,7 +539,9 @@ function runOnce(seed: number): Outcome {
                                     Number(coversWardensStyle(sim, b.choice)) -
                                         Number(coversWardensStyle(sim, a.choice)) ||
                                     CHOICE_ORDER.indexOf(a.choice.kind) -
-                                        CHOICE_ORDER.indexOf(b.choice.kind),
+                                        CHOICE_ORDER.indexOf(b.choice.kind) ||
+                                    // A keris pick: the best jewel found
+                                    kerisPickRank(b.choice) - kerisPickRank(a.choice),
                             );
                         sim.choose(ranked[0].index);
                     } else if (sim.state === "chest") {

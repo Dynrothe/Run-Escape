@@ -7,7 +7,7 @@ import { CombatStyle, emptyStats } from "../content/types";
 import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
 import { Rng } from "./Rng";
 import { Sim } from "./Sim";
-import { MAX_WEAPONS, describeChoice, fitsWithPouch, rollChoices } from "./Upgrades";
+import { MAX_WEAPONS, describeChoice, fitsWithPouch, hiltChoices, rollChoices } from "./Upgrades";
 import { Enemy, PassiveState, WeaponState } from "./entities";
 import { getEarnedUnlocks } from "./save";
 import { makeGrid } from "./world/testGrid";
@@ -130,6 +130,37 @@ describe("the keris partisans", () => {
             }
         }
         expect([...offered]).toEqual(["keris_partisan"]);
+    });
+
+    test("comes as the plain one to set a jewel found before the Queen's kill", () => {
+        // A save with a jewel but not the plain keris (its kill counts only in a run)
+        const unlocked = new Set(["keris_partisan_of_the_sun"]);
+        const rng = new Rng(4);
+        let offered = 0;
+        for (let i = 0; i < 3000; i++) {
+            for (const choice of rollChoices(rng, [], [], 0, "melee", unlocked)) {
+                if (choice.kind === "newWeapon" && choice.weaponId.startsWith("keris")) {
+                    expect(choice.weaponId).toBe("keris_partisan");
+                    offered++;
+                }
+            }
+        }
+        expect(offered).toBeGreaterThan(0);
+        // With neither, none at all
+        const nothing = new Set<string>();
+        for (let i = 0; i < 3000; i++) {
+            for (const choice of rollChoices(rng, [], [], 0, "melee", nothing)) {
+                expect(choice.kind === "newWeapon" && choice.weaponId.startsWith("keris")).toBe(
+                    false,
+                );
+            }
+        }
+        // And its pick has the jewel, and keeping it plain
+        const plain = { def: getWeapon("keris_partisan"), level: 2 } as WeaponState;
+        expect(hiltChoices(plain, unlocked).map((c) => c.kind === "hilt" && c.into)).toEqual([
+            "keris_partisan",
+            "keris_partisan_of_the_sun",
+        ]);
     });
 
     test("picks its jewel at level 2 from those found, keeping its level, as a burst its spell", () => {

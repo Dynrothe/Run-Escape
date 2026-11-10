@@ -283,7 +283,9 @@ unlocks something in the game.
       the rest `raidChest` unlocks on their jewels. Only the plain one is offered on a level up:
       the jewelled ones are `pickOnly`, and the plain one's `hilts` (`KERIS_PICK`) make its level
       2 a pick of the plain one and every jewel's keris found, as Ice Burst's picks the run's
-      Ancient spell (no pick with no jewel found). The level-up window says so (`isJewel`). Kalphites and scarabs, Kephri and her
+      Ancient spell (no pick with no jewel found). The level-up window says so (`isKeris`). A
+      jewel found before the Queen's kill still brings the plain one in to take it
+      (`isOfferable` in `core/Upgrades.ts`). Kalphites and scarabs, Kephri and her
       scarabs too, carry the `kalphite` tag (not the Scarab Mages, who are men), and `slayer`
       gives them the third. Breaching is
       `WeaponDef.breach` (6% a stab, 30% on a kalphite, triple, diamond bolts' Armour Piercing on

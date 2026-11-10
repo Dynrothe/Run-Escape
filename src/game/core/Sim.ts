@@ -2455,7 +2455,7 @@ export class Sim {
                 this.maxEverything();
             }
         }
-        // A godsword's blade or an Ancient burst that just reached its pick
+        // A godsword's blade, an Ancient burst or a keris that just reached its pick
         // level: picking is the rest of this level up
         const weapon =
             choice?.kind === "weaponLevel"
@@ -2527,8 +2527,8 @@ export class Sim {
         return Math.round(SKIP_BASE_COST * 2 ** this.skips * this.coinScale);
     }
 
-    // A level up's rewards can be skipped for coins, but not a godsword's
-    // hilt, or the coins and shark offered when there's nothing else. Only by
+    // A level up's rewards can be skipped for coins, but not a pick (a godsword's
+    // hilt, an Ancient spell, a keris), or the coins and shark offered when there's nothing else. Only by
     // someone choosing: a downed player can't spend the party's coins.
     get canSkip(): boolean {
         return (
@@ -2565,7 +2565,7 @@ export class Sim {
         );
     }
 
-    // Picking a godsword's hilt, which can't be rerolled
+    // Picking a godsword's hilt, an Ancient spell or a keris, which can't be rerolled
     get choosingHilt(): boolean {
         return this.choices.some((c) => c.kind === "hilt");
     }

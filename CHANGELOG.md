@@ -8,9 +8,9 @@ the version in the corner).
 ### Changed
 
 - The keris partisans, by Okaeri: they're picked like the Ancient spells now. Only the plain
-  Keris partisan is offered on a level up, and at its level 2 you choose which keris it becomes,
-  from the jewels you've found in the Tombs of Amascut. It keeps its level, and it's your only
-  keris that run.
+  Keris partisan is offered on a level up. Once you've found a jewel in the Tombs of Amascut,
+  its level 2 lets you choose which keris it becomes: plain, or one of your jewels'. It keeps its
+  level, and it's your only keris that run.
 
 ## 0.30.0 - 2026-11-09
 

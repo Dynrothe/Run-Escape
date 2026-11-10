@@ -139,9 +139,10 @@ version and how to run it.
       everything around you; **Dinh's bulwark**, a slow bash that hits everything around
       you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
       hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
-      Amascut's chest brings in a keris of its own, picked as the Ancient spells are: only the
-      plain keris is offered on a level up, and at its level 2 you pick which it becomes, from
-      the plain one and the jewels you've found, keeping its level: **of breaching** now and then finds a gap in
+      Amascut's chest brings in a keris of its own. They're picked as the Ancient spells are:
+      only the plain keris is offered on a level up, and at its level 2 you pick which it
+      becomes, the plain one or a jewel's you've found, keeping its level (with no jewel found
+      there's no pick). **Of breaching** now and then finds a gap in
       the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
       every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
       **of the sun** heals you on each kill, hits a quarter harder below a quarter of your

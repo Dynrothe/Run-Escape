@@ -212,7 +212,7 @@ const KERIS_PICK = {
         { weaponId: "keris_partisan_of_amascut", hiltObjId: 30891 },
     ],
 };
-const kerisLevels = (objId: number, second = "+5 damage."): WeaponLevel[] =>
+const kerisLevels = (objId: number): WeaponLevel[] =>
     levels(
         {
             damage: 22,
@@ -225,7 +225,7 @@ const kerisLevels = (objId: number, second = "+5 damage."): WeaponLevel[] =>
             knockback: 0.3,
             objId,
         },
-        { damage: 27, description: second },
+        { damage: 27, description: "+5 damage." },
         { area: 2.8, description: "+12% reach." },
         { cooldown: 0.72, description: "Stabs a little faster." },
         { damage: 33, description: "+6 damage." },
@@ -274,7 +274,6 @@ const KERIS_PARTISANS: WeaponDef[] = [
         rarity: "rare",
         unlock: { kind: "killBoss", mapId: "desert", enemyId: "kalphite_queen_risen" },
         hilts: KERIS_PICK,
-        levels: kerisLevels(25979, "+5 damage, and pick a jewel you've found for it."),
     }),
     keris({
         id: "keris_partisan_of_breaching",

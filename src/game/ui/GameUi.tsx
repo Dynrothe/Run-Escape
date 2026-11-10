@@ -2881,7 +2881,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
-    const jewel = ui.choices.some((choice) => choice.isJewel);
+    const keris = ui.choices.some((choice) => choice.isKeris);
     const banishes = ui.hud?.banishes ?? 0;
     return (
         <div className="ui-modal">
@@ -2889,8 +2889,8 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                 <h2>
                     {spell
                         ? t("ui.levelup.title.spell")
-                        : jewel
-                          ? t("ui.levelup.title.jewel")
+                        : keris
+                          ? t("ui.levelup.title.keris")
                           : hilt
                             ? t("ui.levelup.title.hilt")
                             : t("ui.levelup.title.regular")}
@@ -2898,8 +2898,8 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                 <p className="ui-subtle">
                     {spell
                         ? t("ui.levelup.sub.spell")
-                        : jewel
-                          ? t("ui.levelup.sub.jewel")
+                        : keris
+                          ? t("ui.levelup.sub.keris")
                           : hilt
                             ? t("ui.levelup.sub.hilt")
                             : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
@@ -2951,8 +2951,8 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                             <span className="ui-tag ui-tag-evolve">
                                                 {choice.isSpell
                                                     ? t("ui.levelup.tag.spell")
-                                                    : choice.isJewel
-                                                      ? t("ui.levelup.tag.jewel")
+                                                    : choice.isKeris
+                                                      ? t("ui.levelup.tag.keris")
                                                       : t("ui.levelup.tag.hilt")}
                                             </span>
                                         )}
