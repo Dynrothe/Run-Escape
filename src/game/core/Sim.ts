@@ -17088,6 +17088,11 @@ export class Sim {
         this.emit({ type: "roundStarted", round: this.round });
     }
 
+    // The player's given up, from the pause menu: over, as if they'd fallen
+    giveUp(): void {
+        this.endRun("dead");
+    }
+
     // at: when it ended, for the run's time, when that's before now (a final
     // boss's fall, with its death played out since)
     private endRun(state: "dead" | "victory", at = this.tick): void {

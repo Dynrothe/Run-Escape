@@ -11,6 +11,7 @@ import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
 import { RerollButton } from "./RerollButton";
 import { StatLine } from "./StatLine";
+import { useDialog } from "./useDialog";
 
 // Opening a reward casket: it drops in, rattles harder and harder while it
 // glows its tier's colour, then bursts open in the item's rarity colour (rays,
@@ -242,8 +243,12 @@ export function ChestModal({ chest, rerolls, banishes, client }: Props): JSX.Ele
         "--tier": chest.tierColor,
         "--rarity": chest.item.rarity.color,
     } as CSSProperties;
+    const { dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div
+            {...dialogProps}
+            aria-labelledby={undefined}
+            aria-label={tl(chest.casketName)}
             className="ui-modal ui-chest"
             data-phase={phase}
             data-rarity={chest.rarity}

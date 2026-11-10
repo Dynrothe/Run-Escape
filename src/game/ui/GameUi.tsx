@@ -87,6 +87,7 @@ import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
+import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
@@ -109,6 +110,7 @@ import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
+import { useDialog } from "./useDialog";
 
 type Props = {
     store: GameStore;
@@ -507,6 +509,7 @@ function DiscordLink(): JSX.Element {
 // Saves live in this browser; a file carries one to another, or keeps a copy
 function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
     const fileInput = useRef<HTMLInputElement>(null);
+    const [confirm, confirmDialog] = useConfirm();
     const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         // So picking the same file again still counts
@@ -516,17 +519,22 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
         }
         // Nothing's being saved, so an import wouldn't be kept
         if (ui.saveBlock) {
-            window.alert(t("settings.save.alert_save_block"));
+            void confirm(
+                messageOptions(t("confirm.import.failed"), t("settings.save.alert_save_block")),
+            );
             return;
         }
         let save: SaveData;
         try {
             save = importSave(await file.text(), GAME_VERSION);
         } catch (e) {
-            window.alert(
-                e instanceof NewerSaveError
-                    ? t("settings.save.newer_version", { file: file.name })
-                    : t("settings.save.invalid_file", { file: file.name }),
+            void confirm(
+                messageOptions(
+                    t("confirm.import.failed"),
+                    e instanceof NewerSaveError
+                        ? t("settings.save.newer_version", { file: file.name })
+                        : t("settings.save.invalid_file", { file: file.name }),
+                ),
             );
             return;
         }
@@ -536,12 +544,15 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 runs: s.runs,
                 wins: s.victories,
             });
-        const replace = window.confirm(
-            t("settings.save.confirm_replace", {
+        const replace = await confirm({
+            title: t("confirm.import.title"),
+            body: t("settings.save.confirm_replace", {
                 current: describe(ui.save),
                 imported: describe(save),
             }),
-        );
+            confirm: t("confirm.import.confirm"),
+            cancel: t("ui.common.cancel"),
+        });
         if (replace) {
             client.replaceSave(save);
         }
@@ -575,12 +586,14 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 hidden
                 onChange={onFile}
             />
+            {confirmDialog}
         </Setting>
     );
 }
 
 // Saves that couldn't be read, kept as they were
 function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
+    const [confirm, confirmDialog] = useConfirm();
     return (
         <>
             {ui.unreadableSaves.map(({ key, time }) => {
@@ -602,12 +615,15 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
                         </button>
                         <button
                             className="ui-button ui-button-small"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                                 releaseFocus(e);
                                 if (
-                                    window.confirm(
-                                        t("settings.unreadable.confirm_delete", { when }),
-                                    )
+                                    await confirm({
+                                        title: t("confirm.delete_unreadable.title"),
+                                        body: t("settings.unreadable.confirm_delete", { when }),
+                                        confirm: t("settings.unreadable.delete"),
+                                        cancel: t("ui.common.cancel"),
+                                    })
                                 ) {
                                     client.deleteUnreadableSave(key);
                                 }
@@ -618,6 +634,7 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
                     </Setting>
                 );
             })}
+            {confirmDialog}
         </>
     );
 }
@@ -1964,6 +1981,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const [style, setStyle] = useState<CombatStyle>(() => getCharacter(ui.characterId).style);
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
+    const [confirm, confirmDialog] = useConfirm();
     useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
@@ -2086,12 +2104,26 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                     <button
                         className="ui-button"
                         disabled={Object.keys(page.upgrades).length === 0}
-                        onClick={() => client.refundUpgrades(style)}
+                        onClick={async () => {
+                            if (
+                                await confirm({
+                                    title: t("confirm.refund_all.title", {
+                                        style: STYLE_NAMES[style],
+                                    }),
+                                    body: t("confirm.refund_all.body"),
+                                    confirm: t("ui.shop.refund_all"),
+                                    cancel: t("ui.common.cancel"),
+                                })
+                            ) {
+                                client.refundUpgrades(style);
+                            }
+                        }}
                     >
                         {t("ui.shop.refund_all")}
                     </button>
                 </div>
             </div>
+            {confirmDialog}
         </div>
     );
 }
@@ -2135,7 +2167,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     disabled={ui.overlay !== "none"}
                 />
             )}
-            <div className="ui-toasts">
+            <div className="ui-toasts" role="status" aria-relevant="additions">
                 {ui.toasts.map((toast) => (
                     <div key={toast.id} className="ui-toast">
                         {toast.text}
@@ -2893,10 +2925,11 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
     const banishes = ui.hud?.banishes ?? 0;
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-levelup">
-                <h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-levelup">
+                <h2 id={titleId}>
                     {spell
                         ? t("ui.levelup.title.spell")
                         : hilt
@@ -3189,10 +3222,33 @@ function PauseModal({
         coop && ui.coop.room?.hostId === ui.coop.you
             ? ui.party.filter((member) => member.id && !member.left)
             : [];
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>({ modal: !coop });
+    const [confirm, confirmDialog] = useConfirm();
+    const host = coop && ui.coop.room?.hostId === ui.coop.you;
+    const quit = async () => {
+        const confirmed = await confirm(
+            coop
+                ? {
+                      title: t("confirm.leave.title"),
+                      body: host ? t("pause.quit.host_warning") : t("confirm.leave.body"),
+                      confirm: t("pause.quit.leave"),
+                      cancel: t("ui.common.cancel"),
+                  }
+                : {
+                      title: t("confirm.quit.title"),
+                      body: t("confirm.quit.body"),
+                      confirm: t("confirm.quit.confirm"),
+                      cancel: t("confirm.quit.cancel"),
+                  },
+        );
+        if (confirmed) {
+            client.quitRun();
+        }
+    };
     return (
         <div className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
-            <div className="ui-panel rs-border rs-background ui-pause">
-                <h2>{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-pause">
+                <h2 id={titleId}>{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
                 {coop && <p className="ui-subtle">{t("pause.coop_warning")}</p>}
                 {ui.saveBlock && ui.saveBlockClosed && (
                     <p className="ui-subtle">
@@ -3363,12 +3419,8 @@ function PauseModal({
                 <div className="ui-row">
                     <button
                         className="ui-button"
-                        title={
-                            coop && ui.coop.room?.hostId === ui.coop.you
-                                ? t("pause.quit.host_warning")
-                                : undefined
-                        }
-                        onClick={() => client.quitRun()}
+                        title={host ? t("pause.quit.host_warning") : undefined}
+                        onClick={quit}
                     >
                         {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
                     </button>
@@ -3377,6 +3429,7 @@ function PauseModal({
                     </button>
                 </div>
             </div>
+            {confirmDialog}
         </div>
     );
 }
@@ -3481,10 +3534,11 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
         // Esc is the pause key: a run can end just as it's pressed
         guardMs: RESULT_KEY_GUARD_MS,
     });
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-result">
-                <h2 className={victory ? "ui-victory" : "ui-defeat"}>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-result">
+                <h2 id={titleId} className={victory ? "ui-victory" : "ui-defeat"}>
                     {victory && result
                         ? tl(stageVictoryText(getMap(result.mapId), result.stage))
                         : (result?.endedEarly ?? t("ui.result.dead"))}

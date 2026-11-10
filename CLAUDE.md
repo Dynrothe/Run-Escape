@@ -64,7 +64,7 @@ go stale. Add anything that cost you time to work out.
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
 | Hover and hold descriptions: HUD, bag, Armoury         | `src/game/ui/DescriptionButton.tsx`                                    |
-| Menus' Esc and Enter, and the keyboard's focus         | `ui/menuKeys.ts`                                                       |
+| Menus' Esc and Enter, windows' focus, confirmations    | `ui/menuKeys.ts`, `ui/useDialog.ts`, `ui/ConfirmDialog.tsx`            |
 | Weapon stat lines on cards, pause and tooltips         | `src/game/content/weaponStats.ts`                                      |
 | The icon beside each stat line, on every screen        | `content/statIcons.ts`, `ui/StatLine.tsx`                              |
 | How the player stands and runs with each weapon        | `src/game/content/stances.ts`                                          |

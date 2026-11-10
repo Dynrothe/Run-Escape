@@ -2283,8 +2283,8 @@ right-click shortcut or the refund button.
 Older games kept each page's purchase order (`upgradeOrder`) or the price paid for each rank
 (`upgradeRefunds`), because their prices depended on it. Loading drops both: every page can refund
 single ranks, whatever game bought them.
-Refund all clears only the selected class's ranks and spending. It's there whenever
-the page has ranks, even with no spending recorded.
+Refund all asks first, then clears only the selected class's ranks and spending. It's there
+whenever the page has ranks, even with no spending recorded.
 The Skills panel is as wide as the window allows, so every skill fits in a few rows of cards
 and the page needs no scrolling on a window at least about 1000x720 in the UI's own pixels (a
 bigger window draws the UI bigger, so it fits the same way) and on tablets. A narrower window
@@ -2339,7 +2339,7 @@ in `i18n/store.ts`.
 - The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
   whatever the machine's language (`src/setupTests.ts`).
 
-### Menus' keys
+### Menus' keys and windows
 
 A screen answers Escape and Enter through `useMenuKeys` (`ui/menuKeys.ts`). Enter on a button
 reached with Tab or the arrows is that button's; on one that was only clicked it's the screen's, so
@@ -2347,6 +2347,16 @@ a player can click a map and press Enter. A controller's Enter is left out, as i
 already presses what's highlighted. Results pass `guardMs`, because Escape is also the pause key
 and a run can end just as it's pressed. After a click, buttons call `releaseFocus` rather than
 `blur()`, which leaves a press from the keyboard or a controller where it is.
+
+A window over a screen uses `useDialog` (`ui/useDialog.ts`): its role and title for screen
+readers, the focus on the window itself (a level up can open in the middle of a key press, so never
+on a button in it), and everything outside it inert. Toasts stay out of the inert part, so they're
+still announced, and so do other windows, such as the language notice over every screen, which can
+still be answered. Co-op's pause menu passes `modal: false`, as the run goes on behind it.
+
+Anything irreversible asks with `useConfirm` (`ui/ConfirmDialog.tsx`), not the browser's `confirm`:
+the button says what it does, the focus starts on the way out, and the screen behind doesn't hear
+the keys.
 
 ### Text colours
 

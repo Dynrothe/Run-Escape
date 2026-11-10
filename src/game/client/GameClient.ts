@@ -2111,11 +2111,19 @@ export class GameClient implements GameFrameHandler {
         this.syncOverlay();
     }
 
-    // Ends the run where it stands (from the pause menu); coins found are kept.
-    // In co-op that's leaving the party (the host's leaving ends it for
-    // everyone).
+    // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
+    // results. In co-op that's leaving the party (the host's leaving ends it for everyone).
     quitRun(): void {
-        if (this.sim) {
+        const sim = this.sim;
+        if (sim && !this.coopRun) {
+            this.paused = false;
+            sim.giveUp();
+            // Before the overlay, or it would play as a death
+            this.finishRun(t("ui.result.gave_up"), "abandoned");
+            this.syncOverlay();
+            return;
+        }
+        if (sim) {
             this.finishRun();
         }
         if (this.coopRun) {

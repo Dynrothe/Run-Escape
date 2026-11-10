@@ -18,6 +18,7 @@ import {
 } from "../content/maps";
 import { isEndlessUnlocked, isHardUnlocked, isMapUnlocked } from "../core/save";
 import { fmtNum, list, t, tl, tp, useLang } from "../i18n";
+import { useConfirm } from "./ConfirmDialog";
 import "./CoopScreen.css";
 import { CountryFlag } from "./CountryFlag";
 import { AdventurerPanel, Toggle, getStartingWeaponIcon } from "./GameUi";
@@ -313,6 +314,19 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
         setBoardMap(room.mapId);
         setBoard(false);
     }
+    const [confirm, confirmDialog] = useConfirm();
+    const disband = async () => {
+        if (
+            await confirm({
+                title: t("confirm.disband.title"),
+                body: t("coop.disband_hint"),
+                confirm: t("coop.disband"),
+                cancel: t("ui.common.cancel"),
+            })
+        ) {
+            client.disbandRoom();
+        }
+    };
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<number | undefined>(undefined);
     useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
@@ -516,11 +530,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     {t("coop.leave")}
                 </button>
                 {isHost && (
-                    <button
-                        className="ui-button"
-                        title={t("coop.disband_hint")}
-                        onClick={() => client.disbandRoom()}
-                    >
+                    <button className="ui-button" title={t("coop.disband_hint")} onClick={disband}>
                         {t("coop.disband")}
                     </button>
                 )}
@@ -602,6 +612,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
             {board && isHost && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
+            {confirmDialog}
         </div>
     );
 }
