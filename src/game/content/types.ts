@@ -699,9 +699,8 @@ export type AkkhaDef = {
     // How bright his room is for his fight (drawn only), in place of the Tombs' dimmer ambient
     ambient: number;
     specialEvery: number;
-    // Seconds he's on the floor to be hit between one special's end and the next's start, however
-    // many attacks he's made: at raid level 500, Double Trouble, Stay Vigilant and a long Memory
-    // Blast had him gone most of the fight
+    // After Memory Blast, he's on the floor to be hit as long as it took, and specialGap seconds at
+    // least, before his next special, however many attacks he's made
     specialGap: number;
     elements: AkkhaElementDef[];
     // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the

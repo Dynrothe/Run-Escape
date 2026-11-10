@@ -1736,11 +1736,22 @@ describe("Akkha", () => {
             const line = boss.hp;
             let killedAt = -1;
             let hurtAt = -1;
+            let reappeared = false;
+            let blasting = false;
             for (let t = 0; t < 60 * TICKS_PER_SECOND && hurtAt < 0; t++) {
                 const fight = sim.tombsAkkha!;
                 const dead = fight.shadows.find(
                     (s) => !sim.enemies.some((e) => e.uid === s.uid && !e.dead),
                 );
+                // Back from the blast just inside the dead shadow's quarter, not in the middle
+                if (blasting && !fight.memory && dead) {
+                    const middle = sim.tombsPathRoom!.boss!.quadrants!.middle;
+                    expect(sim.akkhaQuadrant(boss.x, boss.y)).toBe(dead.quadrant);
+                    expect(Math.abs(boss.x - middle.x)).toBeGreaterThanOrEqual(DEF.shadows.inside);
+                    expect(Math.abs(boss.y - middle.y)).toBeGreaterThanOrEqual(DEF.shadows.inside);
+                    reappeared = true;
+                }
+                blasting = fight.memory !== undefined;
                 if (!dead && fight.memory && fight.shadows.length > 0) {
                     const shadow = sim.enemies.find((e) => e.uid === fight.shadows[0].uid)!;
                     sim.damageEnemy(shadow, shadow.maxHp * 2, 0, shadow.x, shadow.y);
@@ -1765,6 +1776,7 @@ describe("Akkha", () => {
                 sim.step();
             }
             expect(killedAt).toBeGreaterThanOrEqual(0);
+            expect(reappeared).toBe(true);
             expect(hurtAt).toBeGreaterThan(0);
             // The rest of the blast, then he reappears in its quarter, hurt at once
             expect((hurtAt - killedAt) / TICKS_PER_SECOND).toBeLessThan(15);
@@ -1967,7 +1979,6 @@ describe("Akkha", () => {
             const plan = fight.memory!;
             const middle = { x: akkha(sim).x, y: akkha(sim).y };
             const done = plan.showEnd + plan.burst * plan.order.length;
-            expect(fight.readyTick).toBe(done + Math.round(DEF.specialGap * TICKS_PER_SECOND));
             while (sim.tick <= done && fight.memory) {
                 seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
             }
@@ -1976,19 +1987,19 @@ describe("Akkha", () => {
             // No shadows up: back where he was, not in the middle
             expect(Math.hypot(boss.x - plan.from.x, boss.y - plan.from.y)).toBeLessThan(0.2);
             expect(plan.from).not.toEqual(middle);
-            // His attacks made already, no special till he's been back specialGap seconds
-            while (sim.tick < fight.readyTick - 1) {
-                special(sim);
-                sim.player.hp = sim.player.maxHp;
-                seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
-                expect(fight.memory).toBeUndefined();
-            }
-            for (let i = 0; i < 10 * TICKS_PER_SECOND && !fight.memory; i++) {
+            // His attacks made already, he's still on the floor as long as he was gone, and
+            // specialGap at least, before the next
+            const back = sim.tick;
+            for (let i = 0; i < 60 * TICKS_PER_SECOND && !fight.memory; i++) {
                 special(sim);
                 sim.player.hp = sim.player.maxHp;
                 seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
             }
             expect(fight.memory).toBeDefined();
+            const floor = sim.tick - back;
+            expect(floor).toBeGreaterThanOrEqual(done - plan.start - 1);
+            expect(floor / TICKS_PER_SECOND).toBeGreaterThanOrEqual(DEF.specialGap - 0.1);
+            expect(floor).toBeLessThan(done - plan.start + 2 * TICKS_PER_SECOND);
         });
     });
 

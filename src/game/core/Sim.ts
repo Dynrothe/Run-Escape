@@ -5920,7 +5920,6 @@ export class Sim {
                 cross: this.heroes.map(() => special && this.rng.chance(0.5)),
             };
             this.emit({ type: "notice", message: def.detonate.message });
-            fight.readyTick = fight.detonate.tick + secondsToTicks(def.specialGap);
             const others = def.forms.filter((id) => id !== boss.def.id);
             this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
             return;
@@ -5934,11 +5933,13 @@ export class Sim {
             fight.lastTiles = this.heroes.map((hero) => this.akkhaTile(hero.player));
             this.emit({ type: "notice", message: def.orbs.message });
         }
-        // His next once he's been back on the floor a while, whichever this was
-        const ends = fight.memory
-            ? fight.memory.showEnd + fight.memory.burst * fight.memory.order.length
-            : fight.orbsUntil;
-        fight.readyTick = Math.max(ends, fight.orbsUntil) + secondsToTicks(def.specialGap);
+        // After Memory Blast, his next once he's been back on the floor as long as he was gone,
+        // and specialGap at least
+        if (fight.memory) {
+            const ends = fight.memory.showEnd + fight.memory.burst * fight.memory.order.length;
+            const gone = ends - this.tick;
+            fight.readyTick = ends + Math.max(gone, secondsToTicks(def.specialGap));
+        }
         const others = def.forms.filter((id) => id !== boss.def.id);
         this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
     }
