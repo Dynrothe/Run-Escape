@@ -5,7 +5,7 @@ import { UiSnapshot } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, GEAR_SLOT_BY_ID, getGear } from "../content/items";
-import { RARITIES } from "../content/rarity";
+import { RARITIES, RARITY_ORDER } from "../content/rarity";
 import { describeSetProgress, getItemSet } from "../content/sets";
 import { compareStats, formatStats } from "../content/stats";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -35,6 +35,24 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
             <div className="ui-panel rs-border rs-background ui-armoury">
                 <h2>{t("armoury.title")}</h2>
                 <p className="ui-subtle">{t("armoury.intro")}</p>
+                {/* What the tiles' borders mean */}
+                <div className="ui-armoury-legend">
+                    {RARITY_ORDER.map((rarity) => (
+                        <span key={rarity} className="ui-armoury-legend-item">
+                            <span
+                                className="ui-armoury-legend-swatch"
+                                style={{ borderColor: RARITIES[rarity].color }}
+                            />
+                            {tl(RARITIES[rarity].name)}
+                        </span>
+                    ))}
+                    <span className="ui-armoury-legend-item">
+                        <span className="ui-armoury-legend-swatch ui-armoury-legend-missing">
+                            ?
+                        </span>
+                        {t("armoury.legend.not_found")}
+                    </span>
+                </div>
                 <div className="ui-armoury-body">
                     <div className="ui-armoury-slots">
                         {GEAR_SLOTS.map((slot) => (
