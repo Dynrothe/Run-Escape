@@ -271,15 +271,21 @@ export function trophyName(trophy: TrophyDef): string {
 }
 
 // A trophy a raid's chest gives one of every time (expert mode's Lil' Zik looks), one not found
-// yet while there's one left (Sim.openRaidChest)
+// yet till they're all found (Sim.openRaidChest)
 export function isEveryTimeTrophy(trophy: TrophyDef): boolean {
     return trophy.from.kind === "raid" && (trophy.from.expert ?? false);
 }
 
-// Those of them a save has found, for the chest to go by
-export function getEveryTimeTrophiesFound(trophies: readonly string[]): string[] {
+// A trophy from a raid's chest, the Theatre's or the Tombs'. They're unlocks, so a chest never
+// gives one the player has already (Sim.openRaidChest, Sim.openTombsChest)
+export function isRaidChestTrophy(trophy: TrophyDef): boolean {
+    return trophy.from.kind === "raid" || trophy.from.kind === "tombs";
+}
+
+// Those of them a save has found, for the chests to go by
+export function getRaidChestTrophiesFound(trophies: readonly string[]): string[] {
     return trophies.filter((id) => {
         const trophy = TROPHY_BY_ID.get(id);
-        return trophy !== undefined && isEveryTimeTrophy(trophy);
+        return trophy !== undefined && isRaidChestTrophy(trophy);
     });
 }

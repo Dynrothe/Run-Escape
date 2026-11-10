@@ -128,15 +128,24 @@ describe("movement prediction", () => {
 });
 
 describe("a co-op player's loadout", () => {
-    // Their Lil' Zik looks, for their expert chest: only those, whatever their game sends
-    it("keeps only the looks a chest gives every time, from a list of strings", () => {
+    // Their raid chests' trophies, so their chest gives none twice: only those, whatever their
+    // game sends
+    it("keeps only raid chests' trophies, from a list of strings", () => {
         const loadout = makeLoadout({}, [], {}, undefined, undefined, ["lil_sot", "lil_xarp"]);
         expect([...cleanLoadout(loadout).trophiesFound]).toEqual(["lil_sot", "lil_xarp"]);
         const junk = {
             ...loadout,
-            trophies: ["lil_bloat", 7, null, "ghrazi_rapier", "nope", {}] as unknown as string[],
+            trophies: [
+                "lil_bloat",
+                7,
+                null,
+                "ghrazi_rapier",
+                "jar_of_dreams",
+                "nope",
+                {},
+            ] as unknown as string[],
         };
-        expect([...cleanLoadout(junk).trophiesFound]).toEqual(["lil_bloat"]);
+        expect([...cleanLoadout(junk).trophiesFound]).toEqual(["lil_bloat", "ghrazi_rapier"]);
         const notAList = { ...loadout, trophies: "lil_bloat" as unknown as string[] };
         expect(cleanLoadout(notAList).trophiesFound.size).toBe(0);
         expect(cleanLoadout(undefined).trophiesFound.size).toBe(0);
@@ -1409,11 +1418,11 @@ describe("saving", () => {
         },
     );
 
-    // For the expert chest, which gives a look not found yet
-    test("a solo run and a co-op loadout bring the save's Lil' Zik looks, only those", async () => {
+    // For the raid chests, which give nothing found already
+    test("a solo run and a co-op loadout bring the save's raid chest trophies, only those", async () => {
         expect.hasAssertions();
         const { client } = createSaving(true);
-        client.save.trophies = ["lil_bloat", "ghrazi_rapier", "lil_sot"];
+        client.save.trophies = ["lil_bloat", "jar_of_dreams", "ghrazi_rapier", "lil_sot"];
         const enterRun = vi.fn<(sim: Sim) => void>();
         Object.assign(client, {
             grid: createSim().grid,
@@ -1423,11 +1432,12 @@ describe("saving", () => {
         });
         await client.startRun("lumbridge");
         const sim = enterRun.mock.calls[0][0];
-        expect([...(sim.heroes[0].trophiesFound ?? [])]).toEqual(["lil_bloat", "lil_sot"]);
+        const raidOnes = ["lil_bloat", "ghrazi_rapier", "lil_sot"];
+        expect([...(sim.heroes[0].trophiesFound ?? [])]).toEqual(raidOnes);
         const loadout = (
             client as unknown as { getLoadout(): Parameters<typeof loadoutStats>[0] }
         ).getLoadout();
-        expect(loadout?.trophies).toEqual(["lil_bloat", "lil_sot"]);
+        expect(loadout?.trophies).toEqual(raidOnes);
     });
 
     test("a co-op map's forced adventurer determines the skill page", () => {

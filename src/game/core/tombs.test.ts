@@ -32,7 +32,7 @@ import {
     TOMBS_STRIKE,
     WARDENS,
 } from "../content/tombs";
-import { TROPHY_BY_ID } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
 import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow, zebakShelters } from "./Sim";
@@ -4367,6 +4367,45 @@ describe("the Tombs' chest", () => {
             expect(from.kind === "tombs" && from.level <= level).toBe(true);
         }
         expect(high.sim.heroes[0].raidChest!.level).toBe(level);
+    });
+
+    it("never gives what's found already, a purple, the pet, the Thread or a jewel", () => {
+        const invocations = INVOCATIONS.map((i) => i.id);
+        const sim = tombs(invocations);
+        const level = sim["tombsChestLevel"]();
+        const open = TROPHIES.filter((t) => t.from.kind === "tombs" && t.from.level <= level);
+        const purples = open.filter((t) => t.from.kind === "tombs" && t.from.weight !== undefined);
+        const rolls = open.filter((t) => t.from.kind === "tombs" && t.from.chance !== undefined);
+        expect(purples.length).toBeGreaterThan(1);
+        expect(rolls.length).toBeGreaterThan(1);
+        // All but one purple and one roll of its own found before
+        const owned = new Set([...purples.slice(1), ...rolls.slice(1)].map((t) => t.id));
+        sim.heroes[0].trophiesFound = owned;
+        sim.heroes[0].tombsPoints = TOMBS_POINTS.full;
+        const given = new Set<string>();
+        for (let i = 0; i < 2000; i++) {
+            sim.trophies.clear();
+            sim["openTombsChest"]();
+            for (const id of sim.heroes[0].raidChest!.found) {
+                expect(owned.has(id)).toBe(false);
+                given.add(id);
+            }
+        }
+        expect([...given].sort()).toEqual([purples[0].id, rolls[0].id].sort());
+        // Everything found: no chance, nothing given, and the chest says so
+        sim.heroes[0].trophiesFound = new Set(open.map((t) => t.id));
+        sim.trophies.clear();
+        sim.takeEvents();
+        sim["openTombsChest"]();
+        expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        expect(sim.heroes[0].raidChest!.chance).toBe(0);
+        expect(
+            sim
+                .takeEvents()
+                .some(
+                    (e) => e.type === "notice" && e.message.includes("nothing you haven't found"),
+                ),
+        ).toBe(true);
     });
 });
 

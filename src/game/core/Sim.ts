@@ -654,8 +654,8 @@ export type SimOptions = {
     // The weapons, passives and items brought in by map tasks; everything can
     // turn up when unset
     unlockedItems?: ReadonlySet<string>;
-    // The trophies already in their Collection log that a chest gives one of every time (expert
-    // mode's Lil' Zik looks), so it gives one they haven't got while there's one left
+    // The raid chests' trophies already in their Collection log (isRaidChestTrophy): they're
+    // unlocks, so a chest only gives ones they haven't got
     trophiesFound?: ReadonlySet<string>;
     // Round after round until the player falls, rather than a win at the
     // final boss (see endless.ts)
@@ -788,7 +788,7 @@ export type Hero = {
     // Armoury (see SimOptions)
     metaStats: Stats;
     unlockedItems: ReadonlySet<string> | undefined;
-    // The every-time trophies they'd found before the run, only those (SimOptions.trophiesFound)
+    // The raid chests' trophies they'd found before the run, only those (SimOptions.trophiesFound)
     trophiesFound: ReadonlySet<string> | undefined;
     armoury: ArmouryUpgrades | undefined;
     player: Player;
@@ -11126,39 +11126,45 @@ export class Sim {
     }
 
     // The chest once the raid's done, each of the party their own: a purple, more likely the more
-    // points they earned, and on hard mode a roll for its own uniques too
+    // points they earned, and on hard mode a roll for its own uniques too. The uniques are unlocks,
+    // so a chest only gives ones the hero hasn't found (hasTrophy): a purple is one of those left,
+    // and once there are none left there's no roll
     private openRaidChest(): void {
         const id = this.map.id;
         const purples = TROPHIES.filter((t) => t.from.kind === "raid" && t.from.mapId === id);
-        const pick = (hard: boolean): TrophyDef | undefined => {
-            const pool = purples.filter(
+        const missingOf = (hero: Hero, hard: boolean): TrophyDef[] =>
+            purples.filter(
                 (t) =>
                     t.from.kind === "raid" &&
                     (t.from.hard ?? false) === hard &&
-                    !(t.from.expert ?? false),
+                    !isEveryTimeTrophy(t) &&
+                    !this.hasTrophy(hero, t.id),
             );
-            if (pool.length === 0) {
-                return undefined;
-            }
-            const weights = pool.map((t) => (t.from.kind === "raid" ? t.from.weight : 0));
-            return pool[this.rng.weightedIndex(weights)];
-        };
-        // Expert mode: one of Lil' Zik's looks, every time, one they haven't got while there's one
-        // left, and any of them after that
+        const pick = (pool: TrophyDef[]): TrophyDef =>
+            pool[
+                this.rng.weightedIndex(
+                    pool.map((t) => (t.from.kind === "raid" ? t.from.weight : 0)),
+                )
+            ];
+        // Expert mode: one of Lil' Zik's looks every time, one they haven't got, till they have all
         const expertPool = this.expert ? purples.filter(isEveryTimeTrophy) : [];
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
             const [min, max] = PURPLE_CHANCE;
-            const chance = Math.min(max, Math.max(min, hero.raidPointsEarned / PURPLE_POINTS));
-            const purple = this.rng.chance(chance) ? pick(false) : undefined;
+            const pool = missingOf(hero, false);
+            const chance =
+                pool.length > 0
+                    ? Math.min(max, Math.max(min, hero.raidPointsEarned / PURPLE_POINTS))
+                    : 0;
+            const purple = pool.length > 0 && this.rng.chance(chance) ? pick(pool) : undefined;
+            const hardPool = this.hard ? missingOf(hero, true) : [];
             const hardOne =
-                this.hard && this.rng.chance(HARD_UNIQUE_CHANCE) ? pick(true) : undefined;
-            const missing = expertPool.filter(
-                (t) => !hero.trophies.has(t.id) && !(hero.trophiesFound?.has(t.id) ?? false),
-            );
-            const expertFrom = missing.length > 0 ? missing : expertPool;
-            const expertOne = expertFrom.length > 0 ? this.rng.pick(expertFrom) : undefined;
+                hardPool.length > 0 && this.rng.chance(HARD_UNIQUE_CHANCE)
+                    ? pick(hardPool)
+                    : undefined;
+            const missingLooks = expertPool.filter((t) => !this.hasTrophy(hero, t.id));
+            const expertOne = missingLooks.length > 0 ? this.rng.pick(missingLooks) : undefined;
             const found = [purple, hardOne, expertOne].filter(
                 (t): t is TrophyDef => t !== undefined,
             );
@@ -11173,7 +11179,9 @@ export class Sim {
                     message:
                         found.length > 0
                             ? `A purple chest! ${found.map((t) => this.findTrophy(t)).join(" ")}`
-                            : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
+                            : pool.length === 0 && hardPool.length === 0
+                              ? "The chest holds nothing you haven't found already."
+                              : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
                 },
                 true,
             );
@@ -11181,10 +11189,16 @@ export class Sim {
         this.use(current);
     }
 
+    // Whether a hero has this trophy already: found this run, or before it (Hero.trophiesFound)
+    private hasTrophy(hero: Hero, id: string): boolean {
+        return hero.trophies.has(id) || (hero.trophiesFound?.has(id) ?? false);
+    }
+
     // The Tombs of Amascut's chest, once the last Warden's down, each of the party their own: a
     // purple, more likely the higher the raid level (PURPLE_CHANCE's least at 0, its most at
     // 500), from those its level allows, then its pet, the Thread and the jewels, each a roll of
-    // its own from its raid level
+    // its own from its raid level. As the Theatre's, only what the hero hasn't found: a purple is
+    // one of those left, and a pet, Thread or jewel they have isn't rolled for
     private openTombsChest(): void {
         const level = this.tombsChestLevel();
         const open = TROPHIES.flatMap((trophy) =>
@@ -11192,10 +11206,11 @@ export class Sim {
                 ? [{ trophy, from: trophy.from }]
                 : [],
         );
-        const purples = open.filter(({ from }) => from.weight !== undefined);
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
+            const missing = open.filter(({ trophy }) => !this.hasTrophy(hero, trophy.id));
+            const purples = missing.filter(({ from }) => from.weight !== undefined);
             const chance = purples.length > 0 ? this.tombsChance(hero) : 0;
             const found: TrophyDef[] = [];
             const purple =
@@ -11206,7 +11221,7 @@ export class Sim {
             if (purple) {
                 found.push(purple);
             }
-            for (const { trophy, from } of open) {
+            for (const { trophy, from } of missing) {
                 if (from.chance !== undefined && this.rng.chance(from.chance)) {
                     found.push(trophy);
                 }
@@ -11224,7 +11239,9 @@ export class Sim {
                         found.length > 0
                             ? (purple ? "A purple chest! " : "") +
                               found.map((t) => this.findTrophy(t)).join(" ")
-                            : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
+                            : missing.length === 0
+                              ? "The chest holds nothing you haven't found already."
+                              : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
                 },
                 true,
             );

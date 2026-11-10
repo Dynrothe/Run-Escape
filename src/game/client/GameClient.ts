@@ -36,7 +36,7 @@ import { RARITIES, Rarity, rarityName } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
-import { TROPHY_BY_ID, getEveryTimeTrophiesFound } from "../content/trophies";
+import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
 import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
@@ -378,7 +378,7 @@ export function cleanLoadout(loadout: Loadout | undefined): {
     }
     return {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
-        trophiesFound: new Set(getEveryTimeTrophiesFound(trophies.slice(0, 100))),
+        trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
     };
 }
@@ -1124,7 +1124,7 @@ export class GameClient implements GameFrameHandler {
             this.save.pet,
             // A Tombs room's lobby shows the host's raid level
             room && getMap(room.mapId).tombs ? [...(this.save.invocations ?? [])] : undefined,
-            getEveryTimeTrophiesFound(this.save.trophies),
+            getRaidChestTrophiesFound(this.save.trophies),
         );
     }
 
@@ -1630,7 +1630,7 @@ export class GameClient implements GameFrameHandler {
             spawnX: map.spawn.x,
             spawnY: map.spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
-            trophiesFound: new Set(getEveryTimeTrophiesFound(this.save.trophies)),
+            trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
             endless,
             hard,
             expert,
