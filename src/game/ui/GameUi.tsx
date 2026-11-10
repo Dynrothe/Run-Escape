@@ -1146,10 +1146,16 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
                 {purple ? t("ui.raid.chest.purple") : t("ui.raid.chest.regular")}
             </div>
             <div className="ui-subtle">
+                {/* No purple left to find: no chance to show (a roll of its own can still give
+                    something, the Tombs' jewels or expert's looks) */}
                 {t(
                     chest.level !== undefined
-                        ? "ui.raid.chest.points_level"
-                        : "ui.raid.chest.points",
+                        ? chest.chance > 0
+                            ? "ui.raid.chest.points_level"
+                            : "ui.raid.chest.points_level_none"
+                        : chest.chance > 0
+                          ? "ui.raid.chest.points"
+                          : "ui.raid.chest.points_none",
                     {
                         points: fmtNum(chest.points),
                         level: chest.level ?? 0,

@@ -310,8 +310,38 @@ describe("raids", () => {
         sim.trophies.clear();
         sim.trophies.add(normal[0].id);
         sim.trophies.add(hard[0].id);
+        sim.takeEvents();
         sim["openRaidChest"]();
-        expect([...sim.trophies].sort()).toEqual([normal[0].id, hard[0].id].sort());
+        expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        expect(
+            sim
+                .takeEvents()
+                .some(
+                    (e) => e.type === "notice" && e.message.includes("nothing you haven't found"),
+                ),
+        ).toBe(true);
+        // Every purple found but a hard one left: no chance to show, the hard roll still made
+        sim.trophies.clear();
+        sim.trophies.add(normal[0].id);
+        let hardGiven = 0;
+        for (let i = 0; i < 200; i++) {
+            sim.trophies.delete(hard[0].id);
+            sim.takeEvents();
+            sim["openRaidChest"]();
+            expect(sim.heroes[0].raidChest!.chance).toBe(0);
+            const found = sim.heroes[0].raidChest!.found;
+            hardGiven += found.length;
+            if (found.length === 0) {
+                expect(sim.takeEvents()).toContainEqual(
+                    expect.objectContaining({
+                        type: "notice",
+                        message: "The chest holds no unique this time.",
+                    }),
+                );
+            }
+        }
+        expect(hardGiven).toBeGreaterThan(0);
+        expect(hardGiven).toBeLessThan(200);
         // Everything found: no chance shown, and the chest says so
         const all = raid(false, 0, undefined, new Set(tob.map((t) => t.id)));
         Object.assign(all, { map: getMap("theatre_of_blood"), hard: true });

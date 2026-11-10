@@ -168,7 +168,7 @@ TROPHIES.push(
         id,
         name,
         objId,
-        how: "One each time the Theatre of Blood's beaten on expert mode, a new one until you have them all.",
+        how: "One each time the Theatre of Blood's beaten on expert mode, until you have them all.",
         from: { ...TOB, weight: 1, expert: true },
     })),
     {

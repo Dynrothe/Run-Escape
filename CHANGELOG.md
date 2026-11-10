@@ -7,9 +7,10 @@ the version in the corner).
 
 ### Fixed
 
-- Raid chests could give a unique you already had, which did nothing, since uniques are unlocks.
-  The Theatre of Blood's and the Tombs of Amascut's chests now only give ones you haven't found,
-  in co-op too. Once you have everything a chest holds, it says so. Fixed by Okaeri.
+- Raid chests could give a unique you already had, which did nothing: it was in your Collection
+  log already, and anything it unlocks was unlocked. The Theatre of Blood's and the Tombs of
+  Amascut's chests now only give ones you haven't found, in co-op too. Once you have everything a
+  chest holds, it says so. Fixed by Okaeri.
 
 ## 0.30.0 - 2026-11-09
 

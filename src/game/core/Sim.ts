@@ -11179,14 +11179,26 @@ export class Sim {
                     message:
                         found.length > 0
                             ? `A purple chest! ${found.map((t) => this.findTrophy(t)).join(" ")}`
-                            : pool.length === 0 && hardPool.length === 0
-                              ? "The chest holds nothing you haven't found already."
-                              : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
+                            : this.noUniqueNotice(
+                                  chance,
+                                  pool.length === 0 && hardPool.length === 0,
+                              ),
                 },
                 true,
             );
         }
         this.use(current);
+    }
+
+    // A raid chest's notice when it gave nothing: everything's found already, or no purple left to
+    // find but a roll of its own made (no chance to show), or the purple's chance
+    private noUniqueNotice(chance: number, allFound: boolean): string {
+        if (allFound) {
+            return "The chest holds nothing you haven't found already.";
+        }
+        return chance > 0
+            ? `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`
+            : "The chest holds no unique this time.";
     }
 
     // Whether a hero has this trophy already: found this run, or before it (Hero.trophiesFound)
@@ -11239,9 +11251,7 @@ export class Sim {
                         found.length > 0
                             ? (purple ? "A purple chest! " : "") +
                               found.map((t) => this.findTrophy(t)).join(" ")
-                            : missing.length === 0
-                              ? "The chest holds nothing you haven't found already."
-                              : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
+                            : this.noUniqueNotice(chance, missing.length === 0),
                 },
                 true,
             );

@@ -206,6 +206,8 @@
     "ui.raid.chest.no_unique": "No unique this time.",
     "ui.raid.chest.points": "{points} raid points: a {chance}% chance of a unique",
     "ui.raid.chest.points_level": "{points} points at raid level {level}: a {chance}% chance of a unique",
+    "ui.raid.chest.points_level_none": "{points} points at raid level {level}",
+    "ui.raid.chest.points_none": "{points} raid points",
     "ui.raid.chest.purple": "A purple chest!",
     "ui.raid.chest.regular": "The raid's chest",
     "ui.raid.first_room_hint": "{count} rooms, each with its waves and then its boss. Kill the boss to move on.",

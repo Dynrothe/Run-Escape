@@ -4392,6 +4392,30 @@ describe("the Tombs' chest", () => {
             }
         }
         expect([...given].sort()).toEqual([purples[0].id, rolls[0].id].sort());
+        // Found this run counts too: with those two found in it, nothing more
+        sim.trophies.clear();
+        sim.trophies.add(purples[0].id);
+        sim.trophies.add(rolls[0].id);
+        for (let i = 0; i < 200; i++) {
+            sim["openTombsChest"]();
+            expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        }
+        // Every purple found but a roll of its own left: no chance shown, and none claimed
+        sim.trophies.clear();
+        sim.heroes[0].trophiesFound = new Set(
+            open.filter((t) => t.id !== rolls[0].id).map((t) => t.id),
+        );
+        sim.takeEvents();
+        sim["openTombsChest"]();
+        expect(sim.heroes[0].raidChest!.chance).toBe(0);
+        if (sim.heroes[0].raidChest!.found.length === 0) {
+            expect(sim.takeEvents()).toContainEqual(
+                expect.objectContaining({
+                    type: "notice",
+                    message: "The chest holds no unique this time.",
+                }),
+            );
+        }
         // Everything found: no chance, nothing given, and the chest says so
         sim.heroes[0].trophiesFound = new Set(open.map((t) => t.id));
         sim.trophies.clear();
