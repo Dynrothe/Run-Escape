@@ -2516,7 +2516,7 @@ const Hud = memo(function Hud({
                     {/* The dev server's testing buttons: a build drops them whole */}
                     {import.meta.env.DEV && <DevGodButton client={client} />}
                     {import.meta.env.DEV && <DevWardensButton client={client} />}
-                    <HudQuests open={questTracker} client={client} />
+                    <HudQuests open={questTracker} client={client} disabled={disabled} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                 </div>
             </div>
@@ -2803,10 +2803,18 @@ function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | nul
     );
 }
 
-function HudQuests({ open, client }: { open: boolean; client: GameClient }): JSX.Element | null {
+function HudQuests({
+    open,
+    client,
+    disabled,
+}: {
+    open: boolean;
+    client: GameClient;
+    disabled: boolean;
+}): JSX.Element | null {
     const quests = useHudNumber(client, (n) => n.quests);
     return quests && quests.length > 0 ? (
-        <QuestTracker quests={quests} open={open} client={client} />
+        <QuestTracker quests={quests} open={open} client={client} disabled={disabled} />
     ) : null;
 }
 
@@ -3216,10 +3224,12 @@ function QuestTracker({
     quests,
     open,
     client,
+    disabled,
 }: {
     quests: QuestTrackView[];
     open: boolean;
     client: GameClient;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <div className="ui-quest-tracker">
@@ -3230,18 +3240,33 @@ function QuestTracker({
             >
                 {t("ui.quest.heading")} {open ? "▾" : "▸"}
             </button>
-            {open && quests.map((quest) => <QuestTrack key={quest.id} quest={quest} />)}
+            {open &&
+                quests.map((quest) => (
+                    <QuestTrack key={quest.id} quest={quest} disabled={disabled} />
+                ))}
         </div>
     );
 }
 
-// Kept from the last update while its progress is the same (shareUnchanged)
-const QuestTrack = memo(function QuestTrack({ quest }: { quest: QuestTrackView }): JSX.Element {
+// Kept from the last update while its progress is the same (shareUnchanged). What it asks for is
+// the description a hover or hold brings up, as it is for a slot
+const QuestTrack = memo(function QuestTrack({
+    quest,
+    disabled,
+}: {
+    quest: QuestTrackView;
+    disabled: boolean;
+}): JSX.Element {
     return (
-        <div className={"ui-quest-track " + questTrackClass(quest)} title={tl(quest.task)}>
+        <DescriptionButton
+            itemId={quest.id}
+            disabled={disabled}
+            className={"ui-quest-track " + questTrackClass(quest)}
+            description={tl(quest.task)}
+        >
             <span className="ui-quest-track-name">{tl(quest.name)}</span>
             <span className="ui-quest-track-progress">{formatQuestProgress(quest)}</span>
-        </div>
+        </DescriptionButton>
     );
 });
 
