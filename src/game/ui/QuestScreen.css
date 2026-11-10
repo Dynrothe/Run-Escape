@@ -40,7 +40,7 @@
 .ui-quest-group-note {
     font-family: "OSRS Small", sans-serif;
     font-size: 15px;
-    color: #8a7f6a;
+    color: var(--ui-text-locked);
 }
 
 /* Name, what it asks for, how far it's got, what it pays */
@@ -54,10 +54,11 @@
 
 .ui-quest-name {
     font-family: "OSRS Bold", sans-serif;
+    text-shadow: var(--ui-outline);
 }
 
 .ui-quest-new .ui-quest-name {
-    color: var(--ui-red);
+    color: var(--ui-quest-red-text);
 }
 
 .ui-quest-started .ui-quest-name {
@@ -66,7 +67,7 @@
 
 .ui-quest-done .ui-quest-name,
 .ui-quest-done .ui-quest-progress {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 .ui-quest-progress {
@@ -85,7 +86,7 @@
 }
 
 .ui-quests-count {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 /* Narrow windows: what it asks for under its name */

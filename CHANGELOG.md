@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Easier to read, by Jp66600: secondary text, locked items and disabled buttons are lighter.
+  Penalties, defeats and unreached goals share one red, quests not started a brighter one, and
+  what's written over the world and quest names have a black outline.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added

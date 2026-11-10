@@ -13,6 +13,21 @@
     --ui-edge-light: #6b5e4a;
     /* Lines between rows and columns of a table */
     --ui-divider: rgba(107, 94, 74, 0.55);
+    /* Text on the stone and cards: secondary, faint, locked and disabled, each still readable */
+    --ui-text-dim: #d6cbb0;
+    --ui-text-faint: #c9bda3;
+    --ui-text-locked: #b5a98f;
+    --ui-text-disabled: #ada08a;
+    /* Scarlet, for what's gone wrong or isn't reached yet */
+    --ui-red-text: #e0101a;
+    /* Quests not started yet, which are read over the map too */
+    --ui-quest-red-text: #ff3010;
+    /* The buttons' green is too dark on the stone */
+    --ui-green-text: #5fe05f;
+    /* A whole outline, for text over the world, which can be any colour */
+    --ui-outline:
+        1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 1px 0 #000,
+        0 -1px 0 #000, 1px 0 0 #000, -1px 0 0 #000;
     /* How much bigger the UI is drawn, for the window's size (set on
        .ui-contents). Zoom scales viewport units too, so ones inside the UI
        are divided by it to stay a share of the window. */
@@ -111,7 +126,7 @@
 }
 
 .ui-subtle {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     margin: 0 0 10px;
     text-align: center;
 }
@@ -144,7 +159,7 @@
 }
 
 .ui-button:disabled {
-    color: #7d705b;
+    color: var(--ui-text-disabled);
     cursor: default;
 }
 
@@ -198,7 +213,7 @@
 
 /* Still there to point at, to see what it takes */
 .ui-card-locked {
-    color: #8a7f6a;
+    color: var(--ui-text-locked);
     cursor: default;
 }
 
@@ -207,7 +222,7 @@
 }
 
 .ui-card-dim {
-    opacity: 0.7;
+    opacity: 0.85;
 }
 
 .ui-card:disabled {
@@ -251,7 +266,7 @@
 }
 
 .ui-card-style {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-coins {
@@ -432,7 +447,7 @@
 
 .ui-setting-text {
     font-size: 14px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-setting-control {
@@ -481,7 +496,7 @@
 
 .ui-toggle {
     min-width: 52px;
-    color: #e04040;
+    color: var(--ui-red-text);
 }
 
 .ui-toggle-on {
@@ -606,7 +621,7 @@
 }
 
 .ui-title-stat {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-title-stat-value {
@@ -615,7 +630,6 @@
 
 .ui-hint {
     color: var(--ui-white);
-    opacity: 0.8;
 }
 
 /* A narrow window: the corner stacks, and the hint wraps to stay clear of it */
@@ -642,22 +656,18 @@
     font-family: "OSRS Small", sans-serif;
     font-size: 14px;
     color: var(--ui-text);
-    text-shadow: 1px 1px 0 #000;
     background: none;
     border: none;
-    opacity: 0.8;
     cursor: pointer;
 }
 
 .ui-version:hover {
     color: var(--ui-yellow);
-    opacity: 1;
 }
 
 /* Played on without saving: opens the panel saying why again */
 .ui-version.ui-save-off {
-    color: var(--ui-red);
-    opacity: 1;
+    color: var(--ui-red-text);
 }
 
 /* Adventurer and map select: a panel down each side, so the adventurer picked
@@ -743,7 +753,7 @@
 .ui-select-count {
     font-family: "OSRS Small", sans-serif;
     font-size: 15px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-select-bar {
@@ -779,13 +789,13 @@
 }
 
 .ui-endless-locked .ui-endless-name {
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 .ui-endless-hint {
     font-family: "OSRS Small", sans-serif;
     font-size: 15px;
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 /* Under each list: the one pointed at, or the one picked */
@@ -823,7 +833,12 @@
 .ui-style-treasure {
     font-family: "OSRS Small", sans-serif;
     font-size: 14px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
+}
+
+/* Very rare's red */
+.ui-style-treasure-name {
+    color: var(--ui-red-text);
 }
 
 .ui-tiles {
@@ -975,7 +990,7 @@
 }
 
 .ui-task-done .ui-task-name {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 .ui-reward {
@@ -987,7 +1002,7 @@
 }
 
 .ui-reward-locked {
-    color: #8a7f6a;
+    color: var(--ui-text-locked);
 }
 
 .ui-reward-locked .ui-icon {
@@ -1381,7 +1396,6 @@
     background: none;
     border: none;
     padding: 0;
-    text-shadow: 1px 1px 0 #000;
     cursor: pointer;
 }
 
@@ -1393,6 +1407,9 @@
 }
 
 .ui-quest-track-name {
+    /* Room for the outline, which the overflow would cut off */
+    margin: -1px;
+    padding: 1px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -1402,7 +1419,7 @@
 }
 
 .ui-quest-new .ui-quest-track-name {
-    color: var(--ui-red);
+    color: var(--ui-quest-red-text);
 }
 
 .ui-quest-started .ui-quest-track-name {
@@ -1411,7 +1428,7 @@
 
 .ui-quest-done .ui-quest-track-name,
 .ui-quest-done .ui-quest-track-progress {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 /* The damage meter, under the quest tracker, and each weapon's under it */
@@ -1431,7 +1448,6 @@
     background: none;
     border: none;
     padding: 0;
-    text-shadow: 1px 1px 0 #000;
     cursor: pointer;
     pointer-events: auto;
 }
@@ -1724,11 +1740,11 @@
 }
 
 .ui-evolve-line {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-evolve-done {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 .ui-evolve-ready {
@@ -1754,7 +1770,7 @@
 }
 
 .ui-slot-tip-level {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-gear-slot {
@@ -2033,7 +2049,7 @@
     top: 0;
     font-family: "OSRS Small", sans-serif;
     font-size: 13px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     text-shadow: 1px 1px 0 #000;
 }
 
@@ -2295,7 +2311,7 @@
 }
 
 .ui-tag-banished {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-banishes {
@@ -2341,7 +2357,7 @@
 }
 
 .ui-choice-stat-label {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-choice-stat-up {
@@ -2349,17 +2365,17 @@
 }
 
 .ui-choice-stat-down {
-    color: #ff5a5a;
+    color: var(--ui-red-text);
 }
 
 /* A weapon whose style a raid's bosses pray against: what it loses against them */
 .ui-card-penalty {
-    color: #ff5a5a;
+    color: var(--ui-red-text);
 }
 
 /* What a card's weapon or passive evolves; bright once the other half's owned */
 .ui-card-evolves {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-card-evolves-held {
@@ -2494,7 +2510,7 @@
 }
 
 .ui-pause-level {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     white-space: nowrap;
 }
 
@@ -2526,7 +2542,7 @@
 }
 
 .ui-pause-set-on {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 .ui-result {
@@ -2565,7 +2581,7 @@
 }
 
 .ui-result-player-detail {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-result-arrow {
@@ -2666,7 +2682,7 @@
 }
 
 .ui-defeat {
-    color: var(--ui-red) !important;
+    color: var(--ui-red-text) !important;
 }
 
 .ui-result-table {
@@ -3068,4 +3084,24 @@
     gap: 2px;
     margin-top: 6px;
     color: var(--ui-white);
+}
+
+/* What's written over the world, which can be any colour behind it */
+.ui-hud-right,
+.ui-xp-level,
+.ui-dps,
+.ui-quest-tracker,
+.ui-quest-tracker-title,
+.ui-round,
+.ui-raid-points,
+.ui-boss-name,
+.ui-boss-status,
+.ui-boss-warning,
+.ui-raid-objective,
+.ui-raid-objective-hint,
+.ui-hp span,
+.ui-hint,
+.ui-version,
+.ui-buff {
+    text-shadow: var(--ui-outline);
 }

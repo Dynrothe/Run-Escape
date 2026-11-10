@@ -95,11 +95,11 @@
 
 .ui-log-parts {
     font-size: 13px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-log-hidden {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-log-unknown {
@@ -125,7 +125,7 @@
 }
 
 .ui-log-stats {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-log-count {

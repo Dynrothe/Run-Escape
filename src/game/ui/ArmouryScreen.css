@@ -118,7 +118,7 @@
 }
 
 .ui-armoury-arrow {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-armoury-next {
@@ -156,7 +156,7 @@
 }
 
 .ui-armoury-stat-label {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-armoury-buy {
@@ -167,7 +167,7 @@
 }
 
 .ui-armoury-count {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 @media (max-width: 759px) {
