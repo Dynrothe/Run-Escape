@@ -19583,6 +19583,8 @@ export class Sim {
         });
     }
 
+    // Each hero's own roll, for what they haven't found this run: a kill that
+    // gave one again would say it was new to the collection log again
     private rollEnemyTrophies(enemy: Enemy): void {
         if (enemy.boss) {
             return;
@@ -19594,6 +19596,7 @@ export class Sim {
                     from.kind === "enemy" &&
                     from.enemyId === enemy.def.id &&
                     from.mapId === this.map.id &&
+                    !this.trophies.has(trophy.id) &&
                     this.rng.chance(from.chance)
                 ) {
                     this.emit({ type: "notice", message: this.findTrophy(trophy) }, true);

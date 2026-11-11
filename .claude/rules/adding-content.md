@@ -148,8 +148,8 @@ existing ones won't do, and a case in `Sim.meetVisitor` (`startRandomEvent` for 
 ## Collection log reward
 
 Add trophies to `TROPHIES` in `trophies.ts`, with a `TrophySource` that names how they're found. An
-`enemy` source rolls per loot-bearing kill on its map; a `turkey` source rolls when cooked turkey is
-carved, till the run has found it; a `map` source is awarded only on victory and can require a
+`enemy` source rolls per loot-bearing kill on its map and a `turkey` source when cooked turkey is
+carved, each till the run has found it; a `map` source is awarded only on victory and can require a
 boss in `bossesKilled` or hard mode. A `quest` source is awarded when the quest is recorded,
 including already completed quests on save load. Trophy ids are stored in saves, so keep them
 stable. A pet in `PETS` shares its trophy id and uses the cache's follower NPC with its idle and

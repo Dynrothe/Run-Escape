@@ -423,6 +423,23 @@ describe("Thanksgiving rewards", () => {
         expect(killChompy("halloween")).toEqual([]);
     });
 
+    test("a Chompy bird trophy found this run isn't announced again", () => {
+        const sim = createSim("thanksgiving");
+        sim.rng.chance = () => true;
+        const announced = () => {
+            const bird = sim.spawnEnemy(getEnemy("chompy_bird"), "normal", { x: 1040, y: 1040 })!;
+            sim.damageEnemy(bird, 1e9, 0, sim.player.x, sim.player.y);
+            return sim
+                .takeEvents()
+                .filter((e) => e.type === "notice" && e.message.startsWith("New item added"));
+        };
+
+        expect(announced()).toHaveLength(
+            TROPHIES.filter((trophy) => trophy.from.kind === "enemy").length,
+        );
+        expect(announced()).toEqual([]);
+    });
+
     test("carving a roasted turkey can award Magic secateurs", () => {
         const sim = createSim("thanksgiving");
         sim.rng.chance = () => true;

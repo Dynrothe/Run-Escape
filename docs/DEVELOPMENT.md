@@ -1178,9 +1178,9 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 
 - **`TrophyDef`** (`content/trophies.ts`): its `id` is stored in `SaveData.trophies`, so never
   rename one players may have. `TrophySource.enemy` rolls on a loot-bearing kill of that enemy on
-  `mapId`; `turkey` rolls when a Cooked turkey is carved, till the run has found it; `boss` rolls
-  on that boss's kill; and `map` is given only on a win, with `requiresBoss` checked against the
-  run's `bossesKilled` and `hard` keeping it to hard mode. A `quest` source is given when the
+  `mapId` and `turkey` when a Cooked turkey is carved, each till the run has found it; `boss`
+  rolls on that boss's kill; and `map` is given only on a win, with `requiresBoss` checked against
+  the run's `bossesKilled` and `hard` keeping it to hard mode. A `quest` source is given when the
   quest is recorded, and on loading a save that had already done it.
 - **`PetDef`** (`content/pets.ts`): a pet's `id` is its trophy's, and its follower NPC is the
   cache's variant marked as a follower, with its own idle and walk animations. The pet can be
