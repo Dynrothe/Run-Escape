@@ -1267,7 +1267,12 @@ on hard and expert. Only a closing ring can take a `hold` (a test checks). `clos
 `theatre.ts` sets each ring's `interval` to its hold and time to close in plus `RING_REST`, so a
 ring's next volley forms only once the last is in. The boss stands only for its `channel` (as long
 as before), then attacks between the rings, but a boss with a ring that holds starts no other
-such attack until its last ring is in (`ringsUntil` on its state, in `Sim.startPattern`). Each
+such attack until its last ring is in (`ringsUntil` on its state, in `Sim.startPattern`). That
+goes by the pattern's volleys and `interval`, so any ring with a `hold` needs an interval that
+leaves it time to close in, whoever's it is (a test checks every boss's). It's checked only where
+a boss picks its next attack, not for a chain, a follow or an opener. A nap that comes due while
+the Bloat's swarm is still coming waits for its last ring to go out, so none come while he's
+down, and meanwhile he fights on with nothing that fires more (`stepNap`). Each
 boss has a mechanic of its own that makes the fight longer by making it harder, not by more
 hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with

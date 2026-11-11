@@ -438,7 +438,8 @@ export type BulletPatternDef = {
     spacing?: number;
     distance?: number;
     // Closing rings only (a test checks): seconds it stands where it formed before it closes in,
-    // to find the way out
+    // to find the way out. Its interval must leave time for it to close in (a test checks), and
+    // the boss picks no other ring that holds until the last is in (BossState.ringsUntil).
     hold?: number;
     // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
     // bursting where it lands), rather than from the boss

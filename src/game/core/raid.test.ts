@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { getEnemy } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
 import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
@@ -748,13 +748,14 @@ describe("the Theatre's bullet shapes", () => {
         }
     });
 
-    it("every closing ring has closed in and rested before its next volley", () => {
+    // Every boss's, not only the Theatre's: Sim.startPattern's ringsUntil goes by the interval
+    it("every ring that holds has closed in and rested before its next volley", () => {
         const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
         let checked = 0;
-        for (const id of TEST_BOSS_IDS) {
-            for (const attack of getEnemy(id).boss!.attacks) {
+        for (const { id, boss } of ENEMIES) {
+            for (const attack of boss?.attacks ?? []) {
                 const pattern = attack.pattern;
-                if (pattern?.shape !== "closing") {
+                if (pattern?.hold === undefined) {
                     continue;
                 }
                 const { bullets } = volley(attack.name, id);
@@ -883,16 +884,28 @@ describe("the Theatre's bosses", () => {
         expect(fired).toBe(true);
         const pattern = swarm.pattern!;
         const patternTicks = Math.ceil(pattern.volleys * pattern.interval * TICKS_PER_SECOND);
+        // And what he's winding up then landing first
+        const longestWindup = Math.max(...def.boss!.attacks.map((a) => a.windup));
+        const waitTicks = patternTicks + Math.ceil(longestWindup * TICKS_PER_SECOND);
         bloat.bossState!.nextNap = sim.tick;
         sim.step();
         expect(sim["isNapping"](bloat)).toBe(false);
-        // Down once the last ring's out, with nothing new started meanwhile
-        for (let i = 0; i < patternTicks && !sim["isNapping"](bloat); i++) {
+        // Down once the last ring's out. Meanwhile he fights on with nothing that fires more,
+        // rather than standing idle for the seconds between the swarm's rings.
+        const started: string[] = [];
+        let last = bloat.bossState!.windup;
+        for (let i = 0; i < waitTicks && !sim["isNapping"](bloat); i++) {
             sim.step();
-            expect(bloat.bossState!.windup).toBeUndefined();
+            const windup = bloat.bossState!.windup;
+            if (windup && windup !== last) {
+                started.push(windup.attack.name);
+                expect(windup.attack.pattern, windup.attack.name).toBeUndefined();
+            }
+            last = windup;
         }
         expect(sim["isNapping"](bloat)).toBe(true);
         expect(sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid)).toBe(false);
+        expect(started.length).toBeGreaterThan(0);
     });
 
     it("drop nothing off their adds, and have no visitors, in their rooms", () => {

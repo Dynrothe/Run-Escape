@@ -12567,7 +12567,8 @@ export class Sim {
             ...(rows && { rows, startTick: this.tick }),
         });
         // Rings that hold come one at a time: each volley's is in before the next, and the last's
-        // before another such attack (BulletPatternDef.hold)
+        // before another such attack (BulletPatternDef.hold). Its interval is what leaves the time
+        // for each to close in (theatre.ts's closingRing; a test checks every boss's).
         if (pattern.hold) {
             const state = enemy.bossState!;
             state.ringsUntil = Math.max(
@@ -14028,10 +14029,11 @@ export class Sim {
         if (this.tick < state.nextNap) {
             return false;
         }
-        // Not while his volleys are still coming (a swarm's three rings): he goes down once
-        // they're out, starting nothing new meanwhile, so the whole nap is there to reach him
+        // Not while his volleys are still coming (a swarm's three rings, seconds apart): he goes
+        // down once they're out, so the whole nap is there to reach him. Meanwhile he fights on,
+        // starting nothing that fires more (stepBoss's pick), rather than standing idle.
         if (this.emitters.some((emitter) => emitter.enemyUid === enemy.uid && !emitter.ambient)) {
-            return true;
+            return false;
         }
         state.napEnd = this.tick + secondsToTicks(naps.seconds);
         enemy.vx = enemy.vy = 0;
@@ -14188,6 +14190,8 @@ export class Sim {
             akkha?.uid === enemy.uid && this.tick < akkha.orbsUntil
                 ? def.akkha?.orbAttacks
                 : undefined;
+        // A nap that's due waits only for his volleys to go out (stepNap): nothing that fires more
+        const napDue = def.naps !== undefined && this.tick >= (state.nextNap ?? Infinity);
         const usable: number[] = [];
         def.attacks.forEach((attack, i) => {
             if (
@@ -14197,6 +14201,7 @@ export class Sim {
                 (!attack.enraged || state.enraged) &&
                 // Not a ring that holds while the last is still coming in (startPattern)
                 !(attack.pattern?.hold && this.tick < (state.ringsUntil ?? 0)) &&
+                !(attack.pattern && napDue) &&
                 (!attack.expert || this.expert) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
                 !(attack.parasite && this.parasite) &&
