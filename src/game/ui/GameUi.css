@@ -556,6 +556,7 @@
 
 .ui-volume {
     width: 140px;
+    height: 24px;
     accent-color: var(--ui-orange);
 }
 
@@ -672,6 +673,13 @@
     color: var(--ui-white);
 }
 
+/* The dev server's map generator, out of the row with the links */
+.ui-title-dev {
+    position: absolute;
+    left: 10px;
+    bottom: 8px;
+}
+
 /* A narrow window: the corner stacks, and the hint wraps to stay clear of it */
 @media (max-width: 1040px) and (pointer: fine) {
     .ui-title-utils {
@@ -692,7 +700,8 @@
 
 /* Opens the changelog */
 .ui-version {
-    padding: 2px 4px;
+    min-height: 28px;
+    padding: 2px 6px;
     font-family: "OSRS Small", sans-serif;
     font-size: 14px;
     color: var(--ui-text);
@@ -1595,12 +1604,13 @@
 }
 
 .ui-quest-tracker-title {
+    min-height: 24px;
     font-family: "OSRS Bold", sans-serif;
     font-size: 16px;
     color: var(--ui-orange);
     background: none;
     border: none;
-    padding: 0;
+    padding: 3px 0 3px 8px;
     cursor: pointer;
 }
 
@@ -1660,12 +1670,13 @@
 }
 
 .ui-dps {
+    min-height: 24px;
     font: inherit;
     font-size: 16px;
     color: var(--ui-white);
     background: none;
     border: none;
-    padding: 0;
+    padding: 3px 0 3px 8px;
     cursor: pointer;
     pointer-events: auto;
 }
@@ -3404,6 +3415,14 @@
     font-size: 13px;
 }
 
+/* How many level ups are still to come, beside the heading */
+.ui-levelup-more {
+    margin-left: 10px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    color: var(--ui-text-dim);
+}
+
 /* The game's own confirmation, over everything but the notice to turn a phone sideways */
 .ui-confirm {
     z-index: 20;
@@ -3461,4 +3480,20 @@
 .ui-version,
 .ui-buff {
     text-shadow: var(--ui-outline);
+}
+
+/* For anyone who's asked for less motion: the pulses hold still */
+@media (prefers-reduced-motion: reduce) {
+    .ui-slot-evolve::after {
+        animation: none;
+        opacity: 0.8;
+    }
+
+    .ui-boss-phase-new {
+        animation: none;
+    }
+
+    .ui-xp-fill {
+        transition: none;
+    }
 }

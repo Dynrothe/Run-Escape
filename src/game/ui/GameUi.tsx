@@ -954,7 +954,6 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         {t("ui.title.not_saving")}
                     </button>
                 )}
-                {import.meta.env.DEV && <MapGeneratorButton client={client} />}
                 <button className="ui-version" onClick={() => setChangelogOpen(true)}>
                     {t("ui.title.whats_new", { version: GAME_VERSION })}
                 </button>
@@ -978,6 +977,12 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
             {/* Top right, as by the minimap in a run. After the menu, so Tab reaches
                 Singleplayer first. */}
             <SoundOrb client={client} muted={ui.audio.muted} className="ui-title-sound" />
+            {/* A corner of its own, as it pushed the row above over the how-to-play line */}
+            {import.meta.env.DEV && (
+                <div className="ui-title-dev">
+                    <MapGeneratorButton client={client} />
+                </div>
+            )}
             {savePanel ? null : choicePanel ? (
                 choicePanel
             ) : ui.unreadableSave ? (
@@ -3053,6 +3058,7 @@ function HpBar({ client }: { client: GameClient }): JSX.Element | null {
             <div className="ui-hp-fill" style={{ transform: `scaleX(${hp / maxHp})` }} />
             <span>
                 {hp} / {maxHp}
+                {poisoned && ` · ${t("ui.hud.poisoned")}`}
             </span>
         </div>
     );
@@ -3229,6 +3235,12 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                           : hilt
                             ? t("ui.levelup.title.hilt")
                             : t("ui.levelup.title.regular")}
+                    {/* In the heading, as a phone has no room for the line under it */}
+                    {ui.levelUpsLeft > 0 && (
+                        <span className="ui-levelup-more">
+                            {tp("ui.levelup.more_after", ui.levelUpsLeft)}
+                        </span>
+                    )}
                 </h2>
                 <p className="ui-subtle">
                     {spell

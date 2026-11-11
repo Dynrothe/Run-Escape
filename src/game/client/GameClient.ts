@@ -3350,6 +3350,8 @@ export class GameClient implements GameFrameHandler {
             this.store.set({
                 overlay: "levelUp",
                 choices: getChoiceViews(sim),
+                // The ones still to come after this
+                levelUpsLeft: Math.max(0, sim.pendingLevelUps - 1),
                 chest: undefined,
                 waitingOn,
             });

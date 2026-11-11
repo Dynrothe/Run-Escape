@@ -25,6 +25,7 @@
 }
 
 .ui-log-tab {
+    min-height: 28px;
     padding: 2px 10px;
     font: inherit;
     color: inherit;
