@@ -40,7 +40,7 @@ import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { emptyStats } from "../../src/game/content/types";
 import { RUN_LENGTH } from "../../src/game/content/waves";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
-import { UpgradeChoice, kerisPickRank } from "../../src/game/core/Upgrades";
+import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
@@ -67,7 +67,7 @@ import {
     wallGap,
 } from "./bossReads";
 import { loadRegionData } from "./collision-snapshot";
-import { TombsLog, chestAction, tombsMove, useItems } from "./tombsBot";
+import { TombsLog, chestAction, kerisPickRank, tombsMove, useItems } from "./tombsBot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
 // The Tombs' invocations

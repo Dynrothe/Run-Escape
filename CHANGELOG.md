@@ -12,9 +12,10 @@ the version in the corner).
 - The Android app keeps to the website's version of the game too, by trippy22: on Wi-Fi, a new one
   downloads in the background, and plays when you restart the game from its menu or reopen the app.
 - The keris partisans, by Okaeri: they're picked like the Ancient spells now. Only the plain
-  Keris partisan is offered on a level up. Once you've found a jewel in the Tombs of Amascut,
-  its level 2 lets you choose which keris it becomes: plain, or one of your jewels'. It keeps its
-  level, and it's your only keris that run.
+  Keris partisan is offered on a level up, so once you've found a jewel in the Tombs of Amascut
+  you'll see a keris more often. At the plain one's level 2 you choose which keris it becomes:
+  plain, or one of your jewels'. It keeps its level and the bonus damage it came with (Rare or
+  better, where a jewel's keris came Very rare), and it's your only keris that run.
 
 ### Fixed
 

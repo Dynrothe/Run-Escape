@@ -319,22 +319,6 @@ const PASSIVE_LEVEL_WEIGHT = 6;
 const NEW_WEAPON_WEIGHT = 1;
 const NEW_PASSIVE_WEIGHT = 0.5;
 
-// Rolls the options offered on a level up: VS rules, roughly. An evolution is
-// always offered when it's ready, and luck can add a fourth option and makes
-// rarer rolls likelier. Class weapons are only offered to their own style.
-// Weapons, passives and evolutions still locked behind a map task are left
-// out; with no unlocked set everything is in. In endless runs weapons and
-// most passives level on past their last level, so there's always something.
-// For the balance bots: a keris pick's place in its list (the plain one 0, Amascut's last), so a
-// bot sets the best jewel it has, as a player would. 0 for anything else, so the Ancient spell
-// and hilt picks go as they always have.
-export function kerisPickRank(choice: UpgradeChoice): number {
-    if (choice.kind !== "hilt" || getWeapon(choice.into).family !== "keris") {
-        return 0;
-    }
-    return getWeapon(choice.weaponId).hilts?.into.findIndex((i) => i.weaponId === choice.into) ?? 0;
-}
-
 // Whether a weapon can be offered new: unlocked, or one whose pick keeps it as one of its
 // choices (Ice Burst, the plain keris) with any of the picks unlocked. A jewel found before the
 // Kalphite Queen's kill still comes as the plain keris that takes it.
@@ -356,9 +340,13 @@ export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>)
     if (!hilts || weapon.level !== hilts.level) {
         return [];
     }
-    // Keeping what it is stays a pick, unlocked or not (see isOfferable)
+    // Keeping what it is stays a pick even while it's locked, for a weapon level ups offer (see
+    // isOfferable): the plain keris, taking a jewel found before the Queen's kill. Not for a burst
+    // an adventurer starts with: the Menaphite's Smoke Burst has no pick till the Desert's beaten.
     const into = hilts.into.filter(
-        ({ weaponId }) => weaponId === weapon.def.id || isAvailable(getWeapon(weaponId), unlocked),
+        ({ weaponId }) =>
+            (weaponId === weapon.def.id && !weapon.def.pickOnly) ||
+            isAvailable(getWeapon(weaponId), unlocked),
     );
     // Nothing else to pick from yet (Ice Burst before the Desert's beaten)
     if (into.length < 2) {
@@ -400,6 +388,12 @@ export function fitsWithPouch(
     return weapons.length + 1 <= maxWeapons - 1 + (magic ? 1 : 0);
 }
 
+// Rolls the options offered on a level up: VS rules, roughly. An evolution is
+// always offered when it's ready, and luck can add a fourth option and makes
+// rarer rolls likelier. Class weapons are only offered to their own style.
+// Weapons, passives and evolutions still locked behind a map task are left
+// out; with no unlocked set everything is in. In endless runs weapons and
+// most passives level on past their last level, so there's always something.
 export function rollChoices(
     rng: Rng,
     weapons: readonly WeaponState[],

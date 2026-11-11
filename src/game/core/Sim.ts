@@ -2540,9 +2540,9 @@ export class Sim {
         return Math.round(SKIP_BASE_COST * 2 ** this.skips * this.coinScale);
     }
 
-    // A level up's rewards can be skipped for coins, but not a pick (a godsword's
-    // hilt, an Ancient spell, a keris), or the coins and shark offered when there's nothing else. Only by
-    // someone choosing: a downed player can't spend the party's coins.
+    // A level up's rewards can be skipped for coins, but not a pick (a godsword's hilt, an Ancient
+    // spell, a keris), or the coins and shark offered when there's nothing else. Only by someone
+    // choosing: a downed player can't spend the party's coins.
     get canSkip(): boolean {
         return (
             this.isChoosing() &&

@@ -246,6 +246,8 @@ describe("hilts", () => {
         const choices = hiltChoices(weapon("ice_burst", 2), beaten);
         expect(choices.map((c) => c.kind === "hilt" && c.into)).toEqual(["ice_burst", ...spells]);
         expect(hiltChoices(weapon("smoke_burst", 2), beaten).length).toBe(4);
+        // The Menaphite's Smoke Burst has no pick before the Desert's beaten, not even Ice Burst
+        expect(hiltChoices(weapon("smoke_burst", 2), new Set())).toEqual([]);
         // Only at that level, so keeping Ice Burst doesn't ask again
         expect(hiltChoices(weapon("ice_burst", 1), beaten)).toEqual([]);
         expect(hiltChoices(weapon("ice_burst", 3), beaten)).toEqual([]);

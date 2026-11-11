@@ -34,13 +34,14 @@ import { WARDENS } from "../../src/game/content/tombs";
 import { CombatStyle, emptyStats } from "../../src/game/content/types";
 import { getWeapon, getWeaponStyle } from "../../src/game/content/weapons";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
-import { UpgradeChoice, kerisPickRank } from "../../src/game/core/Upgrades";
+import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { loadRegionData } from "./collision-snapshot";
 import {
     DEFAULT_PATH_ORDER,
     TombsLog,
     chestAction,
+    kerisPickRank,
     kite,
     setPathOrder,
     setSmites,

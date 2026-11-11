@@ -285,7 +285,10 @@ unlocks something in the game.
       2 a pick of the plain one and every jewel's keris found, as Ice Burst's picks the run's
       Ancient spell (no pick with no jewel found). The level-up window says so (`isKeris`). A
       jewel found before the Queen's kill still brings the plain one in to take it
-      (`isOfferable` in `core/Upgrades.ts`). Kalphites and scarabs, Kephri and her
+      (`isOfferable` in `core/Upgrades.ts`). A jewel's keris comes on the plain one's offer, so
+      its bonus damage is a Rare's or better, not the Very rare's it had when jewels were offered
+      themselves. The balance bots set the best jewel found (`kerisPickRank` in
+      `scripts/game/tombsBot.ts`). Kalphites and scarabs, Kephri and her
       scarabs too, carry the `kalphite` tag (not the Scarab Mages, who are men), and `slayer`
       gives them the third. Breaching is
       `WeaponDef.breach` (6% a stab, 30% on a kalphite, triple, diamond bolts' Armour Piercing on

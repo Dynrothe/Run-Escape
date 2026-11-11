@@ -142,7 +142,8 @@ version and how to run it.
       Amascut's chest brings in a keris of its own. They're picked as the Ancient spells are:
       only the plain keris is offered on a level up, and at its level 2 you pick which it
       becomes, the plain one or a jewel's you've found, keeping its level (with no jewel found
-      there's no pick). **Of breaching** now and then finds a gap in
+      there's no pick). A jewel found before the Kalphite Queen's kill still brings the plain
+      keris in, to take it. **Of breaching** now and then finds a gap in
       the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
       every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
       **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
