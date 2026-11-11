@@ -9,6 +9,8 @@ the version in the corner).
 
 - The Windows app keeps to the website's version of the game, by trippy22: Windows and website
   players can play co-op together between releases too. Download the new app once to get it.
+- The Android app keeps to the website's version of the game too, by trippy22: a new one
+  downloads in the background and plays the next time you open the app.
 
 ## 0.30.0 - 2026-11-09
 
