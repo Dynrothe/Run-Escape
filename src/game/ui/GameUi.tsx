@@ -1726,6 +1726,8 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                     (isMapUnlocked(save, map.id) ? "" : " ui-card-locked")
                 }
                 aria-pressed={selected}
+                // Long names are cut off on the tile
+                title={shownMapName}
                 onMouseMove={() => setPeek(map.id)}
                 onFocus={() => setPeek(map.id)}
                 onBlur={() => setPeek(undefined)}
@@ -1739,11 +1741,18 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
+                        role="img"
                         aria-label={t("ui.map.beaten_hard")}
+                        title={t("ui.map.beaten_hard")}
                     />
                 ) : (
                     (save.mapVictories[map.id] ?? 0) > 0 && (
-                        <span className="ui-beaten" aria-label={t("ui.map.beaten")} />
+                        <span
+                            className="ui-beaten"
+                            role="img"
+                            aria-label={t("ui.map.beaten")}
+                            title={t("ui.map.beaten")}
+                        />
                     )
                 )}
             </button>
@@ -1824,6 +1833,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 key={peek ?? ui.mapId}
                 save={save}
                 map={getMap(peek ?? ui.mapId)}
+                expertShown={ui.coop.status === "offline"}
                 picked={(peek ?? ui.mapId) === ui.mapId ? ui.fightStage : undefined}
                 onPick={
                     (peek ?? ui.mapId) === ui.mapId ? (s) => client.pickFightStage(s) : undefined
@@ -1853,11 +1863,13 @@ function stageVictoryText(map: MapDef, stage: number | undefined): string {
 function MapDetails({
     save,
     map,
+    expertShown,
     picked,
     onPick,
 }: {
     save: SaveData;
     map: MapDef;
+    expertShown: boolean;
     // A fight in parts: the part picked to play, and picking one (the selected map's only)
     picked?: number;
     onPick?: (stage: number | undefined) => void;
@@ -1972,7 +1984,72 @@ function MapDetails({
             <div className="ui-card-text ui-card-description">
                 <RichText text={mapDescription(map)} />
             </div>
+            <MapModes save={save} map={map} expertShown={expertShown} />
             <MapTasks save={save} mapId={map.id} />
+        </div>
+    );
+}
+
+// What endless, hard and expert do on this map, or what it takes to open them: the switches in the
+// bar below only have room for their names
+function MapModes({
+    save,
+    map,
+    expertShown,
+}: {
+    save: SaveData;
+    map: MapDef;
+    expertShown: boolean;
+}): JSX.Element | null {
+    // The Tombs go by their invocations instead
+    if (map.tombs) {
+        return null;
+    }
+    const name = mapName(map);
+    const modes: { key: string; name: string; text: string; open: boolean }[] = [];
+    if (!map.raid) {
+        const open = isEndlessUnlocked(save, map.id);
+        modes.push({
+            key: "endless",
+            name: t("ui.endless.name"),
+            text: map.fight
+                ? t("ui.endless.tooltip.fight")
+                : map.fun
+                  ? t("ui.endless.tooltip.fun")
+                  : open
+                    ? t("ui.endless.tooltip.open")
+                    : t("ui.endless.tooltip.locked", { map: name }),
+            open: open || map.fight !== undefined,
+        });
+    }
+    const hardOpen = isHardUnlocked(save, map.id);
+    modes.push({
+        key: "hard",
+        name: t("ui.hard.name"),
+        text: hardOpen ? t("ui.hard.tooltip.open") : t("ui.hard.tooltip.locked", { map: name }),
+        open: hardOpen,
+    });
+    if (map.raid && expertShown) {
+        const expertOpen = isExpertUnlocked(save, map.id);
+        modes.push({
+            key: "expert",
+            name: t("ui.expert.name"),
+            text: expertOpen
+                ? t("ui.expert.tooltip.open")
+                : t("ui.expert.tooltip.locked", { map: name }),
+            open: expertOpen,
+        });
+    }
+    return (
+        <div className="ui-map-modes">
+            {modes.map((mode) => (
+                <div
+                    key={mode.key}
+                    className={"ui-map-mode" + (mode.open ? "" : " ui-map-mode-locked")}
+                >
+                    <span className="ui-map-mode-name">{mode.name}:</span> {mode.text}
+                </div>
+            ))}
         </div>
     );
 }
