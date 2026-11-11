@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { LANGS, Lang, setLang, t, useLang } from "../i18n";
 import "./LanguageSetting.css";
+import { releaseFocus } from "./menuKeys";
 
 // A language as it's offered: its name, and who translated it in small text underneath
 export function LanguageName({ lang }: { lang: Lang }): JSX.Element {
@@ -75,7 +76,7 @@ function LanguageDropdown(): JSX.Element {
                 aria-expanded={open}
                 onClick={(e) => {
                     setOpen(!open);
-                    e.currentTarget.blur();
+                    releaseFocus(e);
                 }}
             >
                 <LanguageName lang={currentLang} />
@@ -99,7 +100,7 @@ function LanguageDropdown(): JSX.Element {
                                 (currentLang === id ? " ui-language-active" : "")
                             }
                             onClick={(e) => {
-                                e.currentTarget.blur();
+                                releaseFocus(e);
                                 setOpen(false);
                                 setLang(id);
                             }}

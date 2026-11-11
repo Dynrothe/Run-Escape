@@ -28,6 +28,9 @@ the version in the corner).
   which way it went.
 - Play again, by Jp66600: the results of any map you play on your own can start it again, not
   only a boss fight's.
+- Menu keys, by Jp66600: Esc goes back from the map select, Skills, the Armoury, Quests, the
+  collection log and the invocation board, and Enter starts the run or presses the results'
+  main button.
 
 ### Changed
 
@@ -50,6 +53,8 @@ the version in the corner).
 - Easier to read, by Jp66600: secondary text, locked items and disabled buttons are lighter.
   Penalties, defeats and unreached goals share one red, quests not started a brighter one, and
   what's written over the world and quest names have a black outline.
+- The keyboard's focus, by Jp66600: a clearer yellow ring, and a button pressed from the keyboard
+  or a controller keeps your place.
 
 ### Fixed
 

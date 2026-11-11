@@ -1,5 +1,6 @@
 import { fmtNum, t } from "../i18n";
 import { KeyHint } from "./PadHint";
+import { releaseFocus } from "./menuKeys";
 
 // Takes none of a level up's rewards (X), for coins from the run: dearer each
 // time
@@ -23,7 +24,7 @@ export function SkipButton({
                 onClick={(e) => {
                     onSkip();
                     // Give the number keys back
-                    e.currentTarget.blur();
+                    releaseFocus(e);
                 }}
             >
                 <KeyHint keyLabel="X" pad="north" /> {t("canvas.skip", { cost: fmtNum(cost) })}

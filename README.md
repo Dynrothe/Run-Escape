@@ -86,7 +86,8 @@ loads are quick.
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
 the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
-**Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
+**Space** uses it; on a controller it's A (cross), and on a touch screen the round button. In the
+menus, **Esc** goes back and **Enter** starts the run, or plays again from the results.
 
 Hover over bag items, weapons, passives, worn equipment or Armoury pieces (including their
 upgrades) to read their descriptions.

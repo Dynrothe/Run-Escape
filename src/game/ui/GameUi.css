@@ -3254,6 +3254,35 @@
     color: var(--ui-white);
 }
 
+/* A key that's a word ("Enter") beside a button's text */
+.ui-choice-key.ui-word-key {
+    width: auto;
+    font-size: 13px;
+}
+
+/* Where the keyboard is, on every screen. Drawn inward in lists that scroll, which would cut it
+   off, and over a controller's highlight there's nothing to do: that's its own, below. */
+.ui-contents :focus-visible {
+    outline: 2px solid var(--ui-yellow);
+    outline-offset: 1px;
+}
+
+.ui-select-scroll :focus-visible,
+.ui-armoury-slots :focus-visible,
+.ui-quest-list :focus-visible,
+.ui-log-list :focus-visible,
+.ui-settings-body :focus-visible,
+.ui-pause-columns :focus-visible,
+.ui-invocations-grid :focus-visible,
+.ui-coop-rooms :focus-visible {
+    outline-offset: -2px;
+}
+
+:root[data-input="pad"] .ui-contents :focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
+
 /* What's written over the world, which can be any colour behind it */
 .ui-hud-right,
 .ui-xp-level,

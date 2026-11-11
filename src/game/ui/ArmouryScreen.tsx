@@ -16,6 +16,7 @@ import { Coins } from "./Coins";
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 import { StatLine } from "./StatLine";
+import { useMenuKeys } from "./menuKeys";
 
 // The Armoury: every piece of gear caskets give, slot by slot, as the
 // upgrades have made it (faded until it's been found). Beside them, the piece
@@ -28,6 +29,7 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
     const [selected, setSelected] = useState(
         () => CASKET_GEAR.find((g) => save.foundGear.includes(g.id))?.id ?? CASKET_GEAR[0].id,
     );
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-armoury">

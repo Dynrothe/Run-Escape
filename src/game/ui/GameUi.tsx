@@ -110,6 +110,7 @@ import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
+import { releaseFocus, useMenuKeys } from "./menuKeys";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
 
 type Props = {
@@ -248,7 +249,7 @@ export function Toggle({
             onClick={(e) => {
                 onToggle();
                 // Give Enter and Space back to the screen
-                e.currentTarget.blur();
+                releaseFocus(e);
             }}
         >
             {on ? t("ui.common.on") : t("ui.common.off")}
@@ -456,7 +457,7 @@ function FrameRateSetting({ ui, client }: ScreenProps): JSX.Element {
                     onClick={(e) => {
                         client.setFrameRate(rate);
                         // Give Enter and Space back to the screen
-                        e.currentTarget.blur();
+                        releaseFocus(e);
                     }}
                 >
                     {t(`settings.frame_rate.${rate}`)}
@@ -479,7 +480,7 @@ function GitHubLink(): JSX.Element {
             rel="noopener noreferrer"
             title={t("ui.title.github")}
             aria-label={t("ui.title.github")}
-            onClick={(e) => e.currentTarget.blur()}
+            onClick={releaseFocus}
         >
             <svg className="ui-title-link-logo" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
@@ -497,7 +498,7 @@ function DiscordLink(): JSX.Element {
             rel="noopener noreferrer"
             title={t("ui.title.discord")}
             aria-label={t("ui.title.discord")}
-            onClick={(e) => e.currentTarget.blur()}
+            onClick={releaseFocus}
         >
             <svg className="ui-title-link-logo" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z" />
@@ -554,7 +555,7 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 className="ui-button ui-button-small"
                 onClick={(e) => {
                     client.exportSave();
-                    e.currentTarget.blur();
+                    releaseFocus(e);
                 }}
             >
                 {t("settings.save.export")}
@@ -565,7 +566,7 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 title={ui.saveBlock ? t("settings.save.import_disabled_title") : undefined}
                 onClick={(e) => {
                     fileInput.current?.click();
-                    e.currentTarget.blur();
+                    releaseFocus(e);
                 }}
             >
                 {t("settings.save.import")}
@@ -597,7 +598,7 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
                             className="ui-button ui-button-small"
                             onClick={(e) => {
                                 client.exportUnreadableSave(key);
-                                e.currentTarget.blur();
+                                releaseFocus(e);
                             }}
                         >
                             {t("settings.save.export")}
@@ -605,7 +606,7 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
                         <button
                             className="ui-button ui-button-small"
                             onClick={(e) => {
-                                e.currentTarget.blur();
+                                releaseFocus(e);
                                 if (
                                     window.confirm(
                                         t("settings.unreadable.confirm_delete", { when }),
@@ -1004,6 +1005,15 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
         : endlessShown
           ? "ui.select.enter.endless"
           : "ui.select.enter";
+    // With the invocation board open, its own keys
+    useMenuKeys(
+        board
+            ? {}
+            : {
+                  onBack: () => client.showScreen("title"),
+                  onConfirm: () => void client.startRun(),
+              },
+    );
     return (
         <div className="ui-fill ui-select">
             <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(map)} />
@@ -1028,7 +1038,8 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
-                    <KeyHint pad="start" /> {t(enterKey, { map: shownMapName })}
+                    <KeyHint keyLabel="Enter" pad="start" className="ui-choice-key ui-word-key" />{" "}
+                    {t(enterKey, { map: shownMapName })}
                 </button>
             </div>
             {board && map.tombs && (
@@ -1992,6 +2003,7 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const [style, setStyle] = useState<CombatStyle>(() => getCharacter(ui.characterId).style);
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
@@ -3577,6 +3589,9 @@ function PauseModal({
 // Co-op's results name everyone else
 const MAX_LISTED_TEAMMATES = 3;
 
+// How long the results ignore Escape and Enter after they come up
+const RESULT_KEY_GUARD_MS = 600;
+
 // "Coif, Rune boots and Seers ring", or the first few "and 5 more"
 function listNames(names: string[], most = 3): string {
     if (names.length === 0) {
@@ -3665,6 +3680,12 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
     // The map just played: a win can have moved the pick on to the one it opened
     const played = getMap(result?.mapId ?? ui.mapId);
     const canRetry = !ui.coop.room;
+    useMenuKeys({
+        onBack: () => client.leaveRun(),
+        onConfirm: () => (canRetry ? client.retry() : client.leaveRun()),
+        // Esc is the pause key: a run can end just as it's pressed
+        guardMs: RESULT_KEY_GUARD_MS,
+    });
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-result">
@@ -3986,6 +4007,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     {/* On your own: straight into the same map again */}
                     {canRetry && (
                         <button className="ui-button ui-button-go" onClick={() => client.retry()}>
+                            <KeyHint keyLabel="Enter" className="ui-choice-key ui-word-key" />{" "}
                             {played.fight
                                 ? nextFightLabel(played, victory, result?.stage)
                                 : t("ui.result.play_again")}
