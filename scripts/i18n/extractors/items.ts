@@ -1,7 +1,7 @@
 import { CHARACTERS } from "../../../src/game/content/characters";
 import { CASKETS, CASKET_TIERS, GEAR, GEAR_SLOTS, UTILITY } from "../../../src/game/content/items";
 import { PASSIVES } from "../../../src/game/content/passives";
-import { POWER_UPS, THRALLS } from "../../../src/game/content/powerups";
+import { POWER_UPS, THRALLS, getPolymorphLooks } from "../../../src/game/content/powerups";
 import { RARITIES, RARITY_ORDER } from "../../../src/game/content/rarity";
 import { SETS } from "../../../src/game/content/sets";
 import { SHOP_UPGRADES } from "../../../src/game/content/shop";
@@ -61,8 +61,14 @@ export default function extract(): Record<string, string> {
         if (powerUp.effect.kind === "laps" || powerUp.effect.kind === "polymorph") {
             strings[`powerup.${powerUp.id}.shout`] = powerUp.effect.shout;
         }
-        if (powerUp.effect.kind === "polymorph" && powerUp.effect.penguin.shout) {
-            strings[`powerup.${powerUp.id}.penguin_shout`] = powerUp.effect.penguin.shout;
+        if (powerUp.effect.kind === "polymorph") {
+            // Each animal's own line, if it has one (sheep by variant)
+            for (const { look, variant, def } of getPolymorphLooks(powerUp.effect)) {
+                if (def.shout) {
+                    const name = look === "sheep" ? `sheep_${variant}` : look;
+                    strings[`powerup.${powerUp.id}.${name}_shout`] = def.shout;
+                }
+            }
         }
     }
     for (const thrall of THRALLS) strings[`thrall.${thrall.id}.name`] = thrall.name;

@@ -353,21 +353,17 @@ export type EnemyAnim = "walk" | "idle" | "attack" | "death" | "jump";
 // Going over a ditch: from one side to the other, starting at tick start
 export type EnemyJump = { fromX: number; fromY: number; toX: number; toY: number; start: number };
 // Turned into an animal by a polymorph power-up (powerUpId's) till endTick, which of them by look
-// and variant (getPolymorphLook), harmless: a sheep (or the penguin) wanders dirX, dirY at speed
-// tiles a tick till turnTick, when it picks another way, and the rare one walks away from the
-// player. Each tick it says shout at shoutChance, with one of shoutSounds.
+// and variant (getPolymorphLook), harmless: a sheep (or the penguin) wanders dirX, dirY till
+// turnTick, when it picks another way, and the rare one walks away from the player. Whether it's
+// one at the moment is Sim.polymorphOf's to say.
 export type EnemyPolymorph = {
     powerUpId: string;
     look: PolymorphKind;
     variant: number;
     endTick: number;
-    speed: number;
     dirX: number;
     dirY: number;
     turnTick: number;
-    shout: string;
-    shoutChance: number;
-    shoutSounds: number[];
 };
 export type EnemyFlung = {
     fromX: number;

@@ -1,5 +1,5 @@
 import { tr } from "../i18n";
-import { PolymorphKind, PolymorphLook, PowerUpDef, PowerUpEffect, ThrallDef } from "./types";
+import { PolymorphEffect, PolymorphKind, PolymorphLook, PowerUpDef, ThrallDef } from "./types";
 
 // Power-ups drop now and then from enemies and are used as soon as they're
 // walked over. A kill is likelier to drop one the longer it's been since the
@@ -238,7 +238,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
                 {
                     npcId: 2697,
@@ -246,7 +245,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
                 {
                     npcId: 2698,
@@ -254,7 +252,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
                 {
                     npcId: 2699,
@@ -262,7 +259,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
                 {
                     npcId: 2788,
@@ -270,7 +266,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5344,
                     deathSeq: 5343,
                     scale: 1,
-                    bossScale: 1,
                 },
                 // Red, Green, Blue and Yellow Sheep
                 {
@@ -279,7 +274,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
                 {
                     npcId: 5306,
@@ -287,7 +281,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
                 {
                     npcId: 5307,
@@ -295,7 +288,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
                 {
                     npcId: 5308,
@@ -303,7 +295,6 @@ export const POWER_UPS: PowerUpDef[] = [
                     walkSeq: 5334,
                     deathSeq: 5336,
                     scale: 1,
-                    bossScale: 1,
                 },
             ],
             // Elites and bosses, which go on fighting as golden sheep (a headbutt for every attack)
@@ -324,7 +315,6 @@ export const POWER_UPS: PowerUpDef[] = [
                 walkSeq: 3568,
                 deathSeq: -1,
                 scale: 1,
-                bossScale: 1,
                 chance: 1 / 1000,
                 shout: "Beh?",
                 shoutSounds: [1855],
@@ -337,7 +327,6 @@ export const POWER_UPS: PowerUpDef[] = [
                 walkSeq: 233,
                 deathSeq: -1,
                 scale: 1,
-                bossScale: 1,
                 chance: 1 / 3000,
             },
             shout: "Baa!",
@@ -430,10 +419,19 @@ export function powerUpDescription(powerUp: PowerUpDef): string {
     return tr(`powerup.${powerUp.id}.desc`, powerUp.description);
 }
 
+// A polymorph power-up's effect (EnemyPolymorph's powerUpId)
+export function getPolymorphEffect(id: string): PolymorphEffect {
+    const effect = getPowerUp(id).effect;
+    if (effect.kind !== "polymorph") {
+        throw new Error("Not a polymorph: " + id);
+    }
+    return effect;
+}
+
 // Each animal a polymorph can turn something into, with what it's known by (EnemyPolymorph's look
 // and variant)
 export function getPolymorphLooks(
-    effect: Extract<PowerUpEffect, { kind: "polymorph" }>,
+    effect: PolymorphEffect,
 ): { look: PolymorphKind; variant: number; def: PolymorphLook }[] {
     return [
         ...effect.sheep.map((def, variant) => ({ look: "sheep" as const, variant, def })),
@@ -444,7 +442,7 @@ export function getPolymorphLooks(
 }
 
 export function getPolymorphLook(
-    effect: Extract<PowerUpEffect, { kind: "polymorph" }>,
+    effect: PolymorphEffect,
     look: PolymorphKind,
     variant: number,
 ): PolymorphLook {

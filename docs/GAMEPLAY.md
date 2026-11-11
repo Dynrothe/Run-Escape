@@ -274,7 +274,10 @@ version and how to run it.
       in 1000 is the penguin dressed as a sheep from Cold War, which wanders with the rest but
       says "Beh?", and when it's killed two KGP agents run out of it and off the screen. One in
       3000 is an odd one that wanders off the other way. Whatever turns up while it lasts is a
-      sheep too, till the rest turn back.
+      sheep too, till the rest turn back, and picked up again it's the same flock for longer. A
+      frozen sheep stays put. What can't be hit stays as it is, and so do ordinary enemies that
+      can't move or carry a flag, and anything busy with its part in a fight (a boss's totem, a
+      rolling boulder, one walking off the map).
 - **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween

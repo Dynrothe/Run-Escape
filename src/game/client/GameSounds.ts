@@ -1,7 +1,7 @@
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
 import { SOUNDS } from "../content/sounds";
@@ -59,7 +59,10 @@ export function getGameSoundIds(): number[] {
     for (const powerUp of POWER_UPS) {
         ids.push(powerUp.sound, powerUp.endSound ?? -1, powerUp.hitSound ?? -1);
         if (powerUp.effect.kind === "polymorph") {
-            ids.push(...powerUp.effect.shoutSounds, ...(powerUp.effect.penguin.shoutSounds ?? []));
+            ids.push(...powerUp.effect.shoutSounds);
+            for (const { def } of getPolymorphLooks(powerUp.effect)) {
+                ids.push(...(def.shoutSounds ?? []));
+            }
         }
     }
     for (const thrall of THRALLS) {

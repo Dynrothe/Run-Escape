@@ -64,6 +64,7 @@ import {
     POWER_UP_LIFETIME,
     POWER_UP_MIN_GAP,
     THRALLS,
+    getPolymorphEffect,
     getPolymorphLook,
     getPowerUp,
 } from "../content/powerups";
@@ -169,6 +170,7 @@ import {
     LightingDef,
     MapDef,
     PlayerEffectDef,
+    PolymorphEffect,
     PolymorphKind,
     PowerUpDef,
     PowerUpEffect,
@@ -209,7 +211,7 @@ import {
     rollCasketTier,
 } from "./Loot";
 import { MovementRules, movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
-import { Rng } from "./Rng";
+import { Rng, hashChance } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
     MAX_PASSIVES,
@@ -469,6 +471,10 @@ const STUN_RECOVER_SECONDS = 0.4;
 // chance each time it turns
 const POLYMORPH_TURN_SECONDS = [1, 2.5];
 const POLYMORPH_GRAZE_CHANCE = 0.25;
+// At most one of a polymorphed flock says its line this often, so a big one can't fill the screen
+const POLYMORPH_SHOUT_GAP = 0.4;
+// What each of a polymorphed enemy's own rolls is for (Sim.polymorphRoll), so no two share one
+const POLYMORPH_ROLL = { look: 0, variant: 1, graze: 2, heading: 3, turn: 4, shout: 5, sound: 6 };
 // Ticks an impact's spot animations are kept (ImpactDef): they play out once in that
 const IMPACT_TICKS = 90;
 // A press of the fight's button held this long when it can't go off yet, and only if the boss
@@ -1633,12 +1639,12 @@ export class Sim {
     // While a Drill Demon lasts
     private lapsEndTick = 0;
     private laps?: Extract<PowerUpEffect, { kind: "laps" }>;
-    // The last polymorph used: what spawns before endTick is turned too
-    private polymorphing?: {
-        def: PowerUpDef;
-        effect: Extract<PowerUpEffect, { kind: "polymorph" }>;
-        endTick: number;
-    };
+    // The last polymorph used: what comes along before endTick is turned too
+    private polymorphing?: { def: PowerUpDef; effect: PolymorphEffect; endTick: number };
+    // When the next of a polymorphed flock may say its line (POLYMORPH_SHOUT_GAP)
+    private nextPolymorphShout = 0;
+    // How far an enemy's pushed off the others it's inside (separate)
+    private readonly apart: Vec2 = { x: 0, y: 0 };
     // Fun maps: run second the next random boss is due, the last one picked
     // (not picked twice running), and when the next chat lines are due
     private nextFunBossSeconds = Infinity;
@@ -4049,6 +4055,11 @@ export class Sim {
             if (enemy.dead) {
                 continue;
             }
+            // Itself again once a polymorph's over, whatever it's doing
+            if (enemy.polymorph && this.tick >= enemy.polymorph.endTick) {
+                enemy.polymorph = undefined;
+                enemy.animStart = this.tick;
+            }
             if (enemy.leaving) {
                 this.stepLeaving(enemy, enemy.leaving);
                 continue;
@@ -4116,9 +4127,20 @@ export class Sim {
                 this.stepEcho(enemy);
                 continue;
             }
-            // A sheep or a penguin in disguise wanders about and does nothing else (a golden sheep,
-            // an elite or a boss, fights on below)
-            if (enemy.polymorph && this.stepPolymorph(enemy, enemy.polymorph)) {
+            // While a polymorph lasts, what's come to be able to be an animal since (risen, say) is
+            // turned too. A sheep or a penguin in disguise wanders about and does nothing else (a
+            // golden sheep, an elite or a boss, fights on below).
+            const polymorphing = this.polymorphing;
+            if (!enemy.polymorph && polymorphing && this.tick < polymorphing.endTick) {
+                this.polymorphEnemy(
+                    enemy,
+                    polymorphing.def,
+                    polymorphing.effect,
+                    polymorphing.endTick,
+                );
+            }
+            const polymorph = this.polymorphOf(enemy);
+            if (polymorph && this.stepPolymorph(enemy, polymorph)) {
                 continue;
             }
 
@@ -4288,41 +4310,9 @@ export class Sim {
                 // Keep apart from each other, and bump into other factions
                 // (bosses and elites don't get dragged into it: they'd lose
                 // their caskets; nor does one after the player)
-                let sepX = 0;
-                let sepY = 0;
                 const faction = enemy.boss || enemy.aggro ? undefined : enemy.def.faction;
-                // Akkha walks through his own shadows: they never move, so one straight between him
-                // and where he's going held him there for good, never drawn into a dead one's quarter
-                const ownShadow = enemy.def.boss?.akkha?.shadows.enemyId;
-                let foe: Enemy | undefined;
-                this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
-                    // A rolling boulder goes its own way, through whatever's there (Ba-Ba's cracked
-                    // one starts on her altar, under her)
-                    if (other === enemy || other.rolls || other.def.id === ownShadow) {
-                        return;
-                    }
-                    const ox = enemy.x - other.x;
-                    const oy = enemy.y - other.y;
-                    const minDist = enemy.radius + other.radius;
-                    const distSq = ox * ox + oy * oy;
-                    if (
-                        faction !== undefined &&
-                        other.def.faction !== undefined &&
-                        other.def.faction !== faction &&
-                        !other.boss &&
-                        !other.elite &&
-                        !other.dead &&
-                        distSq < (minDist + 0.1) * (minDist + 0.1)
-                    ) {
-                        foe = other;
-                    }
-                    if (distSq < minDist * minDist && distSq > 1e-6) {
-                        const d = Math.sqrt(distSq);
-                        const push = (minDist - d) / d;
-                        sepX += ox * push;
-                        sepY += oy * push;
-                    }
-                });
+                const apart = this.apart;
+                const foe = this.separate(enemy, faction, apart);
 
                 const touching = distance < enemy.radius + player.radius + 0.1;
                 if (lapping) {
@@ -4338,8 +4328,8 @@ export class Sim {
                     moveX += dirX * enemy.speed * pace;
                     moveY += dirY * enemy.speed * pace;
                 }
-                moveX += sepX * 0.25;
-                moveY += sepY * 0.25;
+                moveX += apart.x * 0.25;
+                moveY += apart.y * 0.25;
 
                 const lane = bossState?.windup?.lane ?? bossState?.surge?.lane;
                 if (fleeing || lapping) {
@@ -4387,33 +4377,8 @@ export class Sim {
                 moveX = moveY = 0;
                 enemy.vx = enemy.vy = 0;
             }
-            if (moveX !== 0 || moveY !== 0) {
-                if (enemy.def.ghost) {
-                    enemy.x += moveX;
-                    enemy.y += moveY;
-                } else {
-                    moveCircle(flight?.grid ?? grid, enemy, moveX, moveY, enemy.radius);
-                }
-            }
-
-            // Crowd round the player rather than standing inside them (and
-            // the player can't walk into what doesn't move, or what's solid)
-            const ox = enemy.x - player.x;
-            const oy = enemy.y - player.y;
-            const minDist = enemy.radius + player.radius;
-            const distSq = ox * ox + oy * oy;
-            if (distSq < minDist * minDist && distSq > 1e-6) {
-                const d = Math.sqrt(distSq);
-                const push = Math.min((minDist - d) / d, 0.5);
-                if (stationary || enemy.def.solid) {
-                    moveCircle(grid, player, -ox * push, -oy * push, player.radius);
-                } else if (enemy.def.ghost) {
-                    enemy.x += ox * push;
-                    enemy.y += oy * push;
-                } else {
-                    moveCircle(flight?.grid ?? grid, enemy, ox * push, oy * push, enemy.radius);
-                }
-            }
+            this.moveEnemy(enemy, moveX, moveY, flight?.grid ?? grid);
+            this.keepOffPlayer(enemy, player, flight?.grid ?? grid);
 
             if (enemy.bossState) {
                 this.stepBoss(enemy, distance);
@@ -4431,6 +4396,81 @@ export class Sim {
             ) {
                 enemy.anim = "walk";
                 enemy.animStart = this.tick;
+            }
+        }
+    }
+
+    // How far an enemy's pushed off the others it's inside (out), and, for one with a faction to
+    // fight for, another faction's enemy it's up against
+    private separate(enemy: Enemy, faction: EnemyDef["faction"], out: Vec2): Enemy | undefined {
+        let sepX = 0;
+        let sepY = 0;
+        // Akkha walks through his own shadows: they never move, so one straight between him
+        // and where he's going held him there for good, never drawn into a dead one's quarter
+        const ownShadow = enemy.def.boss?.akkha?.shadows.enemyId;
+        let foe: Enemy | undefined;
+        this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
+            // A rolling boulder goes its own way, through whatever's there (Ba-Ba's cracked
+            // one starts on her altar, under her)
+            if (other === enemy || other.rolls || other.def.id === ownShadow) {
+                return;
+            }
+            const ox = enemy.x - other.x;
+            const oy = enemy.y - other.y;
+            const minDist = enemy.radius + other.radius;
+            const distSq = ox * ox + oy * oy;
+            if (
+                faction !== undefined &&
+                other.def.faction !== undefined &&
+                other.def.faction !== faction &&
+                !other.boss &&
+                !other.elite &&
+                !other.dead &&
+                distSq < (minDist + 0.1) * (minDist + 0.1)
+            ) {
+                foe = other;
+            }
+            if (distSq < minDist * minDist && distSq > 1e-6) {
+                const d = Math.sqrt(distSq);
+                const push = (minDist - d) / d;
+                sepX += ox * push;
+                sepY += oy * push;
+            }
+        });
+        out.x = sepX;
+        out.y = sepY;
+        return foe;
+    }
+
+    // An enemy's step: through walls if it's a ghost, round them on grid if not
+    private moveEnemy(enemy: Enemy, x: number, y: number, grid: ArenaGrid | FlightGrid): void {
+        if (x !== 0 || y !== 0) {
+            if (enemy.def.ghost) {
+                enemy.x += x;
+                enemy.y += y;
+            } else {
+                moveCircle(grid, enemy, x, y, enemy.radius);
+            }
+        }
+    }
+
+    // Crowd round the player rather than standing inside them (and the player can't walk into
+    // what doesn't move, or what's solid). grid: what the enemy moves on.
+    private keepOffPlayer(enemy: Enemy, player: Player, grid: ArenaGrid | FlightGrid): void {
+        const ox = enemy.x - player.x;
+        const oy = enemy.y - player.y;
+        const minDist = enemy.radius + player.radius;
+        const distSq = ox * ox + oy * oy;
+        if (distSq < minDist * minDist && distSq > 1e-6) {
+            const d = Math.sqrt(distSq);
+            const push = Math.min((minDist - d) / d, 0.5);
+            if (enemy.def.stationary || enemy.def.solid) {
+                moveCircle(this.grid, player, -ox * push, -oy * push, player.radius);
+            } else if (enemy.def.ghost) {
+                enemy.x += ox * push;
+                enemy.y += oy * push;
+            } else {
+                moveCircle(grid, enemy, ox * push, oy * push, enemy.radius);
             }
         }
     }
@@ -14721,7 +14761,9 @@ export class Sim {
                 enemy.echo ||
                 enemy.echoDash ||
                 // A boss echoing its partner, only while it's free
-                this.isBusyBoss(enemy)
+                this.isBusyBoss(enemy) ||
+                // nor a harmless sheep (a golden one fights on)
+                this.isSheep(enemy)
             ) {
                 continue;
             }
@@ -16991,6 +17033,10 @@ export class Sim {
     // nothing and isn't the player's kill, so luring armies into each other
     // isn't free experience, and the ground doesn't fill with bones far away)
     private killEnemy(enemy: Enemy, cause: "player" | "nuke" | "enemy" = "player"): void {
+        // An animal it's been turned into, if it is one now, is what it dies as
+        const polymorph = this.polymorphOf(enemy);
+        enemy.polymorph = polymorph;
+        const sheep = polymorph !== undefined && polymorph.look !== "golden";
         this.countDeath(enemy);
         enemy.dead = true;
         enemy.hp = 0;
@@ -16999,8 +17045,7 @@ export class Sim {
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
         // A polymorphed penguin's cover is blown, and the agents inside make a run for it
-        const polymorph = enemy.polymorph;
-        if (polymorph?.look === "penguin" && this.tick < polymorph.endTick) {
+        if (polymorph?.look === "penguin") {
             this.emit({
                 type: "polymorphEscape",
                 powerUpId: polymorph.powerUpId,
@@ -17086,7 +17131,10 @@ export class Sim {
         }
         if (cause !== "nuke") {
             this.splitUp(enemy);
-            this.explode(enemy);
+            // (a sheep just dies as one)
+            if (!sheep) {
+                this.explode(enemy);
+            }
         }
 
         const stolen = enemy.bossState?.stolenCoins ?? 0;
@@ -19900,6 +19948,16 @@ export class Sim {
                 break;
             case "polymorph":
                 endTick = this.polymorph(def, effect);
+                // Used again while it lasts, it's one polymorph for longer: this hero's starts
+                // over, and anyone else's lasts as long, so none ends while it's still on
+                this.powerUps = this.powerUps.filter(
+                    (active) => active.id !== def.id || active.hero !== this.hero.index,
+                );
+                for (const active of this.powerUps) {
+                    if (active.id === def.id) {
+                        active.endTick = endTick;
+                    }
+                }
                 message = "Baa! Everything round you turns into sheep!";
                 break;
         }
@@ -19915,34 +19973,41 @@ export class Sim {
         this.emit({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
     }
 
-    // Turns everything on the map into sheep, and its elites and bosses into golden ones, till
-    // endTick; whatever turns up meanwhile is turned too (spawnEnemy), till the same tick. When
-    // they turn back.
-    private polymorph(
-        def: PowerUpDef,
-        effect: Extract<PowerUpEffect, { kind: "polymorph" }>,
-    ): number {
+    // Turns everything on the map into an animal till endTick (elites and bosses into golden
+    // sheep); whatever comes along meanwhile is turned too (spawnEnemy, stepEnemies), till the
+    // same tick. Used again while it lasts, it's the same flock for longer.
+    private polymorph(def: PowerUpDef, effect: PolymorphEffect): number {
         const endTick = Math.max(
             this.polymorphing?.endTick ?? 0,
             this.tick + this.powerUpTicks(effect.seconds),
         );
         this.polymorphing = { def, effect, endTick };
         for (const enemy of this.enemies) {
-            this.polymorphEnemy(enemy, def, effect, endTick);
+            const turned = enemy.polymorph;
+            if (
+                turned &&
+                !enemy.dead &&
+                turned.powerUpId === def.id &&
+                this.tick < turned.endTick
+            ) {
+                turned.endTick = endTick;
+            } else {
+                this.polymorphEnemy(enemy, def, effect, endTick);
+            }
         }
         return endTick;
     }
 
-    // One enemy into an animal till endTick, unless it's busy with something that can't be cut
-    // short. Elites and bosses only look the part: they go on fighting as they were.
-    private polymorphEnemy(
-        enemy: Enemy,
-        def: PowerUpDef,
-        effect: Extract<PowerUpEffect, { kind: "polymorph" }>,
-        endTick: number,
-    ): void {
-        if (
-            enemy.dead ||
+    // Whether an enemy can be an animal now. Not what can't be hit, nor what can't move or carries
+    // a flag, as a Drill Demon leaves them, unless it's an elite or a boss (whose look is all that
+    // changes); nor one busy with what can't be cut short or with its part in a fight (a boss's
+    // totem, a walker on its way to it, a rolling boulder), which may be given it after it's turned.
+    private canPolymorph(enemy: Enemy): boolean {
+        const def = enemy.def;
+        if (def.unhittable || (!enemy.boss && !enemy.elite && (def.stationary || def.flees))) {
+            return false;
+        }
+        return !(
             enemy.leaving ||
             enemy.totemOf ||
             enemy.risingEnd !== 0 ||
@@ -19951,12 +20016,39 @@ export class Sim {
             enemy.seeks !== undefined ||
             enemy.echo ||
             enemy.echoDash
-        ) {
+        );
+    }
+
+    // The animal an enemy's been turned into, as it is now: none once the polymorph's over, nor
+    // while it can't be one (canPolymorph). One killed as an animal stays one, to die as it.
+    polymorphOf(enemy: Enemy): EnemyPolymorph | undefined {
+        const polymorph = enemy.polymorph;
+        if (!polymorph || enemy.dead) {
+            return polymorph;
+        }
+        return this.tick < polymorph.endTick && this.canPolymorph(enemy) ? polymorph : undefined;
+    }
+
+    // Turned into an animal that does nothing but wander (a golden sheep fights on)
+    private isSheep(enemy: Enemy): boolean {
+        const polymorph = this.polymorphOf(enemy);
+        return polymorph !== undefined && polymorph.look !== "golden";
+    }
+
+    // One enemy into an animal till endTick, if it can be one (canPolymorph). Elites and bosses
+    // only look the part: they go on fighting as they were.
+    private polymorphEnemy(
+        enemy: Enemy,
+        def: PowerUpDef,
+        effect: PolymorphEffect,
+        endTick: number,
+    ): void {
+        if (enemy.dead || !this.canPolymorph(enemy)) {
             return;
         }
         let look: PolymorphKind = "sheep";
         let variant = 0;
-        const roll = polymorphRoll(enemy.uid, this.tick);
+        const roll = this.polymorphRoll(enemy, POLYMORPH_ROLL.look);
         if (enemy.boss || enemy.elite) {
             look = "golden";
         } else if (roll < effect.rare.chance) {
@@ -19964,18 +20056,15 @@ export class Sim {
         } else if (roll < effect.rare.chance + effect.penguin.chance) {
             look = "penguin";
         } else {
-            variant = Math.floor(polymorphRoll(enemy.uid, this.tick + 1) * effect.sheep.length);
+            variant = Math.floor(
+                this.polymorphRoll(enemy, POLYMORPH_ROLL.variant) * effect.sheep.length,
+            );
         }
-        const animal = getPolymorphLook(effect, look, variant);
         enemy.polymorph = {
             powerUpId: def.id,
             look,
             variant,
             endTick,
-            speed: enemy.def.stationary ? 0 : enemy.speed * effect.speed,
-            shoutChance: 1 / (effect.shoutSeconds * TICKS_PER_SECOND),
-            shoutSounds: animal.shoutSounds ?? effect.shoutSounds,
-            shout: animal.shout ?? effect.shout,
             dirX: 0,
             dirY: 0,
             turnTick: this.tick,
@@ -19983,101 +20072,110 @@ export class Sim {
     }
 
     // A polymorphed enemy's tick: true if it's an animal that does nothing else, hurting no one;
-    // false once it's itself again, or for a golden sheep, which carries on as it was
+    // false for a golden sheep, which carries on as it was
     private stepPolymorph(enemy: Enemy, polymorph: EnemyPolymorph): boolean {
-        if (this.tick >= polymorph.endTick) {
-            enemy.polymorph = undefined;
-            enemy.animStart = this.tick;
-            return false;
-        }
-        if (polymorphRoll(enemy.uid, this.tick + 3) < polymorph.shoutChance) {
-            const sounds = polymorph.shoutSounds;
-            this.emit({
-                type: "enemyShout",
-                enemyUid: enemy.uid,
-                text: polymorph.shout,
-                sound: sounds[Math.floor(polymorphRoll(enemy.uid, this.tick + 4) * sounds.length)],
-                x: enemy.x,
-                y: enemy.y,
-            });
-        }
+        const effect = getPolymorphEffect(polymorph.powerUpId);
+        this.polymorphShout(enemy, polymorph, effect);
         if (polymorph.look === "golden") {
             return false;
         }
         enemy.anim = "walk";
         const player = this.player;
-        const dx = player.x - enemy.x;
-        const dy = player.y - enemy.y;
-        const distance = fm.hypot(dx, dy);
-        let dirX = 0;
-        let dirY = 0;
-        if (polymorph.look === "rare") {
-            // The odd one out wanders off the other way
-            const step = this.temp;
-            if (this.fleeFrom(enemy, dx, dy, distance, step)) {
-                dirX = step.x;
-                dirY = step.y;
-            }
-        } else {
-            if (this.tick >= polymorph.turnTick) {
-                // Now and then it stops to graze, and otherwise it's off some way at random
-                if (polymorphRoll(enemy.uid, this.tick) < POLYMORPH_GRAZE_CHANCE) {
-                    polymorph.dirX = polymorph.dirY = 0;
-                } else {
-                    const angle = polymorphRoll(enemy.uid, this.tick + 1) * Math.PI * 2;
-                    polymorph.dirX = fm.cos(angle);
-                    polymorph.dirY = fm.sin(angle);
-                }
-                const [shortest, longest] = POLYMORPH_TURN_SECONDS;
-                const seconds =
-                    shortest + polymorphRoll(enemy.uid, this.tick + 2) * (longest - shortest);
-                polymorph.turnTick = this.tick + secondsToTicks(seconds);
-            }
-            dirX = polymorph.dirX;
-            dirY = polymorph.dirY;
-        }
+        const grid = this.getMoveGrid(enemy.def);
+        const speed = enemy.speed * effect.speed;
         const fromX = enemy.x;
         const fromY = enemy.y;
-        // Knockback still throws it about, and the flock keeps apart as the crowd does
-        let moveX = enemy.vx + dirX * polymorph.speed;
-        let moveY = enemy.vy + dirY * polymorph.speed;
+        // Knockback still throws it about, frozen or not, as it does the rest
+        let moveX = enemy.vx;
+        let moveY = enemy.vy;
         enemy.vx *= 0.75;
         enemy.vy *= 0.75;
-        this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
-            if (other === enemy || other.rolls) {
-                return;
-            }
-            const ox = enemy.x - other.x;
-            const oy = enemy.y - other.y;
-            const minDist = enemy.radius + other.radius;
-            const distSq = ox * ox + oy * oy;
-            if (distSq < minDist * minDist && distSq > 1e-6) {
-                const d = Math.sqrt(distSq);
-                const push = (minDist - d) / d;
-                moveX += ox * push * 0.25;
-                moveY += oy * push * 0.25;
-            }
-        });
-        if (moveX !== 0 || moveY !== 0) {
-            if (enemy.def.ghost) {
-                enemy.x += moveX;
-                enemy.y += moveY;
+        let dirX = 0;
+        let dirY = 0;
+        if (enemy.frozen > 0) {
+            // Held where it is, as anything frozen is
+            enemy.frozen--;
+        } else {
+            if (polymorph.look === "rare") {
+                // The odd one out wanders off the other way
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const step = this.temp;
+                if (this.fleeFrom(enemy, dx, dy, fm.hypot(dx, dy), step)) {
+                    dirX = step.x;
+                    dirY = step.y;
+                }
             } else {
-                moveCircle(this.getMoveGrid(enemy.def), enemy, moveX, moveY, enemy.radius);
+                if (this.tick >= polymorph.turnTick) {
+                    // Now and then it stops to graze, and otherwise it's off some way at random
+                    if (this.polymorphRoll(enemy, POLYMORPH_ROLL.graze) < POLYMORPH_GRAZE_CHANCE) {
+                        polymorph.dirX = polymorph.dirY = 0;
+                    } else {
+                        const angle =
+                            this.polymorphRoll(enemy, POLYMORPH_ROLL.heading) * Math.PI * 2;
+                        polymorph.dirX = fm.cos(angle);
+                        polymorph.dirY = fm.sin(angle);
+                    }
+                    const [shortest, longest] = POLYMORPH_TURN_SECONDS;
+                    const seconds =
+                        shortest +
+                        this.polymorphRoll(enemy, POLYMORPH_ROLL.turn) * (longest - shortest);
+                    polymorph.turnTick = this.tick + secondsToTicks(seconds);
+                }
+                dirX = polymorph.dirX;
+                dirY = polymorph.dirY;
+            }
+            // And the flock keeps apart as the crowd does, picking no fights
+            const apart = this.apart;
+            this.separate(enemy, undefined, apart);
+            moveX += dirX * speed + apart.x * 0.25;
+            moveY += dirY * speed + apart.y * 0.25;
+            if (dirX !== 0 || dirY !== 0) {
+                enemy.yaw = yawFromVector(dirX, dirY);
             }
         }
+        this.moveEnemy(enemy, moveX, moveY, grid);
         // Up against a wall, a sheep turns another way next tick
         if (
             polymorph.look !== "rare" &&
             (dirX !== 0 || dirY !== 0) &&
-            fm.hypot(enemy.x - fromX, enemy.y - fromY) < polymorph.speed * 0.5
+            fm.hypot(enemy.x - fromX, enemy.y - fromY) < speed * 0.5
         ) {
             polymorph.turnTick = this.tick + 1;
         }
-        if (dirX !== 0 || dirY !== 0) {
-            enemy.yaw = yawFromVector(dirX, dirY);
-        }
+        this.keepOffPlayer(enemy, player, grid);
         return true;
+    }
+
+    // Now and then it says its line (about every shoutSeconds each), but no more than one of a
+    // flock every POLYMORPH_SHOUT_GAP seconds, or a big one would fill the screen with them
+    private polymorphShout(enemy: Enemy, polymorph: EnemyPolymorph, effect: PolymorphEffect): void {
+        if (
+            this.tick < this.nextPolymorphShout ||
+            this.polymorphRoll(enemy, POLYMORPH_ROLL.shout) >=
+                1 / (effect.shoutSeconds * TICKS_PER_SECOND)
+        ) {
+            return;
+        }
+        this.nextPolymorphShout = this.tick + secondsToTicks(POLYMORPH_SHOUT_GAP);
+        const look = getPolymorphLook(effect, polymorph.look, polymorph.variant);
+        const sounds = look.shoutSounds ?? effect.shoutSounds;
+        this.emit({
+            type: "enemyShout",
+            enemyUid: enemy.uid,
+            text: look.shout ?? effect.shout,
+            sound: sounds[
+                Math.floor(this.polymorphRoll(enemy, POLYMORPH_ROLL.sound) * sounds.length)
+            ],
+            x: enemy.x,
+            y: enemy.y,
+        });
+    }
+
+    // [0, 1) for one of a polymorphed enemy's own choices this tick (POLYMORPH_ROLL): the same on
+    // every co-op copy, without drawing on the sim's rng
+    private polymorphRoll(enemy: Enemy, salt: number): number {
+        return hashChance(enemy.uid, this.tick, 0, salt);
     }
 
     // The middle of the thickest crowd within range of the player, going by
@@ -20879,15 +20977,6 @@ export class Sim {
         )?.at;
         return Math.max(0, (finalBossAt ?? RUN_LENGTH) - this.mapSeconds);
     }
-}
-
-// [0, 1) from an enemy and a tick, for which way a polymorphed one wanders: the same on every co-op
-// copy, without drawing on the sim's rng
-function polymorphRoll(uid: number, tick: number): number {
-    let h = Math.imul(uid ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(tick + 1, 0xc2b2ae35);
-    h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
-    h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 // A name with "The" in front, as it reads partway through a sentence
