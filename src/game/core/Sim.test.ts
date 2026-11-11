@@ -5968,10 +5968,15 @@ describe("random events", () => {
 
     test("active effects have descriptions", () => {
         const sim = createSim();
+        // A buff's described by what it gives (a turkey's feast borrows a potion's look)
+        const potion = getItem("super_combat_potion");
+        if (potion.kind !== "utility" || potion.use.kind !== "buff") {
+            throw new Error("Expected a potion");
+        }
         sim.buffs = [
             {
-                itemId: "super_combat_potion",
-                stats: { might: 0.25 },
+                itemId: potion.id,
+                stats: potion.use.stats,
                 cures: false,
                 startTick: 0,
                 endTick: 100,
@@ -6010,10 +6015,7 @@ describe("random events", () => {
             harmful: true,
             description: "-0.3 armour",
         });
-        const potion = getItem("super_combat_potion");
-        expect(potion.kind).toBe("utility");
-        if (potion.kind !== "utility") throw new Error("Expected a utility item");
-        expect(effects[1].description).toBe(potion.description);
+        expect(effects[1].description).toBe("+25% damage, +1 armour, +10% weapon speed");
         expect(effects[2].description).toBe("+20% movement speed, Cures poison and boss debuffs");
         expect(effects[3].description).toBe(getPowerUp("stopwatch").description);
         expect(effects[4].description).toBe("Revives you once if you fall.");
