@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream";
@@ -9,6 +9,8 @@ import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 import { parseRange } from "./desktop/gameServer";
+import { SITE_FILES_NAME, makeSiteFiles } from "./desktop/siteFiles";
+import { LAUNCHER_VERSION } from "./desktop/version";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
@@ -57,6 +59,34 @@ function buildIdFilePlugin(): Plugin {
                 fileName: "build.json",
                 source: JSON.stringify({ build: BUILD_ID }),
             });
+        },
+    };
+}
+
+// Writes game-files.json beside index.html: every file the build made, with its sha256, for a
+// Windows app that follows the website (desktop/siteFiles.ts). After everything's written,
+// public/ included. The slim cache's chunks list themselves, in caches.json.
+function siteFilesPlugin(): Plugin {
+    let outDir = "";
+    let env: Record<string, string> = {};
+    return {
+        name: "site-files",
+        apply: "build",
+        configResolved(config) {
+            outDir = resolve(config.root, config.build.outDir);
+            env = config.env;
+        },
+        closeBundle() {
+            // Also called after a failed build
+            if (!existsSync(join(outDir, "index.html"))) {
+                return;
+            }
+            const files = makeSiteFiles(outDir, BUILD_ID, LAUNCHER_VERSION, {
+                coopUrl: env.VITE_COOP_URL ?? "",
+                runAnalyticsUrl: env.VITE_RUN_ANALYTICS_URL ?? "",
+                cloudSaveUrl: env.VITE_CLOUD_SAVE_URL ?? "",
+            });
+            writeFileSync(join(outDir, SITE_FILES_NAME), JSON.stringify(files, null, 1) + "\n");
         },
     };
 }
@@ -294,6 +324,7 @@ export default defineConfig({
         wasmGzipNoSourceMapPlugin(),
         leaveOutDevMapsPlugin(),
         buildIdFilePlugin(),
+        siteFilesPlugin(),
     ],
     define: {
         __APP_VERSION__: JSON.stringify(version),

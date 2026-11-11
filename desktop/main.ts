@@ -5,10 +5,18 @@ import path from "node:path";
 
 import { cloudSaveUrl, isCloudSaveRequest } from "../src/util/cloudSaveUrl";
 import { runAnalyticsUrl } from "../src/util/runAnalyticsUrl";
-import { GameFolder, pickGameFolder } from "./gameFiles";
+import { GameFolder, canRun, pickGameFolder } from "./gameFiles";
 import { GAME_ORIGIN, getRelayOrigin, serveGame } from "./gameServer";
 import { checkForUpdate, installUpdate, readInstalledGames, removeOldGames } from "./gameUpdate";
 import { GITHUB_SOURCE } from "./releaseSource";
+import { siteBaseUrl, whyNotFollow } from "./siteFiles";
+import {
+    checkSite,
+    findBuild,
+    installSiteBuild,
+    readSiteGames,
+    removeOldSiteGames,
+} from "./siteUpdate";
 import { LAUNCHER_VERSION } from "./version";
 
 const isDev = !app.isPackaged;
@@ -40,6 +48,10 @@ const log = (message: string) =>
 declare const __COOP_URL__: string;
 declare const __RUN_ANALYTICS_URL__: string;
 declare const __CLOUD_SAVE_URL__: string;
+// The website whose build the app plays (GAME_SITE_URL, see build-main.ts). Without it, or when it
+// can't be reached, the app takes GitHub's releases.
+declare const __GAME_SITE_URL__: string;
+const siteBase = siteBaseUrl(__GAME_SITE_URL__);
 
 function openExternally(url: string): void {
     if (/^https?:\/\//.test(url)) {
@@ -141,6 +153,51 @@ async function updateGame(splash: BrowserWindow, current: GameFolder): Promise<v
     }
 }
 
+// Brings the game to the website's build, so co-op can always join the website's players, and
+// gives back its folder. Undefined when the website can't be followed: the release check runs
+// instead. Whatever goes wrong is only logged.
+async function followSite(
+    splash: BrowserWindow,
+    base: string,
+    folders: GameFolder[],
+    current: GameFolder,
+): Promise<GameFolder | undefined> {
+    const cancel = new AbortController();
+    splash.once("closed", () => cancel.abort(new Error("Cancelled by the player")));
+    showSplashStatus(splash, "Checking for updates...");
+    try {
+        const site = await checkSite(base, cancel.signal);
+        const why = whyNotFollow(site.files, LAUNCHER_VERSION, {
+            coopUrl: __COOP_URL__,
+            runAnalyticsUrl: __RUN_ANALYTICS_URL__,
+            cloudSaveUrl: __CLOUD_SAVE_URL__,
+        });
+        if (why) {
+            await log(`Not following the website: ${why}`);
+            return undefined;
+        }
+        const have = await findBuild(folders, site.files.build);
+        if (have) {
+            return have;
+        }
+        const text = `Updating to ${site.files.version}...`;
+        showSplashStatus(splash, text, 0, true);
+        const folder = await installSiteBuild(
+            site,
+            base,
+            app.getPath("userData"),
+            cancel.signal,
+            (fraction) => showSplashStatus(splash, text, fraction, true),
+            [current.path],
+        );
+        await log(`Updated to the website's ${site.files.build}`);
+        return folder;
+    } catch (e) {
+        await log(`The website's build skipped: ${e}`);
+        return undefined;
+    }
+}
+
 function openGame(): BrowserWindow {
     const window = new BrowserWindow({
         width: 1280,
@@ -204,17 +261,30 @@ async function start(): Promise<void> {
     });
 
     const dataDir = app.getPath("userData");
-    const pick = async () =>
-        pickGameFolder(bundledGame, await readInstalledGames(dataDir), LAUNCHER_VERSION);
+    const installed = async () => [
+        ...(await readInstalledGames(dataDir)),
+        ...(await readSiteGames(dataDir)),
+    ];
+    const pick = async () => pickGameFolder(bundledGame, await installed(), LAUNCHER_VERSION);
 
     // No update check in dev: it plays the build it's pointed at
     let splash: BrowserWindow | undefined;
+    let siteGame: GameFolder | undefined;
     if (!isDev) {
         splash = createSplash();
-        await updateGame(splash, await pick());
+        const current = await pick();
+        if (siteBase) {
+            const folders = [bundledGame, ...(await installed())].filter((folder) =>
+                canRun(folder, LAUNCHER_VERSION),
+            );
+            siteGame = await followSite(splash, siteBase, folders, current);
+        }
+        if (!siteGame) {
+            await updateGame(splash, current);
+        }
     }
 
-    const game = isDev ? bundledGame : await pick();
+    const game = isDev ? bundledGame : (siteGame ?? (await pick()));
     if (!existsSync(path.join(game.path, "index.html"))) {
         dialog.showErrorBox("Run Escape", `The game files are missing from ${game.path}.`);
         app.quit();
@@ -229,6 +299,7 @@ async function start(): Promise<void> {
     });
     if (!isDev) {
         await removeOldGames(dataDir, game);
+        await removeOldSiteGames(dataDir, game);
     }
     await log(`Launcher ${LAUNCHER_VERSION}, playing ${game.version} from ${game.path}`);
 }

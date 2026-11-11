@@ -121,11 +121,14 @@ jobs:
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
                   VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
             - run: bun run slim-cache
+            # GAME_SITE_URL is the website the app keeps to (https://example.com/game/): without it,
+            # the app only takes these releases
             - run: bun run desktop:dist
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
                   VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
+                  GAME_SITE_URL: ${{ vars.GAME_SITE_URL }}
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:

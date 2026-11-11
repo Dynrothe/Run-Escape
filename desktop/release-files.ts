@@ -13,15 +13,13 @@ import {
     ManifestChunk,
     changelogSection,
     chunkName,
+    isShipped,
 } from "./gameFiles";
 import { MANIFEST_NAME, chunkAssetName, gameZipName, liteZipName } from "./gameUpdate";
 import { LAUNCHER_VERSION } from "./version";
 
 const DIST = "dist";
 const OUT = "release";
-
-// Source maps are for debugging a hosted build, and they're as big as the game's code
-const isShipped = (file: string) => !file.endsWith(".map") && path.basename(file) !== ".htaccess";
 
 function listFiles(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
