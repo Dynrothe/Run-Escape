@@ -358,7 +358,8 @@ version and how to run it.
       there, solo or in co-op, and nowhere else. Their Rubber chicken strikes in front and behind,
       has ten levels, does 20% more damage to bosses and heals on hit (25% for 3 HP, growing with
       every upgrade, more with rarer ones). They find no other weapons, gear, passives or utility
-      items: only power-ups and shop skills. Birds circle their head all run, as a look, without
+      items: only power-ups and shop skills. Once the chicken's maxed, level ups offer only a
+      shark, never coins, in every mode. Birds circle their head all run, as a look, without
       stunning them. Enemies now and then drop a Cooked turkey, a feast or a fowl trick. Its quests
       are Professor Oddenstein, the Evil Chickens, the Freaky Forester and the Chompy Slayer, whose
       10,000 kills bring the Chompy chick; the Collection log also has Chompy bird drops, the

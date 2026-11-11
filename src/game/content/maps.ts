@@ -440,6 +440,7 @@ export const MAPS: MapDef[] = [
         seasonal: true,
         seasonalCharacter: "avian_assaulter",
         noRandomEvents: ["highwayman"],
+        noLevelUpCoins: true,
     },
 ];
 

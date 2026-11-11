@@ -2031,6 +2031,9 @@ export type MapDef = {
     seasonalCharacter?: string;
     // Random events that never turn up here (RandomEventDef ids)
     noRandomEvents?: string[];
+    // With nothing left to level, a level up offers only the shark, not the coins (Thanksgiving
+    // Harvest, whose one weapon is maxed early)
+    noLevelUpCoins?: boolean;
     // One boss fight and nothing else (Phosani's Nightmare): no waves, no
     // picks and no items, and its final boss rises as the run begins. Outside
     // the campaign's chain like a seasonal map, and open once requires (a map

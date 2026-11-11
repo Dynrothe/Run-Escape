@@ -14,7 +14,8 @@ the version in the corner).
 - The Avian Assaulter, by Happi: everyone plays them in Thanksgiving Harvest, in a chicken outfit
   with birds circling their head. Their Rubber chicken whacks in front and behind, hits bosses
   harder, and heals you as it hits, more with each of its ten levels. They find no other weapons,
-  gear, passives or items, and caskets only pay them coins.
+  gear, passives or items, and caskets only pay them coins. Once the chicken's maxed, level ups
+  offer a shark, not coins.
 - Thanksgiving Harvest's Collection log, by Happi: drops from Chompy birds and cooked turkeys,
   rewards for beating it (a Golden egg for beating it on hard), and the Chompy chick pet for its
   Chompy Slayer quest.

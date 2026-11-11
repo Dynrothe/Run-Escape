@@ -2604,7 +2604,7 @@ export class Sim {
     }
 
     private roll(): UpgradeChoice[] {
-        return rollChoices(
+        const choices = rollChoices(
             this.rng,
             this.weapons,
             this.passives,
@@ -2616,6 +2616,8 @@ export class Sim {
             this.maxPassives,
             this.hero.banished,
         );
+        // Filtered after the roll, so the run's RNG goes as it did
+        return this.map.noLevelUpCoins ? choices.filter((c) => c.kind !== "coins") : choices;
     }
 
     // Picking a godsword's hilt, an Ancient spell or a keris, which can't be rerolled

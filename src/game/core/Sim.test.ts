@@ -216,6 +216,46 @@ describe("Sim", () => {
         expect(getWeapon("scimitar").bossDamage).toBeUndefined();
     });
 
+    test("a maxed Rubber chicken's level ups offer the shark but no coins, in every mode", () => {
+        // Every player's offers, each with their chicken at its last level
+        const maxed = (sim: Sim) =>
+            sim.heroes.flatMap((hero) => {
+                sim["useHeroAt"](hero.index);
+                hero.weapons[0].level = hero.weapons[0].def.levels.length;
+                return Array.from({ length: 20 }, () => sim["roll"]()).flat();
+            });
+        const party = new Sim({
+            grid: makeGrid(openField(), 1000, 1000),
+            mapId: "thanksgiving",
+            characterId: "avian_assaulter",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party: [0, 1].map((i) => ({
+                name: "player " + i,
+                characterId: "avian_assaulter",
+                metaStats: emptyStats(),
+            })),
+        });
+        const runs = {
+            normal: createSim("avian_assaulter", 1, "thanksgiving"),
+            hard: createSim("avian_assaulter", 1, "thanksgiving", emptyStats(), false, true),
+            party,
+        };
+        for (const [mode, sim] of Object.entries(runs)) {
+            const kinds = new Set(maxed(sim).map((choice) => choice.kind));
+            expect([mode, [...kinds]]).toEqual([mode, ["food"]]);
+        }
+        // Endless levels the chicken on past its last level instead
+        const endless = createSim("avian_assaulter", 1, "thanksgiving", emptyStats(), true);
+        const kinds = new Set(maxed(endless).map((choice) => choice.kind));
+        expect([...kinds]).toEqual(["weaponLevel"]);
+        // Other maps keep the coins
+        const lumbridge = createSim("avian_assaulter", 1, "lumbridge");
+        expect(maxed(lumbridge)).toContainEqual({ kind: "coins", amount: 25 });
+    });
+
     test("Avian gets coins but no item from a casket", () => {
         const sim = createSim("avian_assaulter", 1, "thanksgiving");
         expect(sim.maxPassives).toBe(0);

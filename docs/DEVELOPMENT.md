@@ -1193,9 +1193,11 @@ plays them on that map, solo or in co-op, and they're in no roster. `CharacterDe
 keeps their outfit's slots showing over passive and casket gear, without changing its stats. Their
 Rubber chicken is `pickOnly`: they start with it and can upgrade it, but it isn't offered to
 others. `maxWeapons` leaves room only for it, and `noItems` gives no passive slots and no casket
-item (caskets pay only coins). The chicken's `WeaponDef.bloodHeal` rolls its heal on every hit,
-and each upgrade adds to `WeaponState.healGain` by the offer's rarity (`BLOOD_HEAL_GAIN` in
-`Sim.ts`); `bossDamage` adds damage against bosses for that weapon only. `damageAgainst` is the
+item (caskets pay only coins). The map's `noLevelUpCoins` drops the coins from the level up's
+fallback once the chicken's maxed, leaving the shark: `Sim.roll` filters them after
+`rollChoices`, so the RNG goes as before. Endless never falls back, since the chicken levels on.
+The chicken's `WeaponDef.bloodHeal` rolls its heal on every hit, and each upgrade adds to
+`WeaponState.healGain` by the offer's rarity (`BLOOD_HEAL_GAIN` in `Sim.ts`); `bossDamage` adds damage against bosses for that weapon only. `damageAgainst` is the
 adventurer's bonus against enemies with those tags, on that hero's own damage only.
 `CharacterDef.overheadSpotAnim` is a looping effect over each hero, only for show: the Avian's is
 the cache's stun birds, without a stun. It's in the base bake and slim cache with the other
