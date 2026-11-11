@@ -40,6 +40,8 @@ const BODY_PART_SLOTS = [
 
 // The default male look from character creation
 export const DEFAULT_MALE_KITS = [0, 10, 18, 26, 33, 36, 42];
+// and the female one (body type B), which has no jaw
+export const DEFAULT_FEMALE_KITS = [45, -1, 56, 61, 67, 70, 79];
 
 // Body colours: hair, torso, legs, feet, skin. Each player colour index picks a
 // replacement for the first colour in its row (index 0 keeps the original).
@@ -63,6 +65,15 @@ const BODY_COLORS: number[][] = [
     [4626, 11146, 6439, 12, 4758, 10270],
     [4550, 4537, 5681, 5673, 5790, 6806, 8076, 4574, 17050, 0, 127, -31821, -17991],
 ];
+
+// How many choices each body colour has
+export const BODY_COLOR_COUNTS: readonly number[] = BODY_COLORS.map((row) => row.length);
+
+// The colour a body colour's choice paints (HSL, as the cache packs it), for a swatch
+export function getBodyColorHsl(part: number, choice: number): number {
+    const choices = BODY_COLORS[part] ?? [];
+    return (choices[choice] ?? choices[0] ?? 0) & 0xffff;
+}
 
 export type PlayerAppearance = {
     female: boolean;

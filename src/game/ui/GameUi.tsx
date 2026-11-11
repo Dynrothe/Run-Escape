@@ -58,7 +58,12 @@ import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
-import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    COLLECTION_LOG_OBJ,
+    REFUND_SPRITE,
+    TITLE_TAB_SPRITES,
+    WARDROBE_ICON_OBJ,
+} from "../content/titleIcons";
 import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID, trophyName } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef, Stats } from "../content/types";
@@ -110,6 +115,7 @@ import { SoundOrb } from "./SoundOrb";
 import { StatLine } from "./StatLine";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
+import { WardrobeScreen } from "./WardrobeScreen";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
@@ -181,6 +187,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "armoury":
             screen = <ArmouryScreen ui={ui} client={client} />;
+            break;
+        case "wardrobe":
+            screen = <WardrobeScreen ui={ui} client={client} />;
             break;
         case "quests":
             screen = <QuestScreen ui={ui} client={client} />;
@@ -936,6 +945,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             name={t("ui.title.armoury")}
                             spriteId={TITLE_TAB_SPRITES.armoury}
                             onClick={() => client.showScreen("armoury")}
+                        />
+                        <TitleTile
+                            name={t("ui.title.wardrobe")}
+                            objId={WARDROBE_ICON_OBJ}
+                            onClick={() => client.showScreen("wardrobe")}
                         />
                         <TitleTile
                             name={t("ui.title.quests")}

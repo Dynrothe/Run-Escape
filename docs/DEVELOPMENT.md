@@ -1428,6 +1428,38 @@ it beside the character). So a pet can't change a run, and co-op's copies agree 
   that's the follower (it's the one with the Metamorphosis option). The other one looks different
   for some pets.
 
+### The Wardrobe
+
+The Wardrobe (`ui/WardrobeScreen.tsx`, a tile on the title screen) is the player's look: a body
+(body type A or B, a kit for each body part and the five body colours, as character creation
+picks them) and an outfit, slot by slot, worn on every adventurer. It's looks only, like a pet:
+the sim never sees it.
+
+- **What's in it:** `content/cosmeticItems.ts` is generated from the cache by
+  `scripts/cache/cosmetics.ts`: every item worn outside the weapon slot that both bodies can wear,
+  one of each look (items with the same worn models and colours are one piece), with a rarity by
+  its value in the cache (and the discontinued holiday rares made Very rare). The same script
+  lists the kits character creation offers. Run it again after moving to a newer cache. Prices
+  go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, paid from banked coins like the
+  Armoury. An unlocked adventurer's own pieces are the player's for nothing
+  (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
+- **Saved** as `SaveData.cosmetics` (the pieces bought) and `SaveData.look` (a `WardrobeLook`).
+  `cleanLook` drops what this game doesn't know, and for the save, pieces it can't wear.
+- **Worn:** `getCharacterAppearance(characterId, look)` puts the body on and the outfit over the
+  adventurer's own pieces; a slot set to -1 shows the body. In a run (`getRunAppearance`) gear
+  from passives and caskets goes over the outfit, unless `look.overGear` keeps it on top. The
+  weapon slot is always the run's. Adventurers who look like someone (`wearsWardrobe`: a fixed
+  outfit, or kits of their own) keep their look.
+- **Trying on:** a piece picked in the store is shown on the menus' adventurer
+  (`GameClient.previewLook`) until the Wardrobe's left. The Wardrobe holds the title camera still,
+  turned with its arrows (`turnMenuCamera`).
+- **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
+  so it needed no relay change; `beginCoopRun` cleans each hero's.
+- **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each
+  slot at once (shields one at a time, as a piece covering the shield slot would hide one), and
+  every worn item and power-up look on body type B too. That's what lets a deployed game draw a
+  body type B at all: before the Wardrobe, nothing in the game wore items' female models.
+
 ### What gets drawn
 
 A map square is 64 tiles a side and the camera sees a small part of one, so the game's squares are
@@ -1788,7 +1820,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
 6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
    play exactly as before, run for run, so any difference there is a bug; the ones that changed
    reshuffle their seeds, so give those 6.
-7. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
+7. `scripts/cache/cosmetics.ts`, for the Wardrobe's pieces and kits (The Wardrobe, above).
+8. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
    `slim-cache` makes new chunks only where the groups changed, so returning players download
    just those.
 

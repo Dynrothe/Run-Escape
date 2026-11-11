@@ -32,6 +32,13 @@ import {
     emptyStats,
 } from "../content/types";
 import { LOCKABLE_ITEMS, LOCKABLE_ITEM_BY_ID, LockableItem, isAvailable } from "../content/unlocks";
+import {
+    COSMETIC_BY_ID,
+    WardrobeLook,
+    cleanLook,
+    getCosmeticPrice,
+    ownsCosmetic,
+} from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
@@ -117,6 +124,10 @@ export type SaveData = {
     pet?: string;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
+    // The Wardrobe (content/wardrobe.ts): the pieces bought in its store, by item id, and the body
+    // and outfit worn on every adventurer
+    cosmetics?: number[];
+    look?: WardrobeLook;
     // When the player last exported it (Date.now()), so an exported file says
     // when it was made, and the title screen can remind them to keep a copy
     lastExported?: number;
@@ -309,6 +320,12 @@ export function migrateSave(raw: unknown): SaveData {
     ) {
         save.favouriteCharacter = data.favouriteCharacter;
     }
+    if (Array.isArray(data.cosmetics)) {
+        const owned = new Set(data.cosmetics.filter((id) => COSMETIC_BY_ID.has(id)));
+        if (owned.size > 0) {
+            save.cosmetics = [...owned];
+        }
+    }
     // A time a Date can hold, or the reminder couldn't tell its day
     const exported = data.lastExported;
     if (typeof exported === "number" && exported > 0 && !isNaN(new Date(exported).getTime())) {
@@ -328,7 +345,29 @@ export function migrateSave(raw: unknown): SaveData {
     }
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
+    // After the adventurers, whose own pieces can be worn for nothing
+    const look = cleanLook(data.look, (objId) => canWearCosmetic(save, objId));
+    if (look) {
+        save.look = look;
+    }
     return save;
+}
+
+// The Wardrobe's pieces this save can wear: bought, or an unlocked adventurer's
+export function canWearCosmetic(save: SaveData, objId: number): boolean {
+    return ownsCosmetic(save.cosmetics ?? [], save.unlockedCharacters, objId);
+}
+
+// Buys a piece in the Wardrobe's store. False when it can't be (owned already, not in the store,
+// or too expensive).
+export function buyCosmetic(save: SaveData, objId: number): boolean {
+    const cosmetic = COSMETIC_BY_ID.get(objId);
+    if (!cosmetic || canWearCosmetic(save, objId) || save.coins < getCosmeticPrice(cosmetic)) {
+        return false;
+    }
+    save.coins -= getCosmeticPrice(cosmetic);
+    save.cosmetics = [...(save.cosmetics ?? []), objId];
+    return true;
 }
 
 // The adventurer the game starts on: the favourite, if it's open, or else the first that is

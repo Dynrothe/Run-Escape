@@ -29,3 +29,6 @@ export const COLLECTION_LOG_OBJ = 22711;
 // The client's own back-arrow button, on a bought skill to refund a rank. Also kept in the slim
 // cache by scripts/cache/slim-cache.ts.
 export const REFUND_SPRITE = 1021;
+
+// The Wardrobe's tile: a red partyhat, from its store (so the slim cache has its icon)
+export const WARDROBE_ICON_OBJ = 1038;

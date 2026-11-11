@@ -10,7 +10,7 @@ import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
 import { CURSED_SANDS_ENEMIES, CURSED_SANDS_MAP_ID } from "../content/cursedSands";
 import { ENEMIES, getEnemy } from "../content/enemies";
-import { GEAR_SLOTS } from "../content/items";
+import { GEAR_SLOTS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
@@ -21,6 +21,7 @@ import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import { SOUND_ORB_SPRITES } from "../content/titleIcons";
 import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
+import { COSMETICS } from "../content/wardrobe";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
@@ -318,6 +319,21 @@ describe("player bakes", () => {
         expect(appearance.equipment[EquipSlot.FEET]).toBe(11019);
         expect(appearance.equipment[EquipSlot.WEAPON]).toBe(4566);
         expect(sim.as(1, () => sim.gear.head)).toBe("berserker_helm");
+    });
+
+    test("wear the Wardrobe's outfit under gear, or over it when it's kept on", () => {
+        const sim = createRun(1, "warrior");
+        const hat = COSMETICS.find((c) => c.slot === EquipSlot.HEAD)!;
+        const look = { outfit: { [EquipSlot.HEAD]: hat.objId, [EquipSlot.LEGS]: -1 } };
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        sim.gear = { head: "berserker_helm" };
+        const helm = getItem("berserker_helm").objId;
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(helm);
+        const kept = getRunAppearance(sim, 0, { ...look, overGear: true });
+        expect(kept.equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        expect(kept.equipment[EquipSlot.LEGS]).toBe(-1);
+        // The weapon stays the sim's
+        expect(kept.equipment[EquipSlot.WEAPON]).toBe(sim.getHeldObjId());
     });
 
     test("bake the swings a level-up offers ahead, and not ones held", () => {
