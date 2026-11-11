@@ -289,6 +289,8 @@ export type BossView = {
         // A fight where its weapon only reaches so far (MapDef.fight.strikeReach),
         // and the player's out of it
         outOfReach?: boolean;
+        // Can't be hurt in the world the party's in (EnemyDef.hurtIn)
+        otherWorld?: boolean;
         // Its guard's down (BossDef.guard): exposed after a miss, or stunned
         guard?: "exposed" | "stunned";
         // How charged each totem is, 0 to 1

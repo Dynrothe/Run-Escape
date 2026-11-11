@@ -561,6 +561,13 @@ export function laneStep(sim: Sim, boss: Enemy): Point | undefined {
 // has its guard down; a sloppy player sees the chance only every other second
 export function pressButton(sim: Sim, sloppy = false): void {
     const sees = !sloppy || Math.floor(sim.tick / TICKS_PER_SECOND) % 2 === 0;
+    // One that turns the world (Blackstone): its own reads
+    if (sim.ability?.turn) {
+        if (sees && realmPress(sim)) {
+            sim.useAbility();
+        }
+        return;
+    }
     const target = sees && sim.ability ? sim.abilityTarget() : undefined;
     if (target && sim.isExposed(target)) {
         sim.useAbility();
@@ -601,4 +608,140 @@ export function buttonMove(sim: Sim): Point | undefined {
     }
     const length = Math.max(0.001, Math.hypot(open.x - player.x, open.y - player.y));
     return { x: (open.x - player.x) / length, y: (open.y - player.y) / length };
+}
+
+// A fight's button that turns the party between two worlds (FightAbilityDef.turn: the Awakened
+// Whisperer's Blackstone), as a careful person plays it: into the realm before a blow that's only
+// the city's lands (BossAttackDef.world: her screech) or while her siphon's souls are out (they're
+// caught only there); out again once they're caught and nothing's pending, from beside her for
+// the shock, or at once when sanity's low
+function realmFight(sim: Sim): { boss: Enemy; inRealm: boolean; souls: Enemy[] } | undefined {
+    const realm = sim.realm;
+    const boss = sim.shownBoss;
+    if (!sim.ability?.turn || !realm || !boss || boss.dead) {
+        return undefined;
+    }
+    const souls = sim.enemies.filter((enemy) => !enemy.dead && enemy.def.caughtIn === 1);
+    return { boss, inRealm: realm.layer === 1, souls };
+}
+
+// Whether a blow of the city's alone is winding up (BossAttackDef.world)
+function cityBlowComing(boss: Enemy): boolean {
+    return boss.bossState?.windup?.attack.world === 0;
+}
+
+export function realmPress(sim: Sim): boolean {
+    const fight = realmFight(sim);
+    if (!fight || sim.abilitySecondsLeft() !== 0) {
+        return false;
+    }
+    const { boss, inRealm, souls } = fight;
+    if (!inRealm) {
+        return cityBlowComing(boss) || souls.length > 0;
+    }
+    const hero = sim.heroes.find((h) => h.player === sim.player);
+    const sanity = sim.realm!.sanityOf(hero?.index ?? 0);
+    if (sanity < 22) {
+        return true;
+    }
+    if (souls.length > 0 || cityBlowComing(boss)) {
+        return false;
+    }
+    // Beside her for the shock, or out if she's far
+    const player = sim.player;
+    const away = Math.hypot(boss.x - player.x, boss.y - player.y);
+    const reach = sim.isExposed(boss)
+        ? (sim.ability!.openReach ?? sim.ability!.reach)
+        : sim.ability!.reach;
+    return away <= reach - 0.3 || sanity < 50;
+}
+
+// Where to go for it: in the realm, to the siphon's soul nearest her (the next to reach her), and
+// back to her side once they're all caught
+export function realmMove(sim: Sim): Point | undefined {
+    const fight = realmFight(sim);
+    if (!fight) {
+        return undefined;
+    }
+    const dodge = realmDodge(sim, fight.boss);
+    if (dodge || !fight.inRealm) {
+        return dodge;
+    }
+    const { boss, souls } = fight;
+    const player = sim.player;
+    const towards = (x: number, y: number): Point => {
+        const length = Math.max(0.001, Math.hypot(x - player.x, y - player.y));
+        return { x: (x - player.x) / length, y: (y - player.y) / length };
+    };
+    if (souls.length > 0) {
+        let best = souls[0];
+        let bestScore = Infinity;
+        for (const soul of souls) {
+            // The one soonest at her, unless another's much nearer to hand
+            const score =
+                Math.hypot(soul.x - boss.x, soul.y - boss.y) +
+                0.6 * Math.hypot(soul.x - player.x, soul.y - player.y);
+            if (score < bestScore) {
+                best = soul;
+                bestScore = score;
+            }
+        }
+        return towards(best.x, best.y);
+    }
+    const away = Math.hypot(boss.x - player.x, boss.y - player.y);
+    return away > 2 ? towards(boss.x, boss.y) : undefined;
+}
+
+// Off where her blast and tentacles are to land, to the nearest open spot clear of them all that
+// isn't into her (she's solid, and close: away from the mark alone is often into her), kept near
+// her for the burst
+function realmDodge(sim: Sim, boss: Enemy): Point | undefined {
+    const player = sim.player;
+    const circles: { x: number; y: number; r: number }[] = [];
+    const windup = boss.bossState?.windup;
+    if (windup?.attack.kind === "blast") {
+        for (const spot of windup.targets) {
+            circles.push({
+                x: spot.x,
+                y: spot.y,
+                r: (windup.attack.radius ?? 1) + player.radius + 0.4,
+            });
+        }
+    }
+    for (const hazard of sim.hazards) {
+        if (hazard.attack.ground && hazard.landTick >= sim.tick) {
+            circles.push({ x: hazard.x, y: hazard.y, r: hazard.radius + player.radius + 0.35 });
+        }
+    }
+    const danger = (x: number, y: number) =>
+        circles.some((c) => Math.hypot(x - c.x, y - c.y) < c.r);
+    if (!danger(player.x, player.y)) {
+        return undefined;
+    }
+    const room = inSquare(sim);
+    let best: Point | undefined;
+    let bestScore = Infinity;
+    for (const reach of [0.8, 1.6, 2.4]) {
+        for (let i = 0; i < 16; i++) {
+            const angle = (i / 16) * Math.PI * 2;
+            const dx = Math.cos(angle);
+            const dy = Math.sin(angle);
+            const x = player.x + dx * reach;
+            const y = player.y + dy * reach;
+            const fromBoss = Math.hypot(x - boss.x, y - boss.y);
+            if (
+                sim.grid.isSolid(Math.floor(x), Math.floor(y)) ||
+                !room(x, y) ||
+                fromBoss < boss.radius + player.radius + 0.3
+            ) {
+                continue;
+            }
+            const score = (danger(x, y) ? 100 : 0) + reach + Math.abs(fromBoss - 2.2) * 0.5;
+            if (score < bestScore) {
+                best = { x: dx, y: dy };
+                bestScore = score;
+            }
+        }
+    }
+    return best;
 }

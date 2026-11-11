@@ -1525,7 +1525,14 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
             </div>
             {power && (
                 <span className="ui-pet-power">
-                    {t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
+                    {power.kind === "call"
+                        ? t("ui.pet.power_call", {
+                              every: power.every,
+                              reach: power.reach,
+                              soul: power.soul,
+                              heal: Math.round(power.heal * 100),
+                          })
+                        : t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
                 </span>
             )}
         </div>
@@ -3214,18 +3221,20 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
             )}
             {boss.fight && (
                 <div className="ui-boss-status">
-                    {boss.fight.outOfReach
-                        ? t("ui.hud.boss_status.out_of_reach")
-                        : boss.fight.guard === "stunned"
-                          ? t("ui.hud.boss_status.stunned")
-                          : boss.fight.guard === "exposed"
-                            ? t("ui.hud.boss_status.guard_down")
-                            : ((boss.fight.status ? tl(boss.fight.status) : undefined) ??
-                              (boss.fight.stage === "totems"
-                                  ? t("ui.hud.boss_status.charge_totems")
-                                  : boss.fight.stage === "finale"
-                                    ? t("ui.hud.boss_status.stay_on_feet")
-                                    : t("ui.hud.boss_status.break_shield")))}
+                    {boss.fight.otherWorld && !boss.fight.guard
+                        ? t("ui.hud.boss_status.other_world")
+                        : boss.fight.outOfReach && !boss.fight.otherWorld
+                          ? t("ui.hud.boss_status.out_of_reach")
+                          : boss.fight.guard === "stunned"
+                            ? t("ui.hud.boss_status.stunned")
+                            : boss.fight.guard === "exposed"
+                              ? t("ui.hud.boss_status.guard_down")
+                              : ((boss.fight.status ? tl(boss.fight.status) : undefined) ??
+                                (boss.fight.stage === "totems"
+                                    ? t("ui.hud.boss_status.charge_totems")
+                                    : boss.fight.stage === "finale"
+                                      ? t("ui.hud.boss_status.stay_on_feet")
+                                      : t("ui.hud.boss_status.break_shield")))}
                     {boss.fight.curseAttacks !== undefined && (
                         <span className="ui-boss-curse">
                             {t("ui.hud.boss_cursed", { attacks: boss.fight.curseAttacks })}

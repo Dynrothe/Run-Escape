@@ -60,7 +60,8 @@ go stale. Add anything that cost you time to work out.
 | The Soulreaper axe: souls, Harvest, its pieces         | `WeaponDef.souls`, `Sim.harvest`, `UnlockTask` pieces                  |
 | Adventurers' traits (Timber!, Shatter and the rest)    | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
 | Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
-| Fighting pets (Butch's leap)                           | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
+| The Awakened Whisperer: Blackstone, siphon, screech    | `content/whisperer.ts`, `docs/design/awakened-whisperer.md`            |
+| Fighting pets (Butch's leap, the Wisp's call)          | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |

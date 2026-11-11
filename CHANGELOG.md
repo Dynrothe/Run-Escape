@@ -68,6 +68,13 @@ the version in the corner).
   is a Harvest, a spin all round you that costs you a few hitpoints.
 - Butch, Awakened Vardorvis's pet, the first pet that fights: take him along and every few
   seconds he leaps on an enemy near you, hitting everything round where he lands.
+- The Awakened Whisperer, Act II's second Awakened fight, on the Bosses tab once the Lassar
+  Undercity's beaten: you play the Shadow walker on her island, with Blackstone, a button that
+  turns you between the city and the Shadow Realm. She can only be hurt in the city; her Soul
+  Siphon can only be stopped in the realm, where your sanity drains. Leave her screech behind in
+  the city, and catch every soul of a siphon to break it.
+- The Wisp, the Awakened Whisperer's pet: take it along and it calls the bones and coins near you
+  to you, and now and then sends you a lost soul that heals you.
 
 ### Changed
 

@@ -1132,7 +1132,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 5   | The Overgrown remix, with the remix switches, sets and records                                                                            | 2            | 4 days     |
 | 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter. Built (4.11)          | 2            | 2.5 weeks  |
 | 7   | The Shadow remix                                                                                                                          | 5, 6         | 3 days     |
-| 8   | Awakened Whisperer, Wisp                                                                                                                  | 3, 6         | 2 weeks    |
+| 8   | **Awakened Whisperer**, the Wisp. Built, first pass (`awakened-whisperer.md`)                                                             | 3, 6         | 2 weeks    |
 | 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger. Built (5.11)                                    | 2            | 3 weeks    |
 | 10  | The Frozen remix                                                                                                                          | 5, 9         | 3 days     |
 | 11  | Awakened Duke Sucellus, Baron                                                                                                             | 3, 9         | 2 weeks    |

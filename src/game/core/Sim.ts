@@ -64,7 +64,7 @@ import {
 import { CASKETS, CASKET_TIERS, getGear, getItem } from "../content/items";
 import { getMap, hasFliers, hasPoison, takesInvocations, takesRelics } from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
-import { PET_BY_ID, PetDef } from "../content/pets";
+import { PET_BY_ID, PetDef, PetPowerDef } from "../content/pets";
 import {
     LANTERN_ID,
     POWER_UPS,
@@ -511,6 +511,8 @@ const IMPACT_TICKS = 90;
 // A press of the fight's button held this long when it can't go off yet, and only if the boss
 // is no further than this past its reach (MapDef.fight.ability)
 const ABILITY_BUFFER_SECONDS = 0.3;
+// The soul's glow (Lassar's own) where the Wisp's soul reaches its hero (PetDef.power call)
+const PET_SOUL_SPOTANIM = 2447;
 const ABILITY_BUFFER_REACH = 1.5;
 // Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
 const TRAIL_GAP = 1.5;
@@ -839,20 +841,34 @@ export type RunStats = {
 // A run on your own has one; co-op has one for each player, and the run's
 // level, XP, coins and kills are shared.
 // A hero's pet, if it's one that fights (PetDef.power): looks-only pets are the client's alone
-function fightingPet(id: string | undefined): { pet?: PetDef; petReadyTick: number } {
+function fightingPet(id: string | undefined): {
+    pet?: PetDef;
+    petReadyTick: number;
+    petSoulTick: number;
+    petSoulLands: number;
+} {
     const pet = id === undefined ? undefined : PET_BY_ID.get(id);
     if (!pet?.power) {
-        return { petReadyTick: 0 };
+        return { petReadyTick: 0, petSoulTick: 0, petSoulLands: -1 };
     }
-    return { pet, petReadyTick: secondsToTicks(pet.power.every) };
+    const power = pet.power;
+    return {
+        pet,
+        petReadyTick: secondsToTicks(power.every),
+        petSoulTick: power.kind === "call" ? secondsToTicks(power.soul) : 0,
+        petSoulLands: -1,
+    };
 }
 
 export type Hero = {
     // Where it is in Sim.heroes
     index: number;
-    // A fighting pet taken along (PetDef.power), and the tick it can next leap
+    // A fighting pet taken along (PetDef.power), and the tick it can next leap (or call). The
+    // Wisp's soul: the tick it can next send one, and the tick the one on its way lands (-1 none)
     pet?: PetDef;
     petReadyTick: number;
+    petSoulTick: number;
+    petSoulLands: number;
     // A raid's points, for its supply chest, and damage taken before this room, which it's
     // scored on
     raidPoints: number;
@@ -1514,6 +1530,9 @@ export class Sim {
     private otherPickups: Pickup[] = [];
     // A step between in the city (the Shadow walker's trait): into the realm when the rule's next
     private stepIntoRealm = false;
+    // The fight's button that turns the party (FightAbilityDef.turn), pressed: by which hero (-1
+    // none), turned at the rule's turn of the tick
+    private abilityTurn = -1;
     // An act's map: the step it's played at, and its toughness there (the map's own off an act)
     readonly actStep: number;
     readonly difficulty: { hp: number; damage: number };
@@ -4619,14 +4638,28 @@ export class Sim {
                     this.vanish(enemy);
                     continue;
                 }
-                // A lost soul's caught by walking into it (EnemyDef.caught)
-                if (touching && enemy.def.caught && this.realm) {
+                // A lost soul's caught by walking into it (EnemyDef.caught), in its world
+                // (EnemyDef.caughtIn: a siphon's, only in the realm)
+                if (
+                    touching &&
+                    enemy.def.caught &&
+                    this.realm &&
+                    (enemy.def.caughtIn === undefined || enemy.def.caughtIn === this.layer)
+                ) {
                     this.realm.onCaught(this.ruleHost, enemy.uid, player.x, player.y);
                     this.vanish(enemy);
                     if (enemy.def.spawnSpotAnim !== undefined) {
                         this.addEffect(enemy.def.spawnSpotAnim, enemy.x, enemy.y, 0, 40);
                     }
-                    this.emit({ type: "soulCaught", left: this.realm.soulsLeft });
+                    const siphon = this.siphonOf(enemy.def.id);
+                    this.emit({
+                        type: "soulCaught",
+                        left: siphon ? this.siphonLeft(enemy.def.id) : this.realm.soulsLeft,
+                        siphon: siphon !== undefined,
+                    });
+                    if (siphon) {
+                        this.siphonSoulGone(siphon, false);
+                    }
                     continue;
                 }
                 if (lapping) {
@@ -5277,6 +5310,9 @@ export class Sim {
         }
         if (heals.once) {
             this.vanish(enemy);
+            if (target.def.boss?.siphon?.enemyId === enemy.def.id) {
+                this.siphonSoulGone(target, true);
+            }
             return;
         }
         enemy.anim = "attack";
@@ -13662,6 +13698,11 @@ export class Sim {
             this.stepIntoRealm = false;
             this.realm?.turn(this.ruleHost, 1);
         }
+        if (this.abilityTurn >= 0) {
+            const index = this.abilityTurn;
+            this.abilityTurn = -1;
+            this.turnWithAbility(index);
+        }
         rule.step(this.ruleHost);
         // Each of the run's rules that wears players down: the cold, then the roots (which aren't in
         // the realm: RuleSet)
@@ -13788,6 +13829,53 @@ export class Sim {
         },
         turnWorld: (to, lapse) => sim.turnWorld(to, lapse),
     }))(this);
+
+    // Which world the party's in: 0 the city (and every map of one world), 1 the realm
+    get layer(): RealmLayer {
+        return this.realm?.layer ?? 0;
+    }
+
+    // The boss whose siphon (BossDef.siphon) these souls are, if they're one's
+    private siphonOf(enemyId: string): Enemy | undefined {
+        return this.enemies.find(
+            (enemy) => !enemy.dead && enemy.def.boss?.siphon?.enemyId === enemyId,
+        );
+    }
+
+    // How many of a siphon's souls are still out, in either world
+    siphonLeft(enemyId: string): number {
+        let left = 0;
+        for (const list of [this.enemies, this.otherEnemies]) {
+            for (const enemy of list) {
+                if (!enemy.dead && enemy.def.id === enemyId) {
+                    left++;
+                }
+            }
+        }
+        return left;
+    }
+
+    // One of a siphon's souls is gone, caught or into the boss (lost): the last of a lot caught with
+    // none lost breaks it, stunned with its guard down
+    private siphonSoulGone(boss: Enemy, lost: boolean): void {
+        const state = boss.bossState;
+        const siphon = boss.def.boss?.siphon;
+        if (!state || !siphon) {
+            return;
+        }
+        if (lost) {
+            state.siphonLost = (state.siphonLost ?? 0) + 1;
+        }
+        if (this.siphonLeft(siphon.enemyId) > 0) {
+            return;
+        }
+        const clean = (state.siphonLost ?? 0) === 0;
+        state.siphonLost = 0;
+        if (clean && !boss.dead) {
+            this.dropGuard(boss, siphon.stun, true, "Soul Siphon");
+            this.emit({ type: "notice", message: siphon.message });
+        }
+    }
 
     // The party turns to the other world (RealmRule.turn): the world it leaves stands still, kept
     // aside as it is, and the one it comes to carries on from where it was. What goes with the
@@ -14773,6 +14861,8 @@ export class Sim {
                 (!attack.enraged || state.enraged) &&
                 (!attack.expert || this.expert) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
+                // Some only while the party's in one world (BossAttackDef.world)
+                (attack.world === undefined || attack.world === this.layer) &&
                 !(attack.parasite && this.parasite) &&
                 // Some only with an invocation on (BossAttackDef.onlyWith)
                 (!attack.onlyWith || this.invoked(attack.onlyWith)) &&
@@ -15638,6 +15728,9 @@ export class Sim {
             return false;
         }
         const ready = this.tick >= this.hero.abilityReadyTick;
+        if (ability.turn) {
+            return (ready || this.abilityNearlyReady(ability)) && this.canTurn();
+        }
         return (
             (ready && (this.abilityTarget(ability) !== undefined || this.abilityCuts(ability))) ||
             this.abilityNearlyReady(ability)
@@ -15648,6 +15741,10 @@ export class Sim {
     // ABILITY_BUFFER_REACH)
     private abilityNearlyReady(ability: FightAbilityDef): boolean {
         const soon = this.tick + secondsToTicks(ABILITY_BUFFER_SECONDS);
+        // One that turns the world goes off wherever the boss is
+        if (ability.turn) {
+            return this.hero.abilityReadyTick <= soon && this.canTurn();
+        }
         const player = this.player;
         const near = this.abilityBosses().some(
             (boss) =>
@@ -15698,6 +15795,9 @@ export class Sim {
         if (this.tick < hero.abilityReadyTick) {
             return false;
         }
+        if (ability.turn) {
+            return this.fireTurn(ability);
+        }
         const boss = this.abilityTarget(ability);
         if (!boss) {
             return this.fireCut(ability);
@@ -15739,6 +15839,64 @@ export class Sim {
         this.breakChannel(boss);
         this.cutWithAbility(ability, boss);
         return true;
+    }
+
+    // Whether the party can be turned to the other world by the fight's button now: on a map of two
+    // worlds, the fight begun, and not already on its way
+    private canTurn(): boolean {
+        const realm = this.realm;
+        return realm !== undefined && !this.intro && realm.pullTick < 0 && this.abilityTurn < 0;
+    }
+
+    // A button that turns the world (FightAbilityDef.turn: Blackstone): pressed now, it goes at the
+    // rule's turn of the tick (turnWithAbility), not in the middle of whatever else is going on
+    private fireTurn(ability: FightAbilityDef): boolean {
+        if (!this.canTurn()) {
+            return false;
+        }
+        // The party's turned together, so everyone's waits (co-op: no turning straight back)
+        const ready = this.tick + secondsToTicks(ability.cooldown);
+        for (const hero of this.heroes) {
+            hero.abilityReadyTick = Math.max(hero.abilityReadyTick, ready);
+        }
+        this.abilityTurn = this.hero.index;
+        return true;
+    }
+
+    // The party turns, by a hero's press of the fight's button: coming out into the city within its
+    // reach of the boss, it hits it
+    private turnWithAbility(index: number): void {
+        const ability = this.ability;
+        const realm = this.realm;
+        const hero = this.heroes[index];
+        if (!ability || !realm || !hero || !this.isUp(hero)) {
+            return;
+        }
+        const to = realm.layer === 1 ? 0 : 1;
+        realm.turn(this.ruleHost, to);
+        this.as(index, () => {
+            const player = this.player;
+            if (ability.playerSeq !== undefined) {
+                player.attackSeq = ability.playerSeq;
+                player.attackStart = this.tick;
+            }
+            const boss = to === 0 ? this.abilityTarget(ability) : undefined;
+            this.showImpact(ability.impact, boss?.x ?? player.x, boss?.y ?? player.y);
+            this.emit({
+                type: "ability",
+                abilityId: ability.id,
+                enemyId: boss?.def.id ?? "",
+                sound: ability.sound ?? -1,
+                x: boss?.x ?? player.x,
+                y: boss?.y ?? player.y,
+                opened: boss !== undefined && this.isExposed(boss),
+            });
+            if (boss) {
+                this.damageSource = `ability:${ability.id}`;
+                this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
+                this.breakChannel(boss);
+            }
+        });
     }
 
     // A cutting button (FightAbilityDef.cut) with the boss out of reach: it clears the rule round
@@ -15927,6 +16085,13 @@ export class Sim {
         const current = this.hero;
         for (const hero of this.heroes) {
             const power = hero.pet?.power;
+            if (power?.kind === "call") {
+                if (this.isUp(hero)) {
+                    this.use(hero);
+                    this.stepCallingPet(hero, power);
+                }
+                continue;
+            }
             if (!power || this.tick < hero.petReadyTick || !this.isUp(hero)) {
                 continue;
             }
@@ -15955,6 +16120,35 @@ export class Sim {
             }
         }
         this.use(current);
+    }
+
+    // The Wisp (PetDef.power call), for the current hero: every so often the bones and coins near
+    // them come to them, as a magnet's do, and once a while, when they're hurt, a soul that heals
+    // them as it reaches them
+    private stepCallingPet(hero: Hero, power: Extract<PetPowerDef, { kind: "call" }>): void {
+        const player = this.player;
+        const tick = this.tick;
+        if (tick >= hero.petReadyTick) {
+            hero.petReadyTick = tick + secondsToTicks(power.every);
+            for (const pickup of this.pickups) {
+                if (
+                    !pickup.attracted &&
+                    (pickup.kind === "bones" || pickup.kind === "coins") &&
+                    fm.hypot(pickup.x - player.x, pickup.y - player.y) <= power.reach
+                ) {
+                    pickup.attracted = true;
+                }
+            }
+        }
+        if (hero.petSoulLands >= 0 && tick >= hero.petSoulLands) {
+            hero.petSoulLands = -1;
+            this.heal(Math.max(1, Math.round(player.maxHp * power.heal)));
+            this.addEffect(PET_SOUL_SPOTANIM, player.x, player.y, 0, 40);
+        }
+        if (hero.petSoulLands < 0 && tick >= hero.petSoulTick && player.hp < player.maxHp) {
+            hero.petSoulTick = tick + secondsToTicks(power.soul);
+            hero.petSoulLands = tick + secondsToTicks(power.travel);
+        }
     }
 
     // Seconds until a hero's button can be used again
@@ -16300,6 +16494,10 @@ export class Sim {
                         player.radius,
                     )
                 ) {
+                    hit = false;
+                }
+                // Gone into the other world (BossAttackDef.world): it finds no one
+                if (hit && attack.world !== undefined && attack.world !== this.layer) {
                     hit = false;
                 }
                 if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
@@ -17412,6 +17610,11 @@ export class Sim {
         // Hit by the player, it's after the player from now on
         enemy.aggro = true;
         if (enemy.shieldEnd > this.tick) {
+            this.showBlocked(enemy);
+            return 0;
+        }
+        // Out of reach in the other world (EnemyDef.hurtIn: the Awakened Whisperer, in the realm)
+        if (enemy.def.hurtIn !== undefined && this.layer !== enemy.def.hurtIn) {
             this.showBlocked(enemy);
             return 0;
         }

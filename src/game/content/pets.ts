@@ -14,9 +14,16 @@ export type PetDef = {
     walkSeq: number;
     // What it does in a run (act-2-fallen-empire.md, 8.4). leap: every `every` seconds, when an
     // enemy's within reach tiles of its hero, it leaps on the nearest and hits everything within
-    // cleave tiles of where it lands for damage, scaled as power-ups' damage is
-    power?: { kind: "leap"; every: number; reach: number; cleave: number; damage: number };
+    // cleave tiles of where it lands for damage, scaled as power-ups' damage is. call: every
+    // `every` seconds it calls the bones and coins within reach tiles to its hero (as a magnet
+    // does), and every soul seconds, once its hero's hurt, sends them a soul that heals heal of
+    // their hitpoints as it reaches them, travel seconds later
+    power?: PetPowerDef;
 };
+
+export type PetPowerDef =
+    | { kind: "leap"; every: number; reach: number; cleave: number; damage: number }
+    | { kind: "call"; every: number; reach: number; soul: number; heal: number; travel: number };
 
 export const PETS: PetDef[] = [
     { id: "little_nightmare", npcId: 9399, idleSeq: 8593, walkSeq: 8634 },
@@ -35,6 +42,15 @@ export const PETS: PetDef[] = [
         idleSeq: 10337,
         walkSeq: 10339,
         power: { kind: "leap", every: 6, reach: 5, cleave: 1.5, damage: 20 },
+    },
+    // The Awakened Whisperer's: her own model, small. It calls your drops to you, and now and then
+    // a lost soul that heals
+    {
+        id: "wisp",
+        npcId: 12157,
+        idleSeq: 10230,
+        walkSeq: 10233,
+        power: { kind: "call", every: 10, reach: 8, soul: 60, heal: 0.05, travel: 1 },
     },
 ];
 

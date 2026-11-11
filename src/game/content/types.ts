@@ -278,6 +278,12 @@ export type EnemyDef = {
     realm?: "both" | "drags";
     // Caught by walking into it, not killed (a lost soul, RealmRuleDef.souls)
     caught?: boolean;
+    // On a map of two worlds, caught only in this one (0 the city, 1 the realm): the Awakened
+    // Whisperer's siphoned souls, which go with the party but can be caught only in the realm
+    caughtIn?: 0 | 1;
+    // On a map of two worlds, hurt only in this one: the Awakened Whisperer, out of reach in the
+    // realm
+    hurtIn?: 0 | 1;
 };
 
 export type EnemySpawnsDef = {
@@ -1097,6 +1103,10 @@ export type BossAttackDef = {
     // or blast, a wave or boomerang that reached no one, a surge that crossed without hitting
     // anyone, a ground mark that landed on no one
     opens?: number;
+    // On a map of two worlds, begun only while the party's in this one, and landing only on whoever's
+    // in it there: gone into the other, it misses (and with opens, the guard's down). The Awakened
+    // Whisperer's screech, which the realm's out of.
+    world?: 0 | 1;
     // A spell it channels (BossDef.guard): its guard's down from the moment it begins until it's
     // cast (a summon's walkTo: until its walkers are all in or dead), and the fight's button
     // landing on it meanwhile breaks it: nothing's cast (walkers scatter, no blast), and its
@@ -1202,6 +1212,10 @@ export type FightAbilityDef = {
     // off with the boss out of reach too, hitting whatever else is in reach (Awakened Vardorvis's
     // Chop: his captors and his head)
     cut?: number;
+    // Turns the party between the worlds of a map of two (RealmRuleDef), whether the boss is there
+    // or not: coming out into the city within reach of it, it hits it for damage (the Awakened
+    // Whisperer's Blackstone)
+    turn?: boolean;
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
@@ -1565,6 +1579,10 @@ export type BossDef = {
     look?: BossLookDef;
     // Its guard drops after a miss, and its arena can stun it (BossGuardDef)
     guard?: BossGuardDef;
+    // Its siphon (the Awakened Whisperer's Soul Siphon): its summons of enemyId (EnemyHealsDef
+    // once) caught to the last with none reaching it break it, stunned stun seconds with its
+    // guard down (BossDef.guard's stun look), and message on screen
+    siphon?: { enemyId: string; stun: number; message: string };
 };
 
 // The shared fight screen's colours (CSS), for a boss that isn't to look like the
@@ -2269,7 +2287,8 @@ export type RealmRuleDef = {
     sanity: { max: number; refill: number; drain: number; hit: number; low: number; lapse: number };
     // count lost souls (enemyId) come into the realm with the party, min to max tiles off; catch
     // them all (walk into them) and a portal opens at the catcher's feet for portal.seconds,
-    // portal.radius tiles across; missed, the souls come again
+    // portal.radius tiles across; missed, the souls come again. None (count 0): no way back but
+    // the fight's button (FightAbilityDef.turn) or sanity running out
     souls: { enemyId: string; count: number; distance: [min: number, max: number] };
     portal: { seconds: number; radius: number };
     // What drops are worth in the realm: bones' experience and coins times these, and a casket

@@ -334,8 +334,9 @@ A pet is a trophy that follows its finder (most are looks only). Add the trophy 
 animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: use the one the
 script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
 offered once found, with nothing else to add. A looks-only pet never goes in the sim; a fighting
-one (`PetDef.power`, Butch's leap) is played by `Sim.stepPets`, and a new kind of power needs its
-case there: see Pets in `docs/DEVELOPMENT.md`.
+one (`PetDef.power`, Butch's leap, the Wisp's call) is played by `Sim.stepPets`, and a new kind
+of power needs its case there and its line on the Pet row (`ui.pet.power_<kind>`): see Pets in
+`docs/DEVELOPMENT.md`.
 
 A trophy (`trophies.ts`) shows in the Collection log under the map its `from` names (a pumpkin's
 under the Hallowed Night), with a tab of its own for a new map, and so do weapons whose `unlock`

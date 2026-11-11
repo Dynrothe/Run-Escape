@@ -117,6 +117,19 @@ export const TROPHIES: TrophyDef[] = [
             chance: 1,
         },
     },
+    // The Awakened Whisperer's, certain, as Butch is
+    {
+        id: "wisp",
+        name: "Wisp",
+        objId: 28246,
+        how: "From the Awakened Whisperer, the first time she's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_whisperer",
+            mapId: "awakened_whisperer",
+            chance: 1,
+        },
+    },
 ];
 
 // The Theatre of Blood's uniques, weighted as the real raid's are, and its pet off Verzik

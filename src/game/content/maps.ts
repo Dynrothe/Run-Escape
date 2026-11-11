@@ -64,6 +64,16 @@ import {
     WILDERNESS_WAVES,
 } from "./waves";
 import {
+    AWAKENED_WHISPERER_ID,
+    WHISPERER_BLACKSTONE,
+    WHISPERER_BOSS_ARENA,
+    WHISPERER_BURST_LEVEL,
+    WHISPERER_BURST_REACH,
+    WHISPERER_HITPOINTS,
+    WHISPERER_REALM,
+    WHISPERER_START_DISTANCE,
+} from "./whisperer";
+import {
     OWLS_COURT_FEATURES,
     ZACHARIAH_HITPOINTS,
     ZACHARIAH_SMITE,
@@ -649,6 +659,53 @@ export const MAPS: MapDef[] = [
             ability: VARDORVIS_CHOP,
         },
         music: "Blood Rush",
+    },
+    {
+        id: "awakened_whisperer",
+        name: "Awakened Whisperer",
+        description:
+            "The Whisperer, awakened, on her island in the Lassar Undercity. No waves, no picks " +
+            "and no items: the Shadow walker, Shadow Burst and Blackstone, which turns you " +
+            "between the city and the Shadow Realm. She can only be hurt in the city; her Soul " +
+            "Siphon can only be stopped in the realm, where your sanity drains. Her screech " +
+            "can't be outrun, only left behind.",
+        // The Wisp, her pet
+        iconObjId: 28246,
+        arena: getRecipeArena(LASSAR_RECIPE),
+        // South of her spot, as Vardorvis's fight starts you
+        spawn: {
+            x: LASSAR_CATHEDRAL.x,
+            y: LASSAR_CATHEDRAL.y - WHISPERER_START_DISTANCE,
+        },
+        // Her hitpoints come from the event, her hits are tuned to the Shadow walker's hitpoints
+        difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [
+            {
+                at: 0,
+                kind: "finalBoss",
+                enemyId: AWAKENED_WHISPERER_ID,
+                hp: WHISPERER_HITPOINTS,
+            },
+        ],
+        finalBossWarning: "",
+        victoryText: "The Awakened Whisperer is silenced, and Lassar sleeps.",
+        bossArena: WHISPERER_BOSS_ARENA,
+        scaperune: true,
+        // The island's floor is the cache's near-black navy, as the map's
+        brightness: 1.6,
+        rule: WHISPERER_REALM,
+        twin: { dx: TWIN_SQUARES * 64 },
+        // Opened by beating her map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "lassar_undercity",
+            character: "shadow_walker",
+            weaponLevel: WHISPERER_BURST_LEVEL,
+            strikeReach: WHISPERER_BURST_REACH,
+            ability: WHISPERER_BLACKSTONE,
+        },
+        music: "Song of the Silent Choir",
     },
     // A quest in four parts after the desert, which opens the Tombs of Amascut
     BENEATH_CURSED_SANDS,

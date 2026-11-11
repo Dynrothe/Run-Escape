@@ -3280,13 +3280,19 @@ export class GameClient implements GameFrameHandler {
                     if (music) {
                         this.audio.playMusic(music);
                     }
+                    // A fight's own way between them (FightAbilityDef.turn: Blackstone)
+                    const turned = sim.ability?.turn === true;
                     this.store.toast(
                         t(
                             event.layer === 1
-                                ? "toast.realm_in"
+                                ? turned
+                                    ? "toast.blackstone_in"
+                                    : "toast.realm_in"
                                 : event.lapse
                                   ? "toast.realm_lapse"
-                                  : "toast.realm_out",
+                                  : turned
+                                    ? "toast.blackstone_out"
+                                    : "toast.realm_out",
                         ),
                     );
                     break;
@@ -3297,7 +3303,12 @@ export class GameClient implements GameFrameHandler {
                     }
                     break;
                 case "soulCaught":
-                    if (event.left > 0) {
+                    if (event.siphon) {
+                        // A boss's siphon's (BossDef.siphon): its last says so itself
+                        if (event.left > 0) {
+                            this.store.toast(tp("toast.siphon_left", event.left));
+                        }
+                    } else if (event.left > 0) {
                         this.store.toast(tp("toast.souls_left", event.left));
                     } else {
                         this.store.toast(t("toast.portal_open"));
@@ -3607,6 +3618,10 @@ export class GameClient implements GameFrameHandler {
                     stage: phase.stage,
                     status:
                         phase.stage === "finale" ? undefined : phases?.phases[phase.index]?.status,
+                    // Out of reach in this world (EnemyDef.hurtIn: the Awakened Whisperer, in the
+                    // realm), or of the fight's weapon
+                    otherWorld:
+                        shownBoss.def.hurtIn !== undefined && shownBoss.def.hurtIn !== sim.layer,
                     outOfReach:
                         reach !== undefined &&
                         Math.hypot(shownBoss.x - player.x, shownBoss.y - player.y) > reach,

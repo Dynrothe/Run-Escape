@@ -132,6 +132,8 @@ export type BossState = {
     stolenCoins: number;
     // Times it has got back up
     rises: number;
+    // Its siphon's souls that have reached it, of the lot that's out (BossDef.siphon)
+    siphonLost?: number;
     // Below half its hitpoints: faster, and with its enraged attacks
     enraged: boolean;
     // Enraged by its partner's death (BossDef enrage.partner): its interval's times this instead
@@ -1158,8 +1160,9 @@ type SimEventBody =
     // The party's turned to the other world (RealmRule): 1 the realm, 0 the city; lapse, thrown
     // back out of sanity
     | { type: "worldTurned"; layer: 0 | 1; lapse: boolean }
-    // A lost soul caught, and how many of this lot are left
-    | { type: "soulCaught"; left: number }
+    // A lost soul caught, and how many of this lot are left (siphon: one of a boss's siphon's,
+    // BossDef.siphon, with the rest of its lot left in either world)
+    | { type: "soulCaught"; left: number; siphon?: boolean }
     // Frozen solid under the cold (ColdRuleDef), the hero by index
     | { type: "frozenSolid"; hero: number }
     | { type: "heroRevived"; by: number }

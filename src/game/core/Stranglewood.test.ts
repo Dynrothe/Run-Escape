@@ -59,13 +59,16 @@ describe("the Stranglewood", () => {
 
     test("is played by its roots, and nothing else is", () => {
         expect(createSim().rule?.def).toBe(STRANGLEWOOD_ROOTS);
-        // Awakened Vardorvis's clearing has its own (Vardorvis.test.ts), and Lassar its realm (Lassar.test.ts)
-        for (const map of MAPS.filter(
-            (m) =>
-                !["stranglewood", "awakened_vardorvis", "lassar_undercity", "ghorrock"].includes(
-                    m.id,
-                ),
-        )) {
+        // Awakened Vardorvis's clearing has its own (Vardorvis.test.ts), Lassar and the Awakened
+        // Whisperer's island their realms (Lassar.test.ts, Whisperer.test.ts)
+        const ruled = [
+            "stranglewood",
+            "awakened_vardorvis",
+            "lassar_undercity",
+            "awakened_whisperer",
+            "ghorrock",
+        ];
+        for (const map of MAPS.filter((m) => !ruled.includes(m.id))) {
             expect(createSim({ mapId: map.id }).rule).toBeUndefined();
         }
     });

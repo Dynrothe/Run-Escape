@@ -12,6 +12,7 @@ import { getTheatreBosses } from "./theatre";
 import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
 import { VARDORVIS_ENEMIES } from "./vardorvis";
+import { WHISPERER_ENEMIES } from "./whisperer";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -8380,6 +8381,7 @@ export const ENEMIES: EnemyDef[] = [
     ...GHORROCK_ENEMIES,
     ...SCAR_ENEMIES,
     ...VARDORVIS_ENEMIES,
+    ...WHISPERER_ENEMIES,
 ];
 
 // The Tombs of Amascut's (in development)

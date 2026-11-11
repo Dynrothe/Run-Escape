@@ -69,6 +69,7 @@ import {
     otherBlasts,
     outOfPool,
     pressButton,
+    realmMove,
     shelter,
     sidestepBullets,
     stripStep,
@@ -660,6 +661,12 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         return { x: (x - player.x) / length, y: (y - player.y) / length };
     };
     if (dodges) {
+        // A fight of two worlds (the Awakened Whisperer's): her souls in the realm first, and
+        // nothing to step out of for a blow the realm's out of (her screech)
+        const realm = realmMove(sim);
+        if (realm) {
+            return realm;
+        }
         // A sandstorm over the room but at a boss's feet (BossAttackDef.outside): in to it first
         const storm = shelter(sim);
         if (storm) {
@@ -768,7 +775,7 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // Out of a swing's reach round the boss, and off where a blast's to land, as it winds up:
         // what anyone steps out of
         // (not Phosani's or Zachariah's: older, above)
-        if (!older && windup?.attack.kind === "swing") {
+        if (!older && windup?.attack.kind === "swing" && windup.attack.world === undefined) {
             const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
             const dx = player.x - boss.x;
             const dy = player.y - boss.y;

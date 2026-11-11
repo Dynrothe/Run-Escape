@@ -293,6 +293,8 @@ export const LASSAR_RECIPE: MapRecipe = {
     detail: (context) => build(context, false),
     points: POINTS,
     twin: LASSAR_REALM_RECIPE,
+    // The Awakened Whisperer's fight, on her island
+    fights: ["awakened_whisperer"],
 };
 
 // In world tiles: the cathedral's middle (where the Whisperer rises)

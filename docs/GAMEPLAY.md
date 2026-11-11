@@ -217,6 +217,7 @@ version and how to run it.
     | Ghorrock           | The Snow ranger, the Eye of the Duke             |                                                                                                      |
     | The Scar           | The Lantern-bearer, the Leviathan's lure         |                                                                                                      |
     | Awakened Vardorvis | Butch                                            |                                                                                                      |
+    | Awakened Whisperer | The Wisp                                         |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -228,7 +229,7 @@ version and how to run it.
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
-  Sands, Awakened Vardorvis), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+  Sands, Awakened Vardorvis, the Awakened Whisperer), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -346,8 +347,10 @@ version and how to run it.
   follows just behind you, keeping clear of your thralls, on every map. Most are only for looks,
   and in co-op the party sees each other's. **Butch**, from Awakened Vardorvis, fights: every 6
   seconds, with an enemy within 5 tiles of you, he leaps on the nearest and hits everything round
-  where he lands (a tile and a half), about what a power-up does, growing as the enemies do. Not in
-  boss fights, where your kit is the whole run.
+  where he lands (a tile and a half), about what a power-up does, growing as the enemies do. **The
+  Wisp**, from the Awakened Whisperer, calls the bones and coins within 8 tiles of you to you every
+  10 seconds, and once a minute that you're hurt sends you a lost soul that heals 5% of your
+  hitpoints as it reaches you. Not in boss fights, where your kit is the whole run.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
@@ -461,6 +464,13 @@ version and how to run it.
       his 2h sword at its top level and **Chop**. He rises in the clearing's middle with you south
       of him, to Blood Rush. It can't be endless; it has a hard mode once it's beaten. Beating him
       finds **Butch**, his pet, every time.
+    - **The Awakened Whisperer** (a boss fight, open once the Lassar Undercity's beaten: Act II's
+      second Awakened fight): nothing but her, on her island before the drowned cathedral, the
+      fight kept to the square round her spot, in both the city and its Shadow Realm. No waves, no
+      picks, no items: you play the Shadow walker with Shadow Burst at its top level and
+      **Blackstone**. She rises on the island with you south of her, to Song of the Silent Choir.
+      It can't be endless; it has a hard mode once it's beaten. Beating her finds **the Wisp**, her
+      pet, every time.
 - **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
   Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
   played in any order, each a normal fifteen-minute run with a rule of its own. Each is
@@ -798,6 +808,24 @@ version and how to run it.
       brings the sword down overhead: a heavy blow on him from within 3 tiles (4 with his guard
       down, and doubled), the same on a captor or his head in reach, and it clears the roots
       within 3 tiles of you whether he's there or not, every four seconds.
+    - **The Awakened Whisperer**: the siren of the Shadow Realm, awakened. Three phases on her
+      hitpoints, each a bar of its own (sinking a moment at 65% and 30%). Her **Volley** is three
+      shots fanned along where you stood as she began (five when she's drowned); her
+      **Tentacles** burst in a cross round where you stood (twice in a row, drowned); her
+      **Shadow burst** lands where you stood. From the second phase her **Screech** hits the
+      whole city wherever you are in it, after a long breath: only the realm's out of it, and when
+      it finds no one her guard's down for three seconds (double damage). She can only be hurt in
+      the city; in the realm she's there and attacking, but out of reach, the realm's tentacles
+      rise near you every few seconds, and your **sanity** drains (faster than in the map, and a
+      hit takes more): at none you're thrown back with a fifth of your hitpoints gone. Once a
+      phase (at 82%, 48% and 14%) she **siphons**: six to eight souls drift in to her, and each
+      that reaches her heals her (no higher than the top of her phase). They're in the realm: you
+      see them from the city, but can catch them (walk into them) only there. Catch every one of a
+      siphon and it breaks: she reels, stunned for three and a half seconds. **Blackstone**, the
+      fight's button, turns the whole party between the city and the realm, every three seconds
+      (everything in the air or on the ground is gone as the world turns); coming out into the
+      city within 3 tiles of her (4 with her guard down), its shock hits her, doubled with her
+      guard down.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

@@ -805,7 +805,19 @@ export class BossFightView {
                 lines.push({ x, y, dirX: (target.x - x) / length, dirY: (target.y - y) / length });
             }
         } else {
-            lines.push({ x: enemy.x, y: enemy.y, dirX: windup.dirX, dirY: windup.dirY });
+            // A fan of them (count, spread), each its own line, as Sim.launchProjectiles throws
+            // them: the Awakened Whisperer's volley
+            const count = attack.count ?? 1;
+            const aim = Math.atan2(windup.dirY, windup.dirX);
+            for (let i = 0; i < count; i++) {
+                const angle = aim + (i - (count - 1) / 2) * (attack.spread ?? 0);
+                lines.push({
+                    x: enemy.x,
+                    y: enemy.y,
+                    dirX: Math.cos(angle),
+                    dirY: Math.sin(angle),
+                });
+            }
         }
         const ctx = overlay.ctx;
         for (const { x, y, dirX, dirY } of lines) {
@@ -937,6 +949,10 @@ export class BossFightView {
         const boss = sim.shownBoss;
         const player = sim.player;
         if (reach === undefined || !boss || boss.dead || sim.intro) {
+            return;
+        }
+        // Out of reach in this world whatever the distance (EnemyDef.hurtIn): no ring
+        if (boss.def.hurtIn !== undefined && boss.def.hurtIn !== sim.layer) {
             return;
         }
         if (Math.hypot(boss.x - player.x, boss.y - player.y) <= reach) {

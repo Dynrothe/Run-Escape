@@ -917,6 +917,16 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       (`abilityBosses`): one with its guard down first, then the nearer (`abilityTarget`).
       `guide` has the button coach (the Tombs' and their quest's): a hint early in a fight, until
       it's first used, and a pulsing ring with a tag while the guard's down.
+    - A fight on a map of two worlds (the Awakened Whisperer's, `MapDef.rule` a `RealmRuleDef`
+      with no souls of its own, `souls.count` 0, so no portal): `FightAbilityDef.turn`
+      (Blackstone) turns the party at the rule's turn of the tick (`fireTurn`, then
+      `turnWithAbility` from `stepRule`), every hero's button waiting its cooldown, and coming out
+      into the city it hits the boss in reach (`abilityTarget`). `EnemyDef.hurtIn` keeps a boss
+      of both worlds out of reach in the other (`damageEnemy` shows it blocked); `caughtIn`
+      catches a soul only in one world; `BossAttackDef.world` is begun only while the party's in
+      that world and finds no one once it's gone into the other (with `opens`, the guard drops);
+      `BossDef.siphon` stuns the boss when the last of its siphon's souls (`siphonLeft`, both
+      worlds) is caught with none of them reaching it (`siphonSoulGone`, `BossState.siphonLost`).
     - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
       till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
       its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
@@ -1232,6 +1242,10 @@ it.
   (`pet:butch` in `damageBySource`). It emits `petLeap`, and `PetFollowers.leap` flies the
   follower there and walks it back. Not on a boss fight map (`MapDef.fight`). A run with a
   looks-only pet or none plays as before (`Vardorvis.test.ts`). The bot takes one with `PET=butch`.
+  The Wisp's power is a `call` (`Sim.stepCallingPet`): every `every` seconds the bones and coins
+  within `reach` of its hero are set `attracted` (as a magnet does), and every `soul` seconds that
+  its hero's hurt, a heal of `heal` of their hitpoints lands `travel` seconds later
+  (`Hero.petSoulTick`, `petSoulLands`), with the soul's glow on them. It emits nothing.
 
 - **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
   is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks

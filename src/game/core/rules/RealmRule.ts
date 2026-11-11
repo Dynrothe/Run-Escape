@@ -208,7 +208,13 @@ export class RealmRule implements RunRule {
             this.souls.splice(at, 1);
         }
         this.caught++;
-        if (this.caught >= this.def.souls.count && !this.portal && this.layer === 1) {
+        // None of its own (a fight's realm, left by its button): no portal
+        if (
+            this.def.souls.count > 0 &&
+            this.caught >= this.def.souls.count &&
+            !this.portal &&
+            this.layer === 1
+        ) {
             this.portal = {
                 x,
                 y,
