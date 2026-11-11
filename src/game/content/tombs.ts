@@ -352,6 +352,10 @@ const BABA_SHOCKWAVE: BossAttackDef = {
         spotAnim: ROCK_IMPACT,
         alpha: 0.55,
         light: MARK_LIGHT,
+        // Her dust doesn't reach its edge: outlined, so what's hit is what's seen. Fitting the
+        // dust bigger (fit) doesn't do it: it's a tall puff, and at twice the size the floor out
+        // to the edge still looked bare.
+        edge: true,
     },
     invoked: { id: "shaking_things_up", radius: 1.4 },
     opens: 1,
@@ -433,8 +437,17 @@ export const BA_BA: EnemyDef = {
         look: TOMBS_EXPOSED,
         // Her rampage runs on her walk (no run of hers is in the cache)
         surgeSeq: 9737,
-        // Camp under her and she stomps, quicker the longer you stay
-        stomp: { radius: 1.6, interval: 0.6, damage: 2, max: 8, sound: 5971 },
+        // Right up against her and she stomps, harder the longer you stay: a ring fills at her
+        // feet before each, and the first waits a moment, so a step back answers it
+        stomp: {
+            radius: 1.6,
+            interval: 0.6,
+            damage: 2,
+            max: 8,
+            sound: 5971,
+            first: 1.2,
+            message: "Ba-Ba stomps on whoever's right up against her! Keep a step back.",
+        },
         rollingStones: {
             at: [0.66, 0.33],
             // Over sooner if someone gets back up to her (TombsPathDef boss.boulders)
@@ -2643,9 +2656,11 @@ export const CRONDIS = {
     spearDamage: 5,
     cloudEvery: 9,
     // No closer than this: a cloud fills its corridor and comes faster than you walk, so a trip
-    // in to the waterfall has to fit between two (meeting them head on, the gap's about half
-    // this), with time to fill
-    cloudEveryLeast: 7,
+    // in to the waterfall has to fit between two, met head on: the next can't set off till one's
+    // gone out of the corridor and you've walked it, a trap's slow and all (the Crondis tests
+    // walk it). At 7, from a path done, getting in was luck, not timing. So path levels hardly
+    // quicken them: the room's harder with them by its water, crocodiles and hits instead.
+    cloudEveryLeast: 8.5,
     cloudSpeed: 3.5,
     cloudBehind: 1.1,
     cloudLength: 3,

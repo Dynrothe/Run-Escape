@@ -54,6 +54,20 @@ the version in the corner).
   hurt, not out of reach in the middle. Fixed by Okaeri.
 - Stat icons on tooltips, cards and the pause menu now show in Português (BR), and in any language
   added later. Fixed by Iakee.
+- Ba-Ba's Shockwave, the pound round her, hit further out than anything showed: up to five tiles
+  with Shaking Things Up, while its dust only covered the ground near her, so it seemed to come
+  from nowhere. Its whole reach is now outlined in red, filling as it comes. Fixed by Okaeri.
+- Ba-Ba stomps on anyone standing right up against her, but nothing showed it, so it looked like
+  damage from nowhere. Now a red ring fills at her feet before each stomp, the first one waits a
+  moment so you can step back, and a message says what it is the first time. The Halloween
+  Mimic's stomp gets the same ring. Fixed by Okaeri.
+- In the Tombs of Amascut's rooms, enemies could come in right on top of you, like the Crondis
+  room's crocodiles where its corridors meet the palm, and bite at once. They now come in by a way
+  in that's clear of the party, or the furthest one. Fixed by Okaeri.
+- The Crondis room's poison clouds went on hitting past the end of their corridor, where none was
+  drawn, and once you'd done a path or two they came so close together that getting in to a
+  waterfall without being caught was luck. They now stop at the corridor's end, and there's
+  always a gap to time your way in. Fixed by Okaeri.
 
 ## 0.30.0 - 2026-11-09
 

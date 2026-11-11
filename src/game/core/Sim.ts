@@ -398,6 +398,8 @@ const TELEPORTER_REACH = 2.2;
 // Tiles from the player enemies turn up at in a Tombs room, which is too small for the usual
 const TOMBS_SPAWN_MIN_DISTANCE = 5;
 const TOMBS_SPAWN_MAX_DISTANCE = 14;
+// Tiles from anyone up a Tombs room's enemy can come in by one of its ways in (Sim.tombsEntrance)
+const TOMBS_ENTRANCE_CLEAR = 5;
 // How close to a door in the Tombs' Nexus counts as at it (tiles from its middle; doors are 3 by 3
 // at most, and solid)
 const TOMBS_DOOR_REACH = 2.8;
@@ -3601,6 +3603,32 @@ export class Sim {
         return undefined;
     }
 
+    // A Tombs room's way in for its next enemy: any not right by someone still in the fight (a
+    // downed one who can be revived too, with whoever comes to revive them), or with none, the
+    // one furthest from them all. Picked from them all, one came out on top of whoever was
+    // passing (the Crondis room's are where its corridors come out by the palm), biting at once.
+    private tombsEntrance(entrances: { x: number; y: number }[]): { x: number; y: number } {
+        const near = this.heroes.filter((hero) => this.isUp(hero) || this.canBeRevived(hero));
+        const distance = entrances.map((at) => {
+            let nearest = Infinity;
+            for (const hero of near) {
+                nearest = Math.min(nearest, fm.hypot(hero.player.x - at.x, hero.player.y - at.y));
+            }
+            return nearest;
+        });
+        const clear = entrances.filter((_, i) => distance[i] >= TOMBS_ENTRANCE_CLEAR);
+        if (clear.length > 0) {
+            return clear[this.rng.int(clear.length)];
+        }
+        let best = 0;
+        for (let i = 1; i < entrances.length; i++) {
+            if (distance[i] > distance[best]) {
+                best = i;
+            }
+        }
+        return entrances[best];
+    }
+
     // Co-op: whether a spot's closer than this to a player still up
     private besideATeammate(x: number, y: number, distance: number): boolean {
         return (
@@ -3784,7 +3812,7 @@ export class Sim {
             const entrances = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room
                 ?.entrances;
             if (entrances && entrances.length > 0) {
-                const at = entrances[this.rng.int(entrances.length)];
+                const at = this.tombsEntrance(entrances);
                 pos = this.walkableSpot(
                     at.x + this.rng.range(-0.4, 0.4),
                     at.y + this.rng.range(-0.4, 0.4),
@@ -9116,6 +9144,10 @@ export class Sim {
             if (dark - CRONDIS.cloudLength > length + 2) {
                 return false;
             }
+            // Nothing dark till its first puff's drawn, half a tile in (GameView.drawCrondis)
+            if (dark <= 0.5) {
+                return true;
+            }
             this.forEachHeroInReach(() => {
                 const hero = this.hero;
                 const { x, y } = this.player;
@@ -9127,8 +9159,13 @@ export class Sim {
                 if (this.crondisFallAt(def, x, y) !== -1) {
                     return;
                 }
-                // How far along from the waterfall's end
+                // How far along from the waterfall's end, and only in the corridor, where it's
+                // drawn: past the palm end it went on hitting whoever waited there, and at the
+                // waterfall end it hit as it set off, before anything dark was there, both unseen
                 const along = lane.fromLow ? y - lane.y0 : lane.y1 + 1 - y;
+                if (along < 0 || along > length) {
+                    return;
+                }
                 if (along <= dark && along >= dark - CRONDIS.cloudLength) {
                     cloud.hit.push(hero.index);
                     this.crondisTrapHit(damage, "The poison catches you: your water spills!");
@@ -19246,18 +19283,46 @@ export class Sim {
                 }
             }
         });
+        // Starting over only once nobody's been under it a while (its first's wait): a tick's step
+        // out, back before it comes, put the first off again and again
+        const wait = secondsToTicks(stomp.first ?? stomp.interval);
+        const interval = secondsToTicks(stomp.interval);
         if (under.length === 0) {
-            state.stomps = 0;
-            state.nextStomp = undefined;
+            if (state.nextStomp !== undefined) {
+                state.stompLeft ??= this.tick;
+                if (this.tick - state.stompLeft >= wait) {
+                    state.stomps = 0;
+                    state.nextStomp = undefined;
+                    state.stompFrom = undefined;
+                    state.stompLeft = undefined;
+                }
+            }
             return;
         }
-        const interval = Math.round(stomp.interval * TICKS_PER_SECOND);
-        state.nextStomp ??= this.tick + interval;
+        if (state.nextStomp === undefined) {
+            state.stompFrom = this.tick;
+            state.nextStomp = this.tick + wait;
+            // Said as its first ring starts filling, so it's known before it lands
+            if (stomp.message && !state.stompSaid) {
+                state.stompSaid = true;
+                this.emit({ type: "notice", message: stomp.message });
+            }
+        } else if (state.stompLeft !== undefined && state.nextStomp <= this.tick) {
+            // Back under after it came due with nobody there: its ring fills again first (it isn't
+            // drawn while nobody's under), rather than it landing the moment they're back. One
+            // still coming isn't put off.
+            state.stompFrom = this.tick;
+            state.nextStomp = this.tick + interval;
+        }
+        state.stompLeft = undefined;
         if (this.tick < state.nextStomp || hurt.length === 0) {
             return;
         }
         state.stomps = (state.stomps ?? 0) + 1;
+        state.stompFrom = this.tick;
         state.nextStomp = this.tick + interval;
+        // Seen as well as heard: its flash at its feet
+        this.emit({ type: "bossSwing", x: enemy.x, y: enemy.y, radius: stomp.radius });
         const damage = Math.min(stomp.max, stomp.damage * state.stomps) * enemy.damageScale;
         const current = this.hero;
         for (const hero of hurt) {

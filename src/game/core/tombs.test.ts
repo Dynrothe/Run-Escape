@@ -35,7 +35,14 @@ import {
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
-import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow, zebakShelters } from "./Sim";
+import {
+    PLAYER_SPEED,
+    Sim,
+    TICKS_PER_SECOND,
+    formationSpots,
+    wardenFrontRow,
+    zebakShelters,
+} from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { isCircleFree } from "./world/Collision";
 import { makeGrid } from "./world/testGrid";
@@ -761,6 +768,137 @@ describe("Ba-Ba", () => {
         return sim;
     }
     const baba = (sim: Sim) => sim.enemies.find((e) => e.def.id === "ba_ba" && !e.dead)!;
+
+    it("stomps on whoever's right up against her, shown and said before it lands", () => {
+        // Players met it as damage from nowhere: against her side, no mark, no word
+        const sim = atBaba();
+        const boss = baba(sim);
+        const stomp = boss.def.boss!.stomp!;
+        const step = (sim as unknown as { stepStomp(e: typeof boss): void }).stepStomp.bind(sim);
+        sim.takeEvents();
+        // Touching her side, as her solid body leaves you
+        sim.player.x = boss.x + boss.radius + sim.player.radius;
+        sim.player.y = boss.y;
+        const hits: number[] = [];
+        const notices: string[] = [];
+        let saidAt = -1;
+        let swings = 0;
+        for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+            sim.tick++;
+            sim.player.invulnerable = 0;
+            const hp = (sim.player.hp = sim.player.maxHp);
+            step(boss);
+            const state = boss.bossState!;
+            if (hits.length === 0) {
+                // The ring's there from the moment you're under, till the first lands
+                expect(state.stompFrom).toBeDefined();
+            }
+            if (sim.player.hp < hp) {
+                hits.push(i);
+            }
+            for (const event of sim.takeEvents()) {
+                if (event.type === "notice") {
+                    notices.push(event.message);
+                    saidAt = i;
+                } else if (event.type === "bossSwing") {
+                    swings++;
+                }
+            }
+        }
+        // The first waits its moment, then each interval
+        expect(hits[0]).toBe(Math.round(stomp.first! * TICKS_PER_SECOND));
+        expect(hits[1] - hits[0]).toBe(Math.round(stomp.interval * TICKS_PER_SECOND));
+        expect(swings).toBe(hits.length);
+        // Said as soon as you're under, not with the first stomp
+        expect(notices).toEqual([stomp.message]);
+        expect(saidAt).toBe(0);
+
+        // A tick's step out and back doesn't put it off: it comes as it would have
+        const state = boss.bossState!;
+        const due = state.nextStomp!;
+        sim.player.x = boss.x + stomp.radius + 1;
+        sim.tick++;
+        step(boss);
+        expect(state.nextStomp).toBe(due);
+        sim.player.x = boss.x + boss.radius + sim.player.radius;
+        while (sim.tick < due) {
+            sim.tick++;
+            sim.player.invulnerable = 0;
+            const hp = (sim.player.hp = sim.player.maxHp);
+            step(boss);
+            expect(sim.player.hp < hp).toBe(sim.tick >= due);
+        }
+
+        // Out of it for its first's wait and it's over, ring and all; back in, the wait again,
+        // and nothing said twice
+        sim.player.x = boss.x + stomp.radius + 1;
+        for (let i = 0; i <= Math.round(stomp.first! * TICKS_PER_SECOND); i++) {
+            sim.tick++;
+            step(boss);
+        }
+        expect(state.nextStomp).toBeUndefined();
+        expect(state.stompFrom).toBeUndefined();
+        sim.takeEvents();
+        sim.player.x = boss.x + boss.radius + sim.player.radius;
+        sim.tick++;
+        step(boss);
+        expect(state.nextStomp! - sim.tick).toBe(Math.round(stomp.first! * TICKS_PER_SECOND));
+        for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
+            sim.tick++;
+            sim.player.invulnerable = 0;
+            step(boss);
+        }
+        expect(sim.takeEvents().some((e) => e.type === "notice")).toBe(false);
+    });
+
+    it("fills her stomp's ring again for whoever's back once it came due without them", () => {
+        // Out a moment past when it was due, and back: it landed the tick they were back, its
+        // ring hidden all the while they were out
+        const sim = atBaba();
+        const boss = baba(sim);
+        const stomp = boss.def.boss!.stomp!;
+        const step = (sim as unknown as { stepStomp(e: typeof boss): void }).stepStomp.bind(sim);
+        const state = () => boss.bossState!;
+        const against = boss.x + boss.radius + sim.player.radius;
+        const away = boss.x + stomp.radius + 1;
+        sim.player.y = boss.y;
+        const at = (x: number): boolean => {
+            sim.tick++;
+            sim.player.invulnerable = 0;
+            const hp = (sim.player.hp = sim.player.maxHp);
+            sim.player.x = x;
+            step(boss);
+            return sim.player.hp < hp;
+        };
+        const interval = Math.round(stomp.interval * TICKS_PER_SECOND);
+        const wait = Math.round(stomp.first! * TICKS_PER_SECOND);
+        // Its first one, and a stomp after that, then out for most of the wait, well past the next
+        let stomps = 0;
+        for (let i = 0; i <= wait + interval; i++) {
+            stomps += at(against) ? 1 : 0;
+        }
+        expect(stomps).toBe(2);
+        for (let i = 0; i < wait - 5; i++) {
+            expect(at(away)).toBe(false);
+        }
+        expect(state().nextStomp!).toBeLessThan(sim.tick);
+        // Back: a ring filling from now, its interval, and then it lands, as hard as the next
+        // would have been
+        const ticksBack = sim.tick + 1;
+        const hits: number[] = [];
+        let landedOn = -1;
+        for (let i = 0; i < interval + 5; i++) {
+            if (at(against)) {
+                hits.push(sim.tick - ticksBack);
+                landedOn = state().stomps!;
+            }
+            if (hits.length === 0) {
+                expect(state().stompFrom).toBe(ticksBack);
+            }
+        }
+        expect(hits).toEqual([interval]);
+        expect(landedOn).toBe(3);
+    });
 
     it("has her adds drop food at Entry, a third of that at Expert, none past 450", () => {
         withEntryScale();
@@ -3087,7 +3225,8 @@ describe("Kephri", () => {
 // waterfall
 const CRONDIS_DEF = {
     palm: { x: 1036.5, y: 1036.5 },
-    // The fill spot as far past the corridor's end as the real room's (1.5 tiles)
+    // The fill spot as far past the corridor's end as the real room's north ones (1.5 tiles; the
+    // south ones' are 2.5)
     falls: [{ fill: { x: 1036.5, y: 1055.5 }, at: { x: 1036.5, y: 1059.5 }, rotation: 0 }],
     lanes: [
         { x0: 1034, x1: 1039, y0: 1044, y1: 1053, low: 1033, high: 1040, fall: 0, fromLow: false },
@@ -3169,6 +3308,163 @@ describe("the Crondis room", () => {
         }
     }
     const palm = (sim: Sim) => sim.enemies.find((e) => e.uid === room(sim).palmUid)!;
+
+    it("never brings a crocodile in on top of someone passing its way in", () => {
+        // Its ways in are where the corridors come out by the palm: one came out on whoever was
+        // coming back with water, biting at once
+        const sim = crondis();
+        const roomDef = TEST_CRONDIS.tombs!.paths[0].room!;
+        const before = roomDef.entrances;
+        const p = sim.player;
+        const by = { x: p.x, y: p.y };
+        try {
+            roomDef.entrances = [by, { x: p.x - 9, y: p.y }];
+            for (let i = 0; i < 20; i++) {
+                const croc = sim.spawnEnemy(getEnemy("crondis_crocodile"), "normal")!;
+                expect(Math.hypot(croc.x - p.x, croc.y - p.y)).toBeGreaterThan(4.5);
+            }
+            // Every way in close: the furthest of them
+            roomDef.entrances = [by, { x: p.x + 3, y: p.y }];
+            const croc = sim.spawnEnemy(getEnemy("crondis_crocodile"), "normal")!;
+            expect(Math.hypot(croc.x - p.x, croc.y - p.y)).toBeGreaterThan(2);
+        } finally {
+            roomDef.entrances = before;
+        }
+    });
+
+    it("keeps its crocodiles from someone down to be revived, not from someone out for good", () => {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_CRONDIS.id,
+            characterId: "",
+            metaStats: emptyStats(),
+            seed: 3,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party: ["warrior", "wizard"].map((characterId) => ({
+                name: characterId,
+                characterId,
+                metaStats: emptyStats(),
+            })),
+        });
+        const [a, b] = sim.heroes;
+        const by = { x: 1030.5, y: 1030.5 };
+        const far = { x: 1045.5, y: 1030.5 };
+        // One up, well away from both ways in; the other down on the first
+        a.player.x = 1037.5;
+        a.player.y = 1046.5;
+        b.player.x = by.x;
+        b.player.y = by.y;
+        b.down = true;
+        const picks = () =>
+            new Set(Array.from({ length: 20 }, () => sim["tombsEntrance"]([by, far])));
+        // Whoever comes to revive them would meet it
+        expect(sim.canBeRevived(b)).toBe(true);
+        expect(picks()).toEqual(new Set([far]));
+        // With no revive left nobody's coming, so it's a way in like the other
+        b.revived += sim.revivesLeftFor(b);
+        expect(sim.canBeRevived(b)).toBe(false);
+        expect(picks().size).toBe(2);
+    });
+
+    describe("its poison", () => {
+        const lane = CRONDIS_DEF.lanes[0];
+        const fill = CRONDIS_DEF.falls[0].fill;
+        // Just out of the corridor's mouth, where its clouds come out
+        const mouth = lane.y0 - 1.5;
+        // A tick with the player at (x, y), nothing else about: whether they were hit
+        function tick(sim: Sim, x: number, y: number): boolean {
+            const r = room(sim);
+            r.spears.forEach((spear) => (spear.nextTick = sim.tick + 1000));
+            sim.tombsRoom!.pending = [];
+            for (const enemy of sim.enemies) {
+                if (!enemy.dead && enemy.def.id.startsWith("crondis_crocodile")) {
+                    sim["vanish"](enemy);
+                }
+            }
+            sim.player.invulnerable = 0;
+            const hp = (sim.player.hp = sim.player.maxHp);
+            sim.player.x = sim.player.prevX = x;
+            sim.player.y = sim.player.prevY = y;
+            if (sim.state === "levelUp") {
+                sim.choose(0);
+            }
+            sim.step();
+            return sim.player.hp < hp;
+        }
+        // At the quickest they come, a cloud set off now
+        function quickest(): { sim: Sim; start: number } {
+            const sim = crondis(["pathmaster"]);
+            expect(sim["crondisCloudEvery"]()).toBe(CRONDIS.cloudEveryLeast);
+            room(sim).nextCloudTick[0] = sim.tick + 1;
+            sim.step();
+            return { sim, start: room(sim).clouds.find((c) => c.lane === 0)!.startTick };
+        }
+
+        it("leaves a way in to the waterfall between two, timed, slowed by a trap too", () => {
+            // Players: going in "it's RNG if you get hit or not", and "the poison does extend
+            // past the area". As OSRS's: timing, not luck.
+            for (const x of [fill.x, (lane.x0 + lane.x1 + 1) / 2]) {
+                // A trap's hit slows you a tenth (CRONDIS.weakened)
+                for (const speed of [1, 0.9]) {
+                    const { sim, start } = quickest();
+                    let hits = 0;
+                    // Waiting at the mouth while one comes all the way down and out: untouched
+                    while (sim.tick - start < 4.9 * TICKS_PER_SECOND) {
+                        hits += tick(sim, x, mouth) ? 1 : 0;
+                    }
+                    // Then straight in at a walk to the waterfall
+                    let y = mouth;
+                    while (Math.hypot(fill.x - x, fill.y - y) > 1.4) {
+                        y = Math.min(fill.y, y + PLAYER_SPEED * speed);
+                        hits += tick(sim, x, y) ? 1 : 0;
+                    }
+                    // Under it while the next sets off and passes them by
+                    for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+                        hits += tick(sim, x, y) ? 1 : 0;
+                    }
+                    const next = room(sim).clouds.filter(
+                        (c) => c.lane === 0 && c.startTick > start,
+                    );
+                    expect(next.length, `x ${x} speed ${speed}`).toBe(1);
+                    expect(hits, `x ${x} speed ${speed}`).toBe(0);
+                }
+            }
+        });
+
+        it("hits only in its corridor, where it's drawn", () => {
+            // Between the corridor's end and the waterfall's shelter (a tile on the real room's
+            // south corridors): it hit there the moment it set off, before anything dark came
+            const { sim, start } = quickest();
+            const strip = { x: lane.x1 + 0.5, y: lane.y1 + 1.3 };
+            expect(Math.hypot(fill.x - strip.x, fill.y - strip.y)).toBeGreaterThan(1.5);
+            let hits = 0;
+            while (sim.tick - start < 6 * TICKS_PER_SECOND) {
+                hits += tick(sim, strip.x, strip.y) ? 1 : 0;
+            }
+            expect(hits).toBe(0);
+            // Inside it, the same cloud does hit
+            const again = quickest();
+            let inside = 0;
+            while (again.sim.tick - again.start < 6 * TICKS_PER_SECOND) {
+                inside += tick(again.sim, fill.x, lane.y1 - 2) ? 1 : 0;
+            }
+            expect(inside).toBe(1);
+            // Just inside its waterfall end, not till the first dark puff's drawn there (half a
+            // tile in): it hit as soon as the dark front set off, with nothing dark to see
+            const edge = quickest();
+            const end = { x: lane.x1 - 0.5, y: lane.y1 + 1 - 0.2 };
+            expect(Math.hypot(fill.x - end.x, fill.y - end.y)).toBeGreaterThan(1.5);
+            let hitAt = -1;
+            while (edge.sim.tick - edge.start < 6 * TICKS_PER_SECOND && hitAt === -1) {
+                if (tick(edge.sim, end.x, end.y)) {
+                    hitAt = edge.sim.tick;
+                }
+            }
+            const seconds = (hitAt - edge.start) / TICKS_PER_SECOND;
+            expect((seconds - CRONDIS.cloudBehind) * CRONDIS.cloudSpeed).toBeGreaterThan(0.5);
+        });
+    });
 
     it("starts with the palm a sapling that can't be hurt, and the first wave", () => {
         const sim = crondis();
