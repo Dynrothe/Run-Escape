@@ -3314,7 +3314,27 @@ function PauseModal({
                 )}
                 <div className="ui-pause-columns">
                     <div className="ui-pause-column">
-                        <div className="ui-pause-list">
+                        {hud.stats.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">
+                                    {t("pause.heading.your_stats")}
+                                </h3>
+                                <div className="ui-pause-stats">
+                                    {hud.stats.map((line) => (
+                                        <StatLine key={line} text={line} />
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        <div
+                            className={
+                                "ui-pause-list" +
+                                (hud.stats.length > 0 &&
+                                hud.weapons.length + hud.passives.length > 0
+                                    ? " ui-pause-loadout"
+                                    : "")
+                            }
+                        >
                             {[...hud.weapons, ...hud.passives].map((slot) => (
                                 <div key={slot.id} className="ui-pause-item">
                                     <ItemIcon
@@ -3344,18 +3364,6 @@ function PauseModal({
                                 </div>
                             ))}
                         </div>
-                        {hud.stats.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.your_stats")}
-                                </h3>
-                                <div className="ui-pause-stats">
-                                    {hud.stats.map((line) => (
-                                        <StatLine key={line} text={line} />
-                                    ))}
-                                </div>
-                            </>
-                        )}
                         {hud.gear.some((slot) => slot.item) && (
                             <>
                                 <h3 className="ui-pause-heading">

@@ -7,6 +7,8 @@ the version in the corner).
 
 ### Added
 
+- Armoury Tabs Added, By Happi:
+  Added weapon and passive tabs to the Armoury, with levels, effects and unlock requirements.
 - Thanksgiving Harvest, By Happi:
   Added a brand-new Thanksgiving Harvest event located at the Hosidius Vinery.
   Added an autumn-themed map selector and a new spawn location beside the Vinery.
@@ -50,6 +52,8 @@ the version in the corner).
 ### Changed
 
 - HUD and Interface Improvements, By Happi:
+  Changed desktop gear slots to match the size of item slots.
+  Changed the pause menu to show your stats above equipped weapons and passives.
   Changed Debuffs now appear before buffs in the HUD and pause-menu effect lists.
 
 ## 0.30.0 - 2026-11-09

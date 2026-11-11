@@ -32,7 +32,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   plus raid weapons from the Scythe of Vitur to Tumeken's shadow, and a Godsword whose hilt you
   pick.
 - **Gear from reward caskets**, worn on your character, with **set bonuses** (Void, Torva, Virtus,
-  Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs.
+  Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs and browse weapon
+  and passive effects, levels and unlocks.
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
   adventurer, shared levels, and the run going on while anyone's standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no

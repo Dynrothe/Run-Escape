@@ -299,6 +299,13 @@ describe("stat icons on the screens that show stats", () => {
         store.setNumbers(createNumbers());
         const view = render(<GameUi store={store} client={client} />);
 
+        const leftColumn = view.container.querySelector(".ui-pause-column")!;
+        expect(leftColumn.firstElementChild).toHaveTextContent("Your stats");
+        expect(leftColumn.children[1]).toHaveClass("ui-pause-stats");
+        expect(leftColumn.children[2]).toHaveClass("ui-pause-loadout");
+        expect(leftColumn.children[2]).toHaveTextContent("Rune scimitar");
+        expect(leftColumn.children[3]).toHaveTextContent("Worn equipment");
+
         const [weapon, gear] = view.container.querySelectorAll(".ui-pause-item");
         const weaponLines = weapon.querySelectorAll(".ui-pause-detail > .ui-stat-line");
         expect([...weaponLines].map((line) => line.textContent)).toEqual([

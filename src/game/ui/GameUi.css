@@ -1822,6 +1822,18 @@
     gap: 2px;
 }
 
+@media (pointer: fine) {
+    .ui-hud-gear-grid {
+        grid-template-columns: repeat(2, 46px);
+    }
+
+    .ui-hud-gear-grid .ui-gear-slot {
+        box-sizing: border-box;
+        width: 46px;
+        height: 42px;
+    }
+}
+
 .ui-hud-gear-grid[hidden] {
     display: none;
 }
@@ -2537,6 +2549,12 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+.ui-pause-loadout {
+    border-top: 1px solid var(--ui-divider);
+    margin-top: 10px;
+    padding-top: 10px;
 }
 
 .ui-pause-item {

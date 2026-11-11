@@ -2094,7 +2094,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   quick tap still selects it. A scroll ends holds and hovers, but a focused tile's description
   follows it, since a controller scrolls its list to what it highlights. Escape dismisses them all.
   Buttons only listen on the window while described or pressed. Small phones keep worn gear and
-  its descriptions in the pause menu.
+  its descriptions in the pause menu. The shared pause layout places the player's stats first,
+  above weapons, passives and worn equipment, on both touch and desktop.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
