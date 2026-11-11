@@ -32,6 +32,9 @@ the version in the corner).
   hurt, not out of reach in the middle. Fixed by Okaeri.
 - Stat icons on tooltips, cards and the pause menu now show in Português (BR), and in any language
   added later. Fixed by Iakee.
+- Ba-Ba's Shockwave, the pound round her, hit further out than anything showed: up to five tiles
+  with Shaking Things Up, while its dust only covered the ground near her, so it seemed to come
+  from nowhere. Its whole reach is now outlined in red, filling as it comes. Fixed by Okaeri.
 - Ba-Ba stomps on anyone standing right up against her, but nothing showed it, so it looked like
   damage from nowhere. Now a red ring fills at her feet before each stomp, the first one waits a
   moment so you can step back, and a message says what it is the first time. The Halloween

@@ -417,6 +417,9 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **Invocations**: Mind the Gap (the gap at the foot, where her barrier stood, kills),
       Boulderdash, Shaking Things Up, Jungle Japes (banana peels root you, drawn as the Banana) and
       Gotta Have Faith (the sarcophagi's bolts hit harder: there's no prayer here to scale by).
+    - **Her shockwave**'s dust (451) doesn't reach the edge of what it hits, so its reach is
+      outlined in red too (`GroundPatternDef.edge`). It's chosen with a hero within 4 tiles, and
+      reaches 3.6 (5 with Shaking Things Up), so whoever's further out is hit as well.
     - **Her stomp** (`BossDef.stomp`): whoever's right up against her (within `stomp.radius` of
       her middle, which her solid body leaves you at) is stomped, harder each time they stay. A
       red ring fills at her feet before each (`GameView.drawBossWindups`), the first waits a

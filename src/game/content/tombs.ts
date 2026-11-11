@@ -352,6 +352,8 @@ const BABA_SHOCKWAVE: BossAttackDef = {
         spotAnim: ROCK_IMPACT,
         alpha: 0.55,
         light: MARK_LIGHT,
+        // Her dust doesn't reach its edge: outlined, so what's hit is what's seen
+        edge: true,
     },
     invoked: { id: "shaking_things_up", radius: 1.4 },
     opens: 1,

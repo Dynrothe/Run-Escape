@@ -2388,9 +2388,11 @@ export class GameView {
     // blast will hit, or a ring closing in at its feet before anything else
     private drawBossWindups(overlay: Overlay, sim: Sim, alpha: number): void {
         const ctx = overlay.ctx;
-        // Shadows on the floor where something's coming down (GroundPatternDef.shadow)
+        // Shadows on the floor where something's coming down (GroundPatternDef.shadow), and the
+        // edge of a mark whose own look doesn't reach as far as it hits (GroundPatternDef.edge)
         for (const hazard of sim.hazards) {
-            if (!hazard.attack.ground?.shadow || sim.tick >= hazard.landTick) {
+            const ground = hazard.attack.ground;
+            if ((!ground?.shadow && !ground?.edge) || sim.tick >= hazard.landTick) {
                 continue;
             }
             const t = Math.min(
@@ -2401,7 +2403,20 @@ export class GameView {
                         Math.max(1, hazard.landTick - hazard.startTick),
                 ),
             );
-            this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+            if (ground.shadow) {
+                this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+                continue;
+            }
+            // As a swing's circle: its whole reach outlined, filling from the middle as it comes
+            this.traceGroundCircle(overlay, sim, hazard.x, hazard.y, hazard.radius);
+            ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+            ctx.stroke();
+            this.traceGroundCircle(overlay, sim, hazard.x, hazard.y, hazard.radius * t);
+            ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+            ctx.fill();
         }
         for (const enemy of sim.enemies) {
             // Its stomp coming, on whoever's right up against it (BossDef.stomp): a ring filling
