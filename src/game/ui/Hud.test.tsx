@@ -82,8 +82,8 @@ function numbers(changes: Partial<HudNumbers> = {}): HudNumbers {
     };
 }
 
-// The HUD with the client's store and nothing else of it
-function renderHud(devTools = false) {
+// The HUD with the client's store and nothing else of it, but for the methods given
+function renderHud(methods: Record<string, unknown> = {}, devTools = false) {
     const store = new GameStore(createSave());
     const noop = () => {};
     const setCameraZoom = vi.fn();
@@ -94,6 +94,7 @@ function renderHud(devTools = false) {
             cameraRig: { distance: 22 },
             setCameraZoom,
             devTools,
+            ...methods,
         },
         { get: (target, key) => (key in target ? target[key as keyof typeof target] : noop) },
     ) as unknown as GameClient;
@@ -218,6 +219,24 @@ describe("the run's HUD", () => {
             expect(screen.getByText("Stress test drain")).toBeVisible();
             view.unmount();
         }
+    });
+
+    test("the sound's orb by the minimap turns it off and on, with the \"no\" sign while it's off", () => {
+        // Its sprites as if drawn
+        vi.spyOn(iconCache, "getFrame").mockReturnValue("data:image/png;base64,");
+        vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
+        const toggleMute = vi.fn();
+        const { store } = renderHud({ toggleMute });
+        const orb = () => screen.getByRole("button", { name: /^Sound (on|off):/ });
+        expect(orb()).toHaveAccessibleName("Sound on: turn it off");
+        expect(orb().closest(".ui-minimap")).not.toBeNull();
+        expect(orb().querySelector(".ui-sound-orb-music")).not.toBeNull();
+        expect(orb().querySelector(".ui-sound-orb-off")).toBeNull();
+        act(() => store.set({ audio: { ...store.getSnapshot().audio, muted: true } }));
+        expect(orb()).toHaveAccessibleName("Sound off: turn it on");
+        expect(orb().querySelector(".ui-sound-orb-off")).not.toBeNull();
+        fireEvent.click(orb());
+        expect(toggleMute).toHaveBeenCalledOnce();
     });
 
     test("empty equipment slots use cache silhouettes and equipped items keep their own icons", () => {

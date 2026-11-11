@@ -32,7 +32,12 @@ import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
-import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    CLOUD_SAVE_SPRITES,
+    REFUND_SPRITE,
+    SOUND_ORB_SPRITES,
+    TITLE_TAB_SPRITES,
+} from "../content/titleIcons";
 import {
     AKKHA,
     APMEKEN_BARRIER_LOC,
@@ -179,9 +184,9 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
     HINT_ARROW_SPRITE,
 ];
 
-// Every interface sprite the game shows: the game view's, the title screen's
-// tabs and cloud save's button, empty equipment slots, the skills' refund button, co-op's flags and the
-// overhead prayers (every frame comes with the first) and the passives with a
+// Every interface sprite the game shows: the game view's, the title screen's tabs and cloud
+// save's button, the sound's orb, empty equipment slots, the skills' refund button, co-op's
+// flags and the overhead prayers (every frame comes with the first) and the passives with a
 // sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
 export function getGameSpriteIds(): number[] {
@@ -190,6 +195,7 @@ export function getGameSpriteIds(): number[] {
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
         ...Object.values(CLOUD_SAVE_SPRITES),
+        ...Object.values(SOUND_ORB_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,

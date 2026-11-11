@@ -1357,6 +1357,74 @@
     color: var(--ui-white);
 }
 
+/* The sound's orb (ui/SoundOrb.tsx), as the client's are: its frame (57x34) at its own size, an
+   orb's fill in the circle (26x26 at 27,4), the harp over it and the "no" sign over that, and its
+   key on the plate (the light face at 4,14, 23x15) in the orbs' green */
+.ui-sound-orb {
+    position: relative;
+    width: 57px;
+    height: 34px;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.ui-sound-orb > * {
+    position: absolute;
+}
+
+.ui-sound-orb-frame {
+    left: 0;
+    top: 0;
+}
+
+.ui-sound-orb-fill {
+    left: 27px;
+    top: 4px;
+}
+
+.ui-sound-orb-key {
+    left: 4px;
+    top: 14px;
+    width: 23px;
+    height: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    line-height: 1;
+    color: #00ff00;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-sound-orb-music {
+    left: 31px;
+    top: 7px;
+    height: 20px;
+}
+
+.ui-sound-orb-off {
+    left: 31px;
+    top: 8px;
+}
+
+/* In a run, against the minimap's upper left under the compass, where the client's hitpoints orb
+   is */
+.ui-minimap .ui-sound-orb {
+    position: absolute;
+    left: -31px;
+    top: 36px;
+}
+
+/* On the title screen, top right, as in a run */
+.ui-title-sound {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
 /* The client's minimap frame (181x165), its map circle 77px round about
    (99, 83) and the compass in the small circle at its top left */
 .ui-minimap {

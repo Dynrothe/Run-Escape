@@ -105,6 +105,7 @@ import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
+import { SoundOrb } from "./SoundOrb";
 import { StatLine } from "./StatLine";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
@@ -832,6 +833,8 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     }
     return (
         <div className="ui-fill ui-title">
+            {/* Top right, as in a run, by the minimap */}
+            <SoundOrb client={client} muted={ui.audio.muted} className="ui-title-sound" />
             <div className="ui-title-logo">
                 <h1>Run Escape</h1>
                 <p>{t("ui.title.tagline")}</p>
@@ -2157,6 +2160,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     questTracker={ui.display.questTracker}
                     damagePanel={ui.display.damagePanel}
                     disabled={ui.overlay !== "none"}
+                    muted={ui.audio.muted}
                 />
             )}
             <div className="ui-toasts">
@@ -2471,12 +2475,14 @@ const Hud = memo(function Hud({
     questTracker,
     damagePanel,
     disabled,
+    muted,
 }: {
     hud: HudView;
     client: GameClient;
     questTracker: boolean;
     damagePanel: boolean;
     disabled: boolean;
+    muted: boolean;
 }): JSX.Element {
     return (
         <>
@@ -2490,7 +2496,7 @@ const Hud = memo(function Hud({
                 <TombsScabarasReading client={client} />
                 {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
                 <div className="ui-hud-right">
-                    <Minimap client={client} />
+                    <Minimap client={client} muted={muted} />
                     <KillsAndCoins client={client} />
                     {hud.round !== undefined && (
                         <div className="ui-round">{t("ui.hud.round", { round: hud.round })}</div>
@@ -2970,7 +2976,14 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
 
 // The client's minimap frame and compass around a canvas the game draws on
 // (runs face north, so the compass does too)
-const Minimap = memo(function Minimap({ client }: { client: GameClient }): JSX.Element {
+// The sound's orb sits at its upper left, where the client's hitpoints orb is
+const Minimap = memo(function Minimap({
+    client,
+    muted,
+}: {
+    client: GameClient;
+    muted: boolean;
+}): JSX.Element {
     const canvasRef = useCallback(
         (canvas: HTMLCanvasElement | null) => client.setMinimapCanvas(canvas),
         [client],
@@ -2980,6 +2993,7 @@ const Minimap = memo(function Minimap({ client }: { client: GameClient }): JSX.E
             <canvas className="ui-minimap-map" ref={canvasRef} />
             <img className="ui-minimap-frame" src={minimapFrame} />
             <img className="ui-minimap-compass" src={compass} />
+            <SoundOrb client={client} muted={muted} />
         </div>
     );
 });

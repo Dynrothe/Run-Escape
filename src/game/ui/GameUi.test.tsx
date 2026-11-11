@@ -385,6 +385,13 @@ function renderTitle(runs: number, lastExported?: number) {
     return { client, store };
 }
 
+test("the title has the sound's orb, which says whether the sound's on", () => {
+    const { store } = renderTitle(3);
+    expect(screen.getByRole("button", { name: "Sound on: turn it off" })).toBeInTheDocument();
+    act(() => store.set({ audio: { ...store.getSnapshot().audio, muted: true } }));
+    expect(screen.getByRole("button", { name: "Sound off: turn it on" })).toBeInTheDocument();
+});
+
 describe("the title's export reminder", () => {
     // Its own, as Node 25 and later have a localStorage that hides jsdom's
     beforeEach(() => {

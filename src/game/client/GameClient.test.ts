@@ -86,6 +86,30 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
     return { client, store, sync };
 }
 
+describe("the sound's on and off", () => {
+    test("says which way it went in a run, and nothing on the menus", () => {
+        const { client, store } = createClient(createSim(), false);
+        const settings = { muted: false, volume: 0.6, music: 0.6 };
+        Object.assign(client, {
+            audio: {
+                settings,
+                setSettings: (changes: Partial<typeof settings>) =>
+                    Object.assign(settings, changes),
+            },
+        });
+        const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
+        client.toggleMute();
+        expect(store.getSnapshot().audio.muted).toBe(true);
+        expect(toasts()).toEqual(["Sound off (M to turn it on)"]);
+        client.toggleMute();
+        expect(toasts()).toEqual(["Sound off (M to turn it on)", "Sound on"]);
+        Object.assign(client, { sim: undefined });
+        client.toggleMute();
+        expect(store.getSnapshot().audio.muted).toBe(true);
+        expect(toasts()).toHaveLength(2);
+    });
+});
+
 describe("movement prediction", () => {
     test("is on unless it's been turned off, and is remembered", () => {
         const stored = new Map<string, string>();
