@@ -10,8 +10,11 @@ import { SCAPERUNE_DEV_MAPS } from "./maps/devMaps";
 import { SCAPERUNE_MAPS } from "./maps/shippedMaps";
 import type { BuildContext, MapRecipe } from "./recipe";
 
+// A map's recipe: its own, or the one a boss fight's fought on (MapRecipe.fights)
 export function getRecipe(mapId: string): MapRecipe | undefined {
-    return [...SCAPERUNE_MAPS, ...SCAPERUNE_DEV_MAPS].find((recipe) => recipe.id === mapId);
+    return [...SCAPERUNE_MAPS, ...SCAPERUNE_DEV_MAPS].find(
+        (recipe) => recipe.id === mapId || recipe.fights?.includes(mapId),
+    );
 }
 
 export function createBuildContext(maps: MapFileLoader, locTypes: LocTypeLoader): BuildContext {
@@ -70,7 +73,8 @@ const installed = new Set<string>();
 // nothing for a real map.
 export async function installRecipe(mapViewer: MapViewer, mapId: string): Promise<void> {
     const recipe = getRecipe(mapId);
-    if (!recipe || installed.has(mapId)) {
+    // Once a recipe, whichever map it's for (a fight on another map's ground shares it)
+    if (!recipe || installed.has(recipe.id)) {
         return;
     }
     const context = createBuildContext(mapViewer.mapFileLoader, mapViewer.locTypeLoader);
@@ -82,7 +86,7 @@ export async function installRecipe(mapViewer: MapViewer, mapId: string): Promis
         }
     }
     await mapViewer.addCustomMapSquares(squares);
-    installed.add(mapId);
+    installed.add(recipe.id);
 }
 
 // The same for a scene builder on its own, in a script. Does nothing for a real

@@ -1998,6 +1998,9 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   `twin`: a second recipe on squares of its own, installed with it and pinned in `grid-hash.ts` with it, which the game
   draws in the map's place while the party's in the other world (`MapDef.twin`, `MapManager.twin`). Only the map's own
   collision is used, so build the twin from the same cut, its locs off where the map's twins are.
+- A boss fight on a shipped map's own ground (Awakened Vardorvis in the Stranglewood, the Awakened Whisperer in the
+  Lassar Undercity) is a `MapDef` of its own with the map's `arena`; name it in that recipe's `fights`, or the game
+  (`getRecipe`, `installRecipe`) and the slim cache won't find the recipe for the fight's id and draw nothing there.
 - A map whose rule reads places off it (Ghorrock's braziers, vents, ice pools and the statues that hide you from the
   Duke's gaze, `maps/ghorrock.ts`) exports them in grid tiles, and the content turns them into world tiles for the rule
   (`ColdRuleDef`) and the `MapDef`'s `features`. What the game draws in their place (the braziers, which it lights and

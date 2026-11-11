@@ -359,6 +359,8 @@ export const STRANGLEWOOD_RECIPE: MapRecipe = {
     build: (context) => buildDetail(context).grid,
     detail: buildDetail,
     points: POINTS,
+    // Awakened Vardorvis's fight, in his clearing
+    fights: ["awakened_vardorvis"],
 };
 
 // In world tiles: the clearing's middle (where Vardorvis rises), and the spawn
