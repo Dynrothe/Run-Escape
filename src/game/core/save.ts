@@ -13,6 +13,7 @@ import {
     gauntletOrderKey,
     isGauntletOrder,
 } from "../content/gauntlet";
+import { INVADER_BY_ID } from "../content/invaders";
 import {
     InvocationPreset,
     RUN_SET,
@@ -23,6 +24,7 @@ import {
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
     ALL_MAPS,
+    CAMPAIGN_MAPS,
     MAPS,
     MAP_BY_ID,
     RAID_MAPS,
@@ -31,6 +33,7 @@ import {
     isFunMap,
     isRaidMap,
     isSeasonalMap,
+    takesRelics,
 } from "../content/maps";
 import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
@@ -47,6 +50,7 @@ import {
     emptyStats,
 } from "../content/types";
 import { LOCKABLE_ITEMS, LOCKABLE_ITEM_BY_ID, LockableItem, isAvailable } from "../content/unlocks";
+import { VAULT_WEEKS_KEPT, VaultRecord, isBetterVault, parseWeekKey } from "../content/vault";
 import { WEAPONS } from "../content/weapons";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
@@ -153,9 +157,18 @@ export type SaveData = {
     gauntletOrder?: string[];
     // The Forgotten Four's clears and records, on normal and on hard
     gauntlet?: { normal?: GauntletModeRecord; hard?: GauntletModeRecord };
-    // Awakener's orbs held (act-2-fallen-empire.md 8.6): the gauntlet's first clears give them;
-    // what they're spent on is build order step 16's
+    // Awakener's orbs held (act-2-fallen-empire.md 8.6): each Awakened fight won gives one, and the
+    // gauntlet's first clears two; one's spent awakening a campaign map's final boss for a run
+    // (spent once it comes: a run left before it keeps the orb)
     awakenerOrbs?: number;
+    // A campaign map's id -> the times its final boss was beaten awakened (its card's mark)
+    awakenedWins?: Record<string, number>;
+    // Awakened invasions (content/invasions.ts): invader id -> the times one's been killed, for
+    // the Collection log
+    invasions?: Record<string, number>;
+    // The weekly Vault (content/vault.ts): a week's key ("2026-W46") -> its best run, the latest
+    // VAULT_WEEKS_KEPT weeks
+    vault?: Record<string, VaultRecord>;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // When the player last exported it (Date.now()), so an exported file says
@@ -477,6 +490,32 @@ export function migrateSave(raw: unknown): SaveData {
     if (orbs > 0) {
         save.awakenerOrbs = orbs;
     }
+    for (const [id, wins] of Object.entries(data.awakenedWins ?? {})) {
+        const count = Math.floor(num(wins, 0));
+        if (MAP_BY_ID.has(id) && count > 0) {
+            save.awakenedWins = { ...save.awakenedWins, [id]: count };
+        }
+    }
+    for (const [id, kills] of Object.entries(data.invasions ?? {})) {
+        const count = Math.floor(num(kills, 0));
+        if (INVADER_BY_ID.has(id) && count > 0) {
+            save.invasions = { ...save.invasions, [id]: count };
+        }
+    }
+    for (const [key, record] of Object.entries(data.vault ?? {})) {
+        const seconds = num(record?.seconds, 0);
+        if (parseWeekKey(key) && seconds > 0) {
+            save.vault = {
+                ...save.vault,
+                [key]: {
+                    seconds,
+                    kills: Math.max(0, Math.floor(num(record.kills, 0))),
+                    victory: record.victory === true,
+                    runs: Math.max(1, Math.floor(num(record.runs, 1))),
+                },
+            };
+        }
+    }
     if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;
     }
@@ -672,6 +711,12 @@ export type RunSummary = {
     realmCaskets?: number;
     // The Scabaras room was beaten: its puzzle helper's unlocked
     scabarasBeaten?: boolean;
+    // An Awakened invasion (Sim's RunResult): its invader and whether it fell
+    invasion?: { id: string; came: boolean; killed: boolean };
+    // The final boss awakened by an orb: whether it came, so the orb's spent
+    awakened?: { seen: boolean };
+    // The weekly Vault's run: its week's key (content/vault.ts)
+    vault?: string;
 };
 
 function migrateGauntletMode(
@@ -817,6 +862,42 @@ export function takeActEnding(save: SaveData): string | undefined {
     return act.id;
 }
 
+// Awakener's orbs an Awakened fight's win gives (act-2-fallen-empire.md 7.2)
+export const AWAKENED_WIN_ORBS = 1;
+
+// Whether an orb can awaken this map's final boss: one held, on a campaign map's survival run
+export function canAwaken(save: SaveData, mapId: string): boolean {
+    const map = MAP_BY_ID.get(mapId);
+    return (
+        (save.awakenerOrbs ?? 0) > 0 &&
+        map !== undefined &&
+        CAMPAIGN_MAPS.includes(map) &&
+        takesRelics(map)
+    );
+}
+
+// A Vault run's week, its best kept if it's better, and only the latest weeks
+export function recordVault(
+    save: SaveData,
+    key: string,
+    run: { seconds: number; kills: number; victory: boolean },
+): boolean {
+    if (!parseWeekKey(key)) {
+        return false;
+    }
+    const best = save.vault?.[key];
+    const better = isBetterVault(run, best);
+    const runs = (best?.runs ?? 0) + 1;
+    const record: VaultRecord = better
+        ? { seconds: run.seconds, kills: run.kills, victory: run.victory, runs }
+        : { ...best!, runs };
+    const weeks = { ...save.vault, [key]: record };
+    // Keys sort as their weeks do ("2026-W46")
+    const kept = Object.keys(weeks).sort().slice(-VAULT_WEEKS_KEPT);
+    save.vault = Object.fromEntries(kept.map((week) => [week, weeks[week]]));
+    return better;
+}
+
 // Banks the run, and pays out the quests it finished. Returns those quests.
 export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     // Nothing from a development map, or its id would stay in the save for good
@@ -834,9 +915,30 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         const next = (run.stage ?? 0) + 1;
         save.fightStages = { ...save.fightStages, [run.mapId]: next >= stages.length ? 0 : next };
     }
+    // An Awakener's orb on the final boss is spent once it's come, won or not
+    if (run.awakened?.seen) {
+        save.awakenerOrbs = Math.max(0, (save.awakenerOrbs ?? 0) - 1) || undefined;
+        if (run.victory) {
+            save.awakenedWins = {
+                ...save.awakenedWins,
+                [run.mapId]: (save.awakenedWins?.[run.mapId] ?? 0) + 1,
+            };
+        }
+    }
+    if (run.invasion?.killed && INVADER_BY_ID.has(run.invasion.id)) {
+        const id = run.invasion.id;
+        save.invasions = { ...save.invasions, [id]: (save.invasions?.[id] ?? 0) + 1 };
+    }
+    if (run.vault) {
+        recordVault(save, run.vault, run);
+    }
     if (run.victory && beatsMap(run)) {
         if (GAUNTLET_FIGHTS.includes(run.mapId) && !save.awakenedOrder?.includes(run.mapId)) {
             save.awakenedOrder = [...(save.awakenedOrder ?? []), run.mapId];
+        }
+        // Each Awakened fight won gives an Awakener's orb (the gauntlet's fights don't come here)
+        if (GAUNTLET_FIGHTS.includes(run.mapId)) {
+            save.awakenerOrbs = (save.awakenerOrbs ?? 0) + AWAKENED_WIN_ORBS;
         }
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;

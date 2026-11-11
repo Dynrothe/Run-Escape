@@ -2322,6 +2322,9 @@ export type RealmRuleDef = {
     // the fight's button (FightAbilityDef.turn) or sanity running out
     souls: { enemyId: string; count: number; distance: [min: number, max: number] };
     portal: { seconds: number; radius: number };
+    // Puddles open only in this circle, world tiles (an invader's pocket, core/rules/invasion.ts),
+    // not round a player
+    area?: { x: number; y: number; radius: number };
     // What drops are worth in the realm: bones' experience and coins times these, and a casket
     // this much likelier
     drops: { bones: number; coins: number; caskets: number };
@@ -2406,6 +2409,9 @@ export type ColdRuleDef = {
     // The ice (an effect mask: core/world/EffectMask.ts): ellipses of tiles, rx by ry about x, y,
     // where a player slides, grip of the way to where they steer each tick
     ice: { pools: { x: number; y: number; rx: number; ry: number }[]; grip: number };
+    // The cold only rises in this circle, world tiles (an invader's pocket, core/rules/invasion.ts),
+    // and falls thaw a second out of it
+    area?: { x: number; y: number; radius: number; thaw: number };
     // How it's drawn: a brazier, drawn brazierScale as big, with fire (fireScale as big) in it
     // while it's lit; a vent's gas as it frosts over (its jet is the map's) and the spot animation
     // of its puff; the ice block round someone frozen; the fire of a fire elite's embers; a wash

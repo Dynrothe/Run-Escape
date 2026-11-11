@@ -253,6 +253,31 @@ version and how to run it.
   fighting pets (a red glow: the cache has no recolour of theirs), the act card's gold border and
   the gauntlet's hard mode (each fight's own hard). The fights don't count as the fights' own wins
   or drop anything. Solo only for now.
+- **Awakened invasions** (`content/invasions.ts`, `content/invaders.ts`, `core/rules/invasion.ts`):
+  once all four Act II maps are beaten, a campaign run from the Desert on (not endless) rolls by its
+  seed, 1 in 4 (1 in 2 on hard), for one of the four Act II final bosses to come as a mid-run boss
+  between 6:00 and 12:00, with 1.5 times the map's toughest mid-run boss's hitpoints. It brings a
+  pocket 24 tiles across round where it comes and keeps to it while it lives: Vardorvis's roots
+  creeping in from its edge (3-tile cells, no hearts), the Whisperer's realm through a puddle that
+  opens in it every 20 s (she can only be hurt in the realm), Duke Sucellus's cold rising in it
+  (1.5 times Ghorrock's, a ring of ice round its edge, thawing out of it), or the Leviathan's dark
+  (the Scar's, only in it; weapons aim only at what's lit in it). A rule a remix has on already
+  doesn't come; with all four on, nothing does. Each invader's kit leaves out its summons and what
+  needs its own map (the Duke's vents and gaze). Its kill drops a master casket and 100 to 200
+  coins, and counts on its Act II map's Collection log tab (`SaveData.invasions`).
+- **Awakener's orbs** (`SaveData.awakenerOrbs`, object 28334): each Awakened fight won gives one
+  (the gauntlet's first clears two, its fights none). On a campaign map's card (solo, not endless)
+  the orb's switch awakens its final boss for one run: 1.6 times its hitpoints, enraged from 75%,
+  its attacks and walk 20% quicker, tinted dark violet and glowing. The orb's spent once the boss
+  comes. Its fall opens a master casket (its coins the run's, its gear found for the Armoury), and
+  a win marks the map's tile with an orb (`SaveData.awakenedWins`).
+- **The weekly Vault** (`content/vault.ts`, `ui/Vault.tsx`): open once all four Awakened fights
+  are beaten, from the act's middle card. The ISO week in UTC (it turns Monday 00:00 UTC) is the
+  seed, which picks a campaign map from the Desert on, one or two remixes, three invocations (not
+  hard mode's) and an adventurer (lent, unlocked or not). No relics, never hard or endless, no
+  invasions or orbs; the shop's upgrades are the player's own. Its best each week is kept (a win
+  beats a fall, then the quicker win or the longer fall, then kills), for the last 12 weeks. A host
+  can make it the room's run: everyone plays the Vault's adventurer on its seed.
 - **Hard mode**: the switch beside Endless, open once you've beaten the map (from the start on fun
   maps). Enemies have more hitpoints and hit harder, more of them come at once, every elite is two,
   and bosses enrage at 65% of their hitpoints and attack 15% faster. How much tougher depends on the map: the early ones gain the most, as a player who's

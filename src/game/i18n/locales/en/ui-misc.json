@@ -363,6 +363,7 @@
     "toast.siphon_left.one": "A siphoned soul caught: {n} still out",
     "toast.siphon_left.other": "A siphoned soul caught: {n} still out",
     "toast.frozen_solid": "You're frozen solid! Get to a brazier.",
+    "toast.frozen_solid_pocket": "You're frozen solid! Get out of the cold.",
     "notice.evolved": "Evolved: {name}!",
     "notice.set_bonus": "{set} set bonus: {bonus}!",
     "notice.appeared": "{name} has appeared!",

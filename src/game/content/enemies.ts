@@ -4,6 +4,7 @@ import { CURSED_SANDS_ENEMIES } from "./cursedSands";
 import { DUKE_ENEMIES } from "./duke";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { GHORROCK_ENEMIES } from "./ghorrock";
+import { getInvaders } from "./invaders";
 import { LASSAR_ENEMIES } from "./lassar";
 import { LEVIATHAN_ENEMIES } from "./leviathan";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
@@ -8395,6 +8396,17 @@ ENEMIES.push(...CURSED_SANDS_ENEMIES);
 // The Theatre of Blood raid's bosses, some of them copies of Morytania's above
 ENEMIES.push(
     ...getTheatreBosses((id) => {
+        const def = ENEMIES.find((e) => e.id === id);
+        if (!def) {
+            throw new Error("Unknown enemy " + id);
+        }
+        return def;
+    }),
+);
+
+// Awakened invasions' bosses (content/invaders.ts), made from the Act II maps' own
+ENEMIES.push(
+    ...getInvaders((id) => {
         const def = ENEMIES.find((e) => e.id === id);
         if (!def) {
             throw new Error("Unknown enemy " + id);

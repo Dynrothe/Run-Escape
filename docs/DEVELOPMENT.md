@@ -1464,6 +1464,13 @@ colour added. So a pixel costs the same however many lights there are. `GameWebG
 changes the programs over as a run starts (the first time, it builds the lit set and the light
 map's texture; changing over loads the map squares again and remakes the actors' draw calls).
 
+**A pocket of the dark** (an invading Leviathan's, `Sim.darkPocket`): a run that'll have one is lit
+from the start (`POCKET_LIGHTING`, ambient 1), as the programs are picked as a run starts. The pocket
+is the light map's alpha (`LightMap.darken`), and `u_ambient.w` its ambient: with that over 0 the
+shader mixes from the map's ambient to the pocket's by the alpha, and only adds lights by it too, so
+out of the pocket the map's drawn exactly as unlit. The alpha's only in the light map's 64 tiles round
+the view, so a pocket further off than that would be drawn lit.
+
 **Drawn at full brightness** (`ActorDrawOptions.unlit`): projectiles, spot animations, power-ups and
 caskets on the ground, power-ups' effects, bosses' hazards and everything the boss fight's view draws
 (`ActorRenderer.unlitAtLeast`). A hit's flash shows too. The overlay (hitsplats, health bars,

@@ -183,6 +183,9 @@ describe("the gauntlet's records and rewards", () => {
 
     test("any first clear gives two Awakener's orbs, saved; only a clean one the looks", () => {
         const save = beatAll();
+        // Each Awakened win gave one already
+        const won = save.awakenerOrbs ?? 0;
+        expect(won).toBe(2);
         const retried = recordGauntlet(save, {
             order: ORDER,
             hard: false,
@@ -190,7 +193,7 @@ describe("the gauntlet's records and rewards", () => {
             retries: 2,
         });
         expect(retried).toMatchObject({ firstClear: true, orbs: FIRST_CLEAR_ORBS, looks: false });
-        expect(save.awakenerOrbs).toBe(2);
+        expect(save.awakenerOrbs).toBe(won + 2);
         expect(isGauntletHardOpen(save)).toBe(false);
         expect(hasGauntletLooks(save)).toBe(false);
         const clean = recordGauntlet(save, { order: ORDER, hard: false, seconds: 600, retries: 0 });
@@ -203,14 +206,14 @@ describe("the gauntlet's records and rewards", () => {
             // Clean beats quicker with retries
             record: true,
         });
-        expect(save.awakenerOrbs).toBe(2);
+        expect(save.awakenerOrbs).toBe(won + 2);
         expect(isGauntletHardOpen(save)).toBe(true);
         // Hard's own first clear gives its own
         recordGauntlet(save, { order: ORDER, hard: true, seconds: 700, retries: 0 });
-        expect(save.awakenerOrbs).toBe(4);
+        expect(save.awakenerOrbs).toBe(won + 4);
         // Kept through a save's reload
         const loaded = migrateSave(JSON.parse(JSON.stringify(save)));
-        expect(loaded.awakenerOrbs).toBe(4);
+        expect(loaded.awakenerOrbs).toBe(won + 4);
         expect(loaded.gauntlet).toEqual(save.gauntlet);
         expect(hasGauntletLooks(loaded)).toBe(true);
     });

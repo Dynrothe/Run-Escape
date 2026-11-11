@@ -116,8 +116,12 @@ export class RealmRule implements RunRule {
         if (tick < this.nextPuddleTick || heroes.length === 0 || host.finalBossUp) {
             return;
         }
+        // In its circle (an invader's pocket), or near one of the party
+        const area = this.def.area;
         const pick = this.rng.int(heroes.length / 3) * 3;
-        const spot = this.findSpot(heroes[pick + 1], heroes[pick + 2], puddles.distance);
+        const spot = area
+            ? this.findSpot(area.x, area.y, [0, area.radius])
+            : this.findSpot(heroes[pick + 1], heroes[pick + 2], puddles.distance);
         if (!spot) {
             return;
         }

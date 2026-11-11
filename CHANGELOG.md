@@ -98,6 +98,19 @@ the version in the corner).
   retry that fight or start over. Your first clear gives two Awakener's orbs; your first clean
   one, with no retries, makes the Soulreaper axe and the four fighting pets blood-touched, turns
   the act's card gold and opens its hard mode. On your own for now.
+- Awakened invasions: once all four Act II maps are beaten, a run from the Desert on can be
+  invaded, between 6:00 and 12:00, by Vardorvis, the Whisperer, Duke Sucellus or the Leviathan
+  (1 in 4, 1 in 2 on hard). Each brings a pocket of its own map round where it comes, for as
+  long as it lives: roots creeping in, a puddle into the Whisperer's realm (she can only be hurt
+  there), a ring of cold, or a bubble of dark. Kill it for a master casket and a pile of coins;
+  the Collection log counts each.
+- Awakener's orbs: each Awakened win gives one. Spend one on a campaign map's card to awaken its
+  final boss for a run: 1.6 times its hitpoints, enraged from 75% and 20% faster, darker and
+  glowing violet. A win always opens a master casket and marks the map's card. Leave before the
+  boss comes and the orb's kept.
+- The weekly Vault, on the act's middle card once all four Awakened are beaten: one run a week,
+  the same for everyone (a map, its remixes, three invocations and an adventurer, from the week),
+  with your best time and kills kept for each week. A party can play it from the host's room.
 
 ### Changed
 

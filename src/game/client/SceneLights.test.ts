@@ -39,6 +39,8 @@ class Target implements LightTarget {
         this.lights = [];
     }
     endLights(): void {}
+    setDarkPocket(): void {}
+    darken(): void {}
     setAmbient(level: number, color: number): void {
         this.ambient = [level, color];
     }

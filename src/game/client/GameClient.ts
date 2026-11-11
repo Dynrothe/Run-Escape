@@ -10,7 +10,9 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
-import { BlessingId, CAMP_SECONDS, isGauntletOrder } from "../content/gauntlet";
+import { BlessingId, CAMP_SECONDS, GAUNTLET_FIGHTS, isGauntletOrder } from "../content/gauntlet";
+import { INVADER_BY_ID } from "../content/invaders";
+import { isInvasionOpen, rollInvasion, takesInvasions } from "../content/invasions";
 import {
     RUN_SET,
     getRaidBand,
@@ -51,6 +53,14 @@ import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getEveryTimeTrophiesFound } from "../content/trophies";
 import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
+import {
+    VaultRun,
+    getVault,
+    getVaultAt,
+    isBetterVault,
+    isVaultOpen,
+    parseWeekKey,
+} from "../content/vault";
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
@@ -72,6 +82,7 @@ import {
     winGauntletFight,
 } from "../core/gauntlet";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
+import { POCKET_COLD_WASH, invasionContent } from "../core/rules/invasion";
 import { remixContent } from "../core/rules/remix";
 import {
     NewerSave,
@@ -79,6 +90,7 @@ import {
     SaveStore,
     buyArmouryUpgrade,
     buyUpgrade,
+    canAwaken,
     cleanRunInvocations,
     exportSave,
     getEarnedUnlocks,
@@ -478,6 +490,9 @@ export type GameClientOptions = {
     // ?raidtest on the dev server: solo runs with a raid's rooms two minutes apart and every
     // level up at its max (SimTesting); "short" for the rooms alone
     raidTest?: "max" | "short";
+    // ?invade=invading_duke@20 on the dev server: that invader at that second of the map's clock
+    // on a map that takes invasions, once they're open (SimTesting.invasion)
+    invade?: string;
 };
 
 // A boss winding up a gaze (BossAttackDef.cover) lights the arena, more as it comes: how much
@@ -641,6 +656,8 @@ export class GameClient implements GameFrameHandler {
     // meanwhile)
     private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
+    // The weekly Vault's week, while its run's the one going (content/vault.ts)
+    private runVault?: string;
     // The Forgotten Four, while it's being run (content/gauntlet.ts), and its camp's timer
     private gauntletRun?: GauntletRun;
     private campTimer?: number;
@@ -1056,6 +1073,8 @@ export class GameClient implements GameFrameHandler {
                 this.sounds.denied();
                 return;
             }
+            // Another map: the room's next run isn't the Vault's any more
+            this.store.set({ vaultRoom: undefined });
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -1070,7 +1089,14 @@ export class GameClient implements GameFrameHandler {
             hard: snapshot.hard && isHardUnlocked(this.save, mapId),
             expert: snapshot.expert && isExpertUnlocked(this.save, mapId),
             remixes: this.openRemixes(mapId, snapshot.remixes),
+            awaken: snapshot.awaken && canAwaken(this.save, mapId),
         });
+    }
+
+    // An Awakener's orb on the map's final boss, for the next run (solo: an orb's the player's own)
+    toggleAwaken(): void {
+        const { mapId, awaken } = this.store.getSnapshot();
+        this.store.set({ awaken: !awaken && canAwaken(this.save, mapId) && !this.coop.room });
     }
 
     // Of these remixes, those open on the map (content/remixes.ts, isRemixOpen)
@@ -1281,6 +1307,28 @@ export class GameClient implements GameFrameHandler {
             this.sounds.denied();
             return;
         }
+        // The weekly Vault, if the room's on its map for it: its seed, remixes, invocations and
+        // adventurer for everyone
+        const vaultKey = this.store.getSnapshot().vaultRoom;
+        const vault = vaultKey !== undefined ? getVault(vaultKey) : undefined;
+        if (vault && vault.mapId === map.id) {
+            this.coop.start({
+                seed: vault.seed,
+                mapId: map.id,
+                endless: false,
+                hard: false,
+                invocations: vault.invocations,
+                remixes: vault.remixes,
+                vault: vault.key,
+                heroes: room.members.map((member) => ({
+                    id: member.id,
+                    name: member.name,
+                    characterId: vault.characterId,
+                    loadout: member.loadout ?? makeLoadout({}, [], {}),
+                })),
+            });
+            return;
+        }
         const remixes = this.openRemixes(map.id, this.store.getSnapshot().remixes);
         // The room's modes, which the relay checked everyone has (or takes
         // anyone for, with anyMap), so the run is what the lobby said
@@ -1302,6 +1350,7 @@ export class GameClient implements GameFrameHandler {
                 invocations: this.save.runInvocations ?? [],
             }),
             ...(remixes.length > 0 && { remixes }),
+            ...(isInvasionOpen(this.save.mapVictories) && { invasions: true }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1715,9 +1764,11 @@ export class GameClient implements GameFrameHandler {
         back: Screen,
         pets: (string | undefined)[],
         remixes: readonly string[] = [],
+        // What else the run can bring in (an invasion's: invasionContent)
+        extra: unknown[] = [],
     ): Promise<boolean> {
         const map = getMap(mapId);
-        const enemies = getMapEnemies(map, remixContent(remixes));
+        const enemies = getMapEnemies(map, [...remixContent(remixes), ...extra]);
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
@@ -1747,38 +1798,69 @@ export class GameClient implements GameFrameHandler {
 
     // cinematic: false to start without the map's opening cinematic (a retry)
     // gauntlet: a fight of the Forgotten Four's (this.gauntletRun), on its mode, nothing else on
+    // vault: the weekly Vault's run (content/vault.ts): its map, seed, remixes, invocations and
+    // adventurer, none of the player's relics, never hard or endless
     async startRun(
         mapId: string = this.store.getSnapshot().mapId,
         cinematic = true,
         gauntlet?: GauntletRun,
+        vault?: VaultRun,
     ): Promise<void> {
+        if (vault) {
+            mapId = vault.mapId;
+        }
         if (!isMapUnlocked(this.save, mapId)) {
             return;
         }
         const map = getMap(mapId);
+        const snapshot = this.store.getSnapshot();
+        const plain = !gauntlet && !vault;
         // Fun maps are always endless, and some have everyone play one
         // adventurer (Durial321 in Falador)
         const endless =
-            !gauntlet &&
-            (map.fun !== undefined ||
-                (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId)));
+            plain &&
+            (map.fun !== undefined || (snapshot.endless && isEndlessUnlocked(this.save, mapId)));
         const hard = gauntlet
             ? gauntlet.hard
-            : this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
-        const expert =
-            !gauntlet && this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
-        const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
-        const remixes = gauntlet ? [] : this.openRemixes(mapId, this.store.getSnapshot().remixes);
-        if (!(await this.travelTo(mapId, "characters", [this.save.pet], remixes))) {
+            : plain && snapshot.hard && isHardUnlocked(this.save, mapId);
+        const expert = plain && snapshot.expert && isExpertUnlocked(this.save, mapId);
+        const characterId = vault?.characterId ?? getMapCharacter(map) ?? snapshot.characterId;
+        const remixes = vault
+            ? vault.remixes
+            : gauntlet
+              ? []
+              : this.openRemixes(mapId, snapshot.remixes);
+        const seed = vault?.seed ?? (Math.random() * 0x7fffffff) | 0;
+        // Awakened invasions, once open (rolled by the seed: its invader's baked with the map), and
+        // an orb on the final boss
+        const invasions = plain && isInvasionOpen(this.save.mapVictories);
+        const forced = this.forcedInvasion();
+        const invasion =
+            invasions && !endless
+                ? forced && INVADER_BY_ID.has(forced.invader) && takesInvasions(map)
+                    ? { invader: INVADER_BY_ID.get(forced.invader)!, at: forced.at, hp: 0 }
+                    : rollInvasion(map, seed, hard, remixes)
+                : undefined;
+        const awakened = plain && !endless && snapshot.awaken && canAwaken(this.save, mapId);
+        if (
+            !(await this.travelTo(
+                mapId,
+                "characters",
+                [this.save.pet],
+                remixes,
+                invasionContent(invasion),
+            ))
+        ) {
             return;
         }
+        this.runVault = vault?.key;
         usePortableMath(false);
         const sim = new Sim({
             grid: this.grid,
             mapId,
             characterId,
             metaStats: getMetaStats(this.save, getCharacter(characterId).style),
-            seed: (Math.random() * 0x7fffffff) | 0,
+            seed,
             spawnX: map.spawn.x,
             spawnY: map.spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
@@ -1791,18 +1873,24 @@ export class GameClient implements GameFrameHandler {
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
             actStep: getActStep(map, this.save.mapVictories),
-            invocations: map.tombs
-                ? (this.save.invocations ?? [])
-                : takesInvocations(map, remixes.length > 0)
-                  ? (this.save.runInvocations ?? [])
-                  : undefined,
-            relics: this.runRelics(map),
+            invocations: vault
+                ? vault.invocations
+                : map.tombs
+                  ? (this.save.invocations ?? [])
+                  : takesInvocations(map, remixes.length > 0)
+                    ? (this.save.runInvocations ?? [])
+                    : undefined,
+            relics: vault ? [] : this.runRelics(map),
             remixes,
+            invasions,
+            awakened,
             stage: this.chosenStage(mapId),
             gauntlet: gauntlet && gauntletFightOptions(gauntlet),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
-                : undefined,
+                : forced
+                  ? { invasion: forced }
+                  : undefined,
         });
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
@@ -1856,7 +1944,18 @@ export class GameClient implements GameFrameHandler {
         const pets = game.heroes.map((hero) =>
             typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
         );
-        if (!(await this.travelTo(game.mapId, "coop", pets, game.remixes ?? []))) {
+        const invasion = game.invasions
+            ? rollInvasion(getMap(game.mapId), game.seed, game.hard, game.remixes ?? [])
+            : undefined;
+        if (
+            !(await this.travelTo(
+                game.mapId,
+                "coop",
+                pets,
+                game.remixes ?? [],
+                game.endless ? [] : invasionContent(invasion),
+            ))
+        ) {
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1891,9 +1990,11 @@ export class GameClient implements GameFrameHandler {
             stage: game.stage,
             invocations: game.invocations,
             remixes: game.remixes,
+            invasions: game.invasions === true,
             party,
             focus,
         });
+        this.runVault = game.vault && parseWeekKey(game.vault) ? game.vault : undefined;
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
         run.setPrediction(this.display.movePrediction);
@@ -2385,6 +2486,44 @@ export class GameClient implements GameFrameHandler {
     // them. On your own for now: co-op's chained runs and shared camp aren't built.
 
     // Its screen, to put the fights in order: from the act's middle card, once it's open
+    // ?invade (GameClientOptions.invade): the invader and its second
+    private forcedInvasion(): { invader: string; at: number } | undefined {
+        const [invader, at] = (this.options.invade ?? "").split("@");
+        return invader ? { invader, at: parseFloat(at) || 5 } : undefined;
+    }
+
+    // The weekly Vault's screen (content/vault.ts), once the act's four Awakened are beaten
+    openVault(): void {
+        if (!isVaultOpen(this.save.mapVictories) || this.sim) {
+            this.sounds.denied();
+            return;
+        }
+        this.store.set({ screen: "vault" });
+    }
+
+    // This week's Vault, solo
+    startVault(): void {
+        if (!isVaultOpen(this.save.mapVictories) || this.coop.room) {
+            return;
+        }
+        const vault = getVaultAt(Date.now());
+        void this.startRun(vault.mapId, true, undefined, vault);
+    }
+
+    // Hosting a room: its next run's this week's Vault, on the Vault's map, for everyone (each
+    // player's records their own)
+    vaultForRoom(): void {
+        const room = this.hostedRoom();
+        if (!room || !isVaultOpen(this.save.mapVictories)) {
+            return;
+        }
+        const vault = getVaultAt(Date.now());
+        if (room.mapId !== vault.mapId) {
+            this.coop.setMap(vault.mapId, false, false);
+        }
+        this.store.set({ vaultRoom: vault.key, screen: "coop" });
+    }
+
     openGauntlet(): void {
         if (!isGauntletOpen(this.save) || this.coop.room || this.sim) {
             return;
@@ -2631,7 +2770,12 @@ export class GameClient implements GameFrameHandler {
             : result.trophies.filter((id) => !this.save.trophies.includes(id));
         // A co-op run's numbers can come from another player's modified game,
         // and a NaN in a solo one's would come back from the save as 0 coins
-        const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
+        const vaultKey = this.runVault;
+        const vaultBest =
+            vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
+        const quests = hasBadNumber(result)
+            ? []
+            : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
@@ -2662,6 +2806,8 @@ export class GameClient implements GameFrameHandler {
                 newGear: newGear.map((id) => getItem(id).name),
                 newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
+                ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
+                orbWon: result.victory && GAUNTLET_FIGHTS.includes(result.mapId),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
@@ -2962,7 +3108,14 @@ export class GameClient implements GameFrameHandler {
         const hallBrightness =
             hall?.brightness ?? (realm && realm.brightness * (sim.map.brightness ?? 1));
         // Under the cold, its cold light (ColdRuleDef.look)
-        const wash = hall?.wash ?? realm?.wash ?? sim.cold?.def.look.wash;
+        // An invading Duke's pocket, seen from in it (core/rules/invasion.ts)
+        const wash =
+            hall?.wash ??
+            realm?.wash ??
+            sim.cold?.def.look.wash ??
+            (sim.pocket?.kind === "cold" && sim.inPocket(sim.player.x, sim.player.y)
+                ? POCKET_COLD_WASH
+                : undefined);
         if (wash !== this.shownWash) {
             this.shownWash = wash;
             this.renderer.setWash(wash);
@@ -3545,7 +3698,14 @@ export class GameClient implements GameFrameHandler {
                 }
                 case "frozenSolid":
                     if (event.hero === sim.focus) {
-                        this.store.toast(t("toast.frozen_solid"));
+                        // An invading Duke's cold has no braziers: out of it is the way
+                        this.store.toast(
+                            t(
+                                sim.cold?.def.area
+                                    ? "toast.frozen_solid_pocket"
+                                    : "toast.frozen_solid",
+                            ),
+                        );
                     }
                     break;
                 case "soulCaught":

@@ -30,6 +30,8 @@ export type Screen =
     // The Forgotten Four: its order before the start, and its camp between fights
     | "gauntlet"
     | "camp"
+    // The weekly Vault (content/vault.ts)
+    | "vault"
     | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
@@ -452,6 +454,10 @@ export type UiSnapshot = {
     hard: boolean;
     // The remixes switched on for it (content/remixes.ts), those open on it
     remixes: RemixId[];
+    // An Awakener's orb to be spent on its final boss (act-2-fallen-empire.md 8.6), once one's held
+    awaken: boolean;
+    // The weekly Vault's week (content/vault.ts) the room's next run is, hosting one
+    vaultRoom?: string;
     // A fight in parts: the part picked to play (one already reached, MapDef.stages), till the run
     // it's for ends; the next not beaten when unset
     fightStage?: number;
@@ -494,6 +500,10 @@ export type UiSnapshot = {
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;
+        // The weekly Vault's run: its week, and whether it's the week's best
+        vault?: { key: string; best: boolean };
+        // An Awakener's orb won (an Awakened fight), or spent on this run's final boss
+        orbWon?: boolean;
     };
     toasts: Toast[];
     // The Forgotten Four (content/gauntlet.ts): the order and mode picked on its screen, and once
@@ -527,6 +537,7 @@ export class GameStore {
             endless: false,
             hard: false,
             remixes: [],
+            awaken: false,
             expert: false,
             overlay: "none",
             coop: OFFLINE,

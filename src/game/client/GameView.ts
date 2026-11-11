@@ -249,6 +249,8 @@ const PET_BUBBLE_HEIGHT = 0.5;
 const PET_BUBBLE_TINT = 0xa8f0ff;
 // The Forgotten Four's blood-touched pets (hasBloodLooks)
 const BLOOD_LOOK_TINT = 0xff4040;
+// An orb's awakened final boss's glow: a negative flash, lit in its violet tint
+const AWAKENED_GLOW = -0.3;
 // A boss's debris (BossAttackDef.debris) sinks away over this many ticks
 const DEBRIS_SINK_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
@@ -891,15 +893,17 @@ export class GameView {
     }
 
     // What a remix puts on an older map (core/rules/remix.ts), round the camera: the Dark remix's
-    // fires, and the Frozen remix's ice over the map's own ground, a tile at a time (its open tiles)
+    // fires, and the Frozen remix's ice over the map's own ground, a tile at a time (its open tiles);
+    // an invading Duke's pocket's ice the same way
     private drawRemix(actors: ActorRenderer, sim: Sim, focusX: number, focusY: number): void {
         const run = sim.remixRun;
-        if (!run) {
+        const pocketIce = sim.pocket?.kind === "cold" && !sim.pocket.over;
+        if (!run && !pocketIce) {
             return;
         }
         const clientTicks = Math.floor((sim.tick / TICKS_PER_SECOND) * 50);
         const fire = this.assets.get(getRealmLocKey(REMIX_FIRE_LOC));
-        if (fire && sim.realm?.layer !== 1) {
+        if (run && fire && sim.realm?.layer !== 1) {
             const anim = fire.anims[0];
             for (const spot of run.fires) {
                 if (
@@ -915,7 +919,7 @@ export class GameView {
         }
         const cold = sim.cold;
         const ice = this.assets.get(getRealmLocKey(REMIX_ICE_LOC));
-        if (!cold || !ice || !run.remixes.includes("frozen")) {
+        if (!cold || !ice || !(pocketIce || run?.remixes.includes("frozen"))) {
             return;
         }
         const grid = sim.grid;
@@ -2555,6 +2559,10 @@ export class GameView {
                 EXPOSED_FLASH *
                     (0.5 + 0.5 * Math.sin((tick + alpha) / (TICKS_PER_SECOND / EXPOSED_PULSE))),
             );
+        }
+        // An orb's awakened final boss: a slow violet glow, its tint lit (Sim AWAKENED)
+        if (enemy.awakened && !enemy.dead && tint === enemy.tint) {
+            flash = Math.min(flash, AWAKENED_GLOW - 0.1 * Math.sin((tick + alpha) * 0.12));
         }
         const options = enemyDrawOptions;
         options.scale = enemy.scale;

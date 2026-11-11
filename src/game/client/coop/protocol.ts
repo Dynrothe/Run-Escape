@@ -97,6 +97,10 @@ export type GameStart = {
     invocations?: string[];
     // A run's remixes (content/remixes.ts), the host's; the Sim keeps those the map takes
     remixes?: string[];
+    // Awakened invasions are open for the host (content/invasions.ts): the run rolls by its seed
+    invasions?: boolean;
+    // The weekly Vault's run: its week (content/vault.ts); the seed and the rest are its
+    vault?: string;
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -121,6 +125,8 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
             (Array.isArray(game.remixes) &&
                 game.remixes.length <= 8 &&
                 game.remixes.every((id) => typeof id === "string" && id.length <= 32))) &&
+        (game.invasions === undefined || typeof game.invasions === "boolean") &&
+        (game.vault === undefined || (typeof game.vault === "string" && game.vault.length <= 16)) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&

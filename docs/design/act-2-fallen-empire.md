@@ -1077,6 +1077,87 @@ axe special's spot animation (479) on the player. At level 5 each kill it makes 
 are drawn as soul runes (object 566) circling the head, bigger and flashing at five: no Lost Soul model is loaded
 on every map, and a rune reads as a soul.
 
+### 8.8 As built: invasions, orbs and the weekly Vault (2026-11-11)
+
+Build order step 16, the act's last. Where it differs from 8.6, and why:
+
+- **An invasion is a mid-run boss.** `content/invasions.ts` rolls it as the run starts, on an Rng
+  of its own off the run's seed (`rollInvasion`), so the run's own Rng never moves for it: a run
+  without one plays exactly as before, and nothing's rolled at all unless the player has opened
+  invasions (`SimOptions.invasions`, the host's in co-op, `GameStart.invasions`). One rolled is an
+  event among the map's (a `boss` at its second, `invasionEvent`), so it comes as the map's
+  mid-run bosses do: its co-op copies, its spawn 12 to 16 tiles off, its boss bar. The Desert on
+  means the campaign maps that take invocations unremixed; never endless (the rounds would bring
+  it again and again), never with a stage or a map rule of its own.
+- **The invaders** (`content/invaders.ts`) are the Act II maps' own final bosses, made over: no
+  entrance (an entrance sends the crowd and any other boss off the map), no summons (the
+  Whisperer's siphon, the Leviathan's pathfinder and its dark, Vardorvis's head are each their
+  own map's), and none of the attacks that need their map's scenery (the Duke's gas at a vent, his
+  gaze hidden from behind pillars). Their hitpoints are 1.5 times the map's toughest mid-run
+  boss's (the Desert 5,700, the Inferno 11,100), with hard mode's and co-op's on top.
+- **The pocket** (`core/rules/invasion.ts`) is 24 tiles across, round where the invader comes, and
+  the invader keeps to it (pulled back to its edge, and never brought back near the player as a
+  boss left behind is): to fight it is to go in. Each is its map's own rule with a place to keep
+  to: the Stranglewood's roots kept to the circle and creeping in from its edge
+  (`RootsRuleDef.ring`, as Vardorvis's clearing; 3-tile cells as the remixes', a front out in a
+  minute, no root hearts); Lassar's realm with its puddle opening only in the circle
+  (`RealmRuleDef.area`), every 20 s, and the Whisperer hurt only in the realm (`EnemyDef.hurtIn`),
+  so the puddle's the way to her; Ghorrock's cold rising only in the circle, 1.5 times as fast as
+  Ghorrock's as there are no braziers, thawing out of it as by a brazier (`ColdRuleDef.area`), with
+  three pools of ice in it and a ring of ice round its edge to show where it is; and the Scar's
+  dark only in the circle (`Sim.darkPocket`), where weapons only aim at what's lit. The rule comes
+  with the invader (`Sim.startPocket`, on its own seed) and goes when it falls (`endPocket`: the
+  party's brought back out of the realm first, the dark fades over 2 s).
+- **The dark** needed the renderer: the lit programs are picked as a run starts, so a run that'll
+  have a Leviathan's pocket is lit from the start, at ambient 1 (`POCKET_LIGHTING`); the pocket is
+  the light map's alpha, and the shader only darkens and lights by it (`lights.glsl`), so the rest
+  of the map is drawn as it always is. It's only in the light map's 64 tiles round the view.
+- **No pocket that's on already**: a remix that's the same rule (Overgrown's roots, Shadow's
+  realm, Frozen's cold, Dark's dark) keeps that invader away; with all four on, none comes.
+- **Rewards**: its kill drops a master casket (its own drop, `EnemyDef.caskets`) and a boss's
+  coins twice over, read as an elite casket's (what a mid-run boss drops) twice: 100 to 200 coins
+  on the ground. Each kill counts on its Act II map's Collection log tab (`SaveData.invasions`), a
+  line for each invader.
+- **Awakener's orbs**: each Awakened fight won gives one (`recordRun`; the gauntlet's fights never
+  get there, and its first clears give their two). On a campaign map's card, under the remixes, an
+  orb's switch (`AwakenRow`, solo, not endless) awakens its final boss for the next run: 1.6 times
+  its hitpoints, enraged from 75% (bosses in phases don't enrage; they get the tempo), its attacks
+  and walk 20% quicker (as the gauntlet's climb is), tinted dark violet with a slow violet glow, a
+  redder violet enraged. The orb's spent once the boss comes (`RunResult.awakened.seen`): a run
+  left before it keeps it. Its fall opens a master casket at once, as the run's over as it falls:
+  its coins are the run's, and its gear's found for the Armoury. A win marks the map's tile with
+  an orb (`SaveData.awakenedWins`). The orbs held show on the card and on the act's middle card.
+- **The weekly Vault** (`content/vault.ts`, `ui/Vault.tsx`), opened with the four Awakened fights
+  (the act's table): the ISO week in UTC, Monday 00:00, is its key ("2026-W46") and its seed (the
+  key's FNV hash), which picks a campaign map from the Desert on, one or two remixes, three of the
+  run invocations (not hard mode's) and an adventurer from the roster, lent whether it's unlocked
+  or not. No relics, never hard or endless, no invasion or orb: the run's what the seed says, and
+  what's still each player's own is what they've bought in the shop and the Armoury. Its best each
+  week is kept (`SaveData.vault`, the latest 12 weeks): a win beats a fall, then the quicker win
+  or the longer fall, then the kills. It's a run on its map as any other too (its coins, its
+  remixes' records). A host's Vault screen makes it the room's run (the room goes to its map;
+  `GameStart.vault` gives everyone its seed and adventurer).
+
+- **Bot** (`simulate-run.ts` `INVADE=1`, or `INVADE=invading_duke@360` to make one come; `AWAKEN=1`):
+  each invader made to come at 6:00 on the Desert (`META=max ARMOURY=max DODGE=1`, warrior, wizard
+  and ranger by seeds 1 and 2): all 24 came on time and 8 were killed before 10:00, in 10 to 71 s
+  (the Duke and the Leviathan 6 of 12, Vardorvis 1 of 6, the Whisperer 1 of 6: the bot only dives
+  for a puddle it happens on, and it doesn't go into a pocket to fight; a wizard kills them
+  quickest). Two runs died to the Duke or the Leviathan with it. On Karamja one warrior died to the
+  Duke in 42 s, frozen four times. The orb's awakened final boss against the plain one, same seeds
+  (warrior, wizard, ranger, barbarian by seeds 1 to 3): Lumbridge 12 of 12 plain, 10 of 12
+  awakened; the Desert 6 of the 9 that reached the Kalphite Queen plain, 4 of 9 awakened;
+  Fremennik 3 of 9 either way. Each awakened win opened its master casket (185 to 348 coins).
+
+- **Phones** (`frameProbe.sample(30)` at 844x390, the Desert, the crowd cleared, the camera 7
+  tiles west of the pocket's middle, a minute after it came; then the same spot once the invader's
+  dead): the roots and Vardorvis +6.9k (17.1k against 10.2k), the realm's pocket +2.4k (28.6k against
+  26.2k: its puddle and the Whisperer), the cold +14.5k (33.6k against 19.1k: the Duke and his ring
+  and pools of ice, thinned to single tiles after a first measure), the dark +10.4k in actors (the
+  Leviathan; the dark itself is a texture). The heaviest is the cold's, so a map already near 69k
+  (Karamja's 63k where it was measured) goes over with it; the Barrows, Kourend and Prifddinas are
+  over before anything's added. An orb's awakened boss adds nothing (it's the same model, tinted).
+
 ## 9. Invocations and Relics
 
 Both are in, and in the first build (decided): they ship with the Stranglewood, before the other maps (section 10).
@@ -1199,7 +1280,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
 | 14  | **Awakened Leviathan**, Lil'viathan, the act's ending. Built, first pass (`awakened-leviathan.md`)                                        | 3, 12        | 2 weeks    |
 | 15  | **The Forgotten Four** gauntlet. Built, solo (7.4)                                                                                        | 3, 8, 11, 14 | 1.5 weeks  |
-| 16  | Awakened invasions, Awakener's orbs, the weekly Vault                                                                                     | 14           | 1.5 weeks  |
+| 16  | Awakened invasions, Awakener's orbs, the weekly Vault. Built (8.8)                                                                       | 14           | 1.5 weeks  |
 
 The sizes are reasoned from the code, not prototyped, and leave out playtest rounds.
 

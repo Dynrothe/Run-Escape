@@ -386,6 +386,10 @@ export type Enemy = {
     // Any boss; the final one ends the run when it dies
     boss: boolean;
     finalBoss: boolean;
+    // An Awakened invader's pocket (content/invasions.ts), which it keeps to; and a final boss
+    // awakened by an Awakener's orb (SimOptions.awakened), drawn with a violet glow
+    pocket?: { x: number; y: number; radius: number };
+    awakened?: boolean;
     // Bosses that fight with attacks of their own
     bossState?: BossState;
     // What its hits are multiplied by beyond its def's: a boss's attacks, an

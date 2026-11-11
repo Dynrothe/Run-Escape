@@ -118,6 +118,20 @@ const remixes =
     process.env.REMIX === "all"
         ? ["overgrown", "shadow", "frozen", "dark"]
         : (process.env.REMIX ?? "").split(",").filter(Boolean);
+// Awakened invasions (content/invasions.ts): INVADE=1 rolls by the seed as a run does once
+// they're open; INVADE=invading_duke@400 makes that one come at 6:40
+const invade = process.env.INVADE;
+const invadeAt = invade?.includes("@") ? invade.split("@") : undefined;
+const invasionOptions = invade
+    ? {
+          invasions: true,
+          ...(invadeAt && {
+              testing: { invasion: { invader: invadeAt[0], at: parseFloat(invadeAt[1]) } },
+          }),
+      }
+    : {};
+// An Awakener's orb on the final boss (AWAKEN=1)
+const awakened = process.env.AWAKEN === "1";
 const characters = characterArg ? characterArg.split(",") : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
 // Cells round it, each way, the bot looks at for roots to keep off
@@ -1091,6 +1105,8 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
         // A fight in parts (MapDef.stages): which, STAGE=0 for the first
         stage: parseInt(process.env.STAGE ?? "0"),
         gauntlet,
+        ...invasionOptions,
+        awakened,
     });
     // Another weapon to start with, to compare weapons on one character
     if (process.env.WEAPON) {
@@ -1114,6 +1130,7 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
     const started = new Set<string>();
     const finished = new Set<string>();
     const recentHits: { tick: number; event: SimEvent }[] = [];
+    const invasionLog: { from?: number; down?: number } = {};
     const startTime = performance.now();
     if (fresh && finalBoss) {
         sim.startIntro(getEnemy(finalBoss), "finalBoss");
@@ -1303,6 +1320,12 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
             }
         }
         for (const event of sim.takeEvents()) {
+            // An invader's coming and going (INVADE)
+            if (event.type === "bossSpawned" && event.enemyId.startsWith("invading_")) {
+                invasionLog.from = sim.seconds;
+            } else if (event.type === "kill" && event.enemyId.startsWith("invading_")) {
+                invasionLog.down = sim.seconds;
+            }
             if (event.type === "playerHit") {
                 recentHits.push({ tick: sim.tick, event });
             } else if (event.type === "powerUp") {
@@ -1477,6 +1500,26 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
                 : "") +
             `(${(ms / sim.tick).toFixed(3)}ms per tick)`,
     );
+    if (sim.invasion) {
+        const { invader, at } = sim.invasion;
+        console.log(
+            `  invasion: ${invader.id} due ${formatClock(at)}, ` +
+                (invasionLog.from === undefined
+                    ? "never came"
+                    : `came ${formatClock(invasionLog.from)}, ` +
+                      (invasionLog.down !== undefined
+                          ? `down ${formatClock(invasionLog.down)} (${Math.round(invasionLog.down - invasionLog.from)}s)`
+                          : "still up")),
+        );
+    }
+    if (result.awakened) {
+        console.log(
+            `  awakened: ${result.awakened.seen ? "came" : "never came"}` +
+                (result.awakened.casketCoins !== undefined
+                    ? `, master casket ${result.awakened.casketCoins} coins`
+                    : ""),
+        );
+    }
     return result;
 }
 

@@ -49,6 +49,15 @@ import {
     HARD_XP,
     getHardScale,
 } from "../content/hard";
+import { INVADER_BY_ID, PocketKind } from "../content/invaders";
+import {
+    INVASION,
+    Invasion,
+    getInvaderHp,
+    invasionEvent,
+    rollInvasion,
+    takesInvasions,
+} from "../content/invasions";
 import {
     ACCELERATION,
     AERIAL_ASSAULT,
@@ -72,7 +81,14 @@ import {
     hasHardPreset,
 } from "../content/invocations";
 import { CASKETS, CASKET_TIERS, getGear, getItem } from "../content/items";
-import { getMap, hasFliers, hasPoison, takesInvocations, takesRelics } from "../content/maps";
+import {
+    CAMPAIGN_MAPS,
+    getMap,
+    hasFliers,
+    hasPoison,
+    takesInvocations,
+    takesRelics,
+} from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
 import { PET_BY_ID, PetDef, PetPowerDef } from "../content/pets";
 import {
@@ -330,6 +346,13 @@ import { type Brazier, ColdRule } from "./rules/ColdRule";
 import { RealmLayer, RealmRule } from "./rules/RealmRule";
 import { RootRule } from "./rules/RootRule";
 import { RuleHost, RuleSet, RunRule, createRunRule } from "./rules/RunRule";
+import {
+    POCKET_DARK,
+    POCKET_LIGHTING,
+    PocketPlace,
+    pocketPlace,
+    pocketRule,
+} from "./rules/invasion";
 import { RemixRun, buildRemixRun } from "./rules/remix";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
@@ -497,6 +520,15 @@ const ENRAGE_AT = 0.5;
 const ENRAGED_INTERVAL = 0.7;
 const ENRAGED_SPEED = 1.3;
 const ENRAGED_TINT = 0xff7a66;
+
+// A final boss awakened by an Awakener's orb (act-2-fallen-empire.md 8.6, SimOptions.awakened): its
+// hitpoints times hp, enraged from enrageAt, tempo times quicker (its attacks and its walk), drawn
+// darker and violet (enraged, a redder violet)
+export const AWAKENED = { hp: 1.6, enrageAt: 0.75, tempo: 1.2 };
+const AWAKENED_TINT = 0x8a62c8;
+const AWAKENED_ENRAGED_TINT = 0xb05ab8;
+// The pocket rule's seed off the run's
+const POCKET_SEED = 0x3c0ffee5;
 
 // A boss's entrance: how fast what's left runs for the edge at most, in tiles a
 // second, and how long before the end it's all gone. Further off than that
@@ -774,9 +806,21 @@ export type SimOptions = {
     // A fight of the Forgotten Four's (content/gauntlet.ts): its climb, the hitpoints it starts at
     // and its blessing. Ignored off a boss fight (MapDef.fight).
     gauntlet?: GauntletFightOptions;
+    // Awakened invasions are open (content/invasions.ts, the host's in co-op): the run rolls for
+    // one by its seed. Unset, nothing's rolled and the run plays as it always has.
+    invasions?: boolean;
+    // An Awakener's orb spent on the map's final boss (AWAKENED): only on a campaign map's
+    // survival run, not endless
+    awakened?: boolean;
 };
 
-export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
+export type SimTesting = {
+    raidRoomSeconds?: number;
+    maxLevelUps?: boolean;
+    // An invasion made to come: this invader (content/invaders.ts) at this second of the map's
+    // clock, on a map that takes them, whatever the roll
+    invasion?: { invader: string; at: number };
+};
 
 // A raid's chest at the end: the points it went by, the chance of a purple they gave, and the
 // trophies in it
@@ -824,6 +868,11 @@ export type RunResult = {
     // A fight of the Forgotten Four's: the hitpoints it ended on, of the most, and the times the
     // boss's guard dropped (core/gauntlet.ts scores it)
     gauntlet?: { hp: number; maxHp: number; guardDowns: number };
+    // An Awakened invasion the run rolled: its invader, whether it came, whether it fell
+    invasion?: { id: string; came: boolean; killed: boolean };
+    // The final boss awakened by an orb: whether it came (the orb's spent then), and the master
+    // casket its fall opened (its coins are in the run's)
+    awakened?: { seen: boolean; casketCoins?: number };
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -1547,19 +1596,33 @@ export class Sim {
     floor: ArenaFloor | undefined;
     // The map's rule (MapDef.rule, core/rules) and its remixes' (content/remixes.ts), one RuleSet
     // when there's more than one
-    readonly rule: RunRule | undefined;
-    readonly rules: RunRule[];
+    // (An invader's pocket adds its own for as long as it lives: startPocket)
+    rule: RunRule | undefined;
+    rules: RunRule[];
     // The roots, the map's or a remix's (RootsRuleDef)
-    readonly roots: RootRule | undefined;
+    roots: RootRule | undefined;
     // The run's remixes, what they put on it (core/rules/remix.ts), and the map's and theirs' waves
     // and events
     readonly remixes: RemixId[];
     readonly remixRun: RemixRun | undefined;
     // The same, on a map of two worlds (RealmRuleDef): which the party's in, and what's kept of the
     // other while it's away (its enemies and what's on its ground), standing still
-    readonly realm: RealmRule | undefined;
+    realm: RealmRule | undefined;
     // The same, under the cold (ColdRuleDef): braziers, vents, ice and each player's cold
-    readonly cold: ColdRule | undefined;
+    cold: ColdRule | undefined;
+    // An Awakened invasion (content/invasions.ts), rolled as the run starts; the run's events with
+    // it in; its pocket once it's come (its place, its rule, whether it's over); the dark's
+    // pocket, its place and when it came and went (drawn; what it does is isLit's)
+    readonly invasion: Invasion | undefined;
+    private readonly invasionEvents?: RunEventDef[];
+    pocket?: { kind: PocketKind; place: PocketPlace; rule?: RunRule; over: boolean };
+    darkPocket?: PocketPlace & { from: number; until: number };
+    private invaderKilled = false;
+    // An Awakener's orb on the final boss (SimOptions.awakened), and whether it came
+    readonly awakened: boolean;
+    private awakenedSeen = false;
+    private awakenedCasketCoins?: number;
+    private readonly runSeed: number;
     private otherEnemies: Enemy[] = [];
     private otherPickups: Pickup[] = [];
     // A step between in the city (the Shadow walker's trait): into the realm when the rule's next
@@ -1593,7 +1656,8 @@ export class Sim {
     private readonly start: Vec2;
     // A map's lights (MapDef.lighting), and whether weapons only aim at what's lit
     readonly lighting: LightingDef | undefined;
-    readonly litTargetsOnly: boolean;
+    // (On while an invading Leviathan's dark pocket is: startPocket)
+    litTargetsOnly: boolean;
     // On a map with lighting, this tick's sim lights (stepLights): each player's, the map's, and
     // what enemies carry and leave. Empty on any other map.
     lights: Light[] = [];
@@ -2104,7 +2168,28 @@ export class Sim {
             { x: options.spawnX, y: options.spawnY },
         );
         this.remixes = this.remixRun?.remixes ?? [];
-        this.lighting = this.remixRun?.lighting ?? this.map.lighting;
+        this.runSeed = options.seed;
+        // An Awakened invasion: rolled on an Rng of its own, only once they're open, so a run
+        // without one plays as it did
+        this.invasion =
+            options.invasions && !options.endless ? this.rollInvasion(options) : undefined;
+        if (this.invasion) {
+            const events = this.remixRun?.events ?? this.map.events;
+            this.invasionEvents = [...events, invasionEvent(this.invasion)].sort(
+                (a, b) => a.at - b.at,
+            );
+        }
+        this.awakened =
+            options.awakened === true &&
+            !options.endless &&
+            CAMPAIGN_MAPS.includes(this.map) &&
+            takesRelics(this.map);
+        // A run an invading Leviathan's coming to is lit from the start, as bright as ever till
+        // its dark comes (POCKET_LIGHTING)
+        this.lighting =
+            this.remixRun?.lighting ??
+            this.map.lighting ??
+            (this.invasion?.invader.pocket === "dark" ? POCKET_LIGHTING : undefined);
         this.litTargetsOnly = this.lighting?.litTargetsOnly === true;
         this.hasOnlyLight =
             this.lighting !== undefined &&
@@ -2637,7 +2722,10 @@ export class Sim {
     // The map's events, or this part's of a fight in parts
     get mapEvents(): RunEventDef[] {
         const events =
-            this.map.stages?.[this.stage]?.events ?? this.remixRun?.events ?? this.map.events;
+            this.map.stages?.[this.stage]?.events ??
+            this.invasionEvents ??
+            this.remixRun?.events ??
+            this.map.events;
         if (!this.invoked("run_blood_moon")) {
             return events;
         }
@@ -2675,6 +2763,21 @@ export class Sim {
                 }),
             ...(this.hero.relics.ids.length > 0 && { relics: [...this.hero.relics.ids] }),
             ...(this.remixes.length > 0 && { remixes: [...this.remixes] }),
+            ...(this.invasion && {
+                invasion: {
+                    id: this.invasion.invader.id,
+                    came: this.pocket !== undefined,
+                    killed: this.invaderKilled,
+                },
+            }),
+            ...(this.awakened && {
+                awakened: {
+                    seen: this.awakenedSeen,
+                    ...(this.awakenedCasketCoins !== undefined && {
+                        casketCoins: this.awakenedCasketCoins,
+                    }),
+                },
+            }),
             ...(this.scabarasBeaten && { scabarasBeaten: true }),
             ...(this.gauntlet && {
                 gauntlet: {
@@ -4107,6 +4210,10 @@ export class Sim {
             if (finalBoss) {
                 this.bossSpawned = true;
             }
+            // An invader brings its pocket (each of its co-op copies keeps to the first's)
+            if (INVADER_BY_ID.has(def.id)) {
+                this.startPocket(boss);
+            }
             if (def.spawnSpotAnim !== undefined) {
                 this.addEffect(def.spawnSpotAnim, boss.x, boss.y, 0, 60);
             }
@@ -4191,11 +4298,17 @@ export class Sim {
         if (type === "finalBoss" && this.gauntlet && bossHp !== undefined) {
             bossHp *= this.gauntlet.climb;
         }
+        const awakened = type === "finalBoss" && this.awakened;
+        // The orb's spent once it's come (RunResult.awakened)
+        if (awakened) {
+            this.awakenedSeen = true;
+        }
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
             this.roundHp *
             (boss ? this.hardScale.bossHp : this.hardScale.hp) *
-            (boss ? this.partyScale.bossHp : this.partyScale.hp);
+            (boss ? this.partyScale.bossHp : this.partyScale.hp) *
+            (awakened ? AWAKENED.hp : 1);
         // What its hits are multiplied by: its touch, a boss's attacks, its
         // explosion (and in co-op, harder for each player)
         let hitScale = bossDamage * (boss ? 1 : damageScale) * this.partyScale.damage;
@@ -4259,14 +4372,16 @@ export class Sim {
             speed:
                 (def.speed *
                     (type === "elite" ? 0.85 : 1) *
-                    (this.invoked("run_walk_the_path") ? WALK_THE_PATH : 1)) /
+                    (this.invoked("run_walk_the_path") ? WALK_THE_PATH : 1) *
+                    (awakened ? AWAKENED.tempo : 1)) /
                 TICKS_PER_SECOND,
             radius: def.radius,
             scale,
-            tint,
+            tint: awakened ? AWAKENED_TINT : tint,
             elite: type === "elite",
             boss,
             finalBoss: type === "finalBoss",
+            ...(awakened && { awakened: true }),
             bossState:
                 boss && def.boss
                     ? {
@@ -4513,7 +4628,7 @@ export class Sim {
             // The final boss waits for the player, and what can't move stays
             // put; anything else left behind comes back
             const stationary = enemy.def.stationary ?? false;
-            if (distance > RELOCATE_DISTANCE && !enemy.finalBoss && !stationary) {
+            if (distance > RELOCATE_DISTANCE && !enemy.finalBoss && !stationary && !enemy.pocket) {
                 this.relocate(enemy);
                 continue;
             }
@@ -4829,6 +4944,10 @@ export class Sim {
                     enemy.y += moveY;
                 } else {
                     moveCircle(flight?.grid ?? grid, enemy, moveX, moveY, enemy.radius);
+                }
+                // An invader keeps to its pocket
+                if (enemy.pocket) {
+                    this.keepToPocket(enemy, enemy.pocket);
                 }
             }
 
@@ -13255,8 +13374,11 @@ export class Sim {
     // The tempo of the phase a boss is in (BossPhasesDef tempo): what its
     // interval and its patterns' windups are multiplied by
     private phaseTempo(enemy: Enemy): number {
-        // The gauntlet's climb: its later fights' bosses quicker (SimOptions.gauntlet)
-        const climb = enemy.finalBoss ? (this.gauntlet?.climb ?? 1) : 1;
+        // The gauntlet's climb: its later fights' bosses quicker (SimOptions.gauntlet); an orb's
+        // awakened final boss too (AWAKENED)
+        const climb = enemy.finalBoss
+            ? (this.gauntlet?.climb ?? 1) * (enemy.awakened ? AWAKENED.tempo : 1)
+            : 1;
         const phase = enemy.bossState?.phase;
         if (!phase || phase.stage === "finale") {
             return 1 / climb;
@@ -13854,7 +13976,11 @@ export class Sim {
             const realm = this.realm?.layer === 1;
             const rise =
                 (trait?.kind === "shatter" ? trait.coldRise : 1) * (realm ? REALM_COLD : 1);
-            const warmth = realm ? 0 : cold.warmthAt(player.x, player.y, tick);
+            // Out of its circle (an invader's pocket, ColdRuleDef.area), it thaws
+            const area = def.area;
+            const out =
+                area !== undefined && fm.hypot(player.x - area.x, player.y - area.y) > area.radius;
+            const warmth = out ? area.thaw : realm ? 0 : cold.warmthAt(player.x, player.y, tick);
             const gas = cold.gasAt(player.x, player.y, tick);
             const change =
                 warmth > 0
@@ -14805,12 +14931,15 @@ export class Sim {
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
         // A fight in phases gets harder by the phase instead
-        const enrageAt =
+        // An orb's awakened final boss is enraged sooner (AWAKENED)
+        const enrageAt = Math.max(
             def.enrage.at ??
-            Math.max(
-                this.hardBosses ? HARD_ENRAGE_AT : ENRAGE_AT,
-                this.invoked("run_feeling_special") ? FEELING_SPECIAL_ENRAGE : 0,
-            );
+                Math.max(
+                    this.hardBosses ? HARD_ENRAGE_AT : ENRAGE_AT,
+                    this.invoked("run_feeling_special") ? FEELING_SPECIAL_ENRAGE : 0,
+                ),
+            enemy.awakened ? AWAKENED.enrageAt : 0,
+        );
         if (!def.phases && !state.enraged && enemy.hp <= enemy.maxHp * enrageAt) {
             this.enrage(enemy);
         }
@@ -16466,7 +16595,7 @@ export class Sim {
         const enrage = enemy.def.boss!.enrage;
         state.enraged = true;
         enemy.speed *= ENRAGED_SPEED;
-        enemy.tint = ENRAGED_TINT;
+        enemy.tint = enemy.awakened ? AWAKENED_ENRAGED_TINT : ENRAGED_TINT;
         this.emit({
             type: "bossEnraged",
             enemyId: enemy.def.id,
@@ -18249,6 +18378,14 @@ export class Sim {
             if (lastCopy) {
                 this.bossesKilled.push(enemy.def.id);
                 this.bossKills.push({ enemyId: enemy.def.id, seconds: this.seconds });
+                if (INVADER_BY_ID.has(enemy.def.id) && !byEnemy) {
+                    this.invaderDown(enemy);
+                } else if (INVADER_BY_ID.has(enemy.def.id)) {
+                    this.endPocket();
+                }
+                if (enemy.awakened && !byEnemy) {
+                    this.awakenedDown();
+                }
             }
             // A boss's glyph goes with it, rather than hanging about on the
             // victory screen
@@ -18534,6 +18671,135 @@ export class Sim {
             this.rollPowerUp(enemy.x - 0.3, enemy.y + 0.3);
             this.rollPumpkin(enemy.x + 0.3, enemy.y - 0.3);
         }
+    }
+
+    // ---- Awakened invasions (content/invasions.ts) ----
+
+    // The run's, if it has one: by its seed, or one made to come (SimTesting.invasion)
+    private rollInvasion(options: SimOptions): Invasion | undefined {
+        const forced = options.testing?.invasion;
+        const invader = forced && INVADER_BY_ID.get(forced.invader);
+        if (invader) {
+            return takesInvasions(this.map)
+                ? { invader, at: forced.at, hp: getInvaderHp(this.map) }
+                : undefined;
+        }
+        return rollInvasion(this.map, options.seed, options.hard === true, this.remixes);
+    }
+
+    // The invader's come: its pocket round where it stands, the rule in it on its own Rng
+    private startPocket(boss: Enemy): void {
+        const invader = INVADER_BY_ID.get(boss.def.id)!;
+        if (!this.pocket) {
+            const place = pocketPlace(boss.x, boss.y);
+            const def = pocketRule(
+                invader.pocket,
+                place,
+                this.mapSeconds,
+                TICKS_PER_SECOND,
+                this.tick,
+            );
+            const rule =
+                def &&
+                createRunRule(def, this.grid, (this.runSeed ^ POCKET_SEED) >>> 0, TICKS_PER_SECOND);
+            this.pocket = { kind: invader.pocket, place, rule, over: false };
+            if (rule) {
+                this.setRules([...this.rules, rule]);
+            }
+            if (invader.pocket === "dark" && this.lighting) {
+                this.darkPocket = { ...place, from: this.tick, until: Number.MAX_SAFE_INTEGER };
+                this.litTargetsOnly = true;
+            }
+        }
+        boss.pocket = this.pocket.place;
+    }
+
+    // The run's rules from now on, and what's kept of them by kind
+    private setRules(rules: RunRule[]): void {
+        this.rules = rules;
+        this.rule = rules.length > 1 ? new RuleSet(rules) : rules[0];
+        this.realm = rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
+        this.cold = rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
+        this.roots = rules.find((rule): rule is RootRule => rule instanceof RootRule);
+    }
+
+    // An invader keeps within its pocket: pulled back to its edge if it's gone past it
+    private keepToPocket(enemy: Enemy, pocket: PocketPlace): void {
+        const dx = enemy.x - pocket.x;
+        const dy = enemy.y - pocket.y;
+        const distance = fm.hypot(dx, dy);
+        const edge = pocket.radius - enemy.radius;
+        if (distance > edge && distance > 0) {
+            const back = (distance - edge) / distance;
+            moveCircle(this.grid, enemy, -dx * back, -dy * back, enemy.radius);
+        }
+    }
+
+    // The invader's fallen: its pocket goes, and it pays a boss's coins twice over (its master
+    // casket's its own drop, EnemyDef.caskets)
+    private invaderDown(enemy: Enemy): void {
+        this.invaderKilled = true;
+        this.endPocket();
+        const [least, most] = INVASION.coins;
+        const coins = least + this.rng.int(most - least + 1);
+        this.dropPickup("coins", enemy.x - 0.4, enemy.y + 0.3, coins);
+        // "The invading Leviathan falls!", not "The invading The Leviathan"
+        const name = enemy.def.name.replace(/^The /, "");
+        this.emit({ type: "notice", message: `The invading ${name} falls!` }, true);
+    }
+
+    // Its pocket goes: the party's brought back out of its realm first, and its dark fades
+    private endPocket(): void {
+        const pocket = this.pocket;
+        if (!pocket || pocket.over) {
+            return;
+        }
+        pocket.over = true;
+        const rule = pocket.rule;
+        if (rule) {
+            if (rule instanceof RealmRule && rule.layer === 1) {
+                rule.turn(this.ruleHost, 0);
+            }
+            this.setRules(this.rules.filter((other) => other !== rule));
+        }
+        if (this.darkPocket) {
+            this.darkPocket.until = this.tick + secondsToTicks(POCKET_DARK.fade);
+            this.litTargetsOnly = false;
+        }
+    }
+
+    // Whether a spot's in the invader's pocket while it lasts
+    inPocket(x: number, y: number): boolean {
+        const pocket = this.pocket;
+        return (
+            pocket !== undefined &&
+            !pocket.over &&
+            fm.hypot(x - pocket.place.x, y - pocket.place.y) <= pocket.place.radius
+        );
+    }
+
+    // How dark it is at a spot in an invading Leviathan's pocket, 0 to 1 of the way to its dark,
+    // at a tick (fractions too), as it comes and goes; for the view
+    darkPocketAt(tick: number): number {
+        const dark = this.darkPocket;
+        if (!dark) {
+            return 0;
+        }
+        const fade = secondsToTicks(POCKET_DARK.fade);
+        return Math.max(0, Math.min(1, (tick - dark.from) / fade, (dark.until - tick) / fade));
+    }
+
+    // An orb's awakened final boss is down: it always opens a master casket, its coins the run's
+    // and its gear found for the Armoury
+    private awakenedDown(): void {
+        const [least, most] = CASKETS.master.coins;
+        const coins = Math.round(
+            (least + this.rng.int(most - least + 1)) * (1 + this.stats.greed) * this.coinScale,
+        );
+        this.gainCoins(coins);
+        this.rollChestItem("master");
+        this.awakenedCasketCoins = coins;
+        this.emit({ type: "notice", message: `A master casket! ${coins} coins` }, true);
     }
 
     // Endless runs: the final boss is down, so the map comes round again,
@@ -19772,6 +20038,11 @@ export class Sim {
     // radius: some of something that big (an enemy's) is in it
     isLit(x: number, y: number, radius = 0): boolean {
         if (!this.litTargetsOnly) {
+            return true;
+        }
+        // An invading Leviathan's pocket: out of it, everything's in the light
+        const dark = this.darkPocket;
+        if (dark && fm.hypot(x - dark.x, y - dark.y) > dark.radius + radius) {
             return true;
         }
         for (const light of this.lights) {

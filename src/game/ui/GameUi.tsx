@@ -52,6 +52,8 @@ import {
     characterName,
     getCharacter,
 } from "../content/characters";
+import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
+import { invaderName } from "../content/invasions";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
 import { getInvocationBadge } from "../content/invocations";
 import { GEAR_SLOT_BY_ID } from "../content/items";
@@ -71,6 +73,7 @@ import {
     mapFinalBossWarning,
     mapName,
     takesInvocations,
+    takesRelics,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
@@ -93,6 +96,7 @@ import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID, trophyName } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
+import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
@@ -149,6 +153,7 @@ import { SkipButton } from "./SkipButton";
 import { StatLine } from "./StatLine";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
+import { AwakenRow, VaultScreen } from "./Vault";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
@@ -230,6 +235,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "gauntlet":
             screen = <GauntletScreen ui={ui} client={client} />;
+            break;
+        case "vault":
+            screen = <VaultScreen ui={ui} client={client} />;
             break;
         case "camp":
             screen = <CampScreen ui={ui} client={client} />;
@@ -1756,6 +1764,12 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 <ItemIcon objId={map.iconObjId} size={20} />
                 <span className="ui-map-name">{shownMapName}</span>
                 <InvocationBadge points={save.invocationBest?.[map.id]?.points ?? 0} />
+                {/* Its final boss beaten awakened, by an Awakener's orb */}
+                {(save.awakenedWins?.[map.id] ?? 0) > 0 && (
+                    <span className="ui-awakened-mark" title={t("ui.awaken.marked")}>
+                        <ItemIcon objId={AWAKENERS_ORB_OBJ} size={14} />
+                    </span>
+                )}
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
@@ -1832,6 +1846,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                                 }}
                                 onEnding={() => client.showActEnding(tab.act!.id)}
                                 onGauntlet={ui.coop.room ? undefined : () => client.openGauntlet()}
+                                onVault={() => client.openVault()}
                             />
                         )}
                         {!tab.act &&
@@ -1861,6 +1876,12 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 onRemix={
                     (peek ?? ui.mapId) === ui.mapId ? (id) => client.toggleRemix(id) : undefined
                 }
+                awaken={(peek ?? ui.mapId) === ui.mapId ? ui.awaken : undefined}
+                onAwaken={
+                    (peek ?? ui.mapId) === ui.mapId && !ui.coop.room
+                        ? () => client.toggleAwaken()
+                        : undefined
+                }
                 onPick={
                     (peek ?? ui.mapId) === ui.mapId ? (s) => client.pickFightStage(s) : undefined
                 }
@@ -1879,6 +1900,7 @@ function ActPage({
     onPick,
     onEnding,
     onGauntlet,
+    onVault,
 }: {
     act: ActDef;
     save: SaveData;
@@ -1888,7 +1910,10 @@ function ActPage({
     onEnding: () => void;
     // The Forgotten Four's screen, once it's open (not in a co-op room: solo for now)
     onGauntlet?: () => void;
+    // The weekly Vault's screen, once it's open
+    onVault: () => void;
 }): JSX.Element {
+    const orbs = save.awakenerOrbs ?? 0;
     const open = (save.mapVictories[act.requires] ?? 0) > 0;
     const ids = getActMapIds(act);
     const beaten = ids.filter((id) => (save.mapVictories[id] ?? 0) > 0).length;
@@ -1992,16 +2017,36 @@ function ActPage({
                         )}
                     </span>
                 )}
-                {/* The Forgotten Four, the act's last test (act-2-fallen-empire.md 7.3) */}
-                {ended && act.id === FALLEN_EMPIRE.id && isGauntletOpen(save) && (
-                    <button
-                        className="ui-button ui-button-go ui-act-gauntlet"
-                        disabled={!onGauntlet}
-                        title={onGauntlet ? undefined : t("ui.gauntlet.solo_only")}
-                        onClick={onGauntlet}
-                    >
-                        {t("ui.gauntlet.title")}
-                    </button>
+                {/* The Forgotten Four, the act's last test (act-2-fallen-empire.md 7.3), the weekly
+                    Vault, and the Awakener's orbs held, side by side so a phone's card has room */}
+                {ended && act.id === FALLEN_EMPIRE.id && (
+                    <span className="ui-act-extras">
+                        {isGauntletOpen(save) && (
+                            <button
+                                className="ui-button ui-button-go ui-act-gauntlet"
+                                disabled={!onGauntlet}
+                                title={onGauntlet ? undefined : t("ui.gauntlet.solo_only")}
+                                onClick={onGauntlet}
+                            >
+                                {t("ui.gauntlet.title")}
+                            </button>
+                        )}
+                        {isVaultOpen(save.mapVictories) && (
+                            <button className="ui-button ui-act-vault" onClick={onVault}>
+                                {t("ui.vault.title")}
+                            </button>
+                        )}
+                        {orbs > 0 && (
+                            <span
+                                className="ui-orbs"
+                                title={t("ui.awaken.orbs_tooltip")}
+                                aria-label={t("ui.awaken.orbs", { n: fmtNum(orbs) })}
+                            >
+                                <ItemIcon objId={AWAKENERS_ORB_OBJ} size={18} />
+                                {fmtNum(orbs)}
+                            </span>
+                        )}
+                    </span>
                 )}
             </div>
         </div>
@@ -2232,12 +2277,17 @@ function MapDetails({
     onPick,
     remixes,
     onRemix,
+    awaken,
+    onAwaken,
 }: {
     save: SaveData;
     map: MapDef;
     // The selected map's remixes on, and their switches
     remixes?: RemixId[];
     onRemix?: (id: RemixId) => void;
+    // The selected map's Awakener's orb, on or not, and its switch (solo)
+    awaken?: boolean;
+    onAwaken?: () => void;
     // A fight in parts: the part picked to play, and picking one (the selected map's only)
     picked?: number;
     onPick?: (stage: number | undefined) => void;
@@ -2324,6 +2374,9 @@ function MapDetails({
                     {unlocked && <InvocationDetails save={save} map={map} />}
                     {unlocked && remixes && onRemix && (
                         <RemixRow save={save} map={map} on={remixes} onToggle={onRemix} />
+                    )}
+                    {unlocked && CAMPAIGN_MAPS.includes(map) && takesRelics(map) && (
+                        <AwakenRow save={save} map={map} on={awaken} onToggle={onAwaken} />
                     )}
                     {endless && (
                         <div className="ui-card-style">
@@ -4096,6 +4149,37 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
                         {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
+                    </p>
+                )}
+                {/* Act II's extras (act-2-fallen-empire.md 8.6): an invader felled, an orb spent
+                    or won, the Vault's week */}
+                {result?.invasion?.killed && (
+                    <p className="ui-unlocked">
+                        {t("ui.result.invader_killed", { name: invaderName(result.invasion.id) })}
+                    </p>
+                )}
+                {result?.invasion?.came && !result.invasion.killed && (
+                    <p className="ui-subtle">
+                        {t("ui.result.invader_lived", { name: invaderName(result.invasion.id) })}
+                    </p>
+                )}
+                {result?.awakened?.seen && (
+                    <p className={result.victory ? "ui-unlocked" : "ui-subtle"}>
+                        {result.victory
+                            ? t("ui.result.awakened_won", {
+                                  coins: fmtNum(result.awakened.casketCoins ?? 0),
+                              })
+                            : t("ui.result.awakened_spent")}
+                    </p>
+                )}
+                {result?.orbWon && <p className="ui-unlocked">{t("ui.result.orb_won")}</p>}
+                {result?.vault && (
+                    <p className={result.vault.best ? "ui-unlocked" : "ui-subtle"}>
+                        {result.vault.best
+                            ? t("ui.result.vault_best", {
+                                  week: parseWeekKey(result.vault.key)?.week ?? 0,
+                              })
+                            : t("ui.result.vault_not_best")}
                     </p>
                 )}
                 {result?.unlockedMap && (
