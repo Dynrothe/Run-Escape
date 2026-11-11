@@ -16,6 +16,8 @@ the version in the corner).
   you'll see a keris more often. At the plain one's level 2 you choose which keris it becomes:
   plain, or one of your jewels'. It keeps its level and the bonus damage it came with (Rare or
   better, where a jewel's keris came Very rare), and it's your only keris that run.
+- Theatre of Blood's closing rings, by trippy22: the next ring waits until the last has closed
+  in, so an enraged Maiden's rings no longer come back to back.
 
 ### Fixed
 

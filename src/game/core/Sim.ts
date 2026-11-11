@@ -12566,6 +12566,15 @@ export class Sim {
             originY: pattern.origin === "target" ? windup.targets[0]?.y : undefined,
             ...(rows && { rows, startTick: this.tick }),
         });
+        // Rings that hold come one at a time: each volley's is in before the next, and the last's
+        // before another such attack (BulletPatternDef.hold)
+        if (pattern.hold) {
+            const state = enemy.bossState!;
+            state.ringsUntil = Math.max(
+                state.ringsUntil ?? 0,
+                this.tick + delay + secondsToTicks(patternSeconds(pattern)),
+            );
+        }
         // Still until its volleys are out, or for as long as the pattern says
         // (BulletPatternDef.channel), the rest going on behind its next attack
         if (channel) {
@@ -14186,6 +14195,8 @@ export class Sim {
                 distance <= attack.range &&
                 distance >= (attack.minRange ?? 0) &&
                 (!attack.enraged || state.enraged) &&
+                // Not a ring that holds while the last is still coming in (startPattern)
+                !(attack.pattern?.hold && this.tick < (state.ringsUntil ?? 0)) &&
                 (!attack.expert || this.expert) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
                 !(attack.parasite && this.parasite) &&
