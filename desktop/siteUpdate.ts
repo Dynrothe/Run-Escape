@@ -8,14 +8,14 @@ import path from "node:path";
 
 import { GameFolder, ManifestChunk, chunkPath, zipEntryPath } from "./gameFiles";
 import {
+    DownloadSource,
     MARKER_NAME,
     STALL_TIMEOUT_MS,
-    checkChunks,
-    download,
     findChunk,
-    renameWithRetries,
+    installFolder,
+    progressFetcher,
+    runFewAtOnce,
 } from "./gameUpdate";
-import { ReleaseSource } from "./releaseSource";
 import {
     SITE_FILES_NAME,
     SiteFiles,
@@ -33,16 +33,38 @@ export type SiteBuild = { files: SiteFiles; caches: string; chunks: ManifestChun
 
 const sitesDir = (dataDir: string) => path.join(dataDir, "site");
 const updateDir = (dataDir: string) => path.join(dataDir, "site-update");
+// The website's build the last time the app followed it (noteSiteBuild)
+const lastFollowedFile = (dataDir: string) => path.join(dataDir, "site-build.json");
 
 // Downloads stay on the website: no redirects anywhere, as download() follows none that
 // isRedirectUrl refuses
-function siteSource(base: string): ReleaseSource {
-    return {
-        latestReleaseUrl: "",
-        isAssetUrl: (url) => url.startsWith(base),
-        isRedirectUrl: () => false,
-        isReleasePage: () => false,
-    };
+const siteSource = (base: string): DownloadSource => ({
+    isAssetUrl: (url) => url.startsWith(base),
+    isRedirectUrl: () => false,
+});
+
+// What's done before the game opens: the website's build when followSite can follow it, or else
+// the latest release. The release check starts alongside the website's, so a website that doesn't
+// answer only costs its own time limit. Gives back the website's build, or undefined to play the
+// newest game there is. Once cancel's aborted (the player closed the splash), nothing else is
+// started: a skipped download of the website's build doesn't become a download of the release.
+export async function updateForLaunch<Check>(
+    cancel: AbortSignal,
+    checkRelease: () => Promise<Check>,
+    takeRelease: (check: Check) => Promise<void>,
+    followSite?: () => Promise<GameFolder | undefined>,
+): Promise<GameFolder | undefined> {
+    const release = checkRelease();
+    // Caught here too, as it isn't awaited when the website's followed
+    release.catch(() => {});
+    const siteGame = await followSite?.();
+    if (siteGame) {
+        return siteGame;
+    }
+    if (!cancel.aborted) {
+        await takeRelease(await release);
+    }
+    return undefined;
 }
 
 async function fetchText(url: string, signal: AbortSignal): Promise<string> {
@@ -66,15 +88,18 @@ export async function checkSite(
     return { files, caches, chunks: parseSiteCaches(caches, files.build) };
 }
 
-// The build a game folder's files are, from the build.json every build has
-export async function readBuild(folder: string): Promise<string | undefined> {
+// The build a file like build.json names, if it's there and names one
+async function readBuildFile(file: string): Promise<string | undefined> {
     try {
-        const { build } = JSON.parse(await readFile(path.join(folder, "build.json"), "utf8"));
+        const { build } = JSON.parse(await readFile(file, "utf8"));
         return isBuildId(build) ? build : undefined;
     } catch {
         return undefined;
     }
 }
+
+// The build a game folder's files are, from the build.json every build has
+export const readBuild = (folder: string) => readBuildFile(path.join(folder, "build.json"));
 
 // The first of the folders that's this build already, so it needn't be downloaded
 export async function findBuild(
@@ -89,7 +114,15 @@ export async function findBuild(
     return undefined;
 }
 
-// The website's builds that finished installing. Their marker's their game-files.json.
+// Notes the build the website's on, once the app's playing it, so that offline the app plays it
+// rather than another build of the same version left behind (one whose removal failed, say)
+export async function noteSiteBuild(dataDir: string, build: string): Promise<void> {
+    await writeFile(lastFollowedFile(dataDir), JSON.stringify({ build }));
+}
+
+// The website's builds that finished installing. Their marker's their game-files.json. When the
+// build last followed (noteSiteBuild) is among them, it's the only one: the others were left from
+// before it, and pickGameFolder would take one of the same version by the order of their names.
 export async function readSiteGames(dataDir: string): Promise<GameFolder[]> {
     const names = await readdir(sitesDir(dataDir)).catch(() => [] as string[]);
     const folders: GameFolder[] = [];
@@ -110,7 +143,9 @@ export async function readSiteGames(dataDir: string): Promise<GameFolder[]> {
             // Not a finished install
         }
     }
-    return folders;
+    const lastFollowed = await readBuildFile(lastFollowedFile(dataDir));
+    const last = folders.filter((folder) => path.basename(folder.path) === lastFollowed);
+    return last.length > 0 ? last : folders;
 }
 
 const sha256Of = async (file: string) => {
@@ -195,53 +230,18 @@ export async function installSiteBuild(
         await writeFile(path.join(extracted, "caches", "caches.json"), site.caches);
 
         const total = jobs.reduce((sum, job) => sum + job.size, 0);
-        let done = 0;
-        let next = 0;
-        const worker = async () => {
-            while (next < jobs.length) {
-                const job = jobs[next++];
-                try {
-                    let counted = 0;
-                    const count = (bytes: number) => {
-                        done += bytes - counted;
-                        counted = bytes;
-                        onProgress(total ? Math.min(1, done / total) : 1);
-                    };
-                    const sha = await download(
-                        job.url,
-                        source,
-                        job.target,
-                        signal,
-                        (fraction) => count(Math.min(1, fraction ?? 0) * job.size),
-                        stallMs,
-                    );
-                    if (!job.check(sha)) {
-                        throw new Error(`${job.url} downloaded as ${sha}`);
-                    }
-                    count(job.size);
-                } catch (e) {
-                    // The others stop after the file they're on
-                    next = jobs.length;
-                    throw e;
-                }
+        const fetchFile = progressFetcher(source, signal, stallMs, total, onProgress);
+        await runFewAtOnce(jobs, DOWNLOADS, async (job) => {
+            const sha = await fetchFile(job.url, job.target, job.size);
+            if (!job.check(sha)) {
+                throw new Error(`${job.url} downloaded as ${sha}`);
             }
-        };
-        const workers = Array.from({ length: Math.min(DOWNLOADS, jobs.length) }, worker);
-        // All of them finish before anything removes the folder they write into
-        const failed = (await Promise.allSettled(workers)).find((r) => r.status === "rejected");
-        if (failed) {
-            throw failed.reason;
-        }
+        });
 
-        await access(path.join(extracted, "index.html"), constants.R_OK);
-        await checkChunks(extracted);
-        await writeFile(path.join(extracted, MARKER_NAME), JSON.stringify(files));
-
-        signal.throwIfAborted();
+        // A folder already there never finished, or is a build left from before the last one
+        // followed (readSiteGames), as findBuild would have found any other
         const folder = path.join(sitesDir(dataDir), files.build);
-        // Only a folder that never finished can be here: findBuild would have found it
-        await rm(folder, { recursive: true, force: true });
-        await renameWithRetries(extracted, folder);
+        await installFolder(extracted, folder, files, signal);
         return {
             version: files.version,
             path: folder,

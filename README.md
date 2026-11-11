@@ -143,7 +143,8 @@ off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics)
 There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
 plays offline, and updates the game by itself when it can, keeping to the website's version so it
-can always play co-op with the website's players. Saves are kept apart from a browser's, and
+can play co-op with the website's players between releases.
+Saves are kept apart from a browser's, and
 Export and Import in Settings carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#desktop) covers building and releasing it.
 

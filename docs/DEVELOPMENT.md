@@ -568,7 +568,7 @@ keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
 | `siteFiles.ts`         | The website's `game-files.json`: reading, writing, `whyNotFollow` |
-| `siteUpdate.ts`        | Downloads and installs the website's build, file by file          |
+| `siteUpdate.ts`        | Gets the website's build, and chooses it or a release at launch   |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
 | `release-files.ts`     | Makes the game zips, chunks, manifest and the changelog's notes   |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
@@ -615,7 +615,8 @@ The launcher updates the game's files by itself, not the launcher. At launch:
    renames that to `game/<version>` in the user data folder. Then it removes older ones. When it
    can, it downloads less (below).
 3. It plays the newest game folder it can run: an update, or the bundled files if those are newer,
-   as they are after unzipping a newer launcher.
+   as they are after unzipping a newer launcher. A launcher built with `GAME_SITE_URL` plays the
+   website's build when it can, and takes a release only when it can't (Following the website).
 
 Offline, rate limited (GitHub allows 60 requests an hour per address), a bad download, a skipped
 update: the game starts anyway with what it has, and `launcher.log` in the user data folder says
@@ -628,7 +629,8 @@ Downloads start only from this repository's release URLs, over https. GitHub the
 `release-assets.githubusercontent.com`, so redirects are checked one by one, which is why this uses
 Node's `fetch`: Electron's `net.fetch` fails on `redirect: "manual"`. That means it doesn't use
 Windows' proxy settings, so behind a proxy a player just gets no updates. A zip's entries are all
-checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`.
+checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`. The
+website's build comes only from under `GAME_SITE_URL`, with no redirects (Following the website).
 
 A release also carries the game in two parts: `game-<version>-lite.zip`, the game zip without
 `caches/chunks/`, and each of the slim cache's chunks as `cache-<chunk>.bin`. The manifest lists
@@ -655,19 +657,25 @@ the latest release, whatever its version. At launch:
    redirects. `game-files.json` is written by every `bun run build` (`siteFilesPlugin` in
    `vite.config.ts`): the build id, its version and `minLauncher`, the relay, run collector and
    cloud-save addresses it was built with, and every file but the slim cache's, with its sha256.
-   The chunks are in `caches.json`, which has to be for the same build.
+   The chunks are in `caches.json`, which has to be for the same build. The release check (Game
+   updates) starts at the same time, so a website that doesn't answer costs only its own time
+   limit, and the release is only taken if the website's build can't be (`updateForLaunch`).
 2. `whyNotFollow` refuses a build needing a newer launcher, or one built with other addresses than
    the launcher's: the app only lets out its own, so that build would lose co-op or cloud saves.
 3. If the bundled game or an installed folder is that build already (its `build.json`), it plays
    that. Otherwise it downloads the build into `site/<build>` in the user data folder: files the
    game it's playing has (by sha256, whatever they're called) and chunks it has are copied, the
    rest are downloaded a few at a time, each checked. Nothing's played until all of it's there.
+   Either way it notes the build in `site-build.json`, so that offline it plays that one, not a
+   build of the same version left in `site/` (one whose removal failed, say).
 4. It's served from `GAME_ORIGIN` like any other game folder, so saves, settings and the game's
    copy of the cache stay where they are.
 
-If the website can't be reached, or has no `game-files.json` yet, or can't be followed, it does the
-release check instead, and offline it plays the newest it has (`pickGameFolder`: on the same
-version, the website's build wins). Only the website's build in use is kept.
+If the website can't be reached, or has no `game-files.json` yet, or can't be followed, it takes the
+release instead, and offline it plays the newest it has (`pickGameFolder`: on the same
+version, the website's build wins). Only the website's build in use is kept. Skip for now, or
+closing the small window, skips both: a skipped download of the website's build doesn't become a
+download of the release.
 
 It follows the website back too: a website rolled back to an older build gets the app on it. If
 that's an older version, a save the newer one wrote is only read, not written, until the website
@@ -676,7 +684,8 @@ Whoever can upload to the website can ship code to the app's players, as a relea
 
 **Upload the whole of `dist/`** after `bun run build` and `bun run slim-cache`, `build.json` and
 `game-files.json` included. A launcher that finds a file that isn't what the list says, mid-upload
-say, plays what it has and tries again next launch.
+say, takes the release as it would with the website down (so a newer release is downloaded and
+played, on another build than the website's), and tries the website again next launch.
 
 Launchers from before this only take releases, so players need the new launcher's zip once. The
 Android app takes its game from the release, so it can still be on another build than the website.

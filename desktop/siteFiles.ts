@@ -6,15 +6,18 @@
 // cache's, with its sha256, and the addresses it was built with. The cache's chunks are named
 // after their sha256 and listed in caches.json, which bun run slim-cache writes afterwards.
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
     CHUNK_FILE_PATTERN,
     ManifestChunk,
     compareVersions,
+    isSha256,
     isShipped,
+    isSize,
     isVersion,
+    listFiles,
     zipEntryPath,
 } from "./gameFiles";
 
@@ -37,11 +40,6 @@ const BUILD_PATTERN = /^(\d+\.\d+\.\d+)-[0-9a-z]{1,16}$/;
 
 export const isBuildId = (build: unknown): build is string =>
     typeof build === "string" && BUILD_PATTERN.test(build);
-
-const isSize = (size: unknown): size is number =>
-    typeof size === "number" && Number.isSafeInteger(size) && size >= 0;
-const isSha256 = (sha256: unknown): sha256 is string =>
-    typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256);
 
 // A listed file's path is somewhere inside the game's folder, and isn't one the launcher writes
 // itself: the cache (from caches.json) and the marker of a finished install
@@ -165,16 +163,6 @@ export const siteFileUrl = (base: string, file: string) =>
 // What a game zip has (desktop/release-files.ts), but the cache, which has its own list
 const isListed = (relative: string) =>
     isShipped(relative) && !relative.startsWith("caches/") && relative !== SITE_FILES_NAME;
-
-function listFiles(dir: string, root = dir): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-        const file = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            return listFiles(file, root);
-        }
-        return [path.relative(root, file).split(path.sep).join("/")];
-    });
-}
 
 // The list for a build in dist: everything in it but what isListed leaves out
 export function makeSiteFiles(

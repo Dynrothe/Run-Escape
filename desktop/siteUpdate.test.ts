@@ -11,8 +11,10 @@ import {
     checkSite,
     findBuild,
     installSiteBuild,
+    noteSiteBuild,
     readSiteGames,
     removeOldSiteGames,
+    updateForLaunch,
 } from "./siteUpdate";
 
 // A stand-in for the website on localhost. Each test says what it serves.
@@ -218,11 +220,99 @@ test("removeOldSiteGames keeps only the build being played", async () => {
     deploy({ "index.html": "<html>two</html>" }, [], "0.30.0-bbbbbbbb");
     const current = await install();
     expect(await readSiteGames(dataDir)).toHaveLength(2);
-    // Offline, the newest is the one played: the same version, so the last downloaded wins only
-    // by being kept, which removeOldSiteGames sees to
     await removeOldSiteGames(dataDir, current);
     expect(await readSiteGames(dataDir)).toEqual([current]);
     expect(existsSync(old.path)).toBe(false);
     const bundled = { version: "0.30.0", path: "bundled" };
     expect(pickGameFolder(bundled, await readSiteGames(dataDir), "1.0.0")).toEqual(current);
+});
+
+test("offline, it plays the build last followed, not one of the same version left before it", async () => {
+    // Named so the one left behind comes first, as pickGameFolder takes one of two the same
+    deploy({ "index.html": "<html>one</html>" }, [], "0.30.0-11111111");
+    const left = await install();
+    deploy({ "index.html": "<html>two</html>" }, [], "0.30.0-ffffffff");
+    const followed = await install();
+    const bundled = { version: "0.30.0", path: "bundled" };
+    expect(pickGameFolder(bundled, await readSiteGames(dataDir), "1.0.0")).toEqual(left);
+
+    await noteSiteBuild(dataDir, "0.30.0-ffffffff");
+    expect(await readSiteGames(dataDir)).toEqual([followed]);
+    expect(pickGameFolder(bundled, await readSiteGames(dataDir), "1.0.0")).toEqual(followed);
+    // The website last seen on a build that's a release or the bundled game: none is left out
+    await noteSiteBuild(dataDir, "0.30.0-a6f7bcdc");
+    expect(await readSiteGames(dataDir)).toHaveLength(2);
+});
+
+describe("updateForLaunch", () => {
+    const site: GameFolder = { version: "0.30.0", path: "site", fromSite: true };
+    const none = { kind: "none" } as const;
+
+    test("plays the website's build, and leaves the release alone", async () => {
+        const takeRelease = vi.fn(async () => {});
+        expect(
+            await updateForLaunch(
+                never,
+                async () => none,
+                takeRelease,
+                async () => site,
+            ),
+        ).toBe(site);
+        expect(takeRelease).not.toHaveBeenCalled();
+    });
+
+    test("takes the release when the website can't be followed, or there isn't one", async () => {
+        const takeRelease = vi.fn(async (_check: typeof none) => {});
+        const unfollowed = async () => undefined;
+        expect(await updateForLaunch(never, async () => none, takeRelease, unfollowed)).toBe(
+            undefined,
+        );
+        expect(await updateForLaunch(never, async () => none, takeRelease)).toBeUndefined();
+        expect(takeRelease.mock.calls).toEqual([[none], [none]]);
+    });
+
+    test("takes nothing once the player's skipped the website's download", async () => {
+        const cancel = new AbortController();
+        const takeRelease = vi.fn(async () => {});
+        const skipped = async () => {
+            cancel.abort(new Error("Cancelled by the player"));
+            return undefined;
+        };
+        expect(await updateForLaunch(cancel.signal, async () => none, takeRelease, skipped)).toBe(
+            undefined,
+        );
+        expect(takeRelease).not.toHaveBeenCalled();
+    });
+
+    test("checks for a release while the website's still being checked", async () => {
+        let answer!: (game: GameFolder | undefined) => void;
+        const checkRelease = vi.fn(async () => none);
+        const followSite = () => new Promise<GameFolder | undefined>((done) => (answer = done));
+        const launch = updateForLaunch(never, checkRelease, async () => {}, followSite);
+        expect(checkRelease).toHaveBeenCalled();
+        answer(site);
+        expect(await launch).toBe(site);
+    });
+
+    test("a failed release check only counts when the website isn't followed", async () => {
+        const failed = async () => {
+            throw new Error("rate limited");
+        };
+        expect(
+            await updateForLaunch(
+                never,
+                failed,
+                async () => {},
+                async () => site,
+            ),
+        ).toBe(site);
+        await expect(
+            updateForLaunch(
+                never,
+                failed,
+                async () => {},
+                async () => undefined,
+            ),
+        ).rejects.toThrow(/rate limited/);
+    });
 });

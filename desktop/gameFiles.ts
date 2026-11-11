@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readdirSync } from "node:fs";
 import path from "node:path";
 
 // A chunk of the slim cache, in caches/chunks/ (src/rs/cache/ChunkedCache.ts): its name is the
@@ -26,9 +27,9 @@ export const chunkName = (data: Uint8Array) =>
 export const chunkPath = (folder: string, file: string) =>
     path.join(folder, "caches", "chunks", file);
 
-const isSize = (size: unknown): size is number =>
+export const isSize = (size: unknown): size is number =>
     typeof size === "number" && Number.isSafeInteger(size) && size >= 0;
-const isSha256 = (sha256: unknown): sha256 is string =>
+export const isSha256 = (sha256: unknown): sha256 is string =>
     typeof sha256 === "string" && /^[0-9a-f]{64}$/.test(sha256);
 
 // A set of game files: the ones bundled with the launcher, or an update in the user data folder.
@@ -49,6 +50,18 @@ export const canRun = (folder: GameFolder, launcherVersion: string) =>
 // they're as big as the game's code, and .htaccess is the web server's.
 export const isShipped = (file: string) =>
     !file.endsWith(".map") && path.basename(file) !== ".htaccess";
+
+// Every file in a folder, by its path inside it with forward slashes, as a zip entry or a URL has
+// it (this runs on Windows)
+export function listFiles(root: string, dir = root): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const file = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            return listFiles(root, file);
+        }
+        return [path.relative(root, file).split(path.sep).join("/")];
+    });
+}
 
 export function isVersion(version: unknown): version is string {
     return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version);

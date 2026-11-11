@@ -8,7 +8,7 @@ the version in the corner).
 ### Changed
 
 - The Windows app keeps to the website's version of the game, by trippy22: Windows and website
-  players can always play co-op together. Download the new app once to get it.
+  players can play co-op together between releases too. Download the new app once to get it.
 
 ## 0.30.0 - 2026-11-09
 

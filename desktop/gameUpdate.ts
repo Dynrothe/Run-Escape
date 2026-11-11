@@ -61,11 +61,14 @@ type Release = {
     assets?: { name: string; browser_download_url: string }[];
 };
 
+// Where a download may start, and where it may be redirected to: a release's, or the website's
+export type DownloadSource = Pick<ReleaseSource, "isAssetUrl" | "isRedirectUrl">;
+
 // fetch with every redirect checked before following it. Electron's net.fetch can't do this: with
 // redirect "manual" it fails rather than handing back the redirect.
 async function fetchAsset(
     url: string,
-    source: ReleaseSource,
+    source: DownloadSource,
     signal: AbortSignal,
 ): Promise<Response> {
     let current = url;
@@ -162,9 +165,9 @@ function findSplitUpdate(
 
 // Streams a download to a file and gives back its sha256. Gives up if nothing arrives for a while,
 // rather than leaving the player at a progress bar.
-export async function download(
+async function download(
     url: string,
-    source: ReleaseSource,
+    source: DownloadSource,
     file: string,
     cancel: AbortSignal,
     onProgress: (fraction: number | undefined) => void,
@@ -222,7 +225,7 @@ async function extractZip(zipFile: string, target: string, signal: AbortSignal):
 }
 
 // An antivirus scanner holding a new file makes a rename fail on Windows, for a moment
-export async function renameWithRetries(from: string, to: string): Promise<void> {
+async function renameWithRetries(from: string, to: string): Promise<void> {
     for (let attempt = 0; ; attempt++) {
         try {
             return await rename(from, to);
@@ -271,8 +274,77 @@ export async function findChunk(file: string, folders: string[]): Promise<string
     return undefined;
 }
 
-// Downloads one file of a split update and gives back its sha256, adding to the update's progress
-type Fetcher = (url: string, file: string, size: number) => Promise<string>;
+// Downloads one file of an update and gives back its sha256, adding to the update's progress
+export type Fetcher = (url: string, file: string, size: number) => Promise<string>;
+
+// A Fetcher for files whose sizes add up to total, giving what's arrived of them all. A file can
+// arrive bigger than its size (a website that compresses it, which fetch undoes), so each counts
+// for its size at most.
+export function progressFetcher(
+    source: DownloadSource,
+    signal: AbortSignal,
+    stallMs: number,
+    total: number,
+    onProgress: (fraction: number) => void,
+): Fetcher {
+    let done = 0;
+    return async (url, file, size) => {
+        let counted = 0;
+        const count = (bytes: number) => {
+            done += bytes - counted;
+            counted = bytes;
+            onProgress(total ? Math.min(1, done / total) : 1);
+        };
+        const onFraction = (fraction: number | undefined) =>
+            count(Math.min(1, fraction ?? 0) * size);
+        const hash = await download(url, source, file, signal, onFraction, stallMs);
+        count(size);
+        return hash;
+    };
+}
+
+// Runs each job, a few at a time. When one fails, the others stop after the job they're on, and
+// they all finish before this throws, so nothing's still writing into a folder that's removed.
+export async function runFewAtOnce<T>(
+    jobs: T[],
+    atOnce: number,
+    run: (job: T) => Promise<void>,
+): Promise<void> {
+    let next = 0;
+    const worker = async () => {
+        while (next < jobs.length) {
+            try {
+                await run(jobs[next++]);
+            } catch (e) {
+                next = jobs.length;
+                throw e;
+            }
+        }
+    };
+    const workers = Array.from({ length: Math.min(atOnce, jobs.length) }, worker);
+    const failed = (await Promise.allSettled(workers)).find((r) => r.status === "rejected");
+    if (failed) {
+        throw failed.reason;
+    }
+}
+
+// Puts a finished download in place as folder, once it has the game and every chunk its
+// caches.json lists, with the marker that makes it count as installed. Nothing that would be
+// played changes before the rename: whatever's at folder already is replaced, and only a folder
+// that never finished, or one that wasn't going to be played, can be there.
+export async function installFolder(
+    extracted: string,
+    folder: string,
+    marker: unknown,
+    signal: AbortSignal,
+): Promise<void> {
+    await access(path.join(extracted, "index.html"), constants.R_OK);
+    await checkChunks(extracted);
+    await writeFile(path.join(extracted, MARKER_NAME), JSON.stringify(marker));
+    signal.throwIfAborted();
+    await rm(folder, { recursive: true, force: true });
+    await renameWithRetries(extracted, folder);
+}
 
 // The lite zip, and the chunks: the ones the game has already are copied, the rest downloaded a
 // few at a time
@@ -296,34 +368,17 @@ async function installSplit(
     for (const [file, source] of have) {
         await copyFile(source, chunkPath(extracted, file));
     }
-    let next = 0;
-    const worker = async () => {
-        while (next < missing.length) {
-            const { file, size } = missing[next++];
-            try {
-                const target = chunkPath(extracted, file);
-                const hash = await fetchFile(split.chunkUrls[file], target, size);
-                if (hash.slice(0, 32) + ".bin" !== file) {
-                    throw new Error(`Chunk ${file} downloaded as ${hash}`);
-                }
-            } catch (e) {
-                // The others stop after the chunk they're on
-                next = missing.length;
-                throw e;
-            }
+    await runFewAtOnce(missing, CHUNK_DOWNLOADS, async ({ file, size }) => {
+        const hash = await fetchFile(split.chunkUrls[file], chunkPath(extracted, file), size);
+        if (hash.slice(0, 32) + ".bin" !== file) {
+            throw new Error(`Chunk ${file} downloaded as ${hash}`);
         }
-    };
-    const workers = Array.from({ length: Math.min(CHUNK_DOWNLOADS, missing.length) }, worker);
-    // All of them finish before anything removes the folder they write into
-    const failed = (await Promise.allSettled(workers)).find((r) => r.status === "rejected");
-    if (failed) {
-        throw failed.reason;
-    }
+    });
 }
 
 // Every chunk caches.json lists is in the folder: a game that's missing one stops partway through
 // loading
-export async function checkChunks(folder: string): Promise<void> {
+async function checkChunks(folder: string): Promise<void> {
     const caches: unknown = JSON.parse(
         await readFile(path.join(folder, "caches", "caches.json"), "utf8"),
     );
@@ -378,26 +433,7 @@ export async function installUpdate(
         let installed = false;
         if (split && lite && chunks && sizeOf(missing) <= SPLIT_SHARE * sizeOf(chunks)) {
             const total = lite.size + sizeOf(missing);
-            // What's arrived of every file, for the progress bar
-            let done = 0;
-            const fetchFile: Fetcher = async (url, file, size) => {
-                let counted = 0;
-                const count = (bytes: number) => {
-                    done += bytes - counted;
-                    counted = bytes;
-                    onProgress(total ? done / total : 1);
-                };
-                const hash = await download(
-                    url,
-                    source,
-                    file,
-                    signal,
-                    (fraction) => count((fraction ?? 0) * size),
-                    stallMs,
-                );
-                count(size);
-                return hash;
-            };
+            const fetchFile = progressFetcher(source, signal, stallMs, total, onProgress);
             const required = { ...manifest, lite, chunks };
             try {
                 await installSplit(
@@ -425,15 +461,9 @@ export async function installUpdate(
             }
             await extractZip(zipFile, extracted, signal);
         }
-        await access(path.join(extracted, "index.html"), constants.R_OK);
-        await checkChunks(extracted);
-        await writeFile(path.join(extracted, MARKER_NAME), JSON.stringify(manifest));
-
-        signal.throwIfAborted();
+        // Only a folder that never finished can be there: this version's newer than what's installed
         const folder = path.join(gamesDir(dataDir), manifest.version);
-        // Only a folder that never finished can be here: this version's newer than what's installed
-        await rm(folder, { recursive: true, force: true });
-        await renameWithRetries(extracted, folder);
+        await installFolder(extracted, folder, manifest, signal);
         return { version: manifest.version, path: folder, minLauncher: manifest.minLauncher };
     } finally {
         await rm(workDir, { recursive: true, force: true }).catch(() => {});
