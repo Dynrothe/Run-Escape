@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 
 import type { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
+import { getCharacter } from "../content/characters";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
 import { GameUi } from "./GameUi";
@@ -285,28 +286,22 @@ test("Thanksgiving map selection has its autumn theme", () => {
     expect(document.querySelector(".ui-select-details-thanksgiving")).toBeNull();
 });
 
-test("Avian Assaulter is an available melee adventurer with the requested description", () => {
-    const actions = renderMaps();
-    const avian = screen.getByRole("button", { name: "Avian Assaulter" });
-    expect(avian).not.toHaveClass("ui-card-locked");
-    fireEvent.focus(avian);
+test("the Avian Assaulter is only Thanksgiving's, and shown there with what they do", () => {
+    renderMaps();
+    // Not in the roster, to pick or to count
+    expect(screen.queryByRole("button", { name: "Avian Assaulter" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));
     expect(document.querySelector(".ui-select-adventurers .ui-card-title")).toHaveTextContent(
         "Avian Assaulter",
     );
     expect(document.querySelector(".ui-select-adventurers .ui-card-style")).toHaveTextContent(
         "Melee",
     );
-    expect(
-        screen.getByText(
-            "Starts with a Rubber Chicken. Questionable.... This is one dangerous bird! Everyone plays it in Thanksgiving Harvest.",
-        ),
-    ).toBeVisible();
-    expect(screen.getByText("+15% damage against birds")).toBeVisible();
-    fireEvent.click(avian);
-    expect(actions.selectCharacter).toHaveBeenCalledWith("avian_assaulter");
+    expect(screen.getByText(getCharacter("avian_assaulter").description)).toBeInTheDocument();
+    expect(screen.getByText("+15% damage against birds")).toBeInTheDocument();
 });
 
-test("Thanksgiving fixes the adventurer as the Avian Assaulter, and the Avian is kept to it", () => {
+test("Thanksgiving fixes the adventurer as the Avian Assaulter, and other maps don't", () => {
     const actions = renderMaps();
     const enter = () => screen.getByRole("button", { name: /Enter / });
     fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));

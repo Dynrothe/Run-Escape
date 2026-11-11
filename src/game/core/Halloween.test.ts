@@ -400,7 +400,7 @@ describe("Halloween rewards", () => {
     });
 });
 describe("Thanksgiving rewards", () => {
-    test("Chompy Bird kills drop trophies on Thanksgiving only", () => {
+    test("Chompy bird kills drop trophies on Thanksgiving only", () => {
         const killChompy = (mapId: string) => {
             const sim = createSim(mapId);
             sim.rng.chance = () => true;
@@ -419,7 +419,7 @@ describe("Thanksgiving rewards", () => {
         expect(killChompy("halloween")).toEqual([]);
     });
 
-    test("carving a roasted turkey can award Magic Secateurs", () => {
+    test("carving a roasted turkey can award Magic secateurs", () => {
         const sim = createSim("thanksgiving");
         sim.rng.chance = () => true;
 

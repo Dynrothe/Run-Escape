@@ -684,8 +684,8 @@
         min-height: 44px;
     }
 
-     /* Run HUD: everything at the edges, the middle left to the fight. Equipment
-         has its own right-side panel; quests stay in the pause menu. */
+    /* Run HUD: everything at the edges, the middle left to the fight. Gear has
+       its own panel on the right, behind a toggle; quests are in the pause menu. */
 
     .ui-xp {
         height: calc(var(--safe-top) + 12px);

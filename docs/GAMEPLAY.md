@@ -74,50 +74,50 @@ version and how to run it.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
-- **Adventurers**: some are available from the start, each with their own starting weapon and outfit.
+- **Adventurers**: three to start with, each with their own starting weapon, outfit and bonus.
   The rest join for beating a map or for a task done on one (in a single run, however it ends);
   the adventurer screen says what each one wants, and a task done mid-run rings the town
   crier's bell. One can be made a favourite (`SaveData.favouriteCharacter`), and the game starts
   on them.
 
-    | Adventurer          | Fights with | Starts with            | Bonus                                                                                         | Joins for                                            |
-    | ------------------- | ----------- | ---------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                                                                           |                                                      |
-    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                                                             |                                                      |
-    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                                                              |                                                      |
-    | Avian Assaulter     | Melee       | Rubber Chicken         | +15% damage to birds and XP, +50% pickup range, +35% weapon speed, +45% movement speed, 70 HP | Thanksgiving Harvest only                            |
-    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                                                                            | Killing Count Draynor in Lumbridge                   |
-    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                                                                            | Beating Lumbridge                                    |
-    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                                                                   | Killing Ahrim in Barrows                             |
-    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                                                                         | Beating Barrows                                      |
-    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                                                                       | Surviving 10 minutes in the Wilderness               |
-    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                                                               | Beating the Wilderness                               |
-    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                                                              | Beating the Desert                                   |
-    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                                                                           | Killing Damis in the Desert                          |
-    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                                                                       | Beating the Fremennik Province                       |
-    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                                                                | Killing Dagannoth Rex in the Fremennik Province      |
-    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints                                                           | Beating Karamja                                      |
-    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                                                             | Surviving 13 minutes on Karamja                      |
-    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                                                             | Beating Kourend                                      |
-    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                                                                   | Killing Sarachnis in Kourend                         |
-    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                                                                 | Beating Varlamore                                    |
-    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                                                             | Killing the Javelin Colossus in Varlamore            |
-    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                                                                        | Beating Morytania                                    |
-    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster                                                           | Killing the Pestilent Bloat in Morytania             |
-    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                                                                | Beating the God Wars Dungeon                         |
-    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                                                               | Killing Kree'arra in the God Wars Dungeon            |
-    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder                                                            | Beating Prifddinas                                   |
-    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                                                                | Surviving 10 minutes in Prifddinas                   |
-    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                                                            | Beating the Inferno                                  |
-    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                                                                   | Killing JalTok-Jad in the Inferno                    |
-    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                                                                       | Surviving 10 minutes on the Grand Exchange           |
-    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                                                              | Killing the Clan leader in East Varrock              |
-    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                                                            | Surviving 6:06 in Falador                            |
-    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                                                             | Killing the AGS specer in Last Man Standing          |
-    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                                                             | Killing the Flag carrier in Castle Wars              |
-    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                                                               | Destroying the purple portal in Pest Control         |
-    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                                                                | Phosani's Nightmare only (everyone plays them there) |
-    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute                                             | Justiciar Zachariah only (everyone plays them there) |
+    | Adventurer          | Fights with | Starts with            | Bonus                                            | Joins for                                            |
+    | ------------------- | ----------- | ---------------------- | ------------------------------------------------ | ---------------------------------------------------- |
+    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                              |                                                      |
+    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                |                                                      |
+    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                 |                                                      |
+    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                               | Killing Count Draynor in Lumbridge                   |
+    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                               | Beating Lumbridge                                    |
+    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                      | Killing Ahrim in Barrows                             |
+    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                            | Beating Barrows                                      |
+    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                          | Surviving 10 minutes in the Wilderness               |
+    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                  | Beating the Wilderness                               |
+    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                 | Beating the Desert                                   |
+    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                              | Killing Damis in the Desert                          |
+    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                          | Beating the Fremennik Province                       |
+    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                   | Killing Dagannoth Rex in the Fremennik Province      |
+    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints              | Beating Karamja                                      |
+    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                | Surviving 13 minutes on Karamja                      |
+    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                | Beating Kourend                                      |
+    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                      | Killing Sarachnis in Kourend                         |
+    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                    | Beating Varlamore                                    |
+    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                | Killing the Javelin Colossus in Varlamore            |
+    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                           | Beating Morytania                                    |
+    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster              | Killing the Pestilent Bloat in Morytania             |
+    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                   | Beating the God Wars Dungeon                         |
+    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                  | Killing Kree'arra in the God Wars Dungeon            |
+    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder               | Beating Prifddinas                                   |
+    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                   | Surviving 10 minutes in Prifddinas                   |
+    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                               | Beating the Inferno                                  |
+    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                      | Killing JalTok-Jad in the Inferno                    |
+    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                          | Surviving 10 minutes on the Grand Exchange           |
+    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                 | Killing the Clan leader in East Varrock              |
+    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                               | Surviving 6:06 in Falador                            |
+    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                | Killing the AGS specer in Last Man Standing          |
+    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                | Killing the Flag carrier in Castle Wars              |
+    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                  | Destroying the purple portal in Pest Control         |
+    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                   | Phosani's Nightmare only (everyone plays them there) |
+    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there) |
+    | Avian Assaulter     | Melee       | Rubber chicken         | Hits birds 15% harder, 45% faster, 180% more HP  | Thanksgiving Harvest only (everyone plays them there) |
 
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
@@ -340,19 +340,19 @@ version and how to run it.
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
-    - **Thanksgiving Harvest** (seasonal, open from the start): the Hosidius Vinery and its surrounding
-      countryside provide the harvest grounds, with the player starting on the marked path beside
-      the Vinery. Farm animals, farmers, bandits, foxes, imps and Chompy birds overrun the vines.
-      Only Avian Assaulter can enter, including in co-op. Their Rubber Chicken strikes in front and
-      behind, has ten levels, does 20% more damage to bosses and heals on hit (25% for 3 HP,
-      growing with every upgrade, more with rarer ones). They find no other weapons, gear,
-      passives or utility items; only power-ups and shop skills remain.
-      Birds circle their head throughout the run as a visual effect, without stunning them.
-      Map quests target Professor Oddenstein, Evil Chickens, the Freaky Forester and Chompy Slayer.
-      Completing the 10,000-kill Slayer quest unlocks the Chompy chick; the Collection Log
-      also has Chompy drops, roasted-turkey secateurs and victory rewards, including a Golden Egg
-      for a hard-mode victory. The Turkey hat and Golden Egg use the cache's Pheasant hat and Golden
-      pheasant egg models.
+    - **Thanksgiving Harvest** (seasonal, open from the start): the Hosidius Vinery and the
+      countryside round it, starting on the path beside the Vinery. Farm animals, farmers,
+      bandits, foxes, imps and Chompy birds overrun the vines, and Professor Oddenstein, the Evil
+      Chicken and the Freaky Forester come for the harvest. Everyone plays the Avian Assaulter
+      there, solo or in co-op, and nowhere else. Their Rubber chicken strikes in front and behind,
+      has ten levels, does 20% more damage to bosses and heals on hit (25% for 3 HP, growing with
+      every upgrade, more with rarer ones). They find no other weapons, gear, passives or utility
+      items: only power-ups and shop skills. Birds circle their head all run, as a look, without
+      stunning them. Enemies now and then drop a Cooked turkey, a feast or a fowl trick. Its quests
+      are Professor Oddenstein, the Evil Chickens, the Freaky Forester and the Chompy Slayer, whose
+      10,000 kills bring the Chompy chick; the Collection log also has Chompy bird drops, the
+      turkey's Magic secateurs and victory rewards, a Golden egg for a hard-mode win among them.
+      The Turkey hat and Golden egg are the cache's Pheasant hat and Golden pheasant egg.
     - **Phosani's Nightmare** (a boss fight, open once Hallowed Night's beaten): nothing but her.
       The run's one fight in her dream, as the real one is: a square of her dark floor walled round
       in the Sanctuary's stone, a gate north and south closed by its barrier, inside the Sisterhood Sanctuary's

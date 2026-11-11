@@ -102,7 +102,7 @@ describe("Sim", () => {
         const peck = getEnemy("evil_chicken").boss!.attacks[0];
         expect(peck.count).toBe(5);
         expect(peck.spread! * (peck.count! - 1)).toBeLessThan(0.6);
-        for (const id of ["freaky_forester", "freaky_forester_enraged", "freaky_forester_final"]) {
+        for (const id of ["freaky_forester", "freaky_forester_final"]) {
             expect(getEnemy(id).boss!.attacks.find((a) => a.name === "Boot Kick")!.cone).toBe(1.2);
         }
         const sim = createSim("avian_assaulter", 1, "thanksgiving");
@@ -122,7 +122,7 @@ describe("Sim", () => {
         expect(surged).toBe(true);
     });
 
-    test("Avian Assaulter starts with a melee Rubber Chicken and can damage an enemy", () => {
+    test("Avian Assaulter starts with a melee Rubber chicken and can damage an enemy", () => {
         const sim = createSim("avian_assaulter");
         expect(sim.weapons[0].def).toMatchObject({
             id: "rubber_chicken",
@@ -188,7 +188,7 @@ describe("Sim", () => {
         ).toBe(false);
     });
 
-    test("the Rubber Chicken heals more with each upgrade, by rarity", () => {
+    test("the Rubber chicken heals more with each upgrade, by rarity", () => {
         const sim = createSim("avian_assaulter", 1, "thanksgiving");
         const heals = (quality: "common" | "veryRare") => {
             sim["apply"]({
@@ -205,7 +205,7 @@ describe("Sim", () => {
         expect(gain.hp).toBeCloseTo(1.25);
     });
 
-    test("the Rubber Chicken hits bosses for 20% more, and other weapons don't", () => {
+    test("the Rubber chicken hits bosses for 20% more, and other weapons don't", () => {
         const chicken = armed("rubber_chicken", "avian_assaulter");
         chicken.enemies = [];
         const boss = dummy(chicken, 2, 0, "boss");
@@ -542,7 +542,7 @@ describe("melee", () => {
     });
 
     test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
-        "the Rubber Chicken hits both sides at level %i",
+        "the Rubber chicken hits both sides at level %i",
         (level) => {
             const sim = armed("rubber_chicken", "avian_assaulter");
             sim.enemies = [];
@@ -2079,7 +2079,7 @@ describe("bosses", () => {
         expect(campaign.timeLeftForBoss).toBe(900);
     });
 
-    test("the Chompy Hat requires an Evil Chicken kill and event victory", () => {
+    test("the Chompy bird hat requires an Evil Chicken kill and event victory", () => {
         const sim = createSim("warrior", 1, "thanksgiving");
         const chicken = sim.spawnEnemy(getEnemy("evil_chicken"), "boss", {
             x: 1040,
@@ -2101,7 +2101,7 @@ describe("bosses", () => {
         expect(sim.trophies).toContain("ledger_of_the_harvest");
     });
 
-    test("the Golden Egg requires a hard victory over the final Forester", () => {
+    test("the Golden egg requires a hard victory over the final Forester", () => {
         const playFinal = (hard: boolean, enemyId: string) => {
             const sim = createSim("warrior", 1, "thanksgiving", emptyStats(), false, hard);
             const boss = sim.spawnEnemy(getEnemy(enemyId), "finalBoss", {

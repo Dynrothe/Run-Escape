@@ -735,21 +735,6 @@ export class GameView {
                 this.drawProp(actors, sim, prop, alpha);
             }
         });
-        sim.map.scenery?.forEach((scenery) => {
-            const model = this.assets.get("loc:" + scenery.locId);
-            if (model) {
-                actors.draw(
-                    model,
-                    model.anims[0],
-                    0,
-                    scenery.x,
-                    this.ground(sim, scenery.x, scenery.y),
-                    scenery.y,
-                    (scenery.rotation ?? 0) * 512,
-                    { scale: scenery.scale ?? 1 },
-                );
-            }
-        });
         if (cinematic) {
             this.cinematicView.submitActors(actors, cinematic, (x, y) => this.ground(sim, x, y));
         }
@@ -2009,11 +1994,8 @@ export class GameView {
         if (detonate && sim.isUp(sim.heroes[hero])) {
             flash = Math.max(flash, 0.35 + 0.25 * Math.sin(tick * 0.4));
         }
-        // The Avian Assaulter is drawn bigger on Thanksgiving Harvest, and nowhere else
-        const big =
-            sim.map.id === "thanksgiving" && sim.heroes[hero].characterId === "avian_assaulter"
-                ? AVIAN_SCALE
-                : 1;
+        // The Avian Assaulter (only Thanksgiving Harvest's) is drawn bigger than other heroes
+        const big = sim.heroes[hero].characterId === "avian_assaulter" ? AVIAN_SCALE : 1;
         actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
             silhouette: true,
             tint,

@@ -125,13 +125,6 @@ describe("enemy bakes", () => {
         }
     });
 
-    test("map scenery locs are in the base bake", () => {
-        const keys = new Set(GameAssets.getBaseRequests().map(({ key }) => key));
-        for (const { locId } of getMap("thanksgiving").scenery ?? []) {
-            expect(keys).toContain("loc:" + locId);
-        }
-    });
-
     test("aren't in the base bake", () => {
         const keys = GameAssets.getBaseRequests().map((r) => r.key);
         expect(keys).not.toContain("npc:goblin");

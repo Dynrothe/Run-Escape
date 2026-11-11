@@ -19,7 +19,6 @@ import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 import { iconCache } from "./ItemIcon";
 
-
 const device = vi.hoisted(() => ({ coarse: false }));
 
 vi.mock("../../util/DeviceUtil", async (importOriginal) => ({
@@ -34,7 +33,6 @@ vi.mock("./TouchControls", () => ({
     RotateNotice: () => null,
     enterFullscreen: vi.fn(),
 }));
-
 
 vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
 
@@ -142,8 +140,10 @@ describe("the run's HUD", () => {
             }),
         );
         expect(screen.getByRole("slider", { name: "Camera zoom" })).toBeVisible();
+        // Under the pause menu it stays, out of reach
         act(() => store.set({ overlay: "paused" }));
-        expect(screen.queryByRole("slider", { name: "Camera zoom" })).not.toBeInTheDocument();
+        expect(screen.getByRole("slider", { name: "Camera zoom" })).toBeDisabled();
+        expect(toggle).toBeDisabled();
     });
 
     test.each([1, 2, 3])("stress-tests the mobile HUD with %i teammates", (teammateCount) => {
@@ -213,7 +213,7 @@ describe("the run's HUD", () => {
             expect(screen.getByRole("slider", { name: "Camera zoom" })).toBeVisible();
 
             act(() => store.set({ overlay: "paused" }));
-            expect(screen.queryByRole("slider", { name: "Camera zoom" })).not.toBeInTheDocument();
+            expect(screen.getByRole("slider", { name: "Camera zoom" })).toBeDisabled();
             expect(screen.getByText("Stress test potion")).toBeVisible();
             expect(screen.getByText("Stress test drain")).toBeVisible();
             view.unmount();
@@ -437,7 +437,7 @@ describe("the run's HUD", () => {
         expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
         fireEvent.focus(prayer);
         act(() => store.set({ overlay: "paused" }));
-        expect(screen.queryByRole("button", { name: "Piety" })).not.toBeInTheDocument();
+        expect(prayer).toBeDisabled();
         expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     });
 

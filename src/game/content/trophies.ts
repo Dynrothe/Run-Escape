@@ -11,7 +11,7 @@ export type TrophySource =
     // This chance on each trick or treat pumpkin opened
     | { kind: "pumpkin"; chance: number }
     // This chance on each cooked turkey carved
-    | { kind: "turkey"; chance: number } // Added Turkey event source type!
+    | { kind: "turkey"; chance: number }
     // Rewards granted after winning an event map, optionally requiring a boss kill
     | { kind: "map"; mapId: string; requiresBoss?: string; hard?: boolean }
     // A quest's completion, recorded with its other rewards
@@ -273,39 +273,41 @@ TROPHIES.push(
     },
 );
 
-// 🍁 Thanksgiving Harvest Event Rewards
+// Thanksgiving Harvest's: Chompy bird drops, the turkey's secateurs, its victories' rewards
+// and its quest's pet. The Turkey hat and Golden egg are the cache's Pheasant hat and
+// Golden pheasant egg
 TROPHIES.push(
     {
         id: "rubber_chicken",
-        name: "Rubber Chicken",
+        name: "Rubber chicken",
         objId: 4566,
-        how: "A rare drop from a Chompy Bird.",
+        how: "A rare drop from a Chompy bird.",
         from: { kind: "enemy", enemyId: "chompy_bird", mapId: "thanksgiving", chance: 1 / 200 },
     },
     {
-        id: "chompy_bird_bow",
+        id: "turkey_hat",
         name: "Turkey hat",
         objId: 28620,
-        how: "A rare drop from a Chompy Bird.",
+        how: "A rare drop from a Chompy bird.",
         from: { kind: "enemy", enemyId: "chompy_bird", mapId: "thanksgiving", chance: 1 / 400 },
     },
     {
         id: "magic_secateurs",
-        name: "Magic Secateurs",
+        name: "Magic secateurs",
         objId: 7409,
         how: "Sometimes found when carving a roasted turkey.",
         from: { kind: "turkey", chance: 1 / 5 },
     },
     {
         id: "golden_feather",
-        name: "Golden Feather",
+        name: "Golden feather",
         objId: 10175,
-        how: "A very rare drop from a Chompy Bird.",
+        how: "A very rare drop from a Chompy bird.",
         from: { kind: "enemy", enemyId: "chompy_bird", mapId: "thanksgiving", chance: 1 / 1000 },
     },
     {
         id: "chompy_hat",
-        name: "Chompy Hat",
+        name: "Chompy bird hat",
         objId: 2978,
         how: "Reward for defeating the Evil Chicken and completing Thanksgiving Harvest.",
         from: { kind: "map", mapId: "thanksgiving", requiresBoss: "evil_chicken" },
@@ -325,12 +327,12 @@ TROPHIES.push(
         id: "chompy_chick",
         name: "Chompy chick",
         objId: 13071,
-        how: "Chompy Slayer - Completion required to unlock",
+        how: "Complete the Chompy Slayer quest.",
         from: { kind: "quest", questId: "thanksgiving_chompy_hunt", mapId: "thanksgiving" },
     },
     {
         id: "golden_egg",
-        name: "Golden Egg",
+        name: "Golden egg",
         objId: 28663,
         how: "Complete Thanksgiving Harvest on hard mode.",
         from: {

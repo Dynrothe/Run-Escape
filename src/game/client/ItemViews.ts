@@ -267,19 +267,16 @@ export function getBuffViews(sim: Sim): BuffView[] {
         };
     };
     const buffs: BuffView[] = sim.buffs.map((buff) => {
-        const item = buff.look ? undefined : getItem(buff.itemId);
-        const { name, objId } = buff.look ?? item!;
-        const details = formatStats(buff.stats);
+        const { name, objId } = buff.look ?? getItem(buff.itemId);
+        // What it gives, which isn't always its item's (a turkey's feast borrows a potion)
+        const details = formatStats(buff.stats).map((line) => line.text);
         if (buff.cures) {
-            details.push("Cures poison and boss debuffs");
+            details.push(t("ui.effect.cures"));
         }
         return {
             id: buff.itemId,
             name,
-            description:
-                buff.look || item?.kind !== "utility"
-                    ? details.join(", ") || "Effect active."
-                    : item.description,
+            description: details.join(", ") || t("ui.effect.active"),
             objId,
             ...timer(buff.startTick, buff.endTick),
             harmful: false,
@@ -290,7 +287,7 @@ export function getBuffViews(sim: Sim): BuffView[] {
         buffs.push({
             id: "powerUp:" + active.uid,
             name: powerUp.name,
-            description: powerUp.description,
+            description: powerUpDescription(powerUp),
             objId: powerUp.objId,
             ...timer(active.startTick, active.endTick),
             harmful: false,
@@ -300,7 +297,10 @@ export function getBuffViews(sim: Sim): BuffView[] {
         buffs.push({
             id: debuff.id,
             name: debuff.name,
-            description: formatStats(debuff.stats).join(", ") || "Weakens your stats.",
+            description:
+                formatStats(debuff.stats)
+                    .map((line) => line.text)
+                    .join(", ") || t("ui.effect.weakens"),
             objId: debuff.iconObjId,
             ...timer(debuff.startTick, debuff.endTick),
             harmful: true,
@@ -310,7 +310,7 @@ export function getBuffViews(sim: Sim): BuffView[] {
     for (const revive of new Set(getRevivesLeft(sim.heroes[sim.focus]))) {
         buffs.push({
             ...revive,
-            description: "Revives you once if you fall.",
+            description: t("ui.effect.revive"),
             harmful: false,
         });
     }

@@ -35,7 +35,6 @@ import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import {
     CHARACTERS,
     characterDescription,
-    characterMapRestriction,
     characterName,
     getCharacter,
 } from "../content/characters";
@@ -989,7 +988,6 @@ function TitleHint(): JSX.Element {
 // stands in view between them
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
-    const restriction = characterMapRestriction(getMapCharacter(map) ?? ui.characterId, map.id);
     const [board, setBoard] = useState(false);
     const shownMapName = mapName(getMap(ui.mapId));
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
@@ -1023,11 +1021,8 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                         {expertShown && <ExpertSwitch ui={ui} client={client} />}
                     </>
                 )}
-                {restriction && <span className="ui-endless-hint">{restriction}</span>}
                 <button
                     className="ui-button ui-button-go ui-select-go"
-                    disabled={restriction !== undefined}
-                    title={restriction}
                     onClick={() => client.startRun()}
                 >
                     <KeyHint pad="start" /> {t(enterKey, { map: shownMapName })}
@@ -1546,17 +1541,13 @@ function AdventurerDetails({
                 <div className="ui-select-bonus">
                     {character.damageAgainst && (
                         <StatLine
-                            text={`+${Math.round(character.damageAgainst.damage * 100)}% damage against ${character.damageAgainst.tags
-                                .map(
-                                    (tag) =>
-                                        ({
-                                            bird: "birds",
-                                            vampyre: "vampyres",
-                                            undead: "undead",
-                                            kalphite: "kalphites",
-                                        })[tag],
-                                )
-                                .join(", ")}`}
+                            statKey="might"
+                            text={t("ui.character.damage_against", {
+                                percent: Math.round(character.damageAgainst.damage * 100),
+                                targets: list(
+                                    character.damageAgainst.tags.map((tag) => t(`ui.tag.${tag}`)),
+                                ),
+                            })}
                         />
                     )}
                     {bonus.map((line) => (
@@ -2151,7 +2142,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     }}
                 />
             )}
-            {isCoarsePointer && hud && !ui.cinematic && ui.overlay !== "paused" && (
+            {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
                     inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
                     overlay={ui.overlay}
@@ -2159,7 +2150,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 />
             )}
             {/* The inspectable HUD slots sit above the touch movement zone. */}
-            {hud && !ui.cinematic && ui.overlay !== "paused" && (
+            {hud && !ui.cinematic && (
                 <Hud
                     hud={hud}
                     client={client}
@@ -2353,7 +2344,7 @@ const GearSlots = memo(function GearSlots({
             id={id}
             className="ui-slots ui-hud-gear-grid"
             role="group"
-            aria-label="Equipment slots"
+            aria-label={t("ui.hud.gear_slots")}
             hidden={!open}
         >
             {gear.map((slot) => (
@@ -2388,6 +2379,8 @@ const GearSlots = memo(function GearSlots({
     );
 });
 
+// The worn gear under the damage panel, shut to start with on a touch screen, where there's
+// less room
 function GearPanel({ gear, disabled }: { gear: GearSlotView[]; disabled: boolean }): JSX.Element {
     const [open, setOpen] = useState(!isCoarsePointer);
     const gridId = useId();
@@ -2396,13 +2389,13 @@ function GearPanel({ gear, disabled }: { gear: GearSlotView[]; disabled: boolean
             <button
                 className="ui-dps ui-gear-toggle"
                 type="button"
-                aria-label="Gear"
+                aria-label={t("ui.hud.gear")}
                 aria-expanded={open}
                 aria-controls={gridId}
-                title="Show or hide equipment slots"
+                title={t("ui.hud.gear_toggle_tooltip")}
                 onClick={() => setOpen((shown) => !shown)}
             >
-                <span className="ui-dps-label">GEAR</span>{" "}
+                <span className="ui-dps-label">{t("ui.hud.gear_label")}</span>{" "}
                 <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
             </button>
             <GearSlots gear={gear} disabled={disabled} id={gridId} open={open} />
@@ -2495,7 +2488,7 @@ const Hud = memo(function Hud({
                 </div>
                 <RunTimer client={client} />
                 <TombsScabarasReading client={client} />
-                {isCoarsePointer && <CameraZoomSlider client={client} />}
+                {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
                 <div className="ui-hud-right">
                     <Minimap client={client} />
                     <KillsAndCoins client={client} />
@@ -2549,7 +2542,14 @@ function RunTimer({ client }: { client: GameClient }): JSX.Element {
     return <div className="ui-timer">{formatTime(seconds)}</div>;
 }
 
-function CameraZoomSlider({ client }: { client: GameClient }): JSX.Element {
+// A touch screen's zoom (a mouse has its wheel), behind a toggle beside the timer
+function CameraZoomSlider({
+    client,
+    disabled,
+}: {
+    client: GameClient;
+    disabled: boolean;
+}): JSX.Element {
     const [zoom, setZoom] = useState(() => {
         const range = MAX_CAMERA_DISTANCE - MIN_CAMERA_DISTANCE;
         return Math.round(((MAX_CAMERA_DISTANCE - client.cameraRig.distance) / range) * 100);
@@ -2561,12 +2561,13 @@ function CameraZoomSlider({ client }: { client: GameClient }): JSX.Element {
             <button
                 className="ui-dps ui-mobile-zoom-toggle"
                 type="button"
-                aria-label="Zoom"
+                aria-label={t("ui.hud.zoom")}
                 aria-expanded={open}
                 aria-controls={sliderId}
+                disabled={disabled}
                 onClick={() => setOpen((shown) => !shown)}
             >
-                <span className="ui-dps-label">ZOOM</span>
+                <span className="ui-dps-label">{t("ui.hud.zoom_label")}</span>
                 <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
             </button>
             <input
@@ -2578,13 +2579,14 @@ function CameraZoomSlider({ client }: { client: GameClient }): JSX.Element {
                 step={1}
                 value={zoom}
                 hidden={!open}
+                disabled={disabled}
                 onChange={(event) => {
                     const value = Number(event.currentTarget.value);
                     client.setCameraZoom(value);
                     setZoom(value);
                 }}
                 onPointerUp={(event) => event.currentTarget.blur()}
-                aria-label="Camera zoom"
+                aria-label={t("ui.hud.camera_zoom")}
             />
         </div>
     );
@@ -2882,8 +2884,7 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
                 <RaidObjective room={raidRoom} bossIn={bossIn} />
             ) : null;
         }
-        const warning = getMap(mapId).finalBossWarning;
-        return warning && bossIn !== undefined && bossIn <= 60 ? (
+        return bossIn !== undefined && bossIn <= 60 ? (
             <div className="ui-boss-warning">
                 {t("ui.hud.boss_warning", {
                     warning: mapFinalBossWarning(getMap(mapId)),
@@ -3438,20 +3439,22 @@ function PauseModal({
                         )}
                     </div>
                     <div className="ui-pause-column">
-                        <h3 className="ui-pause-heading">Active Effects</h3>
+                        <h3 className="ui-pause-heading">{t("pause.heading.effects")}</h3>
                         {activeEffects.length > 0 ? (
                             <div className="ui-pause-list">
                                 {activeEffects.map((effect) => (
                                     <div key={effect.id} className="ui-pause-item">
                                         <ItemIcon objId={effect.objId} size={24} />
                                         <span className="ui-pause-name">
-                                            {effect.name}
+                                            {tl(effect.name)}
                                             <span className="ui-pause-detail">
                                                 {effect.description}
                                             </span>
                                             {effect.secondsLeft !== undefined && (
                                                 <span className="ui-pause-detail">
-                                                    {effect.secondsLeft}s left
+                                                    {t("pause.effects.left", {
+                                                        seconds: effect.secondsLeft,
+                                                    })}
                                                 </span>
                                             )}
                                         </span>
@@ -3463,13 +3466,15 @@ function PauseModal({
                                                     : "ui-pause-effect-buff")
                                             }
                                         >
-                                            {effect.harmful ? "Debuff" : "Buff"}
+                                            {effect.harmful
+                                                ? t("pause.effects.debuff")
+                                                : t("pause.effects.buff")}
                                         </span>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="ui-subtle">None</div>
+                            <div className="ui-subtle">{t("pause.effects.none")}</div>
                         )}
                         {quests.length > 0 && (
                             <>

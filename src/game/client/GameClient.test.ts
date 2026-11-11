@@ -1463,20 +1463,6 @@ describe("saving", () => {
         );
     });
 
-    test.each([["avian_assaulter", "lumbridge"]])(
-        "solo start rejects %s on %s before loading the map",
-        async (characterId, mapId) => {
-            const { client, store } = createSaving(true);
-            store.set({ characterId });
-            const travelTo = vi.fn();
-            const denied = vi.fn();
-            Object.assign(client, { travelTo, sounds: { denied } });
-            await client.startRun(mapId);
-            expect(travelTo).not.toHaveBeenCalled();
-            expect(denied).toHaveBeenCalledOnce();
-        },
-    );
-
     test("the co-op host plays everyone as the Avian Assaulter on Thanksgiving", () => {
         const { client } = createSaving(true);
         const members = [
@@ -1493,45 +1479,20 @@ describe("saving", () => {
         ).toEqual(["avian_assaulter", "avian_assaulter"]);
     });
 
-    test("the co-op host requires every hero to match the selected map", () => {
+    test("the co-op host plays an adventurer it hasn't got (a newer guest's) as the first", () => {
         const { client } = createSaving(true);
         const members = [
-            { id: "host", name: "Host", characterId: "avian_assaulter", ready: true },
-            { id: "guest", name: "Guest", characterId: "warrior", ready: true },
+            { id: "host", name: "Host", characterId: "wizard", ready: true },
+            { id: "guest", name: "Guest", characterId: "someone_new", ready: true },
         ];
         const room = { mapId: "lumbridge", members, endless: false, hard: false };
         const start = vi.fn();
-        const denied = vi.fn();
-        Object.assign(client, { coop: { room, isHost: true, start }, sounds: { denied } });
-        client.startCoopRun();
-        expect(start).not.toHaveBeenCalled();
-        expect(denied).toHaveBeenCalledOnce();
-        members[0].characterId = "warrior";
+        Object.assign(client, { coop: { room, isHost: true, start } });
         client.startCoopRun();
         expect(start).toHaveBeenCalledOnce();
-    });
-
-    test("a guest rejects an invalid co-op start before loading", async () => {
-        const { client } = createSaving(true);
-        const leave = vi.fn();
-        const travelTo = vi.fn();
-        Object.assign(client, { coop: { id: "guest", room: { code: "ROOM" }, leave }, travelTo });
-        await client["beginCoopRun"]({
-            seed: 1,
-            mapId: "thanksgiving",
-            endless: false,
-            hard: false,
-            heroes: [
-                {
-                    id: "guest",
-                    name: "Guest",
-                    characterId: "warrior",
-                    loadout: { metaStats: {}, unlockedItems: [], armoury: {} },
-                },
-            ],
-        });
-        expect(leave).toHaveBeenCalledOnce();
-        expect(travelTo).not.toHaveBeenCalled();
+        expect(
+            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
+        ).toEqual(["wizard", CHARACTERS[0].id]);
     });
 
     test("a single skill refund is saved and refreshes the shop", () => {

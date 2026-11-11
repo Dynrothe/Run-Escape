@@ -360,7 +360,7 @@ export const QUESTS: QuestDef[] = [
             kind: "kill",
             enemyIds: ["chompy_bird"],
             count: 10000,
-            what: "Chompy Birds",
+            what: "Chompy birds",
         },
         coins: 4000,
     },

@@ -286,11 +286,7 @@ describe("save", () => {
 
     test("new saves have the free characters", () => {
         const save = createSave();
-        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger", "avian_assaulter"]);
-        expect(
-            migrateSave({ ...save, unlockedCharacters: ["warrior", "wizard", "ranger"] })
-                .unlockedCharacters,
-        ).toContain("avian_assaulter");
+        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger"]);
         expect(save.coins).toBe(0);
     });
 
@@ -646,7 +642,7 @@ describe("save", () => {
         expect(save.coins).toBe(3000);
         expect(save.bestLevel).toBe(20);
         expect(save.runs).toBe(1);
-        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger", "avian_assaulter"]);
+        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger"]);
     });
 
     test("beating a map unlocks the next", () => {
@@ -1216,18 +1212,15 @@ describe("quests", () => {
         expect(save.coins).toBe(4000);
     });
 
-    test("existing quest completions, pets, bow unlocks and hard victories survive loading", () => {
+    test("existing quest completions, pets and trophies survive loading", () => {
         const migrated = migrateSave({
             ...createSave(),
             questsDone: ["thanksgiving_chompy_hunt"],
-            trophies: ["chompy_bird_bow"],
+            trophies: ["turkey_hat"],
             pet: "chompy_chick",
-            hardVictories: { thanksgiving: 1 },
             coins: 123,
         });
-        expect(migrated.trophies).toEqual(
-            expect.arrayContaining(["chompy_bird_bow", "chompy_chick", "golden_egg"]),
-        );
+        expect(migrated.trophies).toEqual(expect.arrayContaining(["turkey_hat", "chompy_chick"]));
         expect(migrated.pet).toBe("chompy_chick");
         expect(migrated.coins).toBe(123);
         expect(migrateSave(migrated)).toEqual(migrated);
@@ -1238,9 +1231,6 @@ describe("quests", () => {
         });
         expect(oldPet.pet).toBe("chompy_chick");
         expect(oldPet.trophies).toContain("chompy_chick");
-        expect(
-            migrateSave({ ...createSave(), mapVictories: { thanksgiving: 1 } }).trophies,
-        ).not.toContain("golden_egg");
     });
 
     test("count kills over runs, and pay out once when finished", () => {

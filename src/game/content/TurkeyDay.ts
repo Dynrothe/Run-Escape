@@ -6,7 +6,7 @@ export const TURKEY_MAPS: readonly string[] = ["thanksgiving"];
 export const TURKEY_ID = "cooked_turkey";
 
 // A kill's chance of dropping one (luck makes it likelier)
-export const TURKEY_CHANCE = 0.015; // Slightly higher chance than pumpkin
+export const TURKEY_CHANCE = 0.015;
 
 // Seconds after one drops before another can
 export const TURKEY_MIN_GAP = 20;
@@ -16,8 +16,7 @@ export type TurkeyOutcome = {
     message: string;
     weight: number;
     trick: boolean;
-    does: 
-        // Heals this fraction of the player's hitpoints
+    does: // Heals this fraction of the player's hitpoints
         | { kind: "heal"; fraction: number }
         // Coins, before greed
         | { kind: "coins"; coins: number }
@@ -34,7 +33,7 @@ export const TURKEY_OUTCOMES: TurkeyOutcome[] = [
         message: "Feast! A generous serving of roast turkey heals you.",
         weight: 4,
         trick: false,
-        does: { kind: "heal", fraction: 0.4 }, // Better healing for a massive feast!
+        does: { kind: "heal", fraction: 0.4 },
     },
     {
         message: "Feast! The turkey stuffing was filled with hidden coins.",
@@ -49,15 +48,15 @@ export const TURKEY_OUTCOMES: TurkeyOutcome[] = [
         does: {
             kind: "buff",
             itemId: "super_combat_potion",
-            stats: { might: 0.25, armor: 0.15 }, // Tanky combat buff from eating well
+            stats: { might: 0.25, armor: 0.15 },
             seconds: 25,
         },
     },
     {
-        message: "Fowl! Angry, vengeful Chompy Birds burst from the carcass!",
+        message: "Fowl! Angry, vengeful Chompy birds burst from the carcass!",
         weight: 3,
         trick: true,
-        does: { kind: "enemies", enemyId: "chompy_bird", count: 6 }, // Spawns your map theme enemies
+        does: { kind: "enemies", enemyId: "chompy_bird", count: 6 },
     },
     {
         message: "Fowl! A massive food coma hits you: sleepy and slow for 5 seconds.",
@@ -69,8 +68,8 @@ export const TURKEY_OUTCOMES: TurkeyOutcome[] = [
                 kind: "debuff",
                 id: "food_coma",
                 name: "Food Coma: Tryptophan overload",
-                // OSRS Asset ID for Cooked Turkey / Roast item icon
-                iconObjId: 2313, 
+                // The Cooked turkey's look
+                iconObjId: 2878,
                 stats: { moveSpeed: -0.4 },
                 seconds: 5,
             },

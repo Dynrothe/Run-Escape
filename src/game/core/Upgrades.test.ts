@@ -386,7 +386,7 @@ describe("class weapons", () => {
         }
     });
 
-    test("the Rubber Chicken is not offered to other adventurers", () => {
+    test("the Rubber chicken is not offered to other adventurers", () => {
         expect(newWeaponOffers("melee", [weapon("scimitar")]).has("rubber_chicken")).toBe(false);
         const rng = new Rng(8);
         const choices = Array.from({ length: 100 }, () =>

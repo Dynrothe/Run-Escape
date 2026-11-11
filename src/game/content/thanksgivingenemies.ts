@@ -1,16 +1,15 @@
 import { EnemyDef } from "./types";
 
 export const THANKSGIVING_ENEMIES: EnemyDef[] = [
-    // 1. Chompy Bird
     {
         id: "chompy_bird",
-        name: "Chompy Bird",
+        name: "Chompy bird",
         tags: ["bird"],
         npcId: 1475,
         idleSeq: 6764,
         walkSeq: 6765,
-        attackSeq: 1846,
-        deathSeq: 1848,
+        attackSeq: 6761,
+        deathSeq: 6762,
         hp: 15,
         damage: 4,
         speed: 1.5,
@@ -19,23 +18,22 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
         sounds: { attack: 355, hit: 357, death: 356 },
         scale: 0.85,
     },
-    // 2. The Evil Chicken
     {
         id: "evil_chicken",
         name: "The Evil Chicken",
         tags: ["bird"],
-        npcId: 6766,
-        idleSeq: 5386,
-        walkSeq: 5385,
-        attackSeq: 5387,
-        deathSeq: 5389,
+        npcId: 1870,
+        idleSeq: 2298,
+        walkSeq: 2297,
+        attackSeq: 2299,
+        deathSeq: 2301,
         hp: 1750,
         damage: 0,
         speed: 1.4,
         radius: 0.35,
         xp: 300,
         sounds: { attack: 355, hit: 357, death: 356 },
-        scale: 0.2,
+        scale: 1.3,
         boss: {
             attackInterval: 1.4,
             enrage: {
@@ -57,7 +55,7 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
                     castSpotAnim: 129,
                     spotAnim: 130,
                     impactSpotAnim: 131,
-                    seq: 5387,
+                    seq: 2299,
                     sound: 160,
                 },
                 {
@@ -69,7 +67,7 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
                     range: 2.4,
                     radius: 2.2,
                     weight: 4,
-                    seq: 5387,
+                    seq: 2299,
                     sound: 2500,
                 },
                 {
@@ -83,7 +81,7 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
                     weight: 2,
                     count: 1,
                     impactSpotAnim: 157,
-                    seq: 5386,
+                    seq: 2299,
                     sound: 2500,
                     shout: "BWAUK!",
                 },
@@ -110,7 +108,6 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
             ],
         },
     },
-    // 3. Professor Oddenstein
     {
         id: "professor_oddenstein",
         name: "Professor Oddenstein",
@@ -205,7 +202,7 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
             ],
         },
     },
-    // 4. Phase 1: The Freaky Forester
+    // Rises as the Desperate Forester
     {
         id: "freaky_forester",
         name: "The Freaky Forester",
@@ -283,75 +280,6 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
             ],
         },
     },
-    // 5. Phase 2A: Enraged Freaky Forester
-    {
-        id: "freaky_forester_enraged",
-        name: "The Enraged Forester",
-        npcId: 372,
-        idleSeq: 808,
-        walkSeq: 819,
-        attackSeq: 422,
-        deathSeq: 836,
-        hp: 8000,
-        damage: 0,
-        speed: 1.6,
-        radius: 0.55,
-        xp: 500,
-        sounds: { attack: 417, hit: 418, death: 419 },
-        scale: 1.65,
-        boss: {
-            attackInterval: 1.6,
-            enrage: {
-                message: "THE CLEARING CONSUMES YOU!",
-                shout: "NATURE WILL TAKE BACK WHAT IS HERS!",
-            },
-            attacks: [
-                {
-                    name: "Pheasant Arrow",
-                    kind: "projectile",
-                    damage: 14,
-                    windup: 0.4,
-                    cooldown: 0,
-                    range: 14,
-                    weight: 2,
-                    speed: 16,
-                    count: 4,
-                    spread: 0.15,
-                    castSpotAnim: 129,
-                    spotAnim: 130,
-                    impactSpotAnim: 131,
-                    seq: 422,
-                    sound: 160,
-                },
-                {
-                    name: "Boot Kick",
-                    kind: "swing",
-                    damage: 16,
-                    windup: 0.4,
-                    cooldown: 2,
-                    range: 2.5,
-                    radius: 2.0,
-                    cone: 1.2,
-                    weight: 2,
-                    seq: 422,
-                    sound: 2500,
-                },
-                {
-                    name: "Flock Flank",
-                    kind: "summon",
-                    damage: 0,
-                    windup: 1.0,
-                    cooldown: 18,
-                    range: 16,
-                    weight: 4,
-                    summon: { enemyId: "chompy_bird", count: 10 },
-                    sound: 2500,
-                    shout: "No escape!",
-                },
-            ],
-        },
-    },
-    // 6. Phase 2B: Desperate Forester (Final Stage)
     {
         id: "freaky_forester_final",
         name: "The Desperate Forester",
@@ -375,15 +303,15 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
                 shout: "Pheasant down!",
             },
             attacks: [
-                // Summon both Enraged Sentinels as the final stage begins.
+                // Once, as soon as he rises: his cooldown outlasts any fight
                 {
                     name: "Feathered Apocalypse",
                     kind: "summon",
                     damage: 0,
                     windup: 1.5,
-                    cooldown: 999, // Triggers exactly once when desperation mode activates
+                    cooldown: 999,
                     range: 18,
-                    weight: 10, // Absolute top priority attack selection
+                    weight: 10,
                     summon: { enemyId: "enraged_chicken", count: 6 },
                     sound: 2500,
                     shout: "FACE THE FOWL-OCALYPSE!!",
@@ -421,29 +349,28 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
             ],
         },
     },
-    // 7. Enraged Chicken Sentinel (Raid-tier suicide rushers)
+    // The Desperate Forester's, rushing down a lane and going off when they die
     {
         id: "enraged_chicken",
         name: "Enraged Dark Chicken",
         tags: ["bird"],
-        npcId: 6766,
-        idleSeq: 5386,
-        walkSeq: 5385,
-        attackSeq: 5387,
-        deathSeq: 5389,
-        hp: 600,
+        npcId: 1870,
+        idleSeq: 2298,
+        walkSeq: 2297,
+        attackSeq: 2299,
+        deathSeq: 2301,
+        hp: 480,
         damage: 0,
         speed: 2.2,
         radius: 0.35,
         xp: 0,
-        scale: 0.25,
+        scale: 0.9,
         minionAttacks: true,
-        // Native Engine Suicide Blast Mechanics (Types.ts line 179)
         explodes: {
-            radius: 3.8, // Mid-size visual area
-            damage: 25, // Heavy explosive payload threat
-            spotAnim: 157, // OSRS burst animation graphic asset ID
-            sound: 356, // Death crunch sound effect asset ID
+            radius: 3.8,
+            damage: 25,
+            spotAnim: 157,
+            sound: 356,
         },
         boss: {
             attackInterval: 1.2,
@@ -464,17 +391,13 @@ export const THANKSGIVING_ENEMIES: EnemyDef[] = [
                     range: 20,
                     surgeLength: 12,
                     weight: 5,
-                    seq: 5387,
+                    seq: 2299,
                     radius: 0.5,
                     speed: 8,
                     message: "The Enraged Chicken is charging down your lane!",
                 },
             ],
         },
-        sounds: {
-            attack: 0,
-            hit: 0,
-            death: 0,
-        },
+        sounds: { attack: 355, hit: 357, death: 356 },
     },
 ];

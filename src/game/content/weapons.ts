@@ -346,7 +346,7 @@ const KERIS_PARTISANS: WeaponDef[] = [
 export const WEAPONS: WeaponDef[] = [
     {
         id: "rubber_chicken",
-        name: "Rubber Chicken",
+        name: "Rubber chicken",
         kind: "slash",
         description:
             "Whacks enemies in front and behind. 20% more damage to bosses, and hits heal you: 25% for 3 HP, growing with every upgrade (more with rarer ones).",

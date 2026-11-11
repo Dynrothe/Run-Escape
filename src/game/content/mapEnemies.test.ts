@@ -78,7 +78,7 @@ describe("canDoQuestOn", () => {
         expect(names("lumbridge")).not.toContain("the_inferno");
     });
 
-    test("Thanksgiving has its boss and Chompy Bird quests with their coin rewards", () => {
+    test("Thanksgiving has its boss and Chompy bird quests with their coin rewards", () => {
         const quests = QUESTS.filter((quest) => quest.mapId === "thanksgiving");
         expect(quests.map((quest) => quest.id)).toEqual([
             "thanksgiving_professor_oddenstein",

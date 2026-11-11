@@ -51,7 +51,7 @@ describe("the Collection log's rewards", () => {
         expect(ids).toEqual(
             expect.arrayContaining([
                 "rubber_chicken",
-                "chompy_bird_bow",
+                "turkey_hat",
                 "magic_secateurs",
                 "golden_feather",
                 "chompy_hat",
@@ -66,7 +66,7 @@ describe("the Collection log's rewards", () => {
             mapId: "thanksgiving",
             chance: 1 / 200,
         });
-        expect(trophy("chompy_bird_bow").from).toMatchObject({
+        expect(trophy("turkey_hat").from).toMatchObject({
             kind: "enemy",
             enemyId: "chompy_bird",
             mapId: "thanksgiving",
@@ -84,9 +84,9 @@ describe("the Collection log's rewards", () => {
             questId: "thanksgiving_chompy_hunt",
             mapId: "thanksgiving",
         });
-        expect(trophy("chompy_chick").how).toBe("Chompy Slayer - Completion required to unlock");
+        expect(trophy("chompy_chick").how).toBe("Complete the Chompy Slayer quest.");
         expect(trophy("golden_egg")).toMatchObject({
-            name: "Golden Egg",
+            name: "Golden egg",
             objId: 28663,
             from: {
                 kind: "map",
@@ -105,10 +105,10 @@ describe("the Collection log's rewards", () => {
             mapId: "thanksgiving",
             requiresBoss: "freaky_forester_final",
         });
-        expect(trophy("chompy_bird_bow")).toMatchObject({
+        expect(trophy("turkey_hat")).toMatchObject({
             name: "Turkey hat",
             objId: 28620,
-            how: "A rare drop from a Chompy Bird.",
+            how: "A rare drop from a Chompy bird.",
         });
         for (const reward of rewards) {
             expect(reward.how).not.toMatch(/\b1 in\b/);

@@ -424,7 +424,7 @@ export const MAPS: MapDef[] = [
             "Hosidius Vinery's grape fields are overrun by restless creatures and wild Chompies. " +
             "Professor Oddenstein and the Evil Chicken interrupt the gathering, and the Freaky Forester " +
             "challenges you at the end.",
-        // Raw Chompy (item ID 2871)
+        // The Rubber chicken
         iconObjId: 4566,
         // Hosidius and the Vinery, map squares 27-29 x 54-56
         arena: { baseX: 27 * 64, baseY: 54 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },

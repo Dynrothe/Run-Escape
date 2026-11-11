@@ -3,7 +3,8 @@ import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
 import { CharacterDef } from "./types";
 
-// Characters without an unlock are there from the start.
+// The first three are there from the start. Each map brings two more: one for
+// beating it, one for a task done there.
 export const CHARACTERS: CharacterDef[] = [
     {
         id: "warrior",
@@ -45,27 +46,6 @@ export const CHARACTERS: CharacterDef[] = [
             [EquipSlot.HANDS]: 1063,
         },
         bonus: { moveSpeed: 0.1 },
-    },
-    {
-        id: "avian_assaulter",
-        name: "Avian Assaulter",
-        description:
-            "Starts with a Rubber Chicken. Questionable.... This is one dangerous bird! Everyone plays it in Thanksgiving Harvest.",
-        style: "melee",
-        startingWeapon: "rubber_chicken",
-        equipment: {
-            [EquipSlot.HEAD]: 11021,
-            [EquipSlot.TORSO]: 11020,
-            [EquipSlot.LEGS]: 11022,
-            [EquipSlot.FEET]: 11019,
-        },
-        fixedOutfit: true,
-        noItems: true,
-        overheadSpotAnim: 254,
-        mapOnly: "thanksgiving",
-        maxWeapons: 1,
-        damageAgainst: { tags: ["bird"], damage: 0.15 },
-        bonus: { growth: 0.15, magnet: 0.5, cooldown: 0.35, moveSpeed: 0.45, maxHp: 1.8 },
     },
     {
         id: "monk",
@@ -630,6 +610,32 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.3, regen: 10 },
         only: "beneath_cursed_sands",
     },
+    {
+        id: "avian_assaulter",
+        name: "Avian Assaulter",
+        description:
+            "Made for Thanksgiving Harvest, and everyone plays them there, and nowhere else: " +
+            "one dangerous bird, with a Rubber chicken and no other weapons, gear or items. " +
+            "Hits birds 15% harder, moves 45% faster and has nearly three times the hitpoints.",
+        style: "melee",
+        startingWeapon: "rubber_chicken",
+        // The chicken outfit, kept on over gear (fixedOutfit)
+        equipment: {
+            [EquipSlot.HEAD]: 11021,
+            [EquipSlot.TORSO]: 11020,
+            [EquipSlot.LEGS]: 11022,
+            [EquipSlot.FEET]: 11019,
+        },
+        fixedOutfit: true,
+        noItems: true,
+        // The stun birds, circling for show
+        overheadSpotAnim: 254,
+        // The Rubber chicken and nothing else: its ten levels are the run
+        maxWeapons: 1,
+        damageAgainst: { tags: ["bird"], damage: 0.15 },
+        bonus: { growth: 0.15, magnet: 0.5, cooldown: 0.35, moveSpeed: 0.45, maxHp: 1.8 },
+        only: "thanksgiving",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));
@@ -639,23 +645,8 @@ export function getCharacter(id: string): CharacterDef {
     if (!character) {
         throw new Error("Unknown character " + id);
     }
-
     return character;
 }
-
-
-// Unlike a fight's forced adventurer, both of these must be selected by the player.
-export function characterMapRestriction(characterId: string, mapId: string): string | undefined {
-    const character = getCharacter(characterId);
-    if (mapId === "thanksgiving" && characterId !== "avian_assaulter") {
-        return "Thanksgiving Harvest requires Avian Assaulter.";
-    }
-    if (character.mapOnly && character.mapOnly !== mapId) {
-        return `${character.name} can only enter Thanksgiving Harvest.`;
-    }
-    return undefined;
-}
-
 
 export function characterName(character: CharacterDef): string {
     return tr(`char.${character.id}.name`, character.name);

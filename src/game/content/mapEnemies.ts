@@ -1,8 +1,8 @@
+import { TURKEY_MAPS, TURKEY_OUTCOMES } from "./TurkeyDay";
 import { ENEMY_BY_ID } from "./enemies";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { TOMBS_ENEMIES } from "./tombs";
 import { PUMPKIN_MAPS, PUMPKIN_OUTCOMES } from "./trickOrTreat";
-import { TURKEY_MAPS, TURKEY_OUTCOMES } from "./TurkeyDay";
 import { EnemyDef, MapDef } from "./types";
 
 // Every enemy id anywhere in a piece of content. It goes by the values, not by

@@ -137,9 +137,6 @@ export function getPickupModelKey(pickup: Pickup): string {
         return "pickup:casket_" + pickup.tier;
     }
     if (pickup.kind === "powerUp" && pickup.powerUp) {
-        if (pickup.powerUp === "cooked_turkey") {
-            return "pickup:food";
-        }
         const powerUp = getPowerUp(pickup.powerUp);
         return powerUp.locId !== undefined ? "loc:" + powerUp.locId : "obj:" + powerUp.objId;
     }
@@ -889,11 +886,6 @@ export class GameAssets {
         }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
-        for (const map of ALL_MAPS) {
-            for (const { locId } of map.scenery ?? []) {
-                locIds.add(locId);
-            }
-        }
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 if (attack.pool) {

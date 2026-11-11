@@ -81,9 +81,8 @@ export function emptyStats(): Stats {
 
 // What some weapons hit harder (the Ivandis flail and undead, vampyres)
 // kalphite: the kalphites and the scarabs (Kephri too), for the keris partisans
-
+// bird: chickens and Chompy birds, for the Avian Assaulter (CharacterDef.damageAgainst)
 export type EnemyTag = "undead" | "vampyre" | "kalphite" | "bird";
-
 
 export type EnemyDef = {
     id: string;
@@ -891,7 +890,8 @@ export type BossAttackDef = {
     castSpotAnim?: number;
     spotAnim?: number;
     impactSpotAnim?: number;
-    // Projectiles: draw this cache item instead of spotAnim, with an optional visual scale multiplier.
+    // Projectiles: an item drawn in flight instead of spotAnim (Oddenstein's potions), this
+    // many times its usual size
     projectileObjId?: number;
     projectileScale?: number;
     // Summons: what comes, and how many.
@@ -1876,11 +1876,11 @@ export type CharacterDef = {
     startingWeapon: string;
     // Worn items by equipment slot
     equipment: Partial<Record<number, number>>;
-    // These outfit slots remain visible over passive and casket equipment.
+    // The outfit stays on over gear from passives and caskets (the Avian Assaulter's chicken)
     fixedOutfit?: boolean;
     // Takes no gear, passives or utility items: caskets give only coins
     noItems?: boolean;
-    // A looping cosmetic spot animation drawn over this adventurer's head.
+    // A spot animation looping over their head, only for show (the Avian Assaulter's birds)
     overheadSpotAnim?: number;
     // Identity kits (hair, jaw, torso, arms, hands, legs, feet) and body
     // colours (hair, torso, legs, feet, skin), when they're not the default
@@ -1888,18 +1888,18 @@ export type CharacterDef = {
     kits?: number[];
     colors?: number[];
     bonus: Partial<Stats>;
-    // A selectable adventurer restricted to one map.
-    mapOnly?: string;
+    // Weapons carried at once, in place of the usual and the shop's extra slots
     maxWeapons?: number;
+    // Their hits do this much more to enemies with any of these tags (0.15 = +15%)
     damageAgainst?: { tags: EnemyTag[]; damage: number };
     // A revive of their own (bonus.revival) as the HUD shows it, beside the
     // shop's Ring of life: the Pyromancer's phoenix
     reviveLook?: { name: string; objId: number };
     // Always available when unset
     unlock?: UnlockTask;
-    // Played on this map alone (a boss fight's, MapDef.fight.character), and
-    // nowhere else: never in the roster, never unlocked, never counted (the
-    // Inquisitor, Phosani's)
+    // Played on this map alone (a boss fight's, MapDef.fight.character, or a seasonal map's,
+    // MapDef.seasonalCharacter), and nowhere else: never in the roster, never unlocked, never
+    // counted (the Inquisitor, Phosani's)
     only?: string;
 };
 
@@ -2009,7 +2009,8 @@ export type MapDef = {
     scaperune?: boolean;
     // A seasonal event: open from the start, outside the campaign's chain
     seasonal?: boolean;
-    // Everyone plays this adventurer here, unlocked or not (the Avian Assaulter at Thanksgiving)
+    // Everyone plays this adventurer here, one made for the map (CharacterDef.only: the Avian
+    // Assaulter at Thanksgiving Harvest)
     seasonalCharacter?: string;
     // One boss fight and nothing else (Phosani's Nightmare): no waves, no
     // picks and no items, and its final boss rises as the run begins. Outside
@@ -2040,8 +2041,6 @@ export type MapDef = {
     // to start in, with a door to each path, and the invocations' raid level (invocations.ts) in
     // place of hard mode
     tombs?: TombsDef;
-    // Decorative cache locs drawn over the world without changing collision.
-    scenery?: MapSceneryDef[];
     // NPCs that sit on the map as scenery, posed with their own animation (MapPropDef): drawn by
     // the view alone, never in the sim, so they're in no hash. For what a loc can't be: a loc
     // can't play a skeletal animation.
@@ -2055,14 +2054,6 @@ export type MapDef = {
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
-};
-
-export type MapSceneryDef = {
-    locId: number;
-    x: number;
-    y: number;
-    rotation?: 0 | 1 | 2 | 3;
-    scale?: number;
 };
 
 // What a light looks like and how far it reaches (docs/DEVELOPMENT.md, Lights). Every kind of light
@@ -3155,7 +3146,7 @@ export type PowerUpEffect =
       }
     // Opens as a treat or a trick (see trickOrTreat.ts)
     | { kind: "pumpkin" }
-    // A cooked turkey (locId) appears at the player's feet(See TurkeyDay.ts)
+    // Carved as a feast or a fowl trick (see TurkeyDay.ts)
     | { kind: "cooked_turkey" }
     // Everything within range runs laps around the player at this many times
     // its speed, radius tiles out, and can't attack; a line for the player to

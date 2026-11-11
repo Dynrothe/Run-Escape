@@ -4,7 +4,7 @@ import { GameClient } from "../client/GameClient";
 import { ReviveView, TeammateView, UiSnapshot } from "../client/GameStore";
 import { describeMissing, parseRoomCode } from "../client/coop/CoopLobby";
 import { RoomListing, RoomView } from "../client/coop/protocol";
-import { CHARACTERS, characterMapRestriction, getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY } from "../content/coop";
 import { cleanInvocations, getRaidBand, getRaidLevel } from "../content/invocations";
 import {
@@ -295,14 +295,6 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
               );
     // A map this game hasn't got (a newer host's) shows as the first
     const map = MAP_BY_ID.get(room.mapId) ?? MAPS[0];
-    const restriction = room.members
-        .map((member) => getMapCharacter(map) ?? member.characterId)
-        .map((id) =>
-            CHARACTERS.some((character) => character.id === id)
-                ? characterMapRestriction(id, map.id)
-                : "A party member has an unknown adventurer.",
-        )
-        .find((reason) => reason !== undefined);
     // Who keeps the host from turning endless or hard mode on here
     const withoutEndless = lacking(map.id, true);
     const withoutHard = lacking(map.id, false, true);
@@ -597,10 +589,8 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                 {isHost && (
                     <button
                         className="ui-button ui-button-go ui-select-go"
-
-                        disabled={!everyoneReady || restriction !== undefined}
-                        title={restriction ?? (everyoneReady ? undefined : t("coop.waiting_ready"))}
-
+                        disabled={!everyoneReady}
+                        title={everyoneReady ? undefined : t("coop.waiting_ready")}
                         onClick={() => client.startCoopRun()}
                     >
                         {room.hard
@@ -608,7 +598,6 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                             : t("coop.start", { map: tl(map.name) })}
                     </button>
                 )}
-                {restriction && <span className="ui-endless-hint">{restriction}</span>}
             </div>
             {board && isHost && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />

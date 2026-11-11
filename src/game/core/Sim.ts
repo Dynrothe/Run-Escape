@@ -532,7 +532,7 @@ export const NUKE_SPOTANIM = 157;
 // in so many ticks gets the roll, hit or miss, or weapons hitting thousands of
 // times a minute late in a run would heal all the time.
 const BLOOD_FURY_HEAL = 2;
-// What each upgrade adds to the Rubber Chicken's heal, by its rarity
+// What each upgrade adds to the Rubber chicken's heal, by its rarity
 const BLOOD_HEAL_GAIN: Record<Rarity, { chance: number; hp: number }> = {
     common: { chance: 0.02, hp: 0.25 },
     uncommon: { chance: 0.03, hp: 0.5 },
@@ -2450,9 +2450,7 @@ export class Sim {
     // Weapons and passives carried at once, with the extra slots: the shop's, and the Divine rune
     // pouch's, for a magic weapon (Upgrades' fitsWithPouch keeps it for one)
     get maxWeapons(): number {
-
         return getCharacter(this.characterId).maxWeapons ?? MAX_WEAPONS + this.stats.weaponSlots;
-
     }
 
     get maxPassives(): number {
@@ -16902,10 +16900,6 @@ export class Sim {
         } else {
             enemy.hp -= damage;
         }
-        // NEW: Trigger native self-sacrifice explosion at 20% HP threshold
-        if (enemy.def.id === "enraged_chicken" && enemy.hp <= enemy.maxHp * 0.2) {
-            enemy.hp = 0;
-        }
         enemy.flash = 5;
         // A Tombs boss's phase stops a hit at its threshold (passThreshold, lastStand, below): what
         // went past it isn't taken, for its points or for life steal
@@ -20675,7 +20669,11 @@ export class Sim {
                 ? Math.max(0, (this.raidBossDueTick - this.tick) / TICKS_PER_SECOND)
                 : 0;
         }
-        const finalBossAt = this.map.events.find((event) => event.kind === "finalBoss")?.at;
+        // The map's final boss (Thanksgiving's comes early), or the run's length where the
+        // fight is there from the start, as a one-fight map's is
+        const finalBossAt = this.map.events.find(
+            (event) => event.kind === "finalBoss" && event.at > 0,
+        )?.at;
         return Math.max(0, (finalBossAt ?? RUN_LENGTH) - this.mapSeconds);
     }
 }

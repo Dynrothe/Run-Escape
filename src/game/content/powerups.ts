@@ -38,15 +38,17 @@ export const POWER_UPS: PowerUpDef[] = [
         effect: { kind: "pumpkin" },
     },
     {
+        // Thanksgiving's, from its enemies now and then (TurkeyDay.ts). No turkey in the
+        // cache is cooked, so it's a Cooked chompy, the map's own bird
         id: "cooked_turkey",
-        name: "Cooked Turkey",
+        name: "Cooked turkey",
         description: "A feast or a foul trick.",
-        objId: 2313,
+        objId: 2878,
         weight: 0,
         price: 0,
-        color: "#d27d2d", // A nice golden roast brown mini-map dot color
+        color: "#d27d2d",
         flash: "#ffcc00",
-        // eat sound
+        // eat
         sound: 2393,
         effect: { kind: "cooked_turkey" },
     },

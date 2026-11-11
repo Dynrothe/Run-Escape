@@ -302,7 +302,6 @@ export function migrateSave(raw: unknown): SaveData {
     }
     if (data.scabarasBeaten === true) {
         save.scabarasBeaten = true;
-
     }
     if (
         typeof data.favouriteCharacter === "string" &&
@@ -322,11 +321,8 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    // A quest done before its trophy was one, and before the pet that trophy brings is checked
     applyQuestTrophies(save);
-    // A recorded hard victory already required defeating the map's final boss.
-    if ((save.hardVictories.thanksgiving ?? 0) > 0 && !save.trophies.includes("golden_egg")) {
-        save.trophies.push("golden_egg");
-    }
     if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;
     }
