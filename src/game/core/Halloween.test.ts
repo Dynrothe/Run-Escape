@@ -431,4 +431,12 @@ describe("Thanksgiving rewards", () => {
 
         expect(sim.trophies).toContain("magic_secateurs");
     });
+
+    test("a turkey carved once the secateurs are found is a feast or a trick", () => {
+        const sim = createSim("thanksgiving");
+        sim.rng.chance = () => true;
+
+        expect(hooks(sim).openTurkey()).toContain("Magic secateurs");
+        expect(hooks(sim).openTurkey()).toMatch(/^(Feast|Fowl)! /);
+    });
 });

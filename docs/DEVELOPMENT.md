@@ -853,9 +853,9 @@ src/game/
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
             offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
             above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
-            (hover, focus and hold descriptions), CountryFlag (a co-op player's flag),
-            SoundOrb (the sound's on or off), CoopScreen (the rooms, the lobby, the party in
-            a run),
+            (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
+            Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
+            off), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -1178,10 +1178,10 @@ of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and no
 
 - **`TrophyDef`** (`content/trophies.ts`): its `id` is stored in `SaveData.trophies`, so never
   rename one players may have. `TrophySource.enemy` rolls on a loot-bearing kill of that enemy on
-  `mapId`; `turkey` rolls when a Cooked turkey is carved; `boss` rolls on that boss's kill; and
-  `map` is given only on a win, with `requiresBoss` checked against the run's `bossesKilled` and
-  `hard` keeping it to hard mode. A `quest` source is given when the quest is recorded, and on
-  loading a save that had already done it.
+  `mapId`; `turkey` rolls when a Cooked turkey is carved, till the run has found it; `boss` rolls
+  on that boss's kill; and `map` is given only on a win, with `requiresBoss` checked against the
+  run's `bossesKilled` and `hard` keeping it to hard mode. A `quest` source is given when the
+  quest is recorded, and on loading a save that had already done it.
 - **`PetDef`** (`content/pets.ts`): a pet's `id` is its trophy's, and its follower NPC is the
   cache's variant marked as a follower, with its own idle and walk animations. The pet can be
   taken out once its trophy is found.
@@ -2228,10 +2228,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
   `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
-  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, HUD effects, worn gear and
-  Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
-  Give each nonempty `DescriptionButton` an `itemId` to enable its description and an
-  `aria-label` for its name when its children only show an icon or countdown.
+  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, HUD effects,
+  worn gear and Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  A button only describes with an `itemId`, and one showing only an icon or a countdown needs an
+  `aria-label` for its name.
   `ui/InventoryItem.tsx` uses it for both bag layouts, with the same `ItemView.lines` as the
   casket. Descriptions are portalled outside scrolling panels and the phone HUD's extra zoom,
   clamped to the viewport while keeping the UI's text scale. Whether the browser's rectangles
@@ -2250,8 +2250,7 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   quick tap still selects it. A scroll ends holds and hovers, but a focused tile's description
   follows it, since a controller scrolls its list to what it highlights. Escape dismisses them all.
   Buttons only listen on the window while described or pressed. Small phones keep worn gear and
-  its descriptions in the pause menu. The shared pause layout places the player's stats first,
-  above weapons, passives and worn equipment, on both touch and desktop.
+  its descriptions in the pause menu, under the player's stats, weapons and passives.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.

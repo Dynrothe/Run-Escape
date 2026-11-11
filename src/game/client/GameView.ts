@@ -752,11 +752,7 @@ export class GameView {
                 if (age > POWER_UP_LIFETIME - POWER_UP_BLINK && Math.floor(tick / 6) % 2 === 0) {
                     continue;
                 }
-                scale = getPowerUpScale(model);
-                // The cooked turkey shows 2.25 times as big
-                if (pickup.powerUp === "cooked_turkey") {
-                    scale *= 2.25;
-                }
+                scale = getPowerUpScale(model, pickup.powerUp);
                 height -= getPowerUpBob(pickup, tick);
                 unlit = 1;
             }
@@ -2376,7 +2372,7 @@ export class GameView {
             if (remaining === 0 || !model) {
                 continue;
             }
-            const modelScale = getPowerUpScale(model);
+            const modelScale = getPowerUpScale(model, pickup.powerUp);
             const x = lerp(pickup.prevX, pickup.x, alpha);
             const y = lerp(pickup.prevY, pickup.y, alpha);
             const top =
@@ -3872,9 +3868,11 @@ function casketHop(t: number): number {
 }
 
 // How much bigger a power-up's drawn than the cache has it, for its model and
-// its timer alike: a loc (the cannon) is big there already
-function getPowerUpScale(model: ActorModel): number {
-    return model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+// its timer alike: a loc (the cannon) is big there already, and one can ask for more
+// (PowerUpDef.scale)
+function getPowerUpScale(model: ActorModel, powerUpId: string | undefined): number {
+    const base = model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+    return base * ((powerUpId && getPowerUp(powerUpId).scale) || 1);
 }
 
 // How far over the ground a power-up floats (tiles), bobbing up and down

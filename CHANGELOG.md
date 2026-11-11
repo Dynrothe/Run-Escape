@@ -20,6 +20,8 @@ the version in the corner).
   Chompy Slayer quest.
 - What your effects do, by Happi: hover over or hold one in the HUD to read it, and the pause menu
   lists them all.
+- The Armoury's weapons and passives, by Happi: two new tabs list each one's levels, how it's
+  unlocked and what it evolves into, once you've made it.
 - A camera zoom slider on phones, by Happi: tap Zoom beside the timer.
 - New power-up, by GhostavoA: Polymorph. For 10 seconds enemies turn into harmless sheep, and
   elites and bosses into golden sheep that still fight.
@@ -46,9 +48,10 @@ the version in the corner).
 
 ### Changed
 
-- The HUD's equipment slots, by Happi: under the damage panel now, in two columns you can hide,
-  and on a phone too (hidden to start with).
+- The HUD's equipment slots, by Happi: under the damage panel now, in two columns you can hide
+  (as big as the bag's slots with a mouse), and on a phone too (hidden to start with).
 - Debuffs show before buffs in the HUD, by Happi.
+- The pause menu, by Happi: your stats come first, above your weapons and passives.
 - The Windows app keeps to the website's version of the game, by trippy22: Windows and website
   players can play co-op together between releases too. Download the new app once to get it.
 - The Android app keeps to the website's version of the game too, by trippy22: on Wi-Fi, a new one

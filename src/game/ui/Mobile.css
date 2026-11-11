@@ -691,6 +691,10 @@
         justify-content: center;
     }
 
+    .ui-armoury-tab {
+        min-height: 44px;
+    }
+
     /* Quests and the collection log */
 
     .ui-quests > .ui-subtle,

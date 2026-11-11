@@ -44,6 +44,8 @@ export const POWER_UPS: PowerUpDef[] = [
         name: "Cooked turkey",
         description: "A feast or a foul trick.",
         objId: 2878,
+        // A cooked chompy, small beside the other power-ups
+        scale: 2.25,
         weight: 0,
         price: 0,
         color: "#d27d2d",

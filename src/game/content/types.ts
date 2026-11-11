@@ -2029,6 +2029,8 @@ export type MapDef = {
     // Everyone plays this adventurer here, one made for the map (CharacterDef.only: the Avian
     // Assaulter at Thanksgiving Harvest)
     seasonalCharacter?: string;
+    // Random events that never turn up here (RandomEventDef ids)
+    noRandomEvents?: string[];
     // One boss fight and nothing else (Phosani's Nightmare): no waves, no
     // picks and no items, and its final boss rises as the run begins. Outside
     // the campaign's chain like a seasonal map, and open once requires (a map
@@ -3249,6 +3251,8 @@ export type PowerUpDef = {
     objId: number;
     // Scenery drawn on the ground instead (the set-up cannon)
     locId?: number;
+    // Drawn this many times bigger on the ground than other power-ups
+    scale?: number;
     // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
     // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR

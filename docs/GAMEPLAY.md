@@ -691,7 +691,7 @@ version and how to run it.
   for it. Each piece has its own upgrades: upgrading the Amulet of strength leaves the Amulet of
   power as it was.
   Its Weapons and Passives tabs also show their effects, levels and unlock tasks for planning a
-  build. Weapons are grouped by damage style; shared weapons and all passives can be offered to
+  build. Weapons are grouped by combat style; shared weapons and all passives can be offered to
   any style. Evolution results remain hidden until made, as in the Collection log.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
   (friends join with its eight-letter code or the invite link) or open to anyone browsing the

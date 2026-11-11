@@ -439,6 +439,7 @@ export const MAPS: MapDef[] = [
         victoryText: "The Freaky Forester is defeated! The harvest is safe!",
         seasonal: true,
         seasonalCharacter: "avian_assaulter",
+        noRandomEvents: ["highwayman"],
     },
 ];
 

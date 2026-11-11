@@ -19518,10 +19518,13 @@ export class Sim {
     }
 
     // Now and then a feast holds a trophy instead; otherwise it's a feast or a
-    // fowl trick by weight. What it says as it carves.
+    // fowl trick by weight. What it says as it carves. A trophy found this run
+    // isn't rolled again: the secateurs' chance is high enough that it would
+    // keep taking the place of the feasts and tricks.
     private openTurkey(): string {
         const trophy = TROPHIES.find(
-            ({ from }) => from.kind === "turkey" && this.rng.chance(from.chance),
+            ({ id, from }) =>
+                from.kind === "turkey" && !this.trophies.has(id) && this.rng.chance(from.chance),
         );
         if (trophy) {
             this.emit({ type: "playerShout", text: "Feast!" });
@@ -20554,7 +20557,7 @@ export class Sim {
                 return event.id === this.lastRandomEventId ||
                     this.seconds < (event.minSeconds ?? 0) ||
                     (event.effect.kind === "ambush" && bossOut) ||
-                    (this.map.id === "thanksgiving" && event.id === "highwayman")
+                    this.map.noRandomEvents?.includes(event.id)
                     ? 0
                     : event.weight;
             }),

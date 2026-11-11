@@ -23,7 +23,7 @@ const PRESS_CLICK_MS = 400;
 
 type Props = Pick<
     ComponentProps<"button">,
-    "className" | "style" | "disabled" | "aria-label" | "aria-pressed" | "title"
+    "className" | "style" | "disabled" | "aria-label" | "aria-pressed"
 > & {
     itemId?: string;
     description: ReactNode;
