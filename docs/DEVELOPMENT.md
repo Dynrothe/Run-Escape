@@ -2228,8 +2228,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
   `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
-  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, worn gear and
+  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, HUD effects, worn gear and
   Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  Give each nonempty `DescriptionButton` an `itemId` to enable its description and an
+  `aria-label` for its name when its children only show an icon or countdown.
   `ui/InventoryItem.tsx` uses it for both bag layouts, with the same `ItemView.lines` as the
   casket. Descriptions are portalled outside scrolling panels and the phone HUD's extra zoom,
   clamped to the viewport while keeping the UI's text scale. Whether the browser's rectangles
@@ -2248,7 +2250,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   quick tap still selects it. A scroll ends holds and hovers, but a focused tile's description
   follows it, since a controller scrolls its list to what it highlights. Escape dismisses them all.
   Buttons only listen on the window while described or pressed. Small phones keep worn gear and
-  its descriptions in the pause menu.
+  its descriptions in the pause menu. The shared pause layout places the player's stats first,
+  above weapons, passives and worn equipment, on both touch and desktop.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.

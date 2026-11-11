@@ -14,7 +14,9 @@ import {
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, getGear } from "../content/items";
+import { getPassive } from "../content/passives";
 import { describeUnlockTask } from "../content/unlocks";
+import { getWeapon } from "../content/weapons";
 import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 import { iconCache } from "./ItemIcon";
@@ -304,7 +306,7 @@ describe("the run's HUD", () => {
         const potion = {
             id: "potion",
             name: "Potion",
-            description: "Potion",
+            description: "+20% damage",
             objId: 2436,
             harmful: false,
             secondsLeft: 30,
@@ -333,8 +335,17 @@ describe("the run's HUD", () => {
         const timed = view.getByRole("button", { name: "Potion" });
         expect(timed).toHaveTextContent("30s");
         expect(timed.querySelector(".ui-buff-bar")).toHaveStyle("transform: scaleX(0.5)");
+        fireEvent.focus(timed);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Potion");
+        expect(screen.getByRole("tooltip")).toHaveTextContent(potion.description);
+        expect(timed).toHaveAttribute("aria-describedby", screen.getByRole("tooltip").id);
+        expect(timed).not.toHaveAttribute("title");
+        fireEvent.blur(timed);
+        fireEvent.focus(ring);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Revives you once if you fall.");
         act(() => store.setNumbers(numbers({ buffs: [potion] })));
         expect(view.queryByRole("button", { name: "Ring of life" })).toBeNull();
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
         expect(view.getByRole("button", { name: "Potion" })).toHaveTextContent("30s");
     });
 
@@ -545,6 +556,71 @@ describe("the run's HUD", () => {
             `${describeUnlockTask(piece.unlock!)} to find it in caskets.`,
         );
         expect(tip).not.toHaveTextContent("find it in a casket to upgrade it");
+    });
+
+    test("the Armoury catalogues show style, levels, unlocks and undiscovered evolutions", () => {
+        const { store, view } = renderHud();
+        const save = createSave();
+        act(() => store.set({ screen: "armoury", save }));
+        const armourTab = screen.getByRole("button", { name: "Armour" });
+        const weaponsTab = screen.getByRole("button", { name: "Weapons" });
+        expect(armourTab).toHaveAttribute("aria-pressed", "true");
+        expect(weaponsTab).toHaveAttribute("aria-pressed", "false");
+        expect(view.container.querySelectorAll(".ui-armoury-body")).toHaveLength(1);
+        expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
+        fireEvent.click(screen.getByRole("button", { name: "Weapons" }));
+        expect(weaponsTab).toHaveAttribute("aria-pressed", "true");
+        expect(armourTab).toHaveAttribute("aria-pressed", "false");
+        expect(screen.queryByRole("button", { name: /Dragonfire shield/ })).not.toBeInTheDocument();
+        expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
+        const groups = view.container.querySelectorAll(".ui-catalogue-group");
+        expect(
+            [...groups].map((group) => group.querySelector(".ui-armoury-slot-name")?.textContent),
+        ).toEqual(["Melee", "Ranged", "Magic"]);
+        const weapon = getWeapon("keris_partisan_of_breaching");
+        fireEvent.click(screen.getByRole("button", { name: weapon.name }));
+        const detail = view.container.querySelector(".ui-armoury-details")!;
+        expect(detail).toHaveTextContent(describeUnlockTask(weapon.unlock!));
+        expect(detail).toHaveTextContent("Locked for offers and choices:");
+        expect(detail).toHaveTextContent("Level 1");
+        save.unlockedItems.push(weapon.id);
+        act(() => store.set({ save: { ...save } }));
+        expect(detail).toHaveTextContent("Unlocked for offers and choices by:");
+
+        fireEvent.click(screen.getByRole("button", { name: "Scimitar" }));
+        expect(detail).toHaveTextContent("At max level, evolve with Piety: ???");
+        expect(screen.queryByRole("button", { name: "Abyssal whip" })).not.toBeInTheDocument();
+        save.evolutionsMade.push("abyssal_whip");
+        act(() => store.set({ save: { ...save } }));
+        expect(detail).toHaveTextContent("At max level, evolve with Piety: Abyssal whip");
+        expect(screen.getByRole("button", { name: "Abyssal whip" })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: "Passives" }));
+        const passive = getPassive("divine_rune_pouch");
+        fireEvent.click(screen.getByRole("button", { name: passive.name }));
+        const passiveDetail = view.container.querySelector(".ui-armoury-details")!;
+        expect(passiveDetail).toHaveTextContent(describeUnlockTask(passive.unlock!));
+        expect(passiveDetail).toHaveTextContent("Gain per pick, regardless of rarity");
+        expect(passiveDetail).toHaveTextContent("Maximum level: 1");
+        expect(screen.getByText("All styles")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Armour" }));
+        expect(armourTab).toHaveAttribute("aria-pressed", "true");
+        expect(view.container.querySelectorAll(".ui-armoury-slots")).toHaveLength(1);
+        expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
+        expect(view.container.querySelector(".ui-catalogue-group")).not.toBeInTheDocument();
+    });
+
+    test("pick-only weapons describe their character and level-up sources", () => {
+        const { store, view } = renderHud();
+        act(() => store.set({ screen: "armoury", save: createSave() }));
+        fireEvent.click(screen.getByRole("button", { name: "Weapons" }));
+        fireEvent.click(screen.getByRole("button", { name: "Rubber chicken" }));
+        const detail = view.container.querySelector(".ui-armoury-details")!;
+        expect(detail).toHaveTextContent("Starting weapon of Avian Assaulter");
+        expect(detail).toHaveTextContent("Only on Thanksgiving Harvest");
+        expect(detail).not.toHaveTextContent("Available from the start");
+        fireEvent.click(screen.getByRole("button", { name: "Smoke Burst" }));
+        expect(detail).toHaveTextContent("Choose from Ice Burst at level 2");
     });
 
     test("the bag is only dimmed where it's empty, overlay or not", () => {

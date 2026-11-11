@@ -690,6 +690,9 @@ version and how to run it.
   rarity of what it becomes, and an upgrade into a piece still locked behind a map task waits
   for it. Each piece has its own upgrades: upgrading the Amulet of strength leaves the Amulet of
   power as it was.
+  Its Weapons and Passives tabs also show their effects, levels and unlock tasks for planning a
+  build. Weapons are grouped by damage style; shared weapons and all passives can be offered to
+  any style. Evolution results remain hidden until made, as in the Collection log.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
   (friends join with its eight-letter code or the invite link) or open to anyone browsing the
   rooms list, or join one. Everyone picks their own adventurer and brings their own skills,
