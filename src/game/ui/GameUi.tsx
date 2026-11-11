@@ -2432,6 +2432,7 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                         (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
                     }
                     title={tl(buff.name)}
+                    description={buff.description}
                 >
                     <ItemIcon objId={buff.objId} size={24} />
                     {buff.secondsLeft !== undefined && (
