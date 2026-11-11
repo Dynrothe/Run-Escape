@@ -73,12 +73,14 @@ import {
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { fmtNum, t, tl, tp } from "../i18n";
+
 import {
     CameraRig,
     MAX_CAMERA_DISTANCE,
     MIN_CAMERA_DISTANCE,
     getGroundReach,
 } from "../render/CameraRig";
+
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
@@ -1715,12 +1717,14 @@ export class GameClient implements GameFrameHandler {
             !game.heroes.every((hero) => CHARACTERS.some((c) => c.id === hero.characterId))
         ) {
             this.store.toast(t("toast.missing_run_content"), 6000);
+
             this.coopInbox = undefined;
             this.coop.leave();
             return;
         }
         if (game.heroes.some((hero) => characterMapRestriction(hero.characterId, game.mapId))) {
             this.store.toast("A party member cannot use that adventurer on this map.", 6000);
+
             this.coopInbox = undefined;
             this.coop.leave();
             return;

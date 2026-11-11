@@ -81,7 +81,9 @@ export function emptyStats(): Stats {
 
 // What some weapons hit harder (the Ivandis flail and undead, vampyres)
 // kalphite: the kalphites and the scarabs (Kephri too), for the keris partisans
+
 export type EnemyTag = "undead" | "vampyre" | "kalphite" | "bird";
+
 
 export type EnemyDef = {
     id: string;

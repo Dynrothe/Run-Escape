@@ -303,6 +303,9 @@ export function migrateSave(raw: unknown): SaveData {
     if (data.scabarasBeaten === true) {
         save.scabarasBeaten = true;
     }
+    if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
+        save.pet = data.pet;
+    }
     if (
         typeof data.favouriteCharacter === "string" &&
         CHARACTERS.some((c) => c.id === data.favouriteCharacter && !c.only)

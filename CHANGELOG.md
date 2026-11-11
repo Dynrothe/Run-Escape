@@ -3,6 +3,7 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+
 ## Unreleased
 
 ### Added
@@ -55,6 +56,7 @@ the version in the corner).
   Changed desktop gear slots to match the size of item slots.
   Changed the pause menu to show your stats above equipped weapons and passives.
   Changed Debuffs now appear before buffs in the HUD and pause-menu effect lists.
+
 
 ## 0.30.0 - 2026-11-09
 

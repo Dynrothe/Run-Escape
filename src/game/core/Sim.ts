@@ -2437,7 +2437,9 @@ export class Sim {
     // Weapons and passives carried at once, with the extra slots: the shop's, and the Divine rune
     // pouch's, for a magic weapon (Upgrades' fitsWithPouch keeps it for one)
     get maxWeapons(): number {
+
         return getCharacter(this.characterId).maxWeapons ?? MAX_WEAPONS + this.stats.weaponSlots;
+
     }
 
     get maxPassives(): number {

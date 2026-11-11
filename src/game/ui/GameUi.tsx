@@ -91,7 +91,7 @@ import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
-import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
+import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen"; 
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
@@ -2431,13 +2431,7 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                         (buff.harmful ? " ui-buff-harmful" : "") +
                         (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
                     }
-                    itemId={buff.id}
-                    aria-label={tl(buff.name)}
-                    description={
-                        <span>
-                            {tl(buff.name)}: {buff.description}
-                        </span>
-                    }
+                    title={tl(buff.name)}
                 >
                     <ItemIcon objId={buff.objId} size={24} />
                     {buff.secondsLeft !== undefined && (
