@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
-import { getCharacterAppearance } from "../client/GameAssets";
+import { getBareAppearance, getCharacterAppearance } from "../client/GameAssets";
 import { makeLoadout } from "../client/coop/CoopLobby";
 import { buyCosmetic, canWearCosmetic, createSave, migrateSave } from "../core/save";
 import { CHARACTERS, getCharacter } from "./characters";
@@ -10,12 +10,17 @@ import {
     BODY_PARTS,
     COSMETICS,
     COSMETIC_BY_ID,
+    MAX_SAVED_OUTFITS,
     WARDROBE_SLOTS,
     cleanLook,
+    cleanSavedOutfits,
     getBodyKits,
     getCosmeticPrice,
     getDefaultBody,
     getPieceAdventurer,
+    isWearingOutfit,
+    saveOutfit,
+    wearOutfit,
     wearsWardrobe,
 } from "./wardrobe";
 
@@ -134,5 +139,70 @@ describe("a look", () => {
         const look = { outfit: { [EquipSlot.HEAD]: hat.objId } };
         expect(makeLoadout({}, [], {}, undefined, undefined, undefined, look).look).toEqual(look);
         expect(makeLoadout({}, [], {}).look).toBeUndefined();
+    });
+});
+
+describe("saved outfits", () => {
+    const look = {
+        body: getDefaultBody(1),
+        outfit: { [EquipSlot.HEAD]: hat.objId },
+        overGear: true,
+    };
+
+    it("save what's worn under a name, over one of that name", () => {
+        const one = saveOutfit([], "  Party  ", look)!;
+        expect(one).toEqual([
+            { name: "Party", outfit: { [EquipSlot.HEAD]: hat.objId }, overGear: true },
+        ]);
+        const two = saveOutfit(one, "Bare", {})!;
+        expect(two.map((o) => o.name)).toEqual(["Party", "Bare"]);
+        expect(two[1]).toEqual({ name: "Bare" });
+        const replaced = saveOutfit(two, "Party", { outfit: { [EquipSlot.CAPE]: cape.objId } })!;
+        expect(replaced[0]).toEqual({ name: "Party", outfit: { [EquipSlot.CAPE]: cape.objId } });
+        expect(saveOutfit(two, "   ", look)).toBeUndefined();
+        let full = one;
+        for (let i = 1; i < MAX_SAVED_OUTFITS; i++) {
+            full = saveOutfit(full, `Set ${i}`, look)!;
+        }
+        expect(saveOutfit(full, "One more", look)).toBeUndefined();
+        expect(saveOutfit(full, "Party", {})).toHaveLength(MAX_SAVED_OUTFITS);
+    });
+
+    it("go on over the outfit, keeping the body", () => {
+        const [saved] = saveOutfit([], "Cape", { outfit: { [EquipSlot.CAPE]: cape.objId } })!;
+        const worn = wearOutfit(look, saved);
+        expect(worn.body).toEqual(look.body);
+        expect(worn.outfit).toEqual({ [EquipSlot.CAPE]: cape.objId });
+        expect(worn.overGear).toBeUndefined();
+        expect(isWearingOutfit(worn, saved)).toBe(true);
+        expect(isWearingOutfit(look, saved)).toBe(false);
+        expect(isWearingOutfit({ ...worn, overGear: true }, saved)).toBe(false);
+    });
+
+    it("are saved with only the pieces the save can wear, one of each name", () => {
+        const save = createSave();
+        save.coins = 100_000;
+        buyCosmetic(save, hat.objId);
+        save.outfits = [
+            { name: "Hat", outfit: { [EquipSlot.HEAD]: hat.objId, [EquipSlot.CAPE]: cape.objId } },
+            { name: "Hat", outfit: {} },
+            { name: "" },
+        ];
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).outfits).toEqual([
+            { name: "Hat", outfit: { [EquipSlot.HEAD]: hat.objId } },
+        ]);
+        expect(cleanSavedOutfits("nonsense")).toEqual([]);
+        expect(migrateSave({ ...save, outfits: undefined }).outfits).toBeUndefined();
+    });
+});
+
+describe("the body alone", () => {
+    it("has the body's kits and colours and nothing worn", () => {
+        const body = getDefaultBody(1);
+        body.colors[0] = 3;
+        const appearance = getBareAppearance({ body, outfit: { [EquipSlot.HEAD]: hat.objId } });
+        expect(appearance.female).toBe(true);
+        expect(appearance.colors).toEqual(body.colors);
+        expect(appearance.equipment.every((objId) => objId === -1)).toBe(true);
     });
 });

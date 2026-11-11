@@ -12,15 +12,19 @@ import {
     COSMETICS,
     COSMETIC_BY_ID,
     CosmeticDef,
+    MAX_OUTFIT_NAME,
+    MAX_SAVED_OUTFITS,
     WARDROBE_SLOTS,
     WardrobeLook,
     bodyColourName,
     bodyPartName,
+    cleanOutfitName,
     cosmeticName,
     getBodyKits,
     getCosmeticPrice,
     getDefaultBody,
     getPieceAdventurer,
+    isWearingOutfit,
     ownsCosmetic,
     wearsWardrobe,
 } from "../content/wardrobe";
@@ -46,6 +50,9 @@ export function WardrobeScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const [tab, setTab] = useState<Tab>("body");
     useMenuKeys({ onBack: () => client.showScreen("title") });
+    // Changing the body, the adventurer stands in it alone, so what changes can be seen
+    useEffect(() => client.showBareBody(tab === "body"), [client, tab]);
+    useEffect(() => () => client.showBareBody(false), [client]);
     const look = save.look ?? {};
     const character = getCharacter(ui.characterId);
     return (
@@ -301,6 +308,7 @@ function OutfitTab({
     return (
         <div className="ui-wardrobe-list">
             <p className="ui-subtle">{t("wardrobe.outfit_intro")}</p>
+            <SavedOutfits save={save} look={look} client={client} />
             {WARDROBE_SLOTS.map((slot) => {
                 const worn = outfit[slot.equipSlot];
                 const own = character.equipment[slot.equipSlot];
@@ -392,6 +400,126 @@ function OutfitTab({
                     {t("wardrobe.clear_outfit")}
                 </button>
             </div>
+        </div>
+    );
+}
+
+// Outfits kept under a name (SaveData.outfits): each goes on in one go, and what's worn saves as
+// one, over one of the same name. Styled as the Tombs' invocation presets are.
+function SavedOutfits({
+    save,
+    look,
+    client,
+}: {
+    save: SaveData;
+    look: WardrobeLook;
+    client: GameClient;
+}): JSX.Element {
+    const outfits = save.outfits ?? [];
+    const [name, setName] = useState("");
+    // The outfit whose Delete was pressed once: a second press deletes it, so a slip beside its
+    // Wear button doesn't
+    const [deleting, setDeleting] = useState<string>();
+    useEffect(() => {
+        if (deleting === undefined) {
+            return;
+        }
+        // Any other press takes it back (Safari gives a pressed button no focus, so no blur)
+        const disarm = (e: PointerEvent) => {
+            if (!(e.target instanceof Element && e.target.closest(".ui-invocations-preset-sure"))) {
+                setDeleting(undefined);
+            }
+        };
+        window.addEventListener("pointerdown", disarm, true);
+        return () => window.removeEventListener("pointerdown", disarm, true);
+    }, [deleting]);
+    // A name left blank is the first "Outfit n" not taken
+    let n = outfits.length + 1;
+    while (outfits.some((o) => o.name === t("wardrobe.outfit_n", { n: fmtNum(n) }))) {
+        n++;
+    }
+    const placeholder = t("wardrobe.outfit_n", { n: fmtNum(n) });
+    const named = cleanOutfitName(name) || placeholder;
+    const replaces = outfits.some((o) => o.name === named);
+    const full = outfits.length >= MAX_SAVED_OUTFITS && !replaces;
+    return (
+        <div className="ui-invocations-presets">
+            <div className="ui-invocations-presets-title">{t("wardrobe.saved_outfits")}</div>
+            {outfits.length === 0 ? (
+                <span className="ui-subtle">{t("wardrobe.saved_none")}</span>
+            ) : (
+                <div className="ui-invocations-preset-list">
+                    {outfits.map((outfit) => {
+                        const current = isWearingOutfit(look, outfit);
+                        const sure = deleting === outfit.name;
+                        return (
+                            <div key={outfit.name} className="ui-invocations-preset">
+                                <button
+                                    className={
+                                        "ui-button ui-invocations-preset-load" +
+                                        (current ? " ui-invocations-preset-on" : "")
+                                    }
+                                    aria-label={t("wardrobe.wear_outfit", { name: outfit.name })}
+                                    aria-current={current || undefined}
+                                    onClick={() => client.wearOutfit(outfit.name)}
+                                >
+                                    {outfit.name}
+                                </button>
+                                <button
+                                    className={
+                                        "ui-button ui-button-small" +
+                                        (sure ? " ui-invocations-preset-sure" : "")
+                                    }
+                                    aria-label={
+                                        sure
+                                            ? t("wardrobe.delete_sure", { name: outfit.name })
+                                            : t("wardrobe.delete_outfit", { name: outfit.name })
+                                    }
+                                    onBlur={() => sure && setDeleting(undefined)}
+                                    onClick={() => {
+                                        if (!sure) {
+                                            setDeleting(outfit.name);
+                                            return;
+                                        }
+                                        setDeleting(undefined);
+                                        client.deleteOutfit(outfit.name);
+                                    }}
+                                >
+                                    {sure ? t("wardrobe.sure") : t("wardrobe.delete")}
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            <form
+                className="ui-invocations-preset-save"
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!full && client.saveOutfit(named)) {
+                        setName("");
+                    }
+                }}
+            >
+                <input
+                    className="ui-coop-input"
+                    value={name}
+                    maxLength={MAX_OUTFIT_NAME}
+                    placeholder={placeholder}
+                    aria-label={t("wardrobe.outfit_name")}
+                    spellCheck={false}
+                    autoComplete="off"
+                    onChange={(e) => setName(e.target.value)}
+                />
+                <button className="ui-button" type="submit" disabled={full}>
+                    {replaces ? t("wardrobe.replace_outfit") : t("wardrobe.save_outfit")}
+                </button>
+            </form>
+            {full && (
+                <span className="ui-subtle">
+                    {t("wardrobe.outfits_full", { n: fmtNum(MAX_SAVED_OUTFITS) })}
+                </span>
+            )}
         </div>
     );
 }

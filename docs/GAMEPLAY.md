@@ -696,8 +696,10 @@ version and how to run it.
   any style. Evolution results remain hidden until made, as in the Collection log.
 - The **Wardrobe** (on the title screen) is how you look, on every adventurer. Appearance picks a
   body (type A or B), its hair, jaw and the rest of the body's styles, and the hair, top, legs,
-  boots and skin colours. Outfit picks what's worn in each slot (head, cape, neck, body, shield,
-  legs, hands and feet): the adventurer's own piece, nothing, or a piece you have. The Store has
+  boots and skin colours, on the body alone so you can see it. Outfit picks what's worn in each slot (head, cape, neck, body, shield,
+  legs, hands and feet): the adventurer's own piece, nothing, or a piece you have. Up to ten
+  outfits can be saved under a name and put on again in one go (they keep the pieces, not the
+  body). The Store has
   every item OSRS can wear outside the weapon slot, one of each look, nearly three thousand of
   them, from 150 coins for a Common piece to 5,000 for a Very rare one (partyhats, h'ween masks,
   3rd age, gilded). Pick one to try it on. Every unlocked adventurer's own pieces are yours for

@@ -34,8 +34,10 @@ import {
 import { LOCKABLE_ITEMS, LOCKABLE_ITEM_BY_ID, LockableItem, isAvailable } from "../content/unlocks";
 import {
     COSMETIC_BY_ID,
+    SavedOutfit,
     WardrobeLook,
     cleanLook,
+    cleanSavedOutfits,
     getCosmeticPrice,
     ownsCosmetic,
 } from "../content/wardrobe";
@@ -128,6 +130,8 @@ export type SaveData = {
     // and outfit worn on every adventurer
     cosmetics?: number[];
     look?: WardrobeLook;
+    // Outfits kept under a name, to put on again in one go
+    outfits?: SavedOutfit[];
     // When the player last exported it (Date.now()), so an exported file says
     // when it was made, and the title screen can remind them to keep a copy
     lastExported?: number;
@@ -349,6 +353,10 @@ export function migrateSave(raw: unknown): SaveData {
     const look = cleanLook(data.look, (objId) => canWearCosmetic(save, objId));
     if (look) {
         save.look = look;
+    }
+    const outfits = cleanSavedOutfits(data.outfits, (objId) => canWearCosmetic(save, objId));
+    if (outfits.length > 0) {
+        save.outfits = outfits;
     }
     return save;
 }

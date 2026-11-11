@@ -239,3 +239,86 @@ export function applyOutfit(appearance: PlayerAppearance, outfit: Outfit | undef
         }
     }
 }
+
+// ---- Saved outfits ----
+
+// An outfit kept under a name, to put on again in one go: its pieces and whether they go over
+// gear. The body isn't in it, so changing the body needn't mean saving each outfit again.
+export type SavedOutfit = { name: string; outfit?: Outfit; overGear?: boolean };
+
+export const MAX_SAVED_OUTFITS = 10;
+export const MAX_OUTFIT_NAME = 24;
+
+export function cleanOutfitName(name: string): string {
+    return name.trim().slice(0, MAX_OUTFIT_NAME);
+}
+
+// The look's outfit saved under this name: over the one of that name if there is one, else added
+// while there's room. Undefined when the name's blank or there's no room, as nothing changes.
+export function saveOutfit(
+    outfits: readonly SavedOutfit[],
+    name: string,
+    look: WardrobeLook | undefined,
+): SavedOutfit[] | undefined {
+    const named = cleanOutfitName(name);
+    if (!named) {
+        return undefined;
+    }
+    const saved: SavedOutfit = { name: named };
+    if (look?.outfit && Object.keys(look.outfit).length > 0) {
+        saved.outfit = { ...look.outfit };
+    }
+    if (look?.overGear) {
+        saved.overGear = true;
+    }
+    const at = outfits.findIndex((o) => o.name === named);
+    if (at >= 0) {
+        return outfits.map((o, i) => (i === at ? saved : o));
+    }
+    return outfits.length < MAX_SAVED_OUTFITS ? [...outfits, saved] : undefined;
+}
+
+// The look with a saved outfit on, its body as it was
+export function wearOutfit(look: WardrobeLook | undefined, saved: SavedOutfit): WardrobeLook {
+    return { ...look, outfit: saved.outfit && { ...saved.outfit }, overGear: saved.overGear };
+}
+
+// Whether the look has this saved outfit on
+export function isWearingOutfit(look: WardrobeLook | undefined, saved: SavedOutfit): boolean {
+    const a = look?.outfit ?? {};
+    const b = saved.outfit ?? {};
+    const slots = new Set([...Object.keys(a), ...Object.keys(b)].map(Number));
+    return (
+        (look?.overGear === true) === (saved.overGear === true) &&
+        [...slots].every((slot) => a[slot] === b[slot])
+    );
+}
+
+// A save's saved outfits, as they can be worn: anything odd left out, one of each name, each
+// cleaned as a look is
+export function cleanSavedOutfits(
+    data: unknown,
+    canWear: (objId: number) => boolean = () => true,
+): SavedOutfit[] {
+    if (!Array.isArray(data)) {
+        return [];
+    }
+    const out: SavedOutfit[] = [];
+    for (const item of data) {
+        if (out.length >= MAX_SAVED_OUTFITS || typeof item !== "object" || item === null) {
+            continue;
+        }
+        const { name, outfit, overGear } = item as Partial<SavedOutfit>;
+        const named = typeof name === "string" ? cleanOutfitName(name) : "";
+        if (!named || out.some((o) => o.name === named)) {
+            continue;
+        }
+        const look = cleanLook({ outfit, overGear }, canWear);
+        out.push({
+            name: named,
+            ...(look?.outfit && { outfit: look.outfit }),
+            ...(look?.overGear && { overGear: true }),
+        });
+    }
+    return out;
+}

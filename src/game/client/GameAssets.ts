@@ -626,6 +626,13 @@ export function getOutfitAppearance(outfit: EnemyOutfit): PlayerAppearance {
     return appearance;
 }
 
+// The Wardrobe's body with nothing on, not even a weapon
+export function getBareAppearance(look?: WardrobeLook): PlayerAppearance {
+    const appearance = createAppearance();
+    applyBody(appearance, look?.body);
+    return appearance;
+}
+
 // An adventurer's look, in the player's own body and outfit from the Wardrobe (look) unless
 // they're someone in particular (wearsWardrobe)
 export function getCharacterAppearance(characterId: string, look?: WardrobeLook): PlayerAppearance {
@@ -1367,8 +1374,12 @@ export class GameAssets {
     }
 
     // The character's look on the menus, with their starting weapon's swing:
-    // the look a run starts with, so it needn't bake again then
-    setCharacterLook(characterId: string, look?: WardrobeLook): Promise<void> {
+    // the look a run starts with, so it needn't bake again then. bare: the body alone, with nothing
+    // worn (the Wardrobe's Appearance tab, so what's changing can be seen).
+    setCharacterLook(characterId: string, look?: WardrobeLook, bare = false): Promise<void> {
+        if (bare && wearsWardrobe(getCharacter(characterId))) {
+            return this.setPlayerAppearance(getBareAppearance(look));
+        }
         return this.setPlayerAppearance(
             getCharacterAppearance(characterId, look),
             0,

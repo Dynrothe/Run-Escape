@@ -39,7 +39,7 @@ import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
 import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
-import { WardrobeLook, cleanLook } from "../content/wardrobe";
+import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
 import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
@@ -601,6 +601,8 @@ export class GameClient implements GameFrameHandler {
     private heroLooks: (WardrobeLook | undefined)[] = [];
     // A look the Wardrobe's trying on, shown on the menus in place of the saved one till it's done
     private previewedLook?: WardrobeLook;
+    // The Wardrobe's showing the body alone, with nothing on (its Appearance tab)
+    private bareMenuLook = false;
     // Which way the Wardrobe's camera faces the adventurer (as the attract camera's yaw)
     private wardrobeYaw = WARDROBE_YAW;
     // How far the title camera's come in for the Wardrobe, 0 to 1
@@ -828,8 +830,9 @@ export class GameClient implements GameFrameHandler {
             this.cloud?.savePoint();
         }
         // Out of the Wardrobe, what was tried on comes off
-        if (was === "wardrobe" && screen !== was && this.previewedLook) {
+        if (was === "wardrobe" && screen !== was && (this.previewedLook || this.bareMenuLook)) {
             this.previewedLook = undefined;
+            this.bareMenuLook = false;
             this.refreshMenuLook();
         }
     }
@@ -850,7 +853,7 @@ export class GameClient implements GameFrameHandler {
         }
         this.store.set({ characterId });
         if (!this.sim) {
-            this.assets.setCharacterLook(characterId, this.getMenuLook());
+            this.refreshMenuLook();
         }
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
     }
@@ -864,7 +867,11 @@ export class GameClient implements GameFrameHandler {
 
     private refreshMenuLook(): void {
         if (!this.sim) {
-            this.assets.setCharacterLook(this.store.getSnapshot().characterId, this.getMenuLook());
+            this.assets.setCharacterLook(
+                this.store.getSnapshot().characterId,
+                this.getMenuLook(),
+                this.bareMenuLook,
+            );
         }
     }
 
@@ -888,6 +895,44 @@ export class GameClient implements GameFrameHandler {
     previewLook(look: WardrobeLook | undefined): void {
         this.previewedLook = look && cleanLook(look);
         this.refreshMenuLook();
+    }
+
+    // The body alone on the menus, with nothing worn over it, or dressed again
+    showBareBody(bare: boolean): void {
+        if (this.bareMenuLook !== bare) {
+            this.bareMenuLook = bare;
+            this.refreshMenuLook();
+        }
+    }
+
+    // The outfit worn now, kept under this name (over one of that name)
+    saveOutfit(name: string): boolean {
+        const outfits = saveOutfit(this.save.outfits ?? [], name, this.save.look);
+        if (!outfits) {
+            return false;
+        }
+        this.save.outfits = outfits;
+        this.persist();
+        return true;
+    }
+
+    // A saved outfit put on, in place of what's worn
+    wearOutfit(name: string): void {
+        const saved = this.save.outfits?.find((o) => o.name === name);
+        if (saved) {
+            this.setLook(wearOutfit(this.save.look, saved));
+        }
+    }
+
+    deleteOutfit(name: string): void {
+        const outfits = this.save.outfits ?? [];
+        const left = outfits.filter((o) => o.name !== name);
+        if (left.length === outfits.length) {
+            return;
+        }
+        // None left is none at all, as a save loads it
+        this.save.outfits = left.length > 0 ? left : undefined;
+        this.persist();
     }
 
     // Buys a piece in the Wardrobe's store
@@ -1881,6 +1926,7 @@ export class GameClient implements GameFrameHandler {
         cinematic: boolean,
     ): void {
         this.previewedLook = undefined;
+        this.bareMenuLook = false;
         this.heroLooks = looks;
         const map = sim.map;
         this.sim = sim;

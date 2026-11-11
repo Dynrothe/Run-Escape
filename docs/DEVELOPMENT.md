@@ -1445,13 +1445,17 @@ the sim never sees it.
   (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
 - **Saved** as `SaveData.cosmetics` (the pieces bought) and `SaveData.look` (a `WardrobeLook`).
   `cleanLook` drops what this game doesn't know, and for the save, pieces it can't wear.
+  `SaveData.outfits` are outfits kept by name (`SavedOutfit`: the pieces and `overGear`, not the
+  body), saved over one of the same name, cleaned by `cleanSavedOutfits`.
 - **Worn:** `getCharacterAppearance(characterId, look)` puts the body on and the outfit over the
   adventurer's own pieces; a slot set to -1 shows the body. In a run (`getRunAppearance`) gear
   from passives and caskets goes over the outfit, unless `look.overGear` keeps it on top. The
   weapon slot is always the run's. Adventurers who look like someone (`wearsWardrobe`: a fixed
   outfit, or kits of their own) keep their look.
 - **Trying on:** a piece picked in the store is shown on the menus' adventurer
-  (`GameClient.previewLook`) until the Wardrobe's left. The Wardrobe holds the title camera still,
+  (`GameClient.previewLook`) until the Wardrobe's left. On the Appearance tab the adventurer
+  stands in the body alone (`showBareBody`, `getBareAppearance`: nothing worn, no weapon) so
+  what's changing can be seen. The Wardrobe holds the title camera still,
   turned with its arrows (`turnMenuCamera`).
 - **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
   so it needed no relay change; `beginCoopRun` cleans each hero's.

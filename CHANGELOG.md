@@ -10,7 +10,8 @@ the version in the corner).
 - The Wardrobe, on the title screen: pick your body, hair, beard and colours, and dress every
   adventurer slot by slot. Its store sells nearly three thousand outfit pieces for coins, from
   bronze helms to partyhats, and you can try each one on first. Your unlocked adventurers' own
-  pieces are free, and co-op shows everyone's look.
+  pieces are free, you can save outfits to put on again in one go, and co-op shows everyone's
+  look.
 
 ## 0.31.0 - 2026-11-11
 
