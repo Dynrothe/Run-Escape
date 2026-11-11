@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- New power-up, by GhostavoA: Polymorph. For 10 seconds everything turns into harmless sheep,
+  and elites and bosses into golden sheep that still fight. Keep an eye out for a penguin in
+  disguise.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added

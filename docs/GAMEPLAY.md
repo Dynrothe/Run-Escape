@@ -261,6 +261,14 @@ version and how to run it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
+    - **Polymorph**: for 10 seconds everything on the map turns into a sheep (shorn, red, green,
+      blue or yellow) that wanders about slowly, stopping now and then to graze, and can't hurt
+      you. Sheep say "Baa!" now and then, and die as sheep if they're killed. Elites and bosses
+      turn into golden sheep (a boss a giant one) that still come at you and attack as usual. One
+      in 1000 is the penguin dressed as a sheep from Cold War, which wanders with the rest but
+      says "Beh?", and when it's killed two KGP agents run out of it and off the screen. One in
+      3000 is an odd one that wanders off the other way. Whatever turns up while it lasts is a
+      sheep too, till the rest turn back.
 - **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween

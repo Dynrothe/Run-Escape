@@ -57,6 +57,7 @@ import {
     POWER_UP_LIFETIME,
     POWER_UP_MIN_GAP,
     THRALLS,
+    getPolymorphLook,
     getPowerUp,
 } from "../content/powerups";
 import { isPrayerIgnored } from "../content/raidBosses";
@@ -161,6 +162,7 @@ import {
     LightingDef,
     MapDef,
     PlayerEffectDef,
+    PolymorphKind,
     PowerUpDef,
     PowerUpEffect,
     QuartersDef,
@@ -245,6 +247,7 @@ import {
     EnemyAbilities,
     EnemyFlung,
     EnemyLeaving,
+    EnemyPolymorph,
     EnemyProjectile,
     EventOffer,
     EventOption,
@@ -455,6 +458,10 @@ const DASH_SPEED = 18;
 const DASH_STEP = 0.1;
 // Stunned (BossDef.guard), a boss gets this long to gather itself after, before it attacks
 const STUN_RECOVER_SECONDS = 0.4;
+// A polymorphed sheep goes one way for between these many seconds, and stops to graze at this
+// chance each time it turns
+const POLYMORPH_TURN_SECONDS = [1, 2.5];
+const POLYMORPH_GRAZE_CHANCE = 0.25;
 // Ticks an impact's spot animations are kept (ImpactDef): they play out once in that
 const IMPACT_TICKS = 90;
 // A press of the fight's button held this long when it can't go off yet, and only if the boss
@@ -1597,6 +1604,12 @@ export class Sim {
     // While a Drill Demon lasts
     private lapsEndTick = 0;
     private laps?: Extract<PowerUpEffect, { kind: "laps" }>;
+    // The last polymorph used: what spawns before endTick is turned too
+    private polymorphing?: {
+        def: PowerUpDef;
+        effect: Extract<PowerUpEffect, { kind: "polymorph" }>;
+        endTick: number;
+    };
     // Fun maps: run second the next random boss is due, the last one picked
     // (not picked twice running), and when the next chat lines are due
     private nextFunBossSeconds = Infinity;
@@ -3882,6 +3895,12 @@ export class Sim {
         if (boss && def.boss?.phases) {
             this.startPhases(enemy, def.boss.phases);
         }
+        // Turning up while a polymorph lasts, it's an animal till the rest do
+        const polymorphing = this.polymorphing;
+        if (polymorphing && this.tick < polymorphing.endTick) {
+            const { def: powerUp, effect, endTick } = polymorphing;
+            this.polymorphEnemy(enemy, powerUp, effect, endTick);
+        }
         return enemy;
     }
 
@@ -4055,6 +4074,11 @@ export class Sim {
             // Copying a boss's lunge, and nothing else till it's done (EnemyDef.echoes)
             if (enemy.echo || enemy.echoDash) {
                 this.stepEcho(enemy);
+                continue;
+            }
+            // A sheep or a penguin in disguise wanders about and does nothing else (a golden sheep,
+            // an elite or a boss, fights on below)
+            if (enemy.polymorph && this.stepPolymorph(enemy, enemy.polymorph)) {
                 continue;
             }
 
@@ -16784,6 +16808,16 @@ export class Sim {
         enemy.anim = "death";
         enemy.animStart = this.tick;
         enemy.vx = enemy.vy = 0;
+        // A polymorphed penguin's cover is blown, and the agents inside make a run for it
+        const polymorph = enemy.polymorph;
+        if (polymorph?.look === "penguin" && this.tick < polymorph.endTick) {
+            this.emit({
+                type: "polymorphEscape",
+                powerUpId: polymorph.powerUpId,
+                x: enemy.x,
+                y: enemy.y,
+            });
+        }
         // A light it carried stays where it fell for a while (EnemyDef.light)
         const leaves = this.lighting && enemy.def.light?.left;
         if (leaves) {
@@ -19570,6 +19604,10 @@ export class Sim {
                 this.emit({ type: "playerShout", text: effect.shout });
                 message = effect.shout;
                 break;
+            case "polymorph":
+                endTick = this.polymorph(def, effect);
+                message = "Baa! Everything round you turns into sheep!";
+                break;
         }
         if (endTick > this.tick) {
             this.powerUps.push({
@@ -19581,6 +19619,171 @@ export class Sim {
             });
         }
         this.emit({ type: "powerUp", id: def.id, message, x: player.x, y: player.y });
+    }
+
+    // Turns everything on the map into sheep, and its elites and bosses into golden ones, till
+    // endTick; whatever turns up meanwhile is turned too (spawnEnemy), till the same tick. When
+    // they turn back.
+    private polymorph(
+        def: PowerUpDef,
+        effect: Extract<PowerUpEffect, { kind: "polymorph" }>,
+    ): number {
+        const endTick = Math.max(
+            this.polymorphing?.endTick ?? 0,
+            this.tick + this.powerUpTicks(effect.seconds),
+        );
+        this.polymorphing = { def, effect, endTick };
+        for (const enemy of this.enemies) {
+            this.polymorphEnemy(enemy, def, effect, endTick);
+        }
+        return endTick;
+    }
+
+    // One enemy into an animal till endTick, unless it's busy with something that can't be cut
+    // short. Elites and bosses only look the part: they go on fighting as they were.
+    private polymorphEnemy(
+        enemy: Enemy,
+        def: PowerUpDef,
+        effect: Extract<PowerUpEffect, { kind: "polymorph" }>,
+        endTick: number,
+    ): void {
+        if (
+            enemy.dead ||
+            enemy.leaving ||
+            enemy.totemOf ||
+            enemy.risingEnd !== 0 ||
+            enemy.walksTo ||
+            enemy.rolls ||
+            enemy.seeks !== undefined ||
+            enemy.echo ||
+            enemy.echoDash
+        ) {
+            return;
+        }
+        let look: PolymorphKind = "sheep";
+        let variant = 0;
+        const roll = polymorphRoll(enemy.uid, this.tick);
+        if (enemy.boss || enemy.elite) {
+            look = "golden";
+        } else if (roll < effect.rare.chance) {
+            look = "rare";
+        } else if (roll < effect.rare.chance + effect.penguin.chance) {
+            look = "penguin";
+        } else {
+            variant = Math.floor(polymorphRoll(enemy.uid, this.tick + 1) * effect.sheep.length);
+        }
+        const animal = getPolymorphLook(effect, look, variant);
+        enemy.polymorph = {
+            powerUpId: def.id,
+            look,
+            variant,
+            endTick,
+            speed: enemy.def.stationary ? 0 : enemy.speed * effect.speed,
+            shoutChance: 1 / (effect.shoutSeconds * TICKS_PER_SECOND),
+            shoutSounds: animal.shoutSounds ?? effect.shoutSounds,
+            shout: animal.shout ?? effect.shout,
+            dirX: 0,
+            dirY: 0,
+            turnTick: this.tick,
+        };
+    }
+
+    // A polymorphed enemy's tick: true if it's an animal that does nothing else, hurting no one;
+    // false once it's itself again, or for a golden sheep, which carries on as it was
+    private stepPolymorph(enemy: Enemy, polymorph: EnemyPolymorph): boolean {
+        if (this.tick >= polymorph.endTick) {
+            enemy.polymorph = undefined;
+            enemy.animStart = this.tick;
+            return false;
+        }
+        if (polymorphRoll(enemy.uid, this.tick + 3) < polymorph.shoutChance) {
+            const sounds = polymorph.shoutSounds;
+            this.emit({
+                type: "enemyShout",
+                enemyUid: enemy.uid,
+                text: polymorph.shout,
+                sound: sounds[Math.floor(polymorphRoll(enemy.uid, this.tick + 4) * sounds.length)],
+                x: enemy.x,
+                y: enemy.y,
+            });
+        }
+        if (polymorph.look === "golden") {
+            return false;
+        }
+        enemy.anim = "walk";
+        const player = this.player;
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const distance = fm.hypot(dx, dy);
+        let dirX = 0;
+        let dirY = 0;
+        if (polymorph.look === "rare") {
+            // The odd one out wanders off the other way
+            const step = this.temp;
+            if (this.fleeFrom(enemy, dx, dy, distance, step)) {
+                dirX = step.x;
+                dirY = step.y;
+            }
+        } else {
+            if (this.tick >= polymorph.turnTick) {
+                // Now and then it stops to graze, and otherwise it's off some way at random
+                if (polymorphRoll(enemy.uid, this.tick) < POLYMORPH_GRAZE_CHANCE) {
+                    polymorph.dirX = polymorph.dirY = 0;
+                } else {
+                    const angle = polymorphRoll(enemy.uid, this.tick + 1) * Math.PI * 2;
+                    polymorph.dirX = fm.cos(angle);
+                    polymorph.dirY = fm.sin(angle);
+                }
+                const [shortest, longest] = POLYMORPH_TURN_SECONDS;
+                const seconds =
+                    shortest + polymorphRoll(enemy.uid, this.tick + 2) * (longest - shortest);
+                polymorph.turnTick = this.tick + secondsToTicks(seconds);
+            }
+            dirX = polymorph.dirX;
+            dirY = polymorph.dirY;
+        }
+        const fromX = enemy.x;
+        const fromY = enemy.y;
+        // Knockback still throws it about, and the flock keeps apart as the crowd does
+        let moveX = enemy.vx + dirX * polymorph.speed;
+        let moveY = enemy.vy + dirY * polymorph.speed;
+        enemy.vx *= 0.75;
+        enemy.vy *= 0.75;
+        this.enemyHash.query(enemy.x, enemy.y, 1, (other) => {
+            if (other === enemy || other.rolls) {
+                return;
+            }
+            const ox = enemy.x - other.x;
+            const oy = enemy.y - other.y;
+            const minDist = enemy.radius + other.radius;
+            const distSq = ox * ox + oy * oy;
+            if (distSq < minDist * minDist && distSq > 1e-6) {
+                const d = Math.sqrt(distSq);
+                const push = (minDist - d) / d;
+                moveX += ox * push * 0.25;
+                moveY += oy * push * 0.25;
+            }
+        });
+        if (moveX !== 0 || moveY !== 0) {
+            if (enemy.def.ghost) {
+                enemy.x += moveX;
+                enemy.y += moveY;
+            } else {
+                moveCircle(this.getMoveGrid(enemy.def), enemy, moveX, moveY, enemy.radius);
+            }
+        }
+        // Up against a wall, a sheep turns another way next tick
+        if (
+            polymorph.look !== "rare" &&
+            (dirX !== 0 || dirY !== 0) &&
+            fm.hypot(enemy.x - fromX, enemy.y - fromY) < polymorph.speed * 0.5
+        ) {
+            polymorph.turnTick = this.tick + 1;
+        }
+        if (dirX !== 0 || dirY !== 0) {
+            enemy.yaw = yawFromVector(dirX, dirY);
+        }
+        return true;
     }
 
     // The middle of the thickest crowd within range of the player, going by
@@ -20374,6 +20577,15 @@ export class Sim {
         }
         return Math.max(0, RUN_LENGTH - this.mapSeconds);
     }
+}
+
+// [0, 1) from an enemy and a tick, for which way a polymorphed one wanders: the same on every co-op
+// copy, without drawing on the sim's rng
+function polymorphRoll(uid: number, tick: number): number {
+    let h = Math.imul(uid ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(tick + 1, 0xc2b2ae35);
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 // A name with "The" in front, as it reads partway through a sentence

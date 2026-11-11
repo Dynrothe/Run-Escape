@@ -58,8 +58,11 @@ export default function extract(): Record<string, string> {
     for (const powerUp of POWER_UPS) {
         strings[`powerup.${powerUp.id}.name`] = powerUp.name;
         strings[`powerup.${powerUp.id}.desc`] = powerUp.description;
-        if (powerUp.effect.kind === "laps") {
+        if (powerUp.effect.kind === "laps" || powerUp.effect.kind === "polymorph") {
             strings[`powerup.${powerUp.id}.shout`] = powerUp.effect.shout;
+        }
+        if (powerUp.effect.kind === "polymorph" && powerUp.effect.penguin.shout) {
+            strings[`powerup.${powerUp.id}.penguin_shout`] = powerUp.effect.penguin.shout;
         }
     }
     for (const thrall of THRALLS) strings[`thrall.${thrall.id}.name`] = thrall.name;
