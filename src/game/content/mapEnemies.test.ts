@@ -55,6 +55,18 @@ describe("getMapEnemies", () => {
         expect(ids).toContain("goblin");
         expect(ids).not.toContain("sol_heredit");
     });
+
+    test("Thanksgiving waves use farmers, bandits and foxes instead of rats and goblins", () => {
+        const map = getMap("thanksgiving");
+        const ids = new Set(map.waves.flatMap((wave) => wave.enemies.map((enemy) => enemy.id)));
+        for (const id of ["farmer", "bandit", "fox"]) {
+            expect(ids.has(id)).toBe(true);
+            expect(getMapEnemyIds(map).has(id)).toBe(true);
+        }
+        for (const id of ["rat", "giant_rat", "goblin"]) {
+            expect(ids.has(id)).toBe(false);
+        }
+    });
 });
 
 describe("canDoQuestOn", () => {
@@ -64,6 +76,29 @@ describe("canDoQuestOn", () => {
     test("a map has its own quests, and none of another's", () => {
         expect(names("inferno")).toContain("the_inferno");
         expect(names("lumbridge")).not.toContain("the_inferno");
+    });
+
+    test("Thanksgiving has its boss and Chompy bird quests with their coin rewards", () => {
+        const quests = QUESTS.filter((quest) => quest.mapId === "thanksgiving");
+        expect(quests.map((quest) => quest.id)).toEqual([
+            "thanksgiving_professor_oddenstein",
+            "thanksgiving_evil_chickens",
+            "thanksgiving_freaky_forester",
+            "thanksgiving_chompy_hunt",
+        ]);
+        expect(quests.map((quest) => quest.coins)).toEqual([1000, 1500, 2500, 4000]);
+        expect(quests[1].objective).toMatchObject({ kind: "kill", count: 10 });
+        expect(quests[2].objective).toMatchObject({
+            kind: "kill",
+            enemyIds: ["freaky_forester_final"],
+        });
+        expect(quests[3].objective).toMatchObject({
+            kind: "kill",
+            enemyIds: ["chompy_bird"],
+            count: 10000,
+        });
+        expect(quests[3].name).toBe("Chompy Slayer");
+        expect(names("lumbridge")).not.toContain("thanksgiving_chompy_hunt");
     });
 
     test("the ones done all over only show where what they're after turns up", () => {

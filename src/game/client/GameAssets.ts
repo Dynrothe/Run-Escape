@@ -18,7 +18,7 @@ import {
     createAppearance,
     getAppearanceKey,
 } from "../../rs/model/player/PlayerModelLoader";
-import { getCharacter } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
@@ -27,12 +27,17 @@ import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items"
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
-import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    CLOUD_SAVE_SPRITES,
+    REFUND_SPRITE,
+    SOUND_ORB_SPRITES,
+    TITLE_TAB_SPRITES,
+} from "../content/titleIcons";
 import {
     AKKHA,
     APMEKEN_BARRIER_LOC,
@@ -59,6 +64,7 @@ import {
     GearSlot,
     ImpactDef,
     MapDef,
+    PolymorphKind,
     WeaponDef,
 } from "../content/types";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
@@ -178,9 +184,9 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
     HINT_ARROW_SPRITE,
 ];
 
-// Every interface sprite the game shows: the game view's, the title screen's
-// tabs and cloud save's button, empty equipment slots, the skills' refund button, co-op's flags and the
-// overhead prayers (every frame comes with the first) and the passives with a
+// Every interface sprite the game shows: the game view's, the title screen's tabs and cloud
+// save's button, the sound's orb, empty equipment slots, the skills' refund button, co-op's
+// flags and the overhead prayers (every frame comes with the first) and the passives with a
 // sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
 // has to be in here.
 export function getGameSpriteIds(): number[] {
@@ -189,6 +195,7 @@ export function getGameSpriteIds(): number[] {
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
         ...Object.values(CLOUD_SAVE_SPRITES),
+        ...Object.values(SOUND_ORB_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
@@ -240,6 +247,9 @@ export function getSpotAnimIds(): number[] {
             }
         }
     };
+    for (const character of CHARACTERS) {
+        add(character.overheadSpotAnim);
+    }
     for (const weapon of WEAPONS) {
         for (const level of weapon.levels) {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
@@ -443,8 +453,8 @@ export function getCharacterAttackSeqs(characterId: string): number[] {
 }
 
 // The player's look in a run: the character's outfit, the held weapon tier,
-// any gear their passives add, and what they've equipped from caskets (which
-// goes over the rest).
+// any gear their passives add, and what they've equipped from caskets. A
+// character's fixed outfit slots stay visible over that gear.
 export function getRunAppearance(sim: Sim, hero = sim.focus): PlayerAppearance {
     return sim.as(hero, () => getCurrentAppearance(sim));
 }
@@ -470,6 +480,14 @@ function getCurrentAppearance(sim: Sim): PlayerAppearance {
         const equipSlot = GEAR_SLOT_BY_ID.get(slot as GearSlot)?.equipSlot;
         if (equipSlot !== undefined) {
             appearance.equipment[equipSlot] = getItem(itemId).objId;
+        }
+    }
+    const character = getCharacter(sim.characterId);
+    if (character.fixedOutfit) {
+        for (const [slot, objId] of Object.entries(character.equipment)) {
+            if (objId !== undefined) {
+                appearance.equipment[Number(slot)] = objId;
+            }
         }
     }
     return appearance;
@@ -510,6 +528,16 @@ export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): Floor
 // An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
 export function getPropKey(npcId: number): string {
     return "prop:" + npcId;
+}
+
+// What a polymorph power-up turns enemies into (EnemyPolymorph's look and variant)
+export function getPolymorphKey(powerUpId: string, look: PolymorphKind, variant: number): string {
+    return `polymorph:${powerUpId}:${look}:${variant}`;
+}
+
+// What runs out of a polymorph's penguin (PolymorphEscapees)
+export function getPolymorphEscapeeKey(powerUpId: string): string {
+    return `polymorph:${powerUpId}:escapee`;
 }
 
 // A piece of what's under a floor (FloorDef.under)
@@ -735,6 +763,14 @@ export class GameAssets {
         }
         // Scenery its attacks grow, here rather than in what every run bakes
         for (const attack of enemy.boss?.attacks ?? []) {
+            if (attack.projectileObjId !== undefined) {
+                requests.push({
+                    kind: "obj",
+                    key: "obj:" + attack.projectileObjId,
+                    objId: attack.projectileObjId,
+                    count: 1,
+                });
+            }
             const quarters = attack.quarters;
             for (const locId of [quarters?.safeLocId, quarters?.hurtLocId, attack.ground?.locId]) {
                 if (locId !== undefined) {
@@ -856,6 +892,27 @@ export class GameAssets {
                     key: "rampage:" + id,
                     npcId: effect.npcId,
                     seqIds: [effect.walkSeq],
+                });
+            } else if (effect.kind === "polymorph") {
+                for (const { look, variant, def } of getPolymorphLooks(effect)) {
+                    requests.push({
+                        kind: "npc",
+                        key: getPolymorphKey(id, look, variant),
+                        npcId: def.npcId,
+                        seqIds: [
+                            def.idleSeq,
+                            def.walkSeq,
+                            def.deathSeq,
+                            def.attackSeq ?? -1,
+                        ].filter((s) => s !== -1),
+                    });
+                }
+                const { npcId, walkSeq } = effect.penguin.escapees;
+                requests.push({
+                    kind: "npc",
+                    key: getPolymorphEscapeeKey(id),
+                    npcId,
+                    seqIds: [walkSeq],
                 });
             }
         }

@@ -5,6 +5,7 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getCharacter } from "../content/characters";
 import { REVIVE_SECONDS, REVIVE_SEQ } from "../content/coop";
 import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
@@ -13,6 +14,8 @@ import {
     POWER_UP_BLINK,
     POWER_UP_COLOR,
     POWER_UP_LIFETIME,
+    getPolymorphEffect,
+    getPolymorphLook,
     getPowerUp,
 } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
@@ -30,7 +33,7 @@ import {
     WARDENS,
     ZEBAK,
 } from "../content/tombs";
-import { EnemyDef, MapPropDef } from "../content/types";
+import { EnemyDef, MapPropDef, PolymorphKind } from "../content/types";
 import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
@@ -46,6 +49,7 @@ import {
 } from "../core/Sim";
 import {
     Enemy,
+    EnemyPolymorph,
     EnemyProjectile,
     FairyRing,
     FallingRock,
@@ -72,6 +76,8 @@ import {
     getEnemyModelKey,
     getPickupModelKey,
     getPileLook,
+    getPolymorphEscapeeKey,
+    getPolymorphKey,
     getPropKey,
     getShieldedModelKey,
 } from "./GameAssets";
@@ -282,11 +288,30 @@ type SlashFx = {
 };
 type AuraFx = { x: number; y: number; radius: number; start: number; hero: number };
 type BlastFx = { x: number; y: number; radius: number; start: number };
-type SwingFx = { x: number; y: number; radius: number; start: number };
+type SwingFx = {
+    x: number;
+    y: number;
+    radius: number;
+    start: number;
+    dirX?: number;
+    dirY?: number;
+    cone?: number;
+};
 // enemyUid 0 or less: a hero, -enemyUid (enemies' uids start at 1), or
 // VISITOR_SHOUT for a random event's visitor
 type Shout = { enemyUid: number; text: string; start: number };
 const VISITOR_SHOUT = -1000;
+// One of a polymorphed penguin's escapees running off from (x, y) along dirX, dirY since startTick
+type EscapeeFx = {
+    powerUpId: string;
+    x: number;
+    y: number;
+    dirX: number;
+    dirY: number;
+    startTick: number;
+};
+// Radians apart the escapees run, fanned out round straight away from the player
+const ESCAPEE_SPREAD = 0.9;
 // Random events' visitors stand out from the crowd
 const VISITOR_SCALE = 1.5;
 // strength: of the full flash (a power-up's), a boss's impact's being fainter
@@ -302,6 +327,11 @@ function pushCapped<T>(list: T[], item: T): void {
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
+}
+
+// How far a windup that started at tick from and lands at to has come, alpha into this tick: 0 to 1
+function windupProgress(sim: Sim, alpha: number, from: number, to: number): number {
+    return Math.min(1, Math.max(0, (sim.tick + alpha - from) / Math.max(1, to - from)));
 }
 
 // How long the upper body holds a weapon's run pose after a shot on the move
@@ -346,6 +376,7 @@ export class GameView {
     private blasts: BlastFx[] = [];
     private swings: SwingFx[] = [];
     private shouts: Shout[] = [];
+    private escapees: EscapeeFx[] = [];
     private flash?: FlashFx;
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
     private readonly screen2: ScreenPoint = { x: 0, y: 0, visible: false };
@@ -391,6 +422,7 @@ export class GameView {
         this.blasts = [];
         this.swings = [];
         this.shouts = [];
+        this.escapees = [];
         this.flash = undefined;
     }
 
@@ -454,9 +486,13 @@ export class GameView {
                         y: event.y,
                         radius: event.radius,
                         start: now,
+                        dirX: event.dirX,
+                        dirY: event.dirY,
+                        cone: event.cone,
                     });
                     break;
                 case "bossShout":
+                case "enemyShout":
                     // A new line replaces what it was saying
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== event.enemyUid);
                     this.shouts.push({ enemyUid: event.enemyUid, text: event.text, start: now });
@@ -465,6 +501,25 @@ export class GameView {
                     const key = -(event.hero ?? sim.focus);
                     this.shouts = this.shouts.filter((s) => s.enemyUid !== key);
                     this.shouts.push({ enemyUid: key, text: event.text, start: now });
+                    break;
+                }
+                case "polymorphEscape": {
+                    // Away from whoever the camera's on, so they're off the screen
+                    const player = sim.heroes[this.viewHero]?.player ?? sim.player;
+                    const away = Math.atan2(event.y - player.y, event.x - player.x);
+                    const count = getPolymorphEffect(event.powerUpId).penguin.escapees.count;
+                    for (let i = 0; i < count; i++) {
+                        const angle =
+                            away + (count > 1 ? (i / (count - 1) - 0.5) * ESCAPEE_SPREAD : 0);
+                        this.escapees.push({
+                            powerUpId: event.powerUpId,
+                            x: event.x,
+                            y: event.y,
+                            dirX: Math.cos(angle),
+                            dirY: Math.sin(angle),
+                            startTick: sim.tick,
+                        });
+                    }
                     break;
                 }
                 case "visitorShout":
@@ -603,7 +658,10 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
-            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            const model =
+                (projectile.attack.projectileObjId !== undefined &&
+                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
+                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
             if (!model || !hasGeometry(model)) {
                 // Drawn as a glow on the overlay instead
                 continue;
@@ -616,10 +674,11 @@ export class GameView {
             // Bigger than in OSRS: most are a few pixels across from up here
             // Small ones drawn bigger, up to a tile across, and all outlined
             // the same thickness
-            const scale = Math.min(
-                ENEMY_PROJECTILE_SCALE,
-                Math.max(1, PROJECTILE_MIN_RADIUS / Math.max(1, model.radius)),
-            );
+            const scale =
+                Math.min(
+                    ENEMY_PROJECTILE_SCALE,
+                    Math.max(1, PROJECTILE_MIN_RADIUS / Math.max(1, model.radius)),
+                ) * (projectile.attack.projectileScale ?? 1);
             actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
                 scale,
                 outline: 1 + PROJECTILE_OUTLINE / (model.radius * scale + 1),
@@ -693,7 +752,7 @@ export class GameView {
                 if (age > POWER_UP_LIFETIME - POWER_UP_BLINK && Math.floor(tick / 6) % 2 === 0) {
                     continue;
                 }
-                scale = getPowerUpScale(model);
+                scale = getPowerUpScale(model, pickup.powerUp);
                 height -= getPowerUpBob(pickup, tick);
                 unlit = 1;
             }
@@ -703,6 +762,8 @@ export class GameView {
         for (const rock of sim.rocks) {
             this.drawRock(actors, sim, rock);
         }
+
+        this.drawEscapees(actors, sim, alpha);
 
         for (const rampage of sim.rampages) {
             this.drawRampage(actors, sim, rampage, alpha);
@@ -1974,11 +2035,29 @@ export class GameView {
         if (detonate && sim.isUp(sim.heroes[hero])) {
             flash = Math.max(flash, 0.35 + 0.25 * Math.sin(tick * 0.4));
         }
+        // The Avian Assaulter (only Thanksgiving Harvest's) is drawn bigger than other heroes
+        const big = sim.heroes[hero].characterId === "avian_assaulter" ? AVIAN_SCALE : 1;
         actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
             silhouette: true,
             tint,
             flash,
+            ...(big !== 1 && { scale: big }),
         });
+        const overhead = getCharacter(sim.heroes[hero].characterId).overheadSpotAnim;
+        const effect = overhead === undefined ? undefined : this.assets.get("spot:" + overhead);
+        if (effect) {
+            const effectAnim = effect.anims[0];
+            actors.draw(
+                effect,
+                effectAnim,
+                effectAnim.getFrame(tick),
+                x,
+                this.ground(sim, x, y) - (model.height * big) / 128,
+                y,
+                pose.yaw,
+                UNLIT,
+            );
+        }
         if (sim.lighting) {
             this.drawLantern(actors, sim, hero, x, y, pose.yaw);
         }
@@ -2021,18 +2100,96 @@ export class GameView {
         );
     }
 
+    // A polymorphed penguin's escapees, running off fast till they're well off the screen (pruned
+    // in place, as keepWhile does)
+    private drawEscapees(actors: ActorRenderer, sim: Sim, alpha: number): void {
+        let kept = 0;
+        for (const escapee of this.escapees) {
+            const { speed, seconds, walkSeq, scale } = getPolymorphEffect(escapee.powerUpId).penguin
+                .escapees;
+            const t = (sim.tick + alpha - escapee.startTick) / TICKS_PER_SECOND;
+            if (t > seconds) {
+                continue;
+            }
+            this.escapees[kept++] = escapee;
+            const model = this.assets.get(getPolymorphEscapeeKey(escapee.powerUpId));
+            if (!model) {
+                continue;
+            }
+            const x = escapee.x + escapee.dirX * speed * t;
+            const y = escapee.y + escapee.dirY * speed * t;
+            const anim = model.getAnim(walkSeq);
+            const options = enemyDrawOptions;
+            options.scale = scale;
+            options.tint = NO_TINT;
+            options.flash = 0;
+            options.silhouette = false;
+            options.alpha = 1;
+            actors.draw(
+                model,
+                anim,
+                // Their little legs going twice as fast
+                anim.getFrame((sim.tick - escapee.startTick) * 2),
+                x,
+                this.groundUnder(sim, x, y, (model.radius * scale) / 128),
+                y,
+                yawFromVector(escapee.dirX, escapee.dirY),
+                options,
+            );
+        }
+        this.escapees.length = kept;
+    }
+
+    // The model of the animal a polymorphed enemy's been turned into; undefined until it's in
+    private getPolymorphModel(polymorph: EnemyPolymorph): ActorModel | undefined {
+        const { powerUpId, look, variant } = polymorph;
+        return this.assets.get(getCachedPolymorphKey(powerUpId, look, variant));
+    }
+
+    // How tall an enemy's drawn, as the animal it's been turned into if it has been, or at
+    // fallback times its scale while its model's still to come
+    private getEnemyHeight(sim: Sim, enemy: Enemy, fallback: number): number {
+        const polymorph = sim.polymorphOf(enemy);
+        const animal = polymorph && this.getPolymorphModel(polymorph);
+        if (polymorph && animal) {
+            return animal.height * getPolymorphScale(enemy, polymorph);
+        }
+        const model = this.assets.get(getCachedEnemyModelKey(enemy.def, enemy.variant));
+        return (model?.height ?? fallback) * enemy.scale;
+    }
+
     private drawEnemy(actors: ActorRenderer, sim: Sim, enemy: Enemy, alpha: number): void {
         const def = enemy.def;
         const tick = sim.tick;
+        // As a sheep (or whatever else it's been turned into) while it's polymorphed, dying as one
+        // if it's killed as one, and as itself until the animal's model is in
+        const polymorph = enemy.polymorph && sim.polymorphOf(enemy);
+        const animal = polymorph && this.getPolymorphModel(polymorph);
+        const look =
+            polymorph && animal
+                ? getPolymorphLook(
+                      getPolymorphEffect(polymorph.powerUpId),
+                      polymorph.look,
+                      polymorph.variant,
+                  )
+                : undefined;
         // Drawn as its shielded version while it's shielded, if it has one
-        const shielded = !enemy.dead && enemy.shieldEnd > tick ? def.shield?.look : undefined;
-        const model = this.assets.get(
-            shielded ? getShieldedModelKey(def) : getCachedEnemyModelKey(def, enemy.variant),
-        );
+        const shielded =
+            !look && !enemy.dead && enemy.shieldEnd > tick ? def.shield?.look : undefined;
+        const model =
+            (look && animal) ||
+            this.assets.get(
+                shielded ? getShieldedModelKey(def) : getCachedEnemyModelKey(def, enemy.variant),
+            );
         if (!model) {
             this.assets.requestEnemy(def);
             return;
         }
+        const scale = polymorph && look ? getPolymorphScale(enemy, polymorph) : enemy.scale;
+        const idleSeq = look?.idleSeq ?? def.idleSeq;
+        const deathSeq = look?.deathSeq ?? def.deathSeq;
+        // (a golden sheep fighting on: a headbutt for every attack)
+        const attackSeq = look ? (look.attackSeq ?? -1) : enemy.attackSeq;
         const x = lerp(enemy.prevX, enemy.x, alpha);
         const y = lerp(enemy.prevY, enemy.y, alpha);
         let anim: ActorAnim;
@@ -2040,8 +2197,8 @@ export class GameView {
         let sink = 0;
         if (enemy.dead) {
             const t = tick - enemy.deathTick;
-            if (def.deathSeq !== -1) {
-                anim = model.getAnim(def.deathSeq);
+            if (deathSeq !== -1) {
+                anim = model.getAnim(deathSeq);
                 // A final boss whose fall the run waits for plays all of its
                 // death (BossDef.fallSeconds); the rest are cut short
                 const fall = def.boss?.fallSeconds;
@@ -2054,29 +2211,30 @@ export class GameView {
                     sink = (t - length) / DEATH_SINK_TICKS;
                 }
             } else {
-                anim = model.getAnim(def.idleSeq);
+                anim = model.getAnim(idleSeq);
                 frame = 0;
                 sink = t / DEATH_SINK_TICKS;
             }
         } else if (shielded) {
             anim = model.getAnim(shielded.idleSeq);
             frame = anim.getFrame(tick + enemy.uid * 7);
-        } else if (enemy.anim === "jump" && def.jumpSeq !== undefined) {
+        } else if (enemy.anim === "jump" && !look && def.jumpSeq !== undefined) {
             anim = model.getAnim(def.jumpSeq);
             frame = anim.getFrame(tick - enemy.animStart, false);
-        } else if (enemy.anim === "attack" && enemy.attackSeq !== -1) {
-            anim = model.getAnim(enemy.attackSeq);
+        } else if (enemy.anim === "attack" && attackSeq !== -1) {
+            anim = model.getAnim(attackSeq);
             frame = anim.getFrame(tick - enemy.animStart, false);
         } else {
             const moving =
                 Math.abs(enemy.x - enemy.prevX) + Math.abs(enemy.y - enemy.prevY) > 0.002;
-            anim = model.getAnim(moving && enemy.frozen === 0 ? def.walkSeq : def.idleSeq);
+            const walkSeq = look?.walkSeq ?? def.walkSeq;
+            anim = model.getAnim(moving && enemy.frozen === 0 ? walkSeq : idleSeq);
             // Offset by uid so a crowd doesn't move in lockstep
             frame = anim.getFrame(tick + enemy.uid * 7);
         }
         let height =
-            this.groundUnder(sim, x, y, (model.radius * enemy.scale) / 128) +
-            (sink * model.height * enemy.scale) / 128;
+            this.groundUnder(sim, x, y, (model.radius * scale) / 128) +
+            (sink * model.height * scale) / 128;
         // Thrown out by a boss: up and over in an arc (negative is up)
         const flung = enemy.flung;
         if (flung) {
@@ -2111,7 +2269,7 @@ export class GameView {
             );
         }
         const options = enemyDrawOptions;
-        options.scale = enemy.scale;
+        options.scale = scale;
         options.tint = tint;
         options.flash = flash;
         options.silhouette = enemy.boss;
@@ -2157,12 +2315,11 @@ export class GameView {
             if (!enemy.def.healthBar && (enemy.hp >= enemy.maxHp || !enemy.elite)) {
                 continue;
             }
-            const model = this.assets.get(getCachedEnemyModelKey(enemy.def, enemy.variant));
             const x = lerp(enemy.prevX, enemy.x, alpha);
             const y = lerp(enemy.prevY, enemy.y, alpha);
             const top =
                 this.ground(sim, x, y) -
-                ((model?.height ?? 128) * enemy.scale) / 128 -
+                this.getEnemyHeight(sim, enemy, 128) / 128 -
                 HEALTH_BAR_GAP;
             const p = overlay.project(x, top, y, this.screen);
             if (p.visible) {
@@ -2215,7 +2372,7 @@ export class GameView {
             if (remaining === 0 || !model) {
                 continue;
             }
-            const modelScale = getPowerUpScale(model);
+            const modelScale = getPowerUpScale(model, pickup.powerUp);
             const x = lerp(pickup.prevX, pickup.x, alpha);
             const y = lerp(pickup.prevY, pickup.y, alpha);
             const top =
@@ -2310,10 +2467,10 @@ export class GameView {
                 if (!enemy || enemy.dead) {
                     continue;
                 }
-                const model = this.assets.get(getCachedEnemyModelKey(enemy.def, enemy.variant));
                 x = lerp(enemy.prevX, enemy.x, alpha);
                 y = lerp(enemy.prevY, enemy.y, alpha);
-                height = (model?.height ?? 200) * enemy.scale;
+                // (over the animal it's been turned into, if it has been)
+                height = this.getEnemyHeight(sim, enemy, 200);
             }
             const top = this.ground(sim, x, y) - height / 128;
             const p = overlay.project(x, top, y, this.screen);
@@ -2388,35 +2545,48 @@ export class GameView {
     // blast will hit, or a ring closing in at its feet before anything else
     private drawBossWindups(overlay: Overlay, sim: Sim, alpha: number): void {
         const ctx = overlay.ctx;
-        // Shadows on the floor where something's coming down (GroundPatternDef.shadow)
+        // Shadows on the floor where something's coming down (GroundPatternDef.shadow), and the
+        // edge of a mark whose own look doesn't reach as far as it hits (GroundPatternDef.edge)
         for (const hazard of sim.hazards) {
-            if (!hazard.attack.ground?.shadow || sim.tick >= hazard.landTick) {
+            const ground = hazard.attack.ground;
+            if ((!ground?.shadow && !ground?.edge) || sim.tick >= hazard.landTick) {
                 continue;
             }
-            const t = Math.min(
-                1,
-                Math.max(
-                    0,
-                    (sim.tick + alpha - hazard.startTick) /
-                        Math.max(1, hazard.landTick - hazard.startTick),
-                ),
-            );
-            this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+            const t = windupProgress(sim, alpha, hazard.startTick, hazard.landTick);
+            if (ground.shadow) {
+                this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+            } else {
+                this.drawFillingCircle(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
+            }
         }
         for (const enemy of sim.enemies) {
+            // Its stomp coming, on whoever's right up against it (BossDef.stomp): a ring filling
+            // at its feet, as a swing's does
+            const stomp = enemy.def.boss?.stomp;
+            const state = enemy.bossState;
+            if (
+                stomp &&
+                !enemy.dead &&
+                state?.nextStomp !== undefined &&
+                state.stompFrom !== undefined &&
+                // Not while nobody's under it
+                state.stompLeft === undefined
+            ) {
+                this.drawFillingCircle(
+                    overlay,
+                    sim,
+                    lerp(enemy.prevX, enemy.x, alpha),
+                    lerp(enemy.prevY, enemy.y, alpha),
+                    stomp.radius,
+                    windupProgress(sim, alpha, state.stompFrom, state.nextStomp),
+                );
+            }
             // A boss's, or what's copying its lunge (EnemyDef.echoes), drawn the same
             const windup = enemy.bossState?.windup ?? enemy.echo;
             if (!windup || enemy.dead) {
                 continue;
             }
-            const t = Math.min(
-                1,
-                Math.max(
-                    0,
-                    (sim.tick + alpha - windup.startTick) /
-                        Math.max(1, windup.landTick - windup.startTick),
-                ),
-            );
+            const t = windupProgress(sim, alpha, windup.startTick, windup.landTick);
             const kind = windup.attack.kind;
             // Those that mark the ground themselves (BossFightView)
             if (
@@ -2487,15 +2657,9 @@ export class GameView {
                           squareCorners(spot.x, spot.y, (square! / 2) * t),
                       );
                 for (let i = 0; i < shapes.length; i++) {
-                    this.fight.traceGround(overlay, sim, shapes[i]);
-                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
-                    ctx.stroke();
-                    this.fight.traceGround(overlay, sim, filled[i]);
-                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
-                    ctx.fill();
+                    this.drawFilling(overlay, t, (whole) =>
+                        this.fight.traceGround(overlay, sim, whole ? shapes[i] : filled[i]),
+                    );
                 }
             } else if (kind === "swing" || kind === "blast") {
                 // Around the boss, or on the spots a blast lands on
@@ -2510,15 +2674,7 @@ export class GameView {
                           ];
                 const radius = windup.attack.radius ?? 2;
                 for (const { x, y } of spots) {
-                    this.traceGroundCircle(overlay, sim, x, y, radius);
-                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
-                    ctx.stroke();
-                    this.traceGroundCircle(overlay, sim, x, y, radius * t);
-                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
-                    ctx.fill();
+                    this.drawFillingCircle(overlay, sim, x, y, radius, t);
                 }
             } else {
                 const x = lerp(enemy.prevX, enemy.x, alpha);
@@ -2529,6 +2685,35 @@ export class GameView {
                 ctx.stroke();
             }
         }
+    }
+
+    // A swing's mark: all it'll hit outlined in red, filling in as it comes (t, 0 to 1). trace
+    // traces the whole shape, or with whole false, the part filled so far.
+    private drawFilling(overlay: Overlay, t: number, trace: (whole: boolean) => void): void {
+        const ctx = overlay.ctx;
+        trace(true);
+        ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+        ctx.stroke();
+        trace(false);
+        ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+        ctx.fill();
+    }
+
+    // A swing's circle, filling from the middle
+    private drawFillingCircle(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        radius: number,
+        t: number,
+    ): void {
+        this.drawFilling(overlay, t, (whole) =>
+            this.traceGroundCircle(overlay, sim, x, y, whole ? radius : radius * t),
+        );
     }
 
     // A shadow on the floor under something coming down: growing and darkening as it nears
@@ -2611,7 +2796,21 @@ export class GameView {
         keepWhile(this.swings, now, SWING_MS);
         for (const swing of this.swings) {
             const t = (now - swing.start) / SWING_MS;
-            this.traceGroundCircle(overlay, sim, swing.x, swing.y, swing.radius * (0.7 + 0.3 * t));
+            const radius = swing.radius * (0.7 + 0.3 * t);
+            if (swing.cone !== undefined && swing.dirX !== undefined && swing.dirY !== undefined) {
+                this.traceGroundWedge(
+                    overlay,
+                    sim,
+                    swing.x,
+                    swing.y,
+                    radius,
+                    swing.dirX,
+                    swing.dirY,
+                    swing.cone,
+                );
+            } else {
+                this.traceGroundCircle(overlay, sim, swing.x, swing.y, radius);
+            }
             ctx.fillStyle = `rgba(255, 40, 20, ${0.35 * (1 - t)})`;
             ctx.fill();
             ctx.lineWidth = 6 * scale * (1 - t) + 1;
@@ -2647,7 +2846,10 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
-            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            const model =
+                (projectile.attack.projectileObjId !== undefined &&
+                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
+                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
             const drawn = model !== undefined && hasGeometry(model);
             const radius = (drawn ? PROJECTILE_GLOW : 9) * scale;
             const glow = this.getGlowImage(drawn, radius);
@@ -2939,6 +3141,33 @@ export class GameView {
             } else {
                 ctx.lineTo(p.x, p.y);
             }
+        }
+        ctx.closePath();
+    }
+
+    private traceGroundWedge(
+        overlay: Overlay,
+        sim: Sim,
+        cx: number,
+        cy: number,
+        radius: number,
+        dirX: number,
+        dirY: number,
+        cone: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const steps = Math.max(8, Math.ceil(cone * 12));
+        const facing = Math.atan2(dirY, dirX);
+        const start = facing - cone / 2;
+        const center = overlay.project(cx, this.ground(sim, cx, cy) - 0.1, cy, this.screen2);
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y);
+        for (let i = 0; i <= steps; i++) {
+            const angle = start + (cone * i) / steps;
+            const wx = cx + Math.cos(angle) * radius;
+            const wy = cy + Math.sin(angle) * radius;
+            const point = overlay.project(wx, this.ground(sim, wx, wy) - 0.1, wy, this.screen2);
+            ctx.lineTo(point.x, point.y);
         }
         ctx.closePath();
     }
@@ -3570,6 +3799,8 @@ function drawArrow(
 const UNLIT: ActorDrawOptions = { unlit: 1 };
 // A lantern in hand (drawLantern): tiles out to the left, ahead, and up, and how big
 const LANTERN_SIDE = 0.38;
+// Avian Assaulter's size on Thanksgiving Harvest
+const AVIAN_SCALE = 1.35;
 const LANTERN_AHEAD = 0.12;
 const LANTERN_HEIGHT = 0.55;
 const LANTERN_OPTIONS: ActorDrawOptions = { scale: 1, unlit: 1 };
@@ -3584,6 +3815,27 @@ function getCachedEnemyModelKey(def: EnemyDef, variant: number): string {
         enemyModelKeys.set(def, keys);
     }
     return (keys[variant] ??= getEnemyModelKey(def, variant));
+}
+
+// getPolymorphKey, made once in the same way: a big flock's drawn every frame
+const polymorphModelKeys = new Map<string, Partial<Record<PolymorphKind, string[]>>>();
+
+function getCachedPolymorphKey(powerUpId: string, look: PolymorphKind, variant: number): string {
+    let looks = polymorphModelKeys.get(powerUpId);
+    if (!looks) {
+        looks = {};
+        polymorphModelKeys.set(powerUpId, looks);
+    }
+    const keys = (looks[look] ??= []);
+    return (keys[variant] ??= getPolymorphKey(powerUpId, look, variant));
+}
+
+// How big a polymorphed enemy's animal is drawn: a boss's golden sheep is bigger than the rest
+function getPolymorphScale(enemy: Enemy, polymorph: EnemyPolymorph): number {
+    const effect = getPolymorphEffect(polymorph.powerUpId);
+    return enemy.boss
+        ? effect.golden.bossScale
+        : getPolymorphLook(effect, polymorph.look, polymorph.variant).scale;
 }
 
 // Drops what's run its time, in place: the overlay's effects are pruned every
@@ -3616,9 +3868,11 @@ function casketHop(t: number): number {
 }
 
 // How much bigger a power-up's drawn than the cache has it, for its model and
-// its timer alike: a loc (the cannon) is big there already
-function getPowerUpScale(model: ActorModel): number {
-    return model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+// its timer alike: a loc (the cannon) is big there already, and one can ask for more
+// (PowerUpDef.scale)
+function getPowerUpScale(model: ActorModel, powerUpId: string | undefined): number {
+    const base = model.key.startsWith("loc:") ? POWER_UP_LOC_SCALE : POWER_UP_SCALE;
+    return base * ((powerUpId && getPowerUp(powerUpId).scale) || 1);
 }
 
 // How far over the ground a power-up floats (tiles), bobbing up and down

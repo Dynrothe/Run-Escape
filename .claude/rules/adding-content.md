@@ -112,6 +112,8 @@ piece upgrades into, and `sets.ts` has the set bonuses. Run `scripts/cache/check
 A utility item with a new `ItemUse` kind needs a case in `Sim.useUtility`, a sound in
 `USE_SOUNDS` in `client/GameSounds.ts`, and if it's only for some runs (the Prayer cape's extra
 revive, co-op only), its weight in `itemWeight` in `core/Loot.ts`.
+A utility item's `description` is the sentence its descriptions show. A `buff` has none: it's
+shown as its stats, a line each, then how long they last (`describeItem`, `ItemView.seconds`).
 
 ## Power-up
 
@@ -142,6 +144,16 @@ existing ones won't do, and a case in `Sim.meetVisitor` (`startRandomEvent` for 
   new path. Keep what they decide on it too.
 - `state === "event"` pauses the run for an offer. The sim's bot answers those in `eventChoice` in
   `simulate-run.ts`, so it needs to know a new kind of offer.
+
+## Collection log reward
+
+Add trophies to `TROPHIES` in `trophies.ts`, with a `TrophySource` that names how they're found. An
+`enemy` source rolls per loot-bearing kill on its map and a `turkey` source when cooked turkey is
+carved, each till the run has found it; a `map` source is awarded only on victory and can require a
+boss in `bossesKilled` or hard mode. A `quest` source is awarded when the quest is recorded,
+including already completed quests on save load. Trophy ids are stored in saves, so keep them
+stable. A pet in `PETS` shares its trophy id and uses the cache's follower NPC with its idle and
+walk sequences.
 
 ## Enemy or boss
 

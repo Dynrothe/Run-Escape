@@ -1,11 +1,11 @@
 import { REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS, getPartyScale } from "../content/coop";
 import { getEnemy } from "../content/enemies";
 import { HARD_XP, getHardScale } from "../content/hard";
-import { CASKET_GEAR, UTILITY } from "../content/items";
+import { CASKET_GEAR, GEAR_SLOTS, UTILITY } from "../content/items";
 import { getMap } from "../content/maps";
 import { getPowerUp } from "../content/powerups";
 import { OLD_MAN_OFFERS, getRandomEvent } from "../content/randomEvents";
-import { emptyStats } from "../content/types";
+import { GearSlot, emptyStats } from "../content/types";
 import { getWeapon } from "../content/weapons";
 import { CASKET_DROP_CHANCE } from "./Loot";
 import { Hero, HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
@@ -109,6 +109,20 @@ function fingerprint(sim: Sim): string {
 describe("co-op", () => {
     afterEach(() => usePortableMath(false));
 
+    it("gives each hero the hard Thanksgiving victory trophy", () => {
+        const sim = createParty(["warrior", "wizard"], 1, 0, true, { mapId: "thanksgiving" });
+        const boss = sim.spawnEnemy(getEnemy("freaky_forester"), "finalBoss", {
+            x: 1040,
+            y: 1040,
+        })!;
+        sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+        sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.state).toBe("victory");
+        for (const hero of sim.heroes) {
+            expect(sim.as(hero.index, () => sim.getResult().trophies)).toContain("golden_egg");
+        }
+    });
+
     it("gives each player a hero of their own, apart at the start", () => {
         const sim = createParty(["warrior", "wizard"]);
         expect(sim.heroes).toHaveLength(2);
@@ -118,6 +132,57 @@ describe("co-op", () => {
         // The fields read the focus hero's
         expect(sim.player).toBe(a.player);
         expect(createParty(["warrior", "wizard"], 1, 1).player).not.toBe(a.player);
+    });
+
+    it.each([2, 3, 4])("keeps gear and effects isolated across %i heroes", (partySize) => {
+        const characters = Array.from({ length: partySize }, (_, index) =>
+            index % 2 === 0 ? "warrior" : "wizard",
+        );
+        const sim = createParty(characters);
+
+        for (const hero of sim.heroes) {
+            const gear: Partial<Record<GearSlot, string>> = {};
+            GEAR_SLOTS.forEach((slot, slotIndex) => {
+                const choices = CASKET_GEAR.filter((item) => item.slot === slot.id);
+                expect(choices.length).toBeGreaterThan(0);
+                gear[slot.id] = choices[(hero.index + slotIndex) % choices.length].id;
+            });
+            sim.as(hero.index, () => {
+                sim.gear = gear;
+                sim.applyPlayerEffect(
+                    hero.index % 2 === 0
+                        ? {
+                              kind: "debuff",
+                              id: `stress-debuff:${hero.index}`,
+                              name: `Party drain ${hero.index}`,
+                              iconObjId: 698,
+                              stats: { armor: -0.2 },
+                              seconds: 30,
+                          }
+                        : {
+                              kind: "drowsy",
+                              id: `stress-drowsy:${hero.index}`,
+                              name: `Party drowsy ${hero.index}`,
+                              iconObjId: 698,
+                              moveSpeed: -0.1,
+                              bossInterval: 3,
+                              seconds: 30,
+                          },
+                );
+            });
+        }
+
+        const states = sim.heroes.map((hero) =>
+            sim.as(hero.index, () => ({
+                gear: { ...sim.gear },
+                debuffs: sim.debuffs.map((debuff) => debuff.id),
+            })),
+        );
+        states.forEach((state) => {
+            expect(Object.keys(state.gear)).toHaveLength(GEAR_SLOTS.length);
+            expect(state.debuffs).toHaveLength(1);
+            expect(state.debuffs[0]).toMatch(/^stress-(debuff|drowsy):/);
+        });
     });
 
     it("keeps each player's own runes going round when they share the weapon", () => {

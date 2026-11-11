@@ -98,6 +98,14 @@ describe("pickGameFolder", () => {
         expect(pickGameFolder(bundled, [folder("0.20.0")], "1.0.0")).toBe(bundled);
     });
 
+    test("takes the website's build over a release of the same version, but not an older one", () => {
+        const site: GameFolder = { ...folder("0.21.0"), path: "site", fromSite: true };
+        const release = folder("0.21.0");
+        expect(pickGameFolder(bundled, [release, site], "1.0.0")).toBe(site);
+        expect(pickGameFolder({ ...bundled, version: "0.21.0" }, [site], "1.0.0")).toBe(site);
+        expect(pickGameFolder(bundled, [site, folder("0.22.0")], "1.0.0").version).toBe("0.22.0");
+    });
+
     test("leaves out an update that needs a newer launcher", () => {
         const usable = folder("0.21.0");
         const installed = [usable, folder("0.22.0", "2.0.0")];

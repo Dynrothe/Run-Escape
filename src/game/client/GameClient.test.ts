@@ -26,6 +26,7 @@ import {
     saveDisplaySettings,
 } from "./DisplaySettings";
 import { GameClient, TICK_MS, cleanLoadout, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import { padHints } from "./GamePad";
 import { GameStore } from "./GameStore";
 import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
@@ -86,6 +87,55 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
     return { client, store, sync };
 }
 
+describe("the sound's on and off", () => {
+    function createMuteClient() {
+        const { client, store } = createClient(createSim(), false);
+        const settings = { muted: false, volume: 0.6, music: 0.6 };
+        Object.assign(client, {
+            audio: {
+                settings,
+                setSettings: (changes: Partial<typeof settings>) =>
+                    Object.assign(settings, changes),
+            },
+        });
+        // As M or the orb do (onKeyPress is the constructor's)
+        const pressM = () => client.toggleMute(true);
+        const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
+        return { client, store, pressM, toasts };
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    test("M and the orb say which way it went in a run, only the last way, and nothing on the menus", () => {
+        const { client, store, pressM, toasts } = createMuteClient();
+        pressM();
+        expect(store.getSnapshot().audio.muted).toBe(true);
+        expect(toasts()).toEqual(["Sound off (M to turn it on)"]);
+        pressM();
+        expect(toasts()).toEqual(["Sound on"]);
+        pressM();
+        expect(toasts()).toEqual(["Sound off (M to turn it on)"]);
+        Object.assign(client, { sim: undefined, soundToast: undefined });
+        store.set({ toasts: [] });
+        pressM();
+        expect(store.getSnapshot().audio.muted).toBe(false);
+        expect(toasts()).toEqual([]);
+    });
+
+    test("the setting shows it itself, and a controller has no M to name", () => {
+        const { client, store, toasts } = createMuteClient();
+        client.toggleMute();
+        expect(store.getSnapshot().audio.muted).toBe(true);
+        expect(toasts()).toEqual([]);
+        vi.spyOn(padHints, "get").mockReturnValue("xbox");
+        client.toggleMute(true);
+        client.toggleMute(true);
+        expect(toasts()).toEqual(["Sound off"]);
+    });
+});
+
 describe("movement prediction", () => {
     test("is on unless it's been turned off, and is remembered", () => {
         const stored = new Map<string, string>();
@@ -128,15 +178,24 @@ describe("movement prediction", () => {
 });
 
 describe("a co-op player's loadout", () => {
-    // Their Lil' Zik looks, for their expert chest: only those, whatever their game sends
-    it("keeps only the looks a chest gives every time, from a list of strings", () => {
+    // Their raid chests' trophies, so their chest gives none twice: only those, whatever their
+    // game sends
+    it("keeps only raid chests' trophies, from a list of strings", () => {
         const loadout = makeLoadout({}, [], {}, undefined, undefined, ["lil_sot", "lil_xarp"]);
         expect([...cleanLoadout(loadout).trophiesFound]).toEqual(["lil_sot", "lil_xarp"]);
         const junk = {
             ...loadout,
-            trophies: ["lil_bloat", 7, null, "ghrazi_rapier", "nope", {}] as unknown as string[],
+            trophies: [
+                "lil_bloat",
+                7,
+                null,
+                "ghrazi_rapier",
+                "jar_of_dreams",
+                "nope",
+                {},
+            ] as unknown as string[],
         };
-        expect([...cleanLoadout(junk).trophiesFound]).toEqual(["lil_bloat"]);
+        expect([...cleanLoadout(junk).trophiesFound]).toEqual(["lil_bloat", "ghrazi_rapier"]);
         const notAList = { ...loadout, trophies: "lil_bloat" as unknown as string[] };
         expect(cleanLoadout(notAList).trophiesFound.size).toBe(0);
         expect(cleanLoadout(undefined).trophiesFound.size).toBe(0);
@@ -350,7 +409,13 @@ describe("the HUD", () => {
             updateHud(client, true);
             const buffs = store.getNumbers()!.buffs;
             expect(buffs).toEqual([
-                { id: "ring_of_life", name: "Ring of life", objId: 2570, harmful: false },
+                {
+                    id: "ring_of_life",
+                    name: "Ring of life",
+                    description: "Revives you once if you fall.",
+                    objId: 2570,
+                    harmful: false,
+                },
             ]);
             sim.tick += 50;
             updateHud(client);
@@ -439,6 +504,7 @@ describe("the HUD", () => {
         const bosses = [1022.5, 1048.5].map(
             (x) => sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
         );
+
         bosses[0].hp = bosses[0].maxHp / 4;
         bosses[1].hp = (bosses[1].maxHp * 3) / 4;
         const fraction = (index: number) => bosses[index].hp / bosses[index].maxHp;
@@ -701,6 +767,29 @@ describe("the frame cap", () => {
         // The title screen
         Object.assign(client, { sim: undefined, coopRun: undefined });
         expect(stopped(client)).toBe(true);
+    });
+});
+
+describe("the gear panel", () => {
+    test("is off unless it's been turned on, and is remembered", () => {
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        // Settings saved before there was such a thing
+        stored.set("rune-survivors-display", JSON.stringify({ damagePanel: true }));
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        const { client } = createClient(createSim(), false);
+        client.toggleGearPanel();
+        expect(loadDisplaySettings().gearPanel).toBe(true);
+        client.toggleGearPanel();
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        vi.unstubAllGlobals();
     });
 });
 
@@ -1409,11 +1498,11 @@ describe("saving", () => {
         },
     );
 
-    // For the expert chest, which gives a look not found yet
-    test("a solo run and a co-op loadout bring the save's Lil' Zik looks, only those", async () => {
+    // For the raid chests, which give nothing found already
+    test("a solo run and a co-op loadout bring the save's raid chest trophies, only those", async () => {
         expect.hasAssertions();
         const { client } = createSaving(true);
-        client.save.trophies = ["lil_bloat", "ghrazi_rapier", "lil_sot"];
+        client.save.trophies = ["lil_bloat", "jar_of_dreams", "ghrazi_rapier", "lil_sot"];
         const enterRun = vi.fn<(sim: Sim) => void>();
         Object.assign(client, {
             grid: createSim().grid,
@@ -1423,11 +1512,12 @@ describe("saving", () => {
         });
         await client.startRun("lumbridge");
         const sim = enterRun.mock.calls[0][0];
-        expect([...(sim.heroes[0].trophiesFound ?? [])]).toEqual(["lil_bloat", "lil_sot"]);
+        const raidOnes = ["lil_bloat", "ghrazi_rapier", "lil_sot"];
+        expect([...(sim.heroes[0].trophiesFound ?? [])]).toEqual(raidOnes);
         const loadout = (
             client as unknown as { getLoadout(): Parameters<typeof loadoutStats>[0] }
         ).getLoadout();
-        expect(loadout?.trophies).toEqual(["lil_bloat", "lil_sot"]);
+        expect(loadout?.trophies).toEqual(raidOnes);
     });
 
     test("a co-op map's forced adventurer determines the skill page", () => {
@@ -1444,6 +1534,38 @@ describe("saving", () => {
         expect(loadoutStats(loadout)).toEqual(
             getMetaStats(client.save, getCharacter("durial321").style),
         );
+    });
+
+    test("the co-op host plays everyone as the Avian Assaulter on Thanksgiving", () => {
+        const { client } = createSaving(true);
+        const members = [
+            { id: "host", name: "Host", characterId: "warrior", ready: true },
+            { id: "guest", name: "Guest", characterId: "ranger", ready: true },
+        ];
+        const room = { mapId: "thanksgiving", members, endless: false, hard: false };
+        const start = vi.fn();
+        Object.assign(client, { coop: { room, isHost: true, start } });
+        client.startCoopRun();
+        expect(start).toHaveBeenCalledOnce();
+        expect(
+            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
+        ).toEqual(["avian_assaulter", "avian_assaulter"]);
+    });
+
+    test("the co-op host plays an adventurer it hasn't got (a newer guest's) as the first", () => {
+        const { client } = createSaving(true);
+        const members = [
+            { id: "host", name: "Host", characterId: "wizard", ready: true },
+            { id: "guest", name: "Guest", characterId: "someone_new", ready: true },
+        ];
+        const room = { mapId: "lumbridge", members, endless: false, hard: false };
+        const start = vi.fn();
+        Object.assign(client, { coop: { room, isHost: true, start } });
+        client.startCoopRun();
+        expect(start).toHaveBeenCalledOnce();
+        expect(
+            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
+        ).toEqual(["wizard", CHARACTERS[0].id]);
     });
 
     test("a single skill refund is saved and refreshes the shop", () => {

@@ -3,6 +3,119 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.31.0 - 2026-11-11
+
+### Added
+
+- Thanksgiving Harvest, by Happi: a seasonal map in the Hosidius Vinery, open from the start.
+  Seven minutes of farmers, bandits, foxes and Chompy birds, with Professor Oddenstein, two Evil
+  Chickens and, at the end, the Freaky Forester, who rises again bigger. Enemies there drop cooked
+  turkeys to carve, for a feast or a fowl trick.
+- What your effects do, by Happi: hover over or hold one in the HUD to read it, and the pause menu
+  lists them all.
+- The Armoury's weapons and passives, by Happi: two new tabs list each one's levels, how it's
+  unlocked and what it evolves into, once you've made it.
+- A camera zoom slider on phones, by Happi: tap Zoom beside the timer.
+- New power-up, by GhostavoA: Polymorph. For 10 seconds enemies turn into harmless sheep, and
+  elites and bosses into golden sheep that still fight.
+- The sound's orb, by Jp66600: by the minimap, where the client's hitpoints orb is, and on the
+  title screen, it shows whether the sound's on and turns it off or on. Pressing M in a run says
+  which way it went.
+- Play again, by Jp66600: the results of any map you play on your own can start it again, not
+  only a boss fight's.
+- Menu keys, by Jp66600: Esc goes back from the map select, Skills, the Armoury, Quests, the
+  collection log and the invocation board, and Enter starts the run or presses the results'
+  main button.
+- Confirmations, by Jp66600: giving up asks first, in the game's own window, then shows what the
+  run found. So do refunding every skill, disbanding a party, importing a save and cloud save's
+  actions.
+- Coins short, by Jp66600: Skills, the Armoury and the Skip button say how many coins you're
+  short.
+- The Armoury's key, by Jp66600: a line under its title says what each border's colour means,
+  and pieces not found yet are marked with a "?".
+- The keyboard's controls, by Jp66600: the pause menu and Settings list them, and the pause menu
+  shows the run's last messages too.
+- Quest list, by Jp66600: it can hide the finished quests, and those under way come first.
+- Map modes, by Jp66600: a map's details say what endless, hard and expert do there, or what
+  opens them.
+
+### Changed
+
+- The HUD's equipment slots, by Happi: turn on Gear panel in Settings to have them under the
+  damage panel, in two columns you can hide (as big as the bag's slots with a mouse), and on a
+  phone too (hidden to start with).
+- Debuffs show before buffs in the HUD, by Happi.
+- The pause menu, by Happi: your stats come first, above your weapons and passives.
+- The Windows app keeps to the website's version of the game, by trippy22: Windows and website
+  players can play co-op together between releases too. Download the new app once to get it.
+- The Android app keeps to the website's version of the game too, by trippy22: on Wi-Fi, a new one
+  downloads in the background, and plays when you restart the game from its menu or reopen the app.
+- The keris partisans, by Okaeri: they're picked like the Ancient spells now. Only the plain
+  Keris partisan is offered on a level up, so once you've found a jewel in the Tombs of Amascut
+  you'll see a keris more often. At the plain one's level 2 you choose which keris it becomes:
+  plain, or one of your jewels'. It keeps its level and the bonus damage it came with (Rare or
+  better, where a jewel's keris came Very rare), and it's your only keris that run.
+- Theatre of Blood's closing rings, by trippy22: the next ring waits until the last has closed
+  in, so an enraged Maiden's rings no longer come back to back.
+- Item descriptions, by Jp66600: a potion lists its stats a line each, with their icons, then how
+  long they last with your effect duration. The bag's descriptions say an item's rarity too.
+- Easier to read, by Jp66600: secondary text, locked items and disabled buttons are lighter.
+  Penalties, defeats and unreached goals share one lighter red, and what's written over the world
+  and quest names have a black outline.
+- The keyboard's focus, by Jp66600: a clearer yellow ring, and a button pressed from the keyboard
+  or a controller keeps your place.
+- Windows, by Jp66600: screen readers announce them and the run's messages, and what's behind a
+  window can't be reached until it closes.
+- Skills, by Jp66600: the preset's own balance is labelled and explained, a maxed skill no longer
+  looks out of reach, and a line under the cards says how to refund a rank.
+- Settings, by Jp66600: your progress comes first, with when you last exported it, and the game
+  section is split into groups.
+- Picking a map, by Jp66600: a map beaten on hard has a double tick, the adventurer picked is
+  marked more clearly, and a map's name that's cut off shows whole on hover.
+- The HUD, by Jp66600: being poisoned says so on the hitpoints bar, and a level up says how many
+  more are coming.
+- The co-op room, by Jp66600: the host picks Invite only or Open to all, as when making the room,
+  instead of "Open: Off". A long name shows whole on hover, and the host sees why Start waits.
+- Easier to press, by Jp66600: the collection log's tabs, the version, the quest tracker's and
+  damage meter's buttons and the volume sliders, and a phone's weapon and passive slots.
+- A failed start, by Jp66600: the game says it couldn't start, with a button to reload.
+
+### Fixed
+
+- Raid chests could give a unique you already had, which did nothing: it was in your Collection
+  log already, and anything it unlocks was unlocked. The Theatre of Blood's and the Tombs of
+  Amascut's chests now only give ones you haven't found, in co-op too. Once you have everything a
+  chest holds, it says so. Fixed by Okaeri.
+- The Theatre of Blood's expert chest could give a Lil' Zik look you already had. It now gives
+  one you haven't got until you have all five. Fixed by Okaeri.
+- At high raid levels Akkha spent most of his fight doing Memory Blast, gone from the floor, one
+  after another. After each Memory Blast he now stays on the floor at least as long as it took, at
+  every raid level, so he's quicker to beat at all of them. Memory Blast is six steps at most, and
+  once one of his shadows is dead he comes back from it in that shadow's quarter, where he can be
+  hurt, not out of reach in the middle. Fixed by Okaeri.
+- Stat icons on tooltips, cards and the pause menu now show in Português (BR), and in any language
+  added later. Fixed by Iakee.
+- Ba-Ba's Shockwave, the pound round her, hit further out than anything showed: up to five tiles
+  with Shaking Things Up, while its dust only covered the ground near her, so it seemed to come
+  from nowhere. Its whole reach is now outlined in red, filling as it comes. Fixed by Okaeri.
+- Ba-Ba stomps on anyone standing right up against her, but nothing showed it, so it looked like
+  damage from nowhere. Now a red ring fills at her feet before each stomp, the first one waits a
+  moment so you can step back, and a message says what it is the first time. The Halloween
+  Mimic's stomp gets the same ring. Fixed by Okaeri.
+- In the Tombs of Amascut's rooms, enemies could come in right on top of you, like the Crondis
+  room's crocodiles where its corridors meet the palm, and bite at once. They now come in by a way
+  in that's clear of the party, or the furthest one. Fixed by Okaeri.
+- The Crondis room's poison clouds went on hitting past the end of their corridor, where none was
+  drawn, and once you'd done a path or two they came so close together that getting in to a
+  waterfall without being caught was luck. They now stop at the corridor's end, and there's
+  always a gap to time your way in. Fixed by Okaeri.
+- The results' buttons stay in view when there's more to show than fits. Fixed by Jp66600.
+- The Armoury's Back button no longer needs scrolling to. Fixed by Jp66600.
+- The pause menu's Give up and Resume stay in view when there's more to show than fits. Fixed by
+  Jp66600.
+- The evolve pulse, a boss's new phase and the XP bar hold still with the system's "reduce
+  motion" setting. Fixed by Jp66600.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added
@@ -36,8 +149,6 @@ the version in the corner).
 
 ### Fixed
 
-- The Theatre of Blood's expert chest could give a Lil' Zik look you already had. It now gives
-  one you haven't got until you have all five. Fixed by Okaeri.
 - On phones, the name of your special attack button was cut off. It now sits under the button.
   Fixed by Okaeri.
 - Beating a boss in the Tombs of Amascut now heals your whole party to full. Fixed by Okaeri.

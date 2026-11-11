@@ -239,7 +239,13 @@ export function GameApp(): JSX.Element {
             {loaded && <RendererCanvas renderer={loaded.renderer} />}
             <canvas className="game-overlay" ref={overlayRef} />
             {errorMessage ? (
-                <div className="game-status content-text">{errorMessage}</div>
+                <div className="game-status game-status-lost content-text">
+                    <p>{t("canvas.start_failed")}</p>
+                    <p>{errorMessage}</p>
+                    <button className="ui-button" onClick={() => window.location.reload()}>
+                        {t("save.reload")}
+                    </button>
+                </div>
             ) : graphicsLost ? (
                 <div className="game-status game-status-lost content-text">
                     <p>

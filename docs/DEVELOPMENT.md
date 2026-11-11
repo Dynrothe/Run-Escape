@@ -21,6 +21,7 @@ in a folder (asset paths are relative, so https://example.com/game/ works):
 ```
 index.html
 build.json
+game-files.json
 assets/
 caches/caches.json
 caches/chunks/<sha256>.bin
@@ -519,6 +520,81 @@ won't install an older APK over a newer one.
 The startup check compares game versions; an Android-only rebuild of the same game version still
 needs a manual install from releases.
 
+### Following the website on Android
+
+The APK's game is a release's, and the website is often on a later build, which co-op won't put
+together (Co-op, Versions). So, as on Windows (Following the website), an app built with
+`-PgameSiteUrl` (the `GAME_SITE_URL` repository variable in the release's `android` job; pull
+requests' and playable debug builds go without, so they play their own build) keeps to the
+website's build. Without it, nothing below happens, except that what an app built with it left in
+`filesDir/site` is cleared.
+
+1. **Each time the activity's made** (opening the app, Restart game once a build's ready, Try
+   again, Reopen), `MainActivity` picks the game to serve before the page loads: `SiteGames.pick`
+   takes the build `filesDir/site/current` names if it's whole and no older than the APK's
+   version. Whole (`readInstall`) means its marker, `verified.json`, is for that build, and every
+   file the marker lists, and every chunk its `caches/caches.json` lists that the APK hasn't, is
+   there at its size: a lost write or a full disk doesn't leave a broken game in front (their
+   sha256s were checked as they were written). Otherwise it's the APK's game. `GamePathHandler`
+   serves `/assets/game/` from that folder (AndroidX's `InternalStoragePathHandler`, which keeps
+   paths inside it), a cache chunk the folder hasn't from the APK (a chunk's named after its
+   bytes, so it's the same one), and everything else under `/assets/` from the APK, so **the
+   address is the same either way**, and saves stay where they are.
+2. **Then, off the UI thread** (`SiteUpdater`, at background priority, on one worker for the whole
+   app, so a new activity's update waits for the last one's to stop), `SiteGames.update` clears
+   every other build in `site/` and reads the website's `game-files.json` and
+   `caches/caches.json`: https only, no redirects, nothing cached, lists capped in size.
+   `SiteFiles.java` checks them as `desktop/siteFiles.ts` does: build ids, versions, sha256s,
+   sizes, paths that stay inside the game and aren't the cache or the marker, no two files
+   differing only in case, and a slim cache made for the same build. Both run the cases in
+   `desktop/siteFiles.cases.json`, so a new check's cases go there rather than in one side's tests.
+3. `whyNotFollow` refuses a build that needs a newer app than this one (`minAndroid`, below), one
+   made with other relay, run collector or cloud-save addresses than the app's (`RelayPolicy` would
+   block them), and, **unlike Windows**, one older than the APK's own version: a newer APK the
+   player installed isn't undone by a website that hasn't caught up, and its save stays writable.
+   The same version from another commit is followed, both ways. `minLauncher` is the Windows
+   launcher's, so the app doesn't look at it.
+4. If the APK's game is that build (`build.json`), `current` goes, and the next start plays the
+   APK's. If the folder in use is that build, nothing happens. Otherwise it's put together in
+   `site/.partial`: the marker first, then files the APK's game or the folder in use list with the
+   same sha256 (their `game-files.json`, or the marker) are copied, chunks by name, chunks the APK
+   has are left out (step 1 serves them), and the rest are downloaded a few at a time. Every file,
+   copied or downloaded, has to be exactly its listed size and sha256 (a chunk's name is its
+   sha256's start), and is synced to the disk; a bad copy is downloaded instead, and a bad
+   download stops it all. Then `caches.json` is written, the folder's renamed to `site/<build>`
+   and checked as step 1 would, and `current` is replaced in one rename.
+5. **Downloads wait for Wi-Fi.** On a metered network (mobile data, or a phone that can't say), the
+   copies are made and nothing's downloaded, and a phone moving onto mobile data stops after the
+   files it's on. A build bigger than an APK could be, or one that would leave the phone without
+   room to spare, isn't started (`MAX_BUILD_BYTES`, `KEEP_FREE_BYTES`).
+6. **What's done is kept.** A failure, mobile data or a cancel (a closing activity cuts its
+   connections and waits for its downloads to stop) leaves `.partial`, and the next try at the
+   same list keeps every file there that's still its size and sha256. One for another list is
+   thrown away.
+7. **It plays from the next time the game starts over**, never mid-run: once another build's
+   ready, a toast says so and the menu's Restart game becomes "Restart on the latest version",
+   which makes the activity again rather than reloading the page. Opening the app, Try again and
+   Reopen pick it up too. The old folder, still being served, stays until then.
+
+Offline, on a website without `game-files.json`, or with anything unexpected, it's logged
+(`SiteUpdater` in logcat) and the app plays what it has. As on Windows, whoever can upload to the
+website can ship code to the app's players. An installed build holds the game's scripts and the
+chunks the APK hasn't, mostly the scripts, since the cache's chunks rarely change. `AppUpdater`
+still offers new APKs as before, and a newer APK plays its own game until the website's past it.
+
+**`minAndroid`**, in `game-files.json`, is `MIN_ANDROID_APP` in `desktop/version.ts`: the oldest
+Android app that can play that build, by its version. An older app plays its APK's game instead.
+Raise it when the game needs something from the app that apps already out there don't have, such
+as an address `RelayPolicy.java` lets out or a message the page sends the app, and deploy such a
+build to the website only after its APK's released. Players on older apps then play their own
+release, and co-op only with players on it, until they install the new APK.
+
+Everything that needs no device is in `SiteFiles.java`, `SiteGames.java` and `LimitedText.java`,
+tested in `SiteFilesTest`, `SiteGamesTest` and `LimitedTextTest` (an install from a fake website,
+what's copied and downloaded, bad and missing files, resuming, mobile data, free space,
+cancelling, picking and clearing folders). `SiteUpdater` and `GamePathHandler` are only tried on
+a phone.
+
 **Google's developer verification** applies outside app stores too. Certified Android phones are
 starting to refuse new installs and updates of apps whose developer hasn't registered with Google:
 from 30 September 2026 in Brazil, Indonesia, Singapore and Thailand, and everywhere in 2027, as
@@ -541,8 +617,9 @@ request itself, and WebSockets are kept to the relay by the `Content-Security-Po
 
 The launcher only gets it in a new download, so players on an older one keep playing without
 Multiplayer until they fetch the new zip. Don't raise `minLauncher` for this: the game still runs.
-Desktop and web players share rooms only on the same build, so publish a release and deploy the
-website from the same commit.
+Desktop and web players share rooms only on the same build. A launcher with `GAME_SITE_URL` keeps
+to the website's (Following the website); without it, publish a release and deploy the website
+from the same commit.
 
 The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, so it plays offline
 the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
@@ -565,6 +642,8 @@ keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 | `gameUpdate.ts`        | Checks for, downloads, verifies and installs game updates         |
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
+| `siteFiles.ts`         | The website's `game-files.json`: reading, writing, `whyNotFollow` |
+| `siteUpdate.ts`        | Gets the website's build, and chooses it or a release at launch   |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
 | `release-files.ts`     | Makes the game zips, chunks, manifest and the changelog's notes   |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
@@ -611,7 +690,8 @@ The launcher updates the game's files by itself, not the launcher. At launch:
    renames that to `game/<version>` in the user data folder. Then it removes older ones. When it
    can, it downloads less (below).
 3. It plays the newest game folder it can run: an update, or the bundled files if those are newer,
-   as they are after unzipping a newer launcher.
+   as they are after unzipping a newer launcher. A launcher built with `GAME_SITE_URL` plays the
+   website's build when it can, and takes a release only when it can't (Following the website).
 
 Offline, rate limited (GitHub allows 60 requests an hour per address), a bad download, a skipped
 update: the game starts anyway with what it has, and `launcher.log` in the user data folder says
@@ -624,7 +704,8 @@ Downloads start only from this repository's release URLs, over https. GitHub the
 `release-assets.githubusercontent.com`, so redirects are checked one by one, which is why this uses
 Node's `fetch`: Electron's `net.fetch` fails on `redirect: "manual"`. That means it doesn't use
 Windows' proxy settings, so behind a proxy a player just gets no updates. A zip's entries are all
-checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`.
+checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`. The
+website's build comes only from under `GAME_SITE_URL`, with no redirects (Following the website).
 
 A release also carries the game in two parts: `game-<version>-lite.zip`, the game zip without
 `caches/chunks/`, and each of the slim cache's chunks as `cache-<chunk>.bin`. The manifest lists
@@ -639,6 +720,52 @@ Either way, a game whose `caches.json` lists a chunk it hasn't got isn't install
 
 The game's Cache API copy of the chunks is under `GAME_ORIGIN`, which never changes, so after an
 update the game reads the chunks it had from there, and drops the ones it no longer needs.
+
+### Following the website
+
+A release's game and the website's can be different builds, and co-op only puts players on the
+same build together (Co-op, Versions). So a launcher built with `GAME_SITE_URL` (a repository
+variable, like `COOP_URL`: `https://example.com/game/`) plays the website's build instead of
+the latest release, whatever its version. At launch:
+
+1. It reads the website's `game-files.json` and `caches/caches.json`, with a short time limit and no
+   redirects. `game-files.json` is written by every `bun run build` (`siteFilesPlugin` in
+   `vite.config.ts`): the build id, its version and `minLauncher`, the relay, run collector and
+   cloud-save addresses it was built with, and every file but the slim cache's, with its sha256.
+   The chunks are in `caches.json`, which has to be for the same build. The release check (Game
+   updates) starts at the same time, so a website that doesn't answer costs only its own time
+   limit, and the release is only taken if the website's build can't be (`updateForLaunch`).
+2. `whyNotFollow` refuses a build needing a newer launcher, or one built with other addresses than
+   the launcher's: the app only lets out its own, so that build would lose co-op or cloud saves.
+3. If the bundled game or an installed folder is that build already (its `build.json`), it plays
+   that. Otherwise it downloads the build into `site/<build>` in the user data folder: files the
+   game it's playing has (by sha256, whatever they're called) and chunks it has are copied, the
+   rest are downloaded a few at a time, each checked. Nothing's played until all of it's there.
+   Either way it notes the build in `site-build.json`, so that offline it plays that one, not a
+   build of the same version left in `site/` (one whose removal failed, say).
+4. It's served from `GAME_ORIGIN` like any other game folder, so saves, settings and the game's
+   copy of the cache stay where they are.
+
+If the website can't be reached, or has no `game-files.json` yet, or can't be followed, it takes the
+release instead, and offline it plays the newest it has (`pickGameFolder`: on the same
+version, the website's build wins). Only the website's build in use is kept. Skip for now, or
+closing the small window, skips both: a skipped download of the website's build doesn't become a
+download of the release.
+
+It follows the website back too: a website rolled back to an older build gets the app on it. If
+that's an older version, a save the newer one wrote is only read, not written, until the website
+moves on (Saves).
+Whoever can upload to the website can ship code to the app's players, as a release can.
+
+**Upload the whole of `dist/`** after `bun run build` and `bun run slim-cache`, `build.json` and
+`game-files.json` included. A launcher that finds a file that isn't what the list says, mid-upload
+say, takes the release as it would with the website down (so a newer release is downloaded and
+played, on another build than the website's), and tries the website again next launch.
+
+Launchers from before this only take releases, so players need the new launcher's zip once. The
+Android app does the same from its next APK, from the next time the game starts over rather than
+straight away, and on Wi-Fi only (Android, Following the website on Android). It has its own
+`minAndroid`, there.
 
 ### When the launcher has to change
 
@@ -725,8 +852,10 @@ src/game/
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
             offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
-            above), DescriptionButton (hover, focus and hold descriptions), CountryFlag (a
-            co-op player's flag), CoopScreen (the rooms, the lobby, the party in a run),
+            above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
+            (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
+            Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
+            off), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -758,6 +887,20 @@ Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.ic
 `client/GameAssets.ts`'s `getGameSpriteIds`, so `scripts/cache/sprites.ts check` and the
 deployment's slim cache cover them too. Equipped slots still show their item's model; small phones
 still hide the gear row.
+
+The sound has an orb like the client's, at the minimap's upper left where the client's hitpoints
+orb is (under the pause button on a touch screen, which has that place), and at the title
+screen's top right (`ui/SoundOrb.tsx`): the client's orb frame and an orb's fill, the Music tab's
+harp in its circle, and cloud save's "no" sign over that while the sound's off
+(`SOUND_ORB_SPRITES` in `content/titleIcons.ts`, in `getGameSpriteIds` too). The frame's wider
+than an item icon, so it's drawn at its own size by `ui/useSpriteFrame.ts`, as a flag is,
+rather than by `ItemIcon`. The harp (33x36) is taller than the orb, and no smaller music
+sprite turned up in the cache, so it's drawn smaller, pixelated to keep its strings. Its plate
+has M for the keyboard (`KeyHint`), and nothing on a touch screen or a controller, which have no
+key for it. On the title it comes after the menu in the page, so Tab reaches Singleplayer first.
+Pressing it turns the sound off or on. In a run, M and the orb say which way it went in a toast
+that replaces the last one; the sound setting doesn't, as it shows that itself
+(`GameClient.toggleMute`'s `announce`).
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
 learned the rev 241 and 242 opcodes, the map loader can take extra map squares as plain data
@@ -903,7 +1046,8 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
     - A checker's cells can hurt only within the circle drawn on them (`GroundPatternDef.round`),
       and a `boomerang` with `toEdge` flies to where its line leaves the `bossArena`
       (`Sim.throwReach`, `boxExit`), which the view's line uses too. A boss fight's HUD and
-      touch screen have no item bar, and its results a Retry (`GameClient.retry`).
+      touch screen have no item bar. Results played on your own, a boss fight's or any other's,
+      have a button to go again (`GameClient.retry`).
     - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button, and `TombsDef.ability`
       the raid's (`Sim.ability` reads either; in the Tombs it lands on the path's boss, or the
       Wardens' second- and third-phase Warden, and `damageShare` hits for a share of its
@@ -1030,6 +1174,36 @@ Her animations are picked by eye, as `classify-npc-seqs.ts` can't tell them apar
 of them, so none ends lying down. `find-npc-seqs.ts` scans every sequence and now runs out of the
 2.4 GB a heavy job gets; `classify-npc-seqs.ts` with a band of ids is what got them.
 
+### Collection log rewards
+
+- **`TrophyDef`** (`content/trophies.ts`): its `id` is stored in `SaveData.trophies`, so never
+  rename one players may have. `TrophySource.enemy` rolls on a loot-bearing kill of that enemy on
+  `mapId` and `turkey` when a Cooked turkey is carved, each till the run has found it; `boss`
+  rolls on that boss's kill; and `map` is given only on a win, with `requiresBoss` checked against
+  the run's `bossesKilled` and `hard` keeping it to hard mode. A `quest` source is given when the
+  quest is recorded, and on loading a save that had already done it.
+- **`PetDef`** (`content/pets.ts`): a pet's `id` is its trophy's, and its follower NPC is the
+  cache's variant marked as a follower, with its own idle and walk animations. The pet can be
+  taken out once its trophy is found.
+
+### Thanksgiving's Avian Assaulter
+
+The Avian Assaulter is Thanksgiving Harvest's `seasonalCharacter` and `only` there, so everyone
+plays them on that map, solo or in co-op, and they're in no roster. `CharacterDef.fixedOutfit`
+keeps their outfit's slots showing over passive and casket gear, without changing its stats. Their
+Rubber chicken is `pickOnly`: they start with it and can upgrade it, but it isn't offered to
+others. `maxWeapons` leaves room only for it, and `noItems` gives no passive slots and no casket
+item (caskets pay only coins). The map's `noLevelUpCoins` drops the coins from the level up's
+fallback once the chicken's maxed, leaving the shark: `Sim.roll` filters them after
+`rollChoices`, so the RNG goes as before. Endless never falls back, since the chicken levels on.
+The chicken's `WeaponDef.bloodHeal` rolls its heal on every hit, and each upgrade adds to
+`WeaponState.healGain` by the offer's rarity (`BLOOD_HEAL_GAIN` in `Sim.ts`); `bossDamage` adds damage against bosses for that weapon only. `damageAgainst` is the
+adventurer's bonus against enemies with those tags, on that hero's own damage only.
+`CharacterDef.overheadSpotAnim` is a looping effect over each hero, only for show: the Avian's is
+the cache's stun birds, without a stun. It's in the base bake and slim cache with the other
+adventurers' effects. `EnemyDef.minionAttacks` lets a summoned (non-boss) enemy fight with its
+`boss` attacks, as the Enraged Dark Chickens' surge does; set its `enrage.at` to 0.
+
 ### Props and opening cinematics
 
 - **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
@@ -1106,10 +1280,13 @@ moved into its boss room (`startRaidBoss`, `moveParty`), and once the boss is do
 raid points) and the next room starts. The last room's boss is the final boss, and its chest
 (`openRaidChest`) goes on the result. Raid wins are kept by the save like a campaign map's; hard
 opens after one, endless never does, and expert mode (`SimOptions.expert`, solo only for now) after
-a hard one. Expert's chest gives one of Lil' Zik's looks every time (`isEveryTimeTrophy`), one the
-player hasn't found while there's one left, so it goes by the looks in their save
-(`SimOptions.trophiesFound`, from `getEveryTimeTrophiesFound`). A co-op player's already go in
-their `Loadout` as `trophies`, which the relays pass as they are, ready for when rooms carry expert.
+a hard one. Expert's chest gives one of Lil' Zik's looks each clear (`isEveryTimeTrophy`) till
+they're all found. Every raid chest (the Theatre's, and the Tombs' `openTombsChest`) gives only
+trophies the hero hasn't found (`Sim.hasTrophy`): found this run, or in the save
+(`SimOptions.trophiesFound`, the `isRaidChestTrophy` ones from `getRaidChestTrophiesFound`). A
+roll with nothing left isn't made, and `RaidChest.purpleLeft` says whether a purple was there to
+find. A co-op player's go in their `Loadout` as `trophies` (the relays pass them as they are, and
+`cleanLoadout` keeps only those), so every copy rolls each hero's chest the same way.
 A hall's teleporter (`stepTeleporter`) asks before skipping to its boss,
 `SimOptions.raidTeleports` times a raid, in the halls `SimOptions.raidPortals` says
 (`getRaidPortals`: rooms whose boss the save has a kill of, in any form). The game draws the portal
@@ -1133,9 +1310,18 @@ slams are as wide, so there's no ring round a still boss to hit it from untouche
 something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
 them. A closing ring stands where it formed for `RING_HOLD` (`BulletPatternDef.hold`, a bullet's
 `wait` in `BulletPool`) before it comes in, hurting whoever walks into it meanwhile, and as long
-on hard and expert. Only a closing ring can take a `hold` (a test checks). Each boss has
-a mechanic of its own that makes the fight longer by making it harder, not by more hitpoints: the
-Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
+on hard and expert. Only a closing ring can take a `hold` (a test checks). `closingRing` in
+`theatre.ts` sets each ring's `interval` to its hold and time to close in plus `RING_REST`, so a
+ring's next volley forms only once the last is in. The boss stands only for its `channel` (as long
+as before), then attacks between the rings, but a boss with a ring that holds starts no other
+such attack until its last ring is in (`ringsUntil` on its state, in `Sim.startPattern`). That
+goes by the pattern's volleys and `interval`, so any ring with a `hold` needs an interval that
+leaves it time to close in, whoever's it is (a test checks every boss's). It's checked only where
+a boss picks its next attack, not for a chain, a follow or an opener. A nap that comes due while
+the Bloat's swarm is still coming waits for its last ring to go out, so none come while he's
+down, and meanwhile he fights on with nothing that fires more (`stepNap`). Each
+boss has a mechanic of its own that makes the fight longer by making it harder, not by more
+hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
@@ -1714,7 +1900,8 @@ it, see Measuring prediction at the end of this section.
   lost.
 - **Versions**: each player's game says its build (`__BUILD_ID__`, the version and commit), and a
   room only takes players on the host's, as different builds fall out of step. The slim cache
-  checks the same id (Hosting).
+  checks the same id (Hosting). The Windows and Android apps keep to the website's build when
+  they're built with `GAME_SITE_URL` (Following the website, and its Android section).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
   run, rather than everyone waiting on a copy that can't recover. It tells the relay first
@@ -2043,8 +2230,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
   `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
-  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, worn gear and
-  Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, HUD effects,
+  worn gear and Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  A button only describes with an `itemId`, and one showing only an icon or a countdown needs an
+  `aria-label` for its name.
   `ui/InventoryItem.tsx` uses it for both bag layouts, with the same `ItemView.lines` as the
   casket. Descriptions are portalled outside scrolling panels and the phone HUD's extra zoom,
   clamped to the viewport while keeping the UI's text scale. Whether the browser's rectangles
@@ -2063,7 +2252,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   quick tap still selects it. A scroll ends holds and hovers, but a focused tile's description
   follows it, since a controller scrolls its list to what it highlights. Escape dismisses them all.
   Buttons only listen on the window while described or pressed. Small phones keep worn gear and
-  its descriptions in the pause menu.
+  its descriptions in the pause menu, under the player's stats, weapons and passives. With a
+  mouse, the HUD's worn gear is a row under the passives (`.ui-gear-slots`), or the gear panel
+  under the damage panel when `DisplaySettings.gearPanel` is on (it's off by default); a phone's
+  HUD only shows it in the panel.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
@@ -2136,7 +2328,8 @@ of its own.
   have.
 - **What each button does** is listed by `PadControls` (`ui/PadHint.tsx`) in the pause menu and
   Settings while a pad's in use, and the title's hint shows its buttons. Change it with `RUN_KEYS`
-  or `MENU_KEYS`.
+  or `MENU_KEYS`. With no pad, and not on a touch screen, `KeyboardControls` lists the
+  keyboard's keys there instead, which follow `GameClient.onKeyPress`.
 
 The tests fake `navigator.getGamepads`. In a browser, an init script that replaces it does the same.
 
@@ -2282,8 +2475,8 @@ right-click shortcut or the refund button.
 Older games kept each page's purchase order (`upgradeOrder`) or the price paid for each rank
 (`upgradeRefunds`), because their prices depended on it. Loading drops both: every page can refund
 single ranks, whatever game bought them.
-Refund all clears only the selected class's ranks and spending. It's there whenever
-the page has ranks, even with no spending recorded.
+Refund all asks first, then clears only the selected class's ranks and spending. It's there
+whenever the page has ranks, even with no spending recorded.
 The Skills panel is as wide as the window allows, so every skill fits in a few rows of cards
 and the page needs no scrolling on a window at least about 1000x720 in the UI's own pixels (a
 bigger window draws the UI bigger, so it fits the same way) and on tablets. A narrower window
@@ -2294,7 +2487,9 @@ is room for a controller's highlight around the cards at its edges. On a touch s
 button's tap area reaches up beside the pips rather than making the cost's row taller. Adding a
 skill adds a card, so check the page still fits at 1024x768 and 1280x720. On a phone the
 one-line help under the title stays, though other panels drop their subtitle there: it says which
-preset an adventurer uses. Keep it to one line at 667 wide.
+preset an adventurer uses. Keep it to one line at 667 wide: its second sentence
+(`ui-shop-help-coins`) and the refund hint under the cards are left out there, as the
+balance's label says as much.
 
 ### Languages
 
@@ -2328,14 +2523,56 @@ in `i18n/store.ts`.
   `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
   `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is
   keyed by its text, not its place, so a changed line is a new key and the test fails on the old
-  one's translations until they're removed. `ui.json` and `ui-misc.json` are written by hand.
+  one's translations until they're removed. `ui.json`, `ui-misc.json` and `ui-ux.json` are written
+  by hand.
 - Numbers go through `fmtNum`, lists through `list` (in English as the game always wrote them, "a,
   b and c") and dates through `dateLocale()` (in English, the browser's own format). Their `Intl`
   formatters are kept, as numbers are formatted every frame.
+- Stat icons (`statIconFor` in `content/statIcons.ts`) need no code per language: they go by a
+  line's English, never by a language's words. A line the game builds from a stat (`formatStats`,
+  `weaponStats`, a passive's value) is a `StatText` that carries its English, and `StatLine` takes
+  it as `english`. A text the language files hold goes back to its English through the files'
+  keys (`englishOf`), so it gets exactly its English's icon, none if the English has none. A new
+  line built from a stat must carry its English, or it loses its icon in other languages. A line
+  that isn't a stat gives `StatLine` its `icon` (a potion's duration has `DURATION_ICON`).
+  `statIcons.test.ts` runs every language in `LANGS` over every such line, so a new language is
+  checked by adding it there.
 - Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give
   keys there, and `tr()` and `tl()` English.
 - The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
   whatever the machine's language (`src/setupTests.ts`).
+
+### Menus' keys and windows
+
+A screen answers Escape and Enter through `useMenuKeys` (`ui/menuKeys.ts`). Enter on a button
+reached with Tab or the arrows is that button's; on one that was only clicked it's the screen's, so
+a player can click a map and press Enter. A controller's Enter is left out, as its south button
+already presses what's highlighted. Results pass `guardMs`, because Escape is also the pause key
+and a run can end just as it's pressed. After a click, buttons call `releaseFocus` rather than
+`blur()`, which leaves a press from the keyboard or a controller where it is.
+
+A window over a screen uses `useDialog` (`ui/useDialog.ts`): its role and title for screen
+readers, the focus on the window itself (a level up can open in the middle of a key press, so never
+on a button in it), and everything outside it inert. Toasts stay out of the inert part, so they're
+still announced, and so do other windows, such as the language notice over every screen, which can
+still be answered. Co-op's pause menu passes `modal: false`, as the run goes on behind it.
+
+Anything irreversible asks with `useConfirm` (`ui/ConfirmDialog.tsx`), not the browser's `confirm`:
+the button says what it does, the focus starts on the way out, and the screen behind doesn't hear
+the keys. It's portaled over every screen and window, so it makes them all inert with
+`inertOthers(..., { spareWindows: false })`, except the toasts inside them.
+
+### Text colours
+
+Text on the stone and cards takes its colour from the `--ui-text-*` and `--ui-green-text`
+variables in `ui/GameUi.css`. `--ui-text-dim`, `--ui-text-faint` and `--ui-green-text` reach 4.5:1
+on the stone, and `--ui-text-locked` and `--ui-text-disabled`, for locked cards and disabled
+buttons, on a card's darker brown. `--ui-red-text`, for what's gone wrong or isn't reached yet,
+reaches it on a card (about 3.3:1 on the stone), as a card faded for being out of reach still says
+in it how many coins it's short. `--ui-quest-red-text`, the quest tab's red for quests not
+started, was picked for its tone and is well under that, with the outline quest names have.
+`--ui-outline` is for text over the world and quest names. A button doesn't inherit it, so one
+over the world sets `text-shadow` itself.
 
 ### Notice
 

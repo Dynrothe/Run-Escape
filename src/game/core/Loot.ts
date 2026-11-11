@@ -8,10 +8,11 @@ import {
     getGear,
     getItem,
     getVariantScale,
+    utilityDescription,
 } from "../content/items";
 import { RARITIES, RARITY_ORDER, Rarity, rollRarityFrom } from "../content/rarity";
 import { SETS, countSetPieces, getItemSet, getSetPieces } from "../content/sets";
-import { formatStats } from "../content/stats";
+import { StatText, formatStats } from "../content/stats";
 import { CasketTier, GearSlot, ItemDef, SetDef, StatKey } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { Rng } from "./Rng";
@@ -380,9 +381,15 @@ export function getAlchValue(item: ItemDef, greed: number, upgrades = 0): number
     );
 }
 
-// What an item does, a line per stat or effect
-export function describeItem(item: ItemDef, upgrades = 0): string[] {
-    return item.kind === "gear" ? formatStats(getGearStats(item, upgrades)) : [item.description];
+// What an item does, a line per stat or effect. A potion that lasts a while is its stats, a
+// line each, as gear is, rather than its sentence (how long is ItemView's seconds).
+export function describeItem(item: ItemDef, upgrades = 0): StatText[] {
+    if (item.kind === "gear") {
+        return formatStats(getGearStats(item, upgrades));
+    }
+    return item.use.kind === "buff"
+        ? formatStats(item.use.stats)
+        : [{ text: utilityDescription(item) }];
 }
 
 // The slot a utility item would go in: its own stack, else the first empty one

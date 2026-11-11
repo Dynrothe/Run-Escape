@@ -11,6 +11,7 @@ import { fmtNum, t, tl } from "../i18n";
 import { Coins } from "./Coins";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
+import { useMenuKeys } from "./menuKeys";
 
 // Every evolution, after the client's Collection log. What it takes is always
 // shown; what it makes stays ??? until it's been made in a run. Then a tab for
@@ -32,6 +33,7 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
         setReward(0);
     };
     const found = rewards.filter((r) => r.found).length;
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-log">

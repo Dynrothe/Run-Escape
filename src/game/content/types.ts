@@ -81,7 +81,8 @@ export function emptyStats(): Stats {
 
 // What some weapons hit harder (the Ivandis flail and undead, vampyres)
 // kalphite: the kalphites and the scarabs (Kephri too), for the keris partisans
-export type EnemyTag = "undead" | "vampyre" | "kalphite";
+// bird: chickens and Chompy birds, for the Avian Assaulter (CharacterDef.damageAgainst)
+export type EnemyTag = "undead" | "vampyre" | "kalphite" | "bird";
 
 export type EnemyDef = {
     id: string;
@@ -124,6 +125,10 @@ export type EnemyDef = {
     // Bosses that fight with attacks of their own (instead of hitting
     // whatever they touch)
     boss?: BossDef;
+    // Fights with its boss attacks even as an ordinary enemy (a summoned
+    // minion): no boss bar, drops or boss rules, and its enrage never comes
+    // (set enrage.at to 0)
+    minionAttacks?: boolean;
     // Drawn as a player in one of these outfits (picked at random as each one
     // turns up) instead of as the NPC: the fun maps' scammers, pkers and
     // noobs. npcId is unused then.
@@ -438,7 +443,8 @@ export type BulletPatternDef = {
     spacing?: number;
     distance?: number;
     // Closing rings only (a test checks): seconds it stands where it formed before it closes in,
-    // to find the way out
+    // to find the way out. Its interval must leave time for it to close in (a test checks), and
+    // the boss picks no other ring that holds until the last is in (BossState.ringsUntil).
     hold?: number;
     // Rings and spirals: out from where the nearest player stood as it began (a thrown boulder
     // bursting where it lands), rather than from the boss
@@ -538,6 +544,12 @@ export type GroundPatternDef = {
     locId?: number;
     spotAnim?: number;
     fit?: number;
+    // Its reach outlined in red too, filling as it comes, as a swing's circle is: for a look that
+    // doesn't show how far it hits (Ba-Ba's shockwave, a puff of dust at her feet that hit up to
+    // five tiles out with Shaking Things Up, so players took it as damage from nowhere). Drawn as a
+    // circle at its radius: not for a square (a checker's cell) or a fitted mark. Try fit first: a
+    // look that can be fitted to its reach needs no overlay.
+    edge?: boolean;
     // A square spot (a checker's cell) hurts only within the circle drawn on it (its radius
     // times fit), not to its corners: what's seen is what's hit
     round?: boolean;
@@ -698,6 +710,8 @@ export type AkkhaDef = {
     forms: string[];
     // How bright his room is for his fight (drawn only), in place of the Tombs' dimmer ambient
     ambient: number;
+    // Attacks between his specials. After Memory Blast, his next also waits till he's been back on
+    // the floor as long as it took (Sim.startAkkhaSpecial), however many attacks he's made
     specialEvery: number;
     elements: AkkhaElementDef[];
     // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the
@@ -858,6 +872,8 @@ export type BossAttackDef = {
     // Surges: tiles either side of the lane's middle.
     // Projectiles: each one's hit radius (0.35 tiles unless set).
     radius?: number;
+    // Surges: total length of the lane; otherwise it runs across the arena.
+    surgeLength?: number;
     // Swings: hits only a wedge this many radians across, in the way the boss
     // faced as it began, and under the boss (around it, underRadius tiles).
     // coneAlpha: how much more solid its wedge and the circle under the boss are drawn: a big
@@ -880,6 +896,10 @@ export type BossAttackDef = {
     castSpotAnim?: number;
     spotAnim?: number;
     impactSpotAnim?: number;
+    // Projectiles: an item drawn in flight instead of spotAnim (Oddenstein's potions), this
+    // many times its usual size
+    projectileObjId?: number;
+    projectileScale?: number;
     // Summons: what comes, and how many.
     // beside: they turn up by the player rather than the boss.
     // holds: the player can't move until they're dead or this many seconds
@@ -1364,9 +1384,20 @@ export type BossDef = {
     // to stand over you; other melee ones walk up
     keepDistance?: number;
     // Standing under it hurts every interval seconds for damage, then a
-    // damage more each time, up to max; stepping out starts it over (the
-    // Mimic's stomp)
-    stomp?: { radius: number; interval: number; damage: number; max: number; sound?: number };
+    // damage more each time, up to max (the Mimic's stomp). It starts over once nobody's been
+    // under it for first seconds (interval without it): a shorter step out keeps the count and
+    // when the next comes, though one that came due meanwhile fills its ring again before it
+    // lands. The first comes first seconds after stepping under, each marked by a ring filling at
+    // its feet (GameView), and message is said the first time anyone's under it in the fight.
+    stomp?: {
+        radius: number;
+        interval: number;
+        damage: number;
+        max: number;
+        sound?: number;
+        first?: number;
+        message?: string;
+    };
     // Dharok's set effect: hits get stronger as he loses hitpoints, up to
     // this much more at none left (1 = double)
     wretched?: number;
@@ -1682,6 +1713,12 @@ export type WeaponDef = {
     // damage, up to max, with this spot animation on them (the Sanguinesti
     // staff; projectiles, auras and strikes)
     lifesteal?: { chance: number; fraction: number; max: number; spotAnim: number };
+    // A hit has this chance of healing a flat amount (the Amulet of blood
+    // fury's way), and each upgrade raises both by its rarity (the Rubber
+    // Chicken). Checked on every hit, not once a second.
+    bloodHeal?: { chance: number; hp: number; maxChance: number; spotAnim: number };
+    // Extra damage against bosses (0.2 = +20%)
+    bossDamage?: number;
     // Orbits: the items circling the player, one for each in turn
     orbitObjIds?: number[];
     // Brought in by a task on a map, like an adventurer; in from the start
@@ -1856,20 +1893,30 @@ export type CharacterDef = {
     startingWeapon: string;
     // Worn items by equipment slot
     equipment: Partial<Record<number, number>>;
+    // The outfit stays on over gear from passives and caskets (the Avian Assaulter's chicken)
+    fixedOutfit?: boolean;
+    // Takes no gear, passives or utility items: caskets give only coins
+    noItems?: boolean;
+    // A spot animation looping over their head, only for show (the Avian Assaulter's birds)
+    overheadSpotAnim?: number;
     // Identity kits (hair, jaw, torso, arms, hands, legs, feet) and body
     // colours (hair, torso, legs, feet, skin), when they're not the default
     // look (Durial321's long white hair)
     kits?: number[];
     colors?: number[];
     bonus: Partial<Stats>;
+    // Weapons carried at once, in place of the usual and the shop's extra slots
+    maxWeapons?: number;
+    // Their hits do this much more to enemies with any of these tags (0.15 = +15%)
+    damageAgainst?: { tags: EnemyTag[]; damage: number };
     // A revive of their own (bonus.revival) as the HUD shows it, beside the
     // shop's Ring of life: the Pyromancer's phoenix
     reviveLook?: { name: string; objId: number };
     // Always available when unset
     unlock?: UnlockTask;
-    // Played on this map alone (a boss fight's, MapDef.fight.character), and
-    // nowhere else: never in the roster, never unlocked, never counted (the
-    // Inquisitor, Phosani's)
+    // Played on this map alone (a boss fight's, MapDef.fight.character, or a seasonal map's,
+    // MapDef.seasonalCharacter), and nowhere else: never in the roster, never unlocked, never
+    // counted (the Inquisitor, Phosani's)
     only?: string;
 };
 
@@ -1979,6 +2026,14 @@ export type MapDef = {
     scaperune?: boolean;
     // A seasonal event: open from the start, outside the campaign's chain
     seasonal?: boolean;
+    // Everyone plays this adventurer here, one made for the map (CharacterDef.only: the Avian
+    // Assaulter at Thanksgiving Harvest)
+    seasonalCharacter?: string;
+    // Random events that never turn up here (RandomEventDef ids)
+    noRandomEvents?: string[];
+    // With nothing left to level, a level up offers only the shark, not the coins (Thanksgiving
+    // Harvest, whose one weapon is maxed early)
+    noLevelUpCoins?: boolean;
     // One boss fight and nothing else (Phosani's Nightmare): no waves, no
     // picks and no items, and its final boss rises as the run begins. Outside
     // the campaign's chain like a seasonal map, and open once requires (a map
@@ -3025,7 +3080,9 @@ export type UtilityDef = {
     name: string;
     objId: number;
     rarity: Rarity;
-    description: string;
+    // What it does, in a sentence. A buff has none: its stats are its lines, then how long
+    // they last (describeItem).
+    description?: string;
     use: ItemUse;
     unlock?: UnlockTask;
 };
@@ -3113,6 +3170,8 @@ export type PowerUpEffect =
       }
     // Opens as a treat or a trick (see trickOrTreat.ts)
     | { kind: "pumpkin" }
+    // Carved as a feast or a fowl trick (see TurkeyDay.ts)
+    | { kind: "cooked_turkey" }
     // Everything within range runs laps around the player at this many times
     // its speed, radius tiles out, and can't attack; a line for the player to
     // shout
@@ -3127,7 +3186,59 @@ export type PowerUpEffect =
     // A light: bonus tiles on the player's own light (LightingDef.player), or a light of its own
     // that big, for seconds (Effect duration stretches it), shrinking back over the last fade
     // seconds. Its look is the player's light's, or the lantern's. Only on a map with lighting.
-    | { kind: "light"; bonus: number; seconds: number; fade: number; look?: LightLook };
+    | { kind: "light"; bonus: number; seconds: number; fade: number; look?: LightLook }
+    // Everything on the map as it's used turns into a sheep for seconds (Effect duration
+    // stretches it), one of sheep at random, wandering about at speed times its own pace and
+    // stopping to graze, unable to hurt anyone; it dies as one too. Elites and bosses turn into
+    // golden, drawn at its bossScale for a boss. Now and then an ordinary enemy turns into the
+    // penguin instead (penguin.chance), which lets its escapees out when it's killed, or the rare
+    // one (rare.chance), which wanders off away from the player. Every so often one of them says
+    // shout (each about every shoutSeconds), with one of shoutSounds, unless its look has its
+    // own. Whatever turns up while it lasts is turned too, till the end. What can't be hit, and
+    // ordinary enemies that can't move or carry a flag, stay as they are (Sim.canPolymorph).
+    | {
+          kind: "polymorph";
+          seconds: number;
+          speed: number;
+          sheep: PolymorphLook[];
+          golden: PolymorphLook & { bossScale: number };
+          penguin: PolymorphLook & { chance: number; escapees: PolymorphEscapees };
+          rare: PolymorphLook & { chance: number };
+          shout: string;
+          shoutSeconds: number;
+          shoutSounds: number[];
+      };
+
+export type PolymorphEffect = Extract<PowerUpEffect, { kind: "polymorph" }>;
+
+// What runs out of a polymorphed penguin when it's killed: count NPCs, off away from the player at
+// speed tiles a second for seconds, drawn at scale. Looks only: they're not in the sim.
+export type PolymorphEscapees = {
+    npcId: number;
+    walkSeq: number;
+    count: number;
+    speed: number;
+    seconds: number;
+    scale: number;
+};
+
+// Which of a polymorph's animals something's turned into
+export type PolymorphKind = "sheep" | "golden" | "penguin" | "rare";
+
+// What a polymorphed enemy is drawn as: an NPC, at scale whatever size the enemy itself was (a
+// boss at the golden look's bossScale). deathSeq -1 sinks it, as an enemy with no death animation
+// does. attackSeq plays while one that fights on (a golden sheep) attacks. shout and shoutSounds
+// stand in for the polymorph's own.
+export type PolymorphLook = {
+    npcId: number;
+    idleSeq: number;
+    walkSeq: number;
+    deathSeq: number;
+    attackSeq?: number;
+    scale: number;
+    shout?: string;
+    shoutSounds?: number[];
+};
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
 // with the player (GameAssets.getPowerUpLookRequests), so it's on at once.
@@ -3143,6 +3254,8 @@ export type PowerUpDef = {
     objId: number;
     // Scenery drawn on the ground instead (the set-up cannon)
     locId?: number;
+    // Drawn this many times bigger on the ground than other power-ups
+    scale?: number;
     // Relative chance of being the one that drops (0: it drops some other way)
     weight: number;
     // Its loot beam and minimap dot, when it isn't POWER_UP_COLOR

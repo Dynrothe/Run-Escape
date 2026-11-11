@@ -15,6 +15,15 @@ export const CLOUD_SAVE_SPRITES = {
     problem: 940,
 } as const;
 
+// The sound's orb (ui/SoundOrb.tsx): the client's orb frame and an orb's fill, as by its minimap,
+// with the Music tab's harp in the circle, and cloud save's "no" sign over it while it's off
+export const SOUND_ORB_SPRITES = {
+    frame: 1071,
+    fill: 1063,
+    music: 910,
+    off: CLOUD_SAVE_SPRITES.problem,
+} as const;
+
 export const COLLECTION_LOG_OBJ = 22711;
 
 // The client's own back-arrow button, on a bought skill to refund a rank. Also kept in the slim

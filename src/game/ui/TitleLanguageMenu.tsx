@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { LANGS, Lang, setLang, t, useLang } from "../i18n";
 import { LanguageName } from "./LanguageSetting";
 import "./TitleLanguageMenu.css";
+import { releaseFocus } from "./menuKeys";
 
 const EXIT_DURATION_MS = 180;
 const LEAVE_DELAY_MS = 140;
@@ -188,7 +189,7 @@ export function TitleLanguageMenu(): JSX.Element {
                                     }
                                     aria-pressed={isCurrent}
                                     onClick={(e) => {
-                                        e.currentTarget.blur();
+                                        releaseFocus(e);
                                         handleSelect(id);
                                     }}
                                 >
