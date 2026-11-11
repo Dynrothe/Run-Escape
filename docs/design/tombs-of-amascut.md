@@ -437,8 +437,12 @@ animations from a lister of those whose model or animation is in the raid's rang
       element's orbs, bright in its colour (drawn only). Four steps, one more every two path
       levels, up to `memory.most`. He comes back where he vanished, or with a shadow of his dead,
       just inside its quarter (`Sim.akkhaReappear`), where he can be hurt. His next special waits
-      till he's been back as long as he was gone, and `AkkhaDef.specialGap` at least, however many
-      attacks he's made.
+      till he's been back as long as he was gone, however many attacks he's made, at every raid
+      level. That was for 500, where every special's a blast, but it's easier everywhere: against
+      0.30.0 (November 2026, `ROOM=akkha` sweep, 10 seeds of each style), Entry with nothing
+      bought went from 14 wins of 30 to 21, in a median 11 to 13 minutes, not 18 to 21. Expert with
+      everything went from 0 of 30 to 4. Normal stayed at 0 or 1, with the bot held at his
+      shadows either way.
     - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
       leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
       Feeling Special drops one three tiles ahead too.

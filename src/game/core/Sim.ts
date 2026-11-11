@@ -689,10 +689,17 @@ export type SimOptions = {
 
 export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
 
-// A raid's chest at the end: the points it went by, the chance of a purple they gave, and the
+// A raid's chest at the end: the points it went by, the chance of a purple they gave, whether
+// there was a purple left to find (not once they're all found: no chance to show then), and the
 // trophies in it
 // (The Tombs of Amascut's goes by its raid level, `level`, and has no points.)
-export type RaidChest = { points: number; chance: number; found: string[]; level?: number };
+export type RaidChest = {
+    points: number;
+    chance: number;
+    purpleLeft: boolean;
+    found: string[];
+    level?: number;
+};
 
 // The Tombs of Amascut's summary on the result screen, as OSRS's raid board has it: the raid
 // level and what made it, each path's time and the Wardens', the party's wipes, and each
@@ -703,7 +710,8 @@ export type TombsSummary = {
     paths: { id: string; name: string; seconds: number }[];
     wardensSeconds?: number;
     wipes: number;
-    party: { name: string; points: number; deaths: number; chance: number; you: boolean }[];
+    // chance: of a purple, none with no purple left to find (RaidChest.purpleLeft)
+    party: { name: string; points: number; deaths: number; chance?: number; you: boolean }[];
     // A time limit invocation's: its minutes, and whether the raid was in time (the chest's raid
     // level drops by `drop` if not)
     timeLimit?: { minutes: number; drop: number; met: boolean };
@@ -1051,7 +1059,8 @@ export type AkkhaFight = {
         // Where he vanished from, to reappear there (in the quarter he's been drawn into)
         from: { x: number; y: number };
     };
-    // Not before this tick does his next special start (AkkhaDef.specialGap)
+    // Not before this tick does his next special start: after Memory Blast, once he's been back
+    // on the floor as long as he was gone, however many attacks he's made
     readyTick: number;
     orbsUntil: number;
     // Detonate: when the marked go off, and whether each's an X (Feeling Special) or a plus
@@ -5933,12 +5942,11 @@ export class Sim {
             fight.lastTiles = this.heroes.map((hero) => this.akkhaTile(hero.player));
             this.emit({ type: "notice", message: def.orbs.message });
         }
-        // After Memory Blast, his next once he's been back on the floor as long as he was gone,
-        // and specialGap at least
+        // After Memory Blast, his next once he's been back on the floor as long as he was gone
+        // (at raid level 500 every special's a blast, and he was hardly ever on the floor)
         if (fight.memory) {
             const ends = fight.memory.showEnd + fight.memory.burst * fight.memory.order.length;
-            const gone = ends - this.tick;
-            fight.readyTick = ends + Math.max(gone, secondsToTicks(def.specialGap));
+            fight.readyTick = ends + (ends - this.tick);
         }
         const others = def.forms.filter((id) => id !== boss.def.id);
         this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
@@ -11214,6 +11222,7 @@ export class Sim {
             hero.raidChest = {
                 points: hero.raidPointsEarned,
                 chance,
+                purpleLeft: pool.length > 0,
                 found: found.map((t) => t.id),
             };
             this.emit(
@@ -11223,7 +11232,7 @@ export class Sim {
                         found.length > 0
                             ? `A purple chest! ${found.map((t) => this.findTrophy(t)).join(" ")}`
                             : this.noUniqueNotice(
-                                  chance,
+                                  hero.raidChest,
                                   pool.length === 0 && hardPool.length === 0,
                               ),
                 },
@@ -11235,12 +11244,12 @@ export class Sim {
 
     // A raid chest's notice when it gave nothing: everything's found already, or no purple left to
     // find but a roll of its own made (no chance to show), or the purple's chance
-    private noUniqueNotice(chance: number, allFound: boolean): string {
+    private noUniqueNotice(chest: RaidChest, allFound: boolean): string {
         if (allFound) {
             return "The chest holds nothing you haven't found already.";
         }
-        return chance > 0
-            ? `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`
+        return chest.purpleLeft
+            ? `The chest holds no unique this time (${Math.round(chest.chance * 100)}% chance).`
             : "The chest holds no unique this time.";
     }
 
@@ -11284,6 +11293,7 @@ export class Sim {
             hero.raidChest = {
                 points: Math.round(hero.tombsPoints),
                 chance,
+                purpleLeft: purples.length > 0,
                 found: found.map((t) => t.id),
                 level,
             };
@@ -11294,7 +11304,7 @@ export class Sim {
                         found.length > 0
                             ? (purple ? "A purple chest! " : "") +
                               found.map((t) => this.findTrophy(t)).join(" ")
-                            : this.noUniqueNotice(chance, missing.length === 0),
+                            : this.noUniqueNotice(hero.raidChest, missing.length === 0),
                 },
                 true,
             );
@@ -11368,7 +11378,11 @@ export class Sim {
                 name: hero.name,
                 points: Math.round(hero.tombsPoints),
                 deaths: hero.tombsDowns,
-                chance: hero.raidChest?.chance ?? this.tombsChance(hero),
+                chance: hero.raidChest
+                    ? hero.raidChest.purpleLeft
+                        ? hero.raidChest.chance
+                        : undefined
+                    : this.tombsChance(hero),
                 you: hero === this.hero,
             })),
         };

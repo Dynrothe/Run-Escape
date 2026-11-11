@@ -698,10 +698,9 @@ export type AkkhaDef = {
     forms: string[];
     // How bright his room is for his fight (drawn only), in place of the Tombs' dimmer ambient
     ambient: number;
+    // Attacks between his specials. After Memory Blast, his next also waits till he's been back on
+    // the floor as long as it took (Sim.startAkkhaSpecial), however many attacks he's made
     specialEvery: number;
-    // After Memory Blast, he's on the floor to be hit as long as it took, and specialGap seconds at
-    // least, before his next special, however many attacks he's made
-    specialGap: number;
     elements: AkkhaElementDef[];
     // Memory Blast, Simon says: he vanishes, the symbols light up one after another, each beside the
     // last (never across), flash seconds each and gap between; then, burst seconds apart (quick

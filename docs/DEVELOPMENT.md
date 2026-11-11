@@ -1233,10 +1233,13 @@ moved into its boss room (`startRaidBoss`, `moveParty`), and once the boss is do
 raid points) and the next room starts. The last room's boss is the final boss, and its chest
 (`openRaidChest`) goes on the result. Raid wins are kept by the save like a campaign map's; hard
 opens after one, endless never does, and expert mode (`SimOptions.expert`, solo only for now) after
-a hard one. Expert's chest gives one of Lil' Zik's looks every time (`isEveryTimeTrophy`), one the
-player hasn't found while there's one left, so it goes by the looks in their save
-(`SimOptions.trophiesFound`, from `getEveryTimeTrophiesFound`). A co-op player's already go in
-their `Loadout` as `trophies`, which the relays pass as they are, ready for when rooms carry expert.
+a hard one. Expert's chest gives one of Lil' Zik's looks each clear (`isEveryTimeTrophy`) till
+they're all found. Every raid chest (the Theatre's, and the Tombs' `openTombsChest`) gives only
+trophies the hero hasn't found (`Sim.hasTrophy`): found this run, or in the save
+(`SimOptions.trophiesFound`, the `isRaidChestTrophy` ones from `getRaidChestTrophiesFound`). A
+roll with nothing left isn't made, and `RaidChest.purpleLeft` says whether a purple was there to
+find. A co-op player's go in their `Loadout` as `trophies` (the relays pass them as they are, and
+`cleanLoadout` keeps only those), so every copy rolls each hero's chest the same way.
 A hall's teleporter (`stepTeleporter`) asks before skipping to its boss,
 `SimOptions.raidTeleports` times a raid, in the halls `SimOptions.raidPortals` says
 (`getRaidPortals`: rooms whose boss the save has a kill of, in any form). The game draws the portal

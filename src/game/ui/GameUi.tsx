@@ -1150,10 +1150,10 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
                     something, the Tombs' jewels or expert's looks) */}
                 {t(
                     chest.level !== undefined
-                        ? chest.chance > 0
+                        ? chest.purpleLeft
                             ? "ui.raid.chest.points_level"
                             : "ui.raid.chest.points_level_none"
-                        : chest.chance > 0
+                        : chest.purpleLeft
                           ? "ui.raid.chest.points"
                           : "ui.raid.chest.points_none",
                     {
@@ -1248,7 +1248,12 @@ function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
                                 <td>{player.name || "You"}</td>
                                 <td>{player.points.toLocaleString("en-GB")}</td>
                                 <td>{player.deaths}</td>
-                                <td>{Math.round(player.chance * 100)}%</td>
+                                {/* None with no purple left to find, as their chest's line */}
+                                <td>
+                                    {player.chance === undefined
+                                        ? "–"
+                                        : `${Math.round(player.chance * 100)}%`}
+                                </td>
                             </tr>
                         ))}
                         {tombs.party.length > 1 && (

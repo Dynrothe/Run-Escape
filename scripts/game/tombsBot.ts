@@ -2763,7 +2763,9 @@ export class TombsLog {
         for (const player of board.party) {
             console.log(
                 `  ${player.name || "bot"}: ${player.points} points, ${player.deaths} deaths, ` +
-                    `${Math.round(player.chance * 100)}% purple` +
+                    (player.chance === undefined
+                        ? "no purple left"
+                        : `${Math.round(player.chance * 100)}% purple`) +
                     (sim.heroes[0].raidChest
                         ? `, chest: ${sim.heroes[0].raidChest.found.join(" ") || "nothing"}`
                         : ""),

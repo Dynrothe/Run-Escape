@@ -1987,8 +1987,8 @@ describe("Akkha", () => {
             // No shadows up: back where he was, not in the middle
             expect(Math.hypot(boss.x - plan.from.x, boss.y - plan.from.y)).toBeLessThan(0.2);
             expect(plan.from).not.toEqual(middle);
-            // His attacks made already, he's still on the floor as long as he was gone, and
-            // specialGap at least, before the next
+            // His attacks made already, he's still on the floor as long as he was gone before the
+            // next
             const back = sim.tick;
             for (let i = 0; i < 60 * TICKS_PER_SECOND && !fight.memory; i++) {
                 special(sim);
@@ -1998,7 +1998,6 @@ describe("Akkha", () => {
             expect(fight.memory).toBeDefined();
             const floor = sim.tick - back;
             expect(floor).toBeGreaterThanOrEqual(done - plan.start - 1);
-            expect(floor / TICKS_PER_SECOND).toBeGreaterThanOrEqual(DEF.specialGap - 0.1);
             expect(floor).toBeLessThan(done - plan.start + 2 * TICKS_PER_SECOND);
         });
     });
@@ -4444,21 +4443,31 @@ describe("the Tombs' chest", () => {
             expect(sim.heroes[0].raidChest!.found).toEqual([]);
         }
         // Every purple found but a roll of its own left: no chance shown, and none claimed
-        sim.trophies.clear();
         sim.heroes[0].trophiesFound = new Set(
             open.filter((t) => t.id !== rolls[0].id).map((t) => t.id),
         );
-        sim.takeEvents();
-        sim["openTombsChest"]();
-        expect(sim.heroes[0].raidChest!.chance).toBe(0);
-        if (sim.heroes[0].raidChest!.found.length === 0) {
-            expect(sim.takeEvents()).toContainEqual(
-                expect.objectContaining({
-                    type: "notice",
-                    message: "The chest holds no unique this time.",
-                }),
-            );
+        let misses = 0;
+        for (let i = 0; i < 400; i++) {
+            sim.trophies.clear();
+            sim.takeEvents();
+            sim["openTombsChest"]();
+            const chest = sim.heroes[0].raidChest!;
+            expect(chest.chance).toBe(0);
+            expect(chest.purpleLeft).toBe(false);
+            if (chest.found.length === 0) {
+                misses++;
+                expect(sim.takeEvents()).toContainEqual(
+                    expect.objectContaining({
+                        type: "notice",
+                        message: "The chest holds no unique this time.",
+                    }),
+                );
+            }
         }
+        expect(misses).toBeGreaterThan(300);
+        expect(misses).toBeLessThan(400);
+        // And the board has no chance for them either
+        expect(sim["tombsSummary"]()!.party[0].chance).toBeUndefined();
         // Everything found: no chance, nothing given, and the chest says so
         sim.heroes[0].trophiesFound = new Set(open.map((t) => t.id));
         sim.trophies.clear();
@@ -4473,6 +4482,29 @@ describe("the Tombs' chest", () => {
                     (e) => e.type === "notice" && e.message.includes("nothing you haven't found"),
                 ),
         ).toBe(true);
+        // No points, with purples still to find: a chance of none is still shown as one
+        sim.heroes[0].trophiesFound = new Set();
+        sim.heroes[0].tombsPoints = 0;
+        let shown = 0;
+        for (let i = 0; i < 20; i++) {
+            sim.trophies.clear();
+            sim.takeEvents();
+            sim["openTombsChest"]();
+            const chest = sim.heroes[0].raidChest!;
+            expect(chest.chance).toBe(0);
+            expect(chest.purpleLeft).toBe(true);
+            if (chest.found.length === 0) {
+                shown++;
+                expect(sim.takeEvents()).toContainEqual(
+                    expect.objectContaining({
+                        type: "notice",
+                        message: "The chest holds no unique this time (0% chance).",
+                    }),
+                );
+            }
+        }
+        expect(shown).toBeGreaterThan(0);
+        expect(sim["tombsSummary"]()!.party[0].chance).toBe(0);
     });
 });
 

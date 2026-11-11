@@ -676,7 +676,11 @@ function boardNotes(sim: Sim): string[] {
             (board.wardensSeconds !== undefined ? `, wardens ${clock(board.wardensSeconds)}` : "") +
             `, ${sim.coins} coins`,
         board.party
-            .map((p) => `${p.name || "bot"} ${p.points} points ${Math.round(p.chance * 100)}%`)
+            .map((p) => {
+                const chance =
+                    p.chance === undefined ? "no purple left" : `${Math.round(p.chance * 100)}%`;
+                return `${p.name || "bot"} ${p.points} points ${chance}`;
+            })
             .join(", "),
     ];
 }

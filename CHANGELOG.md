@@ -19,9 +19,10 @@ the version in the corner).
   Amascut's chests now only give ones you haven't found, in co-op too. Once you have everything a
   chest holds, it says so. Fixed by Okaeri.
 - At high raid levels Akkha spent most of his fight doing Memory Blast, gone from the floor, one
-  after another. After each Memory Blast he now stays on the floor at least as long as it took,
-  Memory Blast is six steps at most, and once one of his shadows is dead he comes back from it in
-  that shadow's quarter, where he can be hurt, not out of reach in the middle. Fixed by Okaeri.
+  after another. After each Memory Blast he now stays on the floor at least as long as it took, at
+  every raid level, so he's quicker to beat at all of them. Memory Blast is six steps at most, and
+  once one of his shadows is dead he comes back from it in that shadow's quarter, where he can be
+  hurt, not out of reach in the middle. Fixed by Okaeri.
 
 ## 0.30.0 - 2026-11-09
 

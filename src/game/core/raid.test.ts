@@ -329,6 +329,7 @@ describe("raids", () => {
             sim.takeEvents();
             sim["openRaidChest"]();
             expect(sim.heroes[0].raidChest!.chance).toBe(0);
+            expect(sim.heroes[0].raidChest!.purpleLeft).toBe(false);
             const found = sim.heroes[0].raidChest!.found;
             hardGiven += found.length;
             if (found.length === 0) {

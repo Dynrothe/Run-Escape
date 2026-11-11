@@ -10,7 +10,8 @@ export type TrophySource =
     | { kind: "pumpkin"; chance: number }
     // A raid's chest, once its last boss is down: a purple's one of these by weight (Sim's
     // openRaidChest has the chance), and a hard raid's own are a roll of their own. An expert
-    // raid's own: one of them each time it's beaten.
+    // raid's own: one of them each time it's beaten, till they're all found. A chest only gives
+    // ones the player hasn't found (isRaidChestTrophy).
     | { kind: "raid"; mapId: string; weight: number; hard?: boolean; expert?: boolean }
     // The Tombs of Amascut's chest (Sim's openTombsChest), from raid level `level` up: a purple's
     // one of those with a weight, its chance going by the raid level; the rest (`chance`) a roll
