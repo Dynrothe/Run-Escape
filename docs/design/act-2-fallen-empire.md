@@ -943,17 +943,19 @@ pull of work put all four on). Where it differs from 8.2 and 8.3, and why:
   II maps). Roots creep that much slower (their spreads' seconds divided by it), sanity drains and the cold rises
   that much slower (times it), and the player's light is that much bigger (divided by it: 7.1 tiles on Lumbridge,
   5 on the Inferno). The Dark's ambient goes from 0.36 to the Scar's 0.3.
-- **Overgrown**: the Stranglewood's roots, from each map's blocked ground (water, buildings, walls: the wood),
+- **Overgrown**: the Stranglewood's roots in cells of 3 by 3 tiles, not 2 (`RootsRuleDef.cell`; 8.3's answer for a
+  map over 69k, and every first-campaign map's busiest view is, below), their spreads' seconds 1.5 times as long so a
+  front still moves as many tiles a second, from each map's blocked ground (water, buildings, walls: the wood),
   never within 10 tiles of the middle of an Act II map's final fight; no safe circle on campaign maps, whose final
   bosses can come anywhere. Elites: three Strangled Bears (4:00, 8:40, 13:00), whose trail roots.
-- **Shadow**: the realm as the palette (brightness 0.55 and Lassar's violet wash), Lassar's puddles, sanity,
+- **Shadow**: the realm as the palette (brightness 0.7, not 8.3's 0.55, which hid the darker maps such as the Barrows, and Lassar's violet wash), Lassar's puddles, sanity,
   souls, portal, risers and realm elites as they are. Puddles open where Lassar's do (8 to 12 tiles off), so on a
   walled map one can be past a wall; the realm's waves are Lassar's realm waves.
 - **Frozen**: Ghorrock's cold, with six braziers placed by the seed on open, outdoor ground joined to the start,
   within 40 tiles of it and 20 apart (10 if a cramped map can't fit six), and twelve ice pools (2 to 5 tiles
   across each way) within 60. No gas vents: they're Ghorrock's scenery, not something to place. The braziers
   don't block (Ghorrock's are stand-ins in the map). The ice is drawn a tile at a time over the map's own ground,
-  only where it can be walked, as the cache's slippery Ice (loc 21148, animated). Elites: four pyrefiends and two
+  only where it can be walked, as the cache's slippery Ice (loc 21148, animated, 1.45 times its size and turned by the tile so neighbours overlap). Elites: four pyrefiends and two
   flaming pyrelords, whose embers relight braziers. The final boss still puts every brazier out.
 - **Dark**: the Scar's lighting, with nine fires (loc 5249, lights of 3 that weapons aim by) placed by the seed
   within 60 tiles of the start and 15 apart, two lanterns by the start and lanterns among the power-ups. The
@@ -980,6 +982,30 @@ pull of work put all four on). Where it differs from 8.2 and 8.3, and why:
 - **The bot** (`simulate-run.ts`): `REMIX=overgrown,frozen` or `REMIX=all`. Its goals for the realm and the cold now
   walk round walls (`wayTo`, the flow field), and it picks a brazier by the walk to it: on an old map a straight line
   to one is often through a castle.
+
+- **Sims** (`simulate-run.ts`, `META=max ARMOURY=max`, warrior, wizard, ranger and barbarian by seeds 1 and 2, each
+  remix alone and all four, against none; wins of 8, the median end, deaths before 10:00):
+
+    | Map       | None        | Overgrown   | Shadow      | Frozen      | Dark        | All four    |
+    | --------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- |
+    | Lumbridge | 8, 15:46, 0 | 7, 15:52, 0 | 6, 15:41, 0 | 6, 16:07, 0 | 8, 15:59, 0 | 5, 16:31, 0 |
+    | Karamja   | 1, 10:39, 3 | 2, 16:12, 2 | 0, 14:19, 0 | 1, 9:24, 5  | 0, 11:00, 3 | 1, 14:15, 2 |
+    | Inferno   | 1, 7:54, 7  | 0, 8:00, 7  | 1, 7:54, 5  | 0, 8:31, 6  | 0, 8:00, 7  | 0, 7:48, 7  |
+
+    The remixes cost a win or two on Lumbridge and the Inferno, and on Karamja the bot lasted longer with most of them
+    on: the remixes' quarter of the crowd is in place of a quarter of Karamja's own, which hit harder than the Act II
+    maps' early waves, and the realm's drops are double. Eight runs a cell is a small sample (a seed's course moves a
+    median by minutes). The bot dived 3 to 7 times a run and was frozen at most once (median). These were run with
+    2-by-2 root cells; the 3-by-3 cells came after, for phones.
+
+- **Phones** (`frameProbe.sample(30)` at 844 by 390 on the phone camera, all four on, 3 minutes in with its crowd, at
+  the start; "all rooted" is every open cell rooted, the worst the roots can be): the first-campaign maps' own
+  worlds are well over 69k at their starts (the Barrows 114k, Kourend 212k, Prifddinas 224k, Varlamore 164k:
+  they were never thinned for phones, as Act II's maps were), so no remix can bring those under it. What the
+  remixes add is actors: the roots at full cover cost 9.6k to 17.6k at 2 by 2 cells and 5.6k to 8.8k at 3 by 3; ice
+  and fires a few hundred; braziers a few models; the realm and the dark nothing in triangles. Under 69k with all
+  four on: the Desert (41k), Fremennik (53k), the Wilderness (45k); over it already without them: the rest. The
+  table is in #159.
 
 **The Soulreaper axe** (`soulreaper_axe`, object 28338): as 8.2. It's opened by a new unlock task, `pieces`, all
 four of the trophies found (they already dropped from the final bosses); the Scar's card lists it. Its swing is the

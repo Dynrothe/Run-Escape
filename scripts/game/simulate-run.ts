@@ -51,7 +51,6 @@ import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
 import { ColdRule } from "../../src/game/core/rules/ColdRule";
 import { RealmRule } from "../../src/game/core/rules/RealmRule";
-import { CELL } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
 import { makeGrid } from "../../src/game/core/world/testGrid";
@@ -295,8 +294,8 @@ function botMove(sim: Sim): { x: number; y: number } {
         let ry = 0;
         for (let dy = -ROOT_LOOK; dy <= ROOT_LOOK; dy++) {
             for (let dx = -ROOT_LOOK; dx <= ROOT_LOOK; dx++) {
-                const x = player.x + dx * CELL;
-                const y = player.y + dy * CELL;
+                const x = player.x + dx * rule.cell;
+                const y = player.y + dy * rule.cell;
                 if ((dx !== 0 || dy !== 0) && rule.isRooted(x, y)) {
                     const d2 = dx * dx + dy * dy;
                     rx -= dx / d2;

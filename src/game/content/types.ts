@@ -2194,6 +2194,9 @@ export type RunRuleDef = RootsRuleDef | RealmRuleDef | ColdRuleDef;
 // where its roots stand, all of it.
 export type RootsRuleDef = {
     kind: "roots";
+    // Tiles a cell is across (2 when unset): 3 on the older maps a remix puts them on, where a phone's
+    // view of them would cost too much at 2 (act-2-fallen-empire.md, 8.3)
+    cell?: number;
     // Seconds into the run they start creeping
     start: number;
     // How many creeping fronts there are, and the seconds between each one's spreads, from start to

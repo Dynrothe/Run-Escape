@@ -41,6 +41,9 @@ export type RemixRun = {
     fires: { x: number; y: number }[];
 };
 
+// Root cells on these maps are 3 tiles across, not 2: half the models in a phone's view
+const REMIX_ROOT_CELL = 3;
+const CELL_GROW = REMIX_ROOT_CELL / 2;
 // Its own seed off the run's, so placing things never moves the run's Rng
 const PLACE_SEED = 0x7e3a1c55;
 // Braziers: this many, at least apart tiles from each other, within reach of the start
@@ -49,8 +52,9 @@ const BRAZIERS = { count: 6, apart: 20, reach: 40 };
 const ICE = { count: 12, reach: 60, min: 2, max: 5 };
 // Fires in the dark: this many, at least apart, within reach of the start
 const FIRES = { count: 9, apart: 15, reach: 60 };
-// The realm on a map without a twin is its palette (8.3): darker, washed violet
-const REALM_BRIGHTNESS = 0.55;
+// The realm on a map without a twin is its palette (8.3): darker, washed violet (0.55 hid the
+// darker maps, the Barrows, in it)
+const REALM_BRIGHTNESS = 0.7;
 // The dark on an older map: a little lighter than the Scar's on the easiest maps
 const DARK_AMBIENT = { from: 0.36, to: 0.3 };
 
@@ -103,7 +107,9 @@ function overgrown(map: MapDef, tough: number): RootsRuleDef {
     const arena = map.bossArena;
     return {
         ...def,
-        every: [def.every[0] / tough, def.every[1] / tough],
+        cell: REMIX_ROOT_CELL,
+        // A spread reaches a cell further: as many tiles a second as the Stranglewood's fronts go
+        every: [(def.every[0] * CELL_GROW) / tough, (def.every[1] * CELL_GROW) / tough],
         safe: arena
             ? { x: arena.baseX + arena.size / 2, y: arena.baseY + arena.size / 2, radius: 10 }
             : undefined,

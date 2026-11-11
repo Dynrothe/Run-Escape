@@ -48,6 +48,8 @@ type Front = { cell: number; next: number };
 type Heart = { uid: number; x: number; y: number };
 
 export class RootRule implements RunRule {
+    // Tiles a cell is across (RootsRuleDef.cell)
+    readonly cell: number;
     readonly baseX: number;
     readonly baseY: number;
     readonly cellsX: number;
@@ -80,10 +82,11 @@ export class RootRule implements RunRule {
         private readonly tps: number,
     ) {
         this.rng = new Rng((seed ^ 0x5e7f00d) >>> 0);
+        this.cell = def.cell ?? CELL;
         this.baseX = grid.baseX;
         this.baseY = grid.baseY;
-        this.cellsX = Math.ceil(grid.sizeX / CELL);
-        this.cellsY = Math.ceil(grid.sizeY / CELL);
+        this.cellsX = Math.ceil(grid.sizeX / this.cell);
+        this.cellsY = Math.ceil(grid.sizeY / this.cell);
         const count = this.cellsX * this.cellsY;
         this.state = new Uint8Array(count);
         this.changedAt = new Int32Array(count).fill(-1);
@@ -97,10 +100,10 @@ export class RootRule implements RunRule {
         for (let cy = 0; cy < this.cellsY; cy++) {
             for (let cx = 0; cx < this.cellsX; cx++) {
                 let tiles = 0;
-                for (let dy = 0; dy < CELL; dy++) {
-                    for (let dx = 0; dx < CELL; dx++) {
-                        const x = this.baseX + cx * CELL + dx;
-                        const y = this.baseY + cy * CELL + dy;
+                for (let dy = 0; dy < this.cell; dy++) {
+                    for (let dx = 0; dx < this.cell; dx++) {
+                        const x = this.baseX + cx * this.cell + dx;
+                        const y = this.baseY + cy * this.cell + dy;
                         if (grid.contains(x, y) && !grid.isSolid(x, y)) {
                             tiles++;
                         }
@@ -116,7 +119,7 @@ export class RootRule implements RunRule {
                 if (outside) {
                     // Past a fight's ring is the wood, as blocked ground is
                     solid[i] = 1;
-                } else if (tiles >= OPEN_TILES && !inSafe) {
+                } else if (tiles >= OPEN_TILES * (this.cell / CELL) && !inSafe) {
                     this.open[i] = 1;
                     open++;
                 }
@@ -200,10 +203,10 @@ export class RootRule implements RunRule {
             const cx = i % this.cellsX;
             const cy = (i - cx) / this.cellsX;
             let hit = false;
-            for (let d = 0; d < CELL * CELL && !hit; d++) {
+            for (let d = 0; d < this.cell * this.cell && !hit; d++) {
                 hit = test(
-                    this.baseX + cx * CELL + (d % CELL),
-                    this.baseY + cy * CELL + Math.floor(d / CELL),
+                    this.baseX + cx * this.cell + (d % this.cell),
+                    this.baseY + cy * this.cell + Math.floor(d / this.cell),
                 );
             }
             if (hit) {
@@ -220,8 +223,8 @@ export class RootRule implements RunRule {
     }
 
     cellAt(x: number, y: number): number {
-        const cx = Math.floor((x - this.baseX) / CELL);
-        const cy = Math.floor((y - this.baseY) / CELL);
+        const cx = Math.floor((x - this.baseX) / this.cell);
+        const cy = Math.floor((y - this.baseY) / this.cell);
         if (cx < 0 || cy < 0 || cx >= this.cellsX || cy >= this.cellsY) {
             return -1;
         }
@@ -231,7 +234,10 @@ export class RootRule implements RunRule {
     cellMiddle(i: number): { x: number; y: number } {
         const cx = i % this.cellsX;
         const cy = (i - cx) / this.cellsX;
-        return { x: this.baseX + cx * CELL + CELL / 2, y: this.baseY + cy * CELL + CELL / 2 };
+        return {
+            x: this.baseX + cx * this.cell + this.cell / 2,
+            y: this.baseY + cy * this.cell + this.cell / 2,
+        };
     }
 
     isRooted(x: number, y: number): boolean {
@@ -538,7 +544,7 @@ export class RootRule implements RunRule {
         arc: number,
         width: number,
     ): void {
-        this.forCellsNear(x, y, reach + CELL, (i, mx, my) => {
+        this.forCellsNear(x, y, reach + this.cell, (i, mx, my) => {
             if (this.state[i] === CELL_EMPTY) {
                 return;
             }
@@ -549,18 +555,18 @@ export class RootRule implements RunRule {
             if (width > 0) {
                 const across = Math.abs(ox * -dirY + oy * dirX);
                 if (
-                    along < -CELL / 2 ||
-                    along > reach + CELL / 2 ||
-                    across > width / 2 + CELL / 2
+                    along < -this.cell / 2 ||
+                    along > reach + this.cell / 2 ||
+                    across > width / 2 + this.cell / 2
                 ) {
                     return;
                 }
             } else {
-                if (distance > reach + CELL / 2) {
+                if (distance > reach + this.cell / 2) {
                     return;
                 }
                 const angle = fm.acos(Math.max(-1, Math.min(1, along / Math.max(distance, 0.001))));
-                if (distance > CELL && angle > arc + CELL / 2 / distance) {
+                if (distance > this.cell && angle > arc + this.cell / 2 / distance) {
                     return;
                 }
             }
@@ -613,18 +619,18 @@ export class RootRule implements RunRule {
         radius: number,
         visit: (i: number, middleX: number, middleY: number) => void,
     ): void {
-        const cx0 = Math.max(0, Math.floor((x - radius - this.baseX) / CELL));
-        const cy0 = Math.max(0, Math.floor((y - radius - this.baseY) / CELL));
-        const cx1 = Math.min(this.cellsX - 1, Math.floor((x + radius - this.baseX) / CELL));
-        const cy1 = Math.min(this.cellsY - 1, Math.floor((y + radius - this.baseY) / CELL));
+        const cx0 = Math.max(0, Math.floor((x - radius - this.baseX) / this.cell));
+        const cy0 = Math.max(0, Math.floor((y - radius - this.baseY) / this.cell));
+        const cx1 = Math.min(this.cellsX - 1, Math.floor((x + radius - this.baseX) / this.cell));
+        const cy1 = Math.min(this.cellsY - 1, Math.floor((y + radius - this.baseY) / this.cell));
         for (let cy = cy0; cy <= cy1; cy++) {
             for (let cx = cx0; cx <= cx1; cx++) {
-                const x0 = this.baseX + cx * CELL;
-                const y0 = this.baseY + cy * CELL;
-                const nearX = Math.min(Math.max(x, x0), x0 + CELL);
-                const nearY = Math.min(Math.max(y, y0), y0 + CELL);
+                const x0 = this.baseX + cx * this.cell;
+                const y0 = this.baseY + cy * this.cell;
+                const nearX = Math.min(Math.max(x, x0), x0 + this.cell);
+                const nearY = Math.min(Math.max(y, y0), y0 + this.cell);
                 if (fm.hypot(nearX - x, nearY - y) <= radius) {
-                    visit(cx + cy * this.cellsX, x0 + CELL / 2, y0 + CELL / 2);
+                    visit(cx + cy * this.cellsX, x0 + this.cell / 2, y0 + this.cell / 2);
                 }
             }
         }

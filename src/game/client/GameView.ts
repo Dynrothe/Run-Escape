@@ -93,12 +93,17 @@ const REMIX_VIEW = 24;
 const ICE_VIEW_X = 18;
 const ICE_VIEW_SOUTH = 12;
 const ICE_VIEW_NORTH = 16;
-// The Soulreaper axe's souls: soul runes circling this far round the head (tiles), this high (scene
-// units), and how many make it glow
+// Each tile's ice drawn this much bigger, turned a quarter at a time by the tile, so neighbours
+// overlap into a sheet rather than a grid of shards
+const ICE_SCALE = 1.45;
+// The Soulreaper axe's souls: soul runes circling this far round the head, this high (tiles), and
+// how many make it glow
 const SOUL_OBJ = 566;
-const SOULS_RADIUS = 0.55;
-const SOULS_HEIGHT = 250;
+const SOULS_RADIUS = 0.7;
+const SOULS_HEIGHT = 1.6;
 const SOULS_MAX = 5;
+// Drawn this big (a rune's model is about a tile across)
+const SOULS_SCALE = 0.5;
 const VENT_PUFFS = [
     [0, 0],
     [-0.9, -0.9],
@@ -915,7 +920,18 @@ export class GameView {
                 const frame = anim ? anim.getFrame(clientTicks + x * 13 + y * 7, true) : 0;
                 const cx = x + 0.5;
                 const cy = y + 0.5;
-                actors.draw(ice, anim, frame, cx, this.ground(sim, cx, cy), cy, 0);
+                actors.draw(
+                    ice,
+                    anim,
+                    frame,
+                    cx,
+                    this.ground(sim, cx, cy),
+                    cy,
+                    ((x * 5 + y * 3) & 3) * 512,
+                    {
+                        scale: ICE_SCALE,
+                    },
+                );
             }
         }
     }
@@ -2337,9 +2353,9 @@ export class GameView {
             const angle = sim.tick * 0.08 + (i / souls) * Math.PI * 2;
             const sx = x + Math.cos(angle) * SOULS_RADIUS;
             const sy = y + Math.sin(angle) * SOULS_RADIUS;
-            const bob = Math.sin(sim.tick * 0.15 + i) * 6;
+            const bob = Math.sin(sim.tick * 0.15 + i) * 0.08;
             actors.draw(model, model.anims[0], 0, sx, head + bob, sy, (sim.tick * 40) % 2048, {
-                scale: full ? 0.75 : 0.55,
+                scale: full ? SOULS_SCALE * 1.35 : SOULS_SCALE,
                 unlit: 1,
                 flash: full ? 0.35 + 0.2 * Math.sin(sim.tick * 0.3) : 0,
             });

@@ -1,7 +1,7 @@
 import { ActorModel, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { yawFromVector } from "../core/PlayerMovement";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { CELL, CELL_EMPTY, CELL_ROOTED, CELL_SPROUT, RootRule } from "../core/rules/RootRule";
+import { CELL_EMPTY, CELL_ROOTED, CELL_SPROUT, RootRule } from "../core/rules/RootRule";
 import { GameAssets, getRootLookKey } from "./GameAssets";
 
 // The Stranglewood's roots (MapDef.rule roots, core/rules/RootRule.ts), drawn by the game over
@@ -37,8 +37,6 @@ const RUN_SCALE_MIN = 0.95;
 const RUN_SCALE_MAX = 1.7;
 // One with no older neighbour grows in from the wood beside it, this far (tiles), or from its own
 // cell's edge
-const RUN_FROM_WOOD = CELL;
-const RUN_FROM_EDGE = CELL / 2;
 // Loops: on this share of the cells, this big, tipped this far at most, with this much of
 // themselves under the ground (a root arching up out of it)
 const LOOP_SHARE = 0.3;
@@ -118,12 +116,15 @@ export class RootsView {
         const sproutTicks = Math.max(1, rule.def.sprout * TICKS_PER_SECOND);
         const hearts = rule.hearts;
         const reach = rule.def.hearts.reach;
-        const cx0 = Math.max(0, Math.floor((focusX - VIEW_X - rule.baseX) / CELL));
-        const cx1 = Math.min(rule.cellsX - 1, Math.floor((focusX + VIEW_X - rule.baseX) / CELL));
-        const cy0 = Math.max(0, Math.floor((focusY - VIEW_SOUTH - rule.baseY) / CELL));
+        const cx0 = Math.max(0, Math.floor((focusX - VIEW_X - rule.baseX) / rule.cell));
+        const cx1 = Math.min(
+            rule.cellsX - 1,
+            Math.floor((focusX + VIEW_X - rule.baseX) / rule.cell),
+        );
+        const cy0 = Math.max(0, Math.floor((focusY - VIEW_SOUTH - rule.baseY) / rule.cell));
         const cy1 = Math.min(
             rule.cellsY - 1,
-            Math.floor((focusY + VIEW_NORTH - rule.baseY) / CELL),
+            Math.floor((focusY + VIEW_NORTH - rule.baseY) / rule.cell),
         );
         const ground = (x: number, y: number) => sim.grid.getHeight(x, y) / 128;
         for (let cy = cy0; cy <= cy1; cy++) {
@@ -138,8 +139,8 @@ export class RootsView {
                 const hash = cellHash(i);
                 // Loops only round the player, sinking away into the ground further out: a
                 // phone's view at full cover is over a hundred cells
-                const cellX = rule.baseX + cx * CELL + CELL / 2;
-                const cellY = rule.baseY + cy * CELL + CELL / 2;
+                const cellX = rule.baseX + cx * rule.cell + rule.cell / 2;
+                const cellY = rule.baseY + cy * rule.cell + rule.cell / 2;
                 const away = Math.hypot(cellX - focusX, cellY - focusY) - NEAR;
                 const sunk = Math.min(1, Math.max(0, away / NEAR_FADE));
                 const model = runners[hash % runners.length];
@@ -240,8 +241,8 @@ export class RootsView {
                         { scale: runner.scale * CREEP * Math.max(0.05, ease), pitch: runner.pitch },
                     );
                     for (let k = 0; k < TIPS; k++) {
-                        const ox = (((hash >>> (k * 5)) & 15) / 15 - 0.5) * CELL * 0.6;
-                        const oy = (((hash >>> (k * 5 + 4)) & 15) / 15 - 0.5) * CELL * 0.6;
+                        const ox = (((hash >>> (k * 5)) & 15) / 15 - 0.5) * rule.cell * 0.6;
+                        const oy = (((hash >>> (k * 5 + 4)) & 15) / 15 - 0.5) * rule.cell * 0.6;
                         const tipHeight = (loop.height * TIP_SCALE) / 128;
                         const x = runner.x + ox;
                         const y = runner.y + oy;
@@ -391,11 +392,11 @@ export class RootsView {
             );
         } else {
             let angle = (((hash >>> 5) & 1023) / 1024) * Math.PI * 2;
-            let from = RUN_FROM_EDGE;
+            let from = rule.cell / 2;
             if (wood >= 0) {
                 const wx = wood % rule.cellsX;
                 angle = Math.atan2(wx - cx, (wood - wx) / rule.cellsX - cy);
-                from = RUN_FROM_WOOD;
+                from = rule.cell;
             }
             fromX = x + Math.sin(angle) * from;
             fromY = y + Math.cos(angle) * from;
@@ -428,7 +429,7 @@ function nodeOf(rule: RootRule, i: number, cx: number, cy: number, hash: number)
     const jx = ((Math.imul(hash, 7) >>> 4) & 255) / 255 - 0.5;
     const jy = ((Math.imul(hash, 13) >>> 12) & 255) / 255 - 0.5;
     return [
-        rule.baseX + cx * CELL + CELL / 2 + jx * 2 * NODE_JITTER,
-        rule.baseY + cy * CELL + CELL / 2 + jy * 2 * NODE_JITTER,
+        rule.baseX + cx * rule.cell + rule.cell / 2 + jx * 2 * NODE_JITTER,
+        rule.baseY + cy * rule.cell + rule.cell / 2 + jy * 2 * NODE_JITTER,
     ];
 }
