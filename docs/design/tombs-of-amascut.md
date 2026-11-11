@@ -582,8 +582,11 @@ animations from a lister of those whose model or animation is in the raid's rang
       glinting out a tile, and the tiles it'll reach marked on the floor
       (`GameView.drawCrondisSpearTells`, yellow, as the floor's red; players found the glint
       alone too hard to time). **Poison** comes down each corridor from its waterfall's end every
-      9 s (less with path levels): pale first, the dark cloud a second behind it. Under a
-      waterfall (where you fill) it doesn't reach you, running or dry, as in OSRS. It's the
+      9 s (less with path levels, never under `cloudEveryLeast`): pale first, the dark cloud a
+      second behind it. Under a waterfall (where you fill) it doesn't reach you, running or dry,
+      as in OSRS, and it stops at the corridor's end, as it's drawn. Going in you meet the clouds
+      head on, so there's always a gap to time a trip in by: once one's out of the corridor, about
+      two seconds at 9 s, one and a half at the least. It's the
       Spitting Scarab's green splash (2155), faint for the pale: the room's own spot animations
       (2129 to 2131) draw nothing, and its poison floor tiles' activation can't be baked (a loc
       bakes with its own animation only).

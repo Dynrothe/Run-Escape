@@ -35,7 +35,14 @@ import {
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
-import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow, zebakShelters } from "./Sim";
+import {
+    PLAYER_SPEED,
+    Sim,
+    TICKS_PER_SECOND,
+    formationSpots,
+    wardenFrontRow,
+    zebakShelters,
+} from "./Sim";
 import { createSave, migrateSave } from "./save";
 import { isCircleFree } from "./world/Collision";
 import { makeGrid } from "./world/testGrid";
@@ -3252,17 +3259,72 @@ describe("the Crondis room", () => {
         // Its ways in are where the corridors come out by the palm: one came out on whoever was
         // coming back with water, biting at once
         const sim = crondis();
-        const pick = (sim as unknown as { tombsEntrance(e: { x: number; y: number }[]): unknown })
-            .tombsEntrance;
+        const roomDef = TEST_CRONDIS.tombs!.paths[0].room!;
+        const before = roomDef.entrances;
         const p = sim.player;
-        const by = { x: p.x + 1, y: p.y };
-        const away = { x: p.x + 9, y: p.y };
-        for (let i = 0; i < 20; i++) {
-            expect(pick.call(sim, [by, away])).toBe(away);
+        const by = { x: p.x, y: p.y };
+        try {
+            roomDef.entrances = [by, { x: p.x - 9, y: p.y }];
+            for (let i = 0; i < 20; i++) {
+                const croc = sim.spawnEnemy(getEnemy("crondis_crocodile"), "normal")!;
+                expect(Math.hypot(croc.x - p.x, croc.y - p.y)).toBeGreaterThan(4.5);
+            }
+            // Every way in close: the furthest of them
+            roomDef.entrances = [by, { x: p.x + 3, y: p.y }];
+            const croc = sim.spawnEnemy(getEnemy("crondis_crocodile"), "normal")!;
+            expect(Math.hypot(croc.x - p.x, croc.y - p.y)).toBeGreaterThan(2);
+        } finally {
+            roomDef.entrances = before;
         }
-        // Every way in close: the furthest of them
-        const closer = { x: p.x + 3, y: p.y };
-        expect(pick.call(sim, [by, closer])).toBe(closer);
+    });
+
+    it("always has a way in to the waterfall between its clouds, and none past the corridor", () => {
+        // Players: going in "it's RNG if you get hit or not", and "the poison does extend past
+        // the area". As OSRS's: timing, not luck, at the quickest they come.
+        const sim = crondis(["pathmaster"]);
+        expect(sim["crondisCloudEvery"]()).toBe(CRONDIS.cloudEveryLeast);
+        const lane = CRONDIS_DEF.lanes[0];
+        const x = 1036.5;
+        // Just out of the corridor's mouth, where its clouds come out
+        const mouth = lane.y0 - 1.5;
+        const fill = CRONDIS_DEF.falls[0].fill;
+        const r = room(sim);
+        r.nextCloudTick[0] = sim.tick + 1;
+        let hits = 0;
+        const tick = (y: number) => {
+            r.spears.forEach((spear) => (spear.nextTick = sim.tick + 1000));
+            sim.tombsRoom!.pending = [];
+            for (const enemy of sim.enemies) {
+                if (!enemy.dead && enemy.def.id.startsWith("crondis_crocodile")) {
+                    sim["vanish"](enemy);
+                }
+            }
+            sim.player.invulnerable = 0;
+            const hp = (sim.player.hp = sim.player.maxHp);
+            sim.player.x = sim.player.prevX = x;
+            sim.player.y = sim.player.prevY = y;
+            if (sim.state === "levelUp") {
+                sim.choose(0);
+            }
+            sim.step();
+            if (sim.player.hp < hp) {
+                hits++;
+            }
+        };
+        sim.step();
+        const start = r.clouds.find((cloud) => cloud.lane === 0)!.startTick;
+        // Waiting at the mouth while one comes all the way down and out: untouched
+        while (sim.tick - start < 4.9 * TICKS_PER_SECOND) {
+            tick(mouth);
+        }
+        expect(hits).toBe(0);
+        // Then straight in at a walk, and the next is met only under the waterfall
+        let y = mouth;
+        while (Math.hypot(fill.x - x, fill.y - y) > 1.4) {
+            y = Math.min(fill.y, y + PLAYER_SPEED);
+            tick(y);
+        }
+        expect(hits).toBe(0);
     });
 
     it("starts with the palm a sapling that can't be hurt, and the first wave", () => {

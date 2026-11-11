@@ -3557,11 +3557,12 @@ export class Sim {
         return undefined;
     }
 
-    // A Tombs room's way in for its next enemy: any not right by someone who's up, or with none,
-    // the one furthest from them all. Picked from them all, one came out on top of whoever was
-    // passing (the Crondis room's are where its corridors come out by the palm), biting at once.
+    // A Tombs room's way in for its next enemy: any not right by someone still in the run (a
+    // downed one too, with whoever comes to revive them), or with none, the one furthest from
+    // them all. Picked from them all, one came out on top of whoever was passing (the Crondis
+    // room's are where its corridors come out by the palm), biting at once.
     private tombsEntrance(entrances: { x: number; y: number }[]): { x: number; y: number } {
-        const up = this.heroes.filter((hero) => this.isUp(hero));
+        const up = this.heroes.filter((hero) => !hero.left);
         const nearest = (at: { x: number; y: number }) =>
             Math.min(
                 Infinity,
@@ -9061,8 +9062,12 @@ export class Sim {
                 if (this.crondisFallAt(def, x, y) !== -1) {
                     return;
                 }
-                // How far along from the waterfall's end
+                // How far along from the waterfall's end, and only in the corridor, where it's
+                // drawn: past its end it went on hitting whoever waited there, unseen
                 const along = lane.fromLow ? y - lane.y0 : lane.y1 + 1 - y;
+                if (along > lane.y1 - lane.y0 + 1) {
+                    return;
+                }
                 if (along <= dark && along >= dark - CRONDIS.cloudLength) {
                     cloud.hit.push(hero.index);
                     this.crondisTrapHit(damage, "The poison catches you: your water spills!");

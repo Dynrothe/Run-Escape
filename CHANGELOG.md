@@ -41,7 +41,11 @@ the version in the corner).
   Mimic's stomp gets the same ring. Fixed by Okaeri.
 - In the Tombs of Amascut's rooms, enemies could come in right on top of you, like the Crondis
   room's crocodiles where its corridors meet the palm, and bite at once. They now come in by a way
-  in that's clear of everyone, or the furthest one. Fixed by Okaeri.
+  in that's clear of the party, or the furthest one. Fixed by Okaeri.
+- The Crondis room's poison clouds went on hitting past the end of their corridor, where none was
+  drawn, and once you'd done a path or two they came so close together that getting in to a
+  waterfall without being caught was luck. They now stop at the corridor's end, and there's
+  always a gap to time your way in. Fixed by Okaeri.
 
 ## 0.30.0 - 2026-11-09
 

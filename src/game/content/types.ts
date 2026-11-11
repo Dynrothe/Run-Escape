@@ -541,7 +541,8 @@ export type GroundPatternDef = {
     fit?: number;
     // Its reach outlined in red too, filling as it comes, as a swing's circle is: for a look that
     // doesn't show how far it hits (Ba-Ba's shockwave, a puff of dust at her feet that hit up to
-    // five tiles out with Shaking Things Up, so players took it as damage from nowhere)
+    // five tiles out with Shaking Things Up, so players took it as damage from nowhere). Drawn as a
+    // circle at its radius: not for a square (a checker's cell) or a fitted mark.
     edge?: boolean;
     // A square spot (a checker's cell) hurts only within the circle drawn on it (its radius
     // times fit), not to its corners: what's seen is what's hit
