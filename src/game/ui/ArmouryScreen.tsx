@@ -34,27 +34,19 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-armoury">
                 <h2>{t("armoury.title")}</h2>
-                <p className="ui-subtle">{t("armoury.intro")}</p>
-                <div className="ui-armoury-body">
-                    <div className="ui-armoury-slots">
-                        {GEAR_SLOTS.map((slot) => (
-                            <div key={slot.id} className="ui-armoury-slot">
-                                <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
-                                <div className="ui-armoury-pieces">
-                                    {CASKET_GEAR.filter((g) => g.slot === slot.id).map((g) => (
-                                        <ArmouryTile
-                                            key={g.id}
-                                            save={save}
-                                            itemId={g.id}
-                                            selected={g.id === selected}
-                                            onSelect={() => setSelected(g.id)}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <ArmouryDetails save={save} itemId={selected} client={client} />
+                <div className="ui-armoury-tabs" aria-label={t("armoury.title")}>
+                    {(["gear", "weapons", "passives"] as const).map((id) => (
+                        <button
+                            key={id}
+                            className={
+                                "ui-armoury-tab" + (tab === id ? " ui-armoury-tab-selected" : "")
+                            }
+                            aria-pressed={tab === id}
+                            onClick={() => setTab(id)}
+                        >
+                            {t(`armoury.tab.${id}`)}
+                        </button>
+                    ))}
                 </div>
                 {tab === "gear" ? (
                     <>

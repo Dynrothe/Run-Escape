@@ -3,7 +3,6 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-
 ## Unreleased
 
 ### Added
@@ -27,7 +26,7 @@ the version in the corner).
   Added Enraged Dark Chickens, new enemies that perform lane-based charges.
   Added farmers, bandits, and foxes as new event wave enemies.
   Added Chompy Birds as new huntable enemies.
--  Rubber Chicken, By Happi:
+- Rubber Chicken, By Happi:
   Added a unique 10-level Rubber Chicken upgrade system exclusive to Avian Assaulter.
   Rubber Chicken attacks enemies in front of and behind the player starting at level 1.
   Each upgrade increases the weapon's healing capabilities.
@@ -57,6 +56,10 @@ the version in the corner).
   Changed the pause menu to show your stats above equipped weapons and passives.
   Changed Debuffs now appear before buffs in the HUD and pause-menu effect lists.
 
+### Fixed
+
+- Restored the Armoury's Armour, Weapons and Passives tabs and removed duplicate equipment.
+- Fixed HUD effect names and their hover, focus and hold descriptions.
 
 ## 0.30.0 - 2026-11-09
 

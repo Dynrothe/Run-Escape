@@ -271,7 +271,7 @@ describe("the run's HUD", () => {
         const potion = {
             id: "potion",
             name: "Potion",
-            description: "Potion",
+            description: "+20% damage",
             objId: 2436,
             harmful: false,
             secondsLeft: 30,
@@ -300,8 +300,17 @@ describe("the run's HUD", () => {
         const timed = view.getByRole("button", { name: "Potion" });
         expect(timed).toHaveTextContent("30s");
         expect(timed.querySelector(".ui-buff-bar")).toHaveStyle("transform: scaleX(0.5)");
+        fireEvent.focus(timed);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Potion");
+        expect(screen.getByRole("tooltip")).toHaveTextContent(potion.description);
+        expect(timed).toHaveAttribute("aria-describedby", screen.getByRole("tooltip").id);
+        expect(timed).not.toHaveAttribute("title");
+        fireEvent.blur(timed);
+        fireEvent.focus(ring);
+        expect(screen.getByRole("tooltip")).toHaveTextContent("Revives you once if you fall.");
         act(() => store.setNumbers(numbers({ buffs: [potion] })));
         expect(view.queryByRole("button", { name: "Ring of life" })).toBeNull();
+        expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
         expect(view.getByRole("button", { name: "Potion" })).toHaveTextContent("30s");
     });
 
@@ -513,7 +522,17 @@ describe("the run's HUD", () => {
         const { store, view } = renderHud();
         const save = createSave();
         act(() => store.set({ screen: "armoury", save }));
+        const armourTab = screen.getByRole("button", { name: "Armour" });
+        const weaponsTab = screen.getByRole("button", { name: "Weapons" });
+        expect(armourTab).toHaveAttribute("aria-pressed", "true");
+        expect(weaponsTab).toHaveAttribute("aria-pressed", "false");
+        expect(view.container.querySelectorAll(".ui-armoury-body")).toHaveLength(1);
+        expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
         fireEvent.click(screen.getByRole("button", { name: "Weapons" }));
+        expect(weaponsTab).toHaveAttribute("aria-pressed", "true");
+        expect(armourTab).toHaveAttribute("aria-pressed", "false");
+        expect(screen.queryByRole("button", { name: /Dragonfire shield/ })).not.toBeInTheDocument();
+        expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
         const groups = view.container.querySelectorAll(".ui-catalogue-group");
         expect(
             [...groups].map((group) => group.querySelector(".ui-armoury-slot-name")?.textContent),
@@ -545,7 +564,10 @@ describe("the run's HUD", () => {
         expect(passiveDetail).toHaveTextContent("Maximum level: 1");
         expect(screen.getByText("All styles")).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Armour" }));
-        expect(view.container.querySelector(".ui-armoury-slots")).toBeInTheDocument();
+        expect(armourTab).toHaveAttribute("aria-pressed", "true");
+        expect(view.container.querySelectorAll(".ui-armoury-slots")).toHaveLength(1);
+        expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
+        expect(view.container.querySelector(".ui-catalogue-group")).not.toBeInTheDocument();
     });
 
     test("pick-only weapons describe their character and level-up sources", () => {
