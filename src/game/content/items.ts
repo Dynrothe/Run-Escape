@@ -786,7 +786,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Stamina potion",
         objId: 12625,
         rarity: "common",
-        description: "+30% movement speed for 40 seconds.",
         use: { kind: "buff", stats: { moveSpeed: 0.3 }, seconds: 40 },
     },
     {
@@ -813,7 +812,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Super attack",
         objId: 2436,
         rarity: "common",
-        description: "+15% weapon speed for 30 seconds.",
         use: { kind: "buff", stats: { cooldown: 0.15 }, seconds: 30 },
     },
     {
@@ -822,7 +820,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Super defence",
         objId: 2442,
         rarity: "common",
-        description: "+2 armour for 30 seconds.",
         use: { kind: "buff", stats: { armor: 2 }, seconds: 30 },
     },
     {
@@ -831,7 +828,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Super strength",
         objId: 2440,
         rarity: "uncommon",
-        description: "+25% damage for 30 seconds.",
         use: { kind: "buff", stats: { might: 0.25 }, seconds: 30 },
     },
     {
@@ -867,7 +863,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Zamorak brew",
         objId: 2450,
         rarity: "uncommon",
-        description: "+35% damage, but -1 armour, for 30 seconds.",
         use: { kind: "buff", stats: { might: 0.35, armor: -1 }, seconds: 30 },
     },
     {
@@ -876,7 +871,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Magic potion",
         objId: 3040,
         rarity: "uncommon",
-        description: "+20% area and +20% effect duration for 30 seconds.",
         use: { kind: "buff", stats: { area: 0.2, duration: 0.2 }, seconds: 30 },
     },
     {
@@ -896,7 +890,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Super combat potion",
         objId: 12695,
         rarity: "rare",
-        description: "+25% damage, +1 armour and +10% weapon speed for 30 seconds.",
         use: { kind: "buff", stats: { might: 0.25, armor: 1, cooldown: 0.1 }, seconds: 30 },
     },
     {
@@ -905,7 +898,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Ranging potion",
         objId: 2444,
         rarity: "rare",
-        description: "+1 projectile and +20% projectile speed for 25 seconds.",
         use: { kind: "buff", stats: { amount: 1, speed: 0.2 }, seconds: 25 },
     },
     {
@@ -914,7 +906,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Bastion potion",
         objId: 22461,
         rarity: "rare",
-        description: "+1 projectile, +20% projectile speed and +1.5 armour for 30 seconds.",
         use: { kind: "buff", stats: { amount: 1, speed: 0.2, armor: 1.5 }, seconds: 30 },
     },
     {
@@ -923,7 +914,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Battlemage potion",
         objId: 22449,
         rarity: "rare",
-        description: "+25% area, +25% effect duration and +1.5 armour for 30 seconds.",
         use: { kind: "buff", stats: { area: 0.25, duration: 0.25, armor: 1.5 }, seconds: 30 },
     },
     {
@@ -950,7 +940,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Overload",
         objId: 11730,
         rarity: "veryRare",
-        description: "+35% damage, +15% weapon speed and +15% area for 30 seconds.",
         use: { kind: "buff", stats: { might: 0.35, cooldown: 0.15, area: 0.15 }, seconds: 30 },
     },
     {
@@ -959,7 +948,6 @@ export const UTILITY: UtilityDef[] = [
         name: "Divine super combat potion",
         objId: 23685,
         rarity: "veryRare",
-        description: "+30% damage, +1.5 armour and +12% weapon speed for 60 seconds.",
         use: { kind: "buff", stats: { might: 0.3, armor: 1.5, cooldown: 0.12 }, seconds: 60 },
     },
     {
@@ -1067,8 +1055,9 @@ export function itemName(item: ItemDef): string {
     return tr(`${item.kind === "gear" ? "gear" : "util"}.${item.id}.name`, item.name);
 }
 
+// Its sentence, in the language chosen ("" for a buff, which has none: describeItem)
 export function utilityDescription(item: UtilityDef): string {
-    return tr(`util.${item.id}.desc`, item.description);
+    return item.description === undefined ? "" : tr(`util.${item.id}.desc`, item.description);
 }
 
 export function casketName(tier: CasketTier): string {

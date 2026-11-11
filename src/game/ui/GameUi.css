@@ -2203,17 +2203,16 @@
     pointer-events: none;
 }
 
-/* A bag item's rarity and kind under its name, as a casket's card has them. The variable is
-   the readable secondary text's, where the UI has it. */
-.ui-description-kind {
+/* A bag item's rarity under its name, in the dim text a casket's card says it in */
+.ui-description-rarity {
     margin-top: -3px;
     font-size: 14px;
-    color: var(--ui-text-dim, #b8aa8a);
+    color: #b8aa8a;
 }
 
 /* How long a potion's stats last, after them */
 .ui-item-lasts {
-    color: var(--ui-text-dim, #b8aa8a);
+    color: #b8aa8a;
 }
 
 .ui-hp {

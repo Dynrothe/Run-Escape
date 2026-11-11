@@ -31,7 +31,9 @@ export default function extract(): Record<string, string> {
     for (const item of GEAR) strings[`gear.${item.id}.name`] = item.name;
     for (const item of UTILITY) {
         strings[`util.${item.id}.name`] = item.name;
-        strings[`util.${item.id}.desc`] = item.description;
+        if (item.description !== undefined) {
+            strings[`util.${item.id}.desc`] = item.description;
+        }
     }
     for (const slot of GEAR_SLOTS) strings[`slot.${slot.id}.name`] = slot.name;
     for (const tier of CASKET_TIERS) strings[`casket.${tier}.name`] = CASKETS[tier].name;

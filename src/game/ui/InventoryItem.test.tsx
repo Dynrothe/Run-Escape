@@ -4,8 +4,10 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { InventorySlotView } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getItem } from "../content/items";
-import { setLang, tp } from "../i18n";
+import { DURATION_ICON, StatIconRef, statKeyIcon } from "../content/statIcons";
+import { setLang, tl, tp } from "../i18n";
 import { InventoryItem } from "./InventoryItem";
+import { iconCache } from "./ItemIcon";
 
 const slot = { item: getItemView(getItem("shark")), count: 2 };
 
@@ -39,10 +41,26 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.restoreAllMocks();
     setLang("en");
 });
 
+// The icon cache answers with the icon's own id, so a line's image says which icon it has
+function iconSrc(icon: StatIconRef | undefined): string {
+    return icon?.spriteId !== undefined ? `sprite:${icon.spriteId}` : `obj:${icon?.objId}`;
+}
+
 test("a potion lists its stats a line each, each with its icon in any language, and how long they last", () => {
+    vi.spyOn(iconCache, "get").mockImplementation((objId) => `obj:${objId}`);
+    vi.spyOn(iconCache, "getSprite").mockImplementation((id) => `sprite:${id}`);
+    vi.spyOn(iconCache, "request").mockImplementation(() => {});
+    vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
+    const icons = [
+        statKeyIcon("armor"),
+        statKeyIcon("area"),
+        statKeyIcon("duration"),
+        DURATION_ICON,
+    ].map(iconSrc);
     for (const lang of ["en", "pt-BR"] as const) {
         setLang(lang);
         const item = getItemView(getItem("battlemage_potion"));
@@ -62,8 +80,10 @@ test("a potion lists its stats a line each, each with its icon in any language, 
             ...item.lines.map((line) => line.text),
             tp("canvas.lasts", 30),
         ]);
-        // The icons go by the stat, not by English words in the text
-        expect(lines.filter((line) => !line.querySelector(".ui-icon"))).toEqual([]);
+        // Each line has its own stat's icon, in any language, and the watch says how long
+        expect(lines.map((line) => line.querySelector("img")?.getAttribute("src"))).toEqual(icons);
+        // The rarity under the name
+        expect(screen.getByRole("tooltip").children[1].textContent).toBe(tl(item.rarity.name));
         cleanup();
     }
 });
@@ -75,7 +95,7 @@ test("hover and keyboard focus show exactly the description used by the reward c
     const tip = screen.getByRole("tooltip");
     expect([...tip.children].map((line) => line.textContent)).toEqual([
         slot.item.name,
-        `${slot.item.rarity.name} · ${slot.item.kindLabel}`,
+        slot.item.rarity.name,
         ...slot.item.lines.map((line) => line.text),
     ]);
     expect(button).toHaveAttribute("aria-describedby", tip.id);

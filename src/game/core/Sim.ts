@@ -3023,10 +3023,15 @@ export class Sim {
         }
     }
 
-    // A potion's effect, for seconds stretched by effect duration. Drinking
-    // another dose starts the timer again.
+    // How long a potion's effect lasts if drunk now: its seconds stretched by effect duration.
+    // The bag says it too (ItemViews).
+    buffTicks(seconds: number): number {
+        return Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
+    }
+
+    // A potion's effect, for buffTicks. Drinking another dose starts the timer again.
     private addBuff(itemId: string, stats: Partial<Stats>, seconds: number, cures: boolean): void {
-        const ticks = Math.round(seconds * (1 + this.stats.duration) * TICKS_PER_SECOND);
+        const ticks = this.buffTicks(seconds);
         this.buffs = this.buffs.filter((b) => b.itemId !== itemId);
         this.buffs.push({
             itemId,

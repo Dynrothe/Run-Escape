@@ -12,12 +12,14 @@ import {
 } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getItem } from "../content/items";
+import { DURATION_ICON, StatIconRef, statKeyIcon } from "../content/statIcons";
 import { createSave } from "../core/save";
 import { setLang, tp } from "../i18n";
 import { ChestModal } from "./ChestModal";
 import { ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import { GameUi } from "./GameUi";
+import { iconCache } from "./ItemIcon";
 
 afterEach(() => {
     cleanup();
@@ -242,6 +244,13 @@ describe("stat icons on the screens that show stats", () => {
 
     test("a casket's potion shows its stats with their icons in any language, and how long they last", () => {
         vi.useFakeTimers();
+        // The icon cache answers with the icon's own id, so a line's image says which it has
+        vi.spyOn(iconCache, "get").mockImplementation((objId) => `obj:${objId}`);
+        vi.spyOn(iconCache, "getSprite").mockImplementation((id) => `sprite:${id}`);
+        vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
+        const iconSrc = (icon: StatIconRef | undefined) =>
+            icon?.spriteId !== undefined ? `sprite:${icon.spriteId}` : `obj:${icon?.objId}`;
         try {
             setLang("pt-BR");
             const store = new GameStore(createSave());
@@ -275,10 +284,18 @@ describe("stat icons on the screens that show stats", () => {
                 ...item.lines.map((line) => line.text),
                 tp("canvas.lasts", 30),
             ]);
-            expect(lines.filter((line) => !line.querySelector(".ui-icon"))).toEqual([]);
+            expect(lines.map((line) => line.querySelector("img")?.getAttribute("src"))).toEqual(
+                [
+                    statKeyIcon("armor"),
+                    statKeyIcon("area"),
+                    statKeyIcon("duration"),
+                    DURATION_ICON,
+                ].map(iconSrc),
+            );
         } finally {
             setLang("en");
             vi.useRealTimers();
+            vi.restoreAllMocks();
         }
     });
 

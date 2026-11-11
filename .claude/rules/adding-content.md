@@ -112,6 +112,8 @@ piece upgrades into, and `sets.ts` has the set bonuses. Run `scripts/cache/check
 A utility item with a new `ItemUse` kind needs a case in `Sim.useUtility`, a sound in
 `USE_SOUNDS` in `client/GameSounds.ts`, and if it's only for some runs (the Prayer cape's extra
 revive, co-op only), its weight in `itemWeight` in `core/Loot.ts`.
+A utility item's `description` is the sentence its descriptions show. A `buff` has none: it's
+shown as its stats, a line each, then how long they last (`describeItem`, `ItemView.seconds`).
 
 ## Power-up
 

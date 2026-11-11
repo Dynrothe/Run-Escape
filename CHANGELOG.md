@@ -43,9 +43,8 @@ the version in the corner).
   better, where a jewel's keris came Very rare), and it's your only keris that run.
 - Theatre of Blood's closing rings, by trippy22: the next ring waits until the last has closed
   in, so an enraged Maiden's rings no longer come back to back.
-- Item descriptions, by Jp66600: a potion lists its stats a line each, with their icons, and how
-  long they last, and the bag's descriptions say an item's rarity and kind, as a casket does. The
-  icons in item descriptions show in every language, not only English.
+- Item descriptions, by Jp66600: a potion lists its stats a line each, with their icons, then how
+  long they last with your effect duration. The bag's descriptions say an item's rarity too.
 
 ### Fixed
 

@@ -1,4 +1,4 @@
-import { getBuffViews } from "../client/ItemViews";
+import { getBuffViews, getInventoryViews } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import {
@@ -1845,6 +1845,17 @@ describe("caskets and items", () => {
         runFor(sim, 31, "still");
         expect(sim.buffs.length).toBe(0);
         expect(sim.stats.might).toBeCloseTo(0);
+    });
+
+    test("the bag says how long a potion lasts, stretched by effect duration", () => {
+        const sim = createSim();
+        sim.metaStats.duration = 0.25;
+        sim.updateStats();
+        sim.stash("battlemage_potion");
+        // 30 seconds, and a quarter more is 37.5: the first second its timer shows
+        expect(getInventoryViews(sim)[0]?.item.seconds).toBe(38);
+        sim.useItem(0);
+        expect(getBuffViews(sim)[0].secondsLeft).toBe(38);
     });
 
     test("regen heals its hitpoints a minute", () => {

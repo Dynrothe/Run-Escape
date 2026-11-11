@@ -86,7 +86,15 @@ function getRunItemView(
 ): ItemView {
     const set = getItemSet(item);
     const view = getItemView(item, upgrades, set && countSetPieces(worn, set.id));
-    return { ...view, lines: [...view.lines, ...getRoundLines(sim, item)] };
+    return {
+        ...view,
+        lines: [...view.lines, ...getRoundLines(sim, item)],
+        // In a run a potion lasts as long as the hero's effect duration stretches it, the
+        // first second its timer shows
+        ...(view.seconds !== undefined && {
+            seconds: Math.ceil(sim.buffTicks(view.seconds) / TICKS_PER_SECOND),
+        }),
+    };
 }
 
 // The casket at the front of the queue, undefined when there's none

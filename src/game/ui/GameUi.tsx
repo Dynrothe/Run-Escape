@@ -91,7 +91,7 @@ import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } 
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
-import { DescriptionButton, ItemDescription } from "./DescriptionButton";
+import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
@@ -3423,13 +3423,7 @@ function PauseModal({
                                                             {tl(item.name)}
                                                         </span>
                                                         <span className="ui-pause-detail">
-                                                            {item.lines.map((line, i) => (
-                                                                <StatLine
-                                                                    key={i}
-                                                                    text={line.text}
-                                                                    english={line.english}
-                                                                />
-                                                            ))}
+                                                            <ItemLines item={item} />
                                                             {item.set && (
                                                                 <span
                                                                     className={

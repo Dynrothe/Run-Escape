@@ -11,6 +11,7 @@ import {
     CASKET_TIERS,
     GEAR,
     ITEMS,
+    TOMBS_SUPPLY_ITEMS,
     UTILITY,
     VARIANT_BONUS,
     getGear,
@@ -19,6 +20,7 @@ import {
 import { MAPS, getMap, hasPoison } from "../content/maps";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { SETS, getSetPieces } from "../content/sets";
+import { formatStats } from "../content/stats";
 import { CasketTier, GearSlot } from "../content/types";
 import {
     SET_PIECE_CHANCE,
@@ -52,6 +54,25 @@ describe("items", () => {
             expect(UTILITY.some((i) => i.rarity === rarity)).toBe(true);
             expect(GEAR.some((i) => i.rarity === rarity)).toBe(true);
         }
+    });
+
+    // A buff is described by its stats, a line each, and how long they last (ItemView's
+    // seconds), so a sentence of its own would never be shown
+    test("a buff is described by its stats, and every other utility item by its sentence", () => {
+        for (const item of [...UTILITY, ...TOMBS_SUPPLY_ITEMS]) {
+            if (item.use.kind === "buff") {
+                expect(item.description, item.id).toBeUndefined();
+                expect(describeItem(item), item.id).toEqual(formatStats(item.use.stats));
+            } else {
+                expect(item.description, item.id).toBeTruthy();
+                expect(describeItem(item), item.id).toEqual([{ text: item.description }]);
+            }
+        }
+        expect(describeItem(getItem("battlemage_potion"))).toEqual([
+            { text: "+1.5 armour", english: "armour" },
+            { text: "+25% area", english: "area" },
+            { text: "+25% effect duration", english: "effect duration" },
+        ]);
     });
 
     describe("auto equip", () => {

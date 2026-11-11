@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { ItemView } from "../client/GameStore";
 import { TAP_SLOP } from "../client/GameTouch";
 import { DURATION_ICON } from "../content/statIcons";
-import { t, tl, tp } from "../i18n";
+import { tl, tp } from "../i18n";
 import { StatLine } from "./StatLine";
 
 const LONG_PRESS_MS = 500;
@@ -326,27 +326,24 @@ function screenRect(element: HTMLElement): DOMRect {
 }
 
 // An item's name in its rarity's colour, what it does, and its set: the bag,
-// worn gear and the Armoury. kind: its rarity and kind under the name, as a casket
-// shows them (the bag's). children add lines after.
+// worn gear and the Armoury. rarity: its rarity's name under its own, for the bag, where
+// everything's a utility item (a casket's card says that too, as it can be gear). children
+// add lines after.
 export function ItemDescription({
     item,
-    kind = false,
+    rarity = false,
     setClassName,
     children,
 }: {
     item: ItemView;
-    kind?: boolean;
+    rarity?: boolean;
     setClassName?: string;
     children?: ReactNode;
 }): JSX.Element {
     return (
         <>
             <span style={{ color: item.rarity.color }}>{item.name}</span>
-            {kind && (
-                <span className="ui-description-kind">
-                    {t("chest.kind", { rarity: tl(item.rarity.name), kind: item.kindLabel })}
-                </span>
-            )}
+            {rarity && <span className="ui-description-rarity">{tl(item.rarity.name)}</span>}
             <ItemLines item={item} />
             {item.set && (
                 <StatLine

@@ -51,7 +51,7 @@ export type ItemView = {
     kindLabel: string;
     // What it does, a line per stat or effect
     lines: StatText[];
-    // A potion's stats last this long
+    // A potion's stats last this long: in a run, stretched by the hero's effect duration
     seconds?: number;
     // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
     // whether its bonus is on

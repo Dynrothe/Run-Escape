@@ -2521,7 +2521,8 @@ in `i18n/store.ts`.
   `weaponStats`, a passive's value) is a `StatText` that carries its English, and `StatLine` takes
   it as `english`. A text the language files hold goes back to its English through the files'
   keys (`englishOf`), so it gets exactly its English's icon, none if the English has none. A new
-  line built from a stat must carry its English, or it loses its icon in other languages.
+  line built from a stat must carry its English, or it loses its icon in other languages. A line
+  that isn't a stat gives `StatLine` its `icon` (a potion's duration has `DURATION_ICON`).
   `statIcons.test.ts` runs every language in `LANGS` over every such line, so a new language is
   checked by adding it there.
 - Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give

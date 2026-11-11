@@ -3075,7 +3075,9 @@ export type UtilityDef = {
     name: string;
     objId: number;
     rarity: Rarity;
-    description: string;
+    // What it does, in a sentence. A buff has none: its stats are its lines, then how long
+    // they last (describeItem).
+    description?: string;
     use: ItemUse;
     unlock?: UnlockTask;
 };
