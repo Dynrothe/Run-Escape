@@ -108,6 +108,12 @@ export type ActorDrawOptions = {
     // Drawn with an outline: the model this much bigger in a flat colour
     // (ActorRenderer.outlineColor) behind it
     outline?: number;
+    // Drawn with a glow: see-through shells of the model this much bigger (each of glow's
+    // scales), in glowColor at glowAlpha, blended behind it, so a soft rim of it shows round the
+    // actor (an orb's awakened boss, client/GameView.ts)
+    glow?: readonly number[];
+    glowColor?: number;
+    glowAlpha?: number;
     // Light along the edges of a tile-sized model (one tile across, centred), as if from under
     // it: 0 to 1, how strongly; how far in it reaches, of the way to the middle; and its colour
     // (the Wardens' floor, client/FloorView.ts)
@@ -284,8 +290,9 @@ export class ActorSegment {
     readonly instances = new InstanceList();
     readonly silhouettes = new InstanceList();
     readonly outlines = new InstanceList();
+    readonly glows = new InstanceList();
     readonly early = new InstanceList();
-    readonly lists = [this.instances, this.silhouettes, this.outlines, this.early];
+    readonly lists = [this.instances, this.silhouettes, this.outlines, this.glows, this.early];
 
     constructor(
         readonly vertexArray: VertexArray,
@@ -293,12 +300,14 @@ export class ActorSegment {
         public drawCall: DrawCall,
         readonly drawCallSilhouette: DrawCall,
         readonly drawCallOutline: DrawCall,
+        readonly drawCallGlow: DrawCall,
     ) {}
 
     setActorData(texture: Texture): void {
         this.drawCall.texture("u_actorData", texture);
         this.drawCallSilhouette.texture("u_actorData", texture);
         this.drawCallOutline.texture("u_actorData", texture);
+        this.drawCallGlow.texture("u_actorData", texture);
     }
 }
 
@@ -357,6 +366,8 @@ export class ActorRenderer {
 
     silhouetteColor = new Float32Array([0.85, 0.85, 1.0, 0.45]);
     outlineColor = new Float32Array([1.0, 0.55, 0.1, 1.0]);
+    // A negative alpha: each glow shell's own colour (actor-silhouette.frag.glsl)
+    readonly glowColor = new Float32Array([0, 0, 0, -1]);
 
     constructor(
         readonly app: PicoApp,
@@ -415,6 +426,10 @@ export class ActorRenderer {
                 createDrawCall(this.silhouetteProgram, vertexArray).uniform(
                     "u_silhouetteColor",
                     this.outlineColor,
+                ),
+                createDrawCall(this.silhouetteProgram, vertexArray).uniform(
+                    "u_silhouetteColor",
+                    this.glowColor,
                 ),
             );
         });
@@ -495,6 +510,7 @@ export class ActorRenderer {
                 segment.instances.reset();
                 segment.silhouettes.reset();
                 segment.outlines.reset();
+                segment.glows.reset();
                 segment.early.reset();
             }
         }
@@ -516,8 +532,11 @@ export class ActorRenderer {
         const stretchX = options?.stretchX ?? 1;
         const stretchZ = options?.stretchZ ?? 1;
         if (this.frustum) {
+            const glow = options?.glow;
             const biggest =
-                scale * Math.max(options?.outline ?? 1, 1) * Math.max(stretchX, stretchZ, 1);
+                scale *
+                Math.max(options?.outline ?? 1, glow ? Math.max(...glow) : 1, 1) *
+                Math.max(stretchX, stretchZ, 1);
             const reach = (model.reach * biggest) / 128 + CULL_MARGIN;
             if (!this.frustum.intersectsSphere(x, y, z, reach)) {
                 return;
@@ -594,6 +613,33 @@ export class ActorRenderer {
                 0,
                 0,
             );
+        }
+        if (options?.glow) {
+            // A full negative flash: the vertex shader's colour is the tint itself, at the alpha
+            const color = options.glowColor ?? NO_TINT;
+            const glowAlpha = (options.glowAlpha ?? 0.5) * alpha;
+            for (const glowScale of options.glow) {
+                segment.glows.push(
+                    anim.ranges,
+                    frame,
+                    x,
+                    y,
+                    z,
+                    yaw,
+                    scale * glowScale,
+                    -1,
+                    color,
+                    glowAlpha,
+                    0,
+                    0,
+                    0,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                );
+            }
         }
     }
 
@@ -738,6 +784,26 @@ export class ActorRenderer {
             }
         }
         this.app.depthMask(true);
+    }
+
+    // Draw after the opaque world and before the actors themselves: the glowing
+    // actors' see-through shells, blended without writing depth, so the actors
+    // drawn over them leave a soft rim of it showing (ActorDrawOptions.glow).
+    // Leaves blending off and depth writes on.
+    renderGlows(): void {
+        if (!this.pages.some((page) => page.segments.some((s) => s.glows.count > 0))) {
+            return;
+        }
+        this.app.enable(PicoGL.BLEND);
+        this.app.depthMask(false);
+        for (const page of this.pages) {
+            for (const segment of page.segments) {
+                const list = segment.glows;
+                this.drawList(segment.drawCallGlow, list, list.opaqueOffsets, list.opaqueCounts);
+            }
+        }
+        this.app.depthMask(true);
+        this.app.disable(PicoGL.BLEND);
     }
 
     // Draw after the opaque world and before the actors themselves: fragments

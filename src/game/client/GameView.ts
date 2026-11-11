@@ -249,8 +249,29 @@ const PET_BUBBLE_HEIGHT = 0.5;
 const PET_BUBBLE_TINT = 0xa8f0ff;
 // The Forgotten Four's blood-touched pets (hasBloodLooks)
 const BLOOD_LOOK_TINT = 0xff4040;
-// An orb's awakened final boss's glow: a negative flash, lit in its violet tint
-const AWAKENED_GLOW = -0.3;
+// An orb's awakened final boss (Sim AWAKENED, design 8.6): its own model drawn darker with a
+// violet cast (its colours times the tint, a little of the tint over them, so its shading stays),
+// in a soft violet glow (ActorDrawOptions.glow: two see-through shells round it) breathing slowly;
+// enraged, a redder violet, the glow brighter, wider and quicker. Sim's own awakened tints stay
+// as they were (synced state); they're only told apart here.
+const AWAKENED_LOOK = {
+    body: 0x9484b8,
+    cast: -0.08,
+    glow: 0x9a5cff,
+    alpha: 0.5,
+    shells: [1.05, 1.11],
+    // Radians a tick (TICKS_PER_SECOND 50): about 2.5 s a breath
+    pulse: 0.05,
+};
+const AWAKENED_ENRAGED_LOOK = {
+    body: 0xa47498,
+    cast: -0.1,
+    glow: 0xc055ff,
+    alpha: 0.62,
+    shells: [1.06, 1.14],
+    pulse: 0.1,
+};
+const awakenedGlow = [0, 0];
 // A boss's debris (BossAttackDef.debris) sinks away over this many ticks
 const DEBRIS_SINK_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
@@ -2560,11 +2581,23 @@ export class GameView {
                     (0.5 + 0.5 * Math.sin((tick + alpha) / (TICKS_PER_SECOND / EXPOSED_PULSE))),
             );
         }
-        // An orb's awakened final boss: a slow violet glow, its tint lit (Sim AWAKENED)
-        if (enemy.awakened && !enemy.dead && tint === enemy.tint) {
-            flash = Math.min(flash, AWAKENED_GLOW - 0.1 * Math.sin((tick + alpha) * 0.12));
-        }
         const options = enemyDrawOptions;
+        options.glow = undefined;
+        // An orb's awakened final boss: darker, in a breathing violet glow (AWAKENED_LOOK)
+        if (enemy.awakened && !enemy.dead && tint === enemy.tint) {
+            const look = enemy.bossState?.enraged ? AWAKENED_ENRAGED_LOOK : AWAKENED_LOOK;
+            const breath = Math.sin((tick + alpha) * look.pulse);
+            tint = look.body;
+            // A hit still flashes
+            if (flash <= 0) {
+                flash = look.cast;
+            }
+            awakenedGlow[0] = look.shells[0] + 0.01 * breath;
+            awakenedGlow[1] = look.shells[1] + 0.02 * breath;
+            options.glow = awakenedGlow;
+            options.glowColor = look.glow;
+            options.glowAlpha = look.alpha * (0.8 + 0.2 * breath);
+        }
         options.scale = enemy.scale;
         options.tint = tint;
         options.flash = flash;

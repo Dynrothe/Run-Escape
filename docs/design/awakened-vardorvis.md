@@ -78,9 +78,9 @@ and rises into the next.
 | ----- | --------- | -------------- | ------------------------------------------------------------------------------ |
 | 1     | 100-70%   | The axes swing | Strike, Dart (and its vines), Swinging axes; roots creep in from the edge      |
 | 2     | 70-35%    | The wood wakes | Strangle, the roots rise on their own, blood captors come up at the root front |
-| 3     | 35-0%     | Severed        | His head tears free and gazes; double darts; everything quicker                |
+| 3     | 35-0%     | Severed        | His head tears free and gazes; double darts; he walks quicker                  |
 
-He has 4,400 hitpoints. He starts an attack every 1.4 s, times the phase's tempo (1, 0.9, 0.8),
+He has 4,000 hitpoints. He starts an attack every 1.4 s, times the phase's tempo (1, 0.9, 0.9),
 and walks after the player at 3 tiles a second (the Forester's is 3.3), quicker by the phase.
 
 ### His attacks, and the dodge arithmetic
@@ -253,6 +253,23 @@ hard). Phase 1 takes 25 to 36 s, phase 2 37 to 56 s, and the bot dies in phase 3
 mostly to his head's shots and the double darts: it never cuts the head down, which a player
 would. So by the bot it's above Zachariah (his careful bot won 1 in 3); whether a person can win
 it is the playtest's question, and the first knobs are his hitpoints and his head.
+
+**Eased, 2026-11-11** (Dynny agreed): in the Forgotten Four gauntlet's bot runs (`GAUNTLET=1
+DODGE=1`) he took about 20 tries a win, against 2 to 8 for the other three. Numbers only, his kit
+as it was: **4,400 to 4,000 hitpoints, and the severed phase's tempo 0.8 to 0.9** (an attack every
+1.26 s there, not 1.12 s; he still walks quicker). The careful bot alone (`MAP=awakened_vardorvis
+DODGE=1`, seeds 1-600 for normal, 1-300 for hard):
+
+| Numbers                        | Normal wins          | Wins in   | Phase 1 | Hard     |
+| ------------------------------ | -------------------- | --------- | ------- | -------- |
+| 4,400 hp, tempo 0.8 (before)   | 10 of 200 (1 in 20)  | 1:34-2:21 | 23-40 s | 0 of 100 |
+| 4,000 hp, tempo 0.9 (as built) | 86 of 600 (1 in 7.0) | 1:23-2:03 | 20-41 s | 0 of 300 |
+
+In the gauntlet (24 seeds, up to 40 retries a fight) that's 141 tries for 24 wins, 5.9 a win, and
+all 24 clear. Other knobs tried (seeds 1-200 or 1-600): 4,000 hp alone 1 in 15, his head's shot
+every 4.5 s alone 1 in 13, tempo 0.9 alone 1 in 17, 3,800 hp with the head at 5 s 1 in 5.6. Near
+these numbers the rate isn't smooth: 4,050 hp gave 1 in 5.2 and 4,100 1 in 9.4 (the bot's whole run
+shifts with a few hitpoints), so read it as about 1 in 5 to 1 in 9, centred near 1 in 7.
 
 ## 11. Not verified
 

@@ -69,7 +69,7 @@ export const VARDORVIS_FEATURES: ArenaFeatures = {
 
 // What the fight's tuned to (maps.ts): his hitpoints, the Forester's 2h sword's level, and tiles
 // south of him the player starts
-export const VARDORVIS_HITPOINTS = 4400;
+export const VARDORVIS_HITPOINTS = 4000;
 export const VARDORVIS_SWORD_LEVEL = 8;
 export const VARDORVIS_START_DISTANCE = 6;
 
@@ -357,7 +357,7 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
                         status: "Severed",
                         message: "Severed!",
                         opener: "Darts",
-                        tempo: 0.8,
+                        tempo: 0.9,
                         speed: 1.2,
                     },
                 ],

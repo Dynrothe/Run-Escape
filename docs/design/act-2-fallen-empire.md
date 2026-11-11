@@ -820,7 +820,10 @@ Build order step 15. Where it differs from 7.3, and why:
 - **Bot** (`simulate-run.ts` `GAUNTLET=1 DODGE=1`, normal, the act's order): with no retries all
   6 seeds fall at the first fight, Vardorvis, the one it wins least. With up to 25 retries a fight
   it clears all 7 runs, with 7 to 40 retries, in 6:28 to 7:17 of fighting; a fight takes it about
-  20 tries at Vardorvis, 2 at the Whisperer and the Duke and 8 at the Leviathan. Its fights earn
+  20 tries at Vardorvis, 2 at the Whisperer and the Duke and 8 at the Leviathan. Vardorvis eased
+  after (4,000 hp, severed tempo 0.9; awakened-vardorvis.md 10): 24 seeds with up to 40 retries all
+  clear, in 5:46 to 7:18, at 5.9 tries a win at Vardorvis, 3.7 the Whisperer, 5.4 the Duke and 8.1
+  the Leviathan (the earlier 2 and 2.5 were 4 seeds). Its fights earn
   165 to 220 points. With Rest skipped (`BLESS=best`) the wounds carry: fights 2 to 4 start at
   81% to 97%.
 - **Not kept**: a run in progress isn't saved; reloading the page mid-gauntlet loses it.
@@ -1122,8 +1125,10 @@ Build order step 16, the act's last. Where it differs from 8.6, and why:
   get there, and its first clears give their two). On a campaign map's card, under the remixes, an
   orb's switch (`AwakenRow`, solo, not endless) awakens its final boss for the next run: 1.6 times
   its hitpoints, enraged from 75% (bosses in phases don't enrage; they get the tempo), its attacks
-  and walk 20% quicker (as the gauntlet's climb is), tinted dark violet with a slow violet glow, a
-  redder violet enraged. The orb's spent once the boss comes (`RunResult.awakened.seen`): a run
+  and walk 20% quicker (as the gauntlet's climb is), drawn darker in its own colours with a violet
+  cast, in a soft violet glow round it (two see-through shells, `ActorDrawOptions.glow`) breathing
+  every 2.5 s; enraged, a redder violet, the glow brighter, wider and quicker (`GameView`
+  `AWAKENED_LOOK`). Sim's tints for it are unchanged. The orb's spent once the boss comes (`RunResult.awakened.seen`): a run
   left before it keeps it. Its fall opens a master casket at once, as the run's over as it falls:
   its coins are the run's, and its gear's found for the Armoury. A win marks the map's tile with
   an orb (`SaveData.awakenedWins`). The orbs held show on the card and on the act's middle card.
@@ -1280,7 +1285,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
 | 14  | **Awakened Leviathan**, Lil'viathan, the act's ending. Built, first pass (`awakened-leviathan.md`)                                        | 3, 12        | 2 weeks    |
 | 15  | **The Forgotten Four** gauntlet. Built, solo (7.4)                                                                                        | 3, 8, 11, 14 | 1.5 weeks  |
-| 16  | Awakened invasions, Awakener's orbs, the weekly Vault. Built (8.8)                                                                       | 14           | 1.5 weeks  |
+| 16  | Awakened invasions, Awakener's orbs, the weekly Vault. Built (8.8)                                                                        | 14           | 1.5 weeks  |
 
 The sizes are reasoned from the code, not prototyped, and leave out playtest rounds.
 
