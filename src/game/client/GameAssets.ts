@@ -898,6 +898,13 @@ export class GameAssets {
         for (const locId of traitLocs) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
+        // The wreck a fight stands round its boss (ArenaFeatures.wreckage), drawn as its debris
+        const wreckLocs = new Set(
+            ALL_MAPS.flatMap((map) => map.features?.wreckage ?? []).map((wreck) => wreck.locId),
+        );
+        for (const locId of wreckLocs) {
+            requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
+        }
         // What's under a floor (the Wardens', as its slabs are)
         for (const map of ALL_MAPS) {
             for (const locId of Object.values(map.floor?.under ?? {})) {

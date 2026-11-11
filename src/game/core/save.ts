@@ -1,3 +1,4 @@
+import { ACTS, ACT_BY_ID, isActEnded } from "../content/acts";
 import {
     getArmouryCost,
     getNextUpgrade,
@@ -137,6 +138,9 @@ export type SaveData = {
     // A set of remixes on a map (content/remixes.ts, remixKey: "lumbridge:dark+frozen") -> its
     // records, relic-free (act-2-fallen-empire.md, 8.3)
     remixVictories?: Record<string, RemixRecord>;
+    // The acts (content/acts.ts) whose ending has been told: it's told once, as the last of the
+    // act's Awakened fights falls, and again only from its card
+    actEndings?: string[];
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // When the player last exported it (Date.now()), so an exported file says
@@ -417,6 +421,14 @@ export function migrateSave(raw: unknown): SaveData {
     if (data.scabarasBeaten === true) {
         save.scabarasBeaten = true;
     }
+    if (Array.isArray(data.actEndings)) {
+        for (const id of data.actEndings) {
+            if (typeof id === "string" && ACT_BY_ID.has(id) && !save.actEndings?.includes(id)) {
+                save.actEndings ??= [];
+                save.actEndings.push(id);
+            }
+        }
+    }
     if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;
     }
@@ -613,6 +625,22 @@ export type RunSummary = {
     // The Scabaras room was beaten: its puzzle helper's unlocked
     scabarasBeaten?: boolean;
 };
+
+// An act whose ending's due (every one of its Awakened fights beaten, its ending not told yet),
+// marked told: it's told once (SaveData.actEndings). Undefined if none is.
+export function takeActEnding(save: SaveData): string | undefined {
+    const act = ACTS.find(
+        (act) =>
+            act.ending &&
+            isActEnded(act, save.mapVictories) &&
+            !(save.actEndings ?? []).includes(act.id),
+    );
+    if (!act) {
+        return undefined;
+    }
+    save.actEndings = [...(save.actEndings ?? []), act.id];
+    return act.id;
+}
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
 export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {

@@ -918,7 +918,10 @@ For a player who's bought everything, each of these changes what a run is like:
    seed. The sim is deterministic already, so this is mostly a screen. **What it changes**: one fixed challenge, new
    each week, that can be compared with friends.
 
-The act's ending is the last: the middle card's story, told when the fourth Awakened falls.
+The act's ending is the last: the middle card's story, told when the fourth Awakened falls. As
+built (`awakened-leviathan.md` section 9): "The Forgotten Four", five lines over the results of
+whichever Awakened fight is beaten fourth, told once (`SaveData.actEndings`) and again from the
+card.
 
 ### 8.7 As built: remixes and the Soulreaper axe (2026-11-11)
 
@@ -1138,7 +1141,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 11  | **Awakened Duke Sucellus**, Baron. Built, first pass (`awakened-duke.md`)                                                                 | 3, 9         | 2 weeks    |
 | 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer. Built (6.9)                                            | 1, 2         | 1.5 weeks  |
 | 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
-| 14  | Awakened Leviathan, Lil'viathan, the act's ending                                                                                         | 3, 12        | 2 weeks    |
+| 14  | **Awakened Leviathan**, Lil'viathan, the act's ending. Built, first pass (`awakened-leviathan.md`)                                        | 3, 12        | 2 weeks    |
 | 15  | **The Forgotten Four** gauntlet                                                                                                           | 3, 8, 11, 14 | 1.5 weeks  |
 | 16  | Awakened invasions, Awakener's orbs, the weekly Vault                                                                                     | 14           | 1.5 weeks  |
 

@@ -478,6 +478,9 @@ export type UiSnapshot = {
         endedEarly?: string;
     };
     toasts: Toast[];
+    // An act's ending being told (its id, content/acts.ts), over whatever screen's up: as the last
+    // of its Awakened fights falls, or played again from its card
+    actEnding?: string;
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;

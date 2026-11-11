@@ -277,6 +277,8 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   screen (`ActPage`), not the Campaign list. Its toughness is the act's step (`ActDef.steps`, set
   by how many of the act's other maps were beaten, the host's in co-op): its `difficulty` is the
   first step's, and the step scales its bosses' event hitpoints too. Sim it with `STEP=0` to `3`.
+  Its slot on the act (`ActSlotDef`) names its Awakened fight (`fightId`): the act's ending
+  (`ActDef.ending`) is told once every slot's fight is beaten (`isActEnded`, `takeActEnding`).
 - `rule` is what the map's played by (`RunRuleDef`, `core/rules/`): the sim runs it each tick on
   its own Rng, so nothing else about a run changes. A rule only reads the grid and its def, never
   a map's own data, so it can go on any map. A new kind needs a class implementing `RunRule`, a
@@ -292,7 +294,8 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
   spells by spot animation (`SPOT_LIGHTS` in `content/lights.ts`), a floor's tiles
   (`FLOOR_LIGHTS`), a boss's windups and marks (`light` on the attack or its ground pattern), and
-  its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
+  its exposed core (`look.exposedLight`), or a faint glow while its own light's out
+  (`look.darkGlow`, with `EnemyDef.light.phases`). `ambient` darkens the rest (and a boss phase's `light`
   for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
   has an example of each. Off a map with `lighting`, none of it does anything.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
@@ -334,7 +337,7 @@ A pet is a trophy that follows its finder (most are looks only). Add the trophy 
 animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: use the one the
 script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
 offered once found, with nothing else to add. A looks-only pet never goes in the sim; a fighting
-one (`PetDef.power`, Butch's leap, the Wisp's call, Baron's gas) is played by `Sim.stepPets`, and a new kind
+one (`PetDef.power`, Butch's leap, the Wisp's call, Baron's gas, Lil'viathan's bubble) is played by `Sim.stepPets`, and a new kind
 of power needs its case there and its line on the Pet row (`ui.pet.power_<kind>`): see Pets in
 `docs/DEVELOPMENT.md`.
 

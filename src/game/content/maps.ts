@@ -31,6 +31,17 @@ import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { GHORROCK_COLD, GHORROCK_EVENTS, GHORROCK_WAVES } from "./ghorrock";
 import { LASSAR_EVENTS, LASSAR_REALM, LASSAR_WAVES } from "./lassar";
+import {
+    AWAKENED_LEVIATHAN_ID,
+    LEVIATHAN_BOSS_ARENA,
+    LEVIATHAN_FEATURES,
+    LEVIATHAN_FIRE_LEVEL,
+    LEVIATHAN_HITPOINTS,
+    LEVIATHAN_LIGHTING,
+    LEVIATHAN_SHADOW,
+    LEVIATHAN_SPOT_WORLD,
+    LEVIATHAN_START_DISTANCE,
+} from "./leviathan";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
@@ -752,6 +763,50 @@ export const MAPS: MapDef[] = [
             ability: DUKE_KINDLE,
         },
         music: "Eye See You",
+    },
+    {
+        id: "awakened_leviathan",
+        name: "Awakened Leviathan",
+        description:
+            "The Leviathan, awakened, in its pool in the Scar. No waves, no picks and no items: " +
+            "the Lantern-bearer, her Fire spells and Shadow, which stuns it from close by. In " +
+            "the dark your spells only find what's lit, and once its glow goes out only your " +
+            "light finds it. Its torrent can only be hidden from behind debris, and the debris " +
+            "that hides you is smashed. At the last, only the pathfinder's light is left.",
+        // Lil'viathan, its pet
+        iconObjId: 28252,
+        arena: getRecipeArena(SCAR_RECIPE),
+        // South of its pool, as the other fights start you
+        spawn: {
+            x: LEVIATHAN_SPOT_WORLD.x,
+            y: LEVIATHAN_SPOT_WORLD.y - LEVIATHAN_START_DISTANCE,
+        },
+        // Its hitpoints come from the event, its hits are tuned to the Lantern-bearer's hitpoints
+        difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [
+            {
+                at: 0,
+                kind: "finalBoss",
+                enemyId: AWAKENED_LEVIATHAN_ID,
+                hp: LEVIATHAN_HITPOINTS,
+            },
+        ],
+        finalBossWarning: "",
+        victoryText: "The Awakened Leviathan sinks into its pool, and the Scar is dark and still.",
+        bossArena: LEVIATHAN_BOSS_ARENA,
+        features: LEVIATHAN_FEATURES,
+        scaperune: true,
+        lighting: LEVIATHAN_LIGHTING,
+        // Opened by beating its map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "scar",
+            character: "lantern_bearer",
+            weaponLevel: LEVIATHAN_FIRE_LEVEL,
+            ability: LEVIATHAN_SHADOW,
+        },
+        music: "Colossus of the Deep",
     },
     // A quest in four parts after the desert, which opens the Tombs of Amascut
     BENEATH_CURSED_SANDS,

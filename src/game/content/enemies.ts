@@ -5,6 +5,7 @@ import { DUKE_ENEMIES } from "./duke";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { GHORROCK_ENEMIES } from "./ghorrock";
 import { LASSAR_ENEMIES } from "./lassar";
+import { LEVIATHAN_ENEMIES } from "./leviathan";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
 import { SCAR_ENEMIES } from "./scar";
@@ -8384,6 +8385,7 @@ export const ENEMIES: EnemyDef[] = [
     ...VARDORVIS_ENEMIES,
     ...WHISPERER_ENEMIES,
     ...DUKE_ENEMIES,
+    ...LEVIATHAN_ENEMIES,
 ];
 
 // The Tombs of Amascut's (in development)

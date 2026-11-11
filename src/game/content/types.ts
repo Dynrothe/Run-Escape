@@ -238,7 +238,9 @@ export type EnemyDef = {
     // A light it carries (the Scar's light leeches, a fire elite), and one it leaves where it dies
     // for seconds. A sim light: on a map with lighting.litTargetsOnly, weapons can aim by it. Off a
     // map with lighting it does nothing.
-    light?: LightLook & { left?: LightLook & { seconds: number } };
+    // phases: a boss's, only in these of its phases (BossDef.phases, counting from 1): the Awakened
+    // Leviathan's glow, put out in the dark.
+    light?: LightLook & { left?: LightLook & { seconds: number }; phases?: number[] };
     // Goes round the final boss radius tiles out from its middle, speed tiles a second, never
     // stopping (the Abyssal pathfinder round the Leviathan's pool). Stationary otherwise.
     circles?: { radius: number; speed: number };
@@ -906,6 +908,14 @@ export type BossAttackDef = {
     // Ground attacks: each spot leaves a piece of debris, locId, standing seconds, most at once
     // (the oldest goes first): cover the boss's projectiles break on. Not in anyone's way.
     debris?: { locId: number; seconds: number; most: number };
+    // A swing hidden from (cover): the wash over the arena as it winds up, its colour (r, g, b)
+    // and how strong at its height, in place of a gaze's warm one (BossFightView.paintGaze): in
+    // the dark, a pale one the shadows show against
+    coverWash?: { rgb: string; alpha: number };
+    // A swing hidden from (cover): each piece of debris (not the wreck, ArenaFeatures.wreckage)
+    // that hid someone from it is smashed as it lands, with impact on it (the Awakened Leviathan's
+    // torrent: cover's used up)
+    smashes?: { impact?: ImpactDef };
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -1223,6 +1233,9 @@ export type FightAbilityDef = {
     // within flare tiles of the boss, flares into it for damage (the Awakened Duke's Kindle).
     // Taken only beside a brazier.
     kindle?: { reach: number; flare: number };
+    // Stuns the boss it lands on for this many seconds (BossDef.guard: its guard down, whatever it
+    // was winding up lost), as an attack of its arena's does (the Awakened Leviathan's Shadow)
+    stun?: number;
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
@@ -1602,6 +1615,9 @@ export type BossLookDef = {
     // A light on it while its guard's down (Sim.isExposed): a core lit up. Only drawn, on a map
     // with lighting.
     exposedLight?: LightLook;
+    // A faint glow on it in the phases its own light's out (EnemyDef.light phases): it's seen, but
+    // not lit to aim at. Only drawn.
+    darkGlow?: LightLook;
     // The camera leans towards it (GameClient's BOSS_LEAN), or share of the way, up to max tiles
     // (phone on a phone, whose short screen would put the player under the HUD): a big one that
     // never moves at the end of a small room (the Awakened Duke) is framed with you
@@ -1641,6 +1657,11 @@ export type ArenaFeatures = {
     rise?: { x: number; y: number };
     // Other statues an attack animates, by group (BossAttackDef.statues group)
     statues?: Record<string, ArenaStatue[]>;
+    // Wreckage standing from the start, as debris does (BossAttackDef.debris) but never going: the
+    // boss's projectiles break on it and it hides from a swing with cover. Drawn as locId, turned
+    // rotation quarter turns, playing its own animation; glows: drawn unlit, a fire (the Awakened
+    // Leviathan's broken boats and pillars, and a fire or two in them, which LightingDef lights).
+    wreckage?: { x: number; y: number; locId: number; rotation?: number; glows?: boolean }[];
 };
 
 // How a character fights, for the weapons only their class can find

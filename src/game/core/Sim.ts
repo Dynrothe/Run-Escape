@@ -403,6 +403,8 @@ const LIGHT_GRACE = 0.5;
 const LEFT_LIGHT_FADE = 3;
 // How far round a piece of debris (BossAttackDef.debris) a projectile breaks on it, tiles
 const DEBRIS_RADIUS = 0.8;
+// How many tiles across a piece of debris (or the wreck) hides someone from a swing with cover
+const DEBRIS_COVER = 1.6;
 // However dimmed, a player's light is never less than this, tiles
 const MIN_PLAYER_LIGHT = 1.5;
 const PHASE_LIGHT_SECONDS = 2;
@@ -515,6 +517,10 @@ const ABILITY_BUFFER_SECONDS = 0.3;
 const PET_SOUL_SPOTANIM = 2447;
 // Baron's gas (PetDef.power gas): the Duke's own
 const PET_GAS_SPOTANIM = 2431;
+// Lil'viathan's bubble (PetDef.power bubble) blown, and popping: the Leviathan's magic orb and
+// its splash
+const PET_BUBBLE_SPOTANIM = 2488;
+const PET_BUBBLE_POP_SPOTANIM = 2490;
 const ABILITY_BUFFER_REACH = 1.5;
 // Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
 const TRAIL_GAP = 1.5;
@@ -849,6 +855,7 @@ function fightingPet(id: string | undefined): {
     petSoulTick: number;
     petSoulLands: number;
     petCloud?: PetCloud;
+    petBubble?: boolean;
 } {
     const pet = id === undefined ? undefined : PET_BY_ID.get(id);
     if (!pet?.power) {
@@ -878,6 +885,8 @@ export type Hero = {
     petSoulLands: number;
     // Baron's gas, while it's out
     petCloud?: PetCloud;
+    // Lil'viathan's bubble round them, while it's up (PetDef.power bubble)
+    petBubble?: boolean;
     // A raid's points, for its supply chest, and damage taken before this room, which it's
     // scored on
     raidPoints: number;
@@ -1582,7 +1591,17 @@ export class Sim {
     // This tick's only light (stepLights), if there is one
     private onlyLight: Enemy | undefined;
     // Debris a boss's ground attack left (BossAttackDef.debris): its projectiles break on it
-    debris: { x: number; y: number; locId: number; until: number; from: number }[] = [];
+    // and the wreck standing from the start (ArenaFeatures.wreckage: wreck, never going)
+    debris: {
+        x: number;
+        y: number;
+        locId: number;
+        until: number;
+        from: number;
+        wreck?: boolean;
+        rotation?: number;
+        glows?: boolean;
+    }[] = [];
     // The scene's ambient as it changes over time (dimTo): from, to, over these ticks
     private dim = { from: 1, to: 1, startTick: 0, endTick: 0 };
 
@@ -2064,6 +2083,10 @@ export class Sim {
                 (e) => e.onlyLight !== undefined && e.light !== undefined,
             );
         this.dim.from = this.dim.to = this.lighting?.ambient ?? 1;
+        // The wreck standing from the start, as debris that never goes (ArenaFeatures.wreckage)
+        for (const wreck of this.map.features?.wreckage ?? []) {
+            this.debris.push({ ...wreck, from: 0, until: Number.MAX_SAFE_INTEGER, wreck: true });
+        }
         this.rng = new Rng(options.seed);
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
@@ -5035,9 +5058,20 @@ export class Sim {
         const openUntil = this.tombsOpenUntil.get(this.hero.index) ?? -1;
         const opened =
             this.invoked("deadly_prayers") && this.tick <= openUntil ? DEADLY_PRAYERS : 1;
-        const amount = Math.max(1, Math.round(damage * opened - armor));
+        let amount = Math.max(1, Math.round(damage * opened - armor));
         if (this.stepBetween(amount)) {
             return 0;
+        }
+        // Lil'viathan's bubble takes an enemy's hit, up to its share of their hitpoints, and pops
+        if (this.hero.petBubble && ENEMY_BY_ID.has(enemyId)) {
+            amount = this.popBubble(amount);
+            if (amount <= 0) {
+                if (grace) {
+                    player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+                }
+                this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
+                return 0;
+            }
         }
         if (this.invoked("deadly_prayers")) {
             this.tombsOpenUntil.set(this.hero.index, this.tick + secondsToTicks(1));
@@ -15864,6 +15898,10 @@ export class Sim {
         } else {
             this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
         }
+        // A button that stuns it (FightAbilityDef.stun: the Awakened Leviathan's Shadow)
+        if (ability.stun !== undefined && !boss.dead) {
+            this.dropGuard(boss, ability.stun, true, ability.name);
+        }
         this.breakChannel(boss);
         this.cutWithAbility(ability, boss);
         return true;
@@ -16186,6 +16224,16 @@ export class Sim {
                 this.stepGasPet(hero, power);
                 continue;
             }
+            // Lil'viathan: a bubble round its hero every so often, while there isn't one
+            if (power?.kind === "bubble") {
+                if (!hero.petBubble && this.tick >= hero.petReadyTick && this.isUp(hero)) {
+                    hero.petBubble = true;
+                    this.use(hero);
+                    this.addEffect(PET_BUBBLE_SPOTANIM, this.player.x, this.player.y, 0, 30);
+                    this.emit({ type: "petBubble", owner: hero.index, popped: false });
+                }
+                continue;
+            }
             if (!power || this.tick < hero.petReadyTick || !this.isUp(hero)) {
                 continue;
             }
@@ -16293,6 +16341,44 @@ export class Sim {
         hero.petCloud = { x: player.x, y: player.y, until: tick + secondsToTicks(power.seconds) };
         this.puffPetGas(player.x, player.y, power.size);
         this.emit({ type: "petGas", owner: hero.index, x: player.x, y: player.y });
+    }
+
+    // Lil'viathan's bubble (PetDef.power bubble) round the current hero pops, taking up to its
+    // share of their hitpoints off a hit and knocking back what's near: what's left of the hit
+    private popBubble(amount: number): number {
+        const hero = this.hero;
+        const power = hero.pet?.power;
+        if (power?.kind !== "bubble") {
+            return amount;
+        }
+        const player = this.player;
+        hero.petBubble = false;
+        hero.petReadyTick = this.tick + secondsToTicks(power.every);
+        const taken = Math.min(amount, Math.round(player.maxHp * power.share));
+        this.addEffect(PET_BUBBLE_POP_SPOTANIM, player.x, player.y, 0, 40);
+        this.emit({ type: "petBubble", owner: hero.index, popped: true });
+        const near: Enemy[] = [];
+        this.queryTouching(player.x, player.y, power.push + 1, (enemy) => {
+            if (
+                !enemy.dead &&
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) <= power.push + enemy.radius
+            ) {
+                near.push(enemy);
+            }
+        });
+        // Knocked back as a weapon's hit knocks them (damageEnemy), with no hit
+        for (const enemy of near) {
+            const resist = enemy.def.knockbackResist ?? 0;
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const length = fm.hypot(dx, dy);
+            if (resist < 1 && !enemy.boss && !enemy.def.stationary && length > 0.001) {
+                const k = (power.knockback * (1 - resist)) / 4;
+                enemy.vx += (dx / length) * k;
+                enemy.vy += (dy / length) * k;
+            }
+        }
+        return amount - taken;
     }
 
     // Baron's gas over its cloud, size tiles across
@@ -16638,7 +16724,7 @@ export class Sim {
                     hit &&
                     attack.cover &&
                     inShadow(
-                        this.map.features?.pillars,
+                        this.coverPillars(),
                         windup.at?.x ?? enemy.x,
                         windup.at?.y ?? enemy.y,
                         player.x,
@@ -16647,6 +16733,10 @@ export class Sim {
                     )
                 ) {
                     hit = false;
+                    // The debris that hid them is smashed (BossAttackDef.smashes)
+                    if (attack.smashes) {
+                        this.smashDebris(attack, windup.at?.x ?? enemy.x, windup.at?.y ?? enemy.y);
+                    }
                 }
                 // Gone into the other world (BossAttackDef.world): it finds no one
                 if (hit && attack.world !== undefined && attack.world !== this.layer) {
@@ -17329,9 +17419,52 @@ export class Sim {
             from: this.tick,
             until: this.tick + secondsToTicks(debris.seconds),
         });
-        if (this.debris.length > debris.most) {
-            this.debris.shift();
+        // The wreck doesn't count, and never goes
+        const fallen = this.debris.filter((d) => !d.wreck);
+        if (fallen.length > debris.most) {
+            this.debris.splice(this.debris.indexOf(fallen[0]), 1);
         }
+    }
+
+    // What hides a hero from a swing with cover (BossAttackDef.cover): the map's pillars, and each
+    // piece of debris and the wreck standing, as a square DEBRIS_COVER across
+    coverPillars(): { x: number; y: number; size: number }[] | undefined {
+        const pillars = this.map.features?.pillars;
+        if (this.debris.length === 0) {
+            return pillars;
+        }
+        const half = DEBRIS_COVER / 2;
+        return [
+            ...(pillars ?? []),
+            ...this.debris
+                .filter((d) => d.until > this.tick && !d.glows)
+                .map((d) => ({ x: d.x - half, y: d.y - half, size: DEBRIS_COVER })),
+        ];
+    }
+
+    // The debris (not the wreck) that hid the current hero from a swing (BossAttackDef.smashes),
+    // smashed: gone, with impact where it stood
+    private smashDebris(attack: BossAttackDef, fromX: number, fromY: number): void {
+        const player = this.player;
+        const half = DEBRIS_COVER / 2;
+        this.debris = this.debris.filter((d) => {
+            if (
+                d.wreck ||
+                d.until <= this.tick ||
+                !inShadow(
+                    [{ x: d.x - half, y: d.y - half, size: DEBRIS_COVER }],
+                    fromX,
+                    fromY,
+                    player.x,
+                    player.y,
+                    player.radius,
+                )
+            ) {
+                return true;
+            }
+            this.showImpact(attack.smashes?.impact, d.x, d.y);
+            return false;
+        });
     }
 
     // Whether a spot's on debris (BossAttackDef.debris)
@@ -17339,7 +17472,11 @@ export class Sim {
         for (const d of this.debris) {
             const dx = x - d.x;
             const dy = y - d.y;
-            if (d.until > this.tick && dx * dx + dy * dy <= DEBRIS_RADIUS * DEBRIS_RADIUS) {
+            if (
+                !d.glows &&
+                d.until > this.tick &&
+                dx * dx + dy * dy <= DEBRIS_RADIUS * DEBRIS_RADIUS
+            ) {
                 return true;
             }
         }
@@ -19442,7 +19579,7 @@ export class Sim {
         }
         for (const enemy of this.enemies) {
             const look = enemy.def.light;
-            if (look && !enemy.dead) {
+            if (look && !enemy.dead && this.lightInPhase(enemy, look.phases)) {
                 const { x, y } = enemy;
                 lights.push({
                     kind: "enemy",
@@ -19483,6 +19620,11 @@ export class Sim {
                 enemy.lit = this.isLit(enemy.x, enemy.y, enemy.radius > 1 ? enemy.radius : 0);
             }
         }
+    }
+
+    // A boss's light only in some of its phases (EnemyDef.light phases, counting from 1)
+    private lightInPhase(enemy: Enemy, phases: number[] | undefined): boolean {
+        return phases === undefined || phases.includes((enemy.bossState?.phase?.index ?? 0) + 1);
     }
 
     // The enemy that's the only light while it's up (EnemyDef.onlyLight), if there is one

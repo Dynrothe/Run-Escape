@@ -230,6 +230,12 @@ function actMessages(): Messages {
             put(messages, `${key}.name`, slot.name);
             put(messages, `${key}.boss`, slot.boss);
         }
+        if (act.ending) {
+            put(messages, `act.${act.id}.ending.title`, act.ending.title);
+            act.ending.lines.forEach((line, i) => {
+                put(messages, `act.${act.id}.ending.line${i}`, line);
+            });
+        }
     }
     return messages;
 }

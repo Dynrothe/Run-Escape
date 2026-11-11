@@ -1,4 +1,5 @@
 import { getEnemy } from "../content/enemies";
+import { LEVIATHAN_LIGHTING } from "../content/leviathan";
 import { ALL_MAPS, MAP_BY_ID, getMap } from "../content/maps";
 import { LANTERN_ID, POWER_UPS, getPowerUp } from "../content/powerups";
 import { SCAR_LIGHTING } from "../content/scar";
@@ -92,14 +93,15 @@ function run(sim: Sim, seconds: number, keep: Enemy[] = []): void {
 
 describe("the dark", () => {
     test("only dev maps, the Tombs and the Scar have lights, and everywhere else is lit everywhere", () => {
-        // The Tombs of Amascut and its quest, a tomb lit by its fires, and the Scar's dark are the
-        // shipped ones
+        // The Tombs of Amascut and its quest, a tomb lit by its fires, and the Scar's dark (the
+        // map's, and the Awakened Leviathan's fight on it) are the shipped ones
         for (const map of ALL_MAPS) {
             expect(
                 map.lighting === undefined ||
                     map.dev === true ||
                     map.lighting === TOMBS_LIGHTING ||
-                    map.lighting === SCAR_LIGHTING,
+                    map.lighting === SCAR_LIGHTING ||
+                    map.lighting === LEVIATHAN_LIGHTING,
             ).toBe(true);
         }
         const sim = createSim("lumbridge");

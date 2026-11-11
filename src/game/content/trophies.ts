@@ -143,6 +143,19 @@ export const TROPHIES: TrophyDef[] = [
             chance: 1,
         },
     },
+    // The Awakened Leviathan's, certain, as the other three are
+    {
+        id: "lilviathan",
+        name: "Lil'viathan",
+        objId: 28252,
+        how: "From the Awakened Leviathan, the first time it's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_leviathan",
+            mapId: "awakened_leviathan",
+            chance: 1,
+        },
+    },
 ];
 
 // The Theatre of Blood's uniques, weighted as the real raid's are, and its pet off Verzik

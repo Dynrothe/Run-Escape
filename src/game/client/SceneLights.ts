@@ -173,10 +173,19 @@ export class SceneLights {
                 });
             }
             const exposed = enemy.def.boss?.look?.exposedLight;
+            const dark = enemy.def.boss?.look?.darkGlow;
+            const phases = enemy.def.light?.phases;
+            const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
+            const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
             if (exposed && sim.isExposed(enemy)) {
-                const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
-                const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
                 this.offer(lightKey(KIND_EXPOSED, enemy.uid), x, y, exposed.radius, exposed);
+            } else if (
+                dark &&
+                phases &&
+                !phases.includes((enemy.bossState?.phase?.index ?? 0) + 1)
+            ) {
+                // Its own light's out: faintly seen all the same (BossLookDef.darkGlow)
+                this.offer(lightKey(KIND_EXPOSED, enemy.uid), x, y, dark.radius, dark);
             }
         }
         // The Wardens: the obelisk flickering open, pyramids about to hit, the enrage's

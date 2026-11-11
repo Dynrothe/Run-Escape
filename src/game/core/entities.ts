@@ -1069,6 +1069,8 @@ type SimEventBody =
     | { type: "petLeap"; owner: number; x: number; y: number }
     // A hero's pet spat its gas round x, y (PetDef.power gas)
     | { type: "petGas"; owner: number; x: number; y: number }
+    // A hero's Lil'viathan blew its bubble round them, or it popped (PetDef.power bubble)
+    | { type: "petBubble"; owner: number; popped: boolean }
     // Its totems' blast, from each totem to the boss
     | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
     // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it

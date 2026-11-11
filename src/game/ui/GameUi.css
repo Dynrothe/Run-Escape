@@ -995,6 +995,88 @@
     opacity: 0.6;
 }
 
+/* The act's Awakened fights on its middle card, each faded until it's fallen */
+.ui-act-awakened {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.ui-act-awakened-not {
+    opacity: 0.3;
+    filter: grayscale(1);
+}
+
+.ui-act-ending-again {
+    margin-left: 6px;
+    padding: 1px 8px;
+    font-size: 12px;
+}
+
+/* An act's ending, told a line at a time (ActEndingModal) */
+.ui-act-ending-modal {
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+/* Over whatever screen's up, so in the game's own type, as .ui-fill's is */
+.ui-act-ending {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-text);
+    text-shadow: 1px 1px 0 #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: min(560px, calc(92vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    overflow-y: auto;
+    text-align: center;
+}
+
+.ui-act-ending-act {
+    color: #b8aa8a;
+    font-size: 13px;
+}
+
+.ui-act-ending-title {
+    margin: 2px 0 6px;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 22px;
+    color: var(--ui-orange);
+}
+
+.ui-act-ending-icons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.ui-act-ending-line {
+    margin: 0 0 10px;
+    line-height: 1.35;
+    animation: ui-act-ending-in 1.2s ease-out;
+}
+
+@keyframes ui-act-ending-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-act-ending-line {
+        animation: none;
+    }
+}
+
 /* A tick for a map that's been beaten */
 .ui-beaten {
     flex-shrink: 0;

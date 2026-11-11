@@ -58,6 +58,7 @@ import {
     buttonMove,
     cageGap,
     coneStep,
+    darkFightMove,
     dodgeOrbs,
     dodgeShots,
     fanStep,
@@ -828,7 +829,8 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         }
         // Out of the boss's sight behind a pillar, as it gazes (BossAttackDef.cover): the nearest
         // spot within reach that's hidden from it
-        const pillars = sim.map.features?.pillars;
+        // (and debris, which hides as a pillar does: Sim.coverPillars)
+        const pillars = sim.coverPillars();
         if (state.windup?.attack.cover && pillars) {
             let best: { x: number; y: number } | undefined;
             let bestDistance = Infinity;
@@ -905,6 +907,11 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     const kindle = dodges ? kindleMove(sim, boss) : undefined;
     if (kindle) {
         return kindle;
+    }
+    // A fight in the dark with a button that stuns (the Awakened Leviathan's): its own read
+    const dark = dodges ? darkFightMove(sim, boss) : undefined;
+    if (dark) {
+        return dark;
     }
     // A less careful person: now and then backs off and loses reach
     if (sloppy && (sim.tick / TICKS_PER_SECOND) % SLOPPY_EVERY < SLOPPY_LAPSE) {

@@ -62,7 +62,9 @@ go stale. Add anything that cost you time to work out.
 | Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
 | The Awakened Whisperer: Blackstone, siphon, screech    | `content/whisperer.ts`, `docs/design/awakened-whisperer.md`            |
 | Awakened Duke Sucellus: his room, Kindle, the cold     | `content/duke.ts`, `scaperune/maps/dukesRoom.ts`, `awakened-duke.md`   |
-| Fighting pets (Butch's leap, the Wisp's call, Baron)   | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
+| The Awakened Leviathan: Shadow, the wreck, the torrent | `content/leviathan.ts`, `docs/design/awakened-leviathan.md`            |
+| Fighting pets (Butch, the Wisp, Baron, Lil'viathan)    | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
+| An act's ending: told once, its card, the save         | `ActDef.ending`, `takeActEnding` in `save.ts`, `ActEndingModal`        |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |

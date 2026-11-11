@@ -936,6 +936,17 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       it gazes), and `rule.chills` adds cold to whoever it hits (`bossHit`). The camera can lean
       a set share of the way to a boss, up to a set distance (`BossLookDef.lean` as an object),
       to frame one that never moves at the end of a small room.
+    - A fight in the dark on another map's ground (the Awakened Leviathan's, on the Scar's recipe
+      through `MapRecipe.fights`, with its own `lighting`): `ArenaFeatures.wreckage` stands as
+      debris from the start and never goes (`Sim.debris` entries with `wreck`; `glows` ones are
+      fires, drawn unlit and lit by the map's `lights`, and neither block nor hide). A `cover`
+      swing reads the debris and the wreck as pillars too (`Sim.coverPillars`, each
+      `DEBRIS_COVER` across), and with `smashes` the debris (not the wreck) that hid someone goes
+      as it lands (`smashDebris`); `coverWash` gives its windup a wash of its own for the shadows to
+      show against. `FightAbilityDef.stun` stuns the boss it lands on (`dropGuard`, its
+      `stunGrace` holding). `EnemyDef.light.phases` puts a boss's own light out in its other
+      phases (`lightInPhase` in `stepLights`), so only what the players carry lights it then, and
+      `BossLookDef.darkGlow` draws a faint glow on it meanwhile that weapons don't aim by.
     - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
       till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
       its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
@@ -1259,6 +1270,11 @@ it.
   `size` tiles across lands round them for `seconds` (`Hero.petCloud`), slowing what's in it
   (`Enemy.slowed`, `slowPace`) and poisoning it (`envenom`, `pet:baron`), the Duke's gas spot
   animation kept up over it; then it sleeps `every` seconds. It emits `petGas`.
+  Lil'viathan's is `bubble`: every `every` seconds without one, a bubble round its hero
+  (`Hero.petBubble`, drawn as the Leviathan's magic orb round them by `GameView.drawPetBubble`).
+  The next enemy's hit on them (`damagePlayer`, after Step between) takes up to `share` of their
+  most hitpoints off it and pops it (`popBubble`), knocking back what's within `push` tiles as a
+  weapon's knockback does, and the wait starts again. It emits `petBubble`.
 
 - **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
   is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks
@@ -1278,6 +1294,18 @@ it.
   animations. The cache has two NPCs for each pet: `scripts/cache/find-npcs.ts` marks the one
   that's the follower (it's the one with the Metamorphosis option). The other one looks different
   for some pets.
+
+### An act's ending
+
+An act (`content/acts.ts`) can have an ending (`ActDef.ending`): a title and a few lines of story,
+told once every one of its slots' Awakened fights (`ActSlotDef.fightId`) is beaten, whichever was
+last (`isActEnded`). As a win is banked (`GameClient`, after `recordRun`), `takeActEnding` returns
+an act whose ending is due and marks it told in the save (`SaveData.actEndings`), and the store's
+`actEnding` puts `ActEndingModal` over whatever's up, a line at a time (a click shows the rest).
+Once the act's ended its middle card on the map screen says so and plays it again
+(`GameClient.showActEnding`); the card fills in a pet's icon for each Awakened fight beaten. The
+lines are in `world.json` (`act.<id>.ending.*`, from the extractor). What opens once the act's
+ended (the Forgotten Four gauntlet, build order step 15) goes by `isActEnded` too.
 
 ### What gets drawn
 

@@ -20,7 +20,14 @@ export type ActSlotDef = {
     rule: string;
     // An item for its card, as a map's icon is
     iconObjId: number;
+    // Its Awakened fight (a fight map's id), once it's in the game: the act ends when all of them
+    // are beaten
+    fightId?: string;
 };
+
+// The act's ending (act-2-fallen-empire.md 8.6): its story, told a line at a time when the last
+// of its Awakened fights falls, whichever is last, and again from its card
+export type ActEndingDef = { title: string; lines: string[] };
 
 export type ActDef = {
     id: string;
@@ -30,6 +37,7 @@ export type ActDef = {
     // Index: how many of the act's other maps were beaten when the run started (the host's in co-op)
     steps: ActStepDef[];
     slots: ActSlotDef[];
+    ending?: ActEndingDef;
 };
 
 export const FALLEN_EMPIRE: ActDef = {
@@ -47,6 +55,7 @@ export const FALLEN_EMPIRE: ActDef = {
     slots: [
         {
             mapId: "stranglewood",
+            fightId: "awakened_vardorvis",
             name: "The Stranglewood",
             boss: "Vardorvis",
             rule: "Roots creep in from the wood. Cut them back.",
@@ -55,6 +64,7 @@ export const FALLEN_EMPIRE: ActDef = {
         },
         {
             mapId: "lassar_undercity",
+            fightId: "awakened_whisperer",
             name: "The Lassar Undercity",
             boss: "The Whisperer",
             rule: "Black puddles open into the Shadow Realm.",
@@ -63,6 +73,7 @@ export const FALLEN_EMPIRE: ActDef = {
         },
         {
             mapId: "ghorrock",
+            fightId: "awakened_duke",
             name: "Ghorrock",
             boss: "Duke Sucellus",
             rule: "The cold rises. Stay by the braziers.",
@@ -71,6 +82,7 @@ export const FALLEN_EMPIRE: ActDef = {
         },
         {
             mapId: "scar",
+            fightId: "awakened_leviathan",
             name: "The Scar",
             boss: "The Leviathan",
             rule: "Darkness, with a light round you.",
@@ -78,6 +90,21 @@ export const FALLEN_EMPIRE: ActDef = {
             iconObjId: 28325,
         },
     ],
+    ending: {
+        title: "The Forgotten Four",
+        lines: [
+            "Before the Empire fell, it set four to keep what it couldn't take with it: a general " +
+                "in the wood, a voice under the sea, a prisoner in the ice and a sleeper in the dark.",
+            "The Empire fell. The four forgot what they were keeping, and kept it anyway, awake " +
+                "and angry, for longer than anyone remembers.",
+            "Now the Stranglewood is still. Lassar sleeps. Ghorrock's cold has broken, and the " +
+                "Scar's pool is dark.",
+            "What they kept was never treasure. It was each other: four locks on one door, and " +
+                "you've broken all four.",
+            "Behind it, they wait to be fought again, together, one after another. They won't be " +
+                "forgotten twice.",
+        ],
+    },
 };
 
 export const ACTS: ActDef[] = [FALLEN_EMPIRE];
@@ -95,6 +122,24 @@ export function getAct(id: string): ActDef {
 // The act's maps that are in the game
 export function getActMapIds(act: ActDef): string[] {
     return act.slots.flatMap((slot) => (slot.mapId ? [slot.mapId] : []));
+}
+
+// The act's Awakened fights in the game (ActSlotDef.fightId)
+export function getActFightIds(act: ActDef): string[] {
+    return act.slots.flatMap((slot) => (slot.fightId ? [slot.fightId] : []));
+}
+
+// Whether the act's done: every one of its Awakened fights beaten (wins: map id to times beaten),
+// all four of them in. What its ending's told on, and what opens what comes after it (the
+// gauntlet, build order step 15).
+export function isActEnded(act: ActDef, wins: Record<string, number>): boolean {
+    const fights = getActFightIds(act);
+    return fights.length === act.slots.length && fights.every((id) => (wins[id] ?? 0) > 0);
+}
+
+// How many of the act's Awakened fights are beaten
+export function getActFightsBeaten(act: ActDef, wins: Record<string, number>): number {
+    return getActFightIds(act).filter((id) => (wins[id] ?? 0) > 0).length;
 }
 
 // A map's toughness at a step of its act; the map's own without one
@@ -146,4 +191,13 @@ export function actSlotName(act: ActDef, slot: ActSlotDef): string {
 
 export function actSlotBoss(act: ActDef, slot: ActSlotDef): string {
     return tr(actSlotKey(act, slot) + ".boss", slot.boss);
+}
+
+// Its ending's title and lines, in the player's language (world.json, act.<id>.ending.*)
+export function actEndingTitle(act: ActDef): string {
+    return tr(`act.${act.id}.ending.title`, act.ending?.title ?? "");
+}
+
+export function actEndingLines(act: ActDef): string[] {
+    return (act.ending?.lines ?? []).map((line, i) => tr(`act.${act.id}.ending.line${i}`, line));
 }

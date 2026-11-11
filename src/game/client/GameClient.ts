@@ -5,7 +5,7 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
-import { getAct, getActStep } from "../content/acts";
+import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -84,6 +84,7 @@ import {
     recordRun,
     refundUpgrade,
     refundUpgrades,
+    takeActEnding,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { fmtNum, t, tl, tp } from "../i18n";
@@ -996,6 +997,15 @@ export class GameClient implements GameFrameHandler {
         if (this.coop.room) {
             this.coop.setMe({ loadout: this.getLoadout() });
         }
+    }
+
+    // An act's ending told again from its card, once the act's done; closed with no id
+    showActEnding(actId: string | undefined): void {
+        const act = actId === undefined ? undefined : ACT_BY_ID.get(actId);
+        if (act && !isActEnded(act, this.save.mapVictories)) {
+            return;
+        }
+        this.store.set({ actEnding: act?.id });
     }
 
     // The pet to take along (one of the trophies found), or none
@@ -2393,6 +2403,8 @@ export class GameClient implements GameFrameHandler {
         // A co-op run's numbers can come from another player's modified game,
         // and a NaN in a solo one's would come back from the save as 0 coins
         const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
+        // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
+        const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
         // A run's results: a save point for cloud save
         this.cloud?.savePoint();
@@ -2426,6 +2438,7 @@ export class GameClient implements GameFrameHandler {
                 }),
                 endedEarly,
             },
+            ...(actEnding && { actEnding }),
         });
         // The room sees this player's new unlocks and upgrades next run
         this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });

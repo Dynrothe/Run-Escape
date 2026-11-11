@@ -62,7 +62,7 @@ import {
 import type { RealmHole } from "../core/rules/RealmRule";
 import { t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
-import { BossFightView } from "./BossFightView";
+import { BossFightView, locYaw } from "./BossFightView";
 import { CinematicPlayer } from "./Cinematic";
 import { CinematicLight, CinematicView } from "./CinematicView";
 import { FloorView } from "./FloorView";
@@ -239,6 +239,13 @@ const ROCK_FALL_HEIGHT = 14;
 const MARK_STRIKE_LOOK = { scale: 1.6 };
 const SHOT_LOOK = { scale: 2.5, flash: 0.3 };
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
+// Lil'viathan's bubble (PetDef.power bubble): the Leviathan's magic orb, this many tiles round
+// the player, its middle this many tiles off the ground
+const PET_BUBBLE_SPOTANIM = 2488;
+const PET_BUBBLE_RADIUS = 1;
+const PET_BUBBLE_HEIGHT = 0.5;
+// Glowing the pale blue of water, not the orb's own murk
+const PET_BUBBLE_TINT = 0xa8f0ff;
 // A boss's debris (BossAttackDef.debris) sinks away over this many ticks
 const DEBRIS_SINK_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
@@ -1146,16 +1153,24 @@ export class GameView {
         }
         const left = debris.until - sim.tick;
         const sink = left < DEBRIS_SINK_TICKS ? (1 - left / DEBRIS_SINK_TICKS) * 96 : 0;
-        const yaw = (Math.round(debris.x * 7 + debris.y * 13) * 331) & 2047;
+        // The wreck turned as it's set (ArenaFeatures.wreckage); fallen debris any way
+        const yaw =
+            debris.rotation !== undefined
+                ? locYaw(debris.rotation)
+                : (Math.round(debris.x * 7 + debris.y * 13) * 331) & 2047;
+        // The wreck plays its own (a fire's flames, drawn as bright as they are); fallen debris
+        // stands still
+        const anim = model.anims[0];
+        const clientTicks = Math.floor((sim.tick / TICKS_PER_SECOND) * 50);
         actors.draw(
             model,
-            model.anims[0],
-            0,
+            anim,
+            debris.wreck && anim ? anim.getFrame(clientTicks, true) : 0,
             debris.x,
             this.ground(sim, debris.x, debris.y) + sink,
             debris.y,
             yaw,
-            { scale: 1 },
+            debris.glows ? { scale: 1, unlit: 1 } : { scale: 1 },
         );
     }
 
@@ -2341,6 +2356,43 @@ export class GameView {
             this.drawLantern(actors, sim, hero, x, y, pose.yaw);
         }
         this.drawSouls(actors, sim, hero, x, y);
+        this.drawPetBubble(actors, sim, hero, x, y);
+    }
+
+    // Lil'viathan's bubble (PetDef.power bubble), while it's up: its orb round the player, faint and
+    // glowing pale blue, wobbling a little
+    private drawPetBubble(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        x: number,
+        y: number,
+    ): void {
+        if (!sim.heroes[hero]?.petBubble) {
+            return;
+        }
+        const model = this.assets.get("spot:" + PET_BUBBLE_SPOTANIM);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const wobble = 1 + 0.04 * Math.sin(sim.tick * 0.2);
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick, true),
+            x,
+            this.ground(sim, x, y) - PET_BUBBLE_HEIGHT,
+            y,
+            0,
+            {
+                scale: ((PET_BUBBLE_RADIUS * 128) / Math.max(1, model.radius)) * wobble,
+                alpha: 0.45,
+                tint: PET_BUBBLE_TINT,
+                flash: -0.6,
+                unlit: 1,
+            },
+        );
     }
 
     // The Soulreaper axe's souls (WeaponDef.souls): one small soul rune a soul, circling the head,

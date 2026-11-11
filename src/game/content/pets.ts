@@ -37,7 +37,11 @@ export type PetPowerDef =
           slow: number;
           poison: number;
           poisonSeconds: number;
-      };
+      }
+    // bubble: every `every` seconds it blows a bubble round its hero that takes the next enemy's
+    // hit, up to share of their most hitpoints, and pops, knocking back what's within push tiles
+    // (knockback as a weapon's)
+    | { kind: "bubble"; every: number; share: number; push: number; knockback: number };
 
 export const PETS: PetDef[] = [
     { id: "little_nightmare", npcId: 9399, idleSeq: 8593, walkSeq: 8634 },
@@ -84,6 +88,14 @@ export const PETS: PetDef[] = [
             poison: 3,
             poisonSeconds: 4,
         },
+    },
+    // The Awakened Leviathan's: its own model, small. It keeps a bubble round you that takes a hit
+    {
+        id: "lilviathan",
+        npcId: 12160,
+        idleSeq: 10277,
+        walkSeq: 10292,
+        power: { kind: "bubble", every: 20, share: 0.25, push: 2.5, knockback: 3 },
     },
 ];
 

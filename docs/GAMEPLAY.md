@@ -219,6 +219,7 @@ version and how to run it.
     | Awakened Vardorvis | Butch                                            |                                                                                                      |
     | Awakened Whisperer | The Wisp                                         |                                                                                                      |
     | Awakened Duke      | Baron                                            |                                                                                                      |
+    | Awakened Leviathan | Lil'viathan                                      |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -230,7 +231,7 @@ version and how to run it.
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
-  Sands, Awakened Vardorvis, the Awakened Whisperer, the Awakened Duke Sucellus), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+  Sands, Awakened Vardorvis, the Awakened Whisperer, the Awakened Duke Sucellus, the Awakened Leviathan), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -354,7 +355,9 @@ version and how to run it.
   hitpoints as it reaches you. **Baron**, from the Awakened Duke Sucellus, naps beside you: when 6
   or more enemies are within 3 tiles of you he wakes and spits the Duke's gas round you, a 3 by 3
   cloud for 4 seconds that slows what's in it by 45% and poisons it, then sleeps for 15 seconds.
-  Not in boss fights, where your kit is the whole run.
+  **Lil'viathan**, from the Awakened Leviathan, blows a bubble round you every 20 seconds that takes
+  the next enemy's hit, up to a quarter of your hitpoints, and pops, knocking back what's within
+  2.5 tiles. Not in boss fights, where your kit is the whole run.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
@@ -481,13 +484,21 @@ version and how to run it.
       ranger with her shortbow at its top level and **Kindle**. He wakes in his alcove with you
       south of him, to Eye See You. It can't be endless; it has a hard mode once it's beaten.
       Beating him finds **Baron**, his pet, every time.
+    - **The Awakened Leviathan** (a boss fight, open once the Scar's beaten: Act II's fourth
+      Awakened fight): nothing but it, in its pool on the Scar's own ground, in the dark. No waves,
+      no picks, no items: you play the Lantern-bearer with Fire spells at their top level and
+      **Shadow**. It rises with you south of its pool, to Colossus of the Deep. It can't be endless;
+      it has a hard mode once it's beaten. Beating it finds **Lil'viathan**, its pet, every time.
 - **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
   Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
   played in any order, each a normal fifteen-minute run with a rule of its own. Each is
   a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno
   (enemies 4.2 times the hitpoints, 2.9 times the damage), up to step 3 (4.65 and 3.2), and each
   step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
-  step it was won at, and an easier one shows its step until it's beaten at a harder one.
+  step it was won at, and an easier one shows its step until it's beaten at a harder one. The
+  middle card fills in with each Awakened fight beaten, and when the fourth falls, whichever it
+  is, **the act's ending** is told, a few lines over the results; from then the card says the
+  act's done and tells it again.
 - **Roots** (the Stranglewood's rule): from 0:30, roots creep in from the wood, a few fronts at a
   time, quicker as the run goes on (every 3 seconds at first, every 1.8 by 12:00). A patch about to
   take root has roots creeping in towards it for a second and a half first; then they take it. On
@@ -851,6 +862,26 @@ version and how to run it.
       solid. The nine vents in the floor puff in turn. **Kindle**, the fight's button, lights the
       brazier beside you at once for its full burn, every six seconds; one that was out or dying,
       lit by his alcove, flares into him for a heavy blow (doubled with his guard down).
+    - **The Awakened Leviathan**: the Scar's sleeper, awakened, never leaving its pool. Three
+      phases on its hitpoints, each a bar of its own (a roar at 65% and 30%). The fight's in the
+      dark: your light is half the Scar's (the Lantern-bearer's 5 tiles), two fires burn in the
+      wreck round its pool, and your spells only aim at what's lit. Its **orbs** come by style:
+      ranged, three along lines fanned at where you stood as it began; magic, two slow ones that
+      turn after you; melee, one heavy one straight at you. After each volley **debris** falls
+      round you (its shadow first): it stays 14 seconds, ten at most, and its orbs break on it.
+      Close to its pool its **Tail** sweeps 7 tiles round it. In the first phase it glows and can be
+      hit from anywhere. From the second its glow is out (the dark phase): only your own light finds
+      it, so you fight within reach of its tail; debris falls on its own every few seconds, its
+      **Leeches** come for your light (each a tile off it), and its **Torrent** sweeps everything it
+      can see: behind debris, or the wreck of broken boats and pillars round the pool, it can't find
+      you, and finding no one its guard's down for three seconds (double damage). The debris that
+      hid you is smashed; the wreck stands. In its last phase the **Abyssal pathfinder** goes round
+      it, the only light there is: in it your hits do half as much again, out of it its hits do
+      double, and the abyss's **Lightning** strikes where you stand every couple of seconds.
+      **Shadow**, the fight's button, every 15 seconds, within 6.5 tiles of its middle (inside its
+      tail's sweep): a shadow spell that stuns it for three seconds, whatever it was winding up
+      lost (a torrent too), its guard down and its back lit. Not again within four seconds of a
+      stun: then only its guard drops.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

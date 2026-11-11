@@ -95,7 +95,7 @@ export const OVERHEAD_SCALE = 1.5;
 export const OVERHEAD_GAP = 0.3;
 
 // A loc's rotation as the map turns it (a quarter turn west each), as an actor's yaw
-function locYaw(rotation = 0): number {
+export function locYaw(rotation = 0): number {
     return (rotation & 3) * 512;
 }
 
@@ -162,6 +162,8 @@ export class BossFightView {
     // how strong the light was when it was last drawn and when (ms), to fade out after it lands
     private gaze?: {
         windup: BossWindup;
+        // How many pieces of cover its outlines were made from
+        cover: number;
         outlines: { x: number; y: number }[][];
         strength: number;
         at: number;
@@ -850,13 +852,16 @@ export class BossFightView {
         strength: number,
         now: number,
     ): void {
-        if (this.gaze?.windup !== windup) {
+        // Debris hides from it too (Sim.coverPillars), and can land or be smashed meanwhile
+        const cover = sim.coverPillars() ?? [];
+        if (this.gaze?.windup !== windup || this.gaze.cover !== cover.length) {
             const from = windup.at ?? { x: enemy.x, y: enemy.y };
             const arena = sim.bossArena;
             const far = Math.hypot(arena.maxX - arena.minX, arena.maxY - arena.minY);
             this.gaze = {
                 windup,
-                outlines: (sim.map.features?.pillars ?? []).map((pillar) =>
+                cover: cover.length,
+                outlines: cover.map((pillar) =>
                     clipToBox(shadowOutline(pillar, from.x, from.y, far), arena),
                 ),
                 strength,
@@ -865,7 +870,7 @@ export class BossFightView {
         }
         this.gaze.strength = strength;
         this.gaze.at = now;
-        this.paintGaze(overlay, sim, this.gaze.outlines, strength);
+        this.paintGaze(overlay, sim, this.gaze.outlines, strength, windup.attack.coverWash);
     }
 
     // After it lands, its light and shadows fade out rather than go at once
@@ -879,7 +884,13 @@ export class BossFightView {
             this.gaze = undefined;
             return;
         }
-        this.paintGaze(overlay, sim, gaze.outlines, gaze.strength * fade);
+        this.paintGaze(
+            overlay,
+            sim,
+            gaze.outlines,
+            gaze.strength * fade,
+            gaze.windup.attack.coverWash,
+        );
     }
 
     // The warm wash, and the shadows as one shape (so where two meet isn't darker), its edges
@@ -891,9 +902,10 @@ export class BossFightView {
         sim: Sim,
         outlines: { x: number; y: number }[][],
         strength: number,
+        wash?: { rgb: string; alpha: number },
     ): void {
         const ctx = overlay.ctx;
-        ctx.fillStyle = `rgba(${GAZE_WASH}, ${GAZE_WASH_ALPHA * strength})`;
+        ctx.fillStyle = `rgba(${wash?.rgb ?? GAZE_WASH}, ${(wash?.alpha ?? GAZE_WASH_ALPHA) * strength})`;
         ctx.fillRect(0, 0, overlay.width, overlay.height);
         const player = sim.player;
         const ground = this.ground(sim, player.x, player.y);

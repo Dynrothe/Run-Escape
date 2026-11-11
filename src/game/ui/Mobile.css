@@ -614,6 +614,13 @@
         font-size: 15px;
     }
 
+    /* The act's middle card is short: its button a line high, in the row of icons */
+    .ui-act-ending-again {
+        min-height: 28px;
+        padding: 0 6px;
+        font-size: 13px;
+    }
+
     .ui-style-name {
         margin-bottom: 2px;
     }

@@ -32,14 +32,19 @@ import {
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
 import {
+    ACT_BY_ID,
     ActDef,
     FALLEN_EMPIRE,
+    actEndingLines,
+    actEndingTitle,
     actName,
     actSlotBoss,
     actSlotName,
     getAct,
+    getActFightsBeaten,
     getActMapIds,
     getActStep,
+    isActEnded,
 } from "../content/acts";
 import {
     CHARACTERS,
@@ -231,6 +236,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             onClickCapture={onClickCapture}
         >
             {screen}
+            {ui.actEnding && (
+                <ActEndingModal key={ui.actEnding} actId={ui.actEnding} client={client} />
+            )}
             {ui.saveBlock && !ui.saveBlockClosed ? (
                 <SaveBlockPanel block={ui.saveBlock} client={client} />
             ) : (
@@ -1540,7 +1548,13 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                                 slow: Math.round(power.slow * 100),
                                 every: power.every,
                             })
-                          : t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
+                          : power.kind === "bubble"
+                            ? t("ui.pet.power_bubble", {
+                                  every: power.every,
+                                  share: Math.round(power.share * 100),
+                                  push: power.push,
+                              })
+                            : t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
                 </span>
             )}
         </div>
@@ -1807,6 +1821,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                                     setPeek(mapId);
                                     client.selectMap(mapId);
                                 }}
+                                onEnding={() => client.showActEnding(tab.act!.id)}
                             />
                         )}
                         {!tab.act &&
@@ -1852,16 +1867,21 @@ function ActPage({
     selected,
     onPeek,
     onPick,
+    onEnding,
 }: {
     act: ActDef;
     save: SaveData;
     selected: string;
     onPeek: (mapId: string | undefined) => void;
     onPick: (mapId: string) => void;
+    onEnding: () => void;
 }): JSX.Element {
     const open = (save.mapVictories[act.requires] ?? 0) > 0;
     const ids = getActMapIds(act);
     const beaten = ids.filter((id) => (save.mapVictories[id] ?? 0) > 0).length;
+    // Its Awakened fights, filling the middle card in as they fall; all four, the act's done
+    const awakened = getActFightsBeaten(act, save.mapVictories);
+    const ended = isActEnded(act, save.mapVictories);
     const areas = ["a", "b", "c", "d"];
     return (
         <div className={"ui-act" + (open ? "" : " ui-act-closed")}>
@@ -1910,10 +1930,49 @@ function ActPage({
             <div className="ui-card ui-act-middle" style={{ gridArea: "m" }}>
                 <span className="ui-map-name">{actName(act)}</span>
                 <span className="ui-act-line">
-                    {open
-                        ? t("ui.act.beaten_any_order", { beaten, total: act.slots.length })
-                        : t("ui.act.beat_to_open", { map: mapName(getMap(act.requires)) })}
+                    {ended
+                        ? t("ui.act.ended", { title: actEndingTitle(act) })
+                        : open
+                          ? t("ui.act.beaten_any_order", { beaten, total: act.slots.length })
+                          : t("ui.act.beat_to_open", { map: mapName(getMap(act.requires)) })}
                 </span>
+                {open && beaten > 0 && (
+                    <span
+                        className="ui-act-awakened"
+                        aria-label={t("ui.act.awakened_beaten", {
+                            beaten: awakened,
+                            total: act.slots.length,
+                        })}
+                        title={t("ui.act.awakened_beaten", {
+                            beaten: awakened,
+                            total: act.slots.length,
+                        })}
+                    >
+                        {act.slots.map((slot) => {
+                            const fight = slot.fightId ? MAP_BY_ID.get(slot.fightId) : undefined;
+                            const won = !!fight && (save.mapVictories[fight.id] ?? 0) > 0;
+                            return (
+                                <span
+                                    key={slot.name}
+                                    className={
+                                        "ui-act-awakened-icon" + (won ? "" : " ui-act-awakened-not")
+                                    }
+                                >
+                                    <ItemIcon
+                                        objId={fight?.iconObjId ?? slot.iconObjId}
+                                        size={18}
+                                    />
+                                </span>
+                            );
+                        })}
+                        {/* In the icons' row, so a phone's short card has room for it */}
+                        {ended && act.ending && (
+                            <button className="ui-button ui-act-ending-again" onClick={onEnding}>
+                                {t("ui.act.ending_again")}
+                            </button>
+                        )}
+                    </span>
+                )}
             </div>
         </div>
     );
@@ -2536,6 +2595,69 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {(ui.overlay === "dead" || ui.overlay === "victory") && (
                 <ResultModal ui={ui} client={client} />
             )}
+        </div>
+    );
+}
+
+// Milliseconds between the lines of an act's ending coming in
+const ENDING_LINE_MS = 2600;
+
+// An act's ending (ActDef.ending), told a line at a time over whatever's up: as the last of its
+// Awakened fights falls, and again from its card. A click brings the rest in at once.
+function ActEndingModal({
+    actId,
+    client,
+}: {
+    actId: string;
+    client: GameClient;
+}): JSX.Element | null {
+    const act = ACT_BY_ID.get(actId);
+    const lines = act ? actEndingLines(act) : [];
+    const [shown, setShown] = useState(1);
+    useEffect(() => {
+        if (shown >= lines.length) {
+            return;
+        }
+        const timer = window.setTimeout(() => setShown((n) => n + 1), ENDING_LINE_MS);
+        return () => window.clearTimeout(timer);
+    }, [shown, lines.length]);
+    if (!act) {
+        return null;
+    }
+    const done = shown >= lines.length;
+    return (
+        <div className="ui-modal ui-act-ending-modal" onClick={() => setShown(lines.length)}>
+            <div
+                className="ui-panel rs-border rs-background ui-act-ending"
+                role="dialog"
+                aria-label={actEndingTitle(act)}
+            >
+                <span className="ui-act-ending-act">{actName(act)}</span>
+                <h2 className="ui-act-ending-title">{actEndingTitle(act)}</h2>
+                <div className="ui-act-ending-icons">
+                    {act.slots.map((slot) => (
+                        <ItemIcon key={slot.name} objId={slot.iconObjId} size={26} />
+                    ))}
+                </div>
+                {lines.slice(0, shown).map((line, i) => (
+                    <p key={i} className="ui-act-ending-line">
+                        {line}
+                    </p>
+                ))}
+                <button
+                    className={"ui-button" + (done ? " ui-button-go" : "")}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        if (done) {
+                            client.showActEnding(undefined);
+                        } else {
+                            setShown(lines.length);
+                        }
+                    }}
+                >
+                    {done ? t("ui.act.ending_close") : t("ui.act.ending_all")}
+                </button>
+            </div>
         </div>
     );
 }

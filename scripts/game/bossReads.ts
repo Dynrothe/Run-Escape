@@ -2,8 +2,9 @@
 // bots (simulate-run.ts's fights and tombsBot.ts's raid): a wall's gap, a closing ring's gap, orbs
 // and aimed shots to step across, a tether's side, a pool or a blast to step out of, a lunge's
 // strip to step off sideways (not back down it), the pocket between two strips, a long wedge to
-// step out of sideways, a surge's lane, marks about to land, a sandstorm's shelter, and the boss
-// whose guard is down for the fight's button. Each says which way to go (a unit step, or none to
+// step out of sideways, a surge's lane, marks about to land, a sandstorm's shelter, the boss
+// whose guard is down for the fight's button, and a fight in the dark with a stun for a button
+// (darkFightMove, stunPress). Each says which way to go (a unit step, or none to
 // stand), or undefined when it has nothing to say. Nothing here touches the DOM or Node, so the
 // dev console can use it too, as it does tombsBot.
 import { type Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
@@ -568,6 +569,13 @@ export function pressButton(sim: Sim, sloppy = false): void {
         }
         return;
     }
+    // One that stuns (Shadow): pressed once it's in reach
+    if (sim.ability?.stun !== undefined) {
+        if (sees && stunPress(sim)) {
+            sim.useAbility();
+        }
+        return;
+    }
     // One that lights braziers (Kindle): its own read
     if (sim.ability?.kindle) {
         if (sees && kindlePress(sim)) {
@@ -904,4 +912,100 @@ export function fanStep(
         }
     }
     return undefined;
+}
+
+// A fight in the dark with a button that stuns (FightAbilityDef.stun: the Awakened Leviathan's
+// Shadow), as a careful person plays it: in to the button's reach while it's ready, and pressed
+// there; close while it's stunned (her lantern's bonus); otherwise out of its tail's sweep, but
+// near enough that her light reaches it while it has no glow of its own; in the only light while
+// there is one (the pathfinder's circle), on its side towards it. Undefined when it isn't such a
+// fight.
+const STUN_STAND = 1.2;
+const TAIL_CLEAR = 1;
+export function darkFightMove(sim: Sim, boss: Enemy): Point | undefined {
+    const ability = sim.ability;
+    if (ability?.stun === undefined || !sim.litTargetsOnly) {
+        return undefined;
+    }
+    const player = sim.player;
+    const towards = (x: number, y: number, close = 0.3): Point => {
+        const length = Math.max(0.001, Math.hypot(x - player.x, y - player.y));
+        return length < close
+            ? { x: 0, y: 0 }
+            : { x: (x - player.x) / length, y: (y - player.y) / length };
+    };
+    const away = Math.hypot(player.x - boss.x, player.y - boss.y);
+    const out = { x: (player.x - boss.x) / away, y: (player.y - boss.y) / away };
+    // Its tail's reach round it (its swing that reaches least far)
+    const tail = Math.min(
+        ...(boss.def.boss?.attacks ?? [])
+            .filter((a) => a.kind === "swing" && !a.cover)
+            .map((a) => a.radius ?? 2),
+    );
+    const clear = tail + player.radius + TAIL_CLEAR;
+    const stunned = sim.isStunned(boss);
+    // An aimed shot coming (not a wave's line, which fightMove reads): across its line, as a
+    // person strafes an aimed shot
+    for (const projectile of sim.enemyProjectiles) {
+        if (projectile.hit || projectile.homing > 0) {
+            continue;
+        }
+        const speed = Math.max(0.001, Math.hypot(projectile.vx, projectile.vy));
+        const ux = projectile.vx / speed;
+        const uy = projectile.vy / speed;
+        const dx = player.x - projectile.x;
+        const dy = player.y - projectile.y;
+        const along = dx * ux + dy * uy;
+        const side = dx * -uy + dy * ux;
+        if (along > 0 && along < 10 && Math.abs(side) < projectile.radius + player.radius + 0.6) {
+            const sign = side >= 0 ? 1 : -1;
+            return openWay(sim, -uy * sign, ux * sign);
+        }
+    }
+    // and round the boss as one's wound up, the same way all through it
+    const windup = boss.bossState?.windup;
+    if (windup?.attack.kind === "projectile" && !windup.attack.wave && !stunned) {
+        const side = Math.floor(windup.startTick / 7) % 2 === 0 ? 1 : -1;
+        return openWay(sim, -out.y * side, out.x * side);
+    }
+    // The only light (the pathfinder's): into it, on its side towards the boss
+    const only = sim.onlyLightEnemy();
+    if (only) {
+        const lx = only.x + (boss.x - only.x) * 0.25;
+        const ly = only.y + (boss.y - only.y) * 0.25;
+        return towards(lx, ly);
+    }
+    // Shadow ready: in to its reach, and pressed there (stunPress)
+    const ready = sim.abilitySecondsLeft() < 0.5 && !stunned;
+    if (ready && player.hp > player.maxHp * 0.4) {
+        const reach = ability.reach - STUN_STAND;
+        if (away > reach) {
+            return towards(boss.x, boss.y);
+        }
+        return { x: 0, y: 0 };
+    }
+    // Stunned: stay close for her lantern's glow, as long as it lasts
+    if (stunned) {
+        return { x: 0, y: 0 };
+    }
+    // Lit by nothing but her own light: near enough for it to reach its edge, in its tail's
+    // sweep if it must be (its windup's stepped out of, in fightMove)
+    if (!sim.isEnemyLit(boss)) {
+        const own = sim.lights.find((l) => l.kind === "player" && l.id === sim.focus);
+        const reach = (own?.radius ?? 0) + boss.radius;
+        return away > reach - 0.2 ? towards(boss.x, boss.y) : { x: 0, y: 0 };
+    }
+    if (away < clear) {
+        return out;
+    }
+    return undefined;
+}
+
+// Shadow (FightAbilityDef.stun): pressed once it's in reach and not stunned already
+export function stunPress(sim: Sim): boolean {
+    if (sim.ability?.stun === undefined || sim.abilitySecondsLeft() !== 0) {
+        return false;
+    }
+    const target = sim.abilityTarget();
+    return target !== undefined && !sim.isStunned(target);
 }

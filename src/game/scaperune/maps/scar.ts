@@ -753,6 +753,8 @@ export const SCAR_RECIPE: MapRecipe = {
     build: (context) => build(context).grid,
     detail: (context) => build(context),
     points: POINTS,
+    // The Awakened Leviathan's fight is on its ground (content/leviathan.ts)
+    fights: ["awakened_leviathan"],
 };
 
 // A grid tile's world tile; middle: the middle of a 2 by 2 from its south-west tile

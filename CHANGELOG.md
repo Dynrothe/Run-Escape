@@ -81,6 +81,15 @@ the version in the corner).
   hide behind the statues, and relight the braziers by his alcove to burn him.
 - Baron, the Awakened Duke's pet: take him along and when a crowd closes round you he wakes and
   spits his gas, slowing and poisoning what's in it.
+- The Awakened Leviathan, Act II's fourth Awakened fight, on the Bosses tab once the Scar's
+  beaten: you play the Lantern-bearer at its pool in the dark, with Shadow, a button that stuns it
+  from close by. Once its glow goes out only your own light finds it, so you fight within reach of
+  its tail; its torrent can only be hidden from behind debris, and the debris that hides you is
+  smashed; and at the last only the pathfinder's circle is lit.
+- Lil'viathan, the Awakened Leviathan's pet: take it along and every 20 seconds it blows a bubble
+  round you that takes the next hit and pops, knocking back what's near.
+- The Fallen Empire's ending: beat all four Awakened fights, in any order, and the act's story is
+  told. The act's middle card fills in as they fall, and tells it again once they're all down.
 
 ### Changed
 
