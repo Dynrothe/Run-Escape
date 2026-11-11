@@ -8,7 +8,7 @@ import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
 import {
     TROPHIES,
     TROPHY_BY_ID,
-    getEveryTimeTrophiesFound,
+    getRaidChestTrophiesFound,
     isEveryTimeTrophy,
 } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
@@ -201,7 +201,9 @@ describe("raids", () => {
         // And it's on the result, for the result screen
         const chest = sim.getResult().raidChest!;
         expect(chest.points).toBe(400);
-        expect(chest.chance).toBeGreaterThan(0);
+        // The test raid has no uniques of its own, so nothing to roll for (the Theatre's chance
+        // is tested below)
+        expect(chest.chance).toBe(0);
     });
 
     it("rolls the Theatre's uniques from its chest, more often with more points", () => {
@@ -233,7 +235,7 @@ describe("raids", () => {
         expect(many).toBeGreaterThan(100);
     });
 
-    it("gives a Lil' Zik look not found yet from expert's chest, till there are none left", () => {
+    it("gives a Lil' Zik look not found yet from expert's chest, and none once all are found", () => {
         const sim = raid(true);
         Object.assign(sim, { map: getMap("theatre_of_blood") });
         const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
@@ -251,17 +253,13 @@ describe("raids", () => {
             found.add(got[0]);
         }
         expect([...found].sort()).toEqual([...looks].sort());
-        // Once they're all found, still one every time, and any of the five
+        // Once they're all found, none again: they're unlocks, so a second does nothing
         sim.heroes[0].trophiesFound = new Set(found);
-        const given = new Set<string>();
         for (let i = 0; i < 20; i++) {
             sim.trophies.clear();
             sim["openRaidChest"]();
-            const got = lookIn();
-            expect(got).toHaveLength(1);
-            given.add(got[0]);
+            expect(lookIn()).toEqual([]);
         }
-        expect(given.size).toBeGreaterThan(1);
         // And the last one missing is the one given, with the found ones brought in as a run
         // starts
         const last = raid(true, 0, undefined, new Set(looks.slice(1)));
@@ -271,9 +269,89 @@ describe("raids", () => {
             last["openRaidChest"]();
             expect([...last.trophies].filter((id) => looks.includes(id))).toEqual([looks[0]]);
         }
-        expect(getEveryTimeTrophiesFound(["lil_bloat", "ghrazi_rapier", "lil_zik"])).toEqual([
-            "lil_bloat",
-        ]);
+        // Every raid chest's trophy is brought in, the Theatre's and the Tombs', and nothing else
+        expect(
+            getRaidChestTrophiesFound([
+                "lil_bloat",
+                "ghrazi_rapier",
+                "jewel_of_the_sun",
+                "jar_of_dreams",
+                "lil_zik",
+            ]),
+        ).toEqual(["lil_bloat", "ghrazi_rapier", "jewel_of_the_sun"]);
+    });
+
+    it("never gives a Theatre unique found already, normal or hard, and none once all are", () => {
+        const tob = TROPHIES.filter(
+            (t) => t.from.kind === "raid" && t.from.mapId === "theatre_of_blood",
+        );
+        const normal = tob.filter(
+            (t) => t.from.kind === "raid" && !t.from.hard && !isEveryTimeTrophy(t),
+        );
+        const hard = tob.filter((t) => t.from.kind === "raid" && t.from.hard);
+        expect(normal.length).toBeGreaterThan(1);
+        expect(hard.length).toBeGreaterThan(0);
+        // All but one of each found: that one's the only unique a chest ever gives
+        const owned = new Set([...normal.slice(1), ...hard.slice(1)].map((t) => t.id));
+        const sim = raid(false, 0, undefined, owned);
+        Object.assign(sim, { map: getMap("theatre_of_blood"), hard: true });
+        sim.heroes[0].raidPointsEarned = 5000;
+        const given = new Set<string>();
+        for (let i = 0; i < 300; i++) {
+            sim.trophies.clear();
+            sim["openRaidChest"]();
+            for (const id of sim.trophies) {
+                expect(owned.has(id)).toBe(false);
+                given.add(id);
+            }
+        }
+        expect([...given].sort()).toEqual([normal[0].id, hard[0].id].sort());
+        // Found this run counts too: a second chest in it gives nothing the first did
+        sim.trophies.clear();
+        sim.trophies.add(normal[0].id);
+        sim.trophies.add(hard[0].id);
+        sim.takeEvents();
+        sim["openRaidChest"]();
+        expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        expect(
+            sim
+                .takeEvents()
+                .some(
+                    (e) => e.type === "notice" && e.message.includes("nothing you haven't found"),
+                ),
+        ).toBe(true);
+        // Every purple found but a hard one left: no chance to show, the hard roll still made
+        sim.trophies.clear();
+        sim.trophies.add(normal[0].id);
+        let hardGiven = 0;
+        for (let i = 0; i < 200; i++) {
+            sim.trophies.delete(hard[0].id);
+            sim.takeEvents();
+            sim["openRaidChest"]();
+            expect(sim.heroes[0].raidChest!.chance).toBe(0);
+            const found = sim.heroes[0].raidChest!.found;
+            hardGiven += found.length;
+            if (found.length === 0) {
+                expect(sim.takeEvents()).toContainEqual(
+                    expect.objectContaining({
+                        type: "notice",
+                        message: "The chest holds no unique this time.",
+                    }),
+                );
+            }
+        }
+        expect(hardGiven).toBeGreaterThan(0);
+        expect(hardGiven).toBeLessThan(200);
+        // Everything found: no chance shown, and the chest says so
+        const all = raid(false, 0, undefined, new Set(tob.map((t) => t.id)));
+        Object.assign(all, { map: getMap("theatre_of_blood"), hard: true });
+        all.heroes[0].raidPointsEarned = 5000;
+        all.takeEvents();
+        all["openRaidChest"]();
+        const notices = all.takeEvents().flatMap((e) => (e.type === "notice" ? [e.message] : []));
+        expect([...all.trophies]).toEqual([]);
+        expect(all.getResult().raidChest!.chance).toBe(0);
+        expect(notices.some((m) => m.includes("nothing you haven't found"))).toBe(true);
     });
 
     it("keeps a raid's wins, normal and hard, when the save's loaded again", () => {

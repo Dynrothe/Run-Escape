@@ -654,8 +654,8 @@ export type SimOptions = {
     // The weapons, passives and items brought in by map tasks; everything can
     // turn up when unset
     unlockedItems?: ReadonlySet<string>;
-    // The trophies already in their Collection log that a chest gives one of every time (expert
-    // mode's Lil' Zik looks), so it gives one they haven't got while there's one left
+    // The raid chests' trophies already in their Collection log (isRaidChestTrophy): they're
+    // unlocks, so a chest only gives ones they haven't got
     trophiesFound?: ReadonlySet<string>;
     // Round after round until the player falls, rather than a win at the
     // final boss (see endless.ts)
@@ -788,7 +788,7 @@ export type Hero = {
     // Armoury (see SimOptions)
     metaStats: Stats;
     unlockedItems: ReadonlySet<string> | undefined;
-    // The every-time trophies they'd found before the run, only those (SimOptions.trophiesFound)
+    // The raid chests' trophies they'd found before the run, only those (SimOptions.trophiesFound)
     trophiesFound: ReadonlySet<string> | undefined;
     armoury: ArmouryUpgrades | undefined;
     player: Player;
@@ -1048,7 +1048,11 @@ export type AkkhaFight = {
         showEnd: number;
         burst: number;
         step: number;
+        // Where he vanished from, to reappear there (in the quarter he's been drawn into)
+        from: { x: number; y: number };
     };
+    // Not before this tick does his next special start (AkkhaDef.specialGap)
+    readyTick: number;
     orbsUntil: number;
     // Detonate: when the marked go off, and whether each's an X (Feeling Special) or a plus
     detonate?: { tick: number; cross: boolean[] };
@@ -5662,6 +5666,7 @@ export class Sim {
                         this.tombsAkkha = {
                             uid: enemy.uid,
                             attacks: 0,
+                            readyTick: 0,
                             orbsUntil: 0,
                             orbs: [],
                             lastTiles: [],
@@ -5895,7 +5900,8 @@ export class Sim {
             !boss.bossState!.windup &&
             !fight.memory &&
             !fight.detonate &&
-            this.tick >= fight.orbsUntil
+            this.tick >= fight.orbsUntil &&
+            this.tick >= fight.readyTick
         ) {
             fight.attacks = 0;
             this.startAkkhaSpecial(boss, fight, def);
@@ -5926,6 +5932,13 @@ export class Sim {
             fight.orbsUntil = this.tick + secondsToTicks(def.orbs.seconds);
             fight.lastTiles = this.heroes.map((hero) => this.akkhaTile(hero.player));
             this.emit({ type: "notice", message: def.orbs.message });
+        }
+        // After Memory Blast, his next once he's been back on the floor as long as he was gone,
+        // and specialGap at least
+        if (fight.memory) {
+            const ends = fight.memory.showEnd + fight.memory.burst * fight.memory.order.length;
+            const gone = ends - this.tick;
+            fight.readyTick = ends + Math.max(gone, secondsToTicks(def.specialGap));
         }
         const others = def.forms.filter((id) => id !== boss.def.id);
         this.changeAkkhaForm(boss, others[this.rng.int(others.length)]);
@@ -6019,7 +6032,8 @@ export class Sim {
         const gap = secondsToTicks(memory.gap);
         const showEnd = this.tick + steps * (flash + gap);
         const burst = secondsToTicks(this.invoked("feeling_special") ? memory.quick : memory.burst);
-        fight.memory = { order, start: this.tick, flash, gap, showEnd, burst, step: 0 };
+        const from = { x: boss.x, y: boss.y };
+        fight.memory = { order, start: this.tick, flash, gap, showEnd, burst, step: 0, from };
         // He's gone from the floor meanwhile: no attacks, nothing to hit
         const state = boss.bossState!;
         state.windup = undefined;
@@ -6102,11 +6116,40 @@ export class Sim {
         memory.step++;
         if (memory.step >= memory.order.length) {
             fight.memory = undefined;
+            // Back where he was, or with a shadow of his dead, just inside its quarter: he's drawn
+            // there meanwhile. Back in the middle (in no quarter) he was out of reach again, and
+            // walked so slowly between his volleys that the next blast came before he got there.
+            const at = this.akkhaReappear(fight, def, memory.from);
+            boss.x = boss.prevX = at.x;
+            boss.y = boss.prevY = at.y;
             boss.anim = "idle";
             boss.attackSeq = boss.def.attackSeq;
             boss.animStart = this.tick;
             this.emit({ type: "notice", message: "Akkha reappears!" });
         }
+    }
+
+    // Where he comes back after Memory Blast: in the dead shadow's quarter nearest where he
+    // vanished, a step past the lines (AkkhaDef.shadows.inside), or where he vanished
+    private akkhaReappear(
+        fight: AkkhaFight,
+        def: AkkhaDef,
+        from: { x: number; y: number },
+    ): { x: number; y: number } {
+        const dead = fight.shadows.filter(
+            (shadow) => !this.enemies.some((e) => e.uid === shadow.uid && !e.dead),
+        );
+        let best: { x: number; y: number } | undefined;
+        let bestDistance = Infinity;
+        for (const shadow of dead) {
+            const at = this.akkhaCorner(shadow.quadrant, def.shadows.inside + 1);
+            const distance = fm.hypot(at.x - from.x, at.y - from.y);
+            if (distance < bestDistance) {
+                best = at;
+                bestDistance = distance;
+            }
+        }
+        return best ?? from;
     }
 
     // His trailing orbs: one on every tile anyone leaves (and one ahead, with Feeling Special),
@@ -11126,39 +11169,45 @@ export class Sim {
     }
 
     // The chest once the raid's done, each of the party their own: a purple, more likely the more
-    // points they earned, and on hard mode a roll for its own uniques too
+    // points they earned, and on hard mode a roll for its own uniques too. The uniques are unlocks,
+    // so a chest only gives ones the hero hasn't found (hasTrophy): a purple is one of those left,
+    // and once there are none left there's no roll
     private openRaidChest(): void {
         const id = this.map.id;
         const purples = TROPHIES.filter((t) => t.from.kind === "raid" && t.from.mapId === id);
-        const pick = (hard: boolean): TrophyDef | undefined => {
-            const pool = purples.filter(
+        const missingOf = (hero: Hero, hard: boolean): TrophyDef[] =>
+            purples.filter(
                 (t) =>
                     t.from.kind === "raid" &&
                     (t.from.hard ?? false) === hard &&
-                    !(t.from.expert ?? false),
+                    !isEveryTimeTrophy(t) &&
+                    !this.hasTrophy(hero, t.id),
             );
-            if (pool.length === 0) {
-                return undefined;
-            }
-            const weights = pool.map((t) => (t.from.kind === "raid" ? t.from.weight : 0));
-            return pool[this.rng.weightedIndex(weights)];
-        };
-        // Expert mode: one of Lil' Zik's looks, every time, one they haven't got while there's one
-        // left, and any of them after that
+        const pick = (pool: TrophyDef[]): TrophyDef =>
+            pool[
+                this.rng.weightedIndex(
+                    pool.map((t) => (t.from.kind === "raid" ? t.from.weight : 0)),
+                )
+            ];
+        // Expert mode: one of Lil' Zik's looks every time, one they haven't got, till they have all
         const expertPool = this.expert ? purples.filter(isEveryTimeTrophy) : [];
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
             const [min, max] = PURPLE_CHANCE;
-            const chance = Math.min(max, Math.max(min, hero.raidPointsEarned / PURPLE_POINTS));
-            const purple = this.rng.chance(chance) ? pick(false) : undefined;
+            const pool = missingOf(hero, false);
+            const chance =
+                pool.length > 0
+                    ? Math.min(max, Math.max(min, hero.raidPointsEarned / PURPLE_POINTS))
+                    : 0;
+            const purple = pool.length > 0 && this.rng.chance(chance) ? pick(pool) : undefined;
+            const hardPool = this.hard ? missingOf(hero, true) : [];
             const hardOne =
-                this.hard && this.rng.chance(HARD_UNIQUE_CHANCE) ? pick(true) : undefined;
-            const missing = expertPool.filter(
-                (t) => !hero.trophies.has(t.id) && !(hero.trophiesFound?.has(t.id) ?? false),
-            );
-            const expertFrom = missing.length > 0 ? missing : expertPool;
-            const expertOne = expertFrom.length > 0 ? this.rng.pick(expertFrom) : undefined;
+                hardPool.length > 0 && this.rng.chance(HARD_UNIQUE_CHANCE)
+                    ? pick(hardPool)
+                    : undefined;
+            const missingLooks = expertPool.filter((t) => !this.hasTrophy(hero, t.id));
+            const expertOne = missingLooks.length > 0 ? this.rng.pick(missingLooks) : undefined;
             const found = [purple, hardOne, expertOne].filter(
                 (t): t is TrophyDef => t !== undefined,
             );
@@ -11173,7 +11222,10 @@ export class Sim {
                     message:
                         found.length > 0
                             ? `A purple chest! ${found.map((t) => this.findTrophy(t)).join(" ")}`
-                            : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
+                            : this.noUniqueNotice(
+                                  chance,
+                                  pool.length === 0 && hardPool.length === 0,
+                              ),
                 },
                 true,
             );
@@ -11181,10 +11233,27 @@ export class Sim {
         this.use(current);
     }
 
+    // A raid chest's notice when it gave nothing: everything's found already, or no purple left to
+    // find but a roll of its own made (no chance to show), or the purple's chance
+    private noUniqueNotice(chance: number, allFound: boolean): string {
+        if (allFound) {
+            return "The chest holds nothing you haven't found already.";
+        }
+        return chance > 0
+            ? `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`
+            : "The chest holds no unique this time.";
+    }
+
+    // Whether a hero has this trophy already: found this run, or before it (Hero.trophiesFound)
+    private hasTrophy(hero: Hero, id: string): boolean {
+        return hero.trophies.has(id) || (hero.trophiesFound?.has(id) ?? false);
+    }
+
     // The Tombs of Amascut's chest, once the last Warden's down, each of the party their own: a
     // purple, more likely the higher the raid level (PURPLE_CHANCE's least at 0, its most at
     // 500), from those its level allows, then its pet, the Thread and the jewels, each a roll of
-    // its own from its raid level
+    // its own from its raid level. As the Theatre's, only what the hero hasn't found: a purple is
+    // one of those left, and a pet, Thread or jewel they have isn't rolled for
     private openTombsChest(): void {
         const level = this.tombsChestLevel();
         const open = TROPHIES.flatMap((trophy) =>
@@ -11192,10 +11261,11 @@ export class Sim {
                 ? [{ trophy, from: trophy.from }]
                 : [],
         );
-        const purples = open.filter(({ from }) => from.weight !== undefined);
         const current = this.hero;
         for (const hero of this.heroes) {
             this.use(hero);
+            const missing = open.filter(({ trophy }) => !this.hasTrophy(hero, trophy.id));
+            const purples = missing.filter(({ from }) => from.weight !== undefined);
             const chance = purples.length > 0 ? this.tombsChance(hero) : 0;
             const found: TrophyDef[] = [];
             const purple =
@@ -11206,7 +11276,7 @@ export class Sim {
             if (purple) {
                 found.push(purple);
             }
-            for (const { trophy, from } of open) {
+            for (const { trophy, from } of missing) {
                 if (from.chance !== undefined && this.rng.chance(from.chance)) {
                     found.push(trophy);
                 }
@@ -11224,7 +11294,7 @@ export class Sim {
                         found.length > 0
                             ? (purple ? "A purple chest! " : "") +
                               found.map((t) => this.findTrophy(t)).join(" ")
-                            : `The chest holds no unique this time (${Math.round(chance * 100)}% chance).`,
+                            : this.noUniqueNotice(chance, missing.length === 0),
                 },
                 true,
             );

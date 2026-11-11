@@ -1151,11 +1151,12 @@ export const AKKHA: AkkhaDef = {
     // Full light: his floor's symbols and Memory Blast's quadrants are what he's read by
     ambient: 1,
     specialEvery: 6,
+    specialGap: 8,
     elements: AKKHA_ELEMENTS,
     memory: {
         steps: 4,
         perLevels: 2,
-        most: 7,
+        most: 6,
         flash: 0.9,
         gap: 0.3,
         burst: 2.4,

@@ -359,6 +359,8 @@
     "notice.collection_log": "New item added to your collection log: {item}",
     "notice.purple_chest": "A purple chest! {rest}",
     "notice.no_unique": "The chest holds no unique this time ({percent}% chance).",
+    "notice.no_unique_left": "The chest holds no unique this time.",
+    "notice.nothing_new": "The chest holds nothing you haven't found already.",
     "notice.bot_nuke.one": "Bot nuke! {n} bot banned.",
     "notice.bot_nuke.other": "Bot nuke! {n} bots banned.",
     "notice.face": "{first} He'll face {side}!",

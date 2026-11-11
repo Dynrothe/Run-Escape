@@ -32,7 +32,7 @@ import {
     TOMBS_STRIKE,
     WARDENS,
 } from "../content/tombs";
-import { TROPHY_BY_ID } from "../content/trophies";
+import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import { MapDef, emptyStats } from "../content/types";
 import { WARDENS_CRATER_WARDEN, createWardensFloor, wardensCrater } from "../content/wardensFloor";
 import { Sim, TICKS_PER_SECOND, formationSpots, wardenFrontRow, zebakShelters } from "./Sim";
@@ -1736,11 +1736,22 @@ describe("Akkha", () => {
             const line = boss.hp;
             let killedAt = -1;
             let hurtAt = -1;
+            let reappeared = false;
+            let blasting = false;
             for (let t = 0; t < 60 * TICKS_PER_SECOND && hurtAt < 0; t++) {
                 const fight = sim.tombsAkkha!;
                 const dead = fight.shadows.find(
                     (s) => !sim.enemies.some((e) => e.uid === s.uid && !e.dead),
                 );
+                // Back from the blast just inside the dead shadow's quarter, not in the middle
+                if (blasting && !fight.memory && dead) {
+                    const middle = sim.tombsPathRoom!.boss!.quadrants!.middle;
+                    expect(sim.akkhaQuadrant(boss.x, boss.y)).toBe(dead.quadrant);
+                    expect(Math.abs(boss.x - middle.x)).toBeGreaterThanOrEqual(DEF.shadows.inside);
+                    expect(Math.abs(boss.y - middle.y)).toBeGreaterThanOrEqual(DEF.shadows.inside);
+                    reappeared = true;
+                }
+                blasting = fight.memory !== undefined;
                 if (!dead && fight.memory && fight.shadows.length > 0) {
                     const shadow = sim.enemies.find((e) => e.uid === fight.shadows[0].uid)!;
                     sim.damageEnemy(shadow, shadow.maxHp * 2, 0, shadow.x, shadow.y);
@@ -1765,8 +1776,10 @@ describe("Akkha", () => {
                 sim.step();
             }
             expect(killedAt).toBeGreaterThanOrEqual(0);
+            expect(reappeared).toBe(true);
             expect(hurtAt).toBeGreaterThan(0);
-            expect((hurtAt - killedAt) / TICKS_PER_SECOND).toBeLessThan(25);
+            // The rest of the blast, then he reappears in its quarter, hurt at once
+            expect((hurtAt - killedAt) / TICKS_PER_SECOND).toBeLessThan(15);
         }
     });
 
@@ -1957,6 +1970,36 @@ describe("Akkha", () => {
             const plain = memory().tombsAkkha!.memory!.burst;
             const quick = memory(["feeling_special"]).tombsAkkha!.memory!.burst;
             expect(quick).toBe(Math.round(plain / 2));
+        });
+
+        it("reappears where he vanished, and is on the floor a while before the next", () => {
+            // Raid level 500's: every special a Memory Blast, an attack sooner, quick bursts
+            const sim = memory(["double_trouble", "stay_vigilant", "feeling_special"]);
+            const fight = sim.tombsAkkha!;
+            const plan = fight.memory!;
+            const middle = { x: akkha(sim).x, y: akkha(sim).y };
+            const done = plan.showEnd + plan.burst * plan.order.length;
+            while (sim.tick <= done && fight.memory) {
+                seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
+            }
+            expect(fight.memory).toBeUndefined();
+            const boss = akkha(sim);
+            // No shadows up: back where he was, not in the middle
+            expect(Math.hypot(boss.x - plan.from.x, boss.y - plan.from.y)).toBeLessThan(0.2);
+            expect(plan.from).not.toEqual(middle);
+            // His attacks made already, he's still on the floor as long as he was gone, and
+            // specialGap at least, before the next
+            const back = sim.tick;
+            for (let i = 0; i < 60 * TICKS_PER_SECOND && !fight.memory; i++) {
+                special(sim);
+                sim.player.hp = sim.player.maxHp;
+                seconds(sim, 1 / TICKS_PER_SECOND, IN[2]);
+            }
+            expect(fight.memory).toBeDefined();
+            const floor = sim.tick - back;
+            expect(floor).toBeGreaterThanOrEqual(done - plan.start - 1);
+            expect(floor / TICKS_PER_SECOND).toBeGreaterThanOrEqual(DEF.specialGap - 0.1);
+            expect(floor).toBeLessThan(done - plan.start + 2 * TICKS_PER_SECOND);
         });
     });
 
@@ -4367,6 +4410,69 @@ describe("the Tombs' chest", () => {
             expect(from.kind === "tombs" && from.level <= level).toBe(true);
         }
         expect(high.sim.heroes[0].raidChest!.level).toBe(level);
+    });
+
+    it("never gives what's found already, a purple, the pet, the Thread or a jewel", () => {
+        const invocations = INVOCATIONS.map((i) => i.id);
+        const sim = tombs(invocations);
+        const level = sim["tombsChestLevel"]();
+        const open = TROPHIES.filter((t) => t.from.kind === "tombs" && t.from.level <= level);
+        const purples = open.filter((t) => t.from.kind === "tombs" && t.from.weight !== undefined);
+        const rolls = open.filter((t) => t.from.kind === "tombs" && t.from.chance !== undefined);
+        expect(purples.length).toBeGreaterThan(1);
+        expect(rolls.length).toBeGreaterThan(1);
+        // All but one purple and one roll of its own found before
+        const owned = new Set([...purples.slice(1), ...rolls.slice(1)].map((t) => t.id));
+        sim.heroes[0].trophiesFound = owned;
+        sim.heroes[0].tombsPoints = TOMBS_POINTS.full;
+        const given = new Set<string>();
+        for (let i = 0; i < 2000; i++) {
+            sim.trophies.clear();
+            sim["openTombsChest"]();
+            for (const id of sim.heroes[0].raidChest!.found) {
+                expect(owned.has(id)).toBe(false);
+                given.add(id);
+            }
+        }
+        expect([...given].sort()).toEqual([purples[0].id, rolls[0].id].sort());
+        // Found this run counts too: with those two found in it, nothing more
+        sim.trophies.clear();
+        sim.trophies.add(purples[0].id);
+        sim.trophies.add(rolls[0].id);
+        for (let i = 0; i < 200; i++) {
+            sim["openTombsChest"]();
+            expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        }
+        // Every purple found but a roll of its own left: no chance shown, and none claimed
+        sim.trophies.clear();
+        sim.heroes[0].trophiesFound = new Set(
+            open.filter((t) => t.id !== rolls[0].id).map((t) => t.id),
+        );
+        sim.takeEvents();
+        sim["openTombsChest"]();
+        expect(sim.heroes[0].raidChest!.chance).toBe(0);
+        if (sim.heroes[0].raidChest!.found.length === 0) {
+            expect(sim.takeEvents()).toContainEqual(
+                expect.objectContaining({
+                    type: "notice",
+                    message: "The chest holds no unique this time.",
+                }),
+            );
+        }
+        // Everything found: no chance, nothing given, and the chest says so
+        sim.heroes[0].trophiesFound = new Set(open.map((t) => t.id));
+        sim.trophies.clear();
+        sim.takeEvents();
+        sim["openTombsChest"]();
+        expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        expect(sim.heroes[0].raidChest!.chance).toBe(0);
+        expect(
+            sim
+                .takeEvents()
+                .some(
+                    (e) => e.type === "notice" && e.message.includes("nothing you haven't found"),
+                ),
+        ).toBe(true);
     });
 });
 

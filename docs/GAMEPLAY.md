@@ -360,7 +360,9 @@ version and how to run it.
   cut out of the cache. Killing it gives raid points (for clearing it, killing the boss fast and
   taking little damage), coins for them, and a supply chest between rooms that sells food and
   potions for points. The last boss's chest rolls for a purple, more likely the more points you
-  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. The Ghrazi rapier
+  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. A second of one
+  would do nothing, so no raid's chest gives one you've found already: a purple is one you haven't
+  got, and once you have all of a roll's there's nothing left for it to give. The Ghrazi rapier
   from the chest unlocks it as a weapon, and on hard or expert the chest has a roll of its own that
   can hold the Holy Scythe of Vitur (uncharged), which unlocks the Holy Scythe. The bosses pray
   against missiles and magic, so melee hits hardest (their overhead prayer shows it, Nylocas
@@ -421,6 +423,7 @@ version and how to run it.
       The Thread of Elidinis and the jewels are rolls of their own, and each brings something in:
       the Thread the **Divine rune pouch**, a rare passive that gives one more weapon slot, for a
       magic weapon, and offers magic weapons whatever your style; each jewel its keris partisan.
+      Like the Theatre's, it never gives anything you've found already.
       The end-of-raid board shows the raid level, each path's time, and every player's points,
       deaths and purple chance.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an

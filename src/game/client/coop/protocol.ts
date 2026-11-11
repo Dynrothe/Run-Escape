@@ -12,9 +12,8 @@ export type Loadout = {
     // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby. Only
     // shown: the start carries the party's (GameStart.invocations), and the relay passes it as is
     invocations?: string[];
-    // The trophies they've found that a raid's chest gives one of every time (expert mode's Lil'
-    // Zik looks), so theirs gives one they haven't got. Ready for co-op's expert mode: rooms don't
-    // carry expert yet (GameStart), so no co-op chest goes by it so far
+    // The raid chests' trophies they've found (isRaidChestTrophy), so their chest only gives ones
+    // they haven't got
     trophies?: string[];
 };
 
