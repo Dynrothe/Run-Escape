@@ -2472,6 +2472,13 @@ in `i18n/store.ts`.
 - Numbers go through `fmtNum`, lists through `list` (in English as the game always wrote them, "a,
   b and c") and dates through `dateLocale()` (in English, the browser's own format). Their `Intl`
   formatters are kept, as numbers are formatted every frame.
+- Stat icons (`statIconFor` in `content/statIcons.ts`) need no code per language. They are found
+  by English wording, so in another language a line first goes back to its English through the
+  files' keys (`englishOf`): a text the files hold gets exactly its English's icon, none if the
+  English has none. Only a generated line (a stat with its number) falls back to the language's
+  words for the labels (`translationsOf`), skipping a short word before the label ("+2 de
+  armadura"). `statIcons.test.ts` runs every language in `LANGS` over all of it, so a new language
+  is checked by adding it there.
 - Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give
   keys there, and `tr()` and `tl()` English.
 - The choice is saved under `rune-survivors-language` in localStorage. Tests start in English

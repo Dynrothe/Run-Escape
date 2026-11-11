@@ -30,6 +30,8 @@ the version in the corner).
   every raid level, so he's quicker to beat at all of them. Memory Blast is six steps at most, and
   once one of his shadows is dead he comes back from it in that shadow's quarter, where he can be
   hurt, not out of reach in the middle. Fixed by Okaeri.
+- Stat icons on tooltips, cards and the pause menu now show in Português (BR), and in any language
+  added later. Fixed by Iakee.
 
 ## 0.30.0 - 2026-11-09
 

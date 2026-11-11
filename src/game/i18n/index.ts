@@ -4,6 +4,7 @@ export { LANGS } from "./types";
 export type { Lang } from "./types";
 export {
     dateLocale,
+    englishOf,
     fmtNum,
     getLang,
     list,
@@ -13,5 +14,6 @@ export {
     tl,
     tp,
     tr,
+    translationsOf,
     useLang,
 } from "./store";
