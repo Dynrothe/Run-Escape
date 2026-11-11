@@ -1933,13 +1933,15 @@ function InvocationDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.
     const best = save.invocationBest?.[map.id];
     return (
         <div className="ui-card-style ui-invocation-record">
-            {best
-                ? t("ui.invocations.best", {
-                      points: best.points,
-                      time: formatTime(best.seconds),
-                  })
-                : t("ui.invocations.none_yet")}
-            {best && <RecordSetupText record={{ relics: best.relics }} />}
+            <span>
+                {best
+                    ? t("ui.invocations.best", {
+                          points: best.points,
+                          time: formatTime(best.seconds),
+                      })
+                    : t("ui.invocations.none_yet")}
+                {best && <RecordSetupText record={{ relics: best.relics }} />}
+            </span>
             <InvocationBadges best={best?.points ?? 0} />
         </div>
     );

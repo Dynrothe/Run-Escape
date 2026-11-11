@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
@@ -26,12 +27,13 @@ export function RelicRow({
     client: GameClient;
 }): JSX.Element | null {
     const [picking, setPicking] = useState<RelicTier>();
+    const row = useRef<HTMLDivElement>(null);
     const open = getOpenRelicTiers(ui.save.mapVictories);
     const picked = ui.save.relics ?? [];
     const inTier = (tier: RelicTier) =>
         picked.map((id) => RELIC_BY_ID.get(id)).find((relic) => relic?.tier === tier);
     return (
-        <div className="ui-relic-row">
+        <div ref={row} className="ui-relic-row">
             <span className="ui-pet-label">{t("ui.relics.label")}</span>
             <div className="ui-relic-slots">
                 {RELIC_TIERS.map((tier) => {
@@ -64,17 +66,20 @@ export function RelicRow({
                     );
                 })}
             </div>
-            {picking !== undefined && (
-                <RelicPicker
-                    tier={picking}
-                    picked={inTier(picking)}
-                    onPick={(id) => {
-                        client.selectRelic(picking, id);
-                        setPicking(undefined);
-                    }}
-                    onClose={() => setPicking(undefined)}
-                />
-            )}
+            {/* Over the whole screen (its .ui-fill), not just the adventurers' panel */}
+            {picking !== undefined &&
+                createPortal(
+                    <RelicPicker
+                        tier={picking}
+                        picked={inTier(picking)}
+                        onPick={(id) => {
+                            client.selectRelic(picking, id);
+                            setPicking(undefined);
+                        }}
+                        onClose={() => setPicking(undefined)}
+                    />,
+                    row.current?.closest(".ui-fill") ?? document.body,
+                )}
         </div>
     );
 }
