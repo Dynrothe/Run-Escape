@@ -237,11 +237,13 @@ desktop build.
   that need no device. See `docs/DEVELOPMENT.md`, Android, for the update flow.
 - **It keeps to the website's build**, when built with `-PgameSiteUrl` (`GAME_SITE_URL`), as the
   Windows app does: `SiteUpdater.java` downloads it into `filesDir/site/<build>` off the UI thread,
-  and it's played from the next launch. `GamePathHandler.java` serves `/assets/game/` from that
-  folder or the APK, at the same address. What needs no device is in `SiteFiles.java` (the same
-  checks as `desktop/siteFiles.ts`: change one, change the other) and `SiteGames.java`, with tests.
-  It never follows a website older than the APK's own version. See `docs/DEVELOPMENT.md`,
-  Following the website on Android.
+  on Wi-Fi only, and it's played when the game next starts over (the menu's Restart game, or
+  opening the app), never mid-run. `GamePathHandler.java` serves `/assets/game/` from that folder,
+  or the APK for the chunks it has, at the same address. What needs no device is in
+  `SiteFiles.java` (the same checks as `desktop/siteFiles.ts`: change one, change the other, and
+  put their cases in `desktop/siteFiles.cases.json`, which both run) and `SiteGames.java`, with
+  tests. It never follows a website older than the APK's own version, or one whose `minAndroid` is
+  newer. See `docs/DEVELOPMENT.md`, Following the website on Android.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
@@ -330,3 +332,7 @@ desktop build.
   refuses one (see Desktop in `docs/DEVELOPMENT.md`).
 - **`minLauncher`**: raise `LAUNCHER_VERSION` in `desktop/version.ts` only if the game can't run on
   launchers already out there. It makes every player download a new zip by hand.
+- **`minAndroid`**: raise `MIN_ANDROID_APP` in `desktop/version.ts` when the game needs something
+  from the Android app that apps already out there don't have (an address `RelayPolicy.java` lets
+  out, a message the page sends the app). Older apps then play their APK's game, so deploy such a
+  build to the website only after its APK's released.

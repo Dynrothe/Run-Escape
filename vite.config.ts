@@ -10,7 +10,7 @@ import { defineConfig } from "vitest/config";
 
 import { parseRange } from "./desktop/gameServer";
 import { SITE_FILES_NAME, makeSiteFiles } from "./desktop/siteFiles";
-import { LAUNCHER_VERSION } from "./desktop/version";
+import { LAUNCHER_VERSION, MIN_ANDROID_APP } from "./desktop/version";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
 const CACHES_ROOT = resolve(process.cwd(), "caches");
@@ -63,9 +63,9 @@ function buildIdFilePlugin(): Plugin {
     };
 }
 
-// Writes game-files.json beside index.html: every file the build made, with its sha256, for a
-// Windows app that follows the website (desktop/siteFiles.ts). After everything's written,
-// public/ included. The slim cache's chunks list themselves, in caches.json.
+// Writes game-files.json beside index.html: every file the build made, with its sha256, for the
+// Windows and Android apps that follow the website (desktop/siteFiles.ts, SiteFiles.java). After
+// everything's written, public/ included. The slim cache's chunks list themselves, in caches.json.
 function siteFilesPlugin(): Plugin {
     let outDir = "";
     let env: Record<string, string> = {};
@@ -81,7 +81,8 @@ function siteFilesPlugin(): Plugin {
             if (!existsSync(join(outDir, "index.html"))) {
                 return;
             }
-            const files = makeSiteFiles(outDir, BUILD_ID, LAUNCHER_VERSION, {
+            const minimums = { minLauncher: LAUNCHER_VERSION, minAndroid: MIN_ANDROID_APP };
+            const files = makeSiteFiles(outDir, BUILD_ID, minimums, {
                 coopUrl: env.VITE_COOP_URL ?? "",
                 runAnalyticsUrl: env.VITE_RUN_ANALYTICS_URL ?? "",
                 cloudSaveUrl: env.VITE_CLOUD_SAVE_URL ?? "",

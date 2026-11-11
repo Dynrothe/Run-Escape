@@ -1,10 +1,13 @@
 // The website's build, for a launcher that follows it rather than GitHub's releases. Co-op only
-// takes players on the host's build, so an app on the website's build can always play with the
-// website's players.
+// takes players on the host's build, so an app on the website's build can play with the website's
+// players between releases.
 //
 // Each build writes game-files.json beside index.html (vite.config.ts): every file but the slim
 // cache's, with its sha256, and the addresses it was built with. The cache's chunks are named
 // after their sha256 and listed in caches.json, which bun run slim-cache writes afterwards.
+//
+// The Android app reads both with SiteFiles.java, which keeps the same rules: siteFiles.cases.json
+// holds the cases both must agree on, run by this file's tests and SiteFilesTest.java.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -28,12 +31,15 @@ export type SiteFile = { path: string; sha256: string; size: number };
 // The relay, run collector and cloud saves the build reaches (its VITE_ variables), "" for none
 export type SiteAddresses = { coopUrl: string; runAnalyticsUrl: string; cloudSaveUrl: string };
 
-export type SiteFiles = SiteAddresses & {
-    build: string;
-    version: string;
-    minLauncher: string;
-    files: SiteFile[];
-};
+// The oldest launcher (LAUNCHER_VERSION) and Android app (MIN_ANDROID_APP) that can play a build
+export type SiteMinimums = { minLauncher: string; minAndroid: string };
+
+export type SiteFiles = SiteAddresses &
+    SiteMinimums & {
+        build: string;
+        version: string;
+        files: SiteFile[];
+    };
 
 // What __BUILD_ID__ is (vite.config.ts): the version, and the commit or the time it was built
 const BUILD_PATTERN = /^(\d+\.\d+\.\d+)-[0-9a-z]{1,16}$/;
@@ -60,8 +66,13 @@ export function isSiteFilePath(file: unknown): file is string {
 
 export function parseSiteFiles(text: string): SiteFiles {
     const data = JSON.parse(text) ?? {};
-    const { build, version, minLauncher, files } = data;
-    if (!isBuildId(build) || build.split("-")[0] !== version || !isVersion(minLauncher)) {
+    const { build, version, minLauncher, minAndroid, files } = data;
+    const versionsValid =
+        isBuildId(build) &&
+        build.split("-")[0] === version &&
+        isVersion(minLauncher) &&
+        isVersion(minAndroid);
+    if (!versionsValid) {
         throw new Error(`${SITE_FILES_NAME}'s build or versions aren't valid`);
     }
     const addresses = ["coopUrl", "runAnalyticsUrl", "cloudSaveUrl"] as const;
@@ -86,6 +97,7 @@ export function parseSiteFiles(text: string): SiteFiles {
         build,
         version,
         minLauncher,
+        minAndroid,
         coopUrl: data.coopUrl,
         runAnalyticsUrl: data.runAnalyticsUrl,
         cloudSaveUrl: data.cloudSaveUrl,
@@ -97,7 +109,9 @@ export function parseSiteFiles(text: string): SiteFiles {
 export function parseSiteCaches(text: string, build: string): ManifestChunk[] {
     const caches = JSON.parse(text);
     const cache = Array.isArray(caches) && caches.length === 1 ? caches[0] : undefined;
-    if (!cache?.slimOf || !Array.isArray(cache.chunks)) {
+    // slimOf names the full cache it was made from (scripts/cache/slim-cache.ts)
+    const slim = typeof cache?.slimOf === "string" && cache.slimOf !== "";
+    if (!slim || !Array.isArray(cache.chunks)) {
         throw new Error("The website's caches.json isn't a slim cache");
     }
     if (cache.build !== build) {
@@ -168,7 +182,7 @@ const isListed = (relative: string) =>
 export function makeSiteFiles(
     dist: string,
     build: string,
-    minLauncher: string,
+    minimums: SiteMinimums,
     addresses: SiteAddresses,
 ): SiteFiles {
     const files = listFiles(dist)
@@ -179,5 +193,5 @@ export function makeSiteFiles(
             const sha256 = createHash("sha256").update(data).digest("hex");
             return { path: file, sha256, size: data.byteLength };
         });
-    return { build, version: build.split("-")[0], minLauncher, ...addresses, files };
+    return { build, version: build.split("-")[0], ...minimums, ...addresses, files };
 }

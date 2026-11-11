@@ -526,52 +526,74 @@ The APK's game is a release's, and the website is often on a later build, which 
 together (Co-op, Versions). So, as on Windows (Following the website), an app built with
 `-PgameSiteUrl` (the `GAME_SITE_URL` repository variable in the release's `android` job; pull
 requests' and playable debug builds go without, so they play their own build) keeps to the
-website's build. Without it, nothing below happens.
+website's build. Without it, nothing below happens, except that what an app built with it left in
+`filesDir/site` is cleared.
 
-1. **When the app opens**, `MainActivity` picks the game to serve before the page loads:
-   `SiteGames.pick` takes the installed build `filesDir/site/current` names, if it's finished (its
-   `verified.json`, `index.html` and `caches/caches.json`) and no older than the APK's version.
-   Otherwise it's the APK's game. `GamePathHandler` serves `/assets/game/` from that folder
-   (AndroidX's `InternalStoragePathHandler`, which keeps paths inside it) and everything else
-   under `/assets/` from the APK, so **the address is the same either way**, and saves stay where
-   they are.
-2. **Then, off the UI thread** (`SiteUpdater`, at background priority, once per open like the APK
-   check), `SiteGames.update` clears every other folder in `site/` and reads the website's
-   `game-files.json` and `caches/caches.json`: https only, no redirects, nothing cached, lists
-   capped in size. `SiteFiles.java` checks them as `desktop/siteFiles.ts` does: build ids, sha256s,
-   paths that stay inside the game and aren't the cache or the marker, no two files differing only
-   in case, and a slim cache made for the same build.
-3. `whyNotFollow` refuses a build made with other relay, run collector or cloud-save addresses than
-   the app's (`RelayPolicy` would block them), and, **unlike Windows**, one older than the APK's own
-   version: a newer APK the player installed isn't undone by a website that hasn't caught up, and
-   its save stays writable. The same version from another commit is followed, both ways.
-   `minLauncher` is the Windows launcher's, so the app doesn't look at it.
-4. If the APK's game is that build (`build.json`), `current` goes, and the next launch plays the
+1. **Each time the activity's made** (opening the app, Restart game once a build's ready, Try
+   again, Reopen), `MainActivity` picks the game to serve before the page loads: `SiteGames.pick`
+   takes the build `filesDir/site/current` names if it's whole and no older than the APK's
+   version. Whole (`readInstall`) means its marker, `verified.json`, is for that build, and every
+   file the marker lists, and every chunk its `caches/caches.json` lists that the APK hasn't, is
+   there at its size: a lost write or a full disk doesn't leave a broken game in front (their
+   sha256s were checked as they were written). Otherwise it's the APK's game. `GamePathHandler`
+   serves `/assets/game/` from that folder (AndroidX's `InternalStoragePathHandler`, which keeps
+   paths inside it), a cache chunk the folder hasn't from the APK (a chunk's named after its
+   bytes, so it's the same one), and everything else under `/assets/` from the APK, so **the
+   address is the same either way**, and saves stay where they are.
+2. **Then, off the UI thread** (`SiteUpdater`, at background priority, on one worker for the whole
+   app, so a new activity's update waits for the last one's to stop), `SiteGames.update` clears
+   every other build in `site/` and reads the website's `game-files.json` and
+   `caches/caches.json`: https only, no redirects, nothing cached, lists capped in size.
+   `SiteFiles.java` checks them as `desktop/siteFiles.ts` does: build ids, versions, sha256s,
+   sizes, paths that stay inside the game and aren't the cache or the marker, no two files
+   differing only in case, and a slim cache made for the same build. Both run the cases in
+   `desktop/siteFiles.cases.json`, so a new check's cases go there rather than in one side's tests.
+3. `whyNotFollow` refuses a build that needs a newer app than this one (`minAndroid`, below), one
+   made with other relay, run collector or cloud-save addresses than the app's (`RelayPolicy` would
+   block them), and, **unlike Windows**, one older than the APK's own version: a newer APK the
+   player installed isn't undone by a website that hasn't caught up, and its save stays writable.
+   The same version from another commit is followed, both ways. `minLauncher` is the Windows
+   launcher's, so the app doesn't look at it.
+4. If the APK's game is that build (`build.json`), `current` goes, and the next start plays the
    APK's. If the folder in use is that build, nothing happens. Otherwise it's put together in
-   `site/.partial`: files the APK's game or the folder in use list with the same sha256 (their
-   `game-files.json`, or the marker) are copied, chunks by name, and the rest are downloaded a few
-   at a time. Every file, copied or downloaded, has to be exactly its listed size and sha256 (a
-   chunk's name is its sha256's start); a bad copy is downloaded instead, a bad download stops it
-   all. Then the marker's written, the folder's renamed to `site/<build>`, and `current` is
-   replaced in one rename.
-5. **It plays from the next time the app opens**, never mid-visit: the game in front doesn't
-   change under the player, and the old folder, still being served, stays until then. Try again
-   and Reopen make the activity again, so they pick it up too; Restart game only reloads the page.
+   `site/.partial`: the marker first, then files the APK's game or the folder in use list with the
+   same sha256 (their `game-files.json`, or the marker) are copied, chunks by name, chunks the APK
+   has are left out (step 1 serves them), and the rest are downloaded a few at a time. Every file,
+   copied or downloaded, has to be exactly its listed size and sha256 (a chunk's name is its
+   sha256's start), and is synced to the disk; a bad copy is downloaded instead, and a bad
+   download stops it all. Then `caches.json` is written, the folder's renamed to `site/<build>`
+   and checked as step 1 would, and `current` is replaced in one rename.
+5. **Downloads wait for Wi-Fi.** On a metered network (mobile data, or a phone that can't say), the
+   copies are made and nothing's downloaded, and a phone moving onto mobile data stops after the
+   files it's on. A build bigger than an APK could be, or one that would leave the phone without
+   room to spare, isn't started (`MAX_BUILD_BYTES`, `KEEP_FREE_BYTES`).
+6. **What's done is kept.** A failure, mobile data or a cancel (a closing activity cuts its
+   connections and waits for its downloads to stop) leaves `.partial`, and the next try at the
+   same list keeps every file there that's still its size and sha256. One for another list is
+   thrown away.
+7. **It plays from the next time the game starts over**, never mid-run: once another build's
+   ready, a toast says so and the menu's Restart game becomes "Restart on the latest version",
+   which makes the activity again rather than reloading the page. Opening the app, Try again and
+   Reopen pick it up too. The old folder, still being served, stays until then.
 
 Offline, on a website without `game-files.json`, or with anything unexpected, it's logged
 (`SiteUpdater` in logcat) and the app plays what it has. As on Windows, whoever can upload to the
-website can ship code to the app's players. Closing the app throws away an unfinished
-download, and the next launch starts it again. Downloads use mobile data too, as the website would:
-mostly the game's scripts, since the cache's chunks rarely change. An installed build takes about
-as much of the phone's storage as the APK's game. `AppUpdater` still offers new
-APKs as before, and a newer APK plays its own game until the website's past it.
+website can ship code to the app's players. An installed build holds the game's scripts and the
+chunks the APK hasn't, mostly the scripts, since the cache's chunks rarely change. `AppUpdater`
+still offers new APKs as before, and a newer APK plays its own game until the website's past it.
 
-Everything that needs no device is in `SiteFiles.java` and `SiteGames.java`, tested in
-`SiteFilesTest` and `SiteGamesTest` (an install from a fake website, what's copied and downloaded,
-bad and missing files, cancelling, picking and clearing folders). `SiteUpdater` and
-`GamePathHandler` are only tried on a phone. A build that needs a newer Android app than players
-have can't say so yet (there's no Android `minLauncher`): until there is, don't deploy one to the
-website before its APK's out.
+**`minAndroid`**, in `game-files.json`, is `MIN_ANDROID_APP` in `desktop/version.ts`: the oldest
+Android app that can play that build, by its version. An older app plays its APK's game instead.
+Raise it when the game needs something from the app that apps already out there don't have, such
+as an address `RelayPolicy.java` lets out or a message the page sends the app, and deploy such a
+build to the website only after its APK's released. Players on older apps then play their own
+release, and co-op only with players on it, until they install the new APK.
+
+Everything that needs no device is in `SiteFiles.java`, `SiteGames.java` and `LimitedText.java`,
+tested in `SiteFilesTest`, `SiteGamesTest` and `LimitedTextTest` (an install from a fake website,
+what's copied and downloaded, bad and missing files, resuming, mobile data, free space,
+cancelling, picking and clearing folders). `SiteUpdater` and `GamePathHandler` are only tried on
+a phone.
 
 **Google's developer verification** applies outside app stores too. Certified Android phones are
 starting to refuse new installs and updates of apps whose developer hasn't registered with Google:
@@ -741,8 +763,9 @@ say, takes the release as it would with the website down (so a newer release is 
 played, on another build than the website's), and tries the website again next launch.
 
 Launchers from before this only take releases, so players need the new launcher's zip once. The
-Android app does the same from its next APK, from the next launch rather than straight away
-(Android, Following the website on Android).
+Android app does the same from its next APK, from the next time the game starts over rather than
+straight away, and on Wi-Fi only (Android, Following the website on Android). It has its own
+`minAndroid`, there.
 
 ### When the launcher has to change
 

@@ -4,11 +4,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.nio.charset.StandardCharsets;
 
 /** The APK published alongside a stable game release. No Android dependencies, for local tests. */
 final class UpdateRelease {
@@ -33,18 +30,7 @@ final class UpdateRelease {
         int status = request.getResponseCode();
         if (status == 404) return null;
         if (status != 200) throw new IOException("GitHub returned " + status);
-        try (InputStream input = request.getInputStream();
-             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-                if (Thread.currentThread().isInterrupted() || output.size() + read > 2 * 1024 * 1024) {
-                    throw new IOException("Release response interrupted or too large");
-                }
-                output.write(buffer, 0, read);
-            }
-            return parse(output.toString(StandardCharsets.UTF_8.name()), installedVersionCode);
-        }
+        return parse(LimitedText.read(request.getInputStream(), 2 * 1024 * 1024), installedVersionCode);
     }
 
     static UpdateRelease parse(String json, int installedVersionCode) throws JSONException {

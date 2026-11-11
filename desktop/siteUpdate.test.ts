@@ -43,6 +43,7 @@ function deploy(files: Record<string, string>, chunks: Buffer[] = [], build = BU
         build,
         version: build.split("-")[0],
         minLauncher: "1.0.0",
+        minAndroid: "0.0.0",
         coopUrl: "",
         runAnalyticsUrl: "",
         cloudSaveUrl: "",

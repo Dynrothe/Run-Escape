@@ -5,6 +5,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -30,8 +35,124 @@ public final class SiteFilesTest {
 
     private static JSONObject site() throws JSONException {
         return new JSONObject().put("build", BUILD).put("version", "0.30.0").put("minLauncher", "1.0.0")
-                .put("coopUrl", COOP).put("runAnalyticsUrl", "").put("cloudSaveUrl", "")
-                .put("files", new JSONArray().put(file("index.html")));
+                .put("minAndroid", "0.0.0").put("coopUrl", COOP).put("runAnalyticsUrl", "")
+                .put("cloudSaveUrl", "").put("files", new JSONArray().put(file("index.html")));
+    }
+
+    // The cases desktop/siteFiles.ts has to agree with (desktop/siteFiles.test.ts runs the same).
+    // Gradle runs tests from android/app, but they're found from anywhere in the repository.
+    private static JSONObject cases() throws IOException, JSONException {
+        for (File dir = new File(System.getProperty("user.dir")).getAbsoluteFile(); dir != null;
+             dir = dir.getParentFile()) {
+            File cases = new File(dir, "desktop/siteFiles.cases.json");
+            if (cases.isFile()) {
+                return new JSONObject(new String(Files.readAllBytes(cases.toPath()), StandardCharsets.UTF_8));
+            }
+        }
+        throw new AssertionError("No desktop/siteFiles.cases.json above " + System.getProperty("user.dir"));
+    }
+
+    // A case as it's sent: its text, or good with its change merged in (null takes a key out)
+    private static String caseText(JSONObject testCase, JSONObject good, boolean wrap) throws JSONException {
+        if (testCase.has("text")) return testCase.getString("text");
+        JSONObject merged = new JSONObject(good.toString());
+        JSONObject change = testCase.optJSONObject("change");
+        if (change != null) {
+            for (Iterator<String> keys = change.keys(); keys.hasNext(); ) {
+                String key = keys.next();
+                Object value = change.get(key);
+                if (value == JSONObject.NULL) merged.remove(key);
+                else merged.put(key, value);
+            }
+        }
+        return wrap ? new JSONArray().put(merged).toString() : merged.toString();
+    }
+
+    @Test
+    public void agreesWithTheDesktopOnGameFiles() throws Exception {
+        JSONObject files = cases().getJSONObject("files");
+        JSONObject good = files.getJSONObject("good");
+        JSONArray take = files.getJSONArray("take");
+        for (int i = 0; i < take.length(); i++) {
+            String name = take.getJSONObject(i).getString("name");
+            try {
+                assertEquals(name, BUILD, SiteFiles.parse(caseText(take.getJSONObject(i), good, false)).build);
+            } catch (JSONException exception) {
+                throw new AssertionError("Refused " + name, exception);
+            }
+        }
+        JSONArray refuse = files.getJSONArray("refuse");
+        for (int i = 0; i < refuse.length(); i++) {
+            String text = caseText(refuse.getJSONObject(i), good, false);
+            try {
+                SiteFiles.parse(text);
+                fail("Took " + refuse.getJSONObject(i).getString("name") + ": " + text);
+            } catch (JSONException expected) {
+                // Refused
+            }
+        }
+    }
+
+    @Test
+    public void agreesWithTheDesktopOnSizes() throws Exception {
+        JSONObject cases = cases();
+        JSONObject good = cases.getJSONObject("files").getJSONObject("good");
+        JSONObject sizes = cases.getJSONObject("sizes");
+        for (String verdict : new String[]{"take", "refuse"}) {
+            JSONArray list = sizes.getJSONArray(verdict);
+            for (int i = 0; i < list.length(); i++) {
+                String size = list.getString(i);
+                // In place of the first file's size, as JSON has it
+                String text = new JSONObject(good.toString()).put("files", new JSONArray().put(
+                        new JSONObject().put("path", "index.html").put("sha256", SHA).put("size", "SIZE")))
+                        .toString().replace("\"SIZE\"", size);
+                boolean took;
+                try {
+                    SiteFiles.parse(text);
+                    took = true;
+                } catch (JSONException exception) {
+                    took = false;
+                }
+                assertEquals(verdict + " " + size, verdict.equals("take"), took);
+            }
+        }
+    }
+
+    @Test
+    public void agreesWithTheDesktopOnPaths() throws Exception {
+        JSONObject paths = cases().getJSONObject("paths");
+        JSONArray take = paths.getJSONArray("take");
+        for (int i = 0; i < take.length(); i++) assertTrue(take.getString(i), SiteFiles.isSitePath(take.getString(i)));
+        JSONArray refuse = paths.getJSONArray("refuse");
+        for (int i = 0; i < refuse.length(); i++) {
+            assertFalse(refuse.getString(i), SiteFiles.isSitePath(refuse.getString(i)));
+        }
+    }
+
+    @Test
+    public void agreesWithTheDesktopOnCaches() throws Exception {
+        JSONObject caches = cases().getJSONObject("caches");
+        JSONObject good = caches.getJSONObject("good");
+        String build = caches.getString("build");
+        JSONArray take = caches.getJSONArray("take");
+        for (int i = 0; i < take.length(); i++) {
+            String name = take.getJSONObject(i).getString("name");
+            try {
+                SiteFiles.parseCaches(caseText(take.getJSONObject(i), good, true), build);
+            } catch (JSONException exception) {
+                throw new AssertionError("Refused " + name, exception);
+            }
+        }
+        JSONArray refuse = caches.getJSONArray("refuse");
+        for (int i = 0; i < refuse.length(); i++) {
+            String text = caseText(refuse.getJSONObject(i), good, true);
+            try {
+                SiteFiles.parseCaches(text, build);
+                fail("Took " + refuse.getJSONObject(i).getString("name") + ": " + text);
+            } catch (JSONException expected) {
+                // Refused
+            }
+        }
     }
 
     private static void assertRefused(String text) {
@@ -161,6 +282,15 @@ public final class SiteFilesTest {
         assertTrue(files.whyNotFollow("1.0.0", COOP, "", "").contains("older"));
         // The same version, built from a later commit, is what the website's ahead with
         assertNull(files.whyNotFollow("0.30.0", COOP, "", ""));
+    }
+
+    @Test
+    public void wontFollowABuildThatNeedsANewerApp() throws JSONException {
+        SiteFiles files = SiteFiles.parse(site().put("minAndroid", "0.29.1").toString());
+        assertTrue(files.whyNotFollow("0.29.0", COOP, "", "").contains("needs the Android app's 0.29.1"));
+        assertNull(files.whyNotFollow("0.29.1", COOP, "", ""));
+        assertNull(files.whyNotFollow("0.30.0", COOP, "", ""));
+        assertEquals("0.29.1", files.minAndroid);
     }
 
     @Test

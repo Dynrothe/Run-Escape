@@ -210,8 +210,13 @@ jobs:
                   ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
               run: python3 scripts/android/sign-apk.py --version "$VERSION"
 
-            # How to install it and use in-app updates, for the release's notes
-            - run: sed "s/<version>/$VERSION/g" android/release-notes.md > release/android-notes.md
+            # How to install it and use in-app updates, for the release's notes. The website's part
+            # only when the app keeps to it.
+            - run: |
+                  website='/^<!-- website[: ].*-->$/,/^<!-- \/website -->$/d'
+                  if [ -n "$GAME_SITE_URL" ]; then website='/^<!-- \/*website[: ].*-->$/d'; fi
+                  sed -e "s/<version>/$VERSION/g" -e "$website" android/release-notes.md | cat -s \
+                      > release/android-notes.md
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:

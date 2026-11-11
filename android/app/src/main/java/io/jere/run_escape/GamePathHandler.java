@@ -14,20 +14,31 @@ import java.io.File;
  */
 final class GamePathHandler implements WebViewAssetLoader.PathHandler {
     private static final String GAME = "game/";
+    private static final String CHUNKS = "caches/chunks/";
 
     private final WebViewAssetLoader.PathHandler assets;
     private final WebViewAssetLoader.PathHandler site;
+    private final File siteGame;
 
     /** siteGame is an installed website build in the app's files, or null for the APK's game. */
     GamePathHandler(Context context, File siteGame) {
         assets = new WebViewAssetLoader.AssetsPathHandler(context);
         // Refuses a folder outside the app's own storage, and paths that climb out of it
         site = siteGame == null ? null : new WebViewAssetLoader.InternalStoragePathHandler(context, siteGame);
+        this.siteGame = siteGame;
     }
 
     @Override
     public WebResourceResponse handle(String path) {
-        if (site != null && path.startsWith(GAME)) return site.handle(path.substring(GAME.length()));
+        if (site != null && path.startsWith(GAME)) {
+            String inside = path.substring(GAME.length());
+            // A chunk is named after its bytes, so one the installed build hasn't (as the APK has it,
+            // SiteGames.install) is the APK's
+            boolean apkChunk = inside.startsWith(CHUNKS)
+                    && SiteFiles.CHUNK.matcher(inside.substring(CHUNKS.length())).matches()
+                    && !new File(siteGame, inside).isFile();
+            if (!apkChunk) return site.handle(inside);
+        }
         return assets.handle(path);
     }
 }

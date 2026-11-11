@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -21,72 +21,88 @@ const site: SiteFiles = {
     build: "0.30.0-19c7e9bd",
     version: "0.30.0",
     minLauncher: "1.0.0",
+    minAndroid: "0.0.0",
     ...ADDRESSES,
     files: [{ path: "index.html", sha256: SHA, size: 10 }],
 };
+const MINIMUMS = { minLauncher: site.minLauncher, minAndroid: site.minAndroid };
+
+// The cases Android's SiteFiles.java has to agree with (its SiteFilesTest runs the same)
+type Case = { name: string; change?: Record<string, unknown>; text?: string };
+type Cases = { good: Record<string, unknown>; take: Case[]; refuse: Case[] };
+type Strings = { take: string[]; refuse: string[] };
+const cases: { files: Cases; caches: Cases & { build: string }; sizes: Strings; paths: Strings } =
+    JSON.parse(readFileSync(path.join(__dirname, "siteFiles.cases.json"), "utf8"));
+
+// A case as it's sent: its text, or good with its change merged in (null takes a key out)
+function caseText({ change, text }: Case, good: Record<string, unknown>, wrap = false) {
+    if (text !== undefined) {
+        return text;
+    }
+    const merged: Record<string, unknown> = { ...good, ...change };
+    for (const [key, value] of Object.entries(change ?? {})) {
+        if (value === null) {
+            delete merged[key];
+        }
+    }
+    return JSON.stringify(wrap ? [merged] : merged);
+}
 
 describe("parseSiteFiles", () => {
     test("reads a good one, and leaves out anything else", () => {
         expect(parseSiteFiles(JSON.stringify({ ...site, extra: true }))).toEqual(site);
     });
 
-    const file = (path: string) => ({ path, sha256: SHA, size: 1 });
-    test.each([
-        ["not JSON", "<html>"],
-        ["null", "null"],
-        ["a build of another version", JSON.stringify({ ...site, version: "0.29.0" })],
-        ["a build that isn't one", JSON.stringify({ ...site, build: "0.30.0" })],
-        ["no addresses", JSON.stringify({ ...site, coopUrl: undefined })],
-        ["no index.html", JSON.stringify({ ...site, files: [file("a.js")] })],
-        ["a climb out", JSON.stringify({ ...site, files: [...site.files, file("../x")] })],
-        ["a cache file", JSON.stringify({ ...site, files: [...site.files, file("caches/a")] })],
-        ["the marker", JSON.stringify({ ...site, files: [...site.files, file("verified.json")] })],
-        [
-            "the same file twice",
-            JSON.stringify({ ...site, files: [...site.files, file("INDEX.html")] }),
-        ],
-        [
-            "a bad sha256",
-            JSON.stringify({ ...site, files: [{ ...file("index.html"), sha256: "x" }] }),
-        ],
-    ])("refuses %s", (_name, text) => {
-        expect(() => parseSiteFiles(text)).toThrow();
+    const { files, sizes } = cases;
+    test.each(files.take.map((c) => [c.name, caseText(c, files.good)]))("takes %s", (_, text) => {
+        expect(parseSiteFiles(text).build).toBe(site.build);
+    });
+    test.each(files.refuse.map((c) => [c.name, caseText(c, files.good)]))(
+        "refuses %s",
+        (_, text) => {
+            expect(() => parseSiteFiles(text)).toThrow();
+        },
+    );
+
+    // A size as JSON has it, in place of the first file's
+    const withSize = (size: string) =>
+        JSON.stringify({ ...files.good, files: [{ ...site.files[0], size: "SIZE" }] }).replace(
+            '"SIZE"',
+            size,
+        );
+    test.each(sizes.take)("takes a size of %s", (size) => {
+        expect(() => parseSiteFiles(withSize(size))).not.toThrow();
+    });
+    test.each(sizes.refuse)("refuses a size of %s", (size) => {
+        expect(() => parseSiteFiles(withSize(size))).toThrow();
     });
 });
 
 describe("isSiteFilePath", () => {
-    test.each(["index.html", "assets/index-CjI-souU.js", "static/.htaccess", "icons/a b.png"])(
-        "takes %s",
-        (file) => expect(isSiteFilePath(file)).toBe(true),
-    );
-    test.each([
-        "",
-        "/index.html",
-        "a\\b.js",
-        "a/../b",
-        "c:x",
-        "assets/",
-        "x.",
-        "caches/caches.json",
-    ])("refuses %s", (file) => expect(isSiteFilePath(file)).toBe(false));
+    test.each(cases.paths.take)("takes %j", (file) => expect(isSiteFilePath(file)).toBe(true));
+    test.each(cases.paths.refuse)("refuses %j", (file) => expect(isSiteFilePath(file)).toBe(false));
 });
 
 describe("parseSiteCaches", () => {
     const chunk = { file: "0".repeat(32) + ".bin", size: 5 };
     const cache = { slimOf: "osrs", build: site.build, chunks: [chunk] };
+    const { caches } = cases;
 
     test("gives the chunks of a slim cache for the build", () => {
         expect(parseSiteCaches(JSON.stringify([cache]), site.build)).toEqual([chunk]);
     });
 
+    test.each(caches.take.map((c) => [c.name, caseText(c, caches.good, true)]))(
+        "takes %s",
+        (_, text) => {
+            expect(() => parseSiteCaches(text, caches.build)).not.toThrow();
+        },
+    );
     test.each([
-        ["another build's", [{ ...cache, build: "0.30.0-a6f7bcdc" }]],
-        ["a full cache", [{ ...cache, slimOf: undefined }]],
-        ["two caches", [cache, cache]],
-        ["a badly named chunk", [{ ...cache, chunks: [{ file: "../x.bin", size: 1 }] }]],
-        ["a chunk twice", [{ ...cache, chunks: [chunk, chunk] }]],
-    ])("refuses %s", (_name, caches) => {
-        expect(() => parseSiteCaches(JSON.stringify(caches), site.build)).toThrow();
+        ...caches.refuse.map((c) => [c.name, caseText(c, caches.good, true)]),
+        ["two caches", JSON.stringify([cache, cache])],
+    ])("refuses %s", (_, text) => {
+        expect(() => parseSiteCaches(text, caches.build)).toThrow();
     });
 });
 
@@ -155,14 +171,19 @@ describe("makeSiteFiles", () => {
         write("caches/chunks/x.bin", "x");
         write(SITE_FILES_NAME, "{}");
 
-        const files = makeSiteFiles(dist, site.build, "1.0.0", ADDRESSES);
+        const files = makeSiteFiles(dist, site.build, MINIMUMS, ADDRESSES);
         expect(files.files.map((file) => file.path)).toEqual(["assets/index-1.js", "index.html"]);
         expect(files.files[1]).toEqual({
             path: "index.html",
             sha256: createHash("sha256").update("<html>").digest("hex"),
             size: 6,
         });
-        expect(files).toMatchObject({ build: site.build, version: "0.30.0", ...ADDRESSES });
+        expect(files).toMatchObject({
+            build: site.build,
+            version: "0.30.0",
+            ...MINIMUMS,
+            ...ADDRESSES,
+        });
         // What it writes, it reads back
         expect(parseSiteFiles(JSON.stringify(files))).toEqual(files);
     });
