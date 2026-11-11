@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import type { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
@@ -55,6 +55,15 @@ function renderShop(upgrades: Record<string, number>, coins = 0, characterId = "
     return { ...actions, save };
 }
 
+// Says yes to the question Refund all asks first
+async function refundAll(): Promise<void> {
+    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await act(async () => {
+        fireEvent.click(within(dialog).getByRole("button", { name: "Refund all" }));
+    });
+}
+
 test("skills explain how combat-style presets are used", () => {
     renderShop({});
     expect(screen.getByRole("tablist", { name: "Skill presets" })).toBeInTheDocument();
@@ -65,7 +74,7 @@ test("skills explain how combat-style presets are used", () => {
     ).toBeVisible();
 });
 
-test("switching class pages keeps purchases and single-rank refunds isolated", () => {
+test("switching class pages keeps purchases and single-rank refunds isolated", async () => {
     expect.hasAssertions();
     const actions = renderShop({}, 50000);
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
@@ -83,7 +92,7 @@ test("switching class pages keeps purchases and single-rank refunds isolated", (
     expect(actions.save.skillPages.melee).toEqual(melee);
     expect(actions.save.skillPages.ranged).toEqual(ranged);
     fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    await refundAll();
     expect(actions.refundUpgrades).toHaveBeenLastCalledWith("ranged");
     expect(actions.save.skillPages.melee).toEqual(melee);
     fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
@@ -198,13 +207,26 @@ test("unbought skills have no refund button", () => {
     expect(screen.queryByRole("button", { name: "Refund one Strength rank" })).toBeNull();
 });
 
-test("Refund all clears ranks that have no spending recorded", () => {
+test("Refund all asks first, and cancelling leaves everything as it was", async () => {
+    expect.hasAssertions();
+    const actions = renderShop({ strength: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(actions.refundUpgrades).not.toHaveBeenCalled();
+    await act(async () => {
+        fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    });
+    expect(actions.refundUpgrades).not.toHaveBeenCalled();
+    expect(actions.save.skillPages.melee.upgrades).toEqual({ strength: 2 });
+});
+
+test("Refund all clears ranks that have no spending recorded", async () => {
     expect.hasAssertions();
     const actions = renderShop({ strength: 2 });
     actions.save.skillPages.melee.upgradesSpent = 0;
     fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
     fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    await refundAll();
     expect(actions.refundUpgrades).toHaveBeenCalledExactlyOnceWith("melee");
     expect(actions.save.skillPages.melee.upgrades).toEqual({});
     expect(screen.queryByRole("button", { name: "Refund one Strength rank" })).toBeNull();

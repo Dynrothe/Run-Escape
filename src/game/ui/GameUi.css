@@ -3260,6 +3260,16 @@
     font-size: 13px;
 }
 
+/* The game's own confirmation, over everything but the notice to turn a phone sideways */
+.ui-confirm {
+    z-index: 20;
+}
+
+/* The questions keep their line breaks */
+.ui-confirm-body {
+    white-space: pre-line;
+}
+
 /* Where the keyboard is, on every screen. Drawn inward in lists that scroll, which would cut it
    off, and over a controller's highlight there's nothing to do: that's its own, below. */
 .ui-contents :focus-visible {
@@ -3281,6 +3291,12 @@
 :root[data-input="pad"] .ui-contents :focus-visible {
     outline: 3px solid #fff;
     outline-offset: 3px;
+}
+
+/* A window takes the focus when it opens, to be announced, with nothing to show for it */
+.ui-contents [role="dialog"]:focus,
+:root[data-input="pad"] .ui-contents [role="dialog"]:focus {
+    outline: none;
 }
 
 /* What's written over the world, which can be any colour behind it */

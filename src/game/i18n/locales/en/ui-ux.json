@@ -1,3 +1,22 @@
 {
-    "ui.result.play_again": "Play again"
+    "ui.common.cancel": "Cancel",
+    "ui.common.ok": "OK",
+    "confirm.quit.title": "Give up this run?",
+    "confirm.quit.body": "The run ends here. You keep the coins you've found so far.",
+    "confirm.quit.confirm": "Give up",
+    "confirm.quit.cancel": "Keep playing",
+    "confirm.leave.title": "Leave the run?",
+    "confirm.leave.body": "You leave the party's run. You keep the coins you've found so far.",
+    "confirm.refund_all.title": "Refund every {style} skill?",
+    "confirm.refund_all.body": "Every rank on this preset goes back to zero, and the coins spent on it go back to its balance.",
+    "confirm.disband.title": "Disband the party?",
+    "confirm.import.title": "Replace your progress?",
+    "confirm.import.confirm": "Replace progress",
+    "confirm.import.failed": "Couldn't import that file",
+    "confirm.delete_unreadable.title": "Delete this copy?",
+    "confirm.cloud.turn_off.title": "Turn off cloud save?",
+    "confirm.cloud.new_code.title": "Change your code?",
+    "confirm.cloud.delete.title": "Delete your cloud save?",
+    "ui.result.play_again": "Play again",
+    "ui.result.gave_up": "You gave up this run"
 }

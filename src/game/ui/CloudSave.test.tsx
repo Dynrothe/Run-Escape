@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { CloudView } from "../client/CloudSave";
 import { GameClient } from "../client/GameClient";
@@ -9,6 +9,14 @@ import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } 
 afterEach(cleanup);
 
 const CODE = "K7Q2-M9XD-4TPA-W3RN-H8BE-6FZC";
+
+// Answers the game's own confirmation
+async function answer(label: string): Promise<void> {
+    const dialog = await screen.findByRole("alertdialog");
+    await act(async () => {
+        fireEvent.click(within(dialog).getByRole("button", { name: label }));
+    });
+}
 
 function mockClient() {
     const cloud = {
@@ -58,26 +66,27 @@ test("waits while the game isn't saving here", () => {
     expect(screen.getByRole("button", { name: "Turn on" })).toBeDisabled();
 });
 
-test("shows the code and what's wrong, once on", () => {
+test("shows the code and what's wrong, once on", async () => {
     const cloud = settings({ code: CODE, working: false, problem: "offline" });
     expect(screen.getByText(CODE)).toBeInTheDocument();
     expect(screen.getByText(/Can't reach cloud save/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
     expect(cloud.check).toHaveBeenCalledTimes(1);
-    vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await answer("Cancel");
     expect(cloud.deleteCloud).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await answer("Delete");
     expect(cloud.deleteCloud).toHaveBeenCalledTimes(1);
 });
 
-test("says what to do once a linked code stops working, and offers only turning off", () => {
+test("says what to do once a linked code stops working, and offers only turning off", async () => {
     const cloud = settings({ code: CODE, working: false, problem: "unknownCode" });
     expect(screen.getByText(/doesn't work any more/)).toHaveTextContent(/Turn off, then/);
     expect(screen.getByRole("button", { name: "Sync now" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "New code" })).toBeDisabled();
-    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    await answer("Turn off");
     expect(cloud.turnOff).toHaveBeenCalledTimes(1);
     cleanup();
     // A code typed in wrong is only that
@@ -174,15 +183,12 @@ test("has a panel of its own, with Settings' rows, that Back closes", () => {
     expect(close).toHaveBeenCalledTimes(1);
 });
 
-test("gets a new code only once the player's said so", () => {
+test("gets a new code only once the player's said so", async () => {
     const cloud = settings({ code: CODE, working: false });
-    const confirm = vi
-        .spyOn(window, "confirm")
-        .mockReturnValueOnce(false)
-        .mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole("button", { name: "New code" }));
+    await answer("Cancel");
     expect(cloud.newCode).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "New code" }));
+    await answer("New code");
     expect(cloud.newCode).toHaveBeenCalledTimes(1);
-    confirm.mockRestore();
 });

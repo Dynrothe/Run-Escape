@@ -31,6 +31,9 @@ the version in the corner).
 - Menu keys, by Jp66600: Esc goes back from the map select, Skills, the Armoury, Quests, the
   collection log and the invocation board, and Enter starts the run or presses the results'
   main button.
+- Confirmations, by Jp66600: giving up asks first, in the game's own window, then shows what the
+  run found. So do refunding every skill, disbanding a party, importing a save and cloud save's
+  actions.
 
 ### Changed
 
@@ -55,6 +58,8 @@ the version in the corner).
   what's written over the world and quest names have a black outline.
 - The keyboard's focus, by Jp66600: a clearer yellow ring, and a button pressed from the keyboard
   or a controller keeps your place.
+- Windows, by Jp66600: screen readers announce them and the run's messages, and what's behind a
+  window can't be reached until it closes.
 
 ### Fixed
 
