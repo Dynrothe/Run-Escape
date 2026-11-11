@@ -36,6 +36,9 @@ the version in the corner).
   damage from nowhere. Now a red ring fills at her feet before each stomp, the first one waits a
   moment so you can step back, and a message says what it is the first time. The Halloween
   Mimic's stomp gets the same ring. Fixed by Okaeri.
+- In the Tombs of Amascut's rooms, enemies could come in right on top of you, like the Crondis
+  room's crocodiles where its corridors meet the palm, and bite at once. They now come in by a way
+  in that's clear of everyone, or the furthest one. Fixed by Okaeri.
 
 ## 0.30.0 - 2026-11-09
 

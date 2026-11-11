@@ -386,6 +386,8 @@ const TELEPORTER_REACH = 2.2;
 // Tiles from the player enemies turn up at in a Tombs room, which is too small for the usual
 const TOMBS_SPAWN_MIN_DISTANCE = 5;
 const TOMBS_SPAWN_MAX_DISTANCE = 14;
+// Tiles from anyone up a Tombs room's enemy can come in by one of its ways in (Sim.tombsEntrance)
+const TOMBS_ENTRANCE_CLEAR = 5;
 // How close to a door in the Tombs' Nexus counts as at it (tiles from its middle; doors are 3 by 3
 // at most, and solid)
 const TOMBS_DOOR_REACH = 2.8;
@@ -3555,6 +3557,29 @@ export class Sim {
         return undefined;
     }
 
+    // A Tombs room's way in for its next enemy: any not right by someone who's up, or with none,
+    // the one furthest from them all. Picked from them all, one came out on top of whoever was
+    // passing (the Crondis room's are where its corridors come out by the palm), biting at once.
+    private tombsEntrance(entrances: { x: number; y: number }[]): { x: number; y: number } {
+        const up = this.heroes.filter((hero) => this.isUp(hero));
+        const nearest = (at: { x: number; y: number }) =>
+            Math.min(
+                Infinity,
+                ...up.map((hero) => fm.hypot(hero.player.x - at.x, hero.player.y - at.y)),
+            );
+        const clear = entrances.filter((at) => nearest(at) >= TOMBS_ENTRANCE_CLEAR);
+        if (clear.length > 0) {
+            return clear[this.rng.int(clear.length)];
+        }
+        let best = entrances[0];
+        for (const at of entrances) {
+            if (nearest(at) > nearest(best)) {
+                best = at;
+            }
+        }
+        return best;
+    }
+
     // Co-op: whether a spot's closer than this to a player still up
     private besideATeammate(x: number, y: number, distance: number): boolean {
         return (
@@ -3738,7 +3763,7 @@ export class Sim {
             const entrances = this.map.tombs?.paths.find((p) => p.id === this.tombsPath)?.room
                 ?.entrances;
             if (entrances && entrances.length > 0) {
-                const at = entrances[this.rng.int(entrances.length)];
+                const at = this.tombsEntrance(entrances);
                 pos = this.walkableSpot(
                     at.x + this.rng.range(-0.4, 0.4),
                     at.y + this.rng.range(-0.4, 0.4),

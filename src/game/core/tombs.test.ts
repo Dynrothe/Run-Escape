@@ -3248,6 +3248,23 @@ describe("the Crondis room", () => {
     }
     const palm = (sim: Sim) => sim.enemies.find((e) => e.uid === room(sim).palmUid)!;
 
+    it("never brings a crocodile in on top of someone passing its way in", () => {
+        // Its ways in are where the corridors come out by the palm: one came out on whoever was
+        // coming back with water, biting at once
+        const sim = crondis();
+        const pick = (sim as unknown as { tombsEntrance(e: { x: number; y: number }[]): unknown })
+            .tombsEntrance;
+        const p = sim.player;
+        const by = { x: p.x + 1, y: p.y };
+        const away = { x: p.x + 9, y: p.y };
+        for (let i = 0; i < 20; i++) {
+            expect(pick.call(sim, [by, away])).toBe(away);
+        }
+        // Every way in close: the furthest of them
+        const closer = { x: p.x + 3, y: p.y };
+        expect(pick.call(sim, [by, closer])).toBe(closer);
+    });
+
     it("starts with the palm a sapling that can't be hurt, and the first wave", () => {
         const sim = crondis();
         const tree = palm(sim);
