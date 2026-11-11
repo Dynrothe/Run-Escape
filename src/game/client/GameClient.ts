@@ -1855,6 +1855,8 @@ export class GameClient implements GameFrameHandler {
             chest: undefined,
             result: undefined,
             toasts: [],
+            // The pause menu's recent messages are this run's, not the title's or the lobby's
+            toastLog: [],
             party: [],
             waitingOn: [],
             revive: undefined,
@@ -2318,6 +2320,8 @@ export class GameClient implements GameFrameHandler {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
                 endedEarly,
+                // As retry() goes by
+                ...(this.coopRun && { coop: true }),
             },
         });
         // The room sees this player's new unlocks and upgrades next run

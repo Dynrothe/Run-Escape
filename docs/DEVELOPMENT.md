@@ -2552,17 +2552,20 @@ still be answered. Co-op's pause menu passes `modal: false`, as the run goes on 
 
 Anything irreversible asks with `useConfirm` (`ui/ConfirmDialog.tsx`), not the browser's `confirm`:
 the button says what it does, the focus starts on the way out, and the screen behind doesn't hear
-the keys.
+the keys. It's portaled over every screen and window, so it makes them all inert with
+`inertOthers(..., { spareWindows: false })`, except the toasts inside them.
 
 ### Text colours
 
 Text on the stone and cards takes its colour from the `--ui-text-*` and `--ui-green-text`
 variables in `ui/GameUi.css`. `--ui-text-dim`, `--ui-text-faint` and `--ui-green-text` reach 4.5:1
 on the stone, and `--ui-text-locked` and `--ui-text-disabled`, for locked cards and disabled
-buttons, on a card's darker brown. `--ui-red-text`, a scarlet for what's gone wrong or isn't
-reached yet, and `--ui-quest-red-text`, a brighter red for quests not started, were picked for
-their tone and are well under that. `--ui-outline` is for text over the world and quest names. A
-button doesn't inherit it, so one over the world sets `text-shadow` itself.
+buttons, on a card's darker brown. `--ui-red-text`, for what's gone wrong or isn't reached yet,
+reaches it on a card (about 3.3:1 on the stone), as a card faded for being out of reach still says
+in it how many coins it's short. `--ui-quest-red-text`, the quest tab's red for quests not
+started, was picked for its tone and is well under that, with the outline quest names have.
+`--ui-outline` is for text over the world and quest names. A button doesn't inherit it, so one
+over the world sets `text-shadow` itself.
 
 ### Notice
 

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 import { t } from "../i18n";
 import "./NoticePanel.css";
+import { inertOthers } from "./useDialog";
 
 export type ConfirmOptions = {
     title: string;
@@ -28,14 +29,9 @@ export function ConfirmDialog({ title, body, confirm, cancel, onAnswer }: Props)
     useEffect(() => {
         const before = document.activeElement;
         first.current?.focus({ preventScroll: true });
+        // Over every screen and window, as it's portaled beside them; toasts are still announced
         const modal = panel.current?.closest(".ui-modal");
-        const changed: Element[] = [];
-        for (const sibling of modal?.parentElement?.children ?? []) {
-            if (sibling !== modal && !sibling.hasAttribute("inert")) {
-                sibling.setAttribute("inert", "");
-                changed.push(sibling);
-            }
-        }
+        const restore = modal ? inertOthers(modal, { spareWindows: false }) : undefined;
         const onKey = (event: KeyboardEvent) => {
             event.stopPropagation();
             if (event.code === "Escape" && !event.repeat) {
@@ -45,7 +41,7 @@ export function ConfirmDialog({ title, body, confirm, cancel, onAnswer }: Props)
         window.addEventListener("keydown", onKey, true);
         return () => {
             window.removeEventListener("keydown", onKey, true);
-            changed.forEach((sibling) => sibling.removeAttribute("inert"));
+            restore?.();
             if (before instanceof HTMLElement && before !== document.body && before.isConnected) {
                 before.focus({ preventScroll: true });
             }

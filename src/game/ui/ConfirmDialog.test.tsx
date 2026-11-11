@@ -78,3 +78,33 @@ test("the page behind it can't be reached while it's open, and can again after",
     });
     expect(asker).not.toHaveAttribute("inert");
 });
+
+test("a run's toasts behind it are still announced, and the run's window isn't reachable", async () => {
+    // As giving up from the pause menu: the confirm is portaled beside the run's screen
+    render(
+        <div className="ui-contents">
+            <div className="ui-fill">
+                <div className="ui-hud">
+                    <button>Bag</button>
+                </div>
+                <div className="ui-fill ui-modal">
+                    <Asker onAnswer={vi.fn()} />
+                </div>
+                <div className="ui-toasts" role="status" />
+            </div>
+        </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByRole("alertdialog", { name: "Give up?" });
+    expect(screen.getByRole("status").closest("[inert]")).toBeNull();
+    expect(
+        screen.getByRole("button", { name: "Bag", hidden: true }).closest("[inert]"),
+    ).not.toBeNull();
+    expect(
+        screen.getByRole("button", { name: "Ask", hidden: true }).closest("[inert]"),
+    ).not.toBeNull();
+    await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Keep playing" }));
+    });
+    expect(document.querySelector("[inert]")).toBeNull();
+});

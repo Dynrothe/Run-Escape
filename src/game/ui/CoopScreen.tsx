@@ -40,6 +40,43 @@ function openRoomTitle(ui: UiSnapshot): string {
         : t("coop.open_room_title");
 }
 
+// Who can join, as a pair: the same when making a room and, for its host, in it
+function RoomAccess({
+    ui,
+    open,
+    onChange,
+    className = "",
+}: {
+    ui: UiSnapshot;
+    open: boolean;
+    onChange: (open: boolean) => void;
+    className?: string;
+}): JSX.Element {
+    return (
+        <div
+            className={"ui-coop-choice " + className}
+            role="group"
+            aria-label={t("coop.who_can_join")}
+        >
+            <button
+                className={"ui-button ui-button-small" + (open ? "" : " ui-toggle-on")}
+                aria-pressed={!open}
+                onClick={() => open && onChange(false)}
+            >
+                {t("coop.invite_only")}
+            </button>
+            <button
+                className={"ui-button ui-button-small" + (open ? " ui-toggle-on" : "")}
+                aria-pressed={open}
+                title={openRoomTitle(ui)}
+                onClick={() => !open && onChange(true)}
+            >
+                {t("coop.open_to_all")}
+            </button>
+        </div>
+    );
+}
+
 export function CoopScreen({ ui, client }: Props): JSX.Element {
     useLang();
     const room = ui.coop.room;
@@ -104,31 +141,7 @@ function CoopMenu({ ui, client }: Props): JSX.Element {
                     </div>
                     <div className="ui-coop-row">
                         <span className="ui-coop-label">{t("coop.new_room")}</span>
-                        <div
-                            className="ui-coop-choice"
-                            role="radiogroup"
-                            aria-label={t("coop.who_can_join")}
-                        >
-                            <button
-                                className={
-                                    "ui-button ui-button-small" + (open ? "" : " ui-toggle-on")
-                                }
-                                aria-pressed={!open}
-                                onClick={() => setOpen(false)}
-                            >
-                                {t("coop.invite_only")}
-                            </button>
-                            <button
-                                className={
-                                    "ui-button ui-button-small" + (open ? " ui-toggle-on" : "")
-                                }
-                                aria-pressed={open}
-                                title={openRoomTitle(ui)}
-                                onClick={() => setOpen(true)}
-                            >
-                                {t("coop.open_to_all")}
-                            </button>
-                        </div>
+                        <RoomAccess ui={ui} open={open} onChange={setOpen} />
                         <button
                             className="ui-button ui-button-go"
                             disabled={!canJoin || coop.roomsFull}
@@ -360,17 +373,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                         {copied ? t("coop.copied") : t("coop.copy_invite")}
                     </button>
                     {isHost ? (
-                        <span className="ui-coop-open" title={openRoomTitle(ui)}>
-                            {/* The room as it is, as "Open: Off" read like a contradiction */}
-                            <button
-                                className={
-                                    "ui-button ui-button-small" + (room.open ? " ui-toggle-on" : "")
-                                }
-                                onClick={() => client.setRoomOpen(!room.open)}
-                            >
-                                {room.open ? t("coop.open") : t("coop.invite_only")}
-                            </button>
-                        </span>
+                        <RoomAccess
+                            ui={ui}
+                            open={room.open}
+                            onChange={(open) => client.setRoomOpen(open)}
+                            className="ui-coop-open"
+                        />
                     ) : (
                         <span className="ui-coop-open">
                             {room.open ? t("coop.open") : t("coop.invite_only")}

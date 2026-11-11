@@ -63,8 +63,8 @@ the version in the corner).
 - Item descriptions, by Jp66600: a potion lists its stats a line each, with their icons, then how
   long they last with your effect duration. The bag's descriptions say an item's rarity too.
 - Easier to read, by Jp66600: secondary text, locked items and disabled buttons are lighter.
-  Penalties, defeats and unreached goals share one red, quests not started a brighter one, and
-  what's written over the world and quest names have a black outline.
+  Penalties, defeats and unreached goals share one lighter red, and what's written over the world
+  and quest names have a black outline.
 - The keyboard's focus, by Jp66600: a clearer yellow ring, and a button pressed from the keyboard
   or a controller keeps your place.
 - Windows, by Jp66600: screen readers announce them and the run's messages, and what's behind a
@@ -77,8 +77,8 @@ the version in the corner).
   marked more clearly, and a map's name that's cut off shows whole on hover.
 - The HUD, by Jp66600: being poisoned says so on the hitpoints bar, and a level up says how many
   more are coming.
-- The co-op room, by Jp66600: the host's button shows the room's state instead of "Open: Off",
-  a long name shows whole on hover, and the host sees why Start waits.
+- The co-op room, by Jp66600: the host picks Invite only or Open to all, as when making the room,
+  instead of "Open: Off". A long name shows whole on hover, and the host sees why Start waits.
 - Easier to press, by Jp66600: the collection log's tabs, the version, the quest tracker's and
   damage meter's buttons and the volume sliders, and a phone's weapon and passive slots.
 - A failed start, by Jp66600: the game says it couldn't start, with a button to reload.

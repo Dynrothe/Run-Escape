@@ -472,6 +472,9 @@ export type UiSnapshot = {
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;
+        // Played in a room to its end, so the party goes back together: no Play again, even once
+        // the room closes on the results
+        coop?: boolean;
     };
     toasts: Toast[];
     // What the toasts said this run, newest first, for the pause menu: they're gone in seconds

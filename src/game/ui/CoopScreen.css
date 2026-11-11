@@ -216,8 +216,10 @@
 
 .ui-coop-code {
     display: flex;
+    /* The host's pair goes under the code when the panel's too narrow for both */
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 6px 8px;
 }
 
 .ui-coop-code-label {
@@ -238,6 +240,12 @@
     gap: 6px;
     margin-left: auto;
     color: var(--ui-text-dim);
+}
+
+/* The host's pair: the rest of the room's row, or a line of its own under the code */
+.ui-coop-choice.ui-coop-open {
+    flex: 1 0 auto;
+    gap: 4px;
 }
 
 .ui-coop-members {

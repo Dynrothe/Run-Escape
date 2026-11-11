@@ -18,8 +18,8 @@
     --ui-text-faint: #c9bda3;
     --ui-text-locked: #b5a98f;
     --ui-text-disabled: #ada08a;
-    /* Scarlet, for what's gone wrong or isn't reached yet */
-    --ui-red-text: #e0101a;
+    /* For what's gone wrong or isn't reached yet: light enough to read on a card, faded or not */
+    --ui-red-text: #ff786a;
     /* Quests not started yet, which are read over the map too */
     --ui-quest-red-text: #ff3010;
     /* The buttons' green is too dark on the stone */
@@ -883,11 +883,6 @@
     font-family: "OSRS Small", sans-serif;
     font-size: 14px;
     color: var(--ui-text-dim);
-}
-
-/* Very rare's red */
-.ui-style-treasure-name {
-    color: var(--ui-red-text);
 }
 
 .ui-tiles {
@@ -2344,12 +2339,12 @@
 .ui-description-rarity {
     margin-top: -3px;
     font-size: 14px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 /* How long a potion's stats last, after them */
 .ui-item-lasts {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-hp {

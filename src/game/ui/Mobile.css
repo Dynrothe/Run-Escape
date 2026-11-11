@@ -727,11 +727,17 @@
         zoom: 0.72;
     }
 
-    /* Taller to press than they're drawn, as there's no room to draw them bigger */
+    /* Taller to press than they're drawn, as there's no room to draw them bigger. Weapons
+       grow up and passives down, each only half the gap toward the other, so neither row
+       covers the other's slots. */
     .ui-slot::before {
         content: "";
         position: absolute;
-        inset: -6px 0;
+        inset: -6px 0 -2px;
+    }
+
+    .ui-hud-left > .ui-slots + .ui-slots .ui-slot::before {
+        inset: -2px 0 -6px;
     }
 
     .ui-gear-slots,

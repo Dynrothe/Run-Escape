@@ -55,6 +55,7 @@ import {
     mapName,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
+import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
@@ -1440,7 +1441,7 @@ export function AdventurerPanel({
                                 {treasure && (
                                     <span className="ui-style-treasure">
                                         {t("ui.character.might_find")}
-                                        <span className="ui-style-treasure-name">
+                                        <span style={{ color: RARITIES.veryRare.color }}>
                                             {weaponName(treasure)}
                                         </span>
                                     </span>
@@ -3918,7 +3919,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
     }, [changePlayer, multiplayer]);
     // The map just played: a win can have moved the pick on to the one it opened
     const played = getMap(result?.mapId ?? ui.mapId);
-    const canRetry = !ui.coop.room;
+    const canRetry = !result?.coop;
     useMenuKeys({
         onBack: () => client.leaveRun(),
         onConfirm: () => (canRetry ? client.retry() : client.leaveRun()),

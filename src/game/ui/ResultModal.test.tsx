@@ -81,6 +81,7 @@ function createUi(solo = false, hard = false, expert = false): UiSnapshot {
             newGear: ["Rune platebody"],
             newTrophies: [],
             quests: [],
+            ...(!solo && { coop: true }),
         },
     };
 }
@@ -115,6 +116,18 @@ test("a party goes back together: no Play again", () => {
     render(<ResultModal ui={createUi()} client={client} />);
     expect(screen.queryByRole("button", { name: /Play again/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Back to the party" })).toHaveClass("ui-button-go");
+});
+
+test("a party's results keep no Play again once the room has closed", () => {
+    // Retry does nothing after a co-op run, so neither the button nor Enter offers it
+    vi.useFakeTimers();
+    const ui = createUi();
+    render(<ResultModal ui={{ ...ui, coop: { ...ui.coop, room: undefined } }} client={client} />);
+    expect(screen.queryByRole("button", { name: /Play again/ })).toBeNull();
+    vi.advanceTimersByTime(700);
+    fireEvent.keyDown(window, { key: "Enter", code: "Enter" });
+    expect(client.retry).not.toHaveBeenCalled();
+    expect(client.leaveRun).toHaveBeenCalledOnce();
 });
 
 test("Escape leaves the results, but not in the moment they come up", () => {

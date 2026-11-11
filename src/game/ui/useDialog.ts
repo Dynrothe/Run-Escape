@@ -1,21 +1,36 @@
 import { useEffect, useId, useRef } from "react";
 
 // Everything outside a window can't be reached while it's open: walks up from the window to the
-// UI's root, making what's beside it inert. Toasts stay out of it, so they're still announced, and
-// so do other windows (a notice over every screen), which can still be answered.
-function inertOthers(element: Element): () => void {
+// UI's root, making what's beside it inert. Toasts stay out of it, even inside what's made inert
+// (a run's, behind a confirm), so they're still announced. So do other windows beside it (a notice
+// over every screen), which can still be answered, unless spareWindows is false (a confirm, which
+// is answered first).
+export function inertOthers(element: Element, { spareWindows = true } = {}): () => void {
     const root = element.closest(".ui-contents");
     const changed: Element[] = [];
+    const inert = (sibling: Element) => {
+        if (
+            sibling.hasAttribute("inert") ||
+            sibling.matches(".ui-toasts") ||
+            (spareWindows && sibling.matches(".ui-modal"))
+        ) {
+            return;
+        }
+        if (sibling.querySelector(".ui-toasts")) {
+            // Around the toasts in it, not over them
+            for (const child of sibling.children) {
+                inert(child);
+            }
+            return;
+        }
+        sibling.setAttribute("inert", "");
+        changed.push(sibling);
+    };
     let node = element;
-    while (node !== root && node.parentElement) {
+    while (node !== root && node !== document.body && node.parentElement) {
         for (const sibling of node.parentElement.children) {
-            if (
-                sibling !== node &&
-                !sibling.hasAttribute("inert") &&
-                !sibling.matches(".ui-toasts, .ui-modal")
-            ) {
-                sibling.setAttribute("inert", "");
-                changed.push(sibling);
+            if (sibling !== node) {
+                inert(sibling);
             }
         }
         node = node.parentElement;
