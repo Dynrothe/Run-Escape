@@ -2654,9 +2654,10 @@ export const CRONDIS = {
     spearDamage: 5,
     cloudEvery: 9,
     // No closer than this: a cloud fills its corridor and comes faster than you walk, so a trip
-    // in to the waterfall has to fit between two, met head on. From the moment one's gone out of
-    // the corridor (4.8 seconds after it set off) there's till 2 seconds before the next sets
-    // off to go in: at 7 that was a tenth of a second, luck, not timing; at 8.5 it's 1.6.
+    // in to the waterfall has to fit between two, met head on: the next can't set off till one's
+    // gone out of the corridor and you've walked it, a trap's slow and all (the Crondis tests
+    // walk it). At 7, from a path done, getting in was luck, not timing. So path levels hardly
+    // quicken them: the room's harder with them by its water, crocodiles and hits instead.
     cloudEveryLeast: 8.5,
     cloudSpeed: 3.5,
     cloudBehind: 1.1,

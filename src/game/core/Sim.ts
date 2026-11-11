@@ -9063,9 +9063,10 @@ export class Sim {
                     return;
                 }
                 // How far along from the waterfall's end, and only in the corridor, where it's
-                // drawn: past its end it went on hitting whoever waited there, unseen
+                // drawn: past the palm end it went on hitting whoever waited there, and at the
+                // waterfall end it hit as it set off, before anything dark was there, both unseen
                 const along = lane.fromLow ? y - lane.y0 : lane.y1 + 1 - y;
-                if (along > lane.y1 - lane.y0 + 1) {
+                if (along < 0 || along > length) {
                     return;
                 }
                 if (along <= dark && along >= dark - CRONDIS.cloudLength) {

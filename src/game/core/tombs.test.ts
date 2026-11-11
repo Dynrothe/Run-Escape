@@ -3172,7 +3172,8 @@ describe("Kephri", () => {
 // waterfall
 const CRONDIS_DEF = {
     palm: { x: 1036.5, y: 1036.5 },
-    // The fill spot as far past the corridor's end as the real room's (1.5 tiles)
+    // The fill spot as far past the corridor's end as the real room's north ones (1.5 tiles; the
+    // south ones' are 2.5)
     falls: [{ fill: { x: 1036.5, y: 1055.5 }, at: { x: 1036.5, y: 1059.5 }, rotation: 0 }],
     lanes: [
         { x0: 1034, x1: 1039, y0: 1044, y1: 1053, low: 1033, high: 1040, fall: 0, fromLow: false },
@@ -3278,20 +3279,14 @@ describe("the Crondis room", () => {
         }
     });
 
-    it("always has a way in to the waterfall between its clouds, and none past the corridor", () => {
-        // Players: going in "it's RNG if you get hit or not", and "the poison does extend past
-        // the area". As OSRS's: timing, not luck, at the quickest they come.
-        const sim = crondis(["pathmaster"]);
-        expect(sim["crondisCloudEvery"]()).toBe(CRONDIS.cloudEveryLeast);
+    describe("its poison", () => {
         const lane = CRONDIS_DEF.lanes[0];
-        const x = 1036.5;
+        const fill = CRONDIS_DEF.falls[0].fill;
         // Just out of the corridor's mouth, where its clouds come out
         const mouth = lane.y0 - 1.5;
-        const fill = CRONDIS_DEF.falls[0].fill;
-        const r = room(sim);
-        r.nextCloudTick[0] = sim.tick + 1;
-        let hits = 0;
-        const tick = (y: number) => {
+        // A tick with the player at (x, y), nothing else about: whether they were hit
+        function tick(sim: Sim, x: number, y: number): boolean {
+            const r = room(sim);
             r.spears.forEach((spear) => (spear.nextTick = sim.tick + 1000));
             sim.tombsRoom!.pending = [];
             for (const enemy of sim.enemies) {
@@ -3307,24 +3302,67 @@ describe("the Crondis room", () => {
                 sim.choose(0);
             }
             sim.step();
-            if (sim.player.hp < hp) {
-                hits++;
+            return sim.player.hp < hp;
+        }
+        // At the quickest they come, a cloud set off now
+        function quickest(): { sim: Sim; start: number } {
+            const sim = crondis(["pathmaster"]);
+            expect(sim["crondisCloudEvery"]()).toBe(CRONDIS.cloudEveryLeast);
+            room(sim).nextCloudTick[0] = sim.tick + 1;
+            sim.step();
+            return { sim, start: room(sim).clouds.find((c) => c.lane === 0)!.startTick };
+        }
+
+        it("leaves a way in to the waterfall between two, timed, slowed by a trap too", () => {
+            // Players: going in "it's RNG if you get hit or not", and "the poison does extend
+            // past the area". As OSRS's: timing, not luck.
+            for (const x of [fill.x, (lane.x0 + lane.x1 + 1) / 2]) {
+                // A trap's hit slows you a tenth (CRONDIS.weakened)
+                for (const speed of [1, 0.9]) {
+                    const { sim, start } = quickest();
+                    let hits = 0;
+                    // Waiting at the mouth while one comes all the way down and out: untouched
+                    while (sim.tick - start < 4.9 * TICKS_PER_SECOND) {
+                        hits += tick(sim, x, mouth) ? 1 : 0;
+                    }
+                    // Then straight in at a walk to the waterfall
+                    let y = mouth;
+                    while (Math.hypot(fill.x - x, fill.y - y) > 1.4) {
+                        y = Math.min(fill.y, y + PLAYER_SPEED * speed);
+                        hits += tick(sim, x, y) ? 1 : 0;
+                    }
+                    // Under it while the next sets off and passes them by
+                    for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
+                        hits += tick(sim, x, y) ? 1 : 0;
+                    }
+                    const next = room(sim).clouds.filter(
+                        (c) => c.lane === 0 && c.startTick > start,
+                    );
+                    expect(next.length, `x ${x} speed ${speed}`).toBe(1);
+                    expect(hits, `x ${x} speed ${speed}`).toBe(0);
+                }
             }
-        };
-        sim.step();
-        const start = r.clouds.find((cloud) => cloud.lane === 0)!.startTick;
-        // Waiting at the mouth while one comes all the way down and out: untouched
-        while (sim.tick - start < 4.9 * TICKS_PER_SECOND) {
-            tick(mouth);
-        }
-        expect(hits).toBe(0);
-        // Then straight in at a walk, and the next is met only under the waterfall
-        let y = mouth;
-        while (Math.hypot(fill.x - x, fill.y - y) > 1.4) {
-            y = Math.min(fill.y, y + PLAYER_SPEED);
-            tick(y);
-        }
-        expect(hits).toBe(0);
+        });
+
+        it("hits only in its corridor, where it's drawn", () => {
+            // Between the corridor's end and the waterfall's shelter (a tile on the real room's
+            // south corridors): it hit there the moment it set off, before anything dark came
+            const { sim, start } = quickest();
+            const strip = { x: lane.x1 + 0.5, y: lane.y1 + 1.3 };
+            expect(Math.hypot(fill.x - strip.x, fill.y - strip.y)).toBeGreaterThan(1.5);
+            let hits = 0;
+            while (sim.tick - start < 6 * TICKS_PER_SECOND) {
+                hits += tick(sim, strip.x, strip.y) ? 1 : 0;
+            }
+            expect(hits).toBe(0);
+            // Inside it, the same cloud does hit
+            const again = quickest();
+            let inside = 0;
+            while (again.sim.tick - again.start < 6 * TICKS_PER_SECOND) {
+                inside += tick(again.sim, fill.x, lane.y1 - 2) ? 1 : 0;
+            }
+            expect(inside).toBe(1);
+        });
     });
 
     it("starts with the palm a sapling that can't be hurt, and the first wave", () => {
