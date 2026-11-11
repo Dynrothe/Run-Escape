@@ -96,8 +96,9 @@ upgrades) to read their descriptions.
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
 use your items: tap an item to use it, or hold it to read its description without using it.
 Hold weapons, passives and Armoury pieces to inspect them too, without selecting or buying them.
-On small screens, tap Zoom beside the timer to show the camera zoom slider. Tap GEAR below DPS to
-show or hide equipment slots. The pause menu lists worn equipment and its descriptions.
+On small screens, tap Zoom beside the timer to show the camera zoom slider. The pause menu lists
+worn equipment and its descriptions, and with the Gear panel setting on, GEAR below DPS shows or
+hides it on the HUD too.
 Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 

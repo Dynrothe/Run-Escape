@@ -2250,7 +2250,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   quick tap still selects it. A scroll ends holds and hovers, but a focused tile's description
   follows it, since a controller scrolls its list to what it highlights. Escape dismisses them all.
   Buttons only listen on the window while described or pressed. Small phones keep worn gear and
-  its descriptions in the pause menu, under the player's stats, weapons and passives.
+  its descriptions in the pause menu, under the player's stats, weapons and passives. With a
+  mouse, the HUD's worn gear is a row under the passives (`.ui-gear-slots`), or the gear panel
+  under the damage panel when `DisplaySettings.gearPanel` is on (it's off by default); a phone's
+  HUD only shows it in the panel.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
   there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.

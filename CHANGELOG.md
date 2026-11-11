@@ -48,8 +48,9 @@ the version in the corner).
 
 ### Changed
 
-- The HUD's equipment slots, by Happi: under the damage panel now, in two columns you can hide
-  (as big as the bag's slots with a mouse), and on a phone too (hidden to start with).
+- The HUD's equipment slots, by Happi: turn on Gear panel in Settings to have them under the
+  damage panel, in two columns you can hide (as big as the bag's slots with a mouse), and on a
+  phone too (hidden to start with).
 - Debuffs show before buffs in the HUD, by Happi.
 - The pause menu, by Happi: your stats come first, above your weapons and passives.
 - The Windows app keeps to the website's version of the game, by trippy22: Windows and website

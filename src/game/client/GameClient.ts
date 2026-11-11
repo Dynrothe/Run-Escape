@@ -1352,6 +1352,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ damagePanel: !this.display.damagePanel });
     }
 
+    toggleGearPanel(): void {
+        this.setDisplay({ gearPanel: !this.display.gearPanel });
+    }
+
     toggleMovePrediction(): void {
         this.setDisplay({ movePrediction: !this.display.movePrediction });
         this.coopRun?.setPrediction(this.display.movePrediction);

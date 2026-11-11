@@ -434,6 +434,27 @@ function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
     );
 }
 
+// Where the HUD shows worn gear (DisplaySettings.gearPanel). On a phone the row isn't drawn,
+// so off there means the pause menu only.
+function GearPanelSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name={t("settings.gear_panel.name")}
+            text={t(
+                isCoarsePointer
+                    ? "settings.gear_panel.desc.touch"
+                    : "settings.gear_panel.desc.mouse",
+            )}
+        >
+            <Toggle
+                on={ui.display.gearPanel}
+                label={t("settings.gear_panel.name")}
+                onToggle={() => client.toggleGearPanel()}
+            />
+        </Setting>
+    );
+}
+
 function AutoEquipSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
         <Setting name={t("settings.auto_equip.name")} text={t("settings.auto_equip.desc")}>
@@ -707,6 +728,7 @@ function SettingsPanel({
                     </Setting>
                     <h4 className="ui-settings-group">{t("settings.group.run")}</h4>
                     <PickupTimerSetting ui={ui} client={client} />
+                    <GearPanelSetting ui={ui} client={client} />
                     <PuzzleHelperSetting ui={ui} client={client} />
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
@@ -2337,6 +2359,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     client={client}
                     questTracker={ui.display.questTracker}
                     damagePanel={ui.display.damagePanel}
+                    gearPanel={ui.display.gearPanel}
                     disabled={ui.overlay !== "none"}
                     muted={ui.audio.muted}
                 />
@@ -2509,22 +2532,23 @@ function EvolutionLine({
     );
 }
 
-// Worn gear, small, under the weapons and passives
+// Worn gear, small: a row under the weapons and passives, or with a gridId the gear panel's two
+// columns (DisplaySettings.gearPanel), shown while open
 const GearSlots = memo(function GearSlots({
     gear,
     disabled,
-    id,
-    open,
+    gridId,
+    open = true,
 }: {
     gear: GearSlotView[];
     disabled: boolean;
-    id: string;
-    open: boolean;
+    gridId?: string;
+    open?: boolean;
 }): JSX.Element {
     return (
         <div
-            id={id}
-            className="ui-slots ui-hud-gear-grid"
+            id={gridId}
+            className={"ui-slots " + (gridId ? "ui-hud-gear-grid" : "ui-gear-slots")}
             role="group"
             aria-label={t("ui.hud.gear_slots")}
             hidden={!open}
@@ -2561,8 +2585,8 @@ const GearSlots = memo(function GearSlots({
     );
 });
 
-// The worn gear under the damage panel, shut to start with on a touch screen, where there's
-// less room
+// The worn gear under the damage panel (DisplaySettings.gearPanel), shut to start with on a
+// touch screen, where there's less room
 function GearPanel({ gear, disabled }: { gear: GearSlotView[]; disabled: boolean }): JSX.Element {
     const [open, setOpen] = useState(!isCoarsePointer);
     const gridId = useId();
@@ -2580,7 +2604,7 @@ function GearPanel({ gear, disabled }: { gear: GearSlotView[]; disabled: boolean
                 <span className="ui-dps-label">{t("ui.hud.gear_label")}</span>{" "}
                 <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
             </button>
-            <GearSlots gear={gear} disabled={disabled} id={gridId} open={open} />
+            <GearSlots gear={gear} disabled={disabled} gridId={gridId} open={open} />
         </div>
     );
 }
@@ -2653,6 +2677,7 @@ const Hud = memo(function Hud({
     client,
     questTracker,
     damagePanel,
+    gearPanel,
     disabled,
     muted,
 }: {
@@ -2660,6 +2685,7 @@ const Hud = memo(function Hud({
     client: GameClient;
     questTracker: boolean;
     damagePanel: boolean;
+    gearPanel: boolean;
     disabled: boolean;
     muted: boolean;
 }): JSX.Element {
@@ -2670,6 +2696,7 @@ const Hud = memo(function Hud({
                 <div className="ui-hud-left">
                     <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
                     <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
+                    {!gearPanel && <GearSlots gear={hud.gear} disabled={disabled} />}
                 </div>
                 <RunTimer client={client} />
                 <TombsScabarasReading client={client} />
@@ -2692,7 +2719,7 @@ const Hud = memo(function Hud({
                     {import.meta.env.DEV && <DevWardensButton client={client} />}
                     <HudQuests open={questTracker} client={client} disabled={disabled} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
-                    <GearPanel gear={hud.gear} disabled={disabled} />
+                    {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
                 </div>
             </div>
             <BossBar mapId={hud.mapId} client={client} />
@@ -3809,6 +3836,7 @@ function PauseModal({
                             music={getMap(ui.mapId).music !== undefined}
                         />
                         <PickupTimerSetting ui={ui} client={client} />
+                        <GearPanelSetting ui={ui} client={client} />
                         <PuzzleHelperSetting ui={ui} client={client} />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />

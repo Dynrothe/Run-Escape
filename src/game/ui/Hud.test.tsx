@@ -173,6 +173,7 @@ describe("the run's HUD", () => {
                 store.set({
                     hud: { ...hud([slot("bow", 1)]), gear },
                     party,
+                    display: { ...store.getSnapshot().display, gearPanel: true },
                 }),
             );
             act(() =>
@@ -349,10 +350,32 @@ describe("the run's HUD", () => {
         expect(view.getByRole("button", { name: "Potion" })).toHaveTextContent("30s");
     });
 
-    test("shows a collapsible two-column gear panel below DPS in solo and co-op", () => {
+    test("worn gear is a row under the weapons and passives unless the gear panel is on", () => {
         const { store, view } = renderHud();
         const gear = GEAR_SLOTS.map(({ id, name }) => ({ slot: id, name }));
         act(() => store.set({ hud: { ...hud([slot("bow", 1)]), gear } }));
+
+        const row = view.container.querySelector(".ui-hud-left > .ui-gear-slots")!;
+        expect(row.previousElementSibling).toHaveClass("ui-slots");
+        expect(row.children).toHaveLength(GEAR_SLOTS.length);
+        expect(row).not.toHaveAttribute("hidden");
+        expect(screen.queryByRole("button", { name: "Gear" })).toBeNull();
+        expect(view.container.querySelector(".ui-hud-gear-grid")).toBeNull();
+
+        act(() => store.set({ display: { ...store.getSnapshot().display, gearPanel: true } }));
+        expect(view.container.querySelector(".ui-gear-slots")).toBeNull();
+        expect(view.container.querySelector(".ui-hud-right .ui-hud-gear-grid")).not.toBeNull();
+    });
+
+    test("shows a collapsible two-column gear panel below DPS in solo and co-op", () => {
+        const { store, view } = renderHud();
+        const gear = GEAR_SLOTS.map(({ id, name }) => ({ slot: id, name }));
+        act(() =>
+            store.set({
+                hud: { ...hud([slot("bow", 1)]), gear },
+                display: { ...store.getSnapshot().display, gearPanel: true },
+            }),
+        );
 
         const rightColumn = view.container.querySelector<HTMLElement>(".ui-hud-right")!;
         const toggle = within(rightColumn).getByRole("button", { name: "Gear" });

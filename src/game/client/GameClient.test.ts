@@ -770,6 +770,29 @@ describe("the frame cap", () => {
     });
 });
 
+describe("the gear panel", () => {
+    test("is off unless it's been turned on, and is remembered", () => {
+        const stored = new Map<string, string>();
+        vi.stubGlobal("window", {
+            matchMedia: () => ({ matches: false }),
+            localStorage: {
+                getItem: (key: string) => stored.get(key) ?? null,
+                setItem: (key: string, value: string) => stored.set(key, value),
+            },
+        });
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        // Settings saved before there was such a thing
+        stored.set("rune-survivors-display", JSON.stringify({ damagePanel: true }));
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        const { client } = createClient(createSim(), false);
+        client.toggleGearPanel();
+        expect(loadDisplaySettings().gearPanel).toBe(true);
+        client.toggleGearPanel();
+        expect(loadDisplaySettings().gearPanel).toBe(false);
+        vi.unstubAllGlobals();
+    });
+});
+
 describe("the damage panel", () => {
     test("is shut unless it's been opened, and is remembered", () => {
         const stored = new Map<string, string>();
