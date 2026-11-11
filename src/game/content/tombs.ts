@@ -352,7 +352,9 @@ const BABA_SHOCKWAVE: BossAttackDef = {
         spotAnim: ROCK_IMPACT,
         alpha: 0.55,
         light: MARK_LIGHT,
-        // Her dust doesn't reach its edge: outlined, so what's hit is what's seen
+        // Her dust doesn't reach its edge: outlined, so what's hit is what's seen. Fitting the
+        // dust bigger (fit) doesn't do it: it's a tall puff, and at twice the size the floor out
+        // to the edge still looked bare.
         edge: true,
     },
     invoked: { id: "shaking_things_up", radius: 1.4 },

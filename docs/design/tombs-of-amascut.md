@@ -423,8 +423,10 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **Her stomp** (`BossDef.stomp`): whoever's right up against her (within `stomp.radius` of
       her middle, which her solid body leaves you at) is stomped, harder each time they stay. A
       red ring fills at her feet before each (`GameView.drawBossWindups`), the first waits a
-      moment (`stomp.first`), each lands with a flash, and the first says what it is. Without
-      those, players took it as damage from nowhere.
+      moment (`stomp.first`), each lands with a flash, and a message says what it is as the first
+      ring starts. Without those, players took it as damage from nowhere. A step out doesn't put
+      the next off (it starts over only after `stomp.first` away), but one that came due while
+      nobody was under fills its ring again before it lands.
     - Her hitpoints go up with the path level (`TOMBS_BOSSES`), as does each path's boss's.
     - Her boulders are drawn as her Boulder NPC (11782) rolling (9518): the rows
       (`BulletPatternDef.look`), the shards, and the boulder that drops into each rockfall and boulder

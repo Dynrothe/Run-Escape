@@ -781,6 +781,7 @@ describe("Ba-Ba", () => {
         sim.player.y = boss.y;
         const hits: number[] = [];
         const notices: string[] = [];
+        let saidAt = -1;
         let swings = 0;
         for (let i = 0; i < 3 * TICKS_PER_SECOND; i++) {
             sim.tick++;
@@ -798,6 +799,7 @@ describe("Ba-Ba", () => {
             for (const event of sim.takeEvents()) {
                 if (event.type === "notice") {
                     notices.push(event.message);
+                    saidAt = i;
                 } else if (event.type === "bossSwing") {
                     swings++;
                 }
@@ -807,7 +809,9 @@ describe("Ba-Ba", () => {
         expect(hits[0]).toBe(Math.round(stomp.first! * TICKS_PER_SECOND));
         expect(hits[1] - hits[0]).toBe(Math.round(stomp.interval * TICKS_PER_SECOND));
         expect(swings).toBe(hits.length);
+        // Said as soon as you're under, not with the first stomp
         expect(notices).toEqual([stomp.message]);
+        expect(saidAt).toBe(0);
 
         // A tick's step out and back doesn't put it off: it comes as it would have
         const state = boss.bossState!;
@@ -834,17 +838,66 @@ describe("Ba-Ba", () => {
         }
         expect(state.nextStomp).toBeUndefined();
         expect(state.stompFrom).toBeUndefined();
+        sim.takeEvents();
         sim.player.x = boss.x + boss.radius + sim.player.radius;
         sim.tick++;
         step(boss);
         expect(state.nextStomp! - sim.tick).toBe(Math.round(stomp.first! * TICKS_PER_SECOND));
-        sim.takeEvents();
         for (let i = 0; i < 2 * TICKS_PER_SECOND; i++) {
             sim.tick++;
             sim.player.invulnerable = 0;
             step(boss);
         }
         expect(sim.takeEvents().some((e) => e.type === "notice")).toBe(false);
+    });
+
+    it("fills her stomp's ring again for whoever's back once it came due without them", () => {
+        // Out a moment past when it was due, and back: it landed the tick they were back, its
+        // ring hidden all the while they were out
+        const sim = atBaba();
+        const boss = baba(sim);
+        const stomp = boss.def.boss!.stomp!;
+        const step = (sim as unknown as { stepStomp(e: typeof boss): void }).stepStomp.bind(sim);
+        const state = () => boss.bossState!;
+        const against = boss.x + boss.radius + sim.player.radius;
+        const away = boss.x + stomp.radius + 1;
+        sim.player.y = boss.y;
+        const at = (x: number): boolean => {
+            sim.tick++;
+            sim.player.invulnerable = 0;
+            const hp = (sim.player.hp = sim.player.maxHp);
+            sim.player.x = x;
+            step(boss);
+            return sim.player.hp < hp;
+        };
+        const interval = Math.round(stomp.interval * TICKS_PER_SECOND);
+        const wait = Math.round(stomp.first! * TICKS_PER_SECOND);
+        // Its first one, and a stomp after that, then out for most of the wait, well past the next
+        let stomps = 0;
+        for (let i = 0; i <= wait + interval; i++) {
+            stomps += at(against) ? 1 : 0;
+        }
+        expect(stomps).toBe(2);
+        for (let i = 0; i < wait - 5; i++) {
+            expect(at(away)).toBe(false);
+        }
+        expect(state().nextStomp!).toBeLessThan(sim.tick);
+        // Back: a ring filling from now, its interval, and then it lands, as hard as the next
+        // would have been
+        const ticksBack = sim.tick + 1;
+        const hits: number[] = [];
+        let landedOn = -1;
+        for (let i = 0; i < interval + 5; i++) {
+            if (at(against)) {
+                hits.push(sim.tick - ticksBack);
+                landedOn = state().stomps!;
+            }
+            if (hits.length === 0) {
+                expect(state().stompFrom).toBe(ticksBack);
+            }
+        }
+        expect(hits).toEqual([interval]);
+        expect(landedOn).toBe(3);
     });
 
     it("has her adds drop food at Entry, a third of that at Expert, none past 450", () => {
@@ -3279,6 +3332,41 @@ describe("the Crondis room", () => {
         }
     });
 
+    it("keeps its crocodiles from someone down to be revived, not from someone out for good", () => {
+        const sim = new Sim({
+            grid: makeGrid(field(), 1000, 1000),
+            mapId: TEST_CRONDIS.id,
+            characterId: "",
+            metaStats: emptyStats(),
+            seed: 3,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party: ["warrior", "wizard"].map((characterId) => ({
+                name: characterId,
+                characterId,
+                metaStats: emptyStats(),
+            })),
+        });
+        const [a, b] = sim.heroes;
+        const by = { x: 1030.5, y: 1030.5 };
+        const far = { x: 1045.5, y: 1030.5 };
+        // One up, well away from both ways in; the other down on the first
+        a.player.x = 1037.5;
+        a.player.y = 1046.5;
+        b.player.x = by.x;
+        b.player.y = by.y;
+        b.down = true;
+        const picks = () =>
+            new Set(Array.from({ length: 20 }, () => sim["tombsEntrance"]([by, far])));
+        // Whoever comes to revive them would meet it
+        expect(sim.canBeRevived(b)).toBe(true);
+        expect(picks()).toEqual(new Set([far]));
+        // With no revive left nobody's coming, so it's a way in like the other
+        b.revived += sim.revivesLeftFor(b);
+        expect(sim.canBeRevived(b)).toBe(false);
+        expect(picks().size).toBe(2);
+    });
+
     describe("its poison", () => {
         const lane = CRONDIS_DEF.lanes[0];
         const fill = CRONDIS_DEF.falls[0].fill;
@@ -3362,6 +3450,19 @@ describe("the Crondis room", () => {
                 inside += tick(again.sim, fill.x, lane.y1 - 2) ? 1 : 0;
             }
             expect(inside).toBe(1);
+            // Just inside its waterfall end, not till the first dark puff's drawn there (half a
+            // tile in): it hit as soon as the dark front set off, with nothing dark to see
+            const edge = quickest();
+            const end = { x: lane.x1 - 0.5, y: lane.y1 + 1 - 0.2 };
+            expect(Math.hypot(fill.x - end.x, fill.y - end.y)).toBeGreaterThan(1.5);
+            let hitAt = -1;
+            while (edge.sim.tick - edge.start < 6 * TICKS_PER_SECOND && hitAt === -1) {
+                if (tick(edge.sim, end.x, end.y)) {
+                    hitAt = edge.sim.tick;
+                }
+            }
+            const seconds = (hitAt - edge.start) / TICKS_PER_SECOND;
+            expect((seconds - CRONDIS.cloudBehind) * CRONDIS.cloudSpeed).toBeGreaterThan(0.5);
         });
     });
 

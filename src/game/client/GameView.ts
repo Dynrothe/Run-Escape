@@ -304,6 +304,11 @@ function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
 }
 
+// How far a windup that started at tick from and lands at to has come, alpha into this tick: 0 to 1
+function windupProgress(sim: Sim, alpha: number, from: number, to: number): number {
+    return Math.min(1, Math.max(0, (sim.tick + alpha - from) / Math.max(1, to - from)));
+}
+
 // How long the upper body holds a weapon's run pose after a shot on the move
 export const RUN_POSE_TICKS = 20;
 
@@ -2395,28 +2400,12 @@ export class GameView {
             if ((!ground?.shadow && !ground?.edge) || sim.tick >= hazard.landTick) {
                 continue;
             }
-            const t = Math.min(
-                1,
-                Math.max(
-                    0,
-                    (sim.tick + alpha - hazard.startTick) /
-                        Math.max(1, hazard.landTick - hazard.startTick),
-                ),
-            );
+            const t = windupProgress(sim, alpha, hazard.startTick, hazard.landTick);
             if (ground.shadow) {
                 this.drawShadow(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
-                continue;
+            } else {
+                this.drawFillingCircle(overlay, sim, hazard.x, hazard.y, hazard.radius, t);
             }
-            // As a swing's circle: its whole reach outlined, filling from the middle as it comes
-            this.traceGroundCircle(overlay, sim, hazard.x, hazard.y, hazard.radius);
-            ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
-            ctx.stroke();
-            this.traceGroundCircle(overlay, sim, hazard.x, hazard.y, hazard.radius * t);
-            ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
-            ctx.fill();
         }
         for (const enemy of sim.enemies) {
             // Its stomp coming, on whoever's right up against it (BossDef.stomp): a ring filling
@@ -2431,39 +2420,21 @@ export class GameView {
                 // Not while nobody's under it
                 state.stompLeft === undefined
             ) {
-                const s = Math.min(
-                    1,
-                    Math.max(
-                        0,
-                        (sim.tick + alpha - state.stompFrom) /
-                            Math.max(1, state.nextStomp - state.stompFrom),
-                    ),
+                this.drawFillingCircle(
+                    overlay,
+                    sim,
+                    lerp(enemy.prevX, enemy.x, alpha),
+                    lerp(enemy.prevY, enemy.y, alpha),
+                    stomp.radius,
+                    windupProgress(sim, alpha, state.stompFrom, state.nextStomp),
                 );
-                const x = lerp(enemy.prevX, enemy.x, alpha);
-                const y = lerp(enemy.prevY, enemy.y, alpha);
-                this.traceGroundCircle(overlay, sim, x, y, stomp.radius);
-                ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * s})`;
-                ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * s})`;
-                ctx.stroke();
-                this.traceGroundCircle(overlay, sim, x, y, stomp.radius * s);
-                ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * s})`;
-                ctx.fill();
             }
             // A boss's, or what's copying its lunge (EnemyDef.echoes), drawn the same
             const windup = enemy.bossState?.windup ?? enemy.echo;
             if (!windup || enemy.dead) {
                 continue;
             }
-            const t = Math.min(
-                1,
-                Math.max(
-                    0,
-                    (sim.tick + alpha - windup.startTick) /
-                        Math.max(1, windup.landTick - windup.startTick),
-                ),
-            );
+            const t = windupProgress(sim, alpha, windup.startTick, windup.landTick);
             const kind = windup.attack.kind;
             // Those that mark the ground themselves (BossFightView)
             if (
@@ -2534,15 +2505,9 @@ export class GameView {
                           squareCorners(spot.x, spot.y, (square! / 2) * t),
                       );
                 for (let i = 0; i < shapes.length; i++) {
-                    this.fight.traceGround(overlay, sim, shapes[i]);
-                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
-                    ctx.stroke();
-                    this.fight.traceGround(overlay, sim, filled[i]);
-                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
-                    ctx.fill();
+                    this.drawFilling(overlay, t, (whole) =>
+                        this.fight.traceGround(overlay, sim, whole ? shapes[i] : filled[i]),
+                    );
                 }
             } else if (kind === "swing" || kind === "blast") {
                 // Around the boss, or on the spots a blast lands on
@@ -2557,15 +2522,7 @@ export class GameView {
                           ];
                 const radius = windup.attack.radius ?? 2;
                 for (const { x, y } of spots) {
-                    this.traceGroundCircle(overlay, sim, x, y, radius);
-                    ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
-                    ctx.stroke();
-                    this.traceGroundCircle(overlay, sim, x, y, radius * t);
-                    ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
-                    ctx.fill();
+                    this.drawFillingCircle(overlay, sim, x, y, radius, t);
                 }
             } else {
                 const x = lerp(enemy.prevX, enemy.x, alpha);
@@ -2576,6 +2533,35 @@ export class GameView {
                 ctx.stroke();
             }
         }
+    }
+
+    // A swing's mark: all it'll hit outlined in red, filling in as it comes (t, 0 to 1). trace
+    // traces the whole shape, or with whole false, the part filled so far.
+    private drawFilling(overlay: Overlay, t: number, trace: (whole: boolean) => void): void {
+        const ctx = overlay.ctx;
+        trace(true);
+        ctx.fillStyle = `rgba(200, 20, 20, ${0.1 + 0.12 * t})`;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + 0.4 * t})`;
+        ctx.stroke();
+        trace(false);
+        ctx.fillStyle = `rgba(255, 40, 20, ${0.25 * t})`;
+        ctx.fill();
+    }
+
+    // A swing's circle, filling from the middle
+    private drawFillingCircle(
+        overlay: Overlay,
+        sim: Sim,
+        x: number,
+        y: number,
+        radius: number,
+        t: number,
+    ): void {
+        this.drawFilling(overlay, t, (whole) =>
+            this.traceGroundCircle(overlay, sim, x, y, whole ? radius : radius * t),
+        );
     }
 
     // A shadow on the floor under something coming down: growing and darkening as it nears

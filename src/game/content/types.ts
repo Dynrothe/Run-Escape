@@ -542,7 +542,8 @@ export type GroundPatternDef = {
     // Its reach outlined in red too, filling as it comes, as a swing's circle is: for a look that
     // doesn't show how far it hits (Ba-Ba's shockwave, a puff of dust at her feet that hit up to
     // five tiles out with Shaking Things Up, so players took it as damage from nowhere). Drawn as a
-    // circle at its radius: not for a square (a checker's cell) or a fitted mark.
+    // circle at its radius: not for a square (a checker's cell) or a fitted mark. Try fit first: a
+    // look that can be fitted to its reach needs no overlay.
     edge?: boolean;
     // A square spot (a checker's cell) hurts only within the circle drawn on it (its radius
     // times fit), not to its corners: what's seen is what's hit
@@ -1372,10 +1373,11 @@ export type BossDef = {
     // to stand over you; other melee ones walk up
     keepDistance?: number;
     // Standing under it hurts every interval seconds for damage, then a
-    // damage more each time, up to max; stepping out starts it over (the
-    // Mimic's stomp). The first comes first seconds after stepping under (interval without it),
-    // each marked by a ring filling at its feet (GameView), and message is said the first time
-    // one lands in the fight.
+    // damage more each time, up to max (the Mimic's stomp). It starts over once nobody's been
+    // under it for first seconds (interval without it): a shorter step out keeps the count and
+    // when the next comes, though one that came due meanwhile fills its ring again before it
+    // lands. The first comes first seconds after stepping under, each marked by a ring filling at
+    // its feet (GameView), and message is said the first time anyone's under it in the fight.
     stomp?: {
         radius: number;
         interval: number;
