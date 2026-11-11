@@ -654,7 +654,8 @@
 
     /* Armoury: the slots and the piece picked scroll apart */
 
-    .ui-armoury > .ui-subtle {
+    .ui-armoury > .ui-subtle,
+    .ui-armoury-legend {
         display: none;
     }
 

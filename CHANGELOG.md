@@ -36,6 +36,8 @@ the version in the corner).
   actions.
 - Coins short, by Jp66600: Skills, the Armoury and the Skip button say how many coins you're
   short.
+- The Armoury's key, by Jp66600: a line under its title says what each border's colour means,
+  and pieces not found yet are marked with a "?".
 
 ### Changed
 
@@ -93,6 +95,7 @@ the version in the corner).
   waterfall without being caught was luck. They now stop at the corridor's end, and there's
   always a gap to time your way in. Fixed by Okaeri.
 - The results' buttons stay in view when there's more to show than fits. Fixed by Jp66600.
+- The Armoury's Back button no longer needs scrolling to. Fixed by Jp66600.
 
 ## 0.30.0 - 2026-11-09
 
