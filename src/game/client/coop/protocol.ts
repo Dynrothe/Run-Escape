@@ -95,6 +95,8 @@ export type GameStart = {
     // The Tombs of Amascut: the host's invocations, the party's raid level; or a run's, the host's
     // (Sim cleans the ids by the map's board)
     invocations?: string[];
+    // A run's remixes (content/remixes.ts), the host's; the Sim keeps those the map takes
+    remixes?: string[];
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -115,6 +117,10 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
             (Array.isArray(game.invocations) &&
                 game.invocations.length <= 100 &&
                 game.invocations.every((id) => typeof id === "string" && id.length <= 64))) &&
+        (game.remixes === undefined ||
+            (Array.isArray(game.remixes) &&
+                game.remixes.length <= 8 &&
+                game.remixes.every((id) => typeof id === "string" && id.length <= 32))) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&

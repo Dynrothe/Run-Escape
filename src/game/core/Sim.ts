@@ -114,6 +114,7 @@ import {
     TRICKSTER,
     cleanRelics,
 } from "../content/relics";
+import { RemixId, getMapRemixes, getRemixCoins } from "../content/remixes";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
 import { SHOP_UPGRADES } from "../content/shop";
 import { SOUNDS } from "../content/sounds";
@@ -317,7 +318,9 @@ import {
 import { fm } from "./fmath";
 import { ColdRule } from "./rules/ColdRule";
 import { RealmLayer, RealmRule } from "./rules/RealmRule";
-import { RuleHost, RunRule, createRunRule } from "./rules/RunRule";
+import { RootRule } from "./rules/RootRule";
+import { RuleHost, RuleSet, RunRule, createRunRule } from "./rules/RunRule";
+import { RemixRun, buildRemixRun } from "./rules/remix";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlightGrid } from "./world/FlightGrid";
@@ -382,6 +385,17 @@ const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
+// The Overgrown and Frozen remixes together: a fire elite's embers burn the roots this far round
+const EMBERS_BURN_ROOTS = 2;
+// The Frozen and Shadow remixes together: the cold rises this much faster in the realm
+const REALM_COLD = 1.5;
+// The Shadow and Dark remixes together: the player's light is this much of its size in the realm
+const REALM_LIGHT = 0.8;
+// The Frozen and Dark remixes together: a lit brazier and embers are lights this big (tiles)
+const BRAZIER_LIGHT = 4;
+const EMBERS_LIGHT = 2;
+const BRAZIER_GLOW = { color: 0xff9a4a, flicker: 0.2 };
+
 // Lights (MapDef.lighting): tiles past a light's edge that weapons can still aim
 // (litTargetsOnly; never more than the light's own radius, so one going out lights nothing), seconds over which a light an enemy left goes out, and over which a boss's
 // phase changes the scene's ambient (and back as it falls)
@@ -735,6 +749,8 @@ export type SimOptions = {
     pet?: string;
     // The solo hero's relics (SaveData.relics); a party's are each hero's (HeroOptions.relics)
     relics?: readonly string[];
+    // Remixes (content/remixes.ts): Act II rules on this map, those it takes (the host's, in co-op)
+    remixes?: readonly string[];
 };
 
 export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
@@ -778,6 +794,8 @@ export type RunResult = {
     invocations?: string[];
     points?: number;
     relics?: string[];
+    // The run's remixes (content/remixes.ts), when any
+    remixes?: RemixId[];
     // The Scabaras room was beaten (Sim.scabarasBeaten)
     scabarasBeaten?: boolean;
     // The round reached (1 outside endless runs)
@@ -966,6 +984,8 @@ export type Hero = {
     // and when it next can
     ruleTicks: number;
     ruleHurtNext: number;
+    // The Soulreaper axe's souls (WeaponDef.souls), 0 to its max
+    souls: number;
     // Under the cold (ColdRuleDef): frozen solid in an ice block until this tick; and the Snow
     // ranger's hits towards her next chill (CharacterTraitDef shatter)
     frozenSolid: number;
@@ -1475,8 +1495,16 @@ export class Sim {
     // A floor that rises and falls away (MapDef.floor)
     // Laid afresh when the party wipes on the Wardens (failWardens)
     floor: ArenaFloor | undefined;
-    // The map's rule (MapDef.rule, core/rules): roots creeping in
+    // The map's rule (MapDef.rule, core/rules) and its remixes' (content/remixes.ts), one RuleSet
+    // when there's more than one
     readonly rule: RunRule | undefined;
+    readonly rules: RunRule[];
+    // The roots, the map's or a remix's (RootsRuleDef)
+    readonly roots: RootRule | undefined;
+    // The run's remixes, what they put on it (core/rules/remix.ts), and the map's and theirs' waves
+    // and events
+    readonly remixes: RemixId[];
+    readonly remixRun: RemixRun | undefined;
     // The same, on a map of two worlds (RealmRuleDef): which the party's in, and what's kept of the
     // other while it's away (its enemies and what's on its ground), standing still
     readonly realm: RealmRule | undefined;
@@ -1991,7 +2019,16 @@ export class Sim {
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
-        this.lighting = this.map.lighting;
+        // Remixes: those the map takes, placed by the seed on its grid
+        this.remixRun = buildRemixRun(
+            this.map,
+            (options.remixes ?? []).filter((id) => getMapRemixes(this.map).includes(id as RemixId)),
+            this.grid,
+            options.seed,
+            { x: options.spawnX, y: options.spawnY },
+        );
+        this.remixes = this.remixRun?.remixes ?? [];
+        this.lighting = this.remixRun?.lighting ?? this.map.lighting;
         this.litTargetsOnly = this.lighting?.litTargetsOnly === true;
         this.hasOnlyLight =
             this.lighting !== undefined &&
@@ -2004,11 +2041,19 @@ export class Sim {
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
             : undefined;
         // On its own Rng, so a map without one plays as it did
-        this.rule = this.map.rule
-            ? createRunRule(this.map.rule, this.grid, options.seed, TICKS_PER_SECOND)
-            : undefined;
-        this.realm = this.rule instanceof RealmRule ? this.rule : undefined;
-        this.cold = this.rule instanceof ColdRule ? this.rule : undefined;
+        this.rules = [
+            ...(this.map.rule ? [this.map.rule] : []),
+            ...(this.remixRun?.rules ?? []),
+        ].map((def) => createRunRule(def, this.grid, options.seed, TICKS_PER_SECOND));
+        this.rule = this.rules.length > 1 ? new RuleSet(this.rules) : this.rules[0];
+        this.realm = this.rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
+        this.cold = this.rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
+        this.roots = this.rules.find((rule): rule is RootRule => rule instanceof RootRule);
+        // Overgrown and Frozen: roots don't grow on ice
+        const cold = this.cold;
+        if (this.roots && cold) {
+            this.roots.exclude((x, y) => cold.iceAt(x + 0.5, y + 0.5));
+        }
         this.actStep = this.map.act ? Math.max(0, Math.floor(options.actStep ?? 0)) : 0;
         this.difficulty = getStepDifficulty(this.map, this.actStep);
         // Building it takes a while, so it's done here, with the map, rather
@@ -2021,7 +2066,11 @@ export class Sim {
         this.expert = (options.expert ?? false) && this.map.raid !== undefined;
         // The Tombs go by their invocations instead. A map with the runs' board has hard mode as a
         // preset of them, so its hard runs play as they always have.
-        const board = this.map.tombs ? TOMBS_SET : takesInvocations(this.map) ? RUN_SET : undefined;
+        const board = this.map.tombs
+            ? TOMBS_SET
+            : takesInvocations(this.map, this.remixes.length > 0)
+              ? RUN_SET
+              : undefined;
         const picked = board ? cleanInvocations(options.invocations ?? [], board) : [];
         const runBoard = board === RUN_SET;
         this.invocations =
@@ -2242,6 +2291,7 @@ export class Sim {
             glideX: 0,
             glideY: 0,
             ruleTicks: 0,
+            souls: 0,
             ruleHurtNext: 0,
             traitKills: 0,
             traitReady: false,
@@ -2502,7 +2552,8 @@ export class Sim {
 
     // The map's events, or this part's of a fight in parts
     get mapEvents(): RunEventDef[] {
-        const events = this.map.stages?.[this.stage]?.events ?? this.map.events;
+        const events =
+            this.map.stages?.[this.stage]?.events ?? this.remixRun?.events ?? this.map.events;
         if (!this.invoked("run_blood_moon")) {
             return events;
         }
@@ -2539,6 +2590,7 @@ export class Sim {
                     points: this.invocationPoints,
                 }),
             ...(this.hero.relics.ids.length > 0 && { relics: [...this.hero.relics.ids] }),
+            ...(this.remixes.length > 0 && { remixes: [...this.remixes] }),
             ...(this.scabarasBeaten && { scabarasBeaten: true }),
             round: this.round,
             victory: this.state === "victory",
@@ -3251,7 +3303,9 @@ export class Sim {
                 ? getInvocationCoins(this.invocations)
                 : this.hard
                   ? HARD_COINS - 1
-                  : 0) + (this.map.act ? getStepCoins(this.map, this.actStep) : 0);
+                  : 0) +
+            (this.map.act ? getStepCoins(this.map, this.actStep) : 0) +
+            getRemixCoins(this.remixes.length);
         return (
             (this.endless ? endlessCoinScale(this.round) : 1) *
             (1 + Math.min(COIN_BONUS_CAP, bonus))
@@ -5880,7 +5934,7 @@ export class Sim {
         if (this.realm?.layer === 1) {
             return this.realm.def.waves;
         }
-        return this.raidRoomDef?.waves ?? this.map.waves;
+        return this.raidRoomDef?.waves ?? this.remixRun?.waves ?? this.map.waves;
     }
 
     private apmekenTrickle(wave: number): WaveDef {
@@ -13609,15 +13663,19 @@ export class Sim {
             this.realm?.turn(this.ruleHost, 1);
         }
         rule.step(this.ruleHost);
-        const def = rule.def;
-        if (def.kind === "cold") {
-            this.stepCold(this.cold!, def);
-        } else if (def.kind === "roots") {
+        // Each of the run's rules that wears players down: the cold, then the roots (which aren't in
+        // the realm: RuleSet)
+        if (this.cold) {
+            this.stepCold(this.cold, this.cold.def);
+        }
+        const roots = this.realm?.layer === 1 ? undefined : this.roots;
+        if (roots) {
+            const def = roots.def;
             const grace = secondsToTicks(def.hurt.grace);
             const every = Math.max(1, secondsToTicks(def.hurt.every));
             this.forEachHeroInReach(() => {
                 const { player } = this;
-                if (!this.isUp(this.hero) || !rule.hurtsAt(player.x, player.y)) {
+                if (!this.isUp(this.hero) || !roots.hurtsAt(player.x, player.y)) {
                     this.hero.ruleTicks = 0;
                     return;
                 }
@@ -13628,7 +13686,8 @@ export class Sim {
                     this.damagePlayer(damage, def.kind, false, -1, true, false);
                 }
             });
-        } else {
+        }
+        if (!this.cold && !this.roots) {
             return;
         }
         // What lays the rule's stuff as it goes (EnemyDef.plants: a bear's trail)
@@ -13655,8 +13714,12 @@ export class Sim {
                 return;
             }
             const trait = this.trait;
-            const rise = trait?.kind === "shatter" ? trait.coldRise : 1;
-            const warmth = cold.warmthAt(player.x, player.y, tick);
+            // In the realm (the Frozen and Shadow remixes together) there are no braziers, and the
+            // cold rises faster
+            const realm = this.realm?.layer === 1;
+            const rise =
+                (trait?.kind === "shatter" ? trait.coldRise : 1) * (realm ? REALM_COLD : 1);
+            const warmth = realm ? 0 : cold.warmthAt(player.x, player.y, tick);
             const gas = cold.gasAt(player.x, player.y, tick);
             const change =
                 warmth > 0
@@ -13821,7 +13884,15 @@ export class Sim {
     private ruleMovement(): MovementRules["floor"] {
         const cold = this.cold;
         if (cold) {
-            return this.coldMovement(cold);
+            const moves = this.coldMovement(cold);
+            // Under the cold and on roots too (remixes stacked): both slow
+            if (this.rules.length > 1) {
+                const roots = this.rule!.playerPace(this.player.x, this.player.y);
+                if (roots !== 1) {
+                    return { ...moves, pace: (moves?.pace ?? 1) * roots };
+                }
+            }
+            return moves;
         }
         const pace = this.rule!.playerPace(this.player.x, this.player.y);
         return pace !== 1 ? { pace } : undefined;
@@ -17614,9 +17685,12 @@ export class Sim {
             this.enragePartners(enemy);
         }
         this.rule?.onKill(enemy.uid, enemy.x, enemy.y);
-        // Under the cold, a fire elite's embers where it fell, and the braziers near it lit
+        this.gainSouls(enemy);
+        // Under the cold, a fire elite's embers where it fell, and the braziers near it lit; they
+        // burn away the roots round them (the Overgrown and Frozen remixes together)
         if (this.cold && enemy.def.embers) {
             this.cold.onFireKill(enemy.x, enemy.y, this.tick);
+            this.roots?.burn(enemy.x, enemy.y, EMBERS_BURN_ROOTS);
             this.emit({ type: "notice", message: "The braziers flare up!" });
         }
         // Killed frozen or chilled by the Snow ranger: it shatters
@@ -18438,6 +18512,9 @@ export class Sim {
         level: WeaponDef["levels"][number],
         special?: SpecialAttackDef,
     ): void {
+        if (def.souls && this.harvest(def, level, def.souls)) {
+            return;
+        }
         if (special?.aoe) {
             this.fireAoeSpecial(def, level, special, special.aoe);
             return;
@@ -18497,6 +18574,103 @@ export class Sim {
         this.meleeHits(def, level, hit, special);
     }
 
+    // The Soulreaper axe's (WeaponDef.souls): a kill near a hero holding it gives it a soul
+    private gainSouls(enemy: Enemy): void {
+        for (const hero of this.heroes) {
+            const axe = hero.weapons.find((w) => w.def.souls);
+            const souls = axe?.def.souls;
+            if (!souls || hero.souls >= souls.max || !this.isUp(hero)) {
+                continue;
+            }
+            const { x, y } = hero.player;
+            if ((enemy.x - x) ** 2 + (enemy.y - y) ** 2 <= souls.reach * souls.reach) {
+                hero.souls++;
+            }
+        }
+    }
+
+    // At its max souls, the axe's swing is a Harvest when something's in reach: a spin all round,
+    // paid for in hitpoints (never below 1, and not while low), healing back a little a kill from
+    // its last level. False when it isn't one (the swing goes on as a sweep).
+    private harvest(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        souls: NonNullable<WeaponDef["souls"]>,
+    ): boolean {
+        const hero = this.hero;
+        const player = this.player;
+        const harvest = souls.harvest;
+        if (hero.souls < souls.max || player.hp < player.maxHp * harvest.floor) {
+            return false;
+        }
+        const radius = harvest.radius * (1 + this.stats.area);
+        const hit: Enemy[] = [];
+        this.queryTouching(player.x, player.y, radius + 1, (enemy) => {
+            if (
+                !enemy.dead &&
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
+            ) {
+                hit.push(enemy);
+            }
+        });
+        if (hit.length === 0) {
+            return false;
+        }
+        hero.souls = 0;
+        const index = hero.weapons.findIndex((w) => w.def === def);
+        const scale =
+            harvest.damage +
+            harvest.perLevel * Math.max(0, index >= 0 ? hero.weapons[index].level - 1 : 0);
+        this.emit({
+            type: "slash",
+            x: player.x,
+            y: player.y,
+            dirX: player.facingX,
+            dirY: player.facingY,
+            reach: radius,
+            width: 0,
+            arc: Math.PI,
+            weaponId: def.id,
+        });
+        this.addEffect(harvest.spotAnim, player.x, player.y, 0, SPECIAL_SPOTANIM_TICKS);
+        this.emit({ type: "harvest", x: player.x, y: player.y });
+        this.rule?.onSwing(player.x, player.y, 1, 0, radius + this.cutReach(), Math.PI, 0);
+        const cost = Math.max(1, Math.round(player.maxHp * harvest.cost));
+        const paid = Math.min(cost, Math.max(0, Math.ceil(player.hp) - 1));
+        if (paid > 0) {
+            player.hp -= paid;
+            this.emit({ type: "playerHit", amount: paid, enemyId: def.id, elite: false });
+        }
+        const alive = hit.filter((enemy) => !enemy.dead);
+        const harvestLevel = { ...level, damage: level.damage * scale };
+        this.meleeHits(def, harvestLevel, hit, undefined);
+        // Bosses and elites take it twice
+        for (const enemy of hit) {
+            if (!enemy.dead && (enemy.boss || enemy.elite)) {
+                this.damageEnemy(
+                    enemy,
+                    harvestLevel.damage * this.soulScale(def),
+                    0,
+                    player.x,
+                    player.y,
+                );
+            }
+        }
+        if (index >= 0 && hero.weapons[index].level >= harvest.healsAt) {
+            const kills = alive.filter((enemy) => enemy.dead).length;
+            const back = Math.min(paid, kills);
+            if (back > 0) {
+                this.heal(back);
+            }
+        }
+        return true;
+    }
+
+    // What the axe's souls add to its hits
+    private soulScale(def: WeaponDef): number {
+        return def.souls ? 1 + def.souls.damage * this.hero.souls : 1;
+    }
+
     // A special attack that hits everything all round the player (the Thunder
     // khopesh's Thunderclap): a full circle swing, lightning on what it hits
     private fireAoeSpecial(
@@ -18544,7 +18718,7 @@ export class Sim {
         special: SpecialAttackDef | undefined,
     ): void {
         const player = this.player;
-        const damage = level.damage * (special?.damage ?? 1);
+        const damage = level.damage * (special?.damage ?? 1) * this.soulScale(def);
         if (special) {
             this.addEffect(special.spotAnim, player.x, player.y, 0, SPECIAL_SPOTANIM_TICKS);
         }
@@ -18871,6 +19045,31 @@ export class Sim {
         (lighting.lights ?? []).forEach((look, id) => {
             lights.push({ kind: "map", id, x: look.x, y: look.y, radius: look.radius, look });
         });
+        // Under the cold too (the Frozen and Dark remixes together): lit braziers and embers, in the
+        // city
+        const cold = this.realm?.layer === 1 ? undefined : this.cold;
+        if (cold) {
+            const base = lighting.lights?.length ?? 0;
+            cold.braziers.forEach((brazier, i) => {
+                if (cold.isLit(brazier, this.tick)) {
+                    const look = { ...BRAZIER_GLOW, radius: BRAZIER_LIGHT };
+                    const { midX: x, midY: y } = brazier;
+                    lights.push({ kind: "map", id: base + i, x, y, radius: BRAZIER_LIGHT, look });
+                }
+            });
+            cold.embers.forEach((ember, i) => {
+                const look = { ...BRAZIER_GLOW, radius: EMBERS_LIGHT };
+                const id = base + cold.braziers.length + i;
+                lights.push({
+                    kind: "map",
+                    id,
+                    x: ember.x,
+                    y: ember.y,
+                    radius: EMBERS_LIGHT,
+                    look,
+                });
+            });
+        }
         for (const enemy of this.enemies) {
             const look = enemy.def.light;
             if (look && !enemy.dead) {
@@ -18984,6 +19183,10 @@ export class Sim {
             }
         }
         radius = Math.max(radius, lighting.player ? MIN_PLAYER_LIGHT : 0);
+        // The realm's darker (the Shadow and Dark remixes together)
+        if (this.realm?.layer === 1 && this.remixes.length > 0) {
+            radius *= REALM_LIGHT;
+        }
         return look && radius > 0 ? { radius, look } : undefined;
     }
 

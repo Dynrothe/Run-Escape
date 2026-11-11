@@ -40,6 +40,7 @@
   "unlock.survive.in": "Survive {time} in {map}",
   "unlock.realm_caskets": "Open {count} caskets in the Shadow Realm in one run",
   "unlock.realm_caskets.in": "Open {count} caskets in the Shadow Realm in one run in {map}",
+  "unlock.pieces": "Find {pieces}",
   "unlock.survive.minutes.other": "{n} minutes",
   "unlock.survive.clock": "{minutes}:{seconds}",
   "unlock.raid_chest": "Find a {trophy} in its chest",

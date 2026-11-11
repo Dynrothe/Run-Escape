@@ -17,6 +17,7 @@ import {
 } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
+import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
 import { solveScabarasAddition, solveScabarasLights } from "../content/scabarasHelper";
 import {
     AKKHA,
@@ -86,6 +87,18 @@ const FROZEN_TINT = 0xa8d8ff;
 // How high an iron brazier's bowl is (ColdRuleDef.look), in tiles at its own size
 const BRAZIER_BOWL = 0.55;
 // A vent's puff, spread over its cloud (ColdRuleDef.vents): its middle and four round it
+// A remix's fires and ice are drawn this far round the camera's player (tiles): the play camera's
+// view, as the roots' (RootsView)
+const REMIX_VIEW = 24;
+const ICE_VIEW_X = 18;
+const ICE_VIEW_SOUTH = 12;
+const ICE_VIEW_NORTH = 16;
+// The Soulreaper axe's souls: soul runes circling this far round the head (tiles), this high (scene
+// units), and how many make it glow
+const SOUL_OBJ = 566;
+const SOULS_RADIUS = 0.55;
+const SOULS_HEIGHT = 250;
+const SOULS_MAX = 5;
 const VENT_PUFFS = [
     [0, 0],
     [-0.9, -0.9],
@@ -827,6 +840,7 @@ export class GameView {
         this.roots.submitActors(actors, sim, focus.x, focus.y);
         this.drawRealmHoles(actors, sim);
         this.drawCold(actors, sim);
+        this.drawRemix(actors, sim, focus.x, focus.y);
         this.trees = this.trees.filter((tree) => sim.tick - tree.start < TREE_TICKS);
         for (const tree of this.trees) {
             this.drawTree(actors, sim, tree);
@@ -861,6 +875,51 @@ export class GameView {
         }
     }
 
+    // What a remix puts on an older map (core/rules/remix.ts), round the camera: the Dark remix's
+    // fires, and the Frozen remix's ice over the map's own ground, a tile at a time (its open tiles)
+    private drawRemix(actors: ActorRenderer, sim: Sim, focusX: number, focusY: number): void {
+        const run = sim.remixRun;
+        if (!run) {
+            return;
+        }
+        const clientTicks = Math.floor((sim.tick / TICKS_PER_SECOND) * 50);
+        const fire = this.assets.get(getRealmLocKey(REMIX_FIRE_LOC));
+        if (fire && sim.realm?.layer !== 1) {
+            const anim = fire.anims[0];
+            for (const spot of run.fires) {
+                if (
+                    Math.abs(spot.x - focusX) > REMIX_VIEW ||
+                    Math.abs(spot.y - focusY) > REMIX_VIEW
+                ) {
+                    continue;
+                }
+                const frame = anim ? anim.getFrame(clientTicks + Math.floor(spot.x * 7), true) : 0;
+                const ground = this.ground(sim, spot.x, spot.y);
+                actors.draw(fire, anim, frame, spot.x, ground, spot.y, 0, { unlit: 1 });
+            }
+        }
+        const cold = sim.cold;
+        const ice = this.assets.get(getRealmLocKey(REMIX_ICE_LOC));
+        if (!cold || !ice || !run.remixes.includes("frozen")) {
+            return;
+        }
+        const grid = sim.grid;
+        const anim = ice.anims[0];
+        const x0 = Math.floor(focusX) - ICE_VIEW_X;
+        const y0 = Math.floor(focusY) - ICE_VIEW_SOUTH;
+        for (let y = y0; y <= Math.floor(focusY) + ICE_VIEW_NORTH; y++) {
+            for (let x = x0; x <= Math.floor(focusX) + ICE_VIEW_X; x++) {
+                if (cold.mask.at(x, y) === 0 || grid.isSolid(x, y)) {
+                    continue;
+                }
+                const frame = anim ? anim.getFrame(clientTicks + x * 13 + y * 7, true) : 0;
+                const cx = x + 0.5;
+                const cy = y + 0.5;
+                actors.draw(ice, anim, frame, cx, this.ground(sim, cx, cy), cy, 0);
+            }
+        }
+    }
+
     // The cold's (ColdRuleDef.look): braziers burning (shrinking as they gutter) or out, the gas
     // out of a vent (a wisp as it frosts over, then its cloud), a fire elite's embers, and the ice
     // block round whoever's frozen solid
@@ -875,7 +934,9 @@ export class GameView {
         const fire = this.assets.get(getRealmLocKey(look.fireLocId));
         const gutter = cold.def.braziers.gutter * TICKS_PER_SECOND;
         const clientTicks = Math.floor((tick / TICKS_PER_SECOND) * 50);
-        for (const brazier of cold.braziers) {
+        // The realm has none (the Frozen and Shadow remixes together)
+        const braziers = sim.realm?.layer === 1 ? [] : cold.braziers;
+        for (const brazier of braziers) {
             const { midX, midY } = brazier;
             const ground = this.ground(sim, midX, midY);
             if (bowl) {
@@ -2255,6 +2316,33 @@ export class GameView {
         });
         if (sim.lighting) {
             this.drawLantern(actors, sim, hero, x, y, pose.yaw);
+        }
+        this.drawSouls(actors, sim, hero, x, y);
+    }
+
+    // The Soulreaper axe's souls (WeaponDef.souls): one small soul rune a soul, circling the head,
+    // glowing at the full five
+    private drawSouls(actors: ActorRenderer, sim: Sim, hero: number, x: number, y: number): void {
+        const souls = sim.heroes[hero]?.souls ?? 0;
+        if (souls === 0) {
+            return;
+        }
+        const model = this.assets.get("obj:" + SOUL_OBJ);
+        if (!model) {
+            return;
+        }
+        const full = souls >= SOULS_MAX;
+        const head = this.ground(sim, x, y) - SOULS_HEIGHT;
+        for (let i = 0; i < souls; i++) {
+            const angle = sim.tick * 0.08 + (i / souls) * Math.PI * 2;
+            const sx = x + Math.cos(angle) * SOULS_RADIUS;
+            const sy = y + Math.sin(angle) * SOULS_RADIUS;
+            const bob = Math.sin(sim.tick * 0.15 + i) * 6;
+            actors.draw(model, model.anims[0], 0, sx, head + bob, sy, (sim.tick * 40) % 2048, {
+                scale: full ? 0.75 : 0.55,
+                unlit: 1,
+                flash: full ? 0.35 + 0.2 * Math.sin(sim.tick * 0.3) : 0,
+            });
         }
     }
 

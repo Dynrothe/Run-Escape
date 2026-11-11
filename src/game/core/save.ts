@@ -28,6 +28,7 @@ import {
 import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { cleanRelics } from "../content/relics";
+import { cleanRemixes, parseRemixKey, remixKey } from "../content/remixes";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getPageCost, getUpgradeCost } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
 import {
@@ -133,6 +134,9 @@ export type SaveData = {
     // An act's map id -> its best win (content/acts.ts): the quickest at the highest step it's
     // been won at, so an easier one's kept, with its step, until it's beaten at a harder one
     actBest?: Record<string, ActRecord>;
+    // A set of remixes on a map (content/remixes.ts, remixKey: "lumbridge:dark+frozen") -> its
+    // records, relic-free (act-2-fallen-empire.md, 8.3)
+    remixVictories?: Record<string, RemixRecord>;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // When the player last exported it (Date.now()), so an exported file says
@@ -149,6 +153,15 @@ export type EndlessRecord = { round: number; seconds: number; step?: number } & 
 
 // A win on an act's map: how long it took, at which step
 export type ActRecord = { seconds: number; step: number } & RecordSetup;
+
+// A set of remixes' records on a map (SaveData.remixVictories): wins, the quickest, wins on hard (its
+// gold tick), and the furthest endless run
+export type RemixRecord = {
+    wins: number;
+    seconds?: number;
+    hard?: number;
+    endless?: { round: number; seconds: number };
+};
 
 // A win at invocation points (SaveData.invocationBest)
 export type InvocationRecord = { points: number; seconds: number; relics?: string[] };
@@ -354,6 +367,29 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    if (data.remixVictories && typeof data.remixVictories === "object") {
+        for (const [key, record] of Object.entries(data.remixVictories)) {
+            const parsed = parseRemixKey(key);
+            if (!parsed || !MAP_BY_ID.has(parsed.mapId) || !record || typeof record !== "object") {
+                continue;
+            }
+            const clean: RemixRecord = { wins: Math.max(0, Math.floor(num(record.wins, 0))) };
+            const seconds = num(record.seconds, 0);
+            if (seconds > 0) {
+                clean.seconds = seconds;
+            }
+            const hard = Math.floor(num(record.hard, 0));
+            if (hard > 0) {
+                clean.hard = hard;
+            }
+            const round = Math.floor(num(record.endless?.round, 0));
+            if (round > 0) {
+                clean.endless = { round, seconds: num(record.endless?.seconds, 0) };
+            }
+            save.remixVictories ??= {};
+            save.remixVictories[remixKey(parsed.mapId, parsed.remixes)] = clean;
+        }
+    }
     if (data.invocationBest && typeof data.invocationBest === "object") {
         for (const [id, record] of Object.entries(data.invocationBest)) {
             const points = Math.floor(num(record?.points, 0));
@@ -555,6 +591,9 @@ export type RunSummary = {
     // A run's invocation points, and the player's relics (Sim's RunResult)
     points?: number;
     relics?: string[];
+    // Its remixes (content/remixes.ts): it sets their records (SaveData.remixVictories), not the
+    // map's own hard, act, invocation and endless ones
+    remixes?: string[];
     victory: boolean;
     seconds: number;
     level: number;
@@ -596,14 +635,20 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
         // A win with relics on still counts, but sets only the map's ordinary records
-        // (act-2-fallen-empire.md, 13.2): not hard mode's
-        if (isHardRecord(run)) {
+        // (act-2-fallen-empire.md, 13.2): not hard mode's. A remixed win sets its remixes' instead.
+        const remixed = isRemixed(run);
+        if (remixed) {
+            // An endless one's recorded as it ends, below
+            if (!run.endless) {
+                recordRemix(save, run);
+            }
+        } else if (isHardRecord(run)) {
             save.hardVictories[run.mapId] = (save.hardVictories[run.mapId] ?? 0) + 1;
         }
         if (run.expert && isRelicFree(run)) {
             save.expertVictories[run.mapId] = (save.expertVictories[run.mapId] ?? 0) + 1;
         }
-        if (!run.endless && isActRecord(save, run)) {
+        if (!remixed && !run.endless && isActRecord(save, run)) {
             save.actBest ??= {};
             save.actBest[run.mapId] = {
                 seconds: run.seconds,
@@ -611,7 +656,7 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
                 ...runSetup(run),
             };
         }
-        if (!run.endless && isInvocationRecord(save, run)) {
+        if (!remixed && !run.endless && isInvocationRecord(save, run)) {
             save.invocationBest ??= {};
             save.invocationBest[run.mapId] = {
                 points: run.points!,
@@ -623,7 +668,9 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     save.totalKills += run.kills;
     save.bestSeconds = Math.max(save.bestSeconds, run.seconds);
     save.bestLevel = Math.max(save.bestLevel, run.level);
-    if (run.endless && isEndlessRecord(save, run)) {
+    if (run.endless && isRemixed(run)) {
+        recordRemix(save, run);
+    } else if (run.endless && isEndlessRecord(save, run)) {
         const records = isHardRecord(run) ? save.hardEndlessBest : save.endlessBest;
         records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds, ...runSetup(run) };
         if (MAP_BY_ID.get(run.mapId)?.act) {
@@ -731,6 +778,51 @@ export function isEndlessRecord(save: SaveData, run: RunSummary): boolean {
     return !best || round > best.round || (round === best.round && run.seconds > best.seconds);
 }
 
+// A run with remixes on (content/remixes.ts)
+export function isRemixed(run: RunSummary): boolean {
+    return (run.remixes?.length ?? 0) > 0;
+}
+
+// A remixed run's records (SaveData.remixVictories): only a relic-free run's. A win counts once
+// (an endless run is recorded as it ends, won or not).
+function recordRemix(save: SaveData, run: RunSummary): void {
+    if (!isRelicFree(run) || isDevMap(run.mapId)) {
+        return;
+    }
+    const key = remixKey(run.mapId, cleanRemixes(run.remixes));
+    const record: RemixRecord = save.remixVictories?.[key] ?? { wins: 0 };
+    if (run.victory) {
+        record.wins++;
+        if (run.hard) {
+            record.hard = (record.hard ?? 0) + 1;
+        }
+        if (!run.endless && (record.seconds === undefined || run.seconds < record.seconds)) {
+            record.seconds = run.seconds;
+        }
+    }
+    if (run.endless) {
+        const round = run.round ?? 1;
+        const best = record.endless;
+        if (!best || round > best.round || (round === best.round && run.seconds > best.seconds)) {
+            record.endless = { round, seconds: run.seconds };
+        }
+    }
+    save.remixVictories ??= {};
+    save.remixVictories[key] = record;
+}
+
+// The most remixes a map's been beaten with at once (its card's badge), relic-free
+export function getRemixBest(save: SaveData, mapId: string): number {
+    let most = 0;
+    for (const [key, record] of Object.entries(save.remixVictories ?? {})) {
+        const parsed = parseRemixKey(key);
+        if (parsed?.mapId === mapId && record.wins > 0) {
+            most = Math.max(most, parsed.remixes.length);
+        }
+    }
+    return most;
+}
+
 // No relics on (content/relics.ts): hard mode's records are relic-free
 export function isRelicFree(run: RunSummary): boolean {
     return !run.relics || run.relics.length === 0;
@@ -787,6 +879,10 @@ export function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): 
             );
         case "realmCaskets":
             return run?.mapId === task.mapId && (run.realmCaskets ?? 0) >= task.count;
+        case "pieces":
+            return task.trophyIds.every(
+                (id) => save.trophies.includes(id) || (run?.trophies ?? []).includes(id),
+            );
     }
 }
 

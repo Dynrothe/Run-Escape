@@ -35,6 +35,7 @@ import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
@@ -254,7 +255,7 @@ export function getSpotAnimIds(): number[] {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
         add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim, weapon.breach?.spotAnim);
+        add(weapon.chain?.spotAnim, weapon.breach?.spotAnim, weapon.souls?.harvest.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -882,6 +883,8 @@ export class GameAssets {
                 }
             }
         }
+        // The remixes' fires in the dark and ice (content/remixes.ts)
+        realmLocs.add(REMIX_FIRE_LOC).add(REMIX_ICE_LOC);
         for (const locId of realmLocs) {
             requests.push({ kind: "loc", key: getRealmLocKey(locId), locId, animated: true });
         }
@@ -949,6 +952,8 @@ export class GameAssets {
             }
         }
         const objIds = new Set(getThrownObjIds());
+        // The Soulreaper axe's souls (GameView.drawSouls): soul runes
+        objIds.add(566);
         const locIds = new Set([CANNON_LOC]);
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {

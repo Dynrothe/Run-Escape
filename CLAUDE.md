@@ -56,6 +56,8 @@ go stale. Add anything that cost you time to work out.
 | The effect mask: tile effects on any map (ice)         | `core/world/EffectMask.ts`                                             |
 | The Scar: its enemies, bosses, the drained sea         | `content/scar.ts`, `scaperune/maps/scar.ts`                            |
 | A dimmed light, the only light, a boss's debris        | `PlayerEffectDef` dim, `EnemyDef.onlyLight`, `BossAttackDef.debris`    |
+| Remixes: Act II rules on older maps, stacked, records  | `content/remixes.ts`, `core/rules/remix.ts`, `RuleSet` in `RunRule.ts` |
+| The Soulreaper axe: souls, Harvest, its pieces         | `WeaponDef.souls`, `Sim.harvest`, `UnlockTask` pieces                  |
 | Adventurers' traits (Timber!, Shatter and the rest)    | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
 | Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
 | Fighting pets (Butch's leap)                           | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |

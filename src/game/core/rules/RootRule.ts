@@ -63,8 +63,8 @@ export class RootRule implements RunRule {
     // Can be rooted (open ground, outside the safe circle); and is the wood's edge, where fronts
     // start
     readonly open: Uint8Array;
-    private readonly seeds: number[] = [];
-    readonly openCount: number;
+    private seeds: number[] = [];
+    openCount: number;
     rootedCount = 0;
     readonly fronts: Front[] = [];
     readonly hearts: Heart[] = [];
@@ -188,6 +188,35 @@ export class RootRule implements RunRule {
                 this.seeds.push(i);
             }
         }
+    }
+
+    // Cells that can't take root after all (under a remix's ice, where roots don't grow: the
+    // Overgrown and Frozen remixes together): any of whose tiles test says so
+    exclude(test: (x: number, y: number) => boolean): void {
+        for (let i = 0; i < this.open.length; i++) {
+            if (!this.open[i]) {
+                continue;
+            }
+            const cx = i % this.cellsX;
+            const cy = (i - cx) / this.cellsX;
+            let hit = false;
+            for (let d = 0; d < CELL * CELL && !hit; d++) {
+                hit = test(
+                    this.baseX + cx * CELL + (d % CELL),
+                    this.baseY + cy * CELL + Math.floor(d / CELL),
+                );
+            }
+            if (hit) {
+                this.open[i] = 0;
+                this.openCount--;
+            }
+        }
+        this.seeds = this.seeds.filter((i) => this.open[i] === 1);
+    }
+
+    // Clears the roots radius tiles round x, y (a fire elite's embers burning them away)
+    burn(x: number, y: number, radius: number): void {
+        this.cutCircle(x, y, radius, 0, true);
     }
 
     cellAt(x: number, y: number): number {

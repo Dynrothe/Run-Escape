@@ -1,7 +1,7 @@
 // The world's English (locales/en/world.json): what enemies, bosses, maps, raids, random events,
 // the pumpkins and the floors say. The texts stay in the content's .ts files; this reads them off
 // the definitions. Keys: enemy.*, boss.*, fun.*, map.*, raid.*, event.*, nightmare.*, phosani.*,
-// zachariah.*, tob.*, pumpkin.*, floor.*, act.*, invocation.* (a run's), relic.*
+// zachariah.*, tob.*, pumpkin.*, floor.*, act.*, invocation.* (a run's), relic.*, remix.*
 //
 // The Sim emits these texts as they are in English and the drawing layer calls tl(text) on them,
 // so each one is here with the literal the Sim emits. Boss attacks' own names
@@ -15,6 +15,7 @@ import { MAPS } from "../../../src/game/content/maps";
 import { RAID_MAPS, RAID_SUPPLIES, RAID_SUPPLY_CHEST } from "../../../src/game/content/raids";
 import { RANDOM_EVENTS } from "../../../src/game/content/randomEvents";
 import { RELICS } from "../../../src/game/content/relics";
+import { REMIXES } from "../../../src/game/content/remixes";
 import { PUMPKIN_OUTCOMES } from "../../../src/game/content/trickOrTreat";
 import type { EnemyDef, MapDef, RandomEventDef } from "../../../src/game/content/types";
 import { createWardensFloor } from "../../../src/game/content/wardensFloor";
@@ -245,6 +246,12 @@ function invocationAndRelicMessages(): Messages {
         put(messages, `relic.${relic.id}.name`, relic.name);
         put(messages, `relic.${relic.id}.desc`, relic.description);
     }
+    // Remixes (content/remixes.ts): each one's word and what it does, and all four's
+    for (const remix of REMIXES) {
+        put(messages, `remix.${remix.id}.name`, remix.name);
+        put(messages, `remix.${remix.id}.description`, remix.description);
+    }
+    put(messages, "remix.fallen", "Fallen");
     return messages;
 }
 

@@ -103,8 +103,9 @@ export class RootsView {
     constructor(private readonly assets: GameAssets) {}
 
     submitActors(actors: ActorRenderer, sim: Sim, focusX: number, focusY: number): void {
-        const rule = sim.rule;
-        if (!(rule instanceof RootRule)) {
+        // The map's or a remix's; the realm has none (RuleSet)
+        const rule = sim.roots;
+        if (!rule || sim.realm?.layer === 1) {
             return;
         }
         const look = rule.def.look;

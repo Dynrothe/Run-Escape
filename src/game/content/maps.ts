@@ -662,10 +662,9 @@ export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter(
 // The acts' maps (MapDef.act, content/acts.ts): each act's open once its map's beaten, in any order
 export const ACT_MAPS: MapDef[] = MAPS.filter((map) => map.act);
 
-// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on campaign maps from the Desert on, and
-// on the acts' maps. A remix (act-2-fallen-empire.md, 8.3) will take them on any campaign map:
-// `remixed` is for it. Boss fights, raids, the Tombs (their own board), quests in parts, the seasonal
-// and fun maps don't.
+// Invocations (content/invocations.ts, RUN_INVOCATIONS) go on campaign maps from the Desert on, on
+// the acts' maps, and on any campaign map with a remix on (content/remixes.ts): `remixed`. Boss
+// fights, raids, the Tombs (their own board), quests in parts, the seasonal and fun maps don't.
 const FIRST_INVOCATION_MAP = CAMPAIGN_MAPS.findIndex((map) => map.id === "desert");
 export function takesInvocations(map: MapDef, remixed = false): boolean {
     if (map.act) {

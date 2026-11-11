@@ -920,6 +920,78 @@ For a player who's bought everything, each of these changes what a run is like:
 
 The act's ending is the last: the middle card's story, told when the fourth Awakened falls.
 
+### 8.7 As built: remixes and the Soulreaper axe (2026-11-11)
+
+Built in #159 as build order steps 5, 7, 10 and 13 together (the four rules were already map-agnostic, so one
+pull of work put all four on). Where it differs from 8.2 and 8.3, and why:
+
+- **What a remix is in the code.** `content/remixes.ts` has the four (which Act II map each comes from, its word,
+  its elites), which maps take them (`getMapRemixes`: every first-campaign survival map, and the Act II maps but
+  their own) and when they're open (`isRemixOpen`: its Act II map beaten; on an Act II map, all four beaten). What
+  one puts on a run is `core/rules/remix.ts` (`buildRemixRun`), done by the Sim as it starts, on the map's own grid
+  and by the run's seed, so every co-op copy places the same: each Act II rule's def with this map's places and
+  numbers in it, the map's waves with the remixes' crowds in, its events with their elites, and the Dark remix's
+  lighting. Several rules on one run are one `RuleSet` (`RunRule.ts`): every hook goes to each. A run without
+  remixes builds nothing new, so every pinned run plays as it did (`runHash.test.ts`).
+- **The switches** are on the map's card, under its records (`RemixRow` in `GameUi.tsx`), not in the bottom bar
+  beside Hard and Endless: on a phone that bar is full. A switch for each of the four, greyed until open (its
+  tooltip says what opens it; on an Act II map its own rule's says it's the map's own), the records of the set
+  that's on under them, and a badge for the most beaten at once (Fallen for all four). The run's button says
+  the set: "Enter Frozen Dark Lumbridge", "Enter Fallen Inferno" (a leading "The" dropped). They're the
+  screen's, not the save's: picking another map keeps those that are open on it.
+- **How hard on each map**: `getRemixToughness`, 0.7 on Lumbridge rising evenly to 1 on the Inferno (and the Act
+  II maps). Roots creep that much slower (their spreads' seconds divided by it), sanity drains and the cold rises
+  that much slower (times it), and the player's light is that much bigger (divided by it: 7.1 tiles on Lumbridge,
+  5 on the Inferno). The Dark's ambient goes from 0.36 to the Scar's 0.3.
+- **Overgrown**: the Stranglewood's roots, from each map's blocked ground (water, buildings, walls: the wood),
+  never within 10 tiles of the middle of an Act II map's final fight; no safe circle on campaign maps, whose final
+  bosses can come anywhere. Elites: three Strangled Bears (4:00, 8:40, 13:00), whose trail roots.
+- **Shadow**: the realm as the palette (brightness 0.55 and Lassar's violet wash), Lassar's puddles, sanity,
+  souls, portal, risers and realm elites as they are. Puddles open where Lassar's do (8 to 12 tiles off), so on a
+  walled map one can be past a wall; the realm's waves are Lassar's realm waves.
+- **Frozen**: Ghorrock's cold, with six braziers placed by the seed on open, outdoor ground joined to the start,
+  within 40 tiles of it and 20 apart (10 if a cramped map can't fit six), and twelve ice pools (2 to 5 tiles
+  across each way) within 60. No gas vents: they're Ghorrock's scenery, not something to place. The braziers
+  don't block (Ghorrock's are stand-ins in the map). The ice is drawn a tile at a time over the map's own ground,
+  only where it can be walked, as the cache's slippery Ice (loc 21148, animated). Elites: four pyrefiends and two
+  flaming pyrelords, whose embers relight braziers. The final boss still puts every brazier out.
+- **Dark**: the Scar's lighting, with nine fires (loc 5249, lights of 3 that weapons aim by) placed by the seed
+  within 60 tiles of the start and 15 apart, two lanterns by the start and lanterns among the power-ups. The
+  "lights from what's already there" (lava, lamps) aren't in: the sim doesn't have the map's scenery, and lights
+  weapons aim by have to be the sim's, so fires are placed instead. Elites: three light leeches.
+- **The crowd**: each wave keeps its size and cap; the remixes' enemies (wave i of each one's Act II map, all paced
+  alike) take a quarter of its weight between them, split evenly, so one remix or four, a quarter of what comes is
+  theirs. Their hitpoints are the map's difficulty's, on the same curve as the map's own.
+- **Pairs**, as 8.3's table, all built: roots don't take on ice (`RootRule.exclude`) and a fire elite's embers
+  burn them 2 tiles round; in the realm the roots stand still and don't slow, hurt or get cut, and aren't drawn;
+  in the realm there are no braziers (not drawn, no warmth) and the cold rises 1.5 times as fast; under the dark a
+  lit brazier is a light of 4 and embers of 2; and in the realm the player's light is 0.8 of its size (4 not 5).
+  Roots in the dark are drawn as the lighting draws them; their sprouts aren't drawn unlit (left as they are).
+  With all four, sanity and cold are the two bars under hitpoints already.
+- **Coins**: 0.3 for one, 0.25 for each more, added to hard mode's or the invocations', and Act II's steps, under
+  the +300% cap. A remixed map takes invocations whatever it is (`takesInvocations(map, true)`): Lumbridge, the Barrows and
+  the Wilderness get the board when remixed.
+- **Records** (`SaveData.remixVictories`, keyed `lumbridge:dark+frozen`): wins, the best time, wins on hard (the
+  gold tick) and the best endless round, relic-free. A remixed win counts as a win of the map (its tick, quests),
+  but sets none of the map's own hard, act, invocation or endless records: they stay the plain map's. No
+  `SAVE_VERSION` bump.
+- **Co-op**: the host's remixes go in `GameStart.remixes` (as its invocations), each copy's Sim keeping those the
+  map takes. The lobby doesn't show them yet.
+- **The bot** (`simulate-run.ts`): `REMIX=overgrown,frozen` or `REMIX=all`. Its goals for the realm and the cold now
+  walk round walls (`wayTo`, the flow field), and it picks a brazier by the walk to it: on an old map a straight line
+  to one is often through a castle.
+
+**The Soulreaper axe** (`soulreaper_axe`, object 28338): as 8.2. It's opened by a new unlock task, `pieces`, all
+four of the trophies found (they already dropped from the final bosses); the Scar's card lists it. Its swing is the
+godswords' (seq 7045); OSRS's own axe animations weren't looked up. `WeaponDef.souls` holds its numbers; a kill by
+anything within 4 tiles of a hero holding it gives that hero a soul (kills the Harvest makes count too, so a big
+spin can leave one). Each soul is +8% to its hits. Harvest (`Sim.harvest`) is a full circle 3.5 tiles round (with
+the area stat), three times the swing's damage plus 0.2 a level after the first, bosses and elites taking it a
+second time, its price a hitsplat of 8% of max hitpoints (never below 1, never while under 20%), with the Dragon
+axe special's spot animation (479) on the player. At level 5 each kill it makes heals 1, up to the price. The souls
+are drawn as soul runes (object 566) circling the head, bigger and flashing at five: no Lost Soul model is loaded
+on every map, and a rune reads as a soul.
+
 ## 9. Invocations and Relics
 
 Both are in, and in the first build (decided): they ship with the Stranglewood, before the other maps (section 10).

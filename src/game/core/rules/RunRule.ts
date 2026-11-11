@@ -81,3 +81,102 @@ export function createRunRule(
             return new ColdRule(def, grid, ticksPerSecond);
     }
 }
+
+// Several rules on one run (remixes stacked, act-2-fallen-empire.md 8.3), as one: every hook goes to
+// each. How they combine: while the party's in the realm the roots stand still, don't slow or hurt,
+// and aren't cut (the realm has none; the world waits). The cold's own pairings are the sim's
+// (Sim.stepCold, Sim.stepLights), and roots don't grow on ice (RootRule.exclude, set up by the sim).
+export class RuleSet implements RunRule {
+    readonly def: RunRuleDef;
+    private readonly roots?: RootRule;
+    private readonly realm?: RealmRule;
+
+    constructor(readonly rules: RunRule[]) {
+        this.def = rules[0].def;
+        this.roots = rules.find((rule): rule is RootRule => rule instanceof RootRule);
+        this.realm = rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
+    }
+
+    // The rules that are in play where the party is: the roots aren't in the realm
+    private get live(): RunRule[] {
+        return this.realm?.layer === 1 && this.roots
+            ? this.rules.filter((rule) => rule !== this.roots)
+            : this.rules;
+    }
+
+    step(host: RuleHost): void {
+        for (const rule of this.live) {
+            rule.step(host);
+        }
+    }
+
+    playerPace(x: number, y: number): number {
+        let pace = 1;
+        for (const rule of this.live) {
+            pace *= rule.playerPace(x, y);
+        }
+        return pace;
+    }
+
+    enemyPace(x: number, y: number): number {
+        let pace = 1;
+        for (const rule of this.live) {
+            pace *= rule.enemyPace(x, y);
+        }
+        return pace;
+    }
+
+    hurtsAt(x: number, y: number): boolean {
+        return this.live.some((rule) => rule.hurtsAt(x, y));
+    }
+
+    onHit(x: number, y: number): void {
+        for (const rule of this.live) {
+            rule.onHit(x, y);
+        }
+    }
+
+    onSwing(
+        x: number,
+        y: number,
+        dirX: number,
+        dirY: number,
+        reach: number,
+        arc: number,
+        width: number,
+    ): void {
+        for (const rule of this.live) {
+            rule.onSwing(x, y, dirX, dirY, reach, arc, width);
+        }
+    }
+
+    onKill(uid: number, x: number, y: number): void {
+        for (const rule of this.live) {
+            rule.onKill(uid, x, y);
+        }
+    }
+
+    plant(x: number, y: number, radius: number): void {
+        for (const rule of this.live) {
+            rule.plant(x, y, radius);
+        }
+    }
+
+    plantHeart(host: RuleHost, x: number, y: number): void {
+        for (const rule of this.live) {
+            rule.plantHeart(host, x, y);
+        }
+    }
+
+    pickSpots(x: number, y: number, reach: number, count: number): { x: number; y: number }[] {
+        return this.live.flatMap((rule) => rule.pickSpots(x, y, reach, count)).slice(0, count);
+    }
+
+    hash(): number {
+        let hash = 0x811c9dc5;
+        for (const rule of this.rules) {
+            hash = (Math.imul(hash, 16777619) ^ rule.hash()) >>> 0;
+        }
+        return hash;
+    }
+}

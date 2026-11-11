@@ -51,7 +51,7 @@ import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
 import { ColdRule } from "../../src/game/core/rules/ColdRule";
 import { RealmRule } from "../../src/game/core/rules/RealmRule";
-import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
+import { CELL } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
 import { makeGrid } from "../../src/game/core/world/testGrid";
@@ -87,6 +87,11 @@ const invocations =
             : RUN_INVOCATIONS.filter((i) => !i.hard).map((i) => i.id)
         : (process.env.INVOCATIONS ?? "").split(",").filter(Boolean);
 const relics = (process.env.RELICS ?? "").split(",").filter(Boolean);
+// Remixes (content/remixes.ts) on the map: REMIX=overgrown,shadow,frozen,dark (or all)
+const remixes =
+    process.env.REMIX === "all"
+        ? ["overgrown", "shadow", "frozen", "dark"]
+        : (process.env.REMIX ?? "").split(",").filter(Boolean);
 const characters = characterArg ? characterArg.split(",") : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
 // Cells round it, each way, the bot looks at for roots to keep off
@@ -202,7 +207,7 @@ function botMove(sim: Sim): { x: number; y: number } {
     let threat = 0;
     // A map's root hearts (MapDef.rule) are worth walking up to and cutting down, as a person
     // would: they make the roots round them grow
-    const heart = sim.rule instanceof RootRule ? sim.rule.def.hearts.enemyId : undefined;
+    const heart = sim.roots?.def.hearts.enemyId;
     for (const enemy of sim.enemies) {
         if (enemy.dead) {
             continue;
@@ -283,8 +288,8 @@ function botMove(sim: Sim): { x: number; y: number } {
     }
     // Off the roots (MapDef.rule): a person steps off what slows and hurts them, the nearer the
     // more, and harder once they're on it
-    if (sim.rule instanceof RootRule) {
-        const rule = sim.rule;
+    if (sim.roots && sim.realm?.layer !== 1) {
+        const rule = sim.roots;
         const on = rule.isRooted(player.x, player.y);
         let rx = 0;
         let ry = 0;
@@ -312,8 +317,10 @@ function botMove(sim: Sim): { x: number; y: number } {
     if (realm && REALM_DIVES) {
         const goal = realmGoal(sim, realm);
         if (goal) {
-            const gx = goal.x - player.x;
-            const gy = goal.y - player.y;
+            // Round walls, by the walk to it (an older map's puddle can be past one)
+            const way = wayTo(sim, goal.x, goal.y);
+            const gx = way.x - player.x;
+            const gy = way.y - player.y;
             const d = Math.hypot(gx, gy);
             if (d > 0.05) {
                 ax += (gx / d) * goal.pull;
@@ -327,8 +334,9 @@ function botMove(sim: Sim): { x: number; y: number } {
     if (cold && COLD_SEEKS) {
         const goal = coldGoal(sim, cold);
         if (goal) {
-            const gx = goal.x - player.x;
-            const gy = goal.y - player.y;
+            const way = wayTo(sim, goal.x, goal.y);
+            const gx = way.x - player.x;
+            const gy = way.y - player.y;
             const d = Math.hypot(gx, gy);
             if (d > 0.05) {
                 ax += (gx / d) * goal.pull;
@@ -492,7 +500,11 @@ function coldGoal(sim: Sim, cold: ColdRule): { x: number; y: number; pull: numbe
     for (const brazier of cold.braziers) {
         // An out one costs a relight: count it further off
         const lit = cold.isLit(brazier, sim.tick);
-        const d = Math.hypot(brazier.midX - player.x, brazier.midY - player.y) + (lit ? 0 : 10);
+        const walk = walkTiles(sim, brazier.midX, brazier.midY);
+        if (walk === undefined) {
+            continue;
+        }
+        const d = walk + (lit ? 0 : 10);
         if (d < bestD) {
             bestD = d;
             // Beside it, not into it
@@ -995,6 +1007,7 @@ function runOnce(characterId: string, seed: number) {
         invocations,
         pet,
         relics,
+        remixes,
         // A fight in parts (MapDef.stages): which, STAGE=0 for the first
         stage: parseInt(process.env.STAGE ?? "0"),
     });
@@ -1244,8 +1257,8 @@ function runOnce(characterId: string, seed: number) {
                     `coins ${String(sim.coins).padStart(4)}  ${weapons} | ${passives} | ${gear}` +
                     // How much of the ground's rooted (MapDef.rule), and how long the bot's spent
                     // on it
-                    (sim.rule instanceof RootRule
-                        ? `  roots ${Math.round(sim.rule.cover * 100)}% (on ${Math.round((100 * rootTicks) / Math.max(1, sim.tick))}%)`
+                    (sim.roots
+                        ? `  roots ${Math.round(sim.roots.cover * 100)}% (on ${Math.round((100 * rootTicks) / Math.max(1, sim.tick))}%)`
                         : "") +
                     (sim.realm
                         ? `  realm ${dives} dives, ${lapses} lapses, ${Math.round((100 * realmTicks) / Math.max(1, sim.tick))}% there`
@@ -1411,6 +1424,7 @@ function runParty(characterId: string, seed: number) {
             pet,
             relics,
         })),
+        remixes,
     });
     const maxTicks = (endless ? 90 * 60 : runSeconds()) * TICKS_PER_SECOND;
     const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));

@@ -264,6 +264,30 @@ version and how to run it.
   They're on campaign and Act II maps, each player's own in co-op, and off in boss fights, raids and
   the Tombs. A win with a relic on counts, but sets no hard-mode record; records show the relics
   they were set with.
+- **Remixes**: beating an Act II map opens its rule on every first-campaign map, a switch for each
+  on the map's card (under its records): Overgrown (the Stranglewood's roots, creeping in from
+  blocked ground), Shadow (Lassar's puddles into the Shadow Realm, drawn as the map darker and
+  washed violet), Frozen (Ghorrock's cold, six braziers and pools of ice placed by the run's seed
+  round the start, no vents) and Dark (the Scar's dark, with fires placed by the seed, lanterns
+  and light leeches for light). Any can be on at once; all four is Fallen. Each rule is gentler
+  on the earlier maps: 0.7 of its Act II strength on Lumbridge, up to all of it on the Inferno.
+  Each brings its Act II map's enemies, a quarter of the crowd between them, and a few elites
+  (Strangled Bears, pyrefiends, light leeches). Paired, they mind each other: roots don't grow on
+  ice and embers burn them, the realm has no roots or braziers and its cold rises half as fast
+  again, braziers and embers are lights in the dark, and your light's smaller in the realm. +30%
+  coins for one, +25% for each more. A remixed map takes invocations whatever map it is. Each set
+  of remixes on each map keeps its own records (wins, the best time, wins on hard, the best
+  endless round), relic-free: a win with a relic on counts as a win of the map but no remix
+  record; and a remixed win sets none of the map's hard, act or invocation records. The card
+  shows the badge for the most remixes beaten at once there. Once all four Act II maps are beaten
+  they take each other's remixes (not their own). In co-op the host's remixes count.
+- **The Soulreaper axe**: a Rare melee weapon, offered only to melee adventurers, once all four of
+  its pieces are found (one from each Act II final boss, the first time its map's beaten). A sweep
+  ahead, 42 damage every 1.9 s. Kills within 4 tiles give it souls, up to 5 (circling your head),
+  each +8% to its hits. At 5, the next swing with anything in reach is a Harvest: a spin 3.5
+  tiles round for three times a swing's damage (+20% a level after the first), bosses and elites
+  hit twice, costing 8% of your max hitpoints (never below 1, and not while you're under 20%).
+  At level 5 each kill it makes heals 1, up to what it cost.
 - **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
   would drop only has a 25% chance to, and only 25 can lie on the ground at once. A round's master
   casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there

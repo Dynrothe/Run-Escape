@@ -70,6 +70,17 @@ import {
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { RELIC_BY_ID, relicName } from "../content/relics";
+import {
+    REMIX_BY_ID,
+    REMIX_IDS,
+    RemixId,
+    getMapRemixes,
+    isRemixOpen,
+    remixDescription,
+    remixKey,
+    remixName,
+    remixPrefix,
+} from "../content/remixes";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
@@ -87,6 +98,7 @@ import {
     getFightStage,
     getNextUpgradeCost,
     getReachedStages,
+    getRemixBest,
     getSkillCoins,
     importSave,
     isEndlessUnlocked,
@@ -1010,9 +1022,9 @@ function TitleHint(): JSX.Element {
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
     const [board, setBoard] = useState(false);
-    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET)
-    const runBoard = takesInvocations(map);
-    const shownMapName = mapName(getMap(ui.mapId));
+    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET), or remixed
+    const runBoard = takesInvocations(map, ui.remixes.length > 0);
+    const shownMapName = remixedMapName(map, ui.remixes);
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
     const expertShown = map.raid !== undefined && ui.coop.status === "offline";
     const endlessShown = ui.endless && !map.fun && !map.tombs;
@@ -1805,6 +1817,10 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 save={save}
                 map={getMap(peek ?? ui.mapId)}
                 picked={(peek ?? ui.mapId) === ui.mapId ? ui.fightStage : undefined}
+                remixes={(peek ?? ui.mapId) === ui.mapId ? ui.remixes : undefined}
+                onRemix={
+                    (peek ?? ui.mapId) === ui.mapId ? (id) => client.toggleRemix(id) : undefined
+                }
                 onPick={
                     (peek ?? ui.mapId) === ui.mapId ? (s) => client.pickFightStage(s) : undefined
                 }
@@ -1947,6 +1963,113 @@ function InvocationDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.
     );
 }
 
+// A map with remixes in its name: theirs before it ("Frozen Lumbridge", "Fallen Inferno")
+export function remixedMapName(map: MapDef, remixes: readonly RemixId[]): string {
+    const name = mapName(map);
+    if (remixes.length === 0) {
+        return name;
+    }
+    return t("ui.remix.map_name", {
+        remixes: remixPrefix(remixes),
+        map: getLang() === "en" ? name.replace(/^The /, "") : name,
+    });
+}
+
+// Remixes on the map's card (content/remixes.ts): a switch for each the map takes, lit once it's
+// open; the records of the set that's on, and a badge for the most beaten at once there
+function RemixRow({
+    save,
+    map,
+    on,
+    onToggle,
+}: {
+    save: SaveData;
+    map: MapDef;
+    on: RemixId[];
+    onToggle: (id: RemixId) => void;
+}): JSX.Element | null {
+    const ids = getMapRemixes(map);
+    const open = ids.filter((id) => isRemixOpen(save.mapVictories, map, id));
+    if (open.length === 0) {
+        return null;
+    }
+    const record = on.length > 0 ? save.remixVictories?.[remixKey(map.id, on)] : undefined;
+    const best = getRemixBest(save, map.id);
+    const setName = remixPrefix(on);
+    return (
+        <div className="ui-remixes">
+            <div className="ui-remix-row">
+                <span className="ui-remix-label">{t("ui.remix.label")}</span>
+                {REMIX_IDS.map((id) => {
+                    const takes = ids.includes(id);
+                    const isOpen = open.includes(id);
+                    const lit = on.includes(id);
+                    const from = getMap(REMIX_BY_ID.get(id)!.from);
+                    return (
+                        <button
+                            key={id}
+                            className={
+                                "ui-button ui-button-small ui-remix" +
+                                (lit ? " ui-remix-on" : "") +
+                                (isOpen ? "" : " ui-remix-locked")
+                            }
+                            disabled={!isOpen}
+                            aria-pressed={lit}
+                            title={
+                                !takes
+                                    ? t("ui.remix.own", { name: remixName(id) })
+                                    : isOpen
+                                      ? remixDescription(id)
+                                      : map.act
+                                        ? t("ui.remix.locked_act")
+                                        : t("ui.remix.locked", { map: mapName(from) })
+                            }
+                            onClick={(e) => {
+                                onToggle(id);
+                                e.currentTarget.blur();
+                            }}
+                        >
+                            <ItemIcon objId={REMIX_BY_ID.get(id)!.iconObjId} size={18} />
+                            {remixName(id)}
+                        </button>
+                    );
+                })}
+                {best > 0 && (
+                    <span
+                        className={
+                            "ui-remix-badge" + (best === REMIX_IDS.length ? " ui-remix-fallen" : "")
+                        }
+                        title={t("ui.remix.badge_tooltip", { count: best })}
+                    >
+                        {best === REMIX_IDS.length
+                            ? remixPrefix(REMIX_IDS)
+                            : `${best}/${REMIX_IDS.length}`}
+                    </span>
+                )}
+            </div>
+            {on.length > 0 && (
+                <div className="ui-card-style">
+                    {record && record.wins > 0
+                        ? t("ui.remix.record", {
+                              name: setName,
+                              times: tp("ui.map.beaten_times", record.wins),
+                              time: record.seconds ? formatTime(record.seconds) : "-",
+                          }) +
+                          (record.hard
+                              ? ` ${t("ui.remix.on_hard", { times: tp("ui.map.beaten_times", record.hard) })}`
+                              : "")
+                        : t("ui.remix.none_yet", { name: setName })}
+                    {record?.endless &&
+                        ` ${t("ui.remix.endless", {
+                            round: record.endless.round,
+                            time: formatTime(record.endless.seconds),
+                        })}`}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // What a record was set with, after it: its invocation points and relics (save.ts, RecordSetup)
 function RecordSetupText({ record }: { record: RecordSetup }): JSX.Element | null {
     const parts = [
@@ -2003,9 +2126,14 @@ function MapDetails({
     map,
     picked,
     onPick,
+    remixes,
+    onRemix,
 }: {
     save: SaveData;
     map: MapDef;
+    // The selected map's remixes on, and their switches
+    remixes?: RemixId[];
+    onRemix?: (id: RemixId) => void;
     // A fight in parts: the part picked to play, and picking one (the selected map's only)
     picked?: number;
     onPick?: (stage: number | undefined) => void;
@@ -2090,6 +2218,9 @@ function MapDetails({
                     )}
                     {unlocked && <ActDetails save={save} map={map} />}
                     {unlocked && <InvocationDetails save={save} map={map} />}
+                    {unlocked && remixes && onRemix && (
+                        <RemixRow save={save} map={map} on={remixes} onToggle={onRemix} />
+                    )}
                     {endless && (
                         <div className="ui-card-style">
                             {t("ui.map.endless_best", {

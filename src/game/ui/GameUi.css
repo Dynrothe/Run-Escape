@@ -3305,3 +3305,51 @@
     margin-top: 6px;
     color: var(--ui-white);
 }
+
+/* Remixes on a map's card (content/remixes.ts): a switch for each, lit when it's on */
+.ui-remixes {
+    margin-top: 2px;
+}
+
+.ui-remix-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px 4px;
+}
+
+.ui-remix-label {
+    color: var(--ui-yellow, #ffff00);
+    margin-right: 2px;
+}
+
+.ui-remix {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 5px 1px 2px;
+    color: #9a9a9a;
+    font-size: 12px;
+}
+
+.ui-remix-on {
+    color: var(--ui-green);
+    border-color: var(--ui-green);
+}
+
+.ui-remix-locked {
+    opacity: 0.4;
+}
+
+.ui-remix-badge {
+    margin-left: 4px;
+    padding: 0 4px;
+    border: 1px solid #a08040;
+    color: #ffb000;
+    font-size: 11px;
+}
+
+.ui-remix-fallen {
+    border-color: #ffd700;
+    color: #ffd700;
+}

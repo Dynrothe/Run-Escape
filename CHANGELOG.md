@@ -57,6 +57,15 @@ the version in the corner).
 - The Lantern-bearer, for beating the Scar: Fire Strike, and Lantern, enemies close to her taking
   20% more and slowed; where it's dark, her light's twice the size. Beating the Leviathan also
   finds the Leviathan's lure.
+- Remixes: beating an Act II map puts its rule on every first-campaign map, switched on from the
+  map's card: Overgrown (roots creep in), Shadow (puddles into the Shadow Realm), Frozen (the
+  cold, with braziers and ice) and Dark (darkness, weapons only aim at what's lit). Any of them
+  can be on at once, all four is "Fallen", and each set has its own records on the card. They
+  pay +30% coins for one and +25% for each more, take invocations on every map, and once all
+  four Act II maps are beaten they go on each other's maps too.
+- The Soulreaper axe, for melee adventurers, once you've found all four of its pieces from Act
+  II's final bosses: kills near you give it souls, each a harder hit, and at five its next swing
+  is a Harvest, a spin all round you that costs you a few hitpoints.
 - Butch, Awakened Vardorvis's pet, the first pet that fights: take him along and every few
   seconds he leaps on an enemy near you, hitting everything round where he lands.
 

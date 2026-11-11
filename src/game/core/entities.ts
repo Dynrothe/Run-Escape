@@ -1068,6 +1068,8 @@ type SimEventBody =
     | { type: "bossAbsorbBlast"; x: number; y: number; absorbed: number }
     // The player's controls were shuffled, or came back
     | { type: "playerCursed"; cursed: boolean }
+    // The Soulreaper axe's Harvest, a spin all round them (WeaponDef.souls)
+    | { type: "harvest"; x: number; y: number }
     | {
           type: "slash";
           x: number;

@@ -327,5 +327,15 @@
     "ui.title.stat.runs": "Runs",
     "ui.title.stat.wins": "Wins",
     "ui.title.tagline": "Survive fifteen minutes and beat the boss. Wins and tasks bring new places and adventurers.",
-    "ui.title.whats_new": "v{version} · What's new"
+    "ui.title.whats_new": "v{version} · What's new",
+    "ui.remix.label": "Remixes",
+    "ui.remix.map_name": "{remixes} {map}",
+    "ui.remix.own": "{name}: this map's own rule",
+    "ui.remix.locked": "Beat {map} to open it",
+    "ui.remix.locked_act": "Beat all four Act II maps to open remixes here",
+    "ui.remix.badge_tooltip": "Most remixes beaten at once here: {count}",
+    "ui.remix.record": "{name}: beaten {times}, best {time}",
+    "ui.remix.on_hard": "(on hard {times})",
+    "ui.remix.endless": "Endless best: round {round} ({time})",
+    "ui.remix.none_yet": "{name}: not beaten yet"
 }

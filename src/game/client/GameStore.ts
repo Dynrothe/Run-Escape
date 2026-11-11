@@ -1,4 +1,5 @@
 import { Rarity } from "../content/rarity";
+import type { RemixId } from "../content/remixes";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
@@ -429,6 +430,8 @@ export type UiSnapshot = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // The remixes switched on for it (content/remixes.ts), those open on it
+    remixes: RemixId[];
     // A fight in parts: the part picked to play (one already reached, MapDef.stages), till the run
     // it's for ends; the next not beaten when unset
     fightStage?: number;
@@ -497,6 +500,7 @@ export class GameStore {
             mapId: "lumbridge",
             endless: false,
             hard: false,
+            remixes: [],
             expert: false,
             overlay: "none",
             coop: OFFLINE,

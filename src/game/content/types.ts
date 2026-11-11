@@ -1793,6 +1793,26 @@ export type WeaponDef = {
     // same level (the godsword's blade takes a hilt): the level up's next
     // choice is the pick, each shown as its hilt
     hilts?: { level: number; into: { weaponId: string; hiltObjId: number }[] };
+    // Sweeps: kills by anything within reach tiles of the player give a soul, up to max, each
+    // making its hits damage more. At max, the next swing with something in reach is a Harvest:
+    // a full spin harvest.radius tiles round for harvest.damage times a swing's damage (plus
+    // perLevel a level after the first), bosses and elites hit twice, spotAnim on the player,
+    // costing cost of their max hitpoints (never below 1, and not while under floor of them).
+    // From healsAt, each kill it makes heals 1, up to what it cost. (The Soulreaper axe.)
+    souls?: {
+        reach: number;
+        max: number;
+        damage: number;
+        harvest: {
+            radius: number;
+            damage: number;
+            perLevel: number;
+            cost: number;
+            floor: number;
+            healsAt: number;
+            spotAnim: number;
+        };
+    };
 };
 
 // An enchanted bolt's effect, when the Armadyl crossbow's bolt procs one
@@ -1882,7 +1902,10 @@ export type UnlockTask =
     // Find this trophy in the raid's chest on the map (trophies.ts says when it can come)
     | { kind: "raidChest"; mapId: string; trophyId: string }
     // Open this many caskets in one run on the map, in its Shadow Realm (RealmRuleDef)
-    | { kind: "realmCaskets"; mapId: string; count: number };
+    | { kind: "realmCaskets"; mapId: string; count: number }
+    // Have found every one of these trophies (an item's pieces: the Soulreaper axe's); mapId is
+    // the map whose card lists it
+    | { kind: "pieces"; mapId: string; trophyIds: string[] };
 
 // What a quest asks for, counted over every run since quests came in
 export type QuestObjective =

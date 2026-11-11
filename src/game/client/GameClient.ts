@@ -43,6 +43,7 @@ import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity, rarityName } from "../content/rarity";
 import { RelicTier, cleanRelics, getOpenRelicTiers, pickRelic } from "../content/relics";
+import { RemixId, cleanRemixes, isRemixOpen } from "../content/remixes";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
@@ -57,6 +58,7 @@ import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../c
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
+import { remixContent } from "../core/rules/remix";
 import {
     NewerSave,
     SaveData,
@@ -1033,7 +1035,25 @@ export class GameClient implements GameFrameHandler {
             endless: snapshot.endless && isEndlessUnlocked(this.save, mapId),
             hard: snapshot.hard && isHardUnlocked(this.save, mapId),
             expert: snapshot.expert && isExpertUnlocked(this.save, mapId),
+            remixes: this.openRemixes(mapId, snapshot.remixes),
         });
+    }
+
+    // Of these remixes, those open on the map (content/remixes.ts, isRemixOpen)
+    private openRemixes(mapId: string, ids: readonly string[]): RemixId[] {
+        const map = getMap(mapId);
+        return cleanRemixes(ids).filter((id) => isRemixOpen(this.save.mapVictories, map, id));
+    }
+
+    // A remix's switch on the map's card, once it's open there. In a room the host's go on the run
+    // (GameStart.remixes), as their invocations do.
+    toggleRemix(id: RemixId): void {
+        const { mapId, remixes } = this.store.getSnapshot();
+        if (remixes.includes(id)) {
+            this.store.set({ remixes: remixes.filter((r) => r !== id) });
+        } else if (isRemixOpen(this.save.mapVictories, getMap(mapId), id)) {
+            this.store.set({ remixes: cleanRemixes([...remixes, id]) });
+        }
     }
 
     // Endless runs, for a map that's been beaten (the room's, hosting one)
@@ -1227,6 +1247,7 @@ export class GameClient implements GameFrameHandler {
             this.sounds.denied();
             return;
         }
+        const remixes = this.openRemixes(map.id, this.store.getSnapshot().remixes);
         // The room's modes, which the relay checked everyone has (or takes
         // anyone for, with anyMap), so the run is what the lobby said
         const { anyMap } = this.store.getSnapshot().coop;
@@ -1241,9 +1262,12 @@ export class GameClient implements GameFrameHandler {
             ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             stage: getFightStage(this.save, map.id),
             // The Tombs' raid level is the host's, as the invocation board set it, and so are a
-            // run's invocations (the room's Hard is hard mode's)
+            // run's invocations (the room's Hard is hard mode's), and its remixes
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
-            ...(takesInvocations(map) && { invocations: this.save.runInvocations ?? [] }),
+            ...(takesInvocations(map, remixes.length > 0) && {
+                invocations: this.save.runInvocations ?? [],
+            }),
+            ...(remixes.length > 0 && { remixes }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1655,9 +1679,10 @@ export class GameClient implements GameFrameHandler {
         mapId: string,
         back: Screen,
         pets: (string | undefined)[],
+        remixes: readonly string[] = [],
     ): Promise<boolean> {
         const map = getMap(mapId);
-        const enemies = getMapEnemies(map);
+        const enemies = getMapEnemies(map, remixContent(remixes));
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
@@ -1702,7 +1727,8 @@ export class GameClient implements GameFrameHandler {
         const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
         const expert = this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
         const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
-        if (!(await this.travelTo(mapId, "characters", [this.save.pet]))) {
+        const remixes = this.openRemixes(mapId, this.store.getSnapshot().remixes);
+        if (!(await this.travelTo(mapId, "characters", [this.save.pet], remixes))) {
             return;
         }
         usePortableMath(false);
@@ -1726,10 +1752,11 @@ export class GameClient implements GameFrameHandler {
             actStep: getActStep(map, this.save.mapVictories),
             invocations: map.tombs
                 ? (this.save.invocations ?? [])
-                : takesInvocations(map)
+                : takesInvocations(map, remixes.length > 0)
                   ? (this.save.runInvocations ?? [])
                   : undefined,
             relics: this.runRelics(map),
+            remixes,
             stage: this.chosenStage(mapId),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
@@ -1787,7 +1814,7 @@ export class GameClient implements GameFrameHandler {
         const pets = game.heroes.map((hero) =>
             typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
         );
-        if (!(await this.travelTo(game.mapId, "coop", pets))) {
+        if (!(await this.travelTo(game.mapId, "coop", pets, game.remixes ?? []))) {
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1821,6 +1848,7 @@ export class GameClient implements GameFrameHandler {
             actStep: game.actStep,
             stage: game.stage,
             invocations: game.invocations,
+            remixes: game.remixes,
             party,
             focus,
         });
@@ -1865,7 +1893,7 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = map.brightness ?? 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
-        this.renderer.setLighting(map.lighting !== undefined);
+        this.renderer.setLighting(sim.lighting !== undefined);
         this.renderer.setTwin(getTwinSquares(map));
         this.sceneLights.reset();
         this.minimap.setMap(map);
@@ -2660,7 +2688,7 @@ export class GameClient implements GameFrameHandler {
             );
             this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
         }
-        const lighting = sim.map.lighting;
+        const lighting = sim.lighting;
         if (lighting) {
             // Lit round the view's middle, which a cinematic takes away from the player
             this.sceneLights.update(
