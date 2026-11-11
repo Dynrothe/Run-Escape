@@ -351,6 +351,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
             isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
+            isKeris: choice.kind === "hilt" && getWeapon(choice.into).family === "keris",
             rarity: rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),

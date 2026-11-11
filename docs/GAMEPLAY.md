@@ -139,12 +139,16 @@ version and how to run it.
       everything around you; **Dinh's bulwark**, a slow bash that hits everything around
       you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
       hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
-      Amascut's chest brings in a keris of its own: **of breaching** now and then finds a gap in
+      Amascut's chest brings in a keris of its own. They're picked as the Ancient spells are:
+      only the plain keris is offered on a level up, and at its level 2 you pick which it
+      becomes, the plain one or a jewel's you've found, keeping its level (with no jewel found
+      there's no pick). **Of breaching** now and then finds a gap in
       the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
       every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
       **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
       hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
-      amascut** has all of it but Tumeken's Light. You carry one keris at most.
+      amascut** has all of it but Tumeken's Light. You carry one keris at most, so they can't
+      be stacked.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and

@@ -280,7 +280,12 @@ unlocks something in the game.
       Tumeken's Light: a keris has one special attack, and this one's is the Wrath.
     - **In the game** (`KERIS_PARTISANS` in `content/weapons.ts`): one `family`, so one a run;
       the plain one from the Queen's second form (`kalphite_queen_risen`, where her kill counts);
-      the rest `raidChest` unlocks on their jewels. Kalphites and scarabs, Kephri and her
+      the rest `raidChest` unlocks on their jewels. Only the plain one is offered on a level up:
+      the jewelled ones are `pickOnly`, and the plain one's `hilts` (`KERIS_PICK`) make its level
+      2 a pick of the plain one and every jewel's keris found, as Ice Burst's picks the run's
+      Ancient spell (no pick with no jewel found). The level-up window says so (`isKeris`). A
+      jewel found before the Queen's kill still brings the plain one in to take it
+      (`isOfferable` in `core/Upgrades.ts`). Kalphites and scarabs, Kephri and her
       scarabs too, carry the `kalphite` tag (not the Scarab Mages, who are men), and `slayer`
       gives them the third. Breaching is
       `WeaponDef.breach` (6% a stab, 30% on a kalphite, triple, diamond bolts' Armour Piercing on

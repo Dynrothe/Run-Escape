@@ -40,7 +40,7 @@ import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { emptyStats } from "../../src/game/content/types";
 import { RUN_LENGTH } from "../../src/game/content/waves";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
-import { UpgradeChoice } from "../../src/game/core/Upgrades";
+import { UpgradeChoice, kerisPickRank } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
@@ -150,7 +150,8 @@ const CHOICE_PRIORITY: Record<UpgradeChoice["kind"], number> = {
 function choiceScore(choice: UpgradeChoice): number {
     const quality = "quality" in choice ? RARITY_ORDER.indexOf(choice.quality) : 0;
     // A Rare or better roll beats a Common pick of a better kind
-    return CHOICE_PRIORITY[choice.kind] * 10 - quality * 15;
+    // A keris pick: the best jewel found (kerisPickRank stays under one kind's step)
+    return CHOICE_PRIORITY[choice.kind] * 10 - quality * 15 - kerisPickRank(choice);
 }
 
 // Runs a set was started in (a piece worn), and finished in (its bonus), for

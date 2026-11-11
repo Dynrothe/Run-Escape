@@ -253,14 +253,18 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
         case "hilt": {
             // The hilted weapon's description, without the sweep it shares
             // with the blade: "Every third swing is The Judgement..."
-            // (no stats: the hilts all share the blade's)
+            // (no stats: the hilts all share the blade's). Keeping what it is (the plain keris)
+            // shows the whole of it.
             const into = getWeapon(choice.into);
             return {
                 title: weaponName(into),
-                text: withoutSharedOpening(
-                    weaponDescription(into),
-                    weaponDescription(getWeapon(choice.weaponId)),
-                ),
+                text:
+                    choice.into === choice.weaponId
+                        ? weaponDescription(into)
+                        : withoutSharedOpening(
+                              weaponDescription(into),
+                              weaponDescription(getWeapon(choice.weaponId)),
+                          ),
                 iconObjId: choice.hiltObjId,
             };
         }
@@ -321,6 +325,30 @@ const NEW_PASSIVE_WEIGHT = 0.5;
 // Weapons, passives and evolutions still locked behind a map task are left
 // out; with no unlocked set everything is in. In endless runs weapons and
 // most passives level on past their last level, so there's always something.
+// For the balance bots: a keris pick's place in its list (the plain one 0, Amascut's last), so a
+// bot sets the best jewel it has, as a player would. 0 for anything else, so the Ancient spell
+// and hilt picks go as they always have.
+export function kerisPickRank(choice: UpgradeChoice): number {
+    if (choice.kind !== "hilt" || getWeapon(choice.into).family !== "keris") {
+        return 0;
+    }
+    return getWeapon(choice.weaponId).hilts?.into.findIndex((i) => i.weaponId === choice.into) ?? 0;
+}
+
+// Whether a weapon can be offered new: unlocked, or one whose pick keeps it as one of its
+// choices (Ice Burst, the plain keris) with any of the picks unlocked. A jewel found before the
+// Kalphite Queen's kill still comes as the plain keris that takes it.
+function isOfferable(weapon: WeaponDef, unlocked: ReadonlySet<string> | undefined): boolean {
+    if (isAvailable(weapon, unlocked)) {
+        return true;
+    }
+    const into = weapon.hilts?.into ?? [];
+    return (
+        into.some(({ weaponId }) => weaponId === weapon.id) &&
+        into.some(({ weaponId }) => isAvailable(getWeapon(weaponId), unlocked))
+    );
+}
+
 // The hilts to pick from when a weapon has just reached its hilt level (the
 // godsword's blade), none otherwise
 export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>): UpgradeChoice[] {
@@ -328,7 +356,10 @@ export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>)
     if (!hilts || weapon.level !== hilts.level) {
         return [];
     }
-    const into = hilts.into.filter(({ weaponId }) => isAvailable(getWeapon(weaponId), unlocked));
+    // Keeping what it is stays a pick, unlocked or not (see isOfferable)
+    const into = hilts.into.filter(
+        ({ weaponId }) => weaponId === weapon.def.id || isAvailable(getWeapon(weaponId), unlocked),
+    );
     // Nothing else to pick from yet (Ice Burst before the Desert's beaten)
     if (into.length < 2) {
         return [];
@@ -390,7 +421,7 @@ export function rollChoices(
     // (evolutions are never offered, so they don't count)
     const familySizes = new Map<string, number>();
     for (const weapon of WEAPONS) {
-        if (weapon.family && !weapon.evolved && !weapon.pickOnly && isAvailable(weapon, unlocked)) {
+        if (weapon.family && !weapon.evolved && !weapon.pickOnly && isOfferable(weapon, unlocked)) {
             familySizes.set(weapon.family, (familySizes.get(weapon.family) ?? 0) + 1);
         }
     }
@@ -428,7 +459,7 @@ export function rollChoices(
                 weapon.pickOnly ||
                 ownedWeapons.has(weapon.id) ||
                 banished?.has(weapon.id) ||
-                !isAvailable(weapon, unlocked)
+                !isOfferable(weapon, unlocked)
             ) {
                 continue;
             }
