@@ -3,14 +3,16 @@ import { KeyHint } from "./PadHint";
 import { releaseFocus } from "./menuKeys";
 
 // Takes none of a level up's rewards (X), for coins from the run: dearer each
-// time
+// time. short: the coins it's short of, shown while it can't be paid
 export function SkipButton({
     cost,
     affordable,
+    short = 0,
     onSkip,
 }: {
     cost: number;
     affordable: boolean;
+    short?: number;
     onSkip: () => void;
 }): JSX.Element {
     return (
@@ -28,6 +30,12 @@ export function SkipButton({
                 }}
             >
                 <KeyHint keyLabel="X" pad="north" /> {t("canvas.skip", { cost: fmtNum(cost) })}
+                {!affordable && short > 0 && (
+                    <span className="ui-card-short">
+                        {" "}
+                        · {t("ui.common.short_by", { n: fmtNum(short) })}
+                    </span>
+                )}
             </button>
         </div>
     );

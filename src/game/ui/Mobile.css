@@ -641,6 +641,12 @@
         font-size: 14px;
     }
 
+    /* The footer's label says as much, in less of the cards' room */
+    .ui-shop-help-coins,
+    .ui-shop-hint {
+        display: none;
+    }
+
     .ui-shop-grid {
         flex: 1 1 auto;
         grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));

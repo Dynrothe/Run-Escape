@@ -226,6 +226,12 @@
     opacity: 0.85;
 }
 
+/* How many coins something's short of */
+.ui-card-short {
+    color: var(--ui-red-text);
+    white-space: nowrap;
+}
+
 .ui-card:disabled {
     cursor: default;
 }
@@ -1176,10 +1182,33 @@
 
 .ui-shop-card .ui-card-cost {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    column-gap: 6px;
     min-height: 28px;
     padding-right: 36px;
     margin-top: auto;
+}
+
+/* Maxed is something done: it reads as such, and isn't faded like one that's out of reach */
+.ui-shop-card-maxed .ui-card-cost {
+    color: var(--ui-green-text);
+}
+
+/* How to buy and refund, under the skills */
+.ui-shop-hint {
+    margin: 10px 0 0;
+    font-size: 14px;
+    text-align: center;
+    color: var(--ui-text-dim);
+}
+
+/* The page's own balance, which isn't the title screen's */
+.ui-shop-balance {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ui-text-dim);
 }
 
 .ui-shop-refund {

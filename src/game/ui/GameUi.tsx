@@ -2026,7 +2026,10 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
                 <h2>{t("ui.shop.heading")}</h2>
-                <p className="ui-subtle ui-shop-help">{t("ui.shop.help")}</p>
+                <p className="ui-subtle ui-shop-help">
+                    {t("ui.shop.help")}{" "}
+                    <span className="ui-shop-help-coins">{t("ui.shop.help_coins")}</span>
+                </p>
                 <div
                     className="ui-row ui-tabs ui-shop-tabs"
                     role="tablist"
@@ -2073,7 +2076,13 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                             <div key={upgrade.id} className="ui-shop-entry">
                                 <button
                                     className={
-                                        "ui-card ui-shop-card" + (affordable ? "" : " ui-card-dim")
+                                        "ui-card ui-shop-card" +
+                                        // Maxed is something done, not something missing
+                                        (cost === undefined
+                                            ? " ui-shop-card-maxed"
+                                            : affordable
+                                              ? ""
+                                              : " ui-card-dim")
                                     }
                                     aria-disabled={!affordable}
                                     title={
@@ -2111,7 +2120,16 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                         {cost === undefined ? (
                                             t("ui.shop.maxed")
                                         ) : (
-                                            <Coins amount={cost} />
+                                            <>
+                                                <Coins amount={cost} />
+                                                {!affordable && (
+                                                    <span className="ui-card-short">
+                                                        {t("ui.common.short_by", {
+                                                            n: fmtNum(cost - coins),
+                                                        })}
+                                                    </span>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </button>
@@ -2135,11 +2153,16 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                         );
                     })}
                 </div>
+                <p className="ui-shop-hint">
+                    {t(isCoarsePointer ? "ui.shop.hint.touch" : "ui.shop.hint.mouse")}
+                </p>
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
                         {t("ui.common.back")}
                     </button>
-                    <Coins amount={coins} />
+                    <span className="ui-shop-balance">
+                        {t("ui.shop.available")} <Coins amount={coins} />
+                    </span>
                     <button
                         className="ui-button"
                         disabled={Object.keys(page.upgrades).length === 0}
@@ -3080,6 +3103,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     const spell = ui.choices.some((choice) => choice.isSpell);
     const keris = ui.choices.some((choice) => choice.isKeris);
     const banishes = ui.hud?.banishes ?? 0;
+    const coins = useHudNumber(client, (n) => n.coins) ?? 0;
     const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
@@ -3207,6 +3231,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                             <SkipButton
                                 cost={ui.hud.skip.cost}
                                 affordable={ui.hud.skip.affordable}
+                                short={ui.hud.skip.cost - coins}
                                 onSkip={() => client.skip()}
                             />
                         )}
