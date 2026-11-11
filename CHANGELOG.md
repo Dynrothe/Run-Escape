@@ -23,9 +23,9 @@ the version in the corner).
 - A camera zoom slider on phones, by Happi: tap Zoom beside the timer.
 - New power-up, by GhostavoA: Polymorph. For 10 seconds enemies turn into harmless sheep, and
   elites and bosses into golden sheep that still fight.
-- The sound's orb, by Jp66600: an orb by the minimap, where the client's hitpoints orb is, and on
-  the title screen shows the Music tab's harp, crossed out while the sound's off, and turns it off
-  or on. Pressing M in a run also says which way it went.
+- The sound's orb, by Jp66600: by the minimap, where the client's hitpoints orb is, and on the
+  title screen, it shows whether the sound's on and turns it off or on. Pressing M in a run says
+  which way it went.
 
 ### Changed
 

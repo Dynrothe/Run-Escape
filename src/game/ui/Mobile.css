@@ -212,6 +212,12 @@
         filter: drop-shadow(1px 1px 0 #000);
     }
 
+    /* The sound's orb under the pause button, which has its place by the minimap */
+    .ui-minimap .ui-sound-orb {
+        left: -62px;
+        top: 56px;
+    }
+
     .ui-touch-items {
         position: absolute;
         right: calc(var(--safe-right) + 12px);

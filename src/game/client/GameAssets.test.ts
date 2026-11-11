@@ -18,6 +18,7 @@ import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { SOUNDS } from "../content/sounds";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { SOUND_ORB_SPRITES } from "../content/titleIcons";
 import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -557,6 +558,12 @@ describe("sprites", () => {
     test("the slim cache keeps every stat icon's sprite", () => {
         const ids = getGameSpriteIds();
         expect(ids).toEqual(expect.arrayContaining(STAT_ICON_SPRITE_IDS));
+    });
+
+    test("the slim cache keeps the sound's orb", () => {
+        expect(getGameSpriteIds()).toEqual(
+            expect.arrayContaining(Object.values(SOUND_ORB_SPRITES)),
+        );
     });
 
     test("the slim cache keeps every passive's icon", () => {

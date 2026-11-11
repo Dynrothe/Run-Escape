@@ -1400,10 +1400,12 @@
     text-shadow: 1px 1px 0 #000;
 }
 
+/* The Music tab's harp is 33x36: smoothed down to fit, its strings turn to mud */
 .ui-sound-orb-music {
     left: 31px;
     top: 7px;
     height: 20px;
+    image-rendering: pixelated;
 }
 
 .ui-sound-orb-off {

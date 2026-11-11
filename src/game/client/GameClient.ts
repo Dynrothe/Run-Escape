@@ -108,6 +108,7 @@ import {
 } from "./GameAssets";
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
+import { padHints } from "./GamePad";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
     AbilityView,
@@ -662,6 +663,8 @@ export class GameClient implements GameFrameHandler {
     // The tick the boss on the bar was first up, in this sim, since there was none: the ability
     // hint's clock. A fight's start, not the run's: the Tombs' Nexus comes before each boss.
     private bossUp?: { sim: Sim; tick: number };
+    // The toast saying the sound's on or off, if one's up (see toggleMute)
+    private soundToast?: number;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
     private attractTick = 0;
@@ -1275,18 +1278,25 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ audio: this.audio.settings });
     }
 
-    // M, the sound setting or the sound-off orb. In a run it says which way it went: there's no
-    // setting in sight, and the orb's off at the side.
-    toggleMute(): void {
+    // M, the sound's orb or the sound setting. In a run, M and the orb say which way it went
+    // (announce): no setting's in sight, and the orb's off at the side. The setting shows it
+    // itself, and a toast from there would wait under the pause menu.
+    toggleMute(announce = false): void {
         this.audio.setSettings({ muted: !this.audio.settings.muted });
         this.store.set({ audio: this.audio.settings });
-        if (this.sim) {
-            this.store.toast(
+        if (announce && this.sim) {
+            // Only the last of them: M pressed twice would say off and on at once
+            if (this.soundToast !== undefined) {
+                this.store.dismissToast(this.soundToast);
+            }
+            // A touch screen or a controller has no key for it
+            const key = !isCoarsePointer && padHints.get() === undefined;
+            this.soundToast = this.store.toast(
                 !this.audio.settings.muted
                     ? t("canvas.sound_on")
-                    : isCoarsePointer
-                      ? t("canvas.sound_off")
-                      : t("canvas.sound_off_key"),
+                    : key
+                      ? t("canvas.sound_off_key")
+                      : t("canvas.sound_off"),
             );
         }
     }
@@ -2369,7 +2379,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         if (code === "KeyM") {
-            this.toggleMute();
+            this.toggleMute(true);
             return;
         }
         if (code === "KeyQ" && this.sim) {

@@ -833,8 +833,6 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
     }
     return (
         <div className="ui-fill ui-title">
-            {/* Top right, as in a run, by the minimap */}
-            <SoundOrb client={client} muted={ui.audio.muted} className="ui-title-sound" />
             <div className="ui-title-logo">
                 <h1>Run Escape</h1>
                 <p>{t("ui.title.tagline")}</p>
@@ -932,6 +930,9 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <DiscordLink />
                 <GitHubLink />
             </div>
+            {/* Top right, as by the minimap in a run. After the menu, so Tab reaches
+                Singleplayer first. */}
+            <SoundOrb client={client} muted={ui.audio.muted} className="ui-title-sound" />
             {savePanel ? null : choicePanel ? (
                 choicePanel
             ) : ui.unreadableSave ? (

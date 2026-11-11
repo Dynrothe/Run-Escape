@@ -235,8 +235,22 @@ describe("the run's HUD", () => {
         act(() => store.set({ audio: { ...store.getSnapshot().audio, muted: true } }));
         expect(orb()).toHaveAccessibleName("Sound off: turn it on");
         expect(orb().querySelector(".ui-sound-orb-off")).not.toBeNull();
-        fireEvent.click(orb());
-        expect(toggleMute).toHaveBeenCalledOnce();
+        expect(orb().querySelector(".ui-sound-orb-key")).toHaveTextContent("M");
+        // A click gives the keys back; Enter or a controller's button (no clicks) keeps the focus
+        orb().focus();
+        fireEvent.click(orb(), { detail: 0 });
+        expect(orb()).toHaveFocus();
+        fireEvent.click(orb(), { detail: 1 });
+        expect(orb()).not.toHaveFocus();
+        expect(toggleMute).toHaveBeenCalledTimes(2);
+        expect(toggleMute).toHaveBeenCalledWith(true);
+    });
+
+    test("the sound's orb has no key on a touch screen", () => {
+        device.coarse = true;
+        renderHud();
+        const orb = screen.getByRole("button", { name: /^Sound (on|off):/ });
+        expect(orb.querySelector(".ui-sound-orb-key")).toBeNull();
     });
 
     test("empty equipment slots use cache silhouettes and equipped items keep their own icons", () => {

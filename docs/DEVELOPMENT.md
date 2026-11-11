@@ -852,9 +852,10 @@ src/game/
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
             offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
-            above), DescriptionButton (hover, focus and hold descriptions), CountryFlag (a
-            co-op player's flag), SoundOrb (the sound's on or off), CoopScreen (the rooms,
-            the lobby, the party in a run),
+            above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
+            (hover, focus and hold descriptions), CountryFlag (a co-op player's flag),
+            SoundOrb (the sound's on or off), CoopScreen (the rooms, the lobby, the party in
+            a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -888,13 +889,18 @@ deployment's slim cache cover them too. Equipped slots still show their item's m
 still hide the gear row.
 
 The sound has an orb like the client's, at the minimap's upper left where the client's hitpoints
-orb is (under the pause button on a phone, which has that place), and at the title screen's top
-right (`ui/SoundOrb.tsx`): the client's orb frame and an orb's fill, the Music tab's harp in its
-circle, and cloud save's "no" sign over that while the sound's off (`SOUND_ORB_SPRITES` in
-`content/titleIcons.ts`, in `getGameSpriteIds` too). The frame's wider than an item icon, so it's
-drawn at its own size, as a flag is, rather than by `ItemIcon`. Its plate has M for the keyboard,
-and nothing on a touch screen or a controller, which have no key for it. Pressing it turns the
-sound off or on, and in a run, M (or the setting) says which way it went in a toast.
+orb is (under the pause button on a touch screen, which has that place), and at the title
+screen's top right (`ui/SoundOrb.tsx`): the client's orb frame and an orb's fill, the Music tab's
+harp in its circle, and cloud save's "no" sign over that while the sound's off
+(`SOUND_ORB_SPRITES` in `content/titleIcons.ts`, in `getGameSpriteIds` too). The frame's wider
+than an item icon, so it's drawn at its own size by `ui/useSpriteFrame.ts`, as a flag is,
+rather than by `ItemIcon`. The harp (33x36) is taller than the orb, and no smaller music
+sprite turned up in the cache, so it's drawn smaller, pixelated to keep its strings. Its plate
+has M for the keyboard (`KeyHint`), and nothing on a touch screen or a controller, which have no
+key for it. On the title it comes after the menu in the page, so Tab reaches Singleplayer first.
+Pressing it turns the sound off or on. In a run, M and the orb say which way it went in a toast
+that replaces the last one; the sound setting doesn't, as it shows that itself
+(`GameClient.toggleMute`'s `announce`).
 
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
 learned the rev 241 and 242 opcodes, the map loader can take extra map squares as plain data

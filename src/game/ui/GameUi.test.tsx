@@ -392,6 +392,11 @@ test("the title has the sound's orb, which says whether the sound's on", () => {
     expect(screen.getByRole("button", { name: "Sound off: turn it on" })).toBeInTheDocument();
 });
 
+test("Tab reaches Singleplayer before the title's other buttons, the sound's orb included", () => {
+    renderTitle(3);
+    expect(screen.getAllByRole("button")[0]).toHaveTextContent("Singleplayer");
+});
+
 describe("the title's export reminder", () => {
     // Its own, as Node 25 and later have a localStorage that hides jsdom's
     beforeEach(() => {

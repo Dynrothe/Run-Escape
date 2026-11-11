@@ -26,6 +26,7 @@ import {
     saveDisplaySettings,
 } from "./DisplaySettings";
 import { GameClient, TICK_MS, cleanLoadout, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import { padHints } from "./GamePad";
 import { GameStore } from "./GameStore";
 import { makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
@@ -87,7 +88,7 @@ function createClient(sim: Sim, autoAlch: boolean, autoEquip = false) {
 }
 
 describe("the sound's on and off", () => {
-    test("says which way it went in a run, and nothing on the menus", () => {
+    function createMuteClient() {
         const { client, store } = createClient(createSim(), false);
         const settings = { muted: false, volume: 0.6, music: 0.6 };
         Object.assign(client, {
@@ -97,16 +98,41 @@ describe("the sound's on and off", () => {
                     Object.assign(settings, changes),
             },
         });
+        // As M or the orb do (onKeyPress is the constructor's)
+        const pressM = () => client.toggleMute(true);
         const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
-        client.toggleMute();
+        return { client, store, pressM, toasts };
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    test("M and the orb say which way it went in a run, only the last way, and nothing on the menus", () => {
+        const { client, store, pressM, toasts } = createMuteClient();
+        pressM();
         expect(store.getSnapshot().audio.muted).toBe(true);
         expect(toasts()).toEqual(["Sound off (M to turn it on)"]);
-        client.toggleMute();
-        expect(toasts()).toEqual(["Sound off (M to turn it on)", "Sound on"]);
-        Object.assign(client, { sim: undefined });
+        pressM();
+        expect(toasts()).toEqual(["Sound on"]);
+        pressM();
+        expect(toasts()).toEqual(["Sound off (M to turn it on)"]);
+        Object.assign(client, { sim: undefined, soundToast: undefined });
+        store.set({ toasts: [] });
+        pressM();
+        expect(store.getSnapshot().audio.muted).toBe(false);
+        expect(toasts()).toEqual([]);
+    });
+
+    test("the setting shows it itself, and a controller has no M to name", () => {
+        const { client, store, toasts } = createMuteClient();
         client.toggleMute();
         expect(store.getSnapshot().audio.muted).toBe(true);
-        expect(toasts()).toHaveLength(2);
+        expect(toasts()).toEqual([]);
+        vi.spyOn(padHints, "get").mockReturnValue("xbox");
+        client.toggleMute(true);
+        client.toggleMute(true);
+        expect(toasts()).toEqual(["Sound off"]);
     });
 });
 
