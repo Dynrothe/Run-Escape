@@ -31,6 +31,16 @@ import {
 } from "../content/endless";
 import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import {
+    ANCIENT_FOCUS,
+    BlessingId,
+    GauntletFightOptions,
+    SARADOMIN_HP,
+    SECOND_WIND_HP,
+    SECOND_WIND_SECONDS,
+    STEADY_HANDS_SECONDS,
+    isBlessingId,
+} from "../content/gauntlet";
+import {
     HARD_BOSS_INTERVAL,
     HARD_COINS,
     HARD_CROWD,
@@ -761,6 +771,9 @@ export type SimOptions = {
     relics?: readonly string[];
     // Remixes (content/remixes.ts): Act II rules on this map, those it takes (the host's, in co-op)
     remixes?: readonly string[];
+    // A fight of the Forgotten Four's (content/gauntlet.ts): its climb, the hitpoints it starts at
+    // and its blessing. Ignored off a boss fight (MapDef.fight).
+    gauntlet?: GauntletFightOptions;
 };
 
 export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
@@ -808,6 +821,9 @@ export type RunResult = {
     remixes?: RemixId[];
     // The Scabaras room was beaten (Sim.scabarasBeaten)
     scabarasBeaten?: boolean;
+    // A fight of the Forgotten Four's: the hitpoints it ended on, of the most, and the times the
+    // boss's guard dropped (core/gauntlet.ts scores it)
+    gauntlet?: { hp: number; maxHp: number; guardDowns: number };
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -1716,6 +1732,13 @@ export class Sim {
     tombsPathsDone: string[] = [];
     // A fight in parts: the part this run is (MapDef.stages)
     readonly stage: number;
+    // A fight of the Forgotten Four's (SimOptions.gauntlet), and what it's done with: the times the
+    // boss's guard dropped, and its Second wind, until it's used
+    readonly gauntlet?: GauntletFightOptions;
+    guardDowns = 0;
+    private secondWindLeft = false;
+    // The fight's button with Ancient focus, quicker
+    private readonly focusedAbility?: FightAbilityDef;
     // Ticks spent in the Nexus, which the run's clock leaves out (not the Wardens' room's)
     nexusTicks = 0;
     // Dev only: nothing hurts the player (GameClient.toggleDevGod), for watching a fight's mechanics
@@ -2066,6 +2089,12 @@ export class Sim {
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
+        this.gauntlet = cleanGauntletFight(this.map.fight ? options.gauntlet : undefined);
+        this.secondWindLeft = this.blessed("second_wind");
+        const ability = this.map.fight?.ability;
+        if (ability && this.blessed("ancient_focus")) {
+            this.focusedAbility = { ...ability, cooldown: ability.cooldown * ANCIENT_FOCUS };
+        }
         // Remixes: those the map takes, placed by the seed on its grid
         this.remixRun = buildRemixRun(
             this.map,
@@ -2211,6 +2240,10 @@ export class Sim {
             }
             this.updateStats();
             hero.player.hp = hero.player.maxHp;
+            // The gauntlet's wounds, carried from the last fight
+            if (this.gauntlet) {
+                hero.player.hp = Math.max(1, Math.round(hero.player.maxHp * this.gauntlet.hp));
+            }
             // Hardcore: no Ring of life. Overly Draining: no rerolls or banishes.
             hero.revivesLeft = this.invoked("run_hardcore") ? 0 : hero.stats.revival;
             hero.rerollsLeft = this.invoked("run_overly_draining")
@@ -2643,6 +2676,13 @@ export class Sim {
             ...(this.hero.relics.ids.length > 0 && { relics: [...this.hero.relics.ids] }),
             ...(this.remixes.length > 0 && { remixes: [...this.remixes] }),
             ...(this.scabarasBeaten && { scabarasBeaten: true }),
+            ...(this.gauntlet && {
+                gauntlet: {
+                    hp: Math.max(0, this.player.hp),
+                    maxHp: this.player.maxHp,
+                    guardDowns: this.guardDowns,
+                },
+            }),
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -2760,7 +2800,8 @@ export class Sim {
         const maxHp = Math.round(
             PLAYER_BASE_HP *
                 (1 + stats.maxHp) *
-                (this.invoked("run_glass_cannon") ? GLASS_CANNON_HP : 1),
+                (this.invoked("run_glass_cannon") ? GLASS_CANNON_HP : 1) *
+                (this.blessed("saradomin") ? 1 + SARADOMIN_HP : 1),
         );
         if (maxHp !== player.maxHp) {
             // Swapping off max hitpoints never kills
@@ -4145,6 +4186,10 @@ export class Sim {
         // A boss's own hitpoints on the map (the event's) climb with an act's steps too
         if (bossHp !== undefined && this.map.act) {
             bossHp *= difficulty.hp / this.map.difficulty.hp;
+        }
+        // The gauntlet's climb: its later fights' bosses tougher (SimOptions.gauntlet)
+        if (type === "finalBoss" && this.gauntlet && bossHp !== undefined) {
+            bossHp *= this.gauntlet.climb;
         }
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
@@ -13210,11 +13255,13 @@ export class Sim {
     // The tempo of the phase a boss is in (BossPhasesDef tempo): what its
     // interval and its patterns' windups are multiplied by
     private phaseTempo(enemy: Enemy): number {
+        // The gauntlet's climb: its later fights' bosses quicker (SimOptions.gauntlet)
+        const climb = enemy.finalBoss ? (this.gauntlet?.climb ?? 1) : 1;
         const phase = enemy.bossState?.phase;
         if (!phase || phase.stage === "finale") {
-            return 1;
+            return 1 / climb;
         }
-        return enemy.def.boss?.phases?.phases[phase.index]?.tempo ?? 1;
+        return (enemy.def.boss?.phases?.phases[phase.index]?.tempo ?? 1) / climb;
     }
 
     // Frees the slots of dead bosses, once no bullet or volley of theirs is
@@ -15517,7 +15564,12 @@ export class Sim {
         }
         const end = this.tick + secondsToTicks(seconds);
         const wasOpen = this.isExposed(boss);
-        state.exposedEnd = Math.max(state.exposedEnd ?? 0, end);
+        // Steady hands, a blessing of the gauntlet's: its guard down longer, not its stun
+        const steady = this.blessed("steady_hands") ? secondsToTicks(STEADY_HANDS_SECONDS) : 0;
+        state.exposedEnd = Math.max(state.exposedEnd ?? 0, end + steady);
+        if (!wasOpen) {
+            this.guardDowns++;
+        }
         if (stunned) {
             const wasStunned = this.isStunned(boss);
             state.stunEnd = Math.max(state.stunEnd ?? 0, end);
@@ -15743,7 +15795,12 @@ export class Sim {
 
     // The fight's button: a fight map's own (MapDef.fight.ability), or the Tombs' (TombsDef.ability)
     get ability(): FightAbilityDef | undefined {
-        return this.map.fight?.ability ?? this.map.tombs?.ability;
+        return this.focusedAbility ?? this.map.fight?.ability ?? this.map.tombs?.ability;
+    }
+
+    // Whether this fight of the gauntlet's has a blessing (SimOptions.gauntlet)
+    blessed(id: BlessingId): boolean {
+        return this.gauntlet?.blessing === id;
     }
 
     // The fight's button (Sim.ability), for the current hero: whether it went off
@@ -17776,6 +17833,14 @@ export class Sim {
 
     private playerDied(): void {
         const player = this.player;
+        // Second wind, a blessing of the gauntlet's: once, back on their feet
+        if (this.secondWindLeft) {
+            this.secondWindLeft = false;
+            player.hp = Math.max(1, Math.round(player.maxHp * SECOND_WIND_HP));
+            player.invulnerable = SECOND_WIND_SECONDS * TICKS_PER_SECOND;
+            this.emit({ type: "revive" });
+            return;
+        }
         if (this.revivesLeft > 0) {
             this.revivesLeft--;
             player.hp = player.maxHp;
@@ -21001,7 +21066,8 @@ export class Sim {
     // Collection log trophies a boss can drop on its map
     // (each of the party their own)
     private rollBossTrophies(enemy: Enemy): void {
-        if (!enemy.boss) {
+        // The gauntlet's fights drop nothing: its reward's at the end (content/gauntlet.ts)
+        if (!enemy.boss || this.gauntlet) {
             return;
         }
         this.forEachHeroInReach(() => {
@@ -22628,4 +22694,21 @@ function shotAttack(shot: EnemyShotDef): BossAttackDef {
         SHOT_ATTACKS.set(shot, attack);
     }
     return attack;
+}
+
+// A gauntlet fight's options as they can be played: a climb from 1 to 2, the hitpoints from a
+// twentieth to all, and a blessing there is
+function cleanGauntletFight(
+    options: GauntletFightOptions | undefined,
+): GauntletFightOptions | undefined {
+    if (!options) {
+        return undefined;
+    }
+    const climb = Number.isFinite(options.climb) ? Math.min(2, Math.max(1, options.climb)) : 1;
+    const hp = Number.isFinite(options.hp) ? Math.min(1, Math.max(0.05, options.hp)) : 1;
+    return {
+        climb,
+        hp,
+        ...(isBlessingId(options.blessing) && { blessing: options.blessing }),
+    };
 }

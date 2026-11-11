@@ -235,6 +235,24 @@ version and how to run it.
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
+- **The Forgotten Four** (`content/gauntlet.ts`, `core/gauntlet.ts`): Act II's four Awakened
+  fights one after another, opened from the act's middle card once all four are beaten. The order
+  screen's four cards are dragged into order (or moved with their arrows or the arrow keys); the
+  first beaten comes first to start with. The bosses climb: hitpoints and tempo times 1, 1.05,
+  1.1 and 1.15 by place. Each fight is its own adventurer and kit, with no pets, items or relics,
+  and starts at full hitpoints less a fifth of what the last one ended down. Between fights a 45 s
+  camp (Ready to skip): the fight won pays points as a raid room does (50 for the win, up to 100
+  for speed within 2:00, none by 5:00, up to 50 for little damage, 5 a guard drop up to 50), spent
+  on one blessing for the next fight or kept: Rest (60, clears the wounds), Steady hands (80,
+  guard drops 0.5 s longer), Ancient focus (100, the button 25% quicker), Saradomin's blessing
+  (120, +20% hitpoints) and Second wind (150, once, falling leaves you at 30% and untouchable for
+  3 s). A fall offers Retry this fight (as it was come into) or Start over. Records are the fights'
+  time, camps left out, kept for each order, a clean clear (no retries) beating one with retries.
+  The first clear on each mode gives two Awakener's orbs (`SaveData.awakenerOrbs`); the first
+  clean one gives the blood-touched Soulreaper axe (the cache's ornamented axe, 33335) and
+  fighting pets (a red glow: the cache has no recolour of theirs), the act card's gold border and
+  the gauntlet's hard mode (each fight's own hard). The fights don't count as the fights' own wins
+  or drop anything. Solo only for now.
 - **Hard mode**: the switch beside Endless, open once you've beaten the map (from the start on fun
   maps). Enemies have more hitpoints and hit harder, more of them come at once, every elite is two,
   and bosses enrage at 65% of their hitpoints and attack 15% faster. How much tougher depends on the map: the early ones gain the most, as a player who's

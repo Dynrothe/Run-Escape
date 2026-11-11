@@ -1,4 +1,4 @@
-import { ACTS, ACT_BY_ID, isActEnded } from "../content/acts";
+import { ACTS, ACT_BY_ID, FALLEN_EMPIRE, isActEnded } from "../content/acts";
 import {
     getArmouryCost,
     getNextUpgrade,
@@ -7,6 +7,12 @@ import {
 } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
+import {
+    FIRST_CLEAR_ORBS,
+    GAUNTLET_FIGHTS,
+    gauntletOrderKey,
+    isGauntletOrder,
+} from "../content/gauntlet";
 import {
     InvocationPreset,
     RUN_SET,
@@ -141,6 +147,15 @@ export type SaveData = {
     // The acts (content/acts.ts) whose ending has been told: it's told once, as the last of the
     // act's Awakened fights falls, and again only from its card
     actEndings?: string[];
+    // The act's Awakened fights in the order they were first beaten: the Forgotten Four's order to
+    // start with (content/gauntlet.ts), and the order last picked for it
+    awakenedOrder?: string[];
+    gauntletOrder?: string[];
+    // The Forgotten Four's clears and records, on normal and on hard
+    gauntlet?: { normal?: GauntletModeRecord; hard?: GauntletModeRecord };
+    // Awakener's orbs held (act-2-fallen-empire.md 8.6): the gauntlet's first clears give them;
+    // what they're spent on is build order step 16's
+    awakenerOrbs?: number;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // When the player last exported it (Date.now()), so an exported file says
@@ -165,6 +180,18 @@ export type RemixRecord = {
     seconds?: number;
     hard?: number;
     endless?: { round: number; seconds: number };
+};
+
+// A clear of the Forgotten Four: the fights' time (the camps left out), whether no fight was
+// retried, its order and its retries
+export type GauntletRecord = { seconds: number; clean: boolean; order: string[]; retries: number };
+
+// The gauntlet's clears on a mode, and the best of each order it's been run in (13.2: times
+// compare within an order; a clean clear beats one with retries, then the quicker)
+export type GauntletModeRecord = {
+    clears: number;
+    cleanClears: number;
+    best: Record<string, GauntletRecord>;
 };
 
 // A win at invocation points (SaveData.invocationBest)
@@ -429,6 +456,27 @@ export function migrateSave(raw: unknown): SaveData {
             }
         }
     }
+    if (isGauntletOrder(data.gauntletOrder)) {
+        save.gauntletOrder = [...data.gauntletOrder];
+    }
+    if (Array.isArray(data.awakenedOrder)) {
+        const order = data.awakenedOrder.filter(
+            (id, i, all) => GAUNTLET_FIGHTS.includes(id) && all.indexOf(id) === i,
+        );
+        if (order.length > 0) {
+            save.awakenedOrder = order;
+        }
+    }
+    for (const mode of ["normal", "hard"] as const) {
+        const record = migrateGauntletMode(data.gauntlet?.[mode], num);
+        if (record) {
+            save.gauntlet = { ...save.gauntlet, [mode]: record };
+        }
+    }
+    const orbs = Math.floor(num(data.awakenerOrbs, 0));
+    if (orbs > 0) {
+        save.awakenerOrbs = orbs;
+    }
     if (typeof data.pet === "string" && isPetFound(save.trophies, data.pet)) {
         save.pet = data.pet;
     }
@@ -626,6 +674,133 @@ export type RunSummary = {
     scabarasBeaten?: boolean;
 };
 
+function migrateGauntletMode(
+    data: unknown,
+    num: (value: unknown, fallback: number) => number,
+): GauntletModeRecord | undefined {
+    if (!data || typeof data !== "object") {
+        return undefined;
+    }
+    const raw = data as Partial<GauntletModeRecord>;
+    const clears = Math.max(0, Math.floor(num(raw.clears, 0)));
+    if (clears === 0) {
+        return undefined;
+    }
+    const best: Record<string, GauntletRecord> = {};
+    for (const record of Object.values(raw.best ?? {})) {
+        const seconds = num(record?.seconds, 0);
+        if (isGauntletOrder(record?.order) && seconds > 0) {
+            best[gauntletOrderKey(record.order)] = {
+                seconds,
+                clean: record.clean === true,
+                order: [...record.order],
+                retries: Math.max(0, Math.floor(num(record.retries, 0))),
+            };
+        }
+    }
+    return {
+        clears,
+        cleanClears: Math.min(clears, Math.max(0, Math.floor(num(raw.cleanClears, 0)))),
+        best,
+    };
+}
+
+// The Forgotten Four opens once every Awakened fight of the act's is beaten (act-2-fallen-empire.md,
+// 7.3), its hard mode with its first clean clear on normal
+export function isGauntletOpen(save: SaveData): boolean {
+    return isActEnded(FALLEN_EMPIRE, save.mapVictories);
+}
+
+export function isGauntletHardOpen(save: SaveData): boolean {
+    return (save.gauntlet?.normal?.cleanClears ?? 0) > 0;
+}
+
+// The first clean clear's looks (on either mode): the blood-touched Soulreaper axe and fighting
+// pets, and the act's middle card's gold border
+export function hasGauntletLooks(save: SaveData): boolean {
+    return (
+        (save.gauntlet?.normal?.cleanClears ?? 0) > 0 || (save.gauntlet?.hard?.cleanClears ?? 0) > 0
+    );
+}
+
+// The order the gauntlet's screen starts on: the one last picked, or the fights in the order they
+// were first beaten (those beaten before that was kept, in the act's order after)
+export function getGauntletOrder(save: SaveData): string[] {
+    if (isGauntletOrder(save.gauntletOrder)) {
+        return [...save.gauntletOrder];
+    }
+    const first = (save.awakenedOrder ?? []).filter((id) => GAUNTLET_FIGHTS.includes(id));
+    return [...first, ...GAUNTLET_FIGHTS.filter((id) => !first.includes(id))];
+}
+
+// A gauntlet clear just done, and what it gave: its first clear (on that mode) gives Awakener's
+// orbs, its first clean clear on normal the looks and hard mode, and a record for its order
+export type GauntletClear = {
+    order: string[];
+    hard: boolean;
+    seconds: number;
+    retries: number;
+};
+
+export type GauntletRewards = {
+    firstClear: boolean;
+    firstCleanClear: boolean;
+    orbs: number;
+    // The looks, the gold border and hard mode, just now
+    looks: boolean;
+    hardOpened: boolean;
+    record: boolean;
+    // The order's best before this one
+    previous?: GauntletRecord;
+};
+
+function isBetterGauntlet(record: GauntletRecord, than: GauntletRecord | undefined): boolean {
+    if (!than) {
+        return true;
+    }
+    if (record.clean !== than.clean) {
+        return record.clean;
+    }
+    return record.seconds < than.seconds;
+}
+
+export function recordGauntlet(save: SaveData, clear: GauntletClear): GauntletRewards {
+    const mode = clear.hard ? "hard" : "normal";
+    const hadLooks = hasGauntletLooks(save);
+    const hadHard = isGauntletHardOpen(save);
+    const before = save.gauntlet?.[mode] ?? { clears: 0, cleanClears: 0, best: {} };
+    const clean = clear.retries === 0;
+    const record: GauntletRecord = {
+        seconds: clear.seconds,
+        clean,
+        order: [...clear.order],
+        retries: clear.retries,
+    };
+    const key = gauntletOrderKey(clear.order);
+    const previous = before.best[key];
+    const better = isBetterGauntlet(record, previous);
+    const after: GauntletModeRecord = {
+        clears: before.clears + 1,
+        cleanClears: before.cleanClears + (clean ? 1 : 0),
+        best: better ? { ...before.best, [key]: record } : before.best,
+    };
+    save.gauntlet = { ...save.gauntlet, [mode]: after };
+    const firstClear = before.clears === 0;
+    const orbs = firstClear ? FIRST_CLEAR_ORBS : 0;
+    if (orbs > 0) {
+        save.awakenerOrbs = (save.awakenerOrbs ?? 0) + orbs;
+    }
+    return {
+        firstClear,
+        firstCleanClear: clean && before.cleanClears === 0,
+        orbs,
+        looks: !hadLooks && hasGauntletLooks(save),
+        hardOpened: !hadHard && isGauntletHardOpen(save),
+        record: better,
+        ...(previous && { previous }),
+    };
+}
+
 // An act whose ending's due (every one of its Awakened fights beaten, its ending not told yet),
 // marked told: it's told once (SaveData.actEndings). Undefined if none is.
 export function takeActEnding(save: SaveData): string | undefined {
@@ -660,6 +835,9 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         save.fightStages = { ...save.fightStages, [run.mapId]: next >= stages.length ? 0 : next };
     }
     if (run.victory && beatsMap(run)) {
+        if (GAUNTLET_FIGHTS.includes(run.mapId) && !save.awakenedOrder?.includes(run.mapId)) {
+            save.awakenedOrder = [...(save.awakenedOrder ?? []), run.mapId];
+        }
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
         // A win with relics on still counts, but sets only the map's ordinary records

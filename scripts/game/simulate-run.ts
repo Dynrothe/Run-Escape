@@ -32,12 +32,21 @@
 //   RELICS=trickster,globetrotter ...      # relics on (content/relics.ts)
 //   INVOCATIONS=walk_for_it,insanity ...   # its invocations (INVOCATIONS=all for every one the
 //                                          # board allows: one of a group that's one at a time)
+//   GAUNTLET=1 DODGE=1 ...  # the Forgotten Four, all four fights chained (runGauntlet: ORDER=,
+//                           # RETRIES=3, HARD=1, BLESS=best|none); the seeds are runs
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
 //                    # half the chances to use the fight's button
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
+import {
+    BLESSINGS,
+    BLESSING_BY_ID,
+    BlessingId,
+    GAUNTLET_FIGHTS,
+    GauntletFightOptions,
+} from "../../src/game/content/gauntlet";
 import { INVOCATIONS, RUN_INVOCATIONS } from "../../src/game/content/invocations";
 import { CASKET_GEAR, getGear } from "../../src/game/content/items";
 import { getMap } from "../../src/game/content/maps";
@@ -49,6 +58,20 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
+import {
+    GauntletRun,
+    chooseBlessing,
+    gauntletFightId,
+    gauntletFightOptions,
+    gauntletRetries,
+    gauntletSeconds,
+    isGauntletClean,
+    leaveGauntletCamp,
+    loseGauntletFight,
+    retryGauntletFight,
+    startGauntlet,
+    winGauntletFight,
+} from "../../src/game/core/gauntlet";
 import { ColdRule } from "../../src/game/core/rules/ColdRule";
 import { RealmRule } from "../../src/game/core/rules/RealmRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
@@ -102,7 +125,10 @@ const ROOT_LOOK = 3;
 // How often to print progress (REPORT=15 for every 15 seconds)
 const REPORT_SECONDS = parseInt(process.env.REPORT ?? "60");
 
-const map = getMap(process.env.MAP ?? "lumbridge");
+// The map being played (GAUNTLET=1 changes it fight by fight, with ARENA and grid)
+let map = getMap(
+    process.env.GAUNTLET === "1" ? "awakened_vardorvis" : (process.env.MAP ?? "lumbridge"),
+);
 const endless = process.env.ENDLESS === "1";
 const hard = process.env.HARD === "1";
 const expert = process.env.EXPERT === "1";
@@ -121,7 +147,7 @@ const armoury =
     process.env.ARMOURY === "max"
         ? Object.fromEntries(CASKET_GEAR.map((g) => [g.id, getUpgradeLine(g.id).length - 1]))
         : undefined;
-const ARENA = map.arena;
+let ARENA = map.arena;
 // Her map's not on every branch, so she can be tried on any map, in a square
 // around its spawn
 const finalBoss = process.env.FINAL_BOSS;
@@ -167,12 +193,33 @@ if (finalBoss) {
         };
     }
 }
-console.time(`${map.name} arena`);
-const grid =
-    process.env.FLAT === "1"
-        ? makeGrid(new Array(ARENA.sizeY).fill(".".repeat(ARENA.sizeX)), ARENA.baseX, ARENA.baseY)
-        : new ArenaGrid(loadRegionData(map));
-console.timeEnd(`${map.name} arena`);
+function loadGrid(): ArenaGrid {
+    console.time(`${map.name} arena`);
+    const loaded =
+        process.env.FLAT === "1"
+            ? makeGrid(
+                  new Array(ARENA.sizeY).fill(".".repeat(ARENA.sizeX)),
+                  ARENA.baseX,
+                  ARENA.baseY,
+              )
+            : new ArenaGrid(loadRegionData(map));
+    console.timeEnd(`${map.name} arena`);
+    return loaded;
+}
+let grid = loadGrid();
+const grids = new Map<string, ArenaGrid>([[map.id, grid]]);
+
+// To another map (the gauntlet's next fight), its grid loaded once
+function useMap(id: string): void {
+    map = getMap(id);
+    ARENA = map.arena;
+    let loaded = grids.get(id);
+    if (!loaded) {
+        loaded = loadGrid();
+        grids.set(id, loaded);
+    }
+    grid = loaded;
+}
 
 // Like a person might: take evolutions, fill the weapon slots, then upgrade;
 // between two of the same kind, the rarer roll
@@ -1022,7 +1069,7 @@ function eventChoice(sim: Sim): number {
     return best;
 }
 
-function runOnce(characterId: string, seed: number) {
+function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOptions) {
     const sim = new Sim({
         grid,
         characterId,
@@ -1043,6 +1090,7 @@ function runOnce(characterId: string, seed: number) {
         remixes,
         // A fight in parts (MapDef.stages): which, STAGE=0 for the first
         stage: parseInt(process.env.STAGE ?? "0"),
+        gauntlet,
     });
     // Another weapon to start with, to compare weapons on one character
     if (process.env.WEAPON) {
@@ -1544,14 +1592,99 @@ function runParty(characterId: string, seed: number) {
     );
 }
 
-for (const characterId of characters) {
-    for (let seed = 1; seed <= seeds; seed++) {
-        if (partySize > 1) {
-            runParty(characterId, seed);
+// The Forgotten Four (GAUNTLET=1, content/gauntlet.ts), on core/gauntlet.ts as the game runs it:
+// the four fights in ORDER (fight map ids, comma separated; the act's by default), each as its
+// adventurer, wounds carried, the camp's blessing bought by gauntletBlessing, and a fight lost
+// retried up to RETRIES times (3 by default) before the run's given up. Each seed is one run;
+// each try of a fight plays on its own seed.
+function runGauntlet(seed: number): void {
+    const order = process.env.ORDER ? process.env.ORDER.split(",") : [...GAUNTLET_FIGHTS];
+    const retries = parseInt(process.env.RETRIES ?? "3");
+    let run = startGauntlet(order, hard);
+    const bought: string[] = [];
+    while (run.phase === "fight") {
+        useMap(gauntletFightId(run));
+        const options = gauntletFightOptions(run);
+        const character = map.fight!.character;
+        const trySeed = seed * 1000 + run.index * 10 + run.tries;
+        console.log(
+            `\ngauntlet seed ${seed}, fight ${run.index + 1} ${map.id} as ${character}, try ` +
+                `${run.tries + 1}: climb x${options.climb}, starts at ` +
+                `${Math.round(options.hp * 100)}% hp, blessing ${options.blessing ?? "none"}`,
+        );
+        const result = runOnce(character, trySeed, options);
+        const end = result.gauntlet!;
+        if (!result.victory) {
+            run = loseGauntletFight(run);
+            if (run.tries >= retries) {
+                break;
+            }
+            run = retryGauntletFight(run);
             continue;
         }
-        console.log(`\n${characterId} seed ${seed}`);
-        runOnce(characterId, seed);
+        run = winGauntletFight(run, {
+            seconds: result.seconds,
+            hp: end.hp,
+            maxHp: end.maxHp,
+            damageTaken: result.stats.damageTaken,
+            guardDowns: end.guardDowns,
+        });
+        const done = run.done[run.done.length - 1];
+        console.log(
+            `  won in ${formatClock(done.seconds)}: ${done.points.total} points ` +
+                `(speed ${done.points.speed}, safe ${done.points.safe}, guard ${done.points.guard}), ` +
+                `left at ${Math.round(end.hp)}/${end.maxHp} hp -> wounds ${Math.round(done.wound * 100)}%`,
+        );
+        if (run.phase === "camp") {
+            const blessing = gauntletBlessing(run);
+            if (blessing) {
+                run = chooseBlessing(run, blessing);
+                bought.push(blessing);
+            }
+            console.log(
+                `  camp: ${run.points} points left, bought ${blessing ?? "nothing"}, next starts at ` +
+                    `${Math.round((1 - run.wound) * 100)}% hp`,
+            );
+            run = leaveGauntletCamp(run);
+        }
+    }
+    const cleared = run.phase === "cleared";
+    console.log(
+        `gauntlet seed ${seed}: ${cleared ? (isGauntletClean(run) ? "CLEARED clean" : "CLEARED with retries") : `stopped at fight ${run.index + 1} (${gauntletFightId(run)})`}, ` +
+            `${run.done.length}/4 won, ${gauntletRetries(run)} retries, fight time ${formatClock(gauntletSeconds(run))}, ` +
+            `order ${order.join(" ")}, blessings ${bought.join(" ") || "none"}, ` +
+            `fights ${run.done.map((d) => `${d.fightId.replace("awakened_", "")} ${formatClock(d.seconds).trim()} r${d.retries}`).join(", ")}`,
+    );
+}
+
+// The camp's pick, as a careful player might: Rest when the wounds are a tenth or more, else the
+// dearest blessing the points run to (BLESS=best: never Rest, so the wounds carry; BLESS=none)
+function gauntletBlessing(run: GauntletRun): BlessingId | undefined {
+    const rest = BLESSING_BY_ID.get("rest")!;
+    if (process.env.BLESS === "none") {
+        return undefined;
+    }
+    if (process.env.BLESS !== "best" && run.wound >= 0.1 && run.points >= rest.price) {
+        return "rest";
+    }
+    const affordable = BLESSINGS.filter((b) => b.id !== "rest" && b.price <= run.points);
+    return affordable.sort((a, b) => b.price - a.price)[0]?.id;
+}
+
+if (process.env.GAUNTLET === "1") {
+    for (let seed = 1; seed <= seeds; seed++) {
+        runGauntlet(seed);
+    }
+} else {
+    for (const characterId of characters) {
+        for (let seed = 1; seed <= seeds; seed++) {
+            if (partySize > 1) {
+                runParty(characterId, seed);
+                continue;
+            }
+            console.log(`\n${characterId} seed ${seed}`);
+            runOnce(characterId, seed);
+        }
     }
 }
 if (setsStarted.size > 0) {

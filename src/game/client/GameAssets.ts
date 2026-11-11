@@ -22,6 +22,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
+import { BLOOD_SOULREAPER_AXE_OBJ, SOULREAPER_AXE_OBJ } from "../content/gauntlet";
 import {
     INVOCATIONS,
     OFF_SPRITE,
@@ -416,9 +417,13 @@ export function getHeldRunPoses(
     appearance: PlayerAppearance,
     attackSeqs: number[],
 ): { seqId: number; frame: number }[] {
-    const held = appearance.equipment[EquipSlot.WEAPON];
+    let held = appearance.equipment[EquipSlot.WEAPON];
     if (held === undefined || held < 0) {
         return [];
+    }
+    // The blood-touched axe is the axe's poses
+    if (held === BLOOD_SOULREAPER_AXE_OBJ) {
+        held = SOULREAPER_AXE_OBJ;
     }
     return WEAPONS.flatMap((weapon) =>
         weapon.runPose !== undefined &&
@@ -466,14 +471,28 @@ export function getCharacterAttackSeqs(characterId: string): number[] {
 // any gear their passives add, and what they've equipped from caskets (which
 // goes over the rest).
 export function getRunAppearance(sim: Sim, hero = sim.focus): PlayerAppearance {
-    return sim.as(hero, () => getCurrentAppearance(sim));
+    return sim.as(hero, () => getCurrentAppearance(sim, hero === sim.focus));
 }
 
-function getCurrentAppearance(sim: Sim): PlayerAppearance {
+// The Forgotten Four's first clean clear (SaveData.gauntlet): this player's Soulreaper axe and
+// fighting pets blood-touched (setGauntletLooks). Only their own hero's, in co-op.
+let gauntletLooks = false;
+
+export function hasBloodLooks(): boolean {
+    return gauntletLooks;
+}
+
+// From the save (hasGauntletLooks): a hero baked from now on, and the pets drawn
+export function setGauntletLooks(on: boolean): void {
+    gauntletLooks = on;
+}
+
+function getCurrentAppearance(sim: Sim, own: boolean): PlayerAppearance {
     const appearance = getCharacterAppearance(sim.characterId);
     const held = sim.getHeldObjId();
     if (held !== -1) {
-        appearance.equipment[EquipSlot.WEAPON] = held;
+        appearance.equipment[EquipSlot.WEAPON] =
+            held === SOULREAPER_AXE_OBJ && gauntletLooks && own ? BLOOD_SOULREAPER_AXE_OBJ : held;
     }
     for (const passive of sim.passives) {
         const def = getPassive(passive.id);

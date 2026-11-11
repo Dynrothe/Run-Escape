@@ -1,7 +1,8 @@
 // The world's English (locales/en/world.json): what enemies, bosses, maps, raids, random events,
 // the pumpkins and the floors say. The texts stay in the content's .ts files; this reads them off
 // the definitions. Keys: enemy.*, boss.*, fun.*, map.*, raid.*, event.*, nightmare.*, phosani.*,
-// zachariah.*, tob.*, pumpkin.*, floor.*, act.*, invocation.* (a run's), relic.*, remix.*
+// zachariah.*, tob.*, pumpkin.*, floor.*, act.*, invocation.* (a run's), relic.*, remix.*,
+// gauntlet.*
 //
 // The Sim emits these texts as they are in English and the drawing layer calls tl(text) on them,
 // so each one is here with the literal the Sim emits. Boss attacks' own names
@@ -10,6 +11,7 @@ import { ACTS, actSlotKey } from "../../../src/game/content/acts";
 import { ENEMIES } from "../../../src/game/content/enemies";
 import * as demos from "../../../src/game/content/floorDemos";
 import { FUN_MAPS } from "../../../src/game/content/fun/maps";
+import { BLESSINGS } from "../../../src/game/content/gauntlet";
 import { RUN_INVOCATIONS } from "../../../src/game/content/invocations";
 import { MAPS } from "../../../src/game/content/maps";
 import { RAID_MAPS, RAID_SUPPLIES, RAID_SUPPLY_CHEST } from "../../../src/game/content/raids";
@@ -258,6 +260,11 @@ function invocationAndRelicMessages(): Messages {
         put(messages, `remix.${remix.id}.description`, remix.description);
     }
     put(messages, "remix.fallen", "Fallen");
+    // The Forgotten Four's camp (content/gauntlet.ts): each blessing's name and what it does
+    for (const blessing of BLESSINGS) {
+        put(messages, `gauntlet.blessing.${blessing.id}.name`, blessing.name);
+        put(messages, `gauntlet.blessing.${blessing.id}.description`, blessing.description);
+    }
     return messages;
 }
 

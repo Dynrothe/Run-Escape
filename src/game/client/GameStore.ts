@@ -4,7 +4,14 @@ import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult, ScabarasPuzzleState } from "../core/Sim";
-import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
+import type { GauntletRun } from "../core/gauntlet";
+import {
+    GauntletRewards,
+    NewerSave,
+    SaveData,
+    UnreadableSave,
+    getStartingCharacter,
+} from "../core/save";
 import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
@@ -20,6 +27,9 @@ export type Screen =
     | "collectionLog"
     // Co-op: finding or making a room, and the room before a run
     | "coop"
+    // The Forgotten Four: its order before the start, and its camp between fights
+    | "gauntlet"
+    | "camp"
     | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
@@ -402,6 +412,14 @@ export type ReviveView = {
     revivesLeft: number;
 };
 
+export type GauntletView = {
+    order: string[];
+    hard: boolean;
+    run?: GauntletRun;
+    campEnds?: number;
+    rewards?: GauntletRewards;
+};
+
 export type Toast = { id: number; text: string; until: number };
 
 // Why nothing's being saved: the game's open in another tab, the save's from
@@ -478,6 +496,9 @@ export type UiSnapshot = {
         endedEarly?: string;
     };
     toasts: Toast[];
+    // The Forgotten Four (content/gauntlet.ts): the order and mode picked on its screen, and once
+    // it's started its run, when its camp ends (performance.now()), and its clear's rewards
+    gauntlet?: GauntletView;
     // An act's ending being told (its id, content/acts.ts), over whatever screen's up: as the last
     // of its Awakened fights falls, or played again from its card
     actEnding?: string;

@@ -77,6 +77,7 @@ import {
     getPropKey,
     getRealmLocKey,
     getShieldedModelKey,
+    hasBloodLooks,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { PetFollower, PetFollowers } from "./PetFollowers";
@@ -246,6 +247,8 @@ const PET_BUBBLE_RADIUS = 1;
 const PET_BUBBLE_HEIGHT = 0.5;
 // Glowing the pale blue of water, not the orb's own murk
 const PET_BUBBLE_TINT = 0xa8f0ff;
+// The Forgotten Four's blood-touched pets (hasBloodLooks)
+const BLOOD_LOOK_TINT = 0xff4040;
 // A boss's debris (BossAttackDef.debris) sinks away over this many ticks
 const DEBRIS_SINK_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
@@ -2194,6 +2197,9 @@ export class GameView {
         const anim = model.getAnim(pet.moving ? def.walkSeq : def.idleSeq);
         const x = lerp(pet.prevX, pet.x, alpha);
         const y = lerp(pet.prevY, pet.y, alpha);
+        // The Forgotten Four's blood-touched look, on this player's fighting pet: the cache has no
+        // recolour of theirs, so a red glow, beating slowly
+        const blood = def.power !== undefined && pet.hero === sim.focus && hasBloodLooks();
         actors.draw(
             model,
             anim,
@@ -2202,6 +2208,9 @@ export class GameView {
             this.ground(sim, x, y),
             y,
             pet.yaw,
+            blood
+                ? { tint: BLOOD_LOOK_TINT, flash: -0.25 - 0.1 * Math.sin(sim.tick * 0.15) }
+                : undefined,
         );
     }
 

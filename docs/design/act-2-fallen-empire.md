@@ -771,6 +771,62 @@ Pets, items and relics stay out of the gauntlet, as they're out of the fights: e
 **In co-op** (decided, 13.2): a party can run it together, each player as the fight's adventurer. The camp's
 blessings and the carried wounds are each player's own, and the room's retry is the host's call.
 
+### 7.4 As built: the Forgotten Four (2026-11-11)
+
+Build order step 15. Where it differs from 7.3, and why:
+
+- **Each fight is its own run, not a room of one.** The Theatre chains rooms inside one Sim on one
+  map; the four fights are four maps from four regions (the Stranglewood, Lassar with its twin,
+  the Duke's room, the Scar), each with its own grid, lights, rule and music. Loading four arenas
+  into one Sim would be a new engine. So `GameClient` chains four runs, each a fight map started
+  with `SimOptions.gauntlet` (its climb, the hitpoints it starts at, its blessing), and the camp is
+  a screen between them, as the Theatre's supply chest is a screen between rooms. The run's state
+  (`core/gauntlet.ts`, plain data) is the same one the bot plays (`GAUNTLET=1`).
+- **The camp is a screen, not a map.** It's 45 s (Ready skips it) of the last fight's points, the
+  next fight's card with its climb and wounds, and the five blessings. No camp map was built, so no
+  shipped map hash changes.
+- **Points**: as a raid room's (`getRoomPoints`), 50 for the win, up to 100 for speed (all within
+  2:00 of the fight's start, none by 5:00), up to 50 for little damage taken (none at a whole bar),
+  and 5 a guard drop up to 50: at most 250 a fight. The careful bot makes 165 to 220 a fight.
+- **Blessings and prices**: Rest 60, Steady hands 80, Ancient focus 100, Saradomin's blessing 120,
+  Second wind 150. One a camp, for the next fight and its retries; points not spent are kept.
+  Picking another gives the first back. Second wind stands you up once at 30%, untouchable 3 s;
+  Steady hands lengthens the guard's drop, not a stun; Ancient focus is the button's cooldown
+  times 0.75; Saradomin's blessing is +20% maximum hitpoints.
+- **The climb** multiplies the fight's boss's hitpoints (its event's) and divides its tempo (its
+  attack interval and its patterns' windups, as `BossPhasesDef.tempo` does). The fights
+  themselves are untouched.
+- **Wounds** are a fifth of the hitpoints missing at the fight's end (so at most a fifth), of the
+  next adventurer's whole. Rest clears them.
+- **Retry this fight** starts it again with the wounds, points and blessing it was come into with.
+  **Start over** goes back to the order screen with the run's order on it.
+- **Records**: per mode (normal, hard) and per order (13.2), the fights' time with the camps left
+  out, whether it was clean, and its retries; a clean clear beats one with retries, then the
+  quicker. The fights in it don't count as the fights' own wins, records or drops (no pets, no
+  pieces), so the gauntlet can't farm what step 16 pays per Awakened win.
+- **Rewards**: the first clear on each mode gives two Awakener's orbs (`SaveData.awakenerOrbs`,
+  kept for step 16). The first clean clear (either mode) gives the looks: the Soulreaper axe drawn
+  as the cache's ornamented axe (object 33335, "Soulreaper axe (o)"), and the four fighting pets
+  with a red glow, since the cache has no recolour of theirs; the act's middle card's gold border;
+  and hard mode (each fight on its own hard). The ornament kit's icon (28336) stands for the looks
+  on the results. Only this player's axe and pet look blood-touched in co-op.
+- **Default order**: the order the fights were first beaten (`SaveData.awakenedOrder`, kept from
+  this build on; saves from before fall back to the act's order for what they don't know), then
+  the order last picked.
+- **Co-op**: not built; the gauntlet is solo for now. Co-op's runs start from one `GameStart`, and
+  chaining four of them, with a camp every copy agrees on and each player's own wounds and
+  blessings, needs new lobby messages and a host-driven retry: its own job. The act card's button
+  is greyed in a room with a note.
+- **Bot** (`simulate-run.ts` `GAUNTLET=1 DODGE=1`, normal, the act's order): with no retries all
+  6 seeds fall at the first fight, Vardorvis, the one it wins least. With up to 25 retries a fight
+  it clears all 7 runs, with 7 to 40 retries, in 6:28 to 7:17 of fighting; a fight takes it about
+  20 tries at Vardorvis, 2 at the Whisperer and the Duke and 8 at the Leviathan. Its fights earn
+  165 to 220 points. With Rest skipped (`BLESS=best`) the wounds carry: fights 2 to 4 start at
+  81% to 97%.
+- **Not kept**: a run in progress isn't saved; reloading the page mid-gauntlet loses it.
+- **Phones**: the camp and the order screen fit 844x390; the heaviest fight start measured is
+  Vardorvis's, 61.5k (54.1k of it the world).
+
 ## 8. Rewards
 
 ### 8.1 What's out
@@ -1142,7 +1198,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer. Built (6.9)                                            | 1, 2         | 1.5 weeks  |
 | 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
 | 14  | **Awakened Leviathan**, Lil'viathan, the act's ending. Built, first pass (`awakened-leviathan.md`)                                        | 3, 12        | 2 weeks    |
-| 15  | **The Forgotten Four** gauntlet                                                                                                           | 3, 8, 11, 14 | 1.5 weeks  |
+| 15  | **The Forgotten Four** gauntlet. Built, solo (7.4)                                                                                        | 3, 8, 11, 14 | 1.5 weeks  |
 | 16  | Awakened invasions, Awakener's orbs, the weekly Vault                                                                                     | 14           | 1.5 weeks  |
 
 The sizes are reasoned from the code, not prototyped, and leave out playtest rounds.

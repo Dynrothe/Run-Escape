@@ -105,9 +105,11 @@ import {
     getReachedStages,
     getRemixBest,
     getSkillCoins,
+    hasGauntletLooks,
     importSave,
     isEndlessUnlocked,
     isExpertUnlocked,
+    isGauntletOpen,
     isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
@@ -125,6 +127,7 @@ import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
+import { CampScreen, GauntletBadge, GauntletResultModal, GauntletScreen } from "./Gauntlet";
 import { InventoryItem } from "./InventoryItem";
 import {
     InvocationBadges,
@@ -224,6 +227,12 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "coop":
             screen = <CoopScreen ui={ui} client={client} />;
+            break;
+        case "gauntlet":
+            screen = <GauntletScreen ui={ui} client={client} />;
+            break;
+        case "camp":
+            screen = <CampScreen ui={ui} client={client} />;
             break;
         case "run":
             screen = <RunScreen ui={ui} client={client} />;
@@ -1822,6 +1831,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                                     client.selectMap(mapId);
                                 }}
                                 onEnding={() => client.showActEnding(tab.act!.id)}
+                                onGauntlet={ui.coop.room ? undefined : () => client.openGauntlet()}
                             />
                         )}
                         {!tab.act &&
@@ -1868,6 +1878,7 @@ function ActPage({
     onPeek,
     onPick,
     onEnding,
+    onGauntlet,
 }: {
     act: ActDef;
     save: SaveData;
@@ -1875,6 +1886,8 @@ function ActPage({
     onPeek: (mapId: string | undefined) => void;
     onPick: (mapId: string) => void;
     onEnding: () => void;
+    // The Forgotten Four's screen, once it's open (not in a co-op room: solo for now)
+    onGauntlet?: () => void;
 }): JSX.Element {
     const open = (save.mapVictories[act.requires] ?? 0) > 0;
     const ids = getActMapIds(act);
@@ -1927,7 +1940,13 @@ function ActPage({
                     </button>
                 );
             })}
-            <div className="ui-card ui-act-middle" style={{ gridArea: "m" }}>
+            <div
+                className={
+                    "ui-card ui-act-middle" +
+                    (act.id === FALLEN_EMPIRE.id && hasGauntletLooks(save) ? " ui-act-gold" : "")
+                }
+                style={{ gridArea: "m" }}
+            >
                 <span className="ui-map-name">{actName(act)}</span>
                 <span className="ui-act-line">
                     {ended
@@ -1972,6 +1991,17 @@ function ActPage({
                             </button>
                         )}
                     </span>
+                )}
+                {/* The Forgotten Four, the act's last test (act-2-fallen-empire.md 7.3) */}
+                {ended && act.id === FALLEN_EMPIRE.id && isGauntletOpen(save) && (
+                    <button
+                        className="ui-button ui-button-go ui-act-gauntlet"
+                        disabled={!onGauntlet}
+                        title={onGauntlet ? undefined : t("ui.gauntlet.solo_only")}
+                        onClick={onGauntlet}
+                    >
+                        {t("ui.gauntlet.title")}
+                    </button>
                 )}
             </div>
         </div>
@@ -2592,9 +2622,15 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 <RunEventModal key={ui.event.uid} event={ui.event} client={client} />
             )}
             {ui.overlay === "paused" && hud && <PauseModal ui={ui} hud={hud} client={client} />}
-            {(ui.overlay === "dead" || ui.overlay === "victory") && (
-                <ResultModal ui={ui} client={client} />
+            {ui.gauntlet?.run && hud && !ui.cinematic && ui.overlay === "none" && (
+                <GauntletBadge run={ui.gauntlet.run} />
             )}
+            {(ui.overlay === "dead" || ui.overlay === "victory") &&
+                (ui.gauntlet?.run && ui.gauntlet.run.phase !== "fight" ? (
+                    <GauntletResultModal view={ui.gauntlet} save={ui.save} client={client} />
+                ) : (
+                    <ResultModal ui={ui} client={client} />
+                ))}
         </div>
     );
 }

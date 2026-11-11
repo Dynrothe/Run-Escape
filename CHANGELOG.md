@@ -90,6 +90,14 @@ the version in the corner).
   round you that takes the next hit and pops, knocking back what's near.
 - The Fallen Empire's ending: beat all four Awakened fights, in any order, and the act's story is
   told. The act's middle card fills in as they fall, and tells it again once they're all down.
+- The Forgotten Four: once all four Awakened are beaten, fight them one after another, from the
+  act's middle card. Drag the four into your order first; each fight's boss is tougher and quicker
+  than the last's. Each is its own adventurer and kit, and a fifth of the hitpoints you lose
+  carries to the next. Between fights, a camp: the fight just won pays points for one blessing on
+  the next (Rest, Saradomin's blessing, Second wind, Ancient focus or Steady hands). Fall, and
+  retry that fight or start over. Your first clear gives two Awakener's orbs; your first clean
+  one, with no retries, makes the Soulreaper axe and the four fighting pets blood-touched, turns
+  the act's card gold and opens its hard mode. On your own for now.
 
 ### Changed
 

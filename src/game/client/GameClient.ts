@@ -10,6 +10,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { BlessingId, CAMP_SECONDS, isGauntletOrder } from "../content/gauntlet";
 import {
     RUN_SET,
     getRaidBand,
@@ -53,10 +54,23 @@ import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlo
 import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
-import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
+import {
+    GauntletRun,
+    chooseBlessing,
+    gauntletFightId,
+    gauntletFightOptions,
+    gauntletRetries,
+    gauntletSeconds,
+    leaveGauntletCamp,
+    loseGauntletFight,
+    retryGauntletFight,
+    startGauntlet,
+    winGauntletFight,
+} from "../core/gauntlet";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
 import { remixContent } from "../core/rules/remix";
 import {
@@ -70,17 +84,22 @@ import {
     getEarnedUnlocks,
     getFightStage,
     getFinishedQuests,
+    getGauntletOrder,
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
     getReachedStages,
     getStartingCharacter,
+    hasGauntletLooks,
     isEndlessRecord,
     isEndlessUnlocked,
     isExpertUnlocked,
+    isGauntletHardOpen,
+    isGauntletOpen,
     isHardRecord,
     isHardUnlocked,
     isMapUnlocked,
+    recordGauntlet,
     recordRun,
     refundUpgrade,
     refundUpgrades,
@@ -115,6 +134,7 @@ import {
     getOfferedAttackSeqs,
     getRunAppearance,
     getRunAttackSeqs,
+    setGauntletLooks,
 } from "./GameAssets";
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
@@ -621,6 +641,9 @@ export class GameClient implements GameFrameHandler {
     // meanwhile)
     private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
+    // The Forgotten Four, while it's being run (content/gauntlet.ts), and its camp's timer
+    private gauntletRun?: GauntletRun;
+    private campTimer?: number;
     // Boss attacks' instructions (BossAttackDef.message): each shown once a run, and one at a
     // time, each held long enough to read, as a busy phase can bring several at once. Those
     // waiting too long are dropped: the attack they were for is long gone.
@@ -723,6 +746,7 @@ export class GameClient implements GameFrameHandler {
         readonly options: GameClientOptions,
     ) {
         this.save = store.getSnapshot().save;
+        setGauntletLooks(hasGauntletLooks(this.save));
         this.grid = titleGrid;
         this.grids.set(TITLE_MAP.id, titleGrid);
         this.sounds = new GameSounds(audio);
@@ -1618,6 +1642,7 @@ export class GameClient implements GameFrameHandler {
     // another tab leaves the pick alone)
     private useSave(save: SaveData, toFavourite = false): void {
         this.save = save;
+        setGauntletLooks(hasGauntletLooks(save));
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
         const starting = getStartingCharacter(save);
@@ -1721,9 +1746,11 @@ export class GameClient implements GameFrameHandler {
     }
 
     // cinematic: false to start without the map's opening cinematic (a retry)
+    // gauntlet: a fight of the Forgotten Four's (this.gauntletRun), on its mode, nothing else on
     async startRun(
         mapId: string = this.store.getSnapshot().mapId,
         cinematic = true,
+        gauntlet?: GauntletRun,
     ): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
@@ -1732,12 +1759,16 @@ export class GameClient implements GameFrameHandler {
         // Fun maps are always endless, and some have everyone play one
         // adventurer (Durial321 in Falador)
         const endless =
-            map.fun !== undefined ||
-            (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId));
-        const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
-        const expert = this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
+            !gauntlet &&
+            (map.fun !== undefined ||
+                (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId)));
+        const hard = gauntlet
+            ? gauntlet.hard
+            : this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
+        const expert =
+            !gauntlet && this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
         const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
-        const remixes = this.openRemixes(mapId, this.store.getSnapshot().remixes);
+        const remixes = gauntlet ? [] : this.openRemixes(mapId, this.store.getSnapshot().remixes);
         if (!(await this.travelTo(mapId, "characters", [this.save.pet], remixes))) {
             return;
         }
@@ -1768,6 +1799,7 @@ export class GameClient implements GameFrameHandler {
             relics: this.runRelics(map),
             remixes,
             stage: this.chosenStage(mapId),
+            gauntlet: gauntlet && gauntletFightOptions(gauntlet),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -2278,6 +2310,8 @@ export class GameClient implements GameFrameHandler {
         if (this.sim) {
             this.finishRun();
         }
+        // Quitting a fight of the Forgotten Four's gives the whole run up
+        this.dropGauntlet();
         if (this.coopRun) {
             this.coop.leave();
         }
@@ -2346,6 +2380,197 @@ export class GameClient implements GameFrameHandler {
         });
     }
 
+    // ---- The Forgotten Four (content/gauntlet.ts, core/gauntlet.ts) ----
+    // Each fight is its own run (startRun with the gauntlet's run), the camp a screen between
+    // them. On your own for now: co-op's chained runs and shared camp aren't built.
+
+    // Its screen, to put the fights in order: from the act's middle card, once it's open
+    openGauntlet(): void {
+        if (!isGauntletOpen(this.save) || this.coop.room || this.sim) {
+            return;
+        }
+        const last = this.store.getSnapshot().gauntlet;
+        this.store.set({
+            screen: "gauntlet",
+            gauntlet: {
+                order: last?.order ?? getGauntletOrder(this.save),
+                hard: (last?.hard ?? false) && isGauntletHardOpen(this.save),
+            },
+        });
+    }
+
+    // The order picked on its screen, kept for next time
+    setGauntletOrder(order: string[]): void {
+        const view = this.store.getSnapshot().gauntlet;
+        if (!view || view.run || !isGauntletOrder(order)) {
+            return;
+        }
+        this.save.gauntletOrder = [...order];
+        this.persist();
+        this.store.set({ gauntlet: { ...view, order: [...order] } });
+    }
+
+    setGauntletHard(hard: boolean): void {
+        const view = this.store.getSnapshot().gauntlet;
+        if (!view || view.run) {
+            return;
+        }
+        this.store.set({ gauntlet: { ...view, hard: hard && isGauntletHardOpen(this.save) } });
+    }
+
+    beginGauntlet(): void {
+        const view = this.store.getSnapshot().gauntlet;
+        if (!view || view.run || !isGauntletOpen(this.save) || this.coop.room) {
+            return;
+        }
+        this.setGauntlet(startGauntlet(view.order, view.hard));
+        void this.startGauntletFight(true);
+    }
+
+    private setGauntlet(run: GauntletRun, more: { campEnds?: number } = {}): void {
+        this.gauntletRun = run;
+        const view = this.store.getSnapshot().gauntlet;
+        this.store.set({
+            gauntlet: {
+                order: run.order,
+                hard: run.hard,
+                run,
+                ...more,
+                ...(view?.rewards && run.phase === "cleared" && { rewards: view.rewards }),
+            },
+        });
+    }
+
+    private async startGauntletFight(cinematic: boolean): Promise<void> {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "fight") {
+            return;
+        }
+        await this.startRun(gauntletFightId(run), cinematic, run);
+        // It couldn't get there: back to the gauntlet's screen
+        if (!this.sim) {
+            this.dropGauntlet();
+            this.openGauntlet();
+        }
+    }
+
+    // A fight's end: a win pays its points and carries its wounds, and the last clears the
+    // gauntlet, which is recorded; a fall waits on Retry this fight or Start over
+    private finishGauntletFight(result: RunResult): void {
+        const run = this.gauntletRun!;
+        const end = result.gauntlet!;
+        if (!result.victory) {
+            this.setGauntlet(loseGauntletFight(run));
+            return;
+        }
+        const next = winGauntletFight(run, {
+            seconds: result.seconds,
+            hp: end.hp,
+            maxHp: end.maxHp,
+            damageTaken: result.stats.damageTaken,
+            guardDowns: end.guardDowns,
+        });
+        this.setGauntlet(next);
+        if (next.phase !== "cleared") {
+            return;
+        }
+        const rewards = recordGauntlet(this.save, {
+            order: next.order,
+            hard: next.hard,
+            seconds: gauntletSeconds(next),
+            retries: gauntletRetries(next),
+        });
+        this.persist();
+        this.cloud?.savePoint();
+        setGauntletLooks(hasGauntletLooks(this.save));
+        this.store.set({ gauntlet: { ...this.store.getSnapshot().gauntlet!, rewards } });
+    }
+
+    // From a fight won, to the camp: its points to spend, CAMP_SECONDS to spend them in
+    toGauntletCamp(): void {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "camp") {
+            return;
+        }
+        this.leaveRun(false);
+        this.setGauntlet(run, { campEnds: performance.now() + CAMP_SECONDS * 1000 });
+        this.store.set({ screen: "camp", overlay: "none", result: undefined });
+        window.clearTimeout(this.campTimer);
+        this.campTimer = window.setTimeout(() => this.leaveGauntletCamp(), CAMP_SECONDS * 1000);
+    }
+
+    chooseGauntletBlessing(id: BlessingId | undefined): void {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "camp") {
+            return;
+        }
+        this.setGauntlet(chooseBlessing(run, id), {
+            campEnds: this.store.getSnapshot().gauntlet?.campEnds,
+        });
+    }
+
+    // Ready, or the camp's time is up: on to the next fight
+    leaveGauntletCamp(): void {
+        window.clearTimeout(this.campTimer);
+        this.campTimer = undefined;
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "camp") {
+            return;
+        }
+        this.setGauntlet(leaveGauntletCamp(run));
+        void this.startGauntletFight(true);
+    }
+
+    // The fight fallen in, from its start again, with what it was come into with
+    retryGauntletFight(): void {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "fallen") {
+            return;
+        }
+        this.leaveRun(false);
+        this.setGauntlet(retryGauntletFight(run));
+        void this.startGauntletFight(false);
+    }
+
+    // Start over: back to the order screen, the run's order and mode on it
+    restartGauntlet(): void {
+        const run = this.gauntletRun;
+        this.dropGauntlet();
+        if (this.sim) {
+            this.leaveRun(false);
+        }
+        this.store.set({
+            gauntlet: run && { order: run.order, hard: run.hard },
+            overlay: "none",
+            result: undefined,
+        });
+        this.openGauntlet();
+    }
+
+    // Out of the gauntlet altogether (its screen's Back, the results' Leave), to the map screen
+    // it was opened from
+    leaveGauntlet(): void {
+        const run = this.gauntletRun;
+        this.dropGauntlet();
+        if (run) {
+            this.store.set({ gauntlet: { order: run.order, hard: run.hard } });
+        }
+        if (this.sim) {
+            this.leaveRun();
+        }
+        this.store.set({ screen: "characters" });
+    }
+
+    private dropGauntlet(): void {
+        window.clearTimeout(this.campTimer);
+        this.campTimer = undefined;
+        this.gauntletRun = undefined;
+        const view = this.store.getSnapshot().gauntlet;
+        if (view?.run) {
+            this.store.set({ gauntlet: { order: view.order, hard: view.hard } });
+        }
+    }
+
     // endedEarly: why a co-op run ended before anyone won or fell
     // A fight in parts: the part picked (one reached), or the next not beaten
     private chosenStage(mapId: string): number {
@@ -2372,6 +2597,10 @@ export class GameClient implements GameFrameHandler {
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
+        if (this.gauntletRun && result.gauntlet) {
+            this.finishGauntletFight(result);
+            return;
+        }
         // A fight in parts: Retry plays the part lost again (one replayed, too, not the furthest
         // reached), and Next fight the one after it. chosenStage falls back to the next not
         // beaten when that isn't reached yet.

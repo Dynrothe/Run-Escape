@@ -65,6 +65,7 @@ go stale. Add anything that cost you time to work out.
 | The Awakened Leviathan: Shadow, the wreck, the torrent | `content/leviathan.ts`, `docs/design/awakened-leviathan.md`            |
 | Fighting pets (Butch, the Wisp, Baron, Lil'viathan)    | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
 | An act's ending: told once, its card, the save         | `ActDef.ending`, `takeActEnding` in `save.ts`, `ActEndingModal`        |
+| The Forgotten Four gauntlet: climb, camp, records      | `content/gauntlet.ts`, `core/gauntlet.ts`, `ui/Gauntlet.tsx`           |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |
