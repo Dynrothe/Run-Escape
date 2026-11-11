@@ -3662,6 +3662,9 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [changePlayer, multiplayer]);
+    // The map just played: a win can have moved the pick on to the one it opened
+    const played = getMap(result?.mapId ?? ui.mapId);
+    const canRetry = !ui.coop.room;
     return (
         <div className="ui-modal">
             <div className="ui-panel rs-border rs-background ui-result">
@@ -3980,18 +3983,16 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                 )}
                 <div className="ui-row">
-                    {/* A boss fight on your own: straight into it again */}
-                    {!ui.coop.room && getMap(ui.mapId).fight && (
+                    {/* On your own: straight into the same map again */}
+                    {canRetry && (
                         <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                            {nextFightLabel(getMap(ui.mapId), victory, result?.stage)}
+                            {played.fight
+                                ? nextFightLabel(played, victory, result?.stage)
+                                : t("ui.result.play_again")}
                         </button>
                     )}
                     <button
-                        className={
-                            !ui.coop.room && getMap(ui.mapId).fight
-                                ? "ui-button"
-                                : "ui-button ui-button-go"
-                        }
+                        className={canRetry ? "ui-button" : "ui-button ui-button-go"}
                         onClick={() => client.leaveRun()}
                     >
                         {ui.coop.room ? t("ui.result.back_party") : t("ui.result.back_title")}

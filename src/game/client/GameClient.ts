@@ -2162,11 +2162,11 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
-    // The same boss fight again, from its results (MapDef.fight), on your own
+    // The same map again, from its results, on your own
     retry(): void {
         const map = this.sim?.map;
         const mapId = map?.id;
-        if (!mapId || this.coopRun || !map.fight) {
+        if (!mapId || this.coopRun) {
             return;
         }
         // A retry of the same part is without its cinematic; "Next fight", on to a part not played

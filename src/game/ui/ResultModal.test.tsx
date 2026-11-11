@@ -92,11 +92,28 @@ function stat(table: string, label: string): string | null {
     return within(row).getAllByRole("cell")[1].textContent;
 }
 
-const client = { leaveRun: vi.fn() } as unknown as GameClient;
+const client = { leaveRun: vi.fn(), retry: vi.fn() } as unknown as GameClient;
 
 afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+});
+
+test("on your own, Play again is the main button", () => {
+    render(<ResultModal ui={createUi(true)} client={client} />);
+    const again = screen.getByRole("button", { name: /Play again/ });
+    expect(again).toHaveClass("ui-button-go");
+    expect(screen.getByRole("button", { name: "Back to the title" })).not.toHaveClass(
+        "ui-button-go",
+    );
+    fireEvent.click(again);
+    expect(client.retry).toHaveBeenCalledOnce();
+});
+
+test("a party goes back together: no Play again", () => {
+    render(<ResultModal ui={createUi()} client={client} />);
+    expect(screen.queryByRole("button", { name: /Play again/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Back to the party" })).toHaveClass("ui-button-go");
 });
 
 test("starts on your own stats and cycles every player with themed buttons and arrow keys", () => {

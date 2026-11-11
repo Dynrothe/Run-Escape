@@ -26,6 +26,8 @@ the version in the corner).
 - The sound's orb, by Jp66600: by the minimap, where the client's hitpoints orb is, and on the
   title screen, it shows whether the sound's on and turns it off or on. Pressing M in a run says
   which way it went.
+- Play again, by Jp66600: the results of any map you play on your own can start it again, not
+  only a boss fight's.
 
 ### Changed
 
@@ -76,6 +78,7 @@ the version in the corner).
   drawn, and once you'd done a path or two they came so close together that getting in to a
   waterfall without being caught was luck. They now stop at the corridor's end, and there's
   always a gap to time your way in. Fixed by Okaeri.
+- The results' buttons stay in view when there's more to show than fits. Fixed by Jp66600.
 
 ## 0.30.0 - 2026-11-09
 

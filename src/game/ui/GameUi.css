@@ -2702,16 +2702,27 @@
     color: var(--ui-green-text);
 }
 
+/* The stats scroll, and the buttons stay in view under them */
 .ui-result {
+    display: flex;
+    flex-direction: column;
     width: min(820px, calc(94vw / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
     overflow-y: auto;
 }
 
+.ui-result > :not(.ui-result-columns) {
+    flex-shrink: 0;
+}
+
 .ui-result-columns {
+    flex: 1 1 auto;
+    min-height: 120px;
     display: flex;
     flex-wrap: wrap;
     gap: 18px;
+    padding-right: 4px;
+    overflow-y: auto;
 }
 
 .ui-result-player-nav {
