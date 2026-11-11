@@ -55,7 +55,6 @@ import {
     mapName,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
-import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
@@ -1380,7 +1379,7 @@ export function AdventurerPanel({
                                 {treasure && (
                                     <span className="ui-style-treasure">
                                         {t("ui.character.might_find")}
-                                        <span style={{ color: RARITIES.veryRare.color }}>
+                                        <span className="ui-style-treasure-name">
                                             {weaponName(treasure)}
                                         </span>
                                     </span>

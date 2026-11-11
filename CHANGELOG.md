@@ -45,6 +45,9 @@ the version in the corner).
   in, so an enraged Maiden's rings no longer come back to back.
 - Item descriptions, by Jp66600: a potion lists its stats a line each, with their icons, then how
   long they last with your effect duration. The bag's descriptions say an item's rarity too.
+- Easier to read, by Jp66600: secondary text, locked items and disabled buttons are lighter.
+  Penalties, defeats and unreached goals share one red, quests not started a brighter one, and
+  what's written over the world and quest names have a black outline.
 
 ### Fixed
 

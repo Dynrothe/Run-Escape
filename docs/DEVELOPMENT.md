@@ -2530,6 +2530,16 @@ in `i18n/store.ts`.
 - The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
   whatever the machine's language (`src/setupTests.ts`).
 
+### Text colours
+
+Text on the stone and cards takes its colour from the `--ui-text-*` and `--ui-green-text`
+variables in `ui/GameUi.css`. `--ui-text-dim`, `--ui-text-faint` and `--ui-green-text` reach 4.5:1
+on the stone, and `--ui-text-locked` and `--ui-text-disabled`, for locked cards and disabled
+buttons, on a card's darker brown. `--ui-red-text`, a scarlet for what's gone wrong or isn't
+reached yet, and `--ui-quest-red-text`, a brighter red for quests not started, were picked for
+their tone and are well under that. `--ui-outline` is for text over the world and quest names. A
+button doesn't inherit it, so one over the world sets `text-shadow` itself.
+
 ### Notice
 
 Whatever's written in [public/notice.md](../public/notice.md) pops up on the title screen until the
