@@ -901,6 +901,8 @@ export type WeaponState = {
     cooldown: number;
     // Extra damage from rare upgrade rolls (0.15 = +15%)
     bonus: number;
+    // Healing from rarity-scaled upgrades, on top of WeaponDef.bloodHeal's base
+    healGain?: { chance: number; hp: number };
     // Attacks made, for special attacks
     uses: number;
 };
@@ -1001,7 +1003,15 @@ type SimEventBody =
     // A boss attack was used (a swing landed, or projectiles were fired)
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
     // A boss's swing landed, hitting around (x, y)
-    | { type: "bossSwing"; x: number; y: number; radius: number }
+    | {
+          type: "bossSwing";
+          x: number;
+          y: number;
+          radius: number;
+          dirX?: number;
+          dirY?: number;
+          cone?: number;
+      }
     // Something of a fight's landed hard at (x, y): the camera shakes (0 to 1) and the screen
     // can flash (ImpactDef)
     | { type: "bossImpact"; x: number; y: number; shake: number; flash?: string }

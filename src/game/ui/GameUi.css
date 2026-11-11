@@ -164,6 +164,7 @@
 .ui-contents {
     position: absolute;
     inset: 0;
+    z-index: 1;
     zoom: var(--ui-scale);
     pointer-events: none;
 }
@@ -926,6 +927,43 @@
     min-width: 0;
     padding: 2px 8px 2px 4px;
     font-size: 15px;
+}
+
+/* A Thanksgiving preview deliberately themes every map option in the selector. */
+.ui-select-maps-thanksgiving {
+    --ui-orange: #ffb34d;
+    --ui-card: rgba(78, 45, 22, 0.97);
+    --ui-card-hover: rgba(112, 59, 21, 0.98);
+    --ui-edge-light: #b87432;
+}
+
+.ui-map-tile-thanksgiving {
+    border-color: #bf7130;
+    background: rgba(97, 52, 23, 0.97);
+    box-shadow: inset 0 0 0 1px rgba(244, 174, 76, 0.52);
+}
+
+.ui-map-tile-thanksgiving:hover:not(:disabled) {
+    background: rgba(125, 64, 21, 0.98);
+}
+
+.ui-map-tile-thanksgiving.ui-card-selected {
+    border-color: #ed9b37;
+    color: #fff0c8;
+    background: rgba(126, 62, 20, 0.98);
+    box-shadow: inset 0 0 0 2px #ffd276;
+}
+
+.ui-select-details-thanksgiving {
+    border-color: #bd7834;
+    background: rgba(57, 31, 17, 0.72);
+    box-shadow:
+        inset 3px 0 0 #d18232,
+        inset 0 0 0 1px rgba(244, 181, 86, 0.36);
+}
+
+.ui-select-details-thanksgiving .ui-card-description {
+    color: #f3dec0;
 }
 
 .ui-map-name {
@@ -1766,6 +1804,32 @@
     background: var(--ui-card);
 }
 
+.ui-hud-gear {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.ui-gear-toggle {
+    pointer-events: auto;
+}
+
+.ui-hud-gear-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 30px);
+    justify-content: end;
+    gap: 2px;
+}
+
+.ui-hud-gear-grid[hidden] {
+    display: none;
+}
+
+.ui-gear-ring-slot {
+    grid-column: 2;
+}
+
 /* Stat line with an OSRS icon, or spacer when there is none. Its text wraps
    beside the icon where there's no room (a phone's level up cards) */
 .ui-stat-line {
@@ -1806,8 +1870,11 @@
     padding: 1px 6px 4px 3px;
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid #000;
+    font: inherit;
     color: var(--ui-white);
     font-size: 14px;
+    text-align: left;
+    cursor: help;
 }
 
 .ui-buff-bar {
@@ -2516,6 +2583,14 @@
     flex-wrap: wrap;
     gap: 2px 14px;
     color: var(--ui-white);
+}
+
+.ui-pause-effect-debuff {
+    color: #ff6b5b;
+}
+
+.ui-pause-effect-buff {
+    color: #75cf80;
 }
 
 /* A worn set piece's progress, under its stats; green once the bonus is on */

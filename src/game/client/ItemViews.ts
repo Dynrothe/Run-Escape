@@ -15,7 +15,7 @@ import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
-import { STAT_INFO, StatText, diffStats } from "../content/stats";
+import { STAT_INFO, StatText, diffStats, formatStats } from "../content/stats";
 import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
@@ -267,10 +267,19 @@ export function getBuffViews(sim: Sim): BuffView[] {
         };
     };
     const buffs: BuffView[] = sim.buffs.map((buff) => {
-        const { name, objId } = buff.look ?? getItem(buff.itemId);
+        const item = buff.look ? undefined : getItem(buff.itemId);
+        const { name, objId } = buff.look ?? item!;
+        const details = formatStats(buff.stats);
+        if (buff.cures) {
+            details.push("Cures poison and boss debuffs");
+        }
         return {
             id: buff.itemId,
             name,
+            description:
+                buff.look || item?.kind !== "utility"
+                    ? details.join(", ") || "Effect active."
+                    : item.description,
             objId,
             ...timer(buff.startTick, buff.endTick),
             harmful: false,
@@ -281,6 +290,7 @@ export function getBuffViews(sim: Sim): BuffView[] {
         buffs.push({
             id: "powerUp:" + active.uid,
             name: powerUp.name,
+            description: powerUp.description,
             objId: powerUp.objId,
             ...timer(active.startTick, active.endTick),
             harmful: false,
@@ -290,6 +300,7 @@ export function getBuffViews(sim: Sim): BuffView[] {
         buffs.push({
             id: debuff.id,
             name: debuff.name,
+            description: formatStats(debuff.stats).join(", ") || "Weakens your stats.",
             objId: debuff.iconObjId,
             ...timer(debuff.startTick, debuff.endTick),
             harmful: true,
@@ -297,9 +308,13 @@ export function getBuffViews(sim: Sim): BuffView[] {
     }
     // One for each kind of revive left, with no timer
     for (const revive of new Set(getRevivesLeft(sim.heroes[sim.focus]))) {
-        buffs.push({ ...revive, harmful: false });
+        buffs.push({
+            ...revive,
+            description: "Revives you once if you fall.",
+            harmful: false,
+        });
     }
-    return buffs;
+    return [...buffs.filter((buff) => buff.harmful), ...buffs.filter((buff) => !buff.harmful)];
 }
 
 export type ReviveLook = { id: string; name: string; objId: number };

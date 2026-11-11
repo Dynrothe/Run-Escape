@@ -8,6 +8,7 @@ describe("the Collection log's rewards", () => {
     it("has a tab for each map with trophies, the Theatre of Blood's as well as the Hallowed Night's", () => {
         expect(REWARD_MAPS).toContain("halloween");
         expect(REWARD_MAPS).toContain("theatre_of_blood");
+        expect(REWARD_MAPS).toContain("thanksgiving");
     });
 
     it("lists every trophy once, under its own map", () => {
@@ -39,5 +40,78 @@ describe("the Collection log's rewards", () => {
     it("has a tab for a boss fight that brings in a weapon, with no trophy: Phosani's staff", () => {
         expect(REWARD_MAPS).toContain("phosani");
         expect(getRewards(createSave(), "phosani").map((r) => r.id)).toContain("nightmare_staff");
+    });
+
+    it("lists Thanksgiving's collection rewards with accurate sources", () => {
+        const rewards = getRewards(createSave(), "thanksgiving");
+        const ids = rewards.map(({ id }) => id);
+        const trophy = (id: string) => TROPHIES.find((entry) => entry.id === id)!;
+
+        expect(ids).toHaveLength(8);
+        expect(ids).toEqual(
+            expect.arrayContaining([
+                "rubber_chicken",
+                "chompy_bird_bow",
+                "magic_secateurs",
+                "golden_feather",
+                "chompy_hat",
+                "ledger_of_the_harvest",
+                "chompy_chick",
+                "golden_egg",
+            ]),
+        );
+        expect(trophy("rubber_chicken").from).toMatchObject({
+            kind: "enemy",
+            enemyId: "chompy_bird",
+            mapId: "thanksgiving",
+            chance: 1 / 200,
+        });
+        expect(trophy("chompy_bird_bow").from).toMatchObject({
+            kind: "enemy",
+            enemyId: "chompy_bird",
+            mapId: "thanksgiving",
+            chance: 1 / 400,
+        });
+        expect(trophy("magic_secateurs").from).toEqual({ kind: "turkey", chance: 1 / 5 });
+        expect(trophy("golden_feather").from).toMatchObject({
+            kind: "enemy",
+            enemyId: "chompy_bird",
+            mapId: "thanksgiving",
+            chance: 1 / 1000,
+        });
+        expect(trophy("chompy_chick").from).toMatchObject({
+            kind: "quest",
+            questId: "thanksgiving_chompy_hunt",
+            mapId: "thanksgiving",
+        });
+        expect(trophy("chompy_chick").how).toBe("Chompy Slayer - Completion required to unlock");
+        expect(trophy("golden_egg")).toMatchObject({
+            name: "Golden Egg",
+            objId: 28663,
+            from: {
+                kind: "map",
+                mapId: "thanksgiving",
+                requiresBoss: "freaky_forester_final",
+                hard: true,
+            },
+        });
+        expect(trophy("chompy_hat").from).toMatchObject({
+            kind: "map",
+            mapId: "thanksgiving",
+            requiresBoss: "evil_chicken",
+        });
+        expect(trophy("ledger_of_the_harvest").from).toMatchObject({
+            kind: "map",
+            mapId: "thanksgiving",
+            requiresBoss: "freaky_forester_final",
+        });
+        expect(trophy("chompy_bird_bow")).toMatchObject({
+            name: "Turkey hat",
+            objId: 28620,
+            how: "A rare drop from a Chompy Bird.",
+        });
+        for (const reward of rewards) {
+            expect(reward.how).not.toMatch(/\b1 in\b/);
+        }
     });
 });

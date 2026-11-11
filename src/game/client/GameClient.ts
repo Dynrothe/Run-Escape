@@ -5,7 +5,7 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
-import { CHARACTERS, getCharacter } from "../content/characters";
+import { CHARACTERS, characterMapRestriction, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
@@ -73,7 +73,14 @@ import {
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { fmtNum, t, tl, tp } from "../i18n";
-import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
+ thanksgiving-avian-0.30-merge
+import {
+    CameraRig,
+    MAX_CAMERA_DISTANCE,
+    MIN_CAMERA_DISTANCE,
+    getGroundReach,
+} from "../render/CameraRig";
+
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
@@ -1147,6 +1154,19 @@ export class GameClient implements GameFrameHandler {
             this.sounds.denied();
             return;
         }
+        const restriction = room.members
+            .map((member) => getMapCharacter(map) ?? member.characterId)
+            .map((id) =>
+                CHARACTERS.some((character) => character.id === id)
+                    ? characterMapRestriction(id, map.id)
+                    : "A party member has an unknown adventurer.",
+            )
+            .find((reason) => reason !== undefined);
+        if (restriction) {
+            this.sounds.denied();
+            this.store.toast(restriction, 6000);
+            return;
+        }
         // The room's modes, which the relay checked everyone has (or takes
         // anyone for, with anyMap), so the run is what the lobby said
         const { anyMap } = this.store.getSnapshot().coop;
@@ -1361,6 +1381,14 @@ export class GameClient implements GameFrameHandler {
     // Takes hold from the next frame (update)
     setFrameRate(frameRate: FrameRate): void {
         this.setDisplay({ frameRate });
+    }
+
+    setCameraZoom(zoom: number): void {
+        if (this.sim) {
+            this.cameraRig.setDistance(
+                MAX_CAMERA_DISTANCE - ((MAX_CAMERA_DISTANCE - MIN_CAMERA_DISTANCE) * zoom) / 100,
+            );
+        }
     }
 
     private setDisplay(changes: Partial<DisplaySettings>): void {
@@ -1618,6 +1646,12 @@ export class GameClient implements GameFrameHandler {
         const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
         const expert = this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
         const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
+        const restriction = characterMapRestriction(characterId, map.id);
+        if (restriction) {
+            this.sounds.denied();
+            this.store.toast(restriction, 6000);
+            return;
+        }
         if (!(await this.travelTo(mapId, "characters", [this.save.pet]))) {
             return;
         }
@@ -1684,6 +1718,14 @@ export class GameClient implements GameFrameHandler {
             !game.heroes.every((hero) => CHARACTERS.some((c) => c.id === hero.characterId))
         ) {
             this.store.toast(t("toast.missing_run_content"), 6000);
+ thanksgiving-avian-0.30-merge
+            this.coopInbox = undefined;
+            this.coop.leave();
+            return;
+        }
+        if (game.heroes.some((hero) => characterMapRestriction(hero.characterId, game.mapId))) {
+            this.store.toast("A party member cannot use that adventurer on this map.", 6000);
+
             this.coopInbox = undefined;
             this.coop.leave();
             return;

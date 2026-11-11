@@ -81,7 +81,9 @@ export function emptyStats(): Stats {
 
 // What some weapons hit harder (the Ivandis flail and undead, vampyres)
 // kalphite: the kalphites and the scarabs (Kephri too), for the keris partisans
-export type EnemyTag = "undead" | "vampyre" | "kalphite";
+
+export type EnemyTag = "undead" | "vampyre" | "kalphite" | "bird";
+
 
 export type EnemyDef = {
     id: string;
@@ -124,6 +126,10 @@ export type EnemyDef = {
     // Bosses that fight with attacks of their own (instead of hitting
     // whatever they touch)
     boss?: BossDef;
+    // Fights with its boss attacks even as an ordinary enemy (a summoned
+    // minion): no boss bar, drops or boss rules, and its enrage never comes
+    // (set enrage.at to 0)
+    minionAttacks?: boolean;
     // Drawn as a player in one of these outfits (picked at random as each one
     // turns up) instead of as the NPC: the fun maps' scammers, pkers and
     // noobs. npcId is unused then.
@@ -861,6 +867,8 @@ export type BossAttackDef = {
     // Surges: tiles either side of the lane's middle.
     // Projectiles: each one's hit radius (0.35 tiles unless set).
     radius?: number;
+    // Surges: total length of the lane; otherwise it runs across the arena.
+    surgeLength?: number;
     // Swings: hits only a wedge this many radians across, in the way the boss
     // faced as it began, and under the boss (around it, underRadius tiles).
     // coneAlpha: how much more solid its wedge and the circle under the boss are drawn: a big
@@ -883,6 +891,9 @@ export type BossAttackDef = {
     castSpotAnim?: number;
     spotAnim?: number;
     impactSpotAnim?: number;
+    // Projectiles: draw this cache item instead of spotAnim, with an optional visual scale multiplier.
+    projectileObjId?: number;
+    projectileScale?: number;
     // Summons: what comes, and how many.
     // beside: they turn up by the player rather than the boss.
     // holds: the player can't move until they're dead or this many seconds
@@ -1685,6 +1696,12 @@ export type WeaponDef = {
     // damage, up to max, with this spot animation on them (the Sanguinesti
     // staff; projectiles, auras and strikes)
     lifesteal?: { chance: number; fraction: number; max: number; spotAnim: number };
+    // A hit has this chance of healing a flat amount (the Amulet of blood
+    // fury's way), and each upgrade raises both by its rarity (the Rubber
+    // Chicken). Checked on every hit, not once a second.
+    bloodHeal?: { chance: number; hp: number; maxChance: number; spotAnim: number };
+    // Extra damage against bosses (0.2 = +20%)
+    bossDamage?: number;
     // Orbits: the items circling the player, one for each in turn
     orbitObjIds?: number[];
     // Brought in by a task on a map, like an adventurer; in from the start
@@ -1859,12 +1876,22 @@ export type CharacterDef = {
     startingWeapon: string;
     // Worn items by equipment slot
     equipment: Partial<Record<number, number>>;
+    // These outfit slots remain visible over passive and casket equipment.
+    fixedOutfit?: boolean;
+    // Takes no gear, passives or utility items: caskets give only coins
+    noItems?: boolean;
+    // A looping cosmetic spot animation drawn over this adventurer's head.
+    overheadSpotAnim?: number;
     // Identity kits (hair, jaw, torso, arms, hands, legs, feet) and body
     // colours (hair, torso, legs, feet, skin), when they're not the default
     // look (Durial321's long white hair)
     kits?: number[];
     colors?: number[];
     bonus: Partial<Stats>;
+    // A selectable adventurer restricted to one map.
+    mapOnly?: string;
+    maxWeapons?: number;
+    damageAgainst?: { tags: EnemyTag[]; damage: number };
     // A revive of their own (bonus.revival) as the HUD shows it, beside the
     // shop's Ring of life: the Pyromancer's phoenix
     reviveLook?: { name: string; objId: number };
@@ -1982,6 +2009,8 @@ export type MapDef = {
     scaperune?: boolean;
     // A seasonal event: open from the start, outside the campaign's chain
     seasonal?: boolean;
+    // Everyone plays this adventurer here, unlocked or not (the Avian Assaulter at Thanksgiving)
+    seasonalCharacter?: string;
     // One boss fight and nothing else (Phosani's Nightmare): no waves, no
     // picks and no items, and its final boss rises as the run begins. Outside
     // the campaign's chain like a seasonal map, and open once requires (a map
@@ -2011,6 +2040,8 @@ export type MapDef = {
     // to start in, with a door to each path, and the invocations' raid level (invocations.ts) in
     // place of hard mode
     tombs?: TombsDef;
+    // Decorative cache locs drawn over the world without changing collision.
+    scenery?: MapSceneryDef[];
     // NPCs that sit on the map as scenery, posed with their own animation (MapPropDef): drawn by
     // the view alone, never in the sim, so they're in no hash. For what a loc can't be: a loc
     // can't play a skeletal animation.
@@ -2024,6 +2055,14 @@ export type MapDef = {
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
+};
+
+export type MapSceneryDef = {
+    locId: number;
+    x: number;
+    y: number;
+    rotation?: 0 | 1 | 2 | 3;
+    scale?: number;
 };
 
 // What a light looks like and how far it reaches (docs/DEVELOPMENT.md, Lights). Every kind of light
@@ -3116,6 +3155,8 @@ export type PowerUpEffect =
       }
     // Opens as a treat or a trick (see trickOrTreat.ts)
     | { kind: "pumpkin" }
+    // A cooked turkey (locId) appears at the player's feet(See TurkeyDay.ts)
+    | { kind: "cooked_turkey" }
     // Everything within range runs laps around the player at this many times
     // its speed, radius tiles out, and can't attack; a line for the player to
     // shout

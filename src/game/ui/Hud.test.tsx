@@ -19,6 +19,23 @@ import { createSave } from "../core/save";
 import { GameUi } from "./GameUi";
 import { iconCache } from "./ItemIcon";
 
+
+const device = vi.hoisted(() => ({ coarse: false }));
+
+vi.mock("../../util/DeviceUtil", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../../util/DeviceUtil")>()),
+    get isCoarsePointer() {
+        return device.coarse;
+    },
+}));
+
+vi.mock("./TouchControls", () => ({
+    TouchControls: () => null,
+    RotateNotice: () => null,
+    enterFullscreen: vi.fn(),
+}));
+
+
 vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
 
 vi.mock("../client/GameView", () => ({
@@ -68,25 +85,141 @@ function numbers(changes: Partial<HudNumbers> = {}): HudNumbers {
 }
 
 // The HUD with the client's store and nothing else of it
-function renderHud() {
+function renderHud(devTools = false) {
     const store = new GameStore(createSave());
     const noop = () => {};
+    const setCameraZoom = vi.fn();
     const client = new Proxy(
-        { store, input: { stick: {} } },
+        {
+            store,
+            input: { stick: {} },
+            cameraRig: { distance: 22 },
+            setCameraZoom,
+            devTools,
+        },
         { get: (target, key) => (key in target ? target[key as keyof typeof target] : noop) },
     ) as unknown as GameClient;
     store.set({ screen: "run", overlay: "none", hud: hud([slot("bow", 1)]) });
     store.setNumbers(numbers());
     const view = render(<GameUi store={store} client={client} />);
-    return { store, view };
+    return { store, view, setCameraZoom, client };
 }
 
 afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    device.coarse = false;
 });
 
 describe("the run's HUD", () => {
+    test("adjusts camera zoom from the mobile HUD in solo and co-op runs", () => {
+        device.coarse = true;
+        const { store, setCameraZoom } = renderHud();
+        const toggle = screen.getByRole("button", { name: "Zoom" });
+        expect(toggle).toHaveAttribute("aria-expanded", "false");
+        expect(screen.queryByRole("slider", { name: "Camera zoom" })).toBeNull();
+        fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+        const slider = screen.getByRole("slider", { name: "Camera zoom" });
+        fireEvent.change(slider, { target: { value: "50" } });
+        expect(setCameraZoom).toHaveBeenCalledExactlyOnceWith(50);
+        expect(slider).toHaveValue("50");
+        act(() =>
+            store.set({
+                party: [
+                    {
+                        name: "Teammate",
+                        characterId: "warrior",
+                        hp: 25,
+                        maxHp: 25,
+                        down: false,
+                        left: false,
+                        revivable: false,
+                        reviveProgress: 0,
+                        immune: false,
+                    },
+                ],
+            }),
+        );
+        expect(screen.getByRole("slider", { name: "Camera zoom" })).toBeVisible();
+        act(() => store.set({ overlay: "paused" }));
+        expect(screen.queryByRole("slider", { name: "Camera zoom" })).not.toBeInTheDocument();
+    });
+
+    test.each([1, 2, 3])("stress-tests the mobile HUD with %i teammates", (teammateCount) => {
+        device.coarse = true;
+        for (let localHero = 0; localHero <= teammateCount; localHero++) {
+            const { store, view, setCameraZoom } = renderHud();
+            const gear = GEAR_SLOTS.map((slot, slotIndex) => {
+                const choices = CASKET_GEAR.filter((item) => item.slot === slot.id);
+                const item = choices[(localHero + teammateCount + slotIndex) % choices.length];
+                return { slot: slot.id, name: slot.name, item: getItemView(item) };
+            });
+            const party = Array.from({ length: teammateCount }, (_, index) => ({
+                name: `Teammate ${index + 1}`,
+                characterId: index % 2 === 0 ? "warrior" : "wizard",
+                hp: 25 - index,
+                maxHp: 25,
+                down: false,
+                left: false,
+                revivable: false,
+                reviveProgress: 0,
+                immune: false,
+            }));
+            act(() =>
+                store.set({
+                    hud: { ...hud([slot("bow", 1)]), gear },
+                    party,
+                }),
+            );
+            act(() =>
+                store.setNumbers(
+                    numbers({
+                        buffs: [
+                            {
+                                id: `stress-buff-${localHero}`,
+                                name: "Stress test potion",
+                                description: "+20% damage",
+                                objId: 12695,
+                                harmful: false,
+                                secondsLeft: 20,
+                                fraction: 0.5,
+                            },
+                            {
+                                id: `stress-debuff-${localHero}`,
+                                name: "Stress test drain",
+                                description: "-0.2 armour",
+                                objId: 698,
+                                harmful: true,
+                                secondsLeft: 10,
+                                fraction: 0.25,
+                            },
+                        ],
+                    }),
+                ),
+            );
+
+            const gearGrid = view.container.querySelector(".ui-hud-gear-grid")!;
+            expect(gearGrid.children).toHaveLength(GEAR_SLOTS.length);
+            expect(gearGrid.querySelectorAll(".ui-gear-slot-empty")).toHaveLength(0);
+            expect(view.container.querySelectorAll(".ui-party-member")).toHaveLength(teammateCount);
+
+            fireEvent.click(screen.getByRole("button", { name: "Zoom" }));
+            const zoom = 20 + localHero * 10;
+            fireEvent.change(screen.getByRole("slider", { name: "Camera zoom" }), {
+                target: { value: String(zoom) },
+            });
+            expect(setCameraZoom).toHaveBeenLastCalledWith(zoom);
+            expect(screen.getByRole("slider", { name: "Camera zoom" })).toBeVisible();
+
+            act(() => store.set({ overlay: "paused" }));
+            expect(screen.queryByRole("slider", { name: "Camera zoom" })).not.toBeInTheDocument();
+            expect(screen.getByText("Stress test potion")).toBeVisible();
+            expect(screen.getByText("Stress test drain")).toBeVisible();
+            view.unmount();
+        }
+    });
+
     test("empty equipment slots use cache silhouettes and equipped items keep their own icons", () => {
         vi.spyOn(iconCache, "getSprite").mockImplementation(
             (id) => `data:image/png;base64,slot${id}`,
@@ -138,6 +271,7 @@ describe("the run's HUD", () => {
         const potion = {
             id: "potion",
             name: "Potion",
+            description: "Potion",
             objId: 2436,
             harmful: false,
             secondsLeft: 30,
@@ -151,6 +285,7 @@ describe("the run's HUD", () => {
                         {
                             id: "ring_of_life",
                             name: "Ring of life",
+                            description: "Revives you once if you fall.",
                             objId: 2570,
                             harmful: false,
                         },
@@ -158,16 +293,59 @@ describe("the run's HUD", () => {
                 }),
             ),
         );
-        const ring = view.getByTitle("Ring of life");
+        const ring = view.getByRole("button", { name: "Ring of life" });
         expect(ring.querySelector(".ui-icon")).not.toBeNull();
         expect(ring).not.toHaveTextContent(/\ds/);
         expect(ring.querySelector(".ui-buff-bar")).toBeNull();
-        const timed = view.getByTitle("Potion");
+        const timed = view.getByRole("button", { name: "Potion" });
         expect(timed).toHaveTextContent("30s");
         expect(timed.querySelector(".ui-buff-bar")).toHaveStyle("transform: scaleX(0.5)");
         act(() => store.setNumbers(numbers({ buffs: [potion] })));
-        expect(view.queryByTitle("Ring of life")).toBeNull();
-        expect(view.getByTitle("Potion")).toHaveTextContent("30s");
+        expect(view.queryByRole("button", { name: "Ring of life" })).toBeNull();
+        expect(view.getByRole("button", { name: "Potion" })).toHaveTextContent("30s");
+    });
+
+    test("shows a collapsible two-column gear panel below DPS in solo and co-op", () => {
+        const { store, view } = renderHud();
+        const gear = GEAR_SLOTS.map(({ id, name }) => ({ slot: id, name }));
+        act(() => store.set({ hud: { ...hud([slot("bow", 1)]), gear } }));
+
+        const rightColumn = view.container.querySelector<HTMLElement>(".ui-hud-right")!;
+        const toggle = within(rightColumn).getByRole("button", { name: "Gear" });
+        const gearGrid = rightColumn.querySelector(".ui-hud-gear-grid")!;
+        expect(rightColumn.querySelector(".ui-damage")?.nextElementSibling).toBe(
+            toggle.parentElement,
+        );
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+        expect(gearGrid.children).toHaveLength(GEAR_SLOTS.length);
+        expect(gearGrid.lastElementChild).toHaveClass("ui-gear-ring-slot");
+        expect(gearGrid.querySelectorAll(".ui-gear-ring-slot")).toHaveLength(1);
+        expect(view.container.querySelector(".ui-hud-left .ui-gear-slots")).toBeNull();
+
+        fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute("aria-expanded", "false");
+        expect(gearGrid).toHaveAttribute("hidden");
+        fireEvent.click(toggle);
+        expect(gearGrid).not.toHaveAttribute("hidden");
+
+        act(() =>
+            store.set({
+                party: [
+                    {
+                        name: "Teammate",
+                        characterId: "warrior",
+                        hp: 25,
+                        maxHp: 25,
+                        down: false,
+                        left: false,
+                        revivable: false,
+                        reviveProgress: 0,
+                        immune: false,
+                    },
+                ],
+            }),
+        );
+        expect(rightColumn.querySelector(".ui-hud-gear-grid")).toBe(gearGrid);
     });
 
     test("shows its numbers as they change, apart from the rest of the UI", () => {
@@ -219,6 +397,15 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
     });
 
+    test("shows the Thanksgiving Forester warning in the final minute", () => {
+        const { store, view } = renderHud();
+        act(() => store.set({ hud: { ...hud([]), mapId: "thanksgiving" } }));
+        act(() => store.setNumbers(numbers({ bossIn: 60 })));
+        expect(view.container.querySelector(".ui-boss-warning")?.textContent).toBe(
+            "The harvest feast is interrupted... the Freaky Forester approaches! 60s",
+        );
+    });
+
     test("weapons and passives describe their current stats and evolution on focus", () => {
         const { store } = renderHud();
         const weapon: SlotView = {
@@ -250,7 +437,7 @@ describe("the run's HUD", () => {
         expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
         fireEvent.focus(prayer);
         act(() => store.set({ overlay: "paused" }));
-        expect(prayer).toBeDisabled();
+        expect(screen.queryByRole("button", { name: "Piety" })).not.toBeInTheDocument();
         expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     });
 

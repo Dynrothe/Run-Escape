@@ -359,7 +359,13 @@ describe("the HUD", () => {
             updateHud(client, true);
             const buffs = store.getNumbers()!.buffs;
             expect(buffs).toEqual([
-                { id: "ring_of_life", name: "Ring of life", objId: 2570, harmful: false },
+                {
+                    id: "ring_of_life",
+                    name: "Ring of life",
+                    description: "Revives you once if you fall.",
+                    objId: 2570,
+                    harmful: false,
+                },
             ]);
             sim.tick += 50;
             updateHud(client);
@@ -448,6 +454,7 @@ describe("the HUD", () => {
         const bosses = [1022.5, 1048.5].map(
             (x) => sim.spawnEnemy(getEnemy("wise_old_man"), type, { x, y: 1036.5 })!,
         );
+
         bosses[0].hp = bosses[0].maxHp / 4;
         bosses[1].hp = (bosses[1].maxHp * 3) / 4;
         const fraction = (index: number) => bosses[index].hp / bosses[index].maxHp;
@@ -1454,6 +1461,77 @@ describe("saving", () => {
         expect(loadoutStats(loadout)).toEqual(
             getMetaStats(client.save, getCharacter("durial321").style),
         );
+    });
+
+    test.each([["avian_assaulter", "lumbridge"]])(
+        "solo start rejects %s on %s before loading the map",
+        async (characterId, mapId) => {
+            const { client, store } = createSaving(true);
+            store.set({ characterId });
+            const travelTo = vi.fn();
+            const denied = vi.fn();
+            Object.assign(client, { travelTo, sounds: { denied } });
+            await client.startRun(mapId);
+            expect(travelTo).not.toHaveBeenCalled();
+            expect(denied).toHaveBeenCalledOnce();
+        },
+    );
+
+    test("the co-op host plays everyone as the Avian Assaulter on Thanksgiving", () => {
+        const { client } = createSaving(true);
+        const members = [
+            { id: "host", name: "Host", characterId: "warrior", ready: true },
+            { id: "guest", name: "Guest", characterId: "ranger", ready: true },
+        ];
+        const room = { mapId: "thanksgiving", members, endless: false, hard: false };
+        const start = vi.fn();
+        Object.assign(client, { coop: { room, isHost: true, start } });
+        client.startCoopRun();
+        expect(start).toHaveBeenCalledOnce();
+        expect(
+            start.mock.calls[0][0].heroes.map((hero: { characterId: string }) => hero.characterId),
+        ).toEqual(["avian_assaulter", "avian_assaulter"]);
+    });
+
+    test("the co-op host requires every hero to match the selected map", () => {
+        const { client } = createSaving(true);
+        const members = [
+            { id: "host", name: "Host", characterId: "avian_assaulter", ready: true },
+            { id: "guest", name: "Guest", characterId: "warrior", ready: true },
+        ];
+        const room = { mapId: "lumbridge", members, endless: false, hard: false };
+        const start = vi.fn();
+        const denied = vi.fn();
+        Object.assign(client, { coop: { room, isHost: true, start }, sounds: { denied } });
+        client.startCoopRun();
+        expect(start).not.toHaveBeenCalled();
+        expect(denied).toHaveBeenCalledOnce();
+        members[0].characterId = "warrior";
+        client.startCoopRun();
+        expect(start).toHaveBeenCalledOnce();
+    });
+
+    test("a guest rejects an invalid co-op start before loading", async () => {
+        const { client } = createSaving(true);
+        const leave = vi.fn();
+        const travelTo = vi.fn();
+        Object.assign(client, { coop: { id: "guest", room: { code: "ROOM" }, leave }, travelTo });
+        await client["beginCoopRun"]({
+            seed: 1,
+            mapId: "thanksgiving",
+            endless: false,
+            hard: false,
+            heroes: [
+                {
+                    id: "guest",
+                    name: "Guest",
+                    characterId: "warrior",
+                    loadout: { metaStats: {}, unlockedItems: [], armoury: {} },
+                },
+            ],
+        });
+        expect(leave).toHaveBeenCalledOnce();
+        expect(travelTo).not.toHaveBeenCalled();
     });
 
     test("a single skill refund is saved and refreshes the shop", () => {

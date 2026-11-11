@@ -3,8 +3,7 @@ import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
 import { CharacterDef } from "./types";
 
-// The first three are there from the start. Each map brings two more: one for
-// beating it, one for a task done there.
+// Characters without an unlock are there from the start.
 export const CHARACTERS: CharacterDef[] = [
     {
         id: "warrior",
@@ -46,6 +45,27 @@ export const CHARACTERS: CharacterDef[] = [
             [EquipSlot.HANDS]: 1063,
         },
         bonus: { moveSpeed: 0.1 },
+    },
+    {
+        id: "avian_assaulter",
+        name: "Avian Assaulter",
+        description:
+            "Starts with a Rubber Chicken. Questionable.... This is one dangerous bird! Everyone plays it in Thanksgiving Harvest.",
+        style: "melee",
+        startingWeapon: "rubber_chicken",
+        equipment: {
+            [EquipSlot.HEAD]: 11021,
+            [EquipSlot.TORSO]: 11020,
+            [EquipSlot.LEGS]: 11022,
+            [EquipSlot.FEET]: 11019,
+        },
+        fixedOutfit: true,
+        noItems: true,
+        overheadSpotAnim: 254,
+        mapOnly: "thanksgiving",
+        maxWeapons: 1,
+        damageAgainst: { tags: ["bird"], damage: 0.15 },
+        bonus: { growth: 0.15, magnet: 0.5, cooldown: 0.35, moveSpeed: 0.45, maxHp: 1.8 },
     },
     {
         id: "monk",
@@ -619,8 +639,23 @@ export function getCharacter(id: string): CharacterDef {
     if (!character) {
         throw new Error("Unknown character " + id);
     }
+
     return character;
 }
+
+
+// Unlike a fight's forced adventurer, both of these must be selected by the player.
+export function characterMapRestriction(characterId: string, mapId: string): string | undefined {
+    const character = getCharacter(characterId);
+    if (mapId === "thanksgiving" && characterId !== "avian_assaulter") {
+        return "Thanksgiving Harvest requires Avian Assaulter.";
+    }
+    if (character.mapOnly && character.mapOnly !== mapId) {
+        return `${character.name} can only enter Thanksgiving Harvest.`;
+    }
+    return undefined;
+}
+
 
 export function characterName(character: CharacterDef): string {
     return tr(`char.${character.id}.name`, character.name);

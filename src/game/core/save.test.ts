@@ -286,7 +286,11 @@ describe("save", () => {
 
     test("new saves have the free characters", () => {
         const save = createSave();
-        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger"]);
+        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger", "avian_assaulter"]);
+        expect(
+            migrateSave({ ...save, unlockedCharacters: ["warrior", "wizard", "ranger"] })
+                .unlockedCharacters,
+        ).toContain("avian_assaulter");
         expect(save.coins).toBe(0);
     });
 
@@ -642,7 +646,7 @@ describe("save", () => {
         expect(save.coins).toBe(3000);
         expect(save.bestLevel).toBe(20);
         expect(save.runs).toBe(1);
-        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger"]);
+        expect(save.unlockedCharacters).toEqual(["warrior", "wizard", "ranger", "avian_assaulter"]);
     });
 
     test("beating a map unlocks the next", () => {
@@ -1196,6 +1200,49 @@ describe("evolutions made", () => {
 });
 
 describe("quests", () => {
+    test("Chompy Slayer awards its pet at 10,000 kills without paying twice", () => {
+        const save = createSave();
+        const quest = QUEST_BY_ID.get("thanksgiving_chompy_hunt")!;
+        recordRun(save, run("thanksgiving", { enemyKills: { chompy_bird: 9999 } }));
+        expect(save.trophies).not.toContain("chompy_chick");
+        expect(save.questsDone).not.toContain(quest.id);
+        expect(recordRun(save, run("thanksgiving", { enemyKills: { chompy_bird: 1 } }))).toContain(
+            quest,
+        );
+        expect(save.trophies).toContain("chompy_chick");
+        expect(save.coins).toBe(4000);
+        recordRun(save, run("thanksgiving", { enemyKills: { chompy_bird: 1 } }));
+        expect(save.trophies.filter((id) => id === "chompy_chick")).toHaveLength(1);
+        expect(save.coins).toBe(4000);
+    });
+
+    test("existing quest completions, pets, bow unlocks and hard victories survive loading", () => {
+        const migrated = migrateSave({
+            ...createSave(),
+            questsDone: ["thanksgiving_chompy_hunt"],
+            trophies: ["chompy_bird_bow"],
+            pet: "chompy_chick",
+            hardVictories: { thanksgiving: 1 },
+            coins: 123,
+        });
+        expect(migrated.trophies).toEqual(
+            expect.arrayContaining(["chompy_bird_bow", "chompy_chick", "golden_egg"]),
+        );
+        expect(migrated.pet).toBe("chompy_chick");
+        expect(migrated.coins).toBe(123);
+        expect(migrateSave(migrated)).toEqual(migrated);
+        const oldPet = migrateSave({
+            ...createSave(),
+            trophies: ["chompy_chick"],
+            pet: "chompy_chick",
+        });
+        expect(oldPet.pet).toBe("chompy_chick");
+        expect(oldPet.trophies).toContain("chompy_chick");
+        expect(
+            migrateSave({ ...createSave(), mapVictories: { thanksgiving: 1 } }).trophies,
+        ).not.toContain("golden_egg");
+    });
+
     test("count kills over runs, and pay out once when finished", () => {
         const save = createSave();
         const quest = QUEST_BY_ID.get("goblin_diplomacy")!;

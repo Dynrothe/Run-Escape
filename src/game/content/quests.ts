@@ -327,6 +327,44 @@ export const QUESTS: QuestDef[] = [
         coins: 4000,
     },
     {
+        id: "thanksgiving_professor_oddenstein",
+        name: "Professor Oddenstein",
+        mapId: "thanksgiving",
+        objective: { kind: "kill", enemyIds: ["professor_oddenstein"], count: 1 },
+        coins: 1000,
+    },
+    {
+        id: "thanksgiving_evil_chickens",
+        name: "Evil Chicken Hunt",
+        mapId: "thanksgiving",
+        objective: { kind: "kill", enemyIds: ["evil_chicken"], count: 10, what: "Evil Chickens" },
+        coins: 1500,
+    },
+    {
+        id: "thanksgiving_freaky_forester",
+        name: "Freaky Forester",
+        mapId: "thanksgiving",
+        objective: {
+            kind: "kill",
+            enemyIds: ["freaky_forester_final"],
+            count: 1,
+            what: "the Freaky Forester",
+        },
+        coins: 2500,
+    },
+    {
+        id: "thanksgiving_chompy_hunt",
+        name: "Chompy Slayer",
+        mapId: "thanksgiving",
+        objective: {
+            kind: "kill",
+            enemyIds: ["chompy_bird"],
+            count: 10000,
+            what: "Chompy Birds",
+        },
+        coins: 4000,
+    },
+    {
         id: "ratcatchers",
         name: "Ratcatchers",
         objective: {

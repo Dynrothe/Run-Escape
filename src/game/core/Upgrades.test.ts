@@ -386,6 +386,19 @@ describe("class weapons", () => {
         }
     });
 
+    test("the Rubber Chicken is not offered to other adventurers", () => {
+        expect(newWeaponOffers("melee", [weapon("scimitar")]).has("rubber_chicken")).toBe(false);
+        const rng = new Rng(8);
+        const choices = Array.from({ length: 100 }, () =>
+            rollChoices(rng, [weapon("rubber_chicken")], [], 0, "melee"),
+        ).flat();
+        expect(
+            choices.some(
+                (choice) => choice.kind === "weaponLevel" && choice.weaponId === "rubber_chicken",
+            ),
+        ).toBe(true);
+    });
+
     test("the Very rare ones are offered least", () => {
         const offered = newWeaponOffers("melee", [weapon("throwing_knives")]);
         const scythe = offered.get("scythe_of_vitur")!;

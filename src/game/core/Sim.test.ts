@@ -58,6 +58,7 @@ function createSim(
     mapId = "lumbridge",
     metaStats = emptyStats(),
     endless = false,
+    hard = false,
 ): Sim {
     const grid = makeGrid(openField(), 1000, 1000);
     return new Sim({
@@ -69,6 +70,7 @@ function createSim(
         spawnX: 1036.5,
         spawnY: 1036.5,
         endless,
+        hard,
     });
 }
 
@@ -95,6 +97,172 @@ function runFor(sim: Sim, seconds: number, move: "circle" | "still" = "circle"):
 }
 
 describe("Sim", () => {
+    test("summoned Enraged Dark Chickens use their surge, and the bosses fire their volleys", () => {
+        expect(getEnemy("professor_oddenstein").boss!.attacks[0].count).toBe(3);
+        const peck = getEnemy("evil_chicken").boss!.attacks[0];
+        expect(peck.count).toBe(5);
+        expect(peck.spread! * (peck.count! - 1)).toBeLessThan(0.6);
+        for (const id of ["freaky_forester", "freaky_forester_enraged", "freaky_forester_final"]) {
+            expect(getEnemy(id).boss!.attacks.find((a) => a.name === "Boot Kick")!.cone).toBe(1.2);
+        }
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        const chicken = sim.spawnEnemy(getEnemy("enraged_chicken"), "normal", {
+            x: sim.player.x + 5,
+            y: sim.player.y,
+        })!;
+        expect(chicken.boss).toBe(false);
+        expect(chicken.bossState).toBeDefined();
+        let surged = false;
+        for (let i = 0; i < 20 * 30 && !surged; i++) {
+            sim.step(0, 0);
+            sim.takeEvents();
+            surged =
+                chicken.bossState?.windup?.attack.kind === "surge" || !!chicken.bossState?.surge;
+        }
+        expect(surged).toBe(true);
+    });
+
+    test("Avian Assaulter starts with a melee Rubber Chicken and can damage an enemy", () => {
+        const sim = createSim("avian_assaulter");
+        expect(sim.weapons[0].def).toMatchObject({
+            id: "rubber_chicken",
+            kind: "slash",
+            style: "melee",
+            iconObjId: 4566,
+            sound: 2257,
+            pickOnly: true,
+        });
+        const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+            x: sim.player.x + 1,
+            y: sim.player.y,
+        })!;
+        runFor(sim, 2, "still");
+        expect(enemy.hp).toBeLessThan(enemy.maxHp);
+    });
+
+    test("Avian's chicken and bonuses follow the requested progression", () => {
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        expect(sim.stats).toMatchObject({
+            growth: 0.15,
+            magnet: 0.5,
+            cooldown: 0.35,
+            moveSpeed: 0.45,
+        });
+        expect(sim.player.maxHp).toBe(70);
+        expect(
+            sim.weapons[0].def.levels.map(({ damage, area, cooldown }) => ({
+                damage,
+                area,
+                cooldown,
+            })),
+        ).toEqual([
+            { damage: 25, area: 4, cooldown: 1 },
+            { damage: 30, area: 4, cooldown: 1 },
+            { damage: 30, area: 4.5, cooldown: 1 },
+            { damage: 30, area: 4.5, cooldown: 0.9 },
+            { damage: 36, area: 4.5, cooldown: 0.9 },
+            { damage: 42, area: 4.5, cooldown: 0.9 },
+            { damage: 42, area: 5, cooldown: 0.9 },
+            { damage: 42, area: 5, cooldown: 0.8 },
+            { damage: 50, area: 5, cooldown: 0.8 },
+            { damage: 60, area: 5, cooldown: 0.8 },
+        ]);
+        expect(sim.weapons[0].def.levels[0].knockback).toBe(2.5);
+        sim.metaStats.weaponSlots = 5;
+        expect(sim.maxWeapons).toBe(1);
+        sim.addWeapon("scimitar");
+        expect(sim.weapons.map((weapon) => weapon.def.id)).toEqual(["rubber_chicken"]);
+        const choices = Array.from({ length: 100 }, () => sim["roll"]()).flat();
+        expect(
+            choices.some((choice) => choice.kind === "newWeapon" || choice.kind === "evolve"),
+        ).toBe(false);
+        expect(
+            choices.some(
+                (choice) => choice.kind === "weaponLevel" && choice.weaponId === "rubber_chicken",
+            ),
+        ).toBe(true);
+        expect(
+            choices.some(
+                (choice) => choice.kind === "newPassive" || choice.kind === "passiveLevel",
+            ),
+        ).toBe(false);
+    });
+
+    test("the Rubber Chicken heals more with each upgrade, by rarity", () => {
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        const heals = (quality: "common" | "veryRare") => {
+            sim["apply"]({
+                kind: "weaponLevel",
+                weaponId: "rubber_chicken",
+                level: sim.weapons[0].level + 1,
+                quality,
+            } as never);
+            return sim.weapons[0].healGain;
+        };
+        expect(heals("common")).toEqual({ chance: 0.02, hp: 0.25 });
+        const gain = heals("veryRare")!;
+        expect(gain.chance).toBeCloseTo(0.09);
+        expect(gain.hp).toBeCloseTo(1.25);
+    });
+
+    test("the Rubber Chicken hits bosses for 20% more, and other weapons don't", () => {
+        const chicken = armed("rubber_chicken", "avian_assaulter");
+        chicken.enemies = [];
+        const boss = dummy(chicken, 2, 0, "boss");
+        boss.frozen = 1e6;
+        const plain = dummy(chicken, 2.1, 0);
+        plain.frozen = 1e6;
+        expect(chicken.weapons[0].def.bossDamage).toBe(0.2);
+        expect(getWeapon("scimitar").bossDamage).toBeUndefined();
+    });
+
+    test("Avian gets coins but no item from a casket", () => {
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        expect(sim.maxPassives).toBe(0);
+        sim.openCasket("medium");
+        expect(sim.chests).toHaveLength(0);
+    });
+
+    test("bird damage belongs to the attacking hero, not environmental damage", () => {
+        const grid = makeGrid(openField(), 1000, 1000);
+        const sim = new Sim({
+            grid,
+            mapId: "thanksgiving",
+            characterId: "avian_assaulter",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party: ["avian_assaulter", "warrior"].map((characterId) => ({
+                name: characterId,
+                characterId,
+                metaStats: emptyStats(),
+            })),
+        });
+        vi.spyOn(sim.rng, "range").mockReturnValue(1);
+        const bird = sim.spawnEnemy(getEnemy("chompy_bird"), "normal", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        const human = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+            x: sim.player.x - 2,
+            y: sim.player.y,
+        })!;
+        bird.hp = human.hp = 10000;
+        sim["damageSource"] = "item:test";
+        sim["useHeroAt"](0);
+        expect(sim.damageEnemy(bird, 100, 0, bird.x, bird.y)).toBe(115);
+        expect(sim.damageEnemy(human, 100, 0, human.x, human.y)).toBe(100);
+        sim["useHeroAt"](1);
+        expect(sim.damageEnemy(bird, 100, 0, bird.x, bird.y)).toBe(100);
+        sim["useHeroAt"](0);
+        sim["damageSource"] = "other";
+        expect(sim.damageEnemy(bird, 100, 0, bird.x, bird.y)).toBe(100);
+        for (const id of ["chicken", "chompy_bird", "evil_chicken", "enraged_chicken"]) {
+            expect(getEnemy(id).tags).toContain("bird");
+        }
+    });
+
     test("a minute of play spawns, fights and levels", () => {
         // Standing still: enemies come to the player and their bones land close by
         const sim = createSim("wizard");
@@ -372,6 +540,26 @@ describe("melee", () => {
         goblin.frozen = 1e6;
         expect(hitsOn(attack(sim), goblin)).toHaveLength(2);
     });
+
+    test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
+        "the Rubber Chicken hits both sides at level %i",
+        (level) => {
+            const sim = armed("rubber_chicken", "avian_assaulter");
+            sim.enemies = [];
+            sim.weapons[0].level = level;
+            const front = dummy(sim, 2, 0);
+            const behind = dummy(sim, -3, 0);
+            const outside = dummy(sim, -9, 0);
+            for (const enemy of [front, behind, outside]) {
+                enemy.frozen = 1e6;
+            }
+            const events = attack(sim);
+            expect(events.filter((event) => event.type === "slash")).toHaveLength(2);
+            expect(hitsOn(events, front)).toHaveLength(1);
+            expect(hitsOn(events, behind)).toHaveLength(1);
+            expect(hitsOn(events, outside)).toHaveLength(0);
+        },
+    );
 
     test("a slash swings at a big enemy as soon as its edge is in reach", () => {
         const sim = armed("scimitar");
@@ -1816,6 +2004,170 @@ describe("bosses", () => {
         return boss;
     }
 
+    test("the Freaky Forester's final Pheasant Arrow launches a projectile", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const boss = bossWith(sim, "freaky_forester_final", "Pheasant Arrow", {
+            x: 1058,
+            y: 1036.5,
+        });
+        untilWindup(sim, boss);
+        expect(boss.bossState!.windup!.attack.kind).toBe("projectile");
+        sim.takeEvents();
+        throughWindup(sim, boss, 0, 0);
+
+        expect(sim.enemyProjectiles.some(({ enemyUid }) => enemyUid === boss.uid)).toBe(true);
+    });
+
+    test("Enraged Dark Chicken's Lane Rush covers 12 tiles through the player", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const chicken = bossWith(sim, "enraged_chicken", "Lane Rush", {
+            x: sim.player.x + 8,
+            y: sim.player.y,
+        });
+
+        untilWindup(sim, chicken);
+
+        const lane = chicken.bossState!.windup!.lane!;
+        expect(Math.hypot(lane.toX - lane.fromX, lane.toY - lane.fromY)).toBeCloseTo(12);
+        expect(lane.halfWidth * 2).toBeCloseTo(1);
+        expect(
+            lane.fromX === lane.toX
+                ? Math.abs(lane.fromX - sim.player.x)
+                : Math.abs(lane.fromY - sim.player.y),
+        ).toBeCloseTo(0);
+    });
+
+    test("Thanksgiving has one Forester event that rises in place", () => {
+        const map = getMap("thanksgiving");
+        const foresterEvents = map.events.filter((event) =>
+            event.enemyId.startsWith("freaky_forester"),
+        );
+        expect(foresterEvents).toHaveLength(1);
+        expect(foresterEvents[0]).toMatchObject({
+            at: 420,
+            kind: "finalBoss",
+            enemyId: "freaky_forester",
+        });
+
+        const sim = createSim("warrior", 1, "thanksgiving");
+        sim.tick = foresterEvents[0].at * TICKS_PER_SECOND;
+        sim.step(0, 0);
+        const boss = sim.enemies.find((enemy) => enemy.def.id === "freaky_forester")!;
+        const uid = boss.uid;
+        sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+
+        expect(boss.uid).toBe(uid);
+        expect(boss.def.id).toBe("freaky_forester_final");
+        expect(boss.dead).toBe(false);
+        expect(boss.scale).toBeCloseTo(1.75);
+        expect(sim.takeEvents()).toContainEqual(
+            expect.objectContaining({ type: "bossRose", enemyId: "freaky_forester_final" }),
+        );
+
+        sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(boss.dead).toBe(true);
+        expect(sim.getResult().bossesKilled).toEqual(["freaky_forester_final"]);
+        expect(sim.trophies).toContain("ledger_of_the_harvest");
+        expect(sim.trophies).not.toContain("chompy_hat");
+    });
+
+    test("Thanksgiving's final boss countdown starts at one minute", () => {
+        const harvest = createSim("warrior", 1, "thanksgiving");
+        const campaign = createSim("warrior", 1, "lumbridge");
+
+        expect(harvest.timeLeftForBoss).toBe(420);
+        expect(campaign.timeLeftForBoss).toBe(900);
+    });
+
+    test("the Chompy Hat requires an Evil Chicken kill and event victory", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const chicken = sim.spawnEnemy(getEnemy("evil_chicken"), "boss", {
+            x: 1040,
+            y: 1040,
+        })!;
+        sim.damageEnemy(chicken, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.trophies).not.toContain("chompy_hat");
+        expect(sim.trophies).not.toContain("ledger_of_the_harvest");
+
+        const forester = sim.spawnEnemy(getEnemy("freaky_forester"), "finalBoss", {
+            x: 1040,
+            y: 1040,
+        })!;
+        sim.damageEnemy(forester, 1e9, 0, sim.player.x, sim.player.y);
+        sim.damageEnemy(forester, 1e9, 0, sim.player.x, sim.player.y);
+
+        expect(sim.getResult().victory).toBe(true);
+        expect(sim.trophies).toContain("chompy_hat");
+        expect(sim.trophies).toContain("ledger_of_the_harvest");
+    });
+
+    test("the Golden Egg requires a hard victory over the final Forester", () => {
+        const playFinal = (hard: boolean, enemyId: string) => {
+            const sim = createSim("warrior", 1, "thanksgiving", emptyStats(), false, hard);
+            const boss = sim.spawnEnemy(getEnemy(enemyId), "finalBoss", {
+                x: 1040,
+                y: 1040,
+            })!;
+            sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+            expect(sim.trophies).not.toContain("golden_egg");
+            if (enemyId === "freaky_forester") {
+                sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+            }
+            return sim;
+        };
+        expect(playFinal(false, "freaky_forester").trophies).not.toContain("golden_egg");
+        expect(playFinal(true, "evil_chicken").trophies).not.toContain("golden_egg");
+        const hardWin = playFinal(true, "freaky_forester");
+        expect(hardWin.getResult().victory).toBe(true);
+        expect(hardWin.trophies).toContain("golden_egg");
+    });
+
+    test("Professor Oddenstein uses Dagger Slice at melee distance", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const boss = sim.spawnEnemy(getEnemy("professor_oddenstein"), "boss", {
+            x: 1038,
+            y: 1036.5,
+        })!;
+        boss.bossState!.cooldowns[3] = 10000;
+
+        untilWindup(sim, boss);
+
+        expect(boss.bossState!.windup!.attack.name).toBe("Dagger Slice");
+    });
+
+    test("Professor Oddenstein's Smoke Bomb marks an armor weakness", () => {
+        const smokeBomb = getEnemy("professor_oddenstein").boss!.attacks.find(
+            ({ name }) => name === "Smoke Bomb",
+        )!;
+
+        expect(smokeBomb.effect).toMatchObject({
+            kind: "debuff",
+            name: "Weakness: Armor reduced by 30%",
+            iconObjId: 698,
+            stats: { armor: -0.3 },
+        });
+    });
+
+    test("a cone swing emits its facing and width for the client visual", () => {
+        const sim = createSim();
+        const boss = bossWith(sim, "professor_oddenstein", "Dagger Slice", {
+            x: 1038,
+            y: 1036.5,
+        });
+        untilWindup(sim, boss);
+        sim.takeEvents();
+        throughWindup(sim, boss, 0, 0);
+
+        expect(sim.takeEvents()).toContainEqual(
+            expect.objectContaining({
+                type: "bossSwing",
+                dirX: -1,
+                dirY: 0,
+                cone: 1.2,
+            }),
+        );
+    });
+
     function wiseOldManWith(sim: Sim, attackName: string, at: { x: number; y: number }): Enemy {
         return bossWith(sim, "wise_old_man", attackName, at);
     }
@@ -2943,7 +3295,8 @@ describe("maps", () => {
             const times = map.events.map((e) => e.at);
             expect(times).toEqual([...times].sort((a, b) => a - b));
             const last = map.events[map.events.length - 1];
-            expect(last).toMatchObject({ at: RUN_LENGTH, kind: "finalBoss" });
+            const finalBossAt = map.id === "thanksgiving" ? 420 : RUN_LENGTH;
+            expect(last).toMatchObject({ at: finalBossAt, kind: "finalBoss" });
             for (const event of map.events) {
                 const enemy = getEnemy(event.enemyId);
                 if (event.kind === "boss") {
@@ -5216,6 +5569,59 @@ describe("random events", () => {
         expect(sim.cured).toBe(true);
         // It's not an item, so its timer goes by what it says
         expect(getBuffViews(sim)[0]).toMatchObject({ name: "Strange fruit", objId: 464 });
+    });
+
+    test("active effects have descriptions", () => {
+        const sim = createSim();
+        sim.buffs = [
+            {
+                itemId: "super_combat_potion",
+                stats: { might: 0.25 },
+                cures: false,
+                startTick: 0,
+                endTick: 100,
+            },
+            {
+                itemId: "raid:stamina_potion",
+                stats: { moveSpeed: 0.2 },
+                cures: true,
+                startTick: 0,
+                endTick: 100,
+                look: { name: "Stamina potion", objId: 123 },
+            },
+        ];
+        sim.powerUps = [{ uid: 1, hero: 0, id: "stopwatch", startTick: 0, endTick: 100 }];
+        sim.debuffs = [
+            {
+                id: "armor-drain",
+                name: "Armour drain",
+                iconObjId: 698,
+                stats: { armor: -0.3 },
+                startTick: 0,
+                endTick: 100,
+            },
+        ];
+        sim.heroes[sim.focus].revivesLeft = 1;
+
+        const effects = getBuffViews(sim);
+        expect(effects.map((effect) => effect.name)).toEqual([
+            "Armour drain",
+            "Super combat potion",
+            "Stamina potion",
+            "Giant stopwatch",
+            "Ring of life",
+        ]);
+        expect(effects[0]).toMatchObject({
+            harmful: true,
+            description: "-0.3 armour",
+        });
+        const potion = getItem("super_combat_potion");
+        expect(potion.kind).toBe("utility");
+        if (potion.kind !== "utility") throw new Error("Expected a utility item");
+        expect(effects[1].description).toBe(potion.description);
+        expect(effects[2].description).toBe("+20% movement speed, Cures poison and boss debuffs");
+        expect(effects[3].description).toBe(getPowerUp("stopwatch").description);
+        expect(effects[4].description).toBe("Revives you once if you fall.");
     });
 
     describe("the Mysterious Old Man", () => {

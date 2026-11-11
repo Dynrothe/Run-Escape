@@ -5,8 +5,28 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- Thanksgiving Harvest, by Happi: a seasonal map in the Hosidius Vinery, open from the start.
+  Seven minutes of farmers, bandits, foxes and Chompy birds, with Professor Oddenstein, two Evil
+  Chickens and, at the end, the Freaky Forester, who rises again bigger. Enemies there drop cooked
+  turkeys to carve, for a feast or a fowl trick.
+- The Avian Assaulter, by Happi: everyone plays them in Thanksgiving Harvest, in a chicken outfit
+  with birds circling their head. Their Rubber chicken whacks in front and behind, hits bosses
+  harder, and heals you as it hits, more with each of its ten levels. They find no other weapons,
+  gear, passives or items, and caskets only pay them coins.
+- Thanksgiving Harvest's Collection log, by Happi: drops from Chompy birds and cooked turkeys,
+  rewards for beating it (a Golden egg for beating it on hard), and the Chompy chick pet for its
+  Chompy Slayer quest.
+- What your effects do, by Happi: hover over or hold one in the HUD to read it, and the pause menu
+  lists them all.
+- A camera zoom slider on phones, by Happi: tap Zoom beside the timer.
+
 ### Changed
 
+- The HUD's equipment slots, by Happi: under the damage panel now, in two columns you can hide,
+  and on a phone too (hidden to start with).
+- Debuffs show before buffs in the HUD, by Happi.
 - The Windows app keeps to the website's version of the game, by trippy22: Windows and website
   players can play co-op together between releases too. Download the new app once to get it.
 - The Android app keeps to the website's version of the game too, by trippy22: on Wi-Fi, a new one

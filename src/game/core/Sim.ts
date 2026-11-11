@@ -1,3 +1,10 @@
+import {
+    TURKEY_CHANCE,
+    TURKEY_ID,
+    TURKEY_MAPS,
+    TURKEY_MIN_GAP,
+    TURKEY_OUTCOMES,
+} from "../content/TurkeyDay";
 import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { WeaponDamageBalance } from "../content/balance";
 import { getCharacter } from "../content/characters";
@@ -86,7 +93,7 @@ import {
     VISITOR_SPOTANIM,
     getQuizGroups,
 } from "../content/randomEvents";
-import { RARITIES, RARITY_ORDER } from "../content/rarity";
+import { RARITIES, RARITY_ORDER, type Rarity } from "../content/rarity";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
 import { SHOP_UPGRADES } from "../content/shop";
 import { SOUNDS } from "../content/sounds";
@@ -525,6 +532,13 @@ export const NUKE_SPOTANIM = 157;
 // in so many ticks gets the roll, hit or miss, or weapons hitting thousands of
 // times a minute late in a run would heal all the time.
 const BLOOD_FURY_HEAL = 2;
+// What each upgrade adds to the Rubber Chicken's heal, by its rarity
+const BLOOD_HEAL_GAIN: Record<Rarity, { chance: number; hp: number }> = {
+    common: { chance: 0.02, hp: 0.25 },
+    uncommon: { chance: 0.03, hp: 0.5 },
+    rare: { chance: 0.045, hp: 0.75 },
+    veryRare: { chance: 0.07, hp: 1 },
+};
 const BLOOD_FURY_ROLL_INTERVAL = TICKS_PER_SECOND;
 export const BLOOD_FURY_SPOTANIM = 1542;
 // The Twisted bow does half its most extra damage to a target with this many
@@ -1474,6 +1488,8 @@ export class Sim {
     bossesKilled: string[] = [];
     // When the next trick or treat pumpkin can drop
     private nextPumpkinTick = 0;
+    // When the next turkey can drop
+    private nextTurkeyTick = 0;
     coins = 0;
     // Party income before purchases or theft. Returning stolen coins isn't new income.
     coinsGained = 0;
@@ -2434,10 +2450,15 @@ export class Sim {
     // Weapons and passives carried at once, with the extra slots: the shop's, and the Divine rune
     // pouch's, for a magic weapon (Upgrades' fitsWithPouch keeps it for one)
     get maxWeapons(): number {
-        return MAX_WEAPONS + this.stats.weaponSlots;
+
+        return getCharacter(this.characterId).maxWeapons ?? MAX_WEAPONS + this.stats.weaponSlots;
+
     }
 
     get maxPassives(): number {
+        if (getCharacter(this.characterId).noItems) {
+            return 0;
+        }
         return MAX_PASSIVES + this.metaStats.passiveSlots;
     }
 
@@ -2703,6 +2724,14 @@ export class Sim {
                         weapon.bonus = overlevelBonus(weapon.bonus, choice.quality);
                     } else {
                         weapon.bonus += RARITIES[choice.quality].weaponBonus;
+                        if (weapon.def.bloodHeal) {
+                            const gain = BLOOD_HEAL_GAIN[choice.quality];
+                            const had = weapon.healGain ?? { chance: 0, hp: 0 };
+                            weapon.healGain = {
+                                chance: had.chance + gain.chance,
+                                hp: had.hp + gain.hp,
+                            };
+                        }
                     }
                     this.appearanceVersion++;
                 }
@@ -3834,7 +3863,7 @@ export class Sim {
             boss,
             finalBoss: type === "finalBoss",
             bossState:
-                boss && def.boss
+                (boss || def.minionAttacks) && def.boss
                     ? {
                           cooldowns: def.boss.attacks.map(() => 0),
                           stolenCoins: 0,
@@ -12347,11 +12376,48 @@ export class Sim {
         const maxY = arena.maxY - margin;
         const px = Math.min(Math.max(player.x, minX), maxX);
         const py = Math.min(Math.max(player.y, minY), maxY);
+        const halfLength = attack.surgeLength === undefined ? undefined : attack.surgeLength / 2;
         const lane: SurgeLane = {
-            fromX: edge === 0 ? minX : edge === 1 ? maxX : px,
-            fromY: edge === 2 ? minY : edge === 3 ? maxY : py,
-            toX: edge === 0 ? maxX : edge === 1 ? minX : px,
-            toY: edge === 2 ? maxY : edge === 3 ? minY : py,
+            fromX:
+                edge === 0
+                    ? halfLength === undefined
+                        ? minX
+                        : Math.max(minX, px - halfLength)
+                    : edge === 1
+                      ? halfLength === undefined
+                          ? maxX
+                          : Math.min(maxX, px + halfLength)
+                      : px,
+            fromY:
+                edge === 2
+                    ? halfLength === undefined
+                        ? minY
+                        : Math.max(minY, py - halfLength)
+                    : edge === 3
+                      ? halfLength === undefined
+                          ? maxY
+                          : Math.min(maxY, py + halfLength)
+                      : py,
+            toX:
+                edge === 0
+                    ? halfLength === undefined
+                        ? maxX
+                        : Math.min(maxX, px + halfLength)
+                    : edge === 1
+                      ? halfLength === undefined
+                          ? minX
+                          : Math.max(minX, px - halfLength)
+                      : px,
+            toY:
+                edge === 2
+                    ? halfLength === undefined
+                        ? maxY
+                        : Math.min(maxY, py + halfLength)
+                    : edge === 3
+                      ? halfLength === undefined
+                          ? minY
+                          : Math.max(minY, py - halfLength)
+                      : py,
             halfWidth: attack.radius ?? 2.5,
         };
         if (attack.castSpotAnim !== undefined) {
@@ -15551,7 +15617,17 @@ export class Sim {
                     continue;
                 }
                 if (!line) {
-                    this.emit({ type: "bossSwing", x, y, radius });
+                    this.emit({
+                        type: "bossSwing",
+                        x,
+                        y,
+                        radius,
+                        ...(attack.cone !== undefined && {
+                            dirX: windup.dirX,
+                            dirY: windup.dirY,
+                            cone: attack.cone,
+                        }),
+                    });
                 }
                 if (attack.kind === "blast" && attack.impactSpotAnim !== undefined) {
                     this.addEffect(attack.impactSpotAnim, x, y, 0, 40);
@@ -16745,6 +16821,20 @@ export class Sim {
         // Damage that ignores the damage bonus (mightScale 0: the nuke's share
         // of a boss's hitpoints, a ruby bolt's) ignores this one too
         const bossMight = enemy.boss && mightScale > 0 ? this.stats.bossMight : 0;
+        const bossBonus =
+            enemy.boss && mightScale > 0 && this.damageSource.startsWith("weapon:")
+                ? (this.weapons.find((w) => `weapon:${w.def.id}` === this.damageSource)?.def
+                      .bossDamage ?? 0)
+                : 0;
+        const targetBonus = getCharacter(this.characterId).damageAgainst;
+        const targetScale =
+            this.damageSource !== "other" &&
+            this.damageSource !== "court" &&
+            mightScale > 0 &&
+            targetBonus &&
+            hasTag(enemy, targetBonus.tags)
+                ? 1 + targetBonus.damage
+                : 1;
         // The Wardens' orbs soaked: each more against their obelisk (WARDENS.orbs.soak)
         const wardensFight = this.tombsWardens;
         const soaked =
@@ -16758,6 +16848,8 @@ export class Sim {
                     weaponScale *
                     (1 + this.stats.might * mightScale) *
                     (1 + bossMight) *
+                    (1 + bossBonus) *
+                    targetScale *
                     soaked *
                     (1 + drain) *
                     prayed *
@@ -16809,6 +16901,10 @@ export class Sim {
             shown = Math.max(0, Math.round(before - enemy.hp));
         } else {
             enemy.hp -= damage;
+        }
+        // NEW: Trigger native self-sacrifice explosion at 20% HP threshold
+        if (enemy.def.id === "enraged_chicken" && enemy.hp <= enemy.maxHp * 0.2) {
+            enemy.hp = 0;
         }
         enemy.flash = 5;
         // A Tombs boss's phase stops a hit at its threshold (passThreshold, lastStand, below): what
@@ -17141,6 +17237,7 @@ export class Sim {
         if (enemy.bonesOnly) {
             return;
         }
+        this.rollEnemyTrophies(enemy);
         const luck = 1 + this.stats.luck;
         const caskets = enemy.def.caskets;
         if (enemy.elite) {
@@ -17173,6 +17270,7 @@ export class Sim {
         if (!enemy.boss) {
             this.rollPowerUp(enemy.x - 0.3, enemy.y + 0.3);
             this.rollPumpkin(enemy.x + 0.3, enemy.y - 0.3);
+            this.rollTurkey(enemy.x - 0.3, enemy.y - 0.3);
         }
     }
 
@@ -17208,6 +17306,9 @@ export class Sim {
                     hero.player.hp = Math.max(hero.player.hp, 1);
                 }
             }
+        }
+        if (state === "victory") {
+            this.awardMapTrophies();
         }
         this.endTick = at;
         this.state = state;
@@ -17824,6 +17925,14 @@ export class Sim {
         if (lifesteal && this.rng.chance(lifesteal.chance)) {
             const amount = Math.min(Math.round(dealt * lifesteal.fraction), lifesteal.max);
             this.lifestealHeal(amount, lifesteal.spotAnim);
+        }
+        if (def.bloodHeal) {
+            const state = this.weapons.find((w) => w.def.id === def.id);
+            const base = def.bloodHeal;
+            const chance = Math.min(base.maxChance, base.chance + (state?.healGain?.chance ?? 0));
+            if (this.rng.chance(chance)) {
+                this.lifestealHeal(base.hp + (state?.healGain?.hp ?? 0), base.spotAnim);
+            }
         }
         if (
             this.stats.healChance > 0 &&
@@ -19245,6 +19354,59 @@ export class Sim {
         this.emit({ type: "playerShout", text: outcome.trick ? "Trick!" : "Treat!" });
         return outcome.message;
     }
+    // Enemies on some maps now and then drop a turkey (see TurkeyDay.ts)
+    private rollTurkey(x: number, y: number): void {
+        if (!TURKEY_MAPS.includes(this.map.id) || this.tick < this.nextTurkeyTick) {
+            return;
+        }
+        if (this.rng.chance(TURKEY_CHANCE * (1 + this.stats.luck))) {
+            this.nextTurkeyTick = this.tick + TURKEY_MIN_GAP * TICKS_PER_SECOND;
+            const spot = this.walkableSpot(x, y);
+            this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: TURKEY_ID });
+        }
+    }
+
+    // Now and then a feast holds a trophy instead; otherwise it's a feast or a
+    // fowl trick by weight. What it says as it carves.
+    private openTurkey(): string {
+        const trophy = TROPHIES.find(
+            ({ from }) => from.kind === "turkey" && this.rng.chance(from.chance),
+        );
+        if (trophy) {
+            this.emit({ type: "playerShout", text: "Feast!" });
+            return this.findTrophy(trophy);
+        }
+        const index = this.rng.weightedIndex(TURKEY_OUTCOMES.map((o) => o.weight));
+        const outcome = TURKEY_OUTCOMES[index];
+        const player = this.player;
+        const does = outcome.does;
+        switch (does.kind) {
+            case "heal":
+                this.heal(player.maxHp * does.fraction);
+                break;
+            case "coins":
+                this.gainCoins(Math.round(does.coins * (1 + this.stats.greed) * this.coinScale));
+                break;
+            case "buff":
+                this.addBuff(does.itemId, does.stats, does.seconds, false);
+                break;
+            case "enemies": {
+                const def = getEnemy(does.enemyId);
+                for (let i = 0; i < does.count; i++) {
+                    const enemy = this.spawnNear(player, def, 2.5, i, does.count, 3);
+                    if (enemy) {
+                        enemy.bonesOnly = true;
+                    }
+                }
+                break;
+            }
+            case "effect":
+                this.applyPlayerEffect(does.effect);
+                break;
+        }
+        this.emit({ type: "playerShout", text: outcome.trick ? "Fowl!" : "Feast!" });
+        return outcome.message;
+    }
 
     // Collection log trophies a boss can drop on its map
     // (each of the party their own)
@@ -19265,6 +19427,41 @@ export class Sim {
                 }
             }
         });
+    }
+
+    private rollEnemyTrophies(enemy: Enemy): void {
+        if (enemy.boss) {
+            return;
+        }
+        this.forEachHeroInReach(() => {
+            for (const trophy of TROPHIES) {
+                const { from } = trophy;
+                if (
+                    from.kind === "enemy" &&
+                    from.enemyId === enemy.def.id &&
+                    from.mapId === this.map.id &&
+                    this.rng.chance(from.chance)
+                ) {
+                    this.emit({ type: "notice", message: this.findTrophy(trophy) }, true);
+                }
+            }
+        });
+    }
+
+    private awardMapTrophies(): void {
+        for (const trophy of TROPHIES) {
+            const { from } = trophy;
+            if (
+                from.kind === "map" &&
+                from.mapId === this.map.id &&
+                (!from.hard || this.hard) &&
+                (!from.requiresBoss || this.bossesKilled.includes(from.requiresBoss))
+            ) {
+                for (const hero of this.heroes) {
+                    hero.trophies.add(trophy.id);
+                }
+            }
+        }
     }
 
     private findTrophy(trophy: TrophyDef): string {
@@ -19659,6 +19856,9 @@ export class Sim {
             case "pumpkin":
                 message = this.openPumpkin();
                 break;
+            case "cooked_turkey":
+                message = this.openTurkey();
+                break;
             case "light":
                 endTick = this.tick + this.powerUpTicks(effect.seconds);
                 message = `Your ${def.name.toLowerCase()} lights up the dark!`;
@@ -19977,17 +20177,17 @@ export class Sim {
         // In the Tombs of Amascut only a visitor with a casket comes, and may come again
         const tombs = this.map.tombs !== undefined;
         const index = this.eventRng.weightedIndex(
-            RANDOM_EVENTS.map((event) =>
-                tombs
-                    ? event.effect.kind === "casket"
-                        ? event.weight
-                        : 0
-                    : event.id === this.lastRandomEventId ||
-                        this.seconds < (event.minSeconds ?? 0) ||
-                        (event.effect.kind === "ambush" && bossOut)
-                      ? 0
-                      : event.weight,
-            ),
+            RANDOM_EVENTS.map((event) => {
+                if (tombs) {
+                    return event.effect.kind === "casket" ? event.weight : 0;
+                }
+                return event.id === this.lastRandomEventId ||
+                    this.seconds < (event.minSeconds ?? 0) ||
+                    (event.effect.kind === "ambush" && bossOut) ||
+                    (this.map.id === "thanksgiving" && event.id === "highwayman")
+                    ? 0
+                    : event.weight;
+            }),
         );
         return RANDOM_EVENTS[index];
     }
@@ -20335,6 +20535,9 @@ export class Sim {
     // The current player's item from a casket, rolled on their luck, gear and banishes, with the
     // casket's coins to show; the run waits while they decide what to do with it
     private offerCasketItem(tier: CasketTier, coins: number): void {
+        if (getCharacter(this.characterId).noItems) {
+            return;
+        }
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
         this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });
@@ -20472,7 +20675,8 @@ export class Sim {
                 ? Math.max(0, (this.raidBossDueTick - this.tick) / TICKS_PER_SECOND)
                 : 0;
         }
-        return Math.max(0, RUN_LENGTH - this.mapSeconds);
+        const finalBossAt = this.map.events.find((event) => event.kind === "finalBoss")?.at;
+        return Math.max(0, (finalBossAt ?? RUN_LENGTH) - this.mapSeconds);
     }
 }
 

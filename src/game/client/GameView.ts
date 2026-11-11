@@ -5,6 +5,7 @@ import {
     ActorRenderer,
     NO_TINT,
 } from "../../mapviewer/webgl/actor/ActorRenderer";
+import { getCharacter } from "../content/characters";
 import { REVIVE_SECONDS, REVIVE_SEQ } from "../content/coop";
 import { getEnemy } from "../content/enemies";
 import { CASKETS } from "../content/items";
@@ -282,7 +283,15 @@ type SlashFx = {
 };
 type AuraFx = { x: number; y: number; radius: number; start: number; hero: number };
 type BlastFx = { x: number; y: number; radius: number; start: number };
-type SwingFx = { x: number; y: number; radius: number; start: number };
+type SwingFx = {
+    x: number;
+    y: number;
+    radius: number;
+    start: number;
+    dirX?: number;
+    dirY?: number;
+    cone?: number;
+};
 // enemyUid 0 or less: a hero, -enemyUid (enemies' uids start at 1), or
 // VISITOR_SHOUT for a random event's visitor
 type Shout = { enemyUid: number; text: string; start: number };
@@ -454,6 +463,9 @@ export class GameView {
                         y: event.y,
                         radius: event.radius,
                         start: now,
+                        dirX: event.dirX,
+                        dirY: event.dirY,
+                        cone: event.cone,
                     });
                     break;
                 case "bossShout":
@@ -603,7 +615,10 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
-            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            const model =
+                (projectile.attack.projectileObjId !== undefined &&
+                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
+                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
             if (!model || !hasGeometry(model)) {
                 // Drawn as a glow on the overlay instead
                 continue;
@@ -616,10 +631,11 @@ export class GameView {
             // Bigger than in OSRS: most are a few pixels across from up here
             // Small ones drawn bigger, up to a tile across, and all outlined
             // the same thickness
-            const scale = Math.min(
-                ENEMY_PROJECTILE_SCALE,
-                Math.max(1, PROJECTILE_MIN_RADIUS / Math.max(1, model.radius)),
-            );
+            const scale =
+                Math.min(
+                    ENEMY_PROJECTILE_SCALE,
+                    Math.max(1, PROJECTILE_MIN_RADIUS / Math.max(1, model.radius)),
+                ) * (projectile.attack.projectileScale ?? 1);
             actors.draw(model, anim, frame, x, height, y, projectile.yaw, {
                 scale,
                 outline: 1 + PROJECTILE_OUTLINE / (model.radius * scale + 1),
@@ -694,6 +710,10 @@ export class GameView {
                     continue;
                 }
                 scale = getPowerUpScale(model);
+                // The cooked turkey shows 2.25 times as big
+                if (pickup.powerUp === "cooked_turkey") {
+                    scale *= 2.25;
+                }
                 height -= getPowerUpBob(pickup, tick);
                 unlit = 1;
             }
@@ -713,6 +733,21 @@ export class GameView {
         sim.map.props?.forEach((prop, i) => {
             if (!cinematic || !this.cinematicView.hidesProp(cinematic, i)) {
                 this.drawProp(actors, sim, prop, alpha);
+            }
+        });
+        sim.map.scenery?.forEach((scenery) => {
+            const model = this.assets.get("loc:" + scenery.locId);
+            if (model) {
+                actors.draw(
+                    model,
+                    model.anims[0],
+                    0,
+                    scenery.x,
+                    this.ground(sim, scenery.x, scenery.y),
+                    scenery.y,
+                    (scenery.rotation ?? 0) * 512,
+                    { scale: scenery.scale ?? 1 },
+                );
             }
         });
         if (cinematic) {
@@ -1974,11 +2009,32 @@ export class GameView {
         if (detonate && sim.isUp(sim.heroes[hero])) {
             flash = Math.max(flash, 0.35 + 0.25 * Math.sin(tick * 0.4));
         }
+        // The Avian Assaulter is drawn bigger on Thanksgiving Harvest, and nowhere else
+        const big =
+            sim.map.id === "thanksgiving" && sim.heroes[hero].characterId === "avian_assaulter"
+                ? AVIAN_SCALE
+                : 1;
         actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
             silhouette: true,
             tint,
             flash,
+            ...(big !== 1 && { scale: big }),
         });
+        const overhead = getCharacter(sim.heroes[hero].characterId).overheadSpotAnim;
+        const effect = overhead === undefined ? undefined : this.assets.get("spot:" + overhead);
+        if (effect) {
+            const effectAnim = effect.anims[0];
+            actors.draw(
+                effect,
+                effectAnim,
+                effectAnim.getFrame(tick),
+                x,
+                this.ground(sim, x, y) - (model.height * big) / 128,
+                y,
+                pose.yaw,
+                UNLIT,
+            );
+        }
         if (sim.lighting) {
             this.drawLantern(actors, sim, hero, x, y, pose.yaw);
         }
@@ -2611,7 +2667,21 @@ export class GameView {
         keepWhile(this.swings, now, SWING_MS);
         for (const swing of this.swings) {
             const t = (now - swing.start) / SWING_MS;
-            this.traceGroundCircle(overlay, sim, swing.x, swing.y, swing.radius * (0.7 + 0.3 * t));
+            const radius = swing.radius * (0.7 + 0.3 * t);
+            if (swing.cone !== undefined && swing.dirX !== undefined && swing.dirY !== undefined) {
+                this.traceGroundWedge(
+                    overlay,
+                    sim,
+                    swing.x,
+                    swing.y,
+                    radius,
+                    swing.dirX,
+                    swing.dirY,
+                    swing.cone,
+                );
+            } else {
+                this.traceGroundCircle(overlay, sim, swing.x, swing.y, radius);
+            }
             ctx.fillStyle = `rgba(255, 40, 20, ${0.35 * (1 - t)})`;
             ctx.fill();
             ctx.lineWidth = 6 * scale * (1 - t) + 1;
@@ -2647,7 +2717,10 @@ export class GameView {
                 continue;
             }
             const spotAnim = projectile.attack.spotAnim;
-            const model = spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined;
+            const model =
+                (projectile.attack.projectileObjId !== undefined &&
+                    this.assets.get("obj:" + projectile.attack.projectileObjId)) ||
+                (spotAnim !== undefined ? this.assets.get("spot:" + spotAnim) : undefined);
             const drawn = model !== undefined && hasGeometry(model);
             const radius = (drawn ? PROJECTILE_GLOW : 9) * scale;
             const glow = this.getGlowImage(drawn, radius);
@@ -2939,6 +3012,33 @@ export class GameView {
             } else {
                 ctx.lineTo(p.x, p.y);
             }
+        }
+        ctx.closePath();
+    }
+
+    private traceGroundWedge(
+        overlay: Overlay,
+        sim: Sim,
+        cx: number,
+        cy: number,
+        radius: number,
+        dirX: number,
+        dirY: number,
+        cone: number,
+    ): void {
+        const ctx = overlay.ctx;
+        const steps = Math.max(8, Math.ceil(cone * 12));
+        const facing = Math.atan2(dirY, dirX);
+        const start = facing - cone / 2;
+        const center = overlay.project(cx, this.ground(sim, cx, cy) - 0.1, cy, this.screen2);
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y);
+        for (let i = 0; i <= steps; i++) {
+            const angle = start + (cone * i) / steps;
+            const wx = cx + Math.cos(angle) * radius;
+            const wy = cy + Math.sin(angle) * radius;
+            const point = overlay.project(wx, this.ground(sim, wx, wy) - 0.1, wy, this.screen2);
+            ctx.lineTo(point.x, point.y);
         }
         ctx.closePath();
     }
@@ -3570,6 +3670,8 @@ function drawArrow(
 const UNLIT: ActorDrawOptions = { unlit: 1 };
 // A lantern in hand (drawLantern): tiles out to the left, ahead, and up, and how big
 const LANTERN_SIDE = 0.38;
+// Avian Assaulter's size on Thanksgiving Harvest
+const AVIAN_SCALE = 1.35;
 const LANTERN_AHEAD = 0.12;
 const LANTERN_HEIGHT = 0.55;
 const LANTERN_OPTIONS: ActorDrawOptions = { scale: 1, unlit: 1 };

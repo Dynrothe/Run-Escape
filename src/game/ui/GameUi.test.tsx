@@ -246,7 +246,8 @@ function renderMaps(mapId = "lumbridge") {
     store.set({ screen: "characters", mapId });
     const actions = {
         selectMap: vi.fn((id: string) => store.set({ mapId: id })),
-        selectCharacter: vi.fn(),
+        selectCharacter: vi.fn((id: string) => store.set({ characterId: id })),
+        startRun: vi.fn(),
         toggleFavouriteCharacter: vi.fn(),
         playClick: vi.fn(),
     };
@@ -270,6 +271,61 @@ test("the map screen opens on the picked map's tab, and a map on another tab can
     renderMaps("theatre_of_blood");
     expect(screen.getByRole("tab", { name: "Bosses" })).toHaveAttribute("aria-selected", "true");
 }, 30000);
+
+test("Thanksgiving map selection has its autumn theme", () => {
+    renderMaps();
+    const thanksgiving = screen.getByRole("button", { name: "Thanksgiving Harvest" });
+    const mapPanel = document.querySelector(".ui-select-maps")!;
+    expect(thanksgiving).toHaveClass("ui-map-tile-thanksgiving");
+    fireEvent.mouseMove(thanksgiving);
+    expect(mapPanel).toHaveClass("ui-select-maps-thanksgiving");
+    expect(document.querySelector(".ui-select-details-thanksgiving")).not.toBeNull();
+    fireEvent.mouseMove(screen.getByRole("button", { name: "Lumbridge" }));
+    expect(mapPanel).not.toHaveClass("ui-select-maps-thanksgiving");
+    expect(document.querySelector(".ui-select-details-thanksgiving")).toBeNull();
+});
+
+test("Avian Assaulter is an available melee adventurer with the requested description", () => {
+    const actions = renderMaps();
+    const avian = screen.getByRole("button", { name: "Avian Assaulter" });
+    expect(avian).not.toHaveClass("ui-card-locked");
+    fireEvent.focus(avian);
+    expect(document.querySelector(".ui-select-adventurers .ui-card-title")).toHaveTextContent(
+        "Avian Assaulter",
+    );
+    expect(document.querySelector(".ui-select-adventurers .ui-card-style")).toHaveTextContent(
+        "Melee",
+    );
+    expect(
+        screen.getByText(
+            "Starts with a Rubber Chicken. Questionable.... This is one dangerous bird! Everyone plays it in Thanksgiving Harvest.",
+        ),
+    ).toBeVisible();
+    expect(screen.getByText("+15% damage against birds")).toBeVisible();
+    fireEvent.click(avian);
+    expect(actions.selectCharacter).toHaveBeenCalledWith("avian_assaulter");
+});
+
+test("Thanksgiving fixes the adventurer as the Avian Assaulter, and the Avian is kept to it", () => {
+    const actions = renderMaps();
+    const enter = () => screen.getByRole("button", { name: /Enter / });
+    fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));
+    expect(enter()).toBeEnabled();
+    expect(document.querySelector(".ui-select-fixed-note")).toHaveTextContent("Avian Assaulter");
+    fireEvent.click(enter());
+    expect(actions.startRun).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Lumbridge" }));
+    expect(document.querySelector(".ui-select-fixed-note")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Warrior" }));
+    expect(enter()).toBeEnabled();
+});
+
+test("the Thanksgiving map keeps its theme when selected and no longer hovered", () => {
+    renderMaps("thanksgiving");
+    const mapPanel = document.querySelector(".ui-select-maps")!;
+    fireEvent.mouseLeave(mapPanel);
+    expect(mapPanel).toHaveClass("ui-select-maps-thanksgiving");
+});
 
 test("the favourite button is the shown adventurer's, and stays as focus moves to it", () => {
     expect.hasAssertions();

@@ -1366,3 +1366,96 @@ export const INFERNO_EVENTS: RunEventDef[] = [
     { at: RUN_LENGTH, kind: "finalBoss", enemyId: "jaltok_jad_finale", hp: 8800 },
     { at: RUN_LENGTH, kind: "finalBoss", enemyId: "jaltok_jad_finale", hp: 8800 },
 ];
+// Thanksgiving: The Great Harvest. Chickens and wild Chompy birds acting as turkeys,
+// farm animals, farmers, bandits, foxes and harvest spirits (imps). Lumbridge's pace, squeezed
+// into the map's 7 minutes.
+export const THANKSGIVING_RUN_LENGTH = 7 * 60;
+export const THANKSGIVING_WAVES: WaveDef[] = paced([
+    [
+        { id: "chompy_bird", weight: 4 },
+        { id: "fox", weight: 1 },
+    ],
+    [
+        { id: "chicken", weight: 3 },
+        { id: "fox", weight: 2 },
+    ],
+    [
+        { id: "chicken", weight: 2 },
+        { id: "farmer", weight: 2 },
+    ],
+    [
+        { id: "farmer", weight: 3 },
+        { id: "fox", weight: 1 },
+    ],
+    [
+        { id: "bandit", weight: 2 },
+        { id: "chompy_bird", weight: 1 }, // Wild Chompy birds begin joining the harvest invasion
+    ],
+    [
+        { id: "cow", weight: 3 },
+        { id: "imp", weight: 1 },
+    ],
+    [
+        { id: "fox", weight: 3 },
+        { id: "imp", weight: 2 },
+    ],
+    [
+        { id: "bandit", weight: 3 },
+        { id: "chompy_bird", weight: 2 },
+    ],
+    [
+        { id: "cow", weight: 2 },
+        { id: "farmer", weight: 3 },
+    ],
+    [
+        { id: "imp", weight: 3 },
+        { id: "fox", weight: 2 },
+    ],
+    [
+        { id: "imp", weight: 2 },
+        { id: "chompy_bird", weight: 3 },
+    ],
+    [
+        { id: "cow", weight: 3 },
+        { id: "fox", weight: 2 },
+    ],
+    [
+        { id: "bandit", weight: 4 },
+        { id: "imp", weight: 2 },
+    ],
+    [
+        { id: "chompy_bird", weight: 4 },
+        { id: "cow", weight: 2 },
+    ],
+    [
+        { id: "chompy_bird", weight: 4 }, // High-intensity final flock of wild Chompies and Chickens
+        { id: "chicken", weight: 3 },
+        { id: "farmer", weight: 1 },
+    ],
+]).map((wave) => ({
+    ...wave,
+    start: Math.round((wave.start * THANKSGIVING_RUN_LENGTH) / RUN_LENGTH),
+}));
+
+export const THANKSGIVING_EVENTS: RunEventDef[] = [
+    { at: 35, kind: "elite", enemyId: "farmer" },
+    { at: 70, kind: "elite", enemyId: "cow" },
+    { at: 98, kind: "ring", enemyId: "chompy_bird", count: 40 }, // Ring of angry poultry rushes early
+    { at: 120, kind: "boss", enemyId: "professor_oddenstein" }, // Professor crashes the party at 2 mins!
+    { at: 161, kind: "ring", enemyId: "farmer", count: 30 },
+    { at: 189, kind: "elite", enemyId: "chompy_bird" },
+    { at: 217, kind: "elite", enemyId: "farmer" },
+    { at: 245, kind: "elite", enemyId: "cow" },
+    { at: 270, kind: "boss", enemyId: "evil_chicken" }, // The Evil Chickens arrive at 4:30
+    { at: 270, kind: "boss", enemyId: "evil_chicken" },
+    { at: 287, kind: "ring", enemyId: "chompy_bird", count: 60 },
+    { at: 315, kind: "elite", enemyId: "farmer" },
+    { at: 343, kind: "elite", enemyId: "chicken" },
+    { at: 364, kind: "elite", enemyId: "chompy_bird" },
+    { at: 385, kind: "ring", enemyId: "chompy_bird", count: 80 }, // Massive final panic flock
+    { at: 399, kind: "elite", enemyId: "chompy_bird" },
+
+    // The final boss enters in his normal form, then rises in place into his larger form.
+    // The 60 second countdown starts at 6:00.
+    { at: 420, kind: "finalBoss", enemyId: "freaky_forester" },
+];
