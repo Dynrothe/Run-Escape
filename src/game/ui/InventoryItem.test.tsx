@@ -47,7 +47,7 @@ test("hover and keyboard focus show exactly the description used by the reward c
     const tip = screen.getByRole("tooltip");
     expect([...tip.children].map((line) => line.textContent)).toEqual([
         slot.item.name,
-        ...slot.item.lines,
+        ...slot.item.lines.map((line) => line.text),
     ]);
     expect(button).toHaveAttribute("aria-describedby", tip.id);
     pointer(button, "pointerout", { pointerType: "mouse" });
@@ -67,7 +67,7 @@ test.each([true, false])("a 500 ms hold inspects without consuming (touch layout
     act(() => vi.advanceTimersByTime(499));
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
-    expect(screen.getByRole("tooltip")).toHaveTextContent(slot.item.lines[0]);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(slot.item.lines[0].text);
     pointer(button, "pointerup");
     fireEvent.click(button);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();

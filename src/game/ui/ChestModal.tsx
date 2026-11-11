@@ -365,8 +365,8 @@ function ChestCard({
             </div>
             <ul className="ui-chest-lines">
                 {item.lines.map((line) => (
-                    <li key={line}>
-                        <StatLine text={line} />
+                    <li key={line.text}>
+                        <StatLine text={line.text} english={line.english} />
                     </li>
                 ))}
             </ul>
@@ -392,7 +392,7 @@ function ChestCard({
                                     key={change.text}
                                     className={change.good ? "ui-good" : "ui-bad"}
                                 >
-                                    <StatLine text={change.text} />
+                                    <StatLine text={change.text} english={change.english} />
                                 </span>
                             ))}
                         </div>

@@ -297,7 +297,7 @@ describe("upgraded gear", () => {
         expect(upgraded.speed).toBeCloseTo(helmet.stats.speed! * 2);
         // Movement speed is capped
         expect(upgraded.moveSpeed).toBe(helmet.stats.moveSpeed);
-        expect(describeItem(helmet, 2)).toContain("+10% damage");
+        expect(describeItem(helmet, 2)).toContainEqual({ text: "+10% damage", english: "damage" });
         expect(getAlchValue(helmet, 0, 2)).toBe(getAlchValue(helmet, 0) * 2);
     });
 

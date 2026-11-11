@@ -29,7 +29,7 @@ vi.mock("../client/GameView", () => ({
 }));
 
 function slot(id: string, level: number): SlotView {
-    return { id, name: id, level, maxLevel: 8, iconObjId: 1, detail: "", rarityColor: "#fff" };
+    return { id, name: id, level, maxLevel: 8, iconObjId: 1, rarityColor: "#fff" };
 }
 
 function hud(weapons: SlotView[]): HudView {
@@ -223,24 +223,29 @@ describe("the run's HUD", () => {
         const { store } = renderHud();
         const weapon: SlotView = {
             ...slot("bow", 8),
-            stats: ["Damage: 20", "Cooldown: 1s"],
-            detail: "Shoots an arrow.",
+            stats: [{ text: "Damage: 20" }, { text: "Cooldown: 1s" }],
+            detail: { text: "Shoots an arrow." },
             evolution: { passive: "Piety", maxed: true, hasPassive: false, ready: false },
         };
-        const passive: SlotView = { ...slot("Piety", 2), detail: "+10% damage" };
+        const passive: SlotView = { ...slot("Piety", 2), detail: { text: "+10% damage" } };
         act(() => store.set({ hud: { ...hud([weapon]), passives: [passive] } }));
         const bow = screen.getByRole("button", { name: "bow" });
         fireEvent.focus(bow);
         const tip = screen.getByRole("tooltip");
         expect(bow).toHaveAttribute("aria-describedby", tip.id);
-        for (const text of ["Max level", ...weapon.stats!, weapon.detail, "Piety"]) {
+        for (const text of [
+            "Max level",
+            ...weapon.stats!.map((l) => l.text),
+            weapon.detail!.text,
+            "Piety",
+        ]) {
             expect(tip).toHaveTextContent(text);
         }
         fireEvent.blur(bow);
         const prayer = screen.getByRole("button", { name: "Piety" });
         fireEvent.focus(prayer);
         expect(screen.getByRole("tooltip")).toHaveTextContent("Level 2 of 8");
-        expect(screen.getByRole("tooltip")).toHaveTextContent(passive.detail);
+        expect(screen.getByRole("tooltip")).toHaveTextContent(passive.detail!.text);
         fireEvent.keyDown(window, { key: "Escape" });
         expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
         fireEvent.focus(prayer);
@@ -263,7 +268,7 @@ describe("the run's HUD", () => {
         const button = screen.getByRole("button", { name: item.name });
         fireEvent.focus(button);
         const tip = screen.getByRole("tooltip");
-        for (const text of [item.name, ...item.lines, item.set.text]) {
+        for (const text of [item.name, ...item.lines.map((l) => l.text), item.set.text]) {
             expect(tip).toHaveTextContent(text);
         }
         // Its line is green, spaced to line up with the stats above it
@@ -286,7 +291,7 @@ describe("the run's HUD", () => {
         ).getByRole("button", { name: getGear(line[1]).name });
         fireEvent.focus(tile);
         const current = getItemView(getGear(line[1]));
-        for (const text of [current.name, ...current.lines]) {
+        for (const text of [current.name, ...current.lines.map((l) => l.text)]) {
             expect(screen.getByRole("tooltip")).toHaveTextContent(text);
         }
         fireEvent.blur(tile);
@@ -295,7 +300,7 @@ describe("the run's HUD", () => {
             view.container.querySelector<HTMLElement>(".ui-armoury-line")!,
         ).getByRole("button", { name: future.name });
         fireEvent.focus(step);
-        for (const text of [future.name, ...future.lines]) {
+        for (const text of [future.name, ...future.lines.map((l) => l.text)]) {
             expect(screen.getByRole("tooltip")).toHaveTextContent(text);
         }
         fireEvent.blur(step);

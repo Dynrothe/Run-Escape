@@ -15,7 +15,7 @@ import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
-import { diffStats } from "../content/stats";
+import { STAT_INFO, StatText, diffStats } from "../content/stats";
 import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
@@ -46,7 +46,7 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
             item.kind === "gear"
                 ? t("canvas.gear_slot", { slot: tl(GEAR_SLOT_BY_ID.get(item.slot)!.name) })
                 : t("canvas.utility"),
-        lines: item.kind === "gear" ? describeItem(item, upgrades) : [utilityDescription(item)],
+        lines: describeItem(item, upgrades),
         ...(set && {
             set: {
                 text: describeSetProgress(set, setWorn),
@@ -58,17 +58,19 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
 
 // An endless run's later rounds make heals and blasts bigger, which the item's
 // own description doesn't say
-function getRoundLines(sim: Sim, item: ItemDef): string[] {
+function getRoundLines(sim: Sim, item: ItemDef): StatText[] {
     if (item.kind !== "utility" || sim.round === 1) {
         return [];
     }
     const times = (n: number) => `${Math.round(n * 10) / 10}x`;
     const use = item.use;
     if (use.kind === "heal" || (use.kind === "cure" && use.heal)) {
-        return [t("canvas.round_heal", { times: times(sim.roundDamage), round: sim.round })];
+        return [
+            { text: t("canvas.round_heal", { times: times(sim.roundDamage), round: sim.round }) },
+        ];
     }
     if (use.kind === "blast") {
-        return [t("canvas.round_hit", { times: times(sim.roundHp), round: sim.round })];
+        return [{ text: t("canvas.round_hit", { times: times(sim.roundHp), round: sim.round }) }];
     }
     return [];
 }
@@ -115,6 +117,7 @@ export function getChestView(sim: Sim): ChestView | undefined {
                 getGearStats(item, chest.upgrades),
             ).map((d) => ({
                 text: d.text,
+                english: STAT_INFO[d.key].label,
                 good: d.delta > 0,
             }));
             if (!shouldWear(sim.gear, sim.gearUpgrades, item, chest.upgrades)) {

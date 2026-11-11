@@ -26,7 +26,7 @@ import {
     isDevMap,
     isFunMap,
 } from "../content/maps";
-import { formatPassiveValue, getPassive } from "../content/passives";
+import { getPassive, passiveValueText } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
@@ -39,7 +39,7 @@ import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
 import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
-import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
+import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
@@ -3548,13 +3548,8 @@ export class GameClient implements GameFrameHandler {
                     level: w.level,
                     maxLevel: w.def.levels.length,
                     iconObjId: level.objId ?? w.def.iconObjId,
-                    detail:
-                        w.bonus > 0
-                            ? t("canvas.weapon_bonus_damage", {
-                                  bonus: formatWeaponBonus(w.bonus),
-                              })
-                            : "",
-                    stats: weaponStats(w.def, level).map(formatWeaponStat),
+                    detail: w.bonus > 0 ? weaponBonusText(w.bonus) : undefined,
+                    stats: weaponStats(w.def, level).map(weaponStatText),
                     evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
@@ -3568,7 +3563,7 @@ export class GameClient implements GameFrameHandler {
                     maxLevel: def.maxLevel,
                     iconObjId: def.iconObjId,
                     iconSpriteId: def.iconSpriteId,
-                    detail: formatPassiveValue(def, p.value),
+                    detail: passiveValueText(def, p.value),
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),

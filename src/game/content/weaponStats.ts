@@ -1,5 +1,6 @@
 import { fmtNum, t, tp } from "../i18n";
 import { WEAPON_DAMAGE_BALANCE, WeaponDamageProfile } from "./balance";
+import { StatText } from "./stats";
 import { WeaponDef, WeaponLevel } from "./types";
 import { weaponDamageProfileScale } from "./weaponBalance";
 
@@ -7,6 +8,8 @@ import { weaponDamageProfileScale } from "./weaponBalance";
 // show it: "Damage 13", or for a level up "Damage 10 → 13"
 export type WeaponStatLine = {
     label: string;
+    // The label in English, which its icon goes by
+    english: string;
     value: string;
     // A level up's change: what it was before, and whether it's for the better
     from?: string;
@@ -19,6 +22,14 @@ export function formatWeaponBonus(bonus: number): string {
     return t("weaponstat.bonus", {
         value: fmtNum(Math.round(bonus * 100), { useGrouping: false }),
     });
+}
+
+// The pause menu's line for a weapon's damage bonus: "+15% damage"
+export function weaponBonusText(bonus: number): StatText {
+    return {
+        text: t("canvas.weapon_bonus_damage", { bonus: formatWeaponBonus(bonus) }),
+        english: "damage",
+    };
 }
 
 // The weapon stats' words, for locales/en/gen.json: weaponstat.<stat> is a stat's label (also the
@@ -294,7 +305,11 @@ export function weaponStats(
     for (const field of statFields(def, profile)) {
         const value = field.get(level);
         if (value !== undefined && field.listed?.(value)) {
-            lines.push({ label: t(field.label), value: field.format(value) });
+            lines.push({
+                label: t(field.label),
+                english: WEAPON_STAT_MESSAGES[field.label],
+                value: field.format(value),
+            });
         }
     }
     return lines;
@@ -317,7 +332,13 @@ export function weaponStatChanges(
         const value = field.format(after);
         const was = field.format(before);
         if (value !== was) {
-            lines.push({ label: t(field.label), value, from: was, better: after > before });
+            lines.push({
+                label: t(field.label),
+                english: WEAPON_STAT_MESSAGES[field.label],
+                value,
+                from: was,
+                better: after > before,
+            });
         }
     }
     return lines;
@@ -328,4 +349,9 @@ export function formatWeaponStat(line: WeaponStatLine): string {
     return line.from === undefined
         ? t("weaponstat.line", { label: line.label, value: line.value })
         : t("weaponstat.change", { label: line.label, from: line.from, value: line.value });
+}
+
+// The same, with its English for the icon
+export function weaponStatText(line: WeaponStatLine): StatText {
+    return { text: formatWeaponStat(line), english: line.english };
 }

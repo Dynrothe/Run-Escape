@@ -239,9 +239,9 @@ function ArmouryDetails({
                 </div>
             </div>
             <ul className="ui-armoury-stats">
-                {formatStats(piece.stats).map((text) => (
-                    <li key={text}>
-                        <StatLine text={text} />
+                {formatStats(piece.stats).map((line) => (
+                    <li key={line.text}>
+                        <StatLine text={line.text} english={line.english} />
                     </li>
                 ))}
                 {set && (

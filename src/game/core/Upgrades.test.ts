@@ -520,7 +520,13 @@ describe("endless runs", () => {
             bonus: 4.77,
         });
         expect(stacked.stats).toEqual([
-            { label: "Damage bonus", value: "+564%", from: "+477%", better: true },
+            {
+                label: "Damage bonus",
+                english: "Damage bonus",
+                value: "+564%",
+                from: "+477%",
+                better: true,
+            },
         ]);
         // An offer past the last level carries the weapon's bonus; one before it doesn't
         const rng = new Rng(1);
@@ -550,13 +556,13 @@ describe("endless runs", () => {
         });
         expect(piety.title).toBe("Piety +1");
         expect(piety.stats).toEqual([
-            { label: "Damage", value: "+30%", from: "+25%", better: true },
+            { label: "Damage", english: "damage", value: "+30%", from: "+25%", better: true },
         ]);
         const newPiety = describeChoice({
             kind: "newPassive",
             passiveId: "piety",
             quality: "common",
         });
-        expect(newPiety.stats).toEqual([{ label: "Damage", value: "+5%" }]);
+        expect(newPiety.stats).toEqual([{ label: "Damage", english: "damage", value: "+5%" }]);
     });
 });

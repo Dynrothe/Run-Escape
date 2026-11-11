@@ -162,6 +162,7 @@ export function overlevelBonus(bonus: number, quality: Rarity): number {
 function bonusStat(value: number, before: number): WeaponStatLine {
     return {
         label: t("ui.levelup.damage_bonus"),
+        english: "Damage bonus",
         value: formatWeaponBonus(value),
         from: formatWeaponBonus(before),
         better: value >= before,
@@ -173,6 +174,7 @@ function bonusStat(value: number, before: number): WeaponStatLine {
 function passiveStat(passive: PassiveDef, value: number, before?: number): WeaponStatLine {
     return {
         label: passiveEffect(passive)[0].toUpperCase() + passiveEffect(passive).slice(1),
+        english: passive.effect,
         value: formatPassiveNumber(passive, value),
         ...(before !== undefined && {
             from: formatPassiveNumber(passive, before),

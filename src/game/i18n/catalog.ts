@@ -87,29 +87,6 @@ export function englishForTranslation(lang: Lang, text: string): string | undefi
     return reverse.get(text) ?? undefined;
 }
 
-// Every translation, in a language, of the keys whose English is this text (compared without
-// case): "hitpoints a minute" is both a stat's label and a passive's effect, worded alike or not.
-let keysByEnglish: Map<string, string[]> | undefined;
-
-export function translationsOfEnglish(lang: Lang, english: string): string[] {
-    if (!keysByEnglish) {
-        keysByEnglish = new Map();
-        for (const [key, value] of Object.entries(catalogs.en)) {
-            const lower = value.toLowerCase();
-            const keys = keysByEnglish.get(lower);
-            if (keys) {
-                keys.push(key);
-            } else {
-                keysByEnglish.set(lower, [key]);
-            }
-        }
-    }
-    const found = (keysByEnglish.get(english.toLowerCase()) ?? [])
-        .map((key) => catalogs[lang][key])
-        .filter((text): text is string => text !== undefined);
-    return [...new Set(found)];
-}
-
 // Swaps in other messages (for tests, which can't lean on the real files being filled
 // in). Languages not given keep theirs. Returns what puts them back.
 export function overrideMessages(messages: Partial<Record<Lang, Messages>>): () => void {
@@ -117,11 +94,9 @@ export function overrideMessages(messages: Partial<Record<Lang, Messages>>): () 
     catalogs = { ...catalogs, ...messages } as Record<Lang, Messages>;
     reverseEn = undefined;
     reverseLang.clear();
-    keysByEnglish = undefined;
     return () => {
         catalogs = before;
         reverseEn = undefined;
         reverseLang.clear();
-        keysByEnglish = undefined;
     };
 }

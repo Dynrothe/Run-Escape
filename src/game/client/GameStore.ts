@@ -1,4 +1,5 @@
 import { Rarity } from "../content/rarity";
+import { StatText } from "../content/stats";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
@@ -30,10 +31,11 @@ export type SlotView = {
     maxLevel: number;
     iconObjId: number;
     iconSpriteId?: number;
-    // What it adds up to so far: "+18% damage", "+15% damage to this weapon"
-    detail: string;
+    // What it adds up to so far: "+18% damage", "+15% damage to this weapon" (none for a
+    // weapon with no bonus)
+    detail?: StatText;
     // Weapons: their stats at this level ("Damage 13", "Attacks 0.74/s")
-    stats?: string[];
+    stats?: StatText[];
     // Weapons that evolve: the passive it takes, and what's done of it
     evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
     // The item's own rarity, for the slot's border
@@ -48,7 +50,7 @@ export type ItemView = {
     // "Head slot", "Utility"
     kindLabel: string;
     // What it does, a line per stat or effect
-    lines: string[];
+    lines: StatText[];
     // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
     // whether its bonus is on
     set?: { text: string; active: boolean };
@@ -89,7 +91,7 @@ export type ChestView = {
     // Gear: what it replaces (alched when the new piece goes on) and what
     // changes
     replaces?: { item: ItemView; alchCoins: number };
-    changes: { text: string; good: boolean }[];
+    changes: (StatText & { good: boolean })[];
     // Utility: whether it fits in the inventory, and how many are carried
     canStash: boolean;
     carried: number;
@@ -139,7 +141,7 @@ export type HudView = {
     passives: SlotView[];
     // The player's stats from passives, gear, potions and their adventurer,
     // the ones that aren't zero: "+18% damage", "+2 armour"
-    stats: string[];
+    stats: StatText[];
     gear: GearSlotView[];
     inventory: InventorySlotView[];
     // Left this run, for a level up's rewards or a casket's item

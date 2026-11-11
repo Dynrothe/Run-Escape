@@ -56,7 +56,7 @@ import {
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
-import { formatStats } from "../content/stats";
+import { StatText, formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID, trophyName } from "../content/trophies";
@@ -1537,8 +1537,8 @@ function AdventurerDetails({
             {/* What they bring, a stat to a line */}
             {bonus.length > 0 && (
                 <div className="ui-select-bonus">
-                    {bonus.map((text) => (
-                        <StatLine key={text} text={text} />
+                    {bonus.map((line) => (
+                        <StatLine key={line.text} text={line.text} english={line.english} />
                     ))}
                 </div>
             )}
@@ -2251,9 +2251,13 @@ const Slots = memo(function Slots({
                                               })}
                                     </div>
                                     {slot.stats?.map((line) => (
-                                        <StatLine key={line} text={line} />
+                                        <StatLine
+                                            key={line.text}
+                                            text={line.text}
+                                            english={line.english}
+                                        />
                                     ))}
-                                    {slot.detail && <div>{slot.detail}</div>}
+                                    {slot.detail && <div>{slot.detail.text}</div>}
                                     {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                 </>
                             )
@@ -2867,7 +2871,12 @@ function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
     return (
         <div className="ui-choice-stats">
             {stats.map((line) => (
-                <StatLine key={line.label} text={formatWeaponStat(line)} className="ui-choice-stat">
+                <StatLine
+                    key={line.label}
+                    text={formatWeaponStat(line)}
+                    english={line.english}
+                    className="ui-choice-stat"
+                >
                     <span className="ui-choice-stat-label">{line.label}</span>{" "}
                     {line.from !== undefined && <>{line.from} → </>}
                     <span
@@ -3228,9 +3237,13 @@ function PauseModal({
                                         </span>
                                         <span className="ui-pause-detail">
                                             {[...(slot.stats ?? []), slot.detail]
-                                                .filter((text): text is string => Boolean(text))
-                                                .map((text, i) => (
-                                                    <StatLine key={i} text={text} />
+                                                .filter((line): line is StatText => !!line)
+                                                .map((line, i) => (
+                                                    <StatLine
+                                                        key={i}
+                                                        text={line.text}
+                                                        english={line.english}
+                                                    />
                                                 ))}
                                         </span>
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
@@ -3250,7 +3263,11 @@ function PauseModal({
                                 </h3>
                                 <div className="ui-pause-stats">
                                     {hud.stats.map((line) => (
-                                        <StatLine key={line} text={line} />
+                                        <StatLine
+                                            key={line.text}
+                                            text={line.text}
+                                            english={line.english}
+                                        />
                                     ))}
                                 </div>
                             </>
@@ -3272,7 +3289,11 @@ function PauseModal({
                                                         </span>
                                                         <span className="ui-pause-detail">
                                                             {item.lines.map((line, i) => (
-                                                                <StatLine key={i} text={line} />
+                                                                <StatLine
+                                                                    key={i}
+                                                                    text={line.text}
+                                                                    english={line.english}
+                                                                />
                                                             ))}
                                                             {item.set && (
                                                                 <span

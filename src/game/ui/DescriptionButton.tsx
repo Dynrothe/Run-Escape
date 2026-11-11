@@ -338,7 +338,7 @@ export function ItemDescription({
         <>
             <span style={{ color: item.rarity.color }}>{item.name}</span>
             {item.lines.map((line) => (
-                <StatLine key={line} text={line} />
+                <StatLine key={line.text} text={line.text} english={line.english} />
             ))}
             {item.set && (
                 <StatLine
