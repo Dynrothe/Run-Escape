@@ -3,7 +3,7 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.31.0 - 2026-11-11
 
 ### Added
 
@@ -11,14 +11,6 @@ the version in the corner).
   Seven minutes of farmers, bandits, foxes and Chompy birds, with Professor Oddenstein, two Evil
   Chickens and, at the end, the Freaky Forester, who rises again bigger. Enemies there drop cooked
   turkeys to carve, for a feast or a fowl trick.
-- The Avian Assaulter, by Happi: everyone plays them in Thanksgiving Harvest, in a chicken outfit
-  with birds circling their head. Their Rubber chicken whacks in front and behind, hits bosses
-  harder, and heals you as it hits, more with each of its ten levels. They find no other weapons,
-  gear, passives or items, and caskets only pay them coins. Once the chicken's maxed, level ups
-  offer a shark, not coins.
-- Thanksgiving Harvest's Collection log, by Happi: drops from Chompy birds and cooked turkeys,
-  rewards for beating it (a Golden egg for beating it on hard), and the Chompy chick pet for its
-  Chompy Slayer quest.
 - What your effects do, by Happi: hover over or hold one in the HUD to read it, and the pause menu
   lists them all.
 - The Armoury's weapons and passives, by Happi: two new tabs list each one's levels, how it's
@@ -94,6 +86,8 @@ the version in the corner).
   log already, and anything it unlocks was unlocked. The Theatre of Blood's and the Tombs of
   Amascut's chests now only give ones you haven't found, in co-op too. Once you have everything a
   chest holds, it says so. Fixed by Okaeri.
+- The Theatre of Blood's expert chest could give a Lil' Zik look you already had. It now gives
+  one you haven't got until you have all five. Fixed by Okaeri.
 - At high raid levels Akkha spent most of his fight doing Memory Blast, gone from the floor, one
   after another. After each Memory Blast he now stays on the floor at least as long as it took, at
   every raid level, so he's quicker to beat at all of them. Memory Blast is six steps at most, and
@@ -155,8 +149,6 @@ the version in the corner).
 
 ### Fixed
 
-- The Theatre of Blood's expert chest could give a Lil' Zik look you already had. It now gives
-  one you haven't got until you have all five. Fixed by Okaeri.
 - On phones, the name of your special attack button was cut off. It now sits under the button.
   Fixed by Okaeri.
 - Beating a boss in the Tombs of Amascut now heals your whole party to full. Fixed by Okaeri.
