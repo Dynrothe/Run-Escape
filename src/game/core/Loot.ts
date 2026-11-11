@@ -381,10 +381,14 @@ export function getAlchValue(item: ItemDef, greed: number, upgrades = 0): number
     );
 }
 
-// What an item does, a line per stat or effect
+// What an item does, a line per stat or effect. A potion that lasts a while is its stats, a
+// line each, as gear is, rather than its sentence (how long is ItemView's seconds).
 export function describeItem(item: ItemDef, upgrades = 0): StatText[] {
-    return item.kind === "gear"
-        ? formatStats(getGearStats(item, upgrades))
+    if (item.kind === "gear") {
+        return formatStats(getGearStats(item, upgrades));
+    }
+    return item.use.kind === "buff"
+        ? formatStats(item.use.stats)
         : [{ text: utilityDescription(item) }];
 }
 

@@ -47,6 +47,7 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
                 ? t("canvas.gear_slot", { slot: tl(GEAR_SLOT_BY_ID.get(item.slot)!.name) })
                 : t("canvas.utility"),
         lines: describeItem(item, upgrades),
+        ...(item.kind === "utility" && item.use.kind === "buff" && { seconds: item.use.seconds }),
         ...(set && {
             set: {
                 text: describeSetProgress(set, setWorn),

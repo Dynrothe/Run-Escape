@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { InventorySlotView } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getItem } from "../content/items";
+import { setLang, tp } from "../i18n";
 import { InventoryItem } from "./InventoryItem";
 
 const slot = { item: getItemView(getItem("shark")), count: 2 };
@@ -38,6 +39,33 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    setLang("en");
+});
+
+test("a potion lists its stats a line each, each with its icon in any language, and how long they last", () => {
+    for (const lang of ["en", "pt-BR"] as const) {
+        setLang(lang);
+        const item = getItemView(getItem("battlemage_potion"));
+        if (lang === "en") {
+            expect(item.lines.map((line) => line.text)).toEqual([
+                "+1.5 armour",
+                "+25% area",
+                "+25% effect duration",
+            ]);
+        }
+        render(<InventoryItem slot={{ item, count: 1 }} index={0} onUse={vi.fn()} />);
+        pointer(screen.getByRole("button", { name: item.name }), "pointerover", {
+            pointerType: "mouse",
+        });
+        const lines = [...screen.getByRole("tooltip").querySelectorAll(".ui-stat-line")];
+        expect(lines.map((line) => line.textContent)).toEqual([
+            ...item.lines.map((line) => line.text),
+            tp("canvas.lasts", 30),
+        ]);
+        // The icons go by the stat, not by English words in the text
+        expect(lines.filter((line) => !line.querySelector(".ui-icon"))).toEqual([]);
+        cleanup();
+    }
 });
 
 test("hover and keyboard focus show exactly the description used by the reward card", () => {
@@ -47,6 +75,7 @@ test("hover and keyboard focus show exactly the description used by the reward c
     const tip = screen.getByRole("tooltip");
     expect([...tip.children].map((line) => line.textContent)).toEqual([
         slot.item.name,
+        `${slot.item.rarity.name} · ${slot.item.kindLabel}`,
         ...slot.item.lines.map((line) => line.text),
     ]);
     expect(button).toHaveAttribute("aria-describedby", tip.id);

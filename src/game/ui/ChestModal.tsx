@@ -7,6 +7,7 @@ import { fmtNum, t, tl, tp } from "../i18n";
 import { BanishButton } from "./BanishButton";
 import "./ChestModal.css";
 import { Coins } from "./Coins";
+import { ItemLines } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
 import { RerollButton } from "./RerollButton";
@@ -364,11 +365,7 @@ function ChestCard({
                 </div>
             </div>
             <ul className="ui-chest-lines">
-                {item.lines.map((line) => (
-                    <li key={line.text}>
-                        <StatLine text={line.text} english={line.english} />
-                    </li>
-                ))}
+                <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
             </ul>
             {item.set && (
                 <div className={"ui-chest-set" + (item.set.active ? " ui-chest-set-on" : "")}>

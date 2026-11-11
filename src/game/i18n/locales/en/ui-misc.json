@@ -39,6 +39,8 @@
     "canvas.extra_revive": "Extra revive",
     "canvas.gear_slot": "{slot} slot",
     "canvas.graphics_lost": "Your device took the game's graphics away, as it can when it's short of memory, and they can't come back without reloading.",
+    "canvas.lasts.one": "For {n} second",
+    "canvas.lasts.other": "For {n} seconds",
     "canvas.left_stick": "Left stick",
     "canvas.loading_building": "Building {name}",
     "canvas.loading_dressing": "Dressing up",
