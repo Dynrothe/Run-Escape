@@ -38,6 +38,8 @@ the version in the corner).
   short.
 - The Armoury's key, by Jp66600: a line under its title says what each border's colour means,
   and pieces not found yet are marked with a "?".
+- The keyboard's controls, by Jp66600: the pause menu and Settings list them, and the pause menu
+  shows the run's last messages too.
 
 ### Changed
 
@@ -66,6 +68,8 @@ the version in the corner).
   window can't be reached until it closes.
 - Skills, by Jp66600: the preset's own balance is labelled and explained, a maxed skill no longer
   looks out of reach, and a line under the cards says how to refund a rank.
+- Settings, by Jp66600: your progress comes first, with when you last exported it, and the game
+  section is split into groups.
 
 ### Fixed
 
@@ -96,6 +100,8 @@ the version in the corner).
   always a gap to time your way in. Fixed by Okaeri.
 - The results' buttons stay in view when there's more to show than fits. Fixed by Jp66600.
 - The Armoury's Back button no longer needs scrolling to. Fixed by Jp66600.
+- The pause menu's Give up and Resume stay in view when there's more to show than fits. Fixed by
+  Jp66600.
 
 ## 0.30.0 - 2026-11-09
 

@@ -472,10 +472,15 @@ export type UiSnapshot = {
         endedEarly?: string;
     };
     toasts: Toast[];
+    // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
+    toastLog: string[];
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;
 };
+
+// How many of the run's messages the pause menu keeps
+const TOAST_LOG_SIZE = 8;
 
 // The UI's view of the game: an immutable snapshot replaced on every change,
 // read by React through useSyncExternalStore.
@@ -503,6 +508,7 @@ export class GameStore {
             waitingOn: [],
             choices: [],
             toasts: [],
+            toastLog: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
             display: getDefaultDisplaySettings(),
@@ -549,7 +555,11 @@ export class GameStore {
         const toasts = this.snapshot.toasts.filter((t) => t.until > now && t.text !== text);
         const id = this.nextToastId++;
         toasts.push({ id, text, until: now + ms });
-        this.set({ toasts: toasts.slice(-4) });
+        const log = this.snapshot.toastLog;
+        this.set({
+            toasts: toasts.slice(-4),
+            toastLog: log[0] === text ? log : [text, ...log].slice(0, TOAST_LOG_SIZE),
+        });
         return id;
     }
 

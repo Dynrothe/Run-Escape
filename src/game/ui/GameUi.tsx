@@ -100,7 +100,7 @@ import { ItemIcon } from "./ItemIcon";
 import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
-import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
+import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
@@ -220,7 +220,7 @@ function Setting({
     children,
 }: {
     name: string;
-    text?: string;
+    text?: ReactNode;
     children: ReactNode;
 }): JSX.Element {
     return (
@@ -560,8 +560,23 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
             client.replaceSave(save);
         }
     };
+    const lastCopy = ui.save.lastExported;
     return (
-        <Setting name={t("settings.save.name")} text={t("settings.save.desc")}>
+        <Setting
+            name={t("settings.save.name")}
+            text={
+                <>
+                    {t("settings.save.desc")}
+                    <span className="ui-setting-note">
+                        {lastCopy === undefined
+                            ? t("settings.save.no_copy")
+                            : t("settings.save.last_copy", {
+                                  date: new Date(lastCopy).toLocaleDateString(dateLocale()),
+                              })}
+                    </span>
+                </>
+            }
+        >
             <button
                 className="ui-button ui-button-small"
                 onClick={(e) => {
@@ -653,13 +668,22 @@ function SettingsPanel({
         <div className="ui-panel rs-border rs-background ui-settings">
             <h2>{t("settings.title")}</h2>
             <div className="ui-settings-body">
+                {/* First: it's what a player can lose */}
+                <section className="ui-settings-section">
+                    <h3>{t("settings.section.save")}</h3>
+                    <SaveSetting ui={ui} client={client} />
+                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
+                    <UnreadableSaveSettings ui={ui} client={client} />
+                </section>
                 <section className="ui-settings-section">
                     <h3>{t("settings.section.sound")}</h3>
                     <SoundSettings ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
                     <h3>{t("settings.section.game")}</h3>
+                    <h4 className="ui-settings-group">{t("settings.group.general")}</h4>
                     <LanguageSetting />
+                    <h4 className="ui-settings-group">{t("settings.group.camera")}</h4>
                     <Setting
                         name={t("settings.camera_spin.name")}
                         text={t("settings.camera_spin.desc")}
@@ -680,28 +704,32 @@ function SettingsPanel({
                             onToggle={() => client.toggleScreenShake()}
                         />
                     </Setting>
+                    <h4 className="ui-settings-group">{t("settings.group.run")}</h4>
                     <PickupTimerSetting ui={ui} client={client} />
                     <PuzzleHelperSetting ui={ui} client={client} />
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
                     <AutoEquipSetting ui={ui} client={client} />
+                    <RunStatsSetting ui={ui} client={client} />
+                    <h4 className="ui-settings-group">{t("settings.group.coop")}</h4>
                     <MovePredictionSetting ui={ui} client={client} />
                     <CoopFlagSetting ui={ui} client={client} />
-                    <RunStatsSetting ui={ui} client={client} />
+                    <h4 className="ui-settings-group">{t("settings.group.performance")}</h4>
                     <FrameRateSetting ui={ui} client={client} />
                 </section>
-                {padKind && (
+                {padKind ? (
                     <section className="ui-settings-section">
                         <h3>{t("settings.section.controller")}</h3>
                         <PadControls />
                     </section>
+                ) : (
+                    !isCoarsePointer && (
+                        <section className="ui-settings-section">
+                            <h3>{t("settings.section.keyboard")}</h3>
+                            <KeyboardControls />
+                        </section>
+                    )
                 )}
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.save")}</h3>
-                    <SaveSetting ui={ui} client={client} />
-                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
-                    <UnreadableSaveSettings ui={ui} client={client} />
-                </section>
             </div>
             <div className="ui-row">
                 <button className="ui-button" onClick={onClose}>
@@ -3622,13 +3650,32 @@ function PauseModal({
                                 </div>
                             </>
                         )}
-                        {padKind && (
+                        {ui.toastLog.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">{t("pause.heading.recent")}</h3>
+                                <ul className="ui-pause-recent">
+                                    {ui.toastLog.map((text, i) => (
+                                        <li key={i}>{text}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                        {padKind ? (
                             <>
                                 <h3 className="ui-pause-heading">
                                     {t("pause.heading.controller")}
                                 </h3>
                                 <PadControls />
                             </>
+                        ) : (
+                            !isCoarsePointer && (
+                                <>
+                                    <h3 className="ui-pause-heading">
+                                        {t("pause.heading.keyboard")}
+                                    </h3>
+                                    <KeyboardControls />
+                                </>
+                            )
                         )}
                         <h3 className="ui-pause-heading">{t("pause.heading.settings")}</h3>
                         <LanguageSetting />
