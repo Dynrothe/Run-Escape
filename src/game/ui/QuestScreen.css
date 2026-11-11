@@ -102,3 +102,8 @@
         grid-column: 1 / -1;
     }
 }
+
+/* Hiding what's done left nothing */
+.ui-quest-none {
+    margin: 12px 0;
+}

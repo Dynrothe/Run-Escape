@@ -40,6 +40,7 @@ the version in the corner).
   and pieces not found yet are marked with a "?".
 - The keyboard's controls, by Jp66600: the pause menu and Settings list them, and the pause menu
   shows the run's last messages too.
+- Quest list, by Jp66600: it can hide the finished quests, and those under way come first.
 
 ### Changed
 
