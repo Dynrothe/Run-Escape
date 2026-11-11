@@ -21,6 +21,9 @@ the version in the corner).
 - What your effects do, by Happi: hover over or hold one in the HUD to read it, and the pause menu
   lists them all.
 - A camera zoom slider on phones, by Happi: tap Zoom beside the timer.
+- New power-up, by GhostavoA: Polymorph. For 10 seconds everything turns into harmless sheep,
+  and elites and bosses into golden sheep that still fight. Keep an eye out for a penguin in
+  disguise.
 
 ### Changed
 

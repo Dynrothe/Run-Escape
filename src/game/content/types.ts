@@ -3162,7 +3162,57 @@ export type PowerUpEffect =
     // A light: bonus tiles on the player's own light (LightingDef.player), or a light of its own
     // that big, for seconds (Effect duration stretches it), shrinking back over the last fade
     // seconds. Its look is the player's light's, or the lantern's. Only on a map with lighting.
-    | { kind: "light"; bonus: number; seconds: number; fade: number; look?: LightLook };
+    | { kind: "light"; bonus: number; seconds: number; fade: number; look?: LightLook }
+    // Everything on the map as it's used turns into a sheep for seconds (Effect duration
+    // stretches it), one of sheep at random, wandering about at speed times its own pace and
+    // stopping to graze, unable to hurt anyone; it dies as one too. Elites and bosses turn into
+    // golden. Now and then an ordinary enemy turns into the penguin instead (penguin.chance),
+    // which lets its escapees out when it's killed, or the rare one (rare.chance), which wanders
+    // off away from the player. Every so often each one says shout (about every shoutSeconds),
+    // with one of shoutSounds, unless its look has its own. Whatever turns up while it lasts is
+    // turned too, till the end.
+    | {
+          kind: "polymorph";
+          seconds: number;
+          speed: number;
+          sheep: PolymorphLook[];
+          golden: PolymorphLook;
+          penguin: PolymorphLook & { chance: number; escapees: PolymorphEscapees };
+          rare: PolymorphLook & { chance: number };
+          shout: string;
+          shoutSeconds: number;
+          shoutSounds: number[];
+      };
+
+// What runs out of a polymorphed penguin when it's killed: count NPCs, off away from the player at
+// speed tiles a second for seconds, drawn at scale. Looks only: they're not in the sim.
+export type PolymorphEscapees = {
+    npcId: number;
+    walkSeq: number;
+    count: number;
+    speed: number;
+    seconds: number;
+    scale: number;
+};
+
+// Which of a polymorph's animals something's turned into
+export type PolymorphKind = "sheep" | "golden" | "penguin" | "rare";
+
+// What a polymorphed enemy is drawn as: an NPC, at scale for an ordinary enemy or an elite and
+// bossScale for a boss, whatever size the enemy itself was. deathSeq -1 sinks it, as an enemy
+// with no death animation does. attackSeq plays while one that fights on (a golden sheep) attacks.
+// shout and shoutSounds stand in for the polymorph's own.
+export type PolymorphLook = {
+    npcId: number;
+    idleSeq: number;
+    walkSeq: number;
+    deathSeq: number;
+    attackSeq?: number;
+    scale: number;
+    bossScale: number;
+    shout?: string;
+    shoutSounds?: number[];
+};
 
 // What the player has in hand and how they stand while a power-up lasts. Baked
 // with the player (GameAssets.getPowerUpLookRequests), so it's on at once.

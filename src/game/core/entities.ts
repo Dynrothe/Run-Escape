@@ -6,6 +6,7 @@ import {
     ImpactDef,
     LightLook,
     PlayerEffectDef,
+    PolymorphKind,
     RandomEventDef,
     Stats,
     ThrallDef,
@@ -351,6 +352,23 @@ export type EnemyAnim = "walk" | "idle" | "attack" | "death" | "jump";
 
 // Going over a ditch: from one side to the other, starting at tick start
 export type EnemyJump = { fromX: number; fromY: number; toX: number; toY: number; start: number };
+// Turned into an animal by a polymorph power-up (powerUpId's) till endTick, which of them by look
+// and variant (getPolymorphLook), harmless: a sheep (or the penguin) wanders dirX, dirY at speed
+// tiles a tick till turnTick, when it picks another way, and the rare one walks away from the
+// player. Each tick it says shout at shoutChance, with one of shoutSounds.
+export type EnemyPolymorph = {
+    powerUpId: string;
+    look: PolymorphKind;
+    variant: number;
+    endTick: number;
+    speed: number;
+    dirX: number;
+    dirY: number;
+    turnTick: number;
+    shout: string;
+    shoutChance: number;
+    shoutSounds: number[];
+};
 export type EnemyFlung = {
     fromX: number;
     fromY: number;
@@ -402,6 +420,8 @@ export type Enemy = {
     lit?: boolean;
     // Jumping a ditch, and nothing else until it lands
     jump?: EnemyJump;
+    // A sheep or a penguin in disguise for a while (a polymorph power-up)
+    polymorph?: EnemyPolymorph;
     // Takes this much more damage from everything (0.25 = +25%) until
     // drainEnd (the Bandos godsword's Warstrike)
     drain: number;
@@ -1110,6 +1130,10 @@ type SimEventBody =
       }
     // A boss said something over its head
     | { type: "bossShout"; enemyUid: number; text: string }
+    // Any enemy said something over its head, with a sound (a polymorphed sheep's "Baa!")
+    | { type: "enemyShout"; enemyUid: number; text: string; sound: number; x: number; y: number }
+    // A polymorphed penguin was killed, and its escapees run off from where it fell
+    | { type: "polymorphEscape"; powerUpId: string; x: number; y: number }
     // Said over the player's head (Durial321's lines in Falador)
     | { type: "playerShout"; text: string }
     // A boss got back up when it should have died

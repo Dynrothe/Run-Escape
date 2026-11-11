@@ -27,7 +27,7 @@ import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items"
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
@@ -59,6 +59,7 @@ import {
     GearSlot,
     ImpactDef,
     MapDef,
+    PolymorphKind,
     WeaponDef,
 } from "../content/types";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
@@ -523,6 +524,16 @@ export function getPropKey(npcId: number): string {
     return "prop:" + npcId;
 }
 
+// What a polymorph power-up turns enemies into (EnemyPolymorph's look and variant)
+export function getPolymorphKey(powerUpId: string, look: PolymorphKind, variant: number): string {
+    return `polymorph:${powerUpId}:${look}:${variant}`;
+}
+
+// What runs out of a polymorph's penguin (PolymorphEscapees)
+export function getPolymorphEscapeeKey(powerUpId: string): string {
+    return `polymorph:${powerUpId}:escapee`;
+}
+
 // A piece of what's under a floor (FloorDef.under)
 export function getFloorPieceKey(locId: number): string {
     return "floorpiece:" + locId;
@@ -875,6 +886,27 @@ export class GameAssets {
                     key: "rampage:" + id,
                     npcId: effect.npcId,
                     seqIds: [effect.walkSeq],
+                });
+            } else if (effect.kind === "polymorph") {
+                for (const { look, variant, def } of getPolymorphLooks(effect)) {
+                    requests.push({
+                        kind: "npc",
+                        key: getPolymorphKey(id, look, variant),
+                        npcId: def.npcId,
+                        seqIds: [
+                            def.idleSeq,
+                            def.walkSeq,
+                            def.deathSeq,
+                            def.attackSeq ?? -1,
+                        ].filter((s) => s !== -1),
+                    });
+                }
+                const { npcId, walkSeq } = effect.penguin.escapees;
+                requests.push({
+                    kind: "npc",
+                    key: getPolymorphEscapeeKey(id),
+                    npcId,
+                    seqIds: [walkSeq],
                 });
             }
         }

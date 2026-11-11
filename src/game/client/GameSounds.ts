@@ -58,6 +58,9 @@ export function getGameSoundIds(): number[] {
     }
     for (const powerUp of POWER_UPS) {
         ids.push(powerUp.sound, powerUp.endSound ?? -1, powerUp.hitSound ?? -1);
+        if (powerUp.effect.kind === "polymorph") {
+            ids.push(...powerUp.effect.shoutSounds, ...(powerUp.effect.penguin.shoutSounds ?? []));
+        }
     }
     for (const thrall of THRALLS) {
         ids.push(thrall.sound);
@@ -173,6 +176,13 @@ export class GameSounds {
                 }
                 case "bossAttack":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.8 });
+                    break;
+                case "enemyShout":
+                    // A flock baas all the time, so not over and over at once
+                    audio.playAt(event.sound, event.x, event.y, px, py, {
+                        volume: 0.5,
+                        minGap: 150,
+                    });
                     break;
                 case "ability":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.9 });
