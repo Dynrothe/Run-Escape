@@ -25,8 +25,9 @@ const SHIPPED_HASHES: Record<string, string> = {
     theatre_of_blood: "e846bfdc8dc8abf583ebe7de484d248c1cd31ba35393ada5b24893517c510973",
     zachariah: "9486e1585cc223d81ed5ddc042d01a189265aa84e3f0de61bf32d41a0747a508",
     stranglewood: "933870d4549c12b99897d02a53df4bacaa7ca194f32fa0708068799b39641ef4",
-    // The city and its Shadow Realm (MapRecipe.twin) together
-    lassar_undercity: "e63d1ae21372ae38ee1522e756b561b474a8b30df23701858d76f5d6ae63fe6a",
+    // The city and its Shadow Realm (MapRecipe.twin) together. Its walls stand whole since the
+    // houses read as bare floors with them thinned
+    lassar_undercity: "0eb0f70b84d7ab8b3b935d6cf538fefc75620483d585b83eddf5ba4614ff6c18",
     ghorrock: "2bc1030c05a631ca65534e2f12f78c618566c16badbdca9f8eb45251d0600520",
     // The Awakened Duke's room, cut from Ghorrock Prison's and widened
     awakened_duke: "dbfdf1174f82175276bcfd02a7634276c38703a0acf130b08221126ddba57cc7",

@@ -92,30 +92,11 @@ const hash = (x: number, y: number, id = 0) =>
     0xffffffff;
 
 // Thinned for phones (scripts/scaperune/view-weight.ts PHONE=1, then frameProbe in the game): the
-// share of each heavy loc kept, by the city's id
+// share of each heavy loc kept, by the city's id. Never its walls (WALL_TYPES): thinned, its houses
+// read as bare floors with stairs, so they stand whole and the phone pays for them
 const KEPT: Record<number, number> = {
     // Its lamps are 3,000 triangles each: a few still stand
     48189: 0.25,
-    // The ruined houses' walls (400 to 700 triangles a piece), with gaps where the rest fell
-    47605: 0.15,
-    47607: 0.15,
-    47629: 0.25,
-    47614: 0.25,
-    47612: 0.2,
-    47610: 0.2,
-    47617: 0.2,
-    47616: 0.2,
-    47611: 0.2,
-    47613: 0.2,
-    47615: 0.2,
-    47671: 0.3,
-    47639: 0.3,
-    47638: 0.3,
-    47634: 0.3,
-    47632: 0.3,
-    47631: 0.5,
-    47636: 0.5,
-    47633: 0.5,
     // What's left in the houses: tables, cupboards, beds, carts, the barracks' ballistae and racks
     47975: 0.2,
     48168: 0.3,
@@ -130,19 +111,13 @@ const KEPT: Record<number, number> = {
     48005: 0.4,
     47974: 0.2,
     47976: 0.2,
-    47618: 0.4,
-    47630: 0.3,
-    47635: 0.3,
-    37773: 0.4,
-    // Its braziers, its barracks' dummies, ranges and doors left standing in their frames
+    // Its braziers, its barracks' dummies and ranges
     47961: 0.5,
     47978: 0.3,
     48169: 0.3,
-    48272: 0,
-    48273: 0,
     47985: 0.4,
     48123: 0.5,
-    // The walls' trims, and rubble on the floor
+    // The trims along the walls' feet (its wall pieces stay), and rubble on the floor
     47669: 0.5,
     42622: 0.5,
     46950: 0.5,
@@ -151,6 +126,9 @@ const KEPT: Record<number, number> = {
 const FURNITURE =
     /table|cupboard|bed|cart|rack|barrel|crate|shel|chair|stool|bench|ballista|book|chest|drawer|wardrobe|pot|sack|box|cabinet/i;
 const FURNITURE_KEPT = 0.33;
+// Walls, their corners and diagonals: never thinned (the doors off them go with the clutter)
+const WALL_TYPES = new Set([0, 1, 2, 3, 9]);
+const DOORS_IN_FRAMES = new Set([48272, 48273]);
 
 // The play camera looks north from about 70 degrees: ground that a rise south of it hides (the city's
 // steps down to its water) is blocked, so nobody fights where they can't be seen. As check-maps.ts
@@ -201,6 +179,9 @@ function cityLocsOff(context: BuildContext, city: TileGrid): (loc: PlacedLoc) =>
     return (loc) => {
         if (blocking(loc) && !KEPT_PROPS.has(loc.id)) {
             return true;
+        }
+        if (WALL_TYPES.has(loc.type)) {
+            return DOORS_IN_FRAMES.has(loc.id);
         }
         const share =
             KEPT[loc.id] ??

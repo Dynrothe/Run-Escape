@@ -380,9 +380,10 @@ Built in #159 as build order step 6. Where it differs from the above, and why:
   10:05 and 12 deaths before 10:00, against the Stranglewood's 1, 6:31 and 14 (its Kasonde wall at 5:00; Lassar's
   deaths spread from 5:09 to 17:00, the Forsaken Assassin at 10:00 the most); at step 1, 0 wins, 7:46 and 14 against 2,
   7:11 and 14. The bot went in 4 times a run (median), was thrown back twice, and spent about an eighth of the run there.
-- **Phones**: thinned for the busiest views (the ruined houses' walls to a fifth and less, lamps to a quarter, furniture
-  to a third), measured with `frameProbe` at 844 by 390 on the phone camera: the heaviest view is 64k in the city and
-  66.4k in the realm, souls in view.
+- **Phones**: thinned for the busiest views (lamps to a quarter, furniture to a third), measured with `frameProbe` at
+  844 by 390 on the phone camera. The ruined houses' walls were thinned to a fifth and less at first (64k in the city,
+  66.4k in the realm), but that left the houses as bare floors with stairs, so they stand whole (Dynny's call, 11-11):
+  the heaviest view is now 134k in the city and 135k in the realm, over the 69k phone line.
 
 ## 5. Ghorrock (Duke Sucellus)
 
