@@ -23,7 +23,21 @@ export type PetDef = {
 
 export type PetPowerDef =
     | { kind: "leap"; every: number; reach: number; cleave: number; damage: number }
-    | { kind: "call"; every: number; reach: number; soul: number; heal: number; travel: number };
+    | { kind: "call"; every: number; reach: number; soul: number; heal: number; travel: number }
+    // gas: asleep till crowd enemies are within reach tiles of its hero, then it spits a cloud
+    // size tiles across round them for seconds: what's in it is slow slower and poisoned, poison
+    // a second (scaled as power-ups' damage is) for poisonSeconds; then asleep every seconds
+    | {
+          kind: "gas";
+          every: number;
+          crowd: number;
+          reach: number;
+          size: number;
+          seconds: number;
+          slow: number;
+          poison: number;
+          poisonSeconds: number;
+      };
 
 export const PETS: PetDef[] = [
     { id: "little_nightmare", npcId: 9399, idleSeq: 8593, walkSeq: 8634 },
@@ -51,6 +65,25 @@ export const PETS: PetDef[] = [
         idleSeq: 10230,
         walkSeq: 10233,
         power: { kind: "call", every: 10, reach: 8, soul: 60, heal: 0.05, travel: 1 },
+    },
+    // The Awakened Duke's: his own model, small. He naps till a crowd's round you, then spits
+    // his gas at them
+    {
+        id: "baron",
+        npcId: 12159,
+        idleSeq: 10217,
+        walkSeq: 10218,
+        power: {
+            kind: "gas",
+            every: 15,
+            crowd: 6,
+            reach: 3,
+            size: 3,
+            seconds: 4,
+            slow: 0.45,
+            poison: 3,
+            poisonSeconds: 4,
+        },
     },
 ];
 

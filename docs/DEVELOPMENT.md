@@ -927,6 +927,15 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       that world and finds no one once it's gone into the other (with `opens`, the guard drops);
       `BossDef.siphon` stuns the boss when the last of its siphon's souls (`siphonLeft`, both
       worlds) is caught with none of them reaching it (`siphonSoulGone`, `BossState.siphonLost`).
+    - A fight under the cold (the Awakened Duke's, `MapDef.rule` a `ColdRuleDef` with
+      `braziers.stayLit`, so they don't all go out as the boss is up from the start):
+      `FightAbilityDef.kindle` (Kindle) is taken only beside a brazier (`kindleBrazier`), lights it
+      at once for its full burn (`ColdRule.kindle`), and one that was out or guttering, within
+      `flare` of the boss, hits it (`fireKindle`). `BossAttackDef.rule.snuff` on a `cover` swing
+      puts out every lit brazier the boss can see (`ColdRule.snuffSeen`, `behindPillar` from where
+      it gazes), and `rule.chills` adds cold to whoever it hits (`bossHit`). The camera can lean
+      a set share of the way to a boss, up to a set distance (`BossLookDef.lean` as an object),
+      to frame one that never moves at the end of a small room.
     - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
       till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
       its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
@@ -1246,6 +1255,10 @@ it.
   within `reach` of its hero are set `attracted` (as a magnet does), and every `soul` seconds that
   its hero's hurt, a heal of `heal` of their hitpoints lands `travel` seconds later
   (`Hero.petSoulTick`, `petSoulLands`), with the soul's glow on them. It emits nothing.
+  Baron's is `gas` (`Sim.stepGasPet`): once `crowd` enemies are within `reach` of its hero, a cloud
+  `size` tiles across lands round them for `seconds` (`Hero.petCloud`), slowing what's in it
+  (`Enemy.slowed`, `slowPace`) and poisoning it (`envenom`, `pet:baron`), the Duke's gas spot
+  animation kept up over it; then it sleeps `every` seconds. It emits `petGas`.
 
 - **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
   is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks

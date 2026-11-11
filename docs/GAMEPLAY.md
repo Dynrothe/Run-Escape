@@ -218,6 +218,7 @@ version and how to run it.
     | The Scar           | The Lantern-bearer, the Leviathan's lure         |                                                                                                      |
     | Awakened Vardorvis | Butch                                            |                                                                                                      |
     | Awakened Whisperer | The Wisp                                         |                                                                                                      |
+    | Awakened Duke      | Baron                                            |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -229,7 +230,7 @@ version and how to run it.
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
-  Sands, Awakened Vardorvis, the Awakened Whisperer), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+  Sands, Awakened Vardorvis, the Awakened Whisperer, the Awakened Duke Sucellus), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -350,7 +351,10 @@ version and how to run it.
   where he lands (a tile and a half), about what a power-up does, growing as the enemies do. **The
   Wisp**, from the Awakened Whisperer, calls the bones and coins within 8 tiles of you to you every
   10 seconds, and once a minute that you're hurt sends you a lost soul that heals 5% of your
-  hitpoints as it reaches you. Not in boss fights, where your kit is the whole run.
+  hitpoints as it reaches you. **Baron**, from the Awakened Duke Sucellus, naps beside you: when 6
+  or more enemies are within 3 tiles of you he wakes and spits the Duke's gas round you, a 3 by 3
+  cloud for 4 seconds that slows what's in it by 45% and poisons it, then sleeps for 15 seconds.
+  Not in boss fights, where your kit is the whole run.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
@@ -471,6 +475,12 @@ version and how to run it.
       **Blackstone**. She rises on the island with you south of her, to Song of the Silent Choir.
       It can't be endless; it has a hard mode once it's beaten. Beating her finds **the Wisp**, her
       pet, every time.
+    - **The Awakened Duke Sucellus** (a boss fight, open once Ghorrock's beaten: Act II's third
+      Awakened fight): nothing but him, in his room in Ghorrock Prison (the real room, widened to
+      his alcove's width), under Ghorrock's cold. No waves, no picks, no items: you play the Snow
+      ranger with her shortbow at its top level and **Kindle**. He wakes in his alcove with you
+      south of him, to Eye See You. It can't be endless; it has a hard mode once it's beaten.
+      Beating him finds **Baron**, his pet, every time.
 - **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
   Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
   played in any order, each a normal fifteen-minute run with a rule of its own. Each is
@@ -826,6 +836,21 @@ version and how to run it.
       (everything in the air or on the ground is gone as the world turns); coming out into the
       city within 3 tiles of her (4 with her guard down), its shock hits her, doubled with her
       guard down.
+    - **The Awakened Duke Sucellus**: the prisoner of Ghorrock, awakened, never moving from his
+      alcove. Three phases on his hitpoints, each a bar of its own (a roar at 60% and 25%). His
+      **Slam** hits round him when you're near; his **Icicles** fall in a ring round where you
+      stood and on it (twice in a row, awakened); his **Spit** is three ice breaths along lines
+      fanned at where you stood as he began (five, awakened); his **Gas** lands where you stood
+      and sets the vent nearest it puffing. From the second phase his **Freezing gaze** (it opens
+      each phase, and comes more often in the last) sees the whole room: behind one of the
+      prison's statues it can't find you, and finding no one his guard's down for three seconds
+      (double damage); in the open it freezes you for two seconds and chills you. Every lit
+      brazier it sees goes out: the two by his alcove are always in his sight, the two in the
+      south corners behind statues. The cold is the map's, faster: it rises three a second (the
+      Snow ranger's 40% slower), only the four braziers hold it off, and at 100 you're frozen
+      solid. The nine vents in the floor puff in turn. **Kindle**, the fight's button, lights the
+      brazier beside you at once for its full burn, every six seconds; one that was out or dying,
+      lit by his alcove, flares into him for a heavy blow (doubled with his guard down).
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

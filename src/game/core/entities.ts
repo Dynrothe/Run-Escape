@@ -401,6 +401,9 @@ export type Enemy = {
     frozen: number;
     // Chilled, at half pace, until this tick (the Snow ranger's Shatter)
     chilled?: number;
+    // Slowed, at slowPace, until this tick (Baron's gas: PetDef.power gas)
+    slowed?: number;
+    slowPace?: number;
     // Under LightingDef.litTargetsOnly, whether it stood in a sim light as this tick's lights were
     // made, or as it came (Sim.isEnemyLit)
     lit?: boolean;
@@ -1064,6 +1067,8 @@ type SimEventBody =
     | { type: "statueSeq"; locId: number; x: number; y: number; seq: number }
     // A hero's fighting pet leaps onto an enemy there (PetDef.power), for the follower to show
     | { type: "petLeap"; owner: number; x: number; y: number }
+    // A hero's pet spat its gas round x, y (PetDef.power gas)
+    | { type: "petGas"; owner: number; x: number; y: number }
     // Its totems' blast, from each totem to the boss
     | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
     // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it

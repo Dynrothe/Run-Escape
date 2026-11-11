@@ -227,6 +227,7 @@
     "ui.map.tab.fun": "Fun",
     "ui.pet.power_leap": "Leaps on an enemy within {reach} tiles of you every {every} s, hitting everything round where he lands. Not in boss fights.",
     "ui.pet.power_call": "Calls the bones and coins within {reach} tiles to you every {every} s, and every {soul} s that you're hurt sends you a lost soul that heals {heal}%. Not in boss fights.",
+    "ui.pet.power_gas": "Naps beside you. When {crowd} or more enemies are within {reach} tiles of you he spits his gas round you for {seconds} s: what's in it is {slow}% slower and poisoned. Then he sleeps {every} s. Not in boss fights.",
     "ui.pet.label": "Pet:",
     "ui.pet.none_aria": "No pet",
     "ui.quest.done": "Done",

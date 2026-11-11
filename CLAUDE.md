@@ -61,7 +61,8 @@ go stale. Add anything that cost you time to work out.
 | Adventurers' traits (Timber!, Shatter and the rest)    | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
 | Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
 | The Awakened Whisperer: Blackstone, siphon, screech    | `content/whisperer.ts`, `docs/design/awakened-whisperer.md`            |
-| Fighting pets (Butch's leap, the Wisp's call)          | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
+| Awakened Duke Sucellus: his room, Kindle, the cold     | `content/duke.ts`, `scaperune/maps/dukesRoom.ts`, `awakened-duke.md`   |
+| Fighting pets (Butch's leap, the Wisp's call, Baron)   | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |

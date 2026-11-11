@@ -899,8 +899,10 @@ export type BossAttackDef = {
     // What it does with the map's rule (MapDef.rule), as it lands: heart, a root heart where the
     // boss lands, the first time it's used; lane, roots laid along the way a surge or lunge went,
     // radius tiles either side of it; vent, under the cold (ColdRuleDef), the gas vent nearest
-    // the spot it's aimed at puffs as it lands. Nothing on a map without a rule.
-    rule?: { heart?: boolean; lane?: number; vent?: boolean };
+    // the spot it's aimed at puffs as it lands; snuff, under the cold, a swing that's hidden from
+    // behind a pillar (cover) puts out every lit brazier it can see; chills, under the cold, a hit
+    // adds this much cold. Nothing on a map without a rule.
+    rule?: { heart?: boolean; lane?: number; vent?: boolean; snuff?: boolean; chills?: number };
     // Ground attacks: each spot leaves a piece of debris, locId, standing seconds, most at once
     // (the oldest goes first): cover the boss's projectiles break on. Not in anyone's way.
     debris?: { locId: number; seconds: number; most: number };
@@ -1216,6 +1218,11 @@ export type FightAbilityDef = {
     // or not: coming out into the city within reach of it, it hits it for damage (the Awakened
     // Whisperer's Blackstone)
     turn?: boolean;
+    // Lights the brazier within reach tiles of the player at once, for its full burn, under the
+    // cold (ColdRuleDef), whether the boss is near or not; and one that was out or dying, lit
+    // within flare tiles of the boss, flares into it for damage (the Awakened Duke's Kindle).
+    // Taken only beside a brazier.
+    kindle?: { reach: number; flare: number };
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
@@ -1595,7 +1602,10 @@ export type BossLookDef = {
     // A light on it while its guard's down (Sim.isExposed): a core lit up. Only drawn, on a map
     // with lighting.
     exposedLight?: LightLook;
-    lean?: boolean;
+    // The camera leans towards it (GameClient's BOSS_LEAN), or share of the way, up to max tiles
+    // (phone on a phone, whose short screen would put the player under the HUD): a big one that
+    // never moves at the end of a small room (the Awakened Duke) is framed with you
+    lean?: boolean | { share: number; max: number; phone: number };
     title?: string;
     subtitle?: string;
     edge?: string | null;
@@ -2344,6 +2354,9 @@ export type ColdRuleDef = {
         burn: number;
         gutter: number;
         relight: { reach: number; seconds: number; kill: number };
+        // Left lit as the final boss wakes (a fight's, where he's up from the start); they all
+        // go out when unset
+        stayLit?: boolean;
     };
     // A fire elite's embers: size tiles across for seconds, warming warm a second within reach
     // tiles, and burning share of the hitpoints of whoever stands on them every `every` seconds
@@ -2387,6 +2400,9 @@ export type ColdRuleDef = {
         embersLocId: number;
         wash?: string;
         relightSpotAnim?: number;
+        // One puff over a vent's cloud, this much bigger, rather than five (his room's nine
+        // vents' puffs are heavy for a phone)
+        puffOne?: number;
     };
 };
 

@@ -1,5 +1,6 @@
 import { tr } from "../i18n";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { DUKES_ROOM_RECIPE } from "../scaperune/maps/dukesRoom";
 import {
     GHORROCK_BOSS_ARENA,
     GHORROCK_DUKE,
@@ -15,6 +16,17 @@ import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/si
 import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
+import {
+    AWAKENED_DUKE_ID,
+    DUKE_BOSS_ARENA,
+    DUKE_BOW_LEVEL,
+    DUKE_COLD,
+    DUKE_FEATURES,
+    DUKE_HITPOINTS,
+    DUKE_KINDLE,
+    DUKE_SPOT_WORLD,
+    DUKE_START_DISTANCE,
+} from "./duke";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { GHORROCK_COLD, GHORROCK_EVENTS, GHORROCK_WAVES } from "./ghorrock";
@@ -706,6 +718,40 @@ export const MAPS: MapDef[] = [
             ability: WHISPERER_BLACKSTONE,
         },
         music: "Song of the Silent Choir",
+    },
+    {
+        id: "awakened_duke",
+        name: "Awakened Duke Sucellus",
+        description:
+            "Duke Sucellus, awakened, in his room in Ghorrock Prison. No waves, no picks and no " +
+            "items: the Snow ranger, her shortbow and Kindle, which lights the brazier you're " +
+            "beside. The cold rises all the time and only the braziers hold it off. His gas finds " +
+            "the vent by you, and his freezing gaze puts out every brazier it can see: hide " +
+            "behind the statues.",
+        // Baron, his pet
+        iconObjId: 28250,
+        arena: getRecipeArena(DUKES_ROOM_RECIPE),
+        // South of him, as the other fights start you
+        spawn: { x: DUKE_SPOT_WORLD.x, y: DUKE_SPOT_WORLD.y - DUKE_START_DISTANCE },
+        // His hitpoints come from the event, his hits are tuned to the Snow ranger's hitpoints
+        difficulty: { hp: 1, damage: 1 },
+        hard: { hp: 1.3, damage: 1.3 },
+        waves: [],
+        events: [{ at: 0, kind: "finalBoss", enemyId: AWAKENED_DUKE_ID, hp: DUKE_HITPOINTS }],
+        finalBossWarning: "",
+        victoryText: "Awakened Duke Sucellus falls, and Ghorrock's cold breaks.",
+        bossArena: DUKE_BOSS_ARENA,
+        features: DUKE_FEATURES,
+        scaperune: true,
+        rule: DUKE_COLD,
+        // Opened by beating his map, played as its adventurer (act-2-fallen-empire.md, 7.2)
+        fight: {
+            requires: "ghorrock",
+            character: "snow_ranger",
+            weaponLevel: DUKE_BOW_LEVEL,
+            ability: DUKE_KINDLE,
+        },
+        music: "Eye See You",
     },
     // A quest in four parts after the desert, which opens the Tombs of Amascut
     BENEATH_CURSED_SANDS,

@@ -316,7 +316,7 @@ import {
     TYPE_FRAGILE,
 } from "./floorLayout";
 import { fm } from "./fmath";
-import { ColdRule } from "./rules/ColdRule";
+import { type Brazier, ColdRule } from "./rules/ColdRule";
 import { RealmLayer, RealmRule } from "./rules/RealmRule";
 import { RootRule } from "./rules/RootRule";
 import { RuleHost, RuleSet, RunRule, createRunRule } from "./rules/RunRule";
@@ -513,6 +513,8 @@ const IMPACT_TICKS = 90;
 const ABILITY_BUFFER_SECONDS = 0.3;
 // The soul's glow (Lassar's own) where the Wisp's soul reaches its hero (PetDef.power call)
 const PET_SOUL_SPOTANIM = 2447;
+// Baron's gas (PetDef.power gas): the Duke's own
+const PET_GAS_SPOTANIM = 2431;
 const ABILITY_BUFFER_REACH = 1.5;
 // Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
 const TRAIL_GAP = 1.5;
@@ -846,6 +848,7 @@ function fightingPet(id: string | undefined): {
     petReadyTick: number;
     petSoulTick: number;
     petSoulLands: number;
+    petCloud?: PetCloud;
 } {
     const pet = id === undefined ? undefined : PET_BY_ID.get(id);
     if (!pet?.power) {
@@ -854,11 +857,15 @@ function fightingPet(id: string | undefined): {
     const power = pet.power;
     return {
         pet,
-        petReadyTick: secondsToTicks(power.every),
+        // Baron's awake from the start
+        petReadyTick: power.kind === "gas" ? 0 : secondsToTicks(power.every),
         petSoulTick: power.kind === "call" ? secondsToTicks(power.soul) : 0,
         petSoulLands: -1,
     };
 }
+
+// Baron's gas cloud (PetDef.power gas): its middle, and the tick it's gone
+type PetCloud = { x: number; y: number; until: number };
 
 export type Hero = {
     // Where it is in Sim.heroes
@@ -869,6 +876,8 @@ export type Hero = {
     petReadyTick: number;
     petSoulTick: number;
     petSoulLands: number;
+    // Baron's gas, while it's out
+    petCloud?: PetCloud;
     // A raid's points, for its supply chest, and damage taken before this room, which it's
     // scored on
     raidPoints: number;
@@ -4680,6 +4689,10 @@ export class Sim {
                     // Chilled (the Snow ranger's Shatter): half pace
                     if (enemy.chilled !== undefined && this.tick < enemy.chilled) {
                         pace *= CHILL_PACE;
+                    }
+                    // In Baron's gas (PetDef.power gas)
+                    if (enemy.slowed !== undefined && this.tick < enemy.slowed) {
+                        pace *= enemy.slowPace ?? 1;
                     }
                     // In the Lantern-bearer's glow (CharacterTraitDef lantern)
                     if (this.hasLanterns) {
@@ -15731,6 +15744,11 @@ export class Sim {
         if (ability.turn) {
             return (ready || this.abilityNearlyReady(ability)) && this.canTurn();
         }
+        if (ability.kindle) {
+            return (
+                (ready || this.abilityNearlyReady(ability)) && this.kindleBrazier(0) !== undefined
+            );
+        }
         return (
             (ready && (this.abilityTarget(ability) !== undefined || this.abilityCuts(ability))) ||
             this.abilityNearlyReady(ability)
@@ -15744,6 +15762,13 @@ export class Sim {
         // One that turns the world goes off wherever the boss is
         if (ability.turn) {
             return this.hero.abilityReadyTick <= soon && this.canTurn();
+        }
+        // One that lights a brazier goes off beside one, wherever the boss is
+        if (ability.kindle) {
+            return (
+                this.hero.abilityReadyTick <= soon &&
+                this.kindleBrazier(ABILITY_BUFFER_REACH) !== undefined
+            );
         }
         const player = this.player;
         const near = this.abilityBosses().some(
@@ -15798,6 +15823,9 @@ export class Sim {
         if (ability.turn) {
             return this.fireTurn(ability);
         }
+        if (ability.kindle) {
+            return this.fireKindle(ability, ability.kindle);
+        }
         const boss = this.abilityTarget(ability);
         if (!boss) {
             return this.fireCut(ability);
@@ -15838,6 +15866,67 @@ export class Sim {
         }
         this.breakChannel(boss);
         this.cutWithAbility(ability, boss);
+        return true;
+    }
+
+    // The brazier a button that lights one (FightAbilityDef.kindle) would light, for the current
+    // hero, more tiles out than its reach
+    private kindleBrazier(more: number): Brazier | undefined {
+        const kindle = this.ability?.kindle;
+        if (!kindle || !this.cold || this.intro) {
+            return undefined;
+        }
+        return this.cold.brazierNear(this.player.x, this.player.y, kindle.reach + more);
+    }
+
+    // A button that lights the brazier beside the hero (FightAbilityDef.kindle: the Awakened
+    // Duke's Kindle): at once, for its full burn, and lit near enough the boss it flares into it
+    private fireKindle(
+        ability: FightAbilityDef,
+        kindle: { reach: number; flare: number },
+    ): boolean {
+        const brazier = this.kindleBrazier(0);
+        if (!brazier) {
+            return false;
+        }
+        const hero = this.hero;
+        const player = this.player;
+        const cold = this.cold!;
+        // Only one that was out or dying flares
+        const low =
+            !cold.isLit(brazier, this.tick) ||
+            brazier.litUntil - this.tick < secondsToTicks(cold.def.braziers.gutter);
+        hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
+        cold.kindle(brazier, this.tick);
+        if (ability.playerSeq !== undefined) {
+            player.attackSeq = ability.playerSeq;
+            player.attackStart = this.tick;
+        }
+        const boss = this.abilityBosses().find(
+            (enemy) =>
+                low &&
+                !enemy.dead &&
+                enemy.shieldEnd <= this.tick &&
+                fm.hypot(enemy.x - brazier.midX, enemy.y - brazier.midY) <= kindle.flare,
+        );
+        this.showImpact(ability.impact, brazier.midX, brazier.midY);
+        if (boss) {
+            this.showImpact(ability.impact, boss.x, boss.y);
+        }
+        this.emit({
+            type: "ability",
+            abilityId: ability.id,
+            enemyId: boss?.def.id ?? "",
+            sound: ability.sound ?? -1,
+            x: brazier.midX,
+            y: brazier.midY,
+            opened: boss !== undefined && this.isExposed(boss),
+        });
+        if (boss) {
+            this.damageSource = `ability:${ability.id}`;
+            this.damageEnemy(boss, ability.damage, 0, brazier.midX, brazier.midY);
+            this.breakChannel(boss);
+        }
         return true;
     }
 
@@ -16092,6 +16181,11 @@ export class Sim {
                 }
                 continue;
             }
+            if (power?.kind === "gas") {
+                this.use(hero);
+                this.stepGasPet(hero, power);
+                continue;
+            }
             if (!power || this.tick < hero.petReadyTick || !this.isUp(hero)) {
                 continue;
             }
@@ -16148,6 +16242,64 @@ export class Sim {
         if (hero.petSoulLands < 0 && tick >= hero.petSoulTick && player.hp < player.maxHp) {
             hero.petSoulTick = tick + secondsToTicks(power.soul);
             hero.petSoulLands = tick + secondsToTicks(power.travel);
+        }
+    }
+
+    // Baron (PetDef.power gas), for the current hero: asleep till a crowd's round them, then a
+    // cloud of gas round them that slows and poisons what's in it, then asleep again
+    private stepGasPet(hero: Hero, power: Extract<PetPowerDef, { kind: "gas" }>): void {
+        const tick = this.tick;
+        const cloud = hero.petCloud;
+        if (cloud) {
+            if (tick >= cloud.until) {
+                hero.petCloud = undefined;
+            } else {
+                const half = power.size / 2;
+                const pace = 1 - power.slow;
+                const poison = power.poison * this.powerUpDamageScale();
+                const poisonTicks = secondsToTicks(power.poisonSeconds);
+                this.damageSource = `pet:${hero.pet!.id}`;
+                this.queryTouching(cloud.x, cloud.y, half + 1, (enemy) => {
+                    if (
+                        enemy.dead ||
+                        Math.abs(enemy.x - cloud.x) > half ||
+                        Math.abs(enemy.y - cloud.y) > half
+                    ) {
+                        return;
+                    }
+                    enemy.slowed = tick + 1;
+                    enemy.slowPace = pace;
+                    if (enemy.venomEnd < tick) {
+                        this.envenom(enemy, poison, poisonTicks);
+                    }
+                });
+                // Its puff kept up while it lasts
+                if ((cloud.until - tick) % TICKS_PER_SECOND === 0) {
+                    this.puffPetGas(cloud.x, cloud.y, power.size);
+                }
+            }
+            return;
+        }
+        if (tick < hero.petReadyTick || !this.isUp(hero)) {
+            return;
+        }
+        const player = this.player;
+        if (
+            this.nearestEnemies(player.x, player.y, power.reach, power.crowd).length < power.crowd
+        ) {
+            return;
+        }
+        hero.petReadyTick = tick + secondsToTicks(power.seconds + power.every);
+        hero.petCloud = { x: player.x, y: player.y, until: tick + secondsToTicks(power.seconds) };
+        this.puffPetGas(player.x, player.y, power.size);
+        this.emit({ type: "petGas", owner: hero.index, x: player.x, y: player.y });
+    }
+
+    // Baron's gas over its cloud, size tiles across
+    private puffPetGas(x: number, y: number, size: number): void {
+        const effect = this.addEffect(PET_GAS_SPOTANIM, x, y, 0, 60);
+        if (effect) {
+            effect.fitRadius = size / 2;
         }
     }
 
@@ -16536,6 +16688,15 @@ export class Sim {
                 for (const { x, y } of spots) {
                     this.showImpact(attack.impact, x, y);
                 }
+            }
+            // Under the cold, every lit brazier it can see goes out (BossAttackDef.rule snuff)
+            if (attack.rule?.snuff && this.cold) {
+                const pillars = this.map.features?.pillars;
+                const fromX = windup.at?.x ?? enemy.x;
+                const fromY = windup.at?.y ?? enemy.y;
+                this.cold.snuffSeen(this.tick, (brazier) =>
+                    behindPillar(pillars, fromX, fromY, brazier.midX, brazier.midY),
+                );
             }
             // Missed everyone: its guard's down (BossDef.guard)
             if (!landed && attack.opens !== undefined) {
@@ -17325,6 +17486,12 @@ export class Sim {
         }
         if (attack.effect) {
             this.applyPlayerEffect(attack.effect, enemy);
+        }
+        // Under the cold, it chills (BossAttackDef.rule chills: the Awakened Duke's gaze)
+        const chills = this.cold ? attack.rule?.chills : undefined;
+        if (chills) {
+            const index = this.hero.index;
+            this.cold!.setCold(index, this.cold!.coldOf(index) + chills);
         }
         const akkha = enemy?.def.boss?.akkha;
         if (attack.elemental && akkha && this.tombsPathRoom?.boss?.quadrants) {

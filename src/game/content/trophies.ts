@@ -130,6 +130,19 @@ export const TROPHIES: TrophyDef[] = [
             chance: 1,
         },
     },
+    // The Awakened Duke's, certain, as Butch and the Wisp are
+    {
+        id: "baron",
+        name: "Baron",
+        objId: 28250,
+        how: "From the Awakened Duke Sucellus, the first time he's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_duke",
+            mapId: "awakened_duke",
+            chance: 1,
+        },
+    },
 ];
 
 // The Theatre of Blood's uniques, weighted as the real raid's are, and its pet off Verzik

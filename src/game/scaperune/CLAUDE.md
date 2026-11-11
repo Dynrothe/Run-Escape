@@ -2006,6 +2006,12 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   (`ColdRuleDef`) and the `MapDef`'s `features`. What the game draws in their place (the braziers, which it lights and
   puts out) is blocked in the grid and handed on as `standIns`, so `view-weight.ts` counts it. Its ice is painted with
   an overlay here and given to the sim as an effect mask from the same shapes (`core/world/EffectMask.ts`).
+- A boss room cut from the cache and widened (the Awakened Duke's, `maps/dukesRoom.ts`) moves the cut's locs as it
+  lays them (its side walls and what's along them out, its south rocks down), paints the cache's border floor where
+  the room's grown, and clears `TILE_BLOCKED` on what was under the old walls. A cut from a square with levels above
+  its ground floor can mark some of its tiles as bridges there (level 1's flags): clear the upper levels' flags, or
+  the room's collision has holes no one can see. A boss that never moves and sits on blocked ground (his alcove)
+  needs its own tiles open, or `findFreeSpot` moves it into the room; he's solid himself.
 - A cut whose real ground is mostly blocked (the Scar's sea of sludge, `maps/scar.ts`) can be drained: take its
   overlay off what's to be walked, clear `TILE_BLOCKED`, then paint it back where it's wanted with `paintField`. Mind
   what lay on it: the sludge's ripples are floor decoration that only reads on sludge. An island's raised rim may be a

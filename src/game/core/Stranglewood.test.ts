@@ -67,6 +67,7 @@ describe("the Stranglewood", () => {
             "lassar_undercity",
             "awakened_whisperer",
             "ghorrock",
+            "awakened_duke",
         ];
         for (const map of MAPS.filter((m) => !ruled.includes(m.id))) {
             expect(createSim({ mapId: map.id }).rule).toBeUndefined();

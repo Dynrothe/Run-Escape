@@ -2995,10 +2995,14 @@ export class GameClient implements GameFrameHandler {
         if (!at) {
             return { x: 0, y: 0 };
         }
-        const dx = (at.x - px) * BOSS_LEAN;
-        const dy = (at.y - py) * BOSS_LEAN;
+        const lean = at.def.boss!.look!.lean;
+        const share = typeof lean === "object" ? lean.share : BOSS_LEAN;
+        const phone = this.cameraRig.distance === PHONE_RUN_DISTANCE;
+        const max = typeof lean === "object" ? (phone ? lean.phone : lean.max) : BOSS_LEAN_MAX;
+        const dx = (at.x - px) * share;
+        const dy = (at.y - py) * share;
         const length = Math.hypot(dx, dy);
-        const scale = length > BOSS_LEAN_MAX ? BOSS_LEAN_MAX / length : 1;
+        const scale = length > max ? max / length : 1;
         return { x: dx * scale, y: dy * scale };
     }
 

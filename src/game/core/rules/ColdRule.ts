@@ -94,7 +94,7 @@ export class ColdRule implements RunRule {
         // He wakes, and every brazier goes out
         if (host.finalBossUp && !this.woke) {
             this.woke = true;
-            for (const brazier of this.braziers) {
+            for (const brazier of this.def.braziers.stayLit ? [] : this.braziers) {
                 brazier.litUntil = -1;
                 brazier.tending = 0;
             }
@@ -121,6 +121,39 @@ export class ColdRule implements RunRule {
         if (this.embers.length > 0) {
             this.embers = this.embers.filter((embers) => tick < embers.until);
         }
+    }
+
+    // The brazier whose middle's nearest x, y, within reach tiles of it
+    brazierNear(x: number, y: number, reach: number): Brazier | undefined {
+        let best: Brazier | undefined;
+        let bestDistance = reach;
+        for (const brazier of this.braziers) {
+            const distance = fm.hypot(x - brazier.midX, y - brazier.midY);
+            if (distance <= bestDistance) {
+                best = brazier;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    // Lit at once, for its full burn (FightAbilityDef.kindle)
+    kindle(brazier: Brazier, tick: number): void {
+        this.light(brazier, tick);
+    }
+
+    // Every lit brazier the boss can see goes out (BossAttackDef.rule snuff): hidden says which it
+    // can't, from where it is. Which went out.
+    snuffSeen(tick: number, hidden: (brazier: Brazier) => boolean): Brazier[] {
+        const out: Brazier[] = [];
+        for (const brazier of this.braziers) {
+            if (this.isLit(brazier, tick) && !hidden(brazier)) {
+                brazier.litUntil = -1;
+                brazier.tending = 0;
+                out.push(brazier);
+            }
+        }
+        return out;
     }
 
     private light(brazier: Brazier, tick: number): void {

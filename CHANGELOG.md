@@ -75,6 +75,12 @@ the version in the corner).
   the city, and catch every soul of a siphon to break it.
 - The Wisp, the Awakened Whisperer's pet: take it along and it calls the bones and coins near you
   to you, and now and then sends you a lost soul that heals you.
+- The Awakened Duke Sucellus, Act II's third Awakened fight, on the Bosses tab once Ghorrock's
+  beaten: you play the Snow ranger in his room in Ghorrock Prison, under the cold, with Kindle, a
+  button that lights the brazier beside you. His freezing gaze puts out every brazier it can see:
+  hide behind the statues, and relight the braziers by his alcove to burn him.
+- Baron, the Awakened Duke's pet: take him along and when a crowd closes round you he wakes and
+  spits his gas, slowing and poisoning what's in it.
 
 ### Changed
 

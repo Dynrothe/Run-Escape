@@ -28,6 +28,8 @@ const SHIPPED_HASHES: Record<string, string> = {
     // The city and its Shadow Realm (MapRecipe.twin) together
     lassar_undercity: "e63d1ae21372ae38ee1522e756b561b474a8b30df23701858d76f5d6ae63fe6a",
     ghorrock: "2bc1030c05a631ca65534e2f12f78c618566c16badbdca9f8eb45251d0600520",
+    // The Awakened Duke's room, cut from Ghorrock Prison's and widened
+    awakened_duke: "dbfdf1174f82175276bcfd02a7634276c38703a0acf130b08221126ddba57cc7",
     scar: "f5064a2a6a31239c4f5cdd4fc263faf130ca100d638f10b75ed9831e10db4a8c",
     tombs_of_amascut: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
     // The raid's squares under the quest's id: the same build

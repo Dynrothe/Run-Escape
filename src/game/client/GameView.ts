@@ -993,6 +993,13 @@ export class GameView {
                 actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, { tint: FROZEN_TINT });
                 continue;
             }
+            if (look.puffOne !== undefined) {
+                actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, {
+                    alpha: 0.9,
+                    scale: look.puffOne,
+                });
+                continue;
+            }
             for (const [dx, dy] of VENT_PUFFS) {
                 const x = vent.x + (dx * cloud) / 3;
                 const y = vent.y + (dy * cloud) / 3;

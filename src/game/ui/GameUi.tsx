@@ -1532,7 +1532,15 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                               soul: power.soul,
                               heal: Math.round(power.heal * 100),
                           })
-                        : t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
+                        : power.kind === "gas"
+                          ? t("ui.pet.power_gas", {
+                                crowd: power.crowd,
+                                reach: power.reach,
+                                seconds: power.seconds,
+                                slow: Math.round(power.slow * 100),
+                                every: power.every,
+                            })
+                          : t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
                 </span>
             )}
         </div>

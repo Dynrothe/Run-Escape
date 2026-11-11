@@ -60,7 +60,9 @@ import {
     coneStep,
     dodgeOrbs,
     dodgeShots,
+    fanStep,
     inSquare,
+    kindleMove,
     laneStep,
     lungeStep,
     offMarks,
@@ -724,6 +726,14 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         if (lunge) {
             return lunge;
         }
+        // A fanned wave (the Awakened Duke's spit): to where none of its lines reach
+        const fan =
+            windup?.attack.wave && !windup.from && (windup.attack.count ?? 1) > 1 && !older
+                ? fanStep(sim, boss, windup, room)
+                : undefined;
+        if (fan) {
+            return fan;
+        }
         if (windup && (windup.attack.wave || windup.attack.boomerang)) {
             const half = windup.attack.radius ?? 0.35;
             const lines = windup.from
@@ -766,7 +776,7 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // Off sparks about to land under it, in a fight in parts (Static, a lattice, a trail of
         // its own steps), or a rift still open, before anything that keeps it moving round the
         // boss: to the nearest spot clear of them all
-        if (sim.map.stages) {
+        if (sim.map.stages || sim.ability?.kindle) {
             const step = offMarks(sim, room);
             if (step) {
                 return step;
@@ -775,7 +785,12 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // Out of a swing's reach round the boss, and off where a blast's to land, as it winds up:
         // what anyone steps out of
         // (not Phosani's or Zachariah's: older, above)
-        if (!older && windup?.attack.kind === "swing" && windup.attack.world === undefined) {
+        if (
+            !older &&
+            windup?.attack.kind === "swing" &&
+            windup.attack.world === undefined &&
+            !windup.attack.cover
+        ) {
             const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
             const dx = player.x - boss.x;
             const dy = player.y - boss.y;
@@ -885,6 +900,11 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
                 );
             }
         }
+    }
+    // A fight under the cold with a button that lights braziers (the Awakened Duke's): its own read
+    const kindle = dodges ? kindleMove(sim, boss) : undefined;
+    if (kindle) {
+        return kindle;
     }
     // A less careful person: now and then backs off and loses reach
     if (sloppy && (sim.tick / TICKS_PER_SECOND) % SLOPPY_EVERY < SLOPPY_LAPSE) {

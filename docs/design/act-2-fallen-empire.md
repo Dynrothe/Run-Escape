@@ -1135,7 +1135,7 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | 8   | **Awakened Whisperer**, the Wisp. Built, first pass (`awakened-whisperer.md`)                                                             | 3, 6         | 2 weeks    |
 | 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger. Built (5.11)                                    | 2            | 3 weeks    |
 | 10  | The Frozen remix                                                                                                                          | 5, 9         | 3 days     |
-| 11  | Awakened Duke Sucellus, Baron                                                                                                             | 3, 9         | 2 weeks    |
+| 11  | **Awakened Duke Sucellus**, Baron. Built, first pass (`awakened-duke.md`)                                                                 | 3, 9         | 2 weeks    |
 | 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer. Built (6.9)                                            | 1, 2         | 1.5 weeks  |
 | 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
 | 14  | Awakened Leviathan, Lil'viathan, the act's ending                                                                                         | 3, 12        | 2 weeks    |

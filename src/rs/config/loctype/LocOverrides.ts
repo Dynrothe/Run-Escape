@@ -66,6 +66,14 @@ export const MODEL_SIMPLIFY: Map<number, { keep: number; seams: boolean }> = new
         49177, 49176, 49170, 49180, 49181, 49173, 49171, 48469, 48466, 49172, 49182, 49178, 48879,
         49179,
     ].map((id): [number, { keep: number; seams: boolean }] => [id, { keep: 0.4, seams: false }]),
+    // Ghorrock Prison's room wall pieces, salt deposits and vats, along the Awakened Duke's room's walls
+    // (scaperune/maps/dukesRoom.ts): about 2,500 triangles each, eight of them in a phone's view
+    ...[47013, 48738, 48751, 49081].map((id): [number, { keep: number; seams: boolean }] => [
+        id,
+        { keep: 0.3, seams: false },
+    ]),
+    // The prison's statue, there and on Ghorrock
+    [49043, { keep: 0.5, seams: false }],
 ]);
 
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([

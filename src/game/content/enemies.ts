@@ -1,6 +1,7 @@
 import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { tr } from "../i18n";
 import { CURSED_SANDS_ENEMIES } from "./cursedSands";
+import { DUKE_ENEMIES } from "./duke";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { GHORROCK_ENEMIES } from "./ghorrock";
 import { LASSAR_ENEMIES } from "./lassar";
@@ -8382,6 +8383,7 @@ export const ENEMIES: EnemyDef[] = [
     ...SCAR_ENEMIES,
     ...VARDORVIS_ENEMIES,
     ...WHISPERER_ENEMIES,
+    ...DUKE_ENEMIES,
 ];
 
 // The Tombs of Amascut's (in development)

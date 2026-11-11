@@ -568,6 +568,13 @@ export function pressButton(sim: Sim, sloppy = false): void {
         }
         return;
     }
+    // One that lights braziers (Kindle): its own read
+    if (sim.ability?.kindle) {
+        if (sees && kindlePress(sim)) {
+            sim.useAbility();
+        }
+        return;
+    }
     const target = sees && sim.ability ? sim.abilityTarget() : undefined;
     if (target && sim.isExposed(target)) {
         sim.useAbility();
@@ -744,4 +751,157 @@ function realmDodge(sim: Sim, boss: Enemy): Point | undefined {
         }
     }
     return best;
+}
+
+// A fight under the cold with a button that lights braziers (FightAbilityDef.kindle: the Awakened
+// Duke's Kindle), as a careful person plays it: out of his slam's reach, off the vents about to
+// puff, to a brazier that's out or dying while Kindle's ready (one by him first: it flares into
+// him), to a lit one once it's cold, and otherwise standing to shoot. Undefined when it isn't such
+// a fight.
+const KINDLE_SAFE = 8.6;
+const KINDLE_COLD = 40;
+export function kindleMove(sim: Sim, boss: Enemy): Point | undefined {
+    const kindle = sim.ability?.kindle;
+    const cold = sim.cold;
+    if (!kindle || !cold) {
+        return undefined;
+    }
+    const player = sim.player;
+    const tick = sim.tick;
+    const towards = (x: number, y: number): Point => {
+        const length = Math.max(0.001, Math.hypot(x - player.x, y - player.y));
+        return length < 0.3
+            ? { x: 0, y: 0 }
+            : { x: (x - player.x) / length, y: (y - player.y) / length };
+    };
+    // Off a vent that's frosting over or puffing
+    const half = cold.def.vents.size / 2 + 0.6;
+    for (const vent of cold.vents) {
+        const dx = player.x - vent.x;
+        const dy = player.y - vent.y;
+        if (Math.abs(dx) < half && Math.abs(dy) < half && cold.ventState(vent, tick)) {
+            return Math.abs(dx) > Math.abs(dy)
+                ? { x: Math.sign(dx) || 1, y: 0 }
+                : { x: 0, y: Math.sign(dy) || -1 };
+        }
+    }
+    const away = Math.hypot(player.x - boss.x, player.y - boss.y);
+    if (away < KINDLE_SAFE) {
+        return { x: (player.x - boss.x) / away, y: (player.y - boss.y) / away };
+    }
+    // The room's middle, where there's room to step either way
+    const square = sim.map.bossArena;
+    const middle = square
+        ? { x: square.baseX + square.size / 2, y: square.baseY + square.size / 2 - 2 }
+        : { x: boss.x, y: boss.y - 11 };
+    // Beside a brazier, on its side towards the room's middle (not cornered against the wall)
+    const beside = (b: { midX: number; midY: number }): Point => {
+        const dx = middle.x - b.midX;
+        const dy = middle.y - b.midY;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        return { x: b.midX + (dx / length) * 2, y: b.midY + (dy / length) * 2 };
+    };
+    const gutter = cold.def.braziers.gutter * TICKS_PER_SECOND;
+    const ready = sim.abilitySecondsLeft() < 1;
+    let best: Point | undefined;
+    let bestScore = Infinity;
+    for (const brazier of cold.braziers) {
+        const lit = cold.isLit(brazier, tick);
+        const low = !lit || brazier.litUntil - tick < gutter;
+        const spot = beside(brazier);
+        const walk = Math.hypot(spot.x - player.x, spot.y - player.y);
+        const flares = Math.hypot(brazier.midX - boss.x, brazier.midY - boss.y) <= kindle.flare;
+        let score: number | undefined;
+        if (low && ready) {
+            score = walk - (flares && !lit ? 6 : 0);
+        } else if (lit && cold.coldOf(sim.focus) >= KINDLE_COLD) {
+            score = walk + 4;
+        }
+        if (score !== undefined && score < bestScore) {
+            best = spot;
+            bestScore = score;
+        }
+    }
+    if (best) {
+        return towards(best.x, best.y);
+    }
+    // Otherwise standing to shoot, unless a wall's close: back towards the middle
+    for (let k = 0; k < 8; k++) {
+        const angle = (k / 8) * Math.PI * 2;
+        const x = player.x + Math.cos(angle) * 1.6;
+        const y = player.y + Math.sin(angle) * 1.6;
+        if (sim.grid.isSolid(Math.floor(x), Math.floor(y))) {
+            return towards(middle.x, middle.y);
+        }
+    }
+    return { x: 0, y: 0 };
+}
+
+// Kindle (FightAbilityDef.kindle): pressed beside a brazier that's out or dying
+export function kindlePress(sim: Sim): boolean {
+    const kindle = sim.ability?.kindle;
+    const cold = sim.cold;
+    if (!kindle || !cold || sim.abilitySecondsLeft() !== 0) {
+        return false;
+    }
+    const player = sim.player;
+    const gutter = cold.def.braziers.gutter * TICKS_PER_SECOND;
+    return cold.braziers.some(
+        (brazier) =>
+            Math.hypot(player.x - brazier.midX, player.y - brazier.midY) <= kindle.reach &&
+            (!cold.isLit(brazier, sim.tick) || brazier.litUntil - sim.tick < gutter),
+    );
+}
+
+// Off every line of a fanned wave (BossAttackDef.wave with count and spread: the Awakened Duke's
+// spit), to the nearest open spot none of them reaches, in the room; undefined when none's on it
+export function fanStep(
+    sim: Sim,
+    boss: Enemy,
+    windup: BossWindup,
+    room: (x: number, y: number) => boolean,
+): Point | undefined {
+    const attack = windup.attack;
+    const count = attack.count ?? 1;
+    const spread = attack.spread ?? 0;
+    const half = (attack.radius ?? 0.35) + sim.player.radius + 0.35;
+    const aim = Math.atan2(windup.dirY, windup.dirX);
+    const lines = Array.from({ length: count }, (_, i) => {
+        const angle = aim + (i - (count - 1) / 2) * spread;
+        return { dirX: Math.cos(angle), dirY: Math.sin(angle) };
+    });
+    const onLine = (x: number, y: number) =>
+        lines.some(({ dirX, dirY }) => {
+            const along = (x - boss.x) * dirX + (y - boss.y) * dirY;
+            const side = (x - boss.x) * -dirY + (y - boss.y) * dirX;
+            return along > -1 && Math.abs(side) < half;
+        });
+    const player = sim.player;
+    if (!onLine(player.x, player.y)) {
+        return undefined;
+    }
+    let best: Point | undefined;
+    let bestDistance = Infinity;
+    for (let ring = 1; ring <= 6; ring++) {
+        const distance = ring * 0.6;
+        for (let k = 0; k < 16; k++) {
+            const angle = (k / 16) * Math.PI * 2;
+            const x = player.x + Math.cos(angle) * distance;
+            const y = player.y + Math.sin(angle) * distance;
+            if (
+                distance < bestDistance &&
+                room(x, y) &&
+                !sim.grid.isSolid(Math.floor(x), Math.floor(y)) &&
+                !onLine(x, y) &&
+                Math.hypot(x - boss.x, y - boss.y) > boss.radius + 2
+            ) {
+                best = { x: Math.cos(angle), y: Math.sin(angle) };
+                bestDistance = distance;
+            }
+        }
+        if (best) {
+            return best;
+        }
+    }
+    return undefined;
 }

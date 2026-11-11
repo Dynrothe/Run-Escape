@@ -1,4 +1,5 @@
 import { MapRecipe } from "../recipe";
+import { DUKES_ROOM_RECIPE } from "./dukesRoom";
 import { GHORROCK_RECIPE } from "./ghorrock";
 import { HALLOWED_NIGHT } from "./hallowedNight";
 import { LASSAR_RECIPE } from "./lassarUndercity";
@@ -18,6 +19,7 @@ export const SCAPERUNE_MAPS: MapRecipe[] = [
     STRANGLEWOOD_RECIPE,
     LASSAR_RECIPE,
     GHORROCK_RECIPE,
+    DUKES_ROOM_RECIPE,
     SCAR_RECIPE,
     TOMBS_OF_AMASCUT,
     BENEATH_CURSED_SANDS_RECIPE,
