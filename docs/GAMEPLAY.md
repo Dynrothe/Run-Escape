@@ -704,8 +704,8 @@ version and how to run it.
   outfits can be saved under a name and put on again in one go (they keep the pieces, not the
   body). The Store has
   every item OSRS can wear outside the weapon slot, one of each look, nearly three thousand of
-  them, from 150 coins for a Common piece to 5,000 for a Very rare one (partyhats, 3rd age,
-  gilded). Pick one to try it on. Every unlocked adventurer's own pieces are yours for
+  them, from 200 coins for a Common piece to 25,000 for a Very rare one (partyhats, gilded), and
+  250,000 for each piece of 3rd Age. Pick one to try it on. Every unlocked adventurer's own pieces are yours for
   nothing. Collection log finds that are worn aren't sold, and are yours once found: the
   Halloween masks (the h'ween masks, the Jack lantern and the Skeleton mask, from Hallowed
   Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)

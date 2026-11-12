@@ -150,7 +150,8 @@ existing ones won't do, and a case in `Sim.meetVisitor` (`startRandomEvent` for 
 The Wardrobe's store is every wearable item in the cache, generated into `content/cosmeticItems.ts` by
 `bun run tsx scripts/cache/cosmetics.ts`: don't add pieces by hand. To change what's in it, change
 the script's filters (`JUNK`, `RARES`, the slots) and run it again, then
-`scripts/i18n/extract.ts` for their names. Prices are by rarity in `content/wardrobe.ts`. An
+`scripts/i18n/extract.ts` for their names. Prices are by rarity in `content/wardrobe.ts`, with
+3rd Age priced on its own there. An
 adventurer's own outfit pieces are free once they're unlocked, so a new adventurer needs nothing more.
 A piece that's only found, never sold (the Halloween masks, raid armour), is a trophy (`trophies.ts`)
 named in `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts`, with any pieces it makes besides its

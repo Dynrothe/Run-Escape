@@ -15,6 +15,7 @@ import {
     COSMETICS,
     COSMETIC_BY_ID,
     MAX_SAVED_OUTFITS,
+    THIRD_AGE_PRICE,
     WARDROBE_SLOTS,
     cleanLook,
     cleanSavedOutfits,
@@ -70,6 +71,16 @@ describe("the Wardrobe's store", () => {
         save.coins = price;
         expect(buyCosmetic(save, hat.objId)).toBe(false);
         expect(buyCosmetic(save, -5)).toBe(false);
+    });
+
+    it("prices every 3rd Age piece at 250k, the dearest in the store", () => {
+        const thirdAge = COSMETICS.filter((c) => /^3rd age/i.test(c.name));
+        expect(thirdAge.length).toBeGreaterThan(10);
+        for (const piece of thirdAge) {
+            expect(getCosmeticPrice(piece)).toBe(THIRD_AGE_PRICE);
+        }
+        const others = COSMETICS.filter((c) => !thirdAge.includes(c));
+        expect(Math.max(...others.map(getCosmeticPrice))).toBeLessThan(THIRD_AGE_PRICE);
     });
 });
 

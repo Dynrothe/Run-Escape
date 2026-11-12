@@ -1440,8 +1440,8 @@ the sim never sees it.
   one of each look (items with the same worn models and colours are one piece), with a rarity by
   its value in the cache (and the discontinued holiday rares made Very rare). The same script
   lists the kits character creation offers. Run it again after moving to a newer cache. Prices
-  go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, paid from banked coins like the
-  Armoury. An unlocked adventurer's own pieces are the player's for nothing
+  go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, except 3rd Age's dearer
+  `THIRD_AGE_PRICE` (by name), paid from banked coins like the Armoury. An unlocked adventurer's own pieces are the player's for nothing
   (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
   Collection log finds are never sold: `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts` names the
   trophies whose pieces are worn once the trophy's in the save (`getPieceTrophy`): the trophy's

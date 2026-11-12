@@ -42,13 +42,19 @@ const RARITY_CODES: Record<string, Rarity> = {
     v: "veryRare",
 };
 
-// What a piece costs in the store, by its rarity (from its value in the cache)
+// What a piece costs in the store, by its rarity (from its value in the cache). A late map's run
+// banks around a thousand coins, so the dearest are something to save up for.
 export const COSMETIC_PRICES: Record<Rarity, number> = {
-    common: 150,
-    uncommon: 500,
-    rare: 1500,
-    veryRare: 5000,
+    common: 200,
+    uncommon: 1_000,
+    rare: 5_000,
+    veryRare: 25_000,
 };
+
+// 3rd Age, the rarest the store sells, is dearer than its rarity says: a piece is about half of a
+// combat style's whole skill page
+const THIRD_AGE = /^3rd age\b/i;
+export const THIRD_AGE_PRICE = 250_000;
 
 export const COSMETICS: CosmeticDef[] = COSMETIC_ROWS.flatMap(([slot, rows]) =>
     rows.map(([objId, name, rarity]) => ({
@@ -73,7 +79,7 @@ export function cosmeticName(cosmetic: CosmeticDef): string {
 }
 
 export function getCosmeticPrice(cosmetic: CosmeticDef): number {
-    return COSMETIC_PRICES[cosmetic.rarity];
+    return THIRD_AGE.test(cosmetic.name) ? THIRD_AGE_PRICE : COSMETIC_PRICES[cosmetic.rarity];
 }
 
 // The body parts character creation has, in the order of PlayerAppearance.kits
