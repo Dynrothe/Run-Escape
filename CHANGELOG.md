@@ -3,6 +3,12 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Right clicking in the game no longer opens the browser's menu.
+
 ## 0.31.1 - 2026-11-12
 
 ### Fixed
