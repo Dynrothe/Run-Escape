@@ -699,7 +699,8 @@ version and how to run it.
   any style. Evolution results remain hidden until made, as in the Collection log.
 - The **Wardrobe** (on the title screen) is how you look, on every adventurer. Appearance picks a
   body (type A or B), its hair, jaw and the rest of the body's styles, and the hair, top, legs,
-  boots and skin colours, on the body alone so you can see it. Outfit picks what's worn in each slot (head, cape, neck, body, shield,
+  boots and skin colours, on the body alone so you can see it, or Random picks the lot. Drag the
+  adventurer (or press the arrows) to turn them round. Outfit picks what's worn in each slot (head, cape, neck, body, shield,
   legs, hands and feet): the adventurer's own piece, nothing, or a piece you have. Up to ten
   outfits can be saved under a name and put on again in one go (they keep the pieces, not the
   body). The Store has

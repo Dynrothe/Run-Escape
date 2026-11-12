@@ -30,12 +30,14 @@ import {
     getPieceTrophy,
     isWearingOutfit,
     ownsCosmetic,
+    randomBody,
     wearsWardrobe,
 } from "../content/wardrobe";
 import { SaveData } from "../core/save";
 import { fmtNum, t, tl, tr } from "../i18n";
 import { Coins } from "./Coins";
 import { ItemIcon } from "./ItemIcon";
+import { RsCheckbox } from "./RsCheckbox";
 import "./WardrobeScreen.css";
 import { useMenuKeys } from "./menuKeys";
 
@@ -50,10 +52,54 @@ type Tab = "body" | "outfit" | "store";
 // Store tiles on a page
 const PAGE_SIZE = 40;
 
+// How far a drag turns the adventurer: an actor's yaw (2048 a turn) a pixel, a turn every 512
+const TURN_PER_PIXEL = 4;
+
+// Dragging across the courtyard (the game's canvas: a press on a panel is the panel's) turns the
+// adventurer round, with the mouse or a finger
+function useDragToTurn(client: GameClient): void {
+    useEffect(() => {
+        const root = document.documentElement;
+        let drag: { id: number; x: number } | undefined;
+        const down = (e: PointerEvent) => {
+            if (!drag && e.target instanceof HTMLCanvasElement && e.button === 0) {
+                drag = { id: e.pointerId, x: e.clientX };
+                root.classList.add("ui-wardrobe-turning");
+            }
+        };
+        const move = (e: PointerEvent) => {
+            if (drag?.id === e.pointerId) {
+                // Their front follows the pointer: a drag to the right turns them to their left
+                client.turnWardrobeModel((drag.x - e.clientX) * TURN_PER_PIXEL, true);
+                drag.x = e.clientX;
+            }
+        };
+        const up = (e: PointerEvent) => {
+            if (drag?.id === e.pointerId) {
+                drag = undefined;
+                root.classList.remove("ui-wardrobe-turning");
+            }
+        };
+        root.classList.add("ui-wardrobe-turnable");
+        window.addEventListener("pointerdown", down);
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+        return () => {
+            root.classList.remove("ui-wardrobe-turnable", "ui-wardrobe-turning");
+            window.removeEventListener("pointerdown", down);
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", up);
+        };
+    }, [client]);
+}
+
 export function WardrobeScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
     const [tab, setTab] = useState<Tab>("body");
     useMenuKeys({ onBack: () => client.showScreen("title") });
+    useDragToTurn(client);
     // Changing the body, the adventurer stands in it alone, so what changes can be seen
     useEffect(() => client.showBareBody(tab === "body"), [client, tab]);
     useEffect(() => () => client.showBareBody(false), [client]);
@@ -145,7 +191,7 @@ function PreviewControls({ ui, client }: Props): JSX.Element {
                 <button
                     className="ui-button ui-wardrobe-arrow"
                     aria-label={t("wardrobe.turn_left")}
-                    onClick={() => client.turnMenuCamera(-256)}
+                    onClick={() => client.turnWardrobeModel(-256)}
                 >
                     ↶
                 </button>
@@ -155,7 +201,7 @@ function PreviewControls({ ui, client }: Props): JSX.Element {
                 <button
                     className="ui-button ui-wardrobe-arrow"
                     aria-label={t("wardrobe.turn_right")}
-                    onClick={() => client.turnMenuCamera(256)}
+                    onClick={() => client.turnWardrobeModel(256)}
                 >
                     ↷
                 </button>
@@ -268,7 +314,13 @@ function BodyTab({ look, client }: { look: WardrobeLook; client: GameClient }): 
                     </div>
                 </div>
             ))}
-            <div className="ui-row">
+            <div className="ui-row ui-wardrobe-body-buttons">
+                <button
+                    className="ui-button"
+                    onClick={() => client.setLook({ ...look, body: randomBody(Math.random) })}
+                >
+                    {t("wardrobe.random_body")}
+                </button>
                 <button
                     className="ui-button"
                     onClick={() => client.setLook({ ...look, body: undefined })}
@@ -383,16 +435,12 @@ function OutfitTab({
                     </div>
                 );
             })}
-            <label className="ui-wardrobe-check">
-                <input
-                    type="checkbox"
-                    checked={look.overGear === true}
-                    onChange={(e) =>
-                        client.setLook({ ...look, overGear: e.target.checked || undefined })
-                    }
-                />
+            <RsCheckbox
+                checked={look.overGear === true}
+                onChange={(checked) => client.setLook({ ...look, overGear: checked || undefined })}
+            >
                 {t("wardrobe.over_gear")}
-            </label>
+            </RsCheckbox>
             <div className="ui-row">
                 <button
                     className="ui-button"
@@ -655,14 +703,9 @@ function StoreTab({
                             {tl(RARITIES[r].name)}
                         </button>
                     ))}
-                    <label className="ui-wardrobe-check">
-                        <input
-                            type="checkbox"
-                            checked={hideOwned}
-                            onChange={(e) => setHideOwned(e.target.checked)}
-                        />
+                    <RsCheckbox checked={hideOwned} onChange={setHideOwned}>
                         {t("wardrobe.hide_owned")}
-                    </label>
+                    </RsCheckbox>
                 </div>
             </div>
             <div className="ui-wardrobe-store-body">

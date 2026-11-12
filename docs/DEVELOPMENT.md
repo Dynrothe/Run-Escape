@@ -855,7 +855,8 @@ src/game/
             above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
             (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
             Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
-            off), CoopScreen (the rooms, the lobby, the party in a run),
+            off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real
+            checkbox, `CHECKBOX_SPRITES`), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -1464,8 +1465,15 @@ the sim never sees it.
 - **Trying on:** a piece picked in the store is shown on the menus' adventurer
   (`GameClient.previewLook`) until the Wardrobe's left. On the Appearance tab the adventurer
   stands in the body alone (`showBareBody`, `getBareAppearance`: nothing worn, no weapon) so
-  what's changing can be seen. The Wardrobe holds the title camera still,
-  turned with its arrows (`turnMenuCamera`).
+  what's changing can be seen. The Wardrobe holds the title camera still in front of the
+  adventurer and turns them instead (`turnWardrobeModel`, the actor's yaw), with its arrows or
+  by dragging the courtyard: `useDragToTurn` takes a press that lands on the game's canvas, as
+  the screen lets everything but its panels through, so it needs no area of its own on any
+  layout. Random (`randomBody`) is any kit and colour of either body.
+- **Body colours:** `PlayerModelLoader` recolours as the client does, from its tables (not the
+  cache's). Hair and tops have a second colour too (`BODY_COLOR_SOURCE_2`, the newer hairstyles'
+  and beards' streaks, made in pink), recoloured by every choice, the first included: without
+  it they come out pink.
 - **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
   so it needed no relay change; `beginCoopRun` cleans each hero's.
 - **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each

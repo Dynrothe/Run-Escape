@@ -45,6 +45,7 @@
     "wardrobe.none": "None",
     "wardrobe.style_of": "{n} of {total}",
     "wardrobe.colour_n": "{name} colour {n}",
+    "wardrobe.random_body": "Random",
     "wardrobe.reset_body": "Reset body",
     "wardrobe.outfit_intro": "What you wear on every adventurer, slot by slot. Gear found in a run goes on over it, unless it's kept on below.",
     "wardrobe.nothing": "Nothing",

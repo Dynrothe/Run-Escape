@@ -130,6 +130,21 @@ export function getDefaultBody(bodyType: 0 | 1 = 0): BodyLook {
     };
 }
 
+// A body picked at random, of either type: any kit it can have for each part, and any colour.
+// random: a number from 0 up to 1 (Math.random; the menus aren't the sim's).
+export function randomBody(random: () => number): BodyLook {
+    const pick = (count: number) => Math.min(count - 1, Math.floor(random() * count));
+    const bodyType = pick(2) as 0 | 1;
+    return {
+        bodyType,
+        kits: BODY_PARTS.map((_, part) => {
+            const kits = getBodyKits(bodyType, part);
+            return kits[pick(kits.length)];
+        }),
+        colors: BODY_COLOURS.map((colour) => pick(colour.count)),
+    };
+}
+
 // Someone in particular keeps their own look: a fixed outfit (the Avian Assaulter's chicken) or a
 // body of their own (Durial321's hair)
 export function wearsWardrobe(character: CharacterDef): boolean {

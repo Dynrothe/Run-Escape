@@ -24,6 +24,15 @@ export const SOUND_ORB_SPRITES = {
     off: CLOUD_SAVE_SPRITES.problem,
 } as const;
 
+// The client's square checkbox (ui/RsCheckbox.tsx): empty and ticked, and each lit up under the
+// mouse
+export const CHECKBOX_SPRITES = {
+    off: 1215,
+    on: 1217,
+    offHover: 1218,
+    onHover: 1220,
+} as const;
+
 export const COLLECTION_LOG_OBJ = 22711;
 
 // The client's own back-arrow button, on a bought skill to refund a rank. Also kept in the slim

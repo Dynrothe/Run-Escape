@@ -205,6 +205,20 @@ const WARDROBE_PITCH = -140;
 const WARDROBE_YAW = 0;
 const WARDROBE_SIDE = 1.4;
 const WARDROBE_RISE = 0.3;
+
+// A yaw (0 to 2048 a turn) kept in its turn
+function wrapYaw(yaw: number): number {
+    return ((yaw % 2048) + 2048) % 2048;
+}
+
+// A yaw a frame nearer its target, the short way round: settle is how much of the way it's
+// still to go, and it's there once it's under a unit off
+function settleYaw(yaw: number, target: number, settle: number): number {
+    const turn = wrapYaw(yaw - target);
+    const settled = (turn > 1024 ? turn - 2048 : turn) * settle;
+    return wrapYaw(target + (Math.abs(settled) < 1 ? 0 : settled));
+}
+
 // The pet taken along stands beside the character on the menus: tiles to their side and behind
 const PREVIEW_PET_SIDE = 1.1;
 const PREVIEW_PET_BACK = 0.4;
@@ -603,8 +617,10 @@ export class GameClient implements GameFrameHandler {
     private previewedLook?: WardrobeLook;
     // The Wardrobe's showing the body alone, with nothing on (its Appearance tab)
     private bareMenuLook = false;
-    // Which way the Wardrobe's camera faces the adventurer (as the attract camera's yaw)
-    private wardrobeYaw = WARDROBE_YAW;
+    // Which way the adventurer's turned in the Wardrobe (an actor's yaw), and the way they face
+    // now, on their way round to it (and back to the front once it's left)
+    private wardrobeTurn = 0;
+    private menuModelYaw = 0;
     // How far the title camera's come in for the Wardrobe, 0 to 1
     private wardrobeZoom = 0;
     // The casket Auto alch or Auto equip answered, until that's done (co-op's
@@ -3209,28 +3225,30 @@ export class GameClient implements GameFrameHandler {
         return Math.min(1, this.accumulator / TICK_MS);
     }
 
-    // Turns the camera round the adventurer in the Wardrobe, which holds it there
-    turnMenuCamera(by: number): void {
-        this.wardrobeYaw = (((this.wardrobeYaw + by) % 2048) + 2048) % 2048;
+    // Turns the adventurer round in the Wardrobe, which holds the camera still in front of them.
+    // at once: straight there (dragged round), not turning round to it (the arrows).
+    turnWardrobeModel(by: number, atOnce = false): void {
+        this.wardrobeTurn = wrapYaw(this.wardrobeTurn + by);
+        if (atOnce) {
+            this.menuModelYaw = wrapYaw(this.menuModelYaw + by);
+        }
     }
 
     // Title screen: the character idles in the courtyard while the camera
-    // circles them (unless that's turned off). The Wardrobe holds it where it's turned to.
+    // circles them (unless that's turned off). The Wardrobe holds it in front of them, and turns
+    // them instead, so the courtyard behind stays put.
     private updateAttract(deltaTimeMs: number, camera: Camera): void {
         const ticks = deltaTimeMs / TICK_MS;
         this.attractTick += ticks;
         const wardrobe = this.store.getSnapshot().screen === "wardrobe";
+        const settle = Math.pow(ATTRACT_SETTLE, ticks);
         if (this.display.menuSpin && !wardrobe) {
             this.attractYaw = (this.attractYaw + ticks * ATTRACT_SPIN) % 2048;
         } else {
-            // Back round to the front (or the way the Wardrobe's turned it) the short way
-            const target = wardrobe ? this.wardrobeYaw : 0;
-            const turn = (((this.attractYaw - target) % 2048) + 2048) % 2048;
-            const offset = turn > 1024 ? turn - 2048 : turn;
-            const settled = offset * Math.pow(ATTRACT_SETTLE, ticks);
-            const yaw = Math.abs(settled) < 1 ? 0 : settled;
-            this.attractYaw = (((target + yaw) % 2048) + 2048) % 2048;
+            // Back round to the front the short way
+            this.attractYaw = settleYaw(this.attractYaw, wardrobe ? WARDROBE_YAW : 0, settle);
         }
+        this.menuModelYaw = settleYaw(this.menuModelYaw, wardrobe ? this.wardrobeTurn : 0, settle);
         this.cameraRig.yaw = this.attractYaw & 2047;
         // The Wardrobe comes in close, the adventurer off to the right of its panel
         this.wardrobeZoom += ((wardrobe ? 1 : 0) - this.wardrobeZoom) * (1 - 0.85 ** ticks);
@@ -3833,7 +3851,7 @@ export class GameClient implements GameFrameHandler {
                 TITLE_MAP.spawn.x,
                 this.grid.getHeight(TITLE_MAP.spawn.x, TITLE_MAP.spawn.y) / 128,
                 TITLE_MAP.spawn.y,
-                0,
+                Math.round(this.menuModelYaw) & 2047,
             );
         }
         const pet = this.save.pet === undefined ? undefined : PET_BY_ID.get(this.save.pet);

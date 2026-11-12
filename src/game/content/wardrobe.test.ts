@@ -25,6 +25,7 @@ import {
     getPieceAdventurer,
     getPieceTrophy,
     isWearingOutfit,
+    randomBody,
     saveOutfit,
     wearOutfit,
     wearsWardrobe,
@@ -189,6 +190,23 @@ describe("a look", () => {
         for (const colour of BODY_COLOURS) {
             expect(colour.count).toBeGreaterThan(1);
         }
+    });
+
+    it("picks a random body that a look keeps as it is", () => {
+        let seed = 7;
+        const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+        const types = new Set<number>();
+        for (let i = 0; i < 50; i++) {
+            const body = randomBody(random);
+            types.add(body.bodyType);
+            expect(cleanLook({ body })?.body).toEqual(body);
+        }
+        expect(types.size).toBe(2);
+        // The ends of the range are choices too, never past them
+        expect(cleanLook({ body: randomBody(() => 0) })?.body).toEqual(randomBody(() => 0));
+        expect(cleanLook({ body: randomBody(() => 0.9999999) })?.body).toEqual(
+            randomBody(() => 0.9999999),
+        );
     });
 
     it("is saved with only the pieces the save can wear", () => {

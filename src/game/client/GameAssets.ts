@@ -33,6 +33,7 @@ import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import {
+    CHECKBOX_SPRITES,
     CLOUD_SAVE_SPRITES,
     REFUND_SPRITE,
     SOUND_ORB_SPRITES,
@@ -186,10 +187,10 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's tabs and cloud
-// save's button, the sound's orb, empty equipment slots, the skills' refund button, co-op's
-// flags and the overhead prayers (every frame comes with the first) and the passives with a
-// sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
-// has to be in here.
+// save's button, the sound's orb, the checkboxes, empty equipment slots, the skills' refund
+// button, co-op's flags and the overhead prayers (every frame comes with the first) and the
+// passives with a sprite for an icon. The slim cache keeps these and no others, so a sprite the
+// game shows has to be in here.
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
@@ -197,6 +198,7 @@ export function getGameSpriteIds(): number[] {
         ...Object.values(TITLE_TAB_SPRITES),
         ...Object.values(CLOUD_SAVE_SPRITES),
         ...Object.values(SOUND_ORB_SPRITES),
+        ...Object.values(CHECKBOX_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,

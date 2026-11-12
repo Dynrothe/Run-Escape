@@ -11,7 +11,7 @@ the version in the corner).
   adventurer slot by slot. Its store sells nearly three thousand outfit pieces for coins, from
   bronze helms to partyhats, and you can try each one on first. Your unlocked adventurers' own
   pieces are free, you can save outfits to put on again in one go, and co-op shows everyone's
-  look.
+  look. Drag your adventurer round to see them from every side, or press Random for a new look.
 - The Wardrobe doesn't sell what the Collection log finds: Halloween masks, Justiciar and Masori
   armour, the Avernic defender, Elidinis' ward, and the Turkey and Chompy bird hats are yours to
   wear once found.

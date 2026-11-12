@@ -198,12 +198,18 @@
     color: var(--ui-green-text);
 }
 
-.ui-wardrobe-check {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    pointer-events: auto;
+.ui-row.ui-wardrobe-body-buttons {
+    justify-content: flex-start;
+}
+
+/* The courtyard can be dragged to turn the adventurer round (useDragToTurn) */
+.ui-wardrobe-turnable canvas {
+    cursor: grab;
+}
+
+.ui-wardrobe-turning,
+.ui-wardrobe-turning canvas {
+    cursor: grabbing;
 }
 
 /* The store: filters, then the page of pieces beside the one picked */
