@@ -4443,7 +4443,7 @@ describe("class weapons", () => {
                 expect(healed).toBe(0);
             }
         }
-        // One attack in 25
+        // One attack in 40
         expect(specials).toBeGreaterThan(0);
         expect(specials).toBeLessThan(16);
     });

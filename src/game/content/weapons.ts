@@ -2171,7 +2171,7 @@ export const WEAPONS: WeaponDef[] = [
         // Its special attack, as in OSRS: half again the damage, and half of it back as hitpoints
         siphon: {
             name: "Toxic Siphon",
-            chance: 1 / 25,
+            chance: 1 / 40,
             damage: 1.5,
             heal: 0.5,
             max: 3,
