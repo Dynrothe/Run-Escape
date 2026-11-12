@@ -258,8 +258,7 @@ version and how to run it.
   and it wakes, the demons about run from it every way, every way out bursts into fire, and you
   fight it there with nothing else coming. Neither is a fight for a fresh hero: on average the
   first wants about eight minutes of the hordes' levels, the second fifteen, and Yama no more.
-  Die there and you're thrown out whole, the general back where it stood with all its hitpoints:
-  only a death to the hordes ends the run. Beat one and the other grows stronger: 50% more
+  Die there and the run's over, as it is anywhere. Beat one and the other grows stronger: 50% more
   hitpoints, 30% harder hits, attacks sooner, and an attack of the fallen one's.
   **Xarth** (13,300 hitpoints), in the middle of the Grand Exchange's pad, stands where he is and
   burns. The whole pad is his fight, its walls and booths gone, and it's ringed with fire once he
@@ -294,8 +293,7 @@ version and how to run it.
   never sooner than the gaze comes back), he calls down a meteor that kills you wherever you
   stand. The only answer is the gaze cast at him as he calls it, which breaks it in the sky and
   leaves him open. He never starts one while your gaze is too far from ready. Killing him wins
-  the run. Dying in his fight throws you out to the palace's court, whole, to come back when
-  you're ready.
+  the run, and dying to him ends it.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
   screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any

@@ -12,7 +12,7 @@ import { makeGrid } from "./world/testGrid";
 
 // Yama's two generals in burnt Varrock (MapDef.lairs, content/xarth.ts, content/kril.ts): each
 // asleep in a ruin of its own, fought in either order, the one left empowered by the other's
-// death, and a death in either fight throwing the hero out rather than ending the run. On open
+// death, and a death in either fight ending the run, as any death does. On open
 // ground round both ruins and the palace, from the map's own lairs (Yama's in Yama.test.ts).
 
 const MAP = getMap("battle_for_varrock");
@@ -137,7 +137,7 @@ describe.each([
         expect(other.state).toBe("asleep");
     });
 
-    test("a death there throws the hero out whole, and it's back asleep with all its own", () => {
+    test("a death there ends the run, the hero dead where they fell", () => {
         const sim = createSim(MAP.spawn);
         const lair = sim.lairById(def.id)!;
         const boss = startFight(sim, def);
@@ -145,17 +145,12 @@ describe.each([
         sim.player.hp = 1;
         sim.player.invulnerable = 0;
         sim["damagePlayer"](100, "test", false, -1, true);
-        expect(sim.runOver).toBe(false);
-        expect(lair.state).toBe("asleep");
-        expect(sim.player.hp).toBe(sim.player.maxHp);
-        const out = Math.hypot(sim.player.x - def.retreat!.x, sim.player.y - def.retreat!.y);
-        expect(out).toBeLessThan(1.5);
-        expect(sim.inLair(lair, sim.player)).toBe(false);
-        expect(lair.liftTick).toBeGreaterThan(lair.sealTick);
-        expect(sim.enemies.some((e) => !e.dead && e.def.id === def.enemyId)).toBe(false);
-        // Back in, it's up again from the start
-        const again = startFight(sim, def);
-        expect(again.hp).toBe(hitpoints);
+        expect(sim.runOver).toBe(true);
+        expect(sim.state).toBe("dead");
+        expect(sim.player.hp).toBe(0);
+        expect(sim.player.deathTick).toBe(sim.tick);
+        expect(sim.inLair(lair, sim.player)).toBe(true);
+        expect(lair.state).toBe("fighting");
     });
 });
 

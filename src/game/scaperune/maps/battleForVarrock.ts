@@ -111,7 +111,7 @@ const YAMA_RISE = { x: YAMA.x + 2, y: YAMA.y - 4 };
 // pad his: the raised deck the Exchange stands on (a bridge's level in the cache), thirty-four
 // tiles across. Everything that stood on it is gone (clearExchange): its inner ring's walls, its
 // booths and the storey over them. Eight of the Fractured Archive's pillars stand where the ring's
-// walls stood, and the party's thrown out south of the pad, by the gap in the city wall.
+// walls stood.
 export const EXCHANGE_PAD_REAL = { x0: 3148, y0: 3473, x1: 3181, y1: 3506 };
 // The pad's rows, the north row first: how many tiles each is cut in from either side (the
 // deck's tiles in the cache, which buildVarrockDetail holds it to)
@@ -136,13 +136,10 @@ const EXCHANGE_PILLARS_REAL = [
     { x: 3155, y: 3493 },
     { x: 3155, y: 3485 },
 ];
-const EXCHANGE_RETREAT_REAL = { x: 3165, y: 3470.5 };
 // K'ril Tsutsaroth before the altar of the church in the north-east of the city, its nave his:
-// eight tiles across from its south door to its altar, eighteen long. Thrown out, the party's
-// outside its door.
+// eight tiles across from its south door to its altar, eighteen long.
 export const CHURCH_NAVE_REAL = { x0: 3252, y0: 3471, x1: 3259, y1: 3488 };
 const KRIL_REAL = { x: 3256, y: 3483 };
-const CHURCH_RETREAT_REAL = { x: 3256, y: 3466.5 };
 const YAMA_START = { x: YAMA_RISE.x, y: YAMA_RISE.y - 9 };
 
 // What the conversion leaves standing, by name: the square's fountain, the churches' altars and
@@ -406,8 +403,6 @@ const POINTS: MapPoint[] = [
     { name: "where his fight starts", ...YAMA_START },
     { name: "Xarth in the Grand Exchange", ...toGrid(XARTH_REAL.x, XARTH_REAL.y - 3) },
     { name: "K'ril Tsutsaroth in the church", ...toGrid(KRIL_REAL.x, KRIL_REAL.y - 3) },
-    { name: "outside the Exchange", ...toGrid(EXCHANGE_RETREAT_REAL.x, EXCHANGE_RETREAT_REAL.y) },
-    { name: "outside the church", ...toGrid(CHURCH_RETREAT_REAL.x, CHURCH_RETREAT_REAL.y) },
 ];
 
 const DECKS_BLOCKED = [{ ...toGrid(3285, 3468), x1: 3285 - REAL_X, y1: 3469 - REAL_Y }].map(
@@ -948,25 +943,18 @@ export const BATTLE_FOR_VARROCK = {
         x: MAP_X * MAP_SQUARE_SIZE + YAMA_START.x + 0.5,
         y: MAP_Y * MAP_SQUARE_SIZE + YAMA_START.y + 0.5,
     },
-    // Beaten back from his floor: the palace's front court
-    yamaRetreat: {
-        x: MAP_X * MAP_SQUARE_SIZE + PALACE_COURT.x + 0.5,
-        y: MAP_Y * MAP_SQUARE_SIZE + PALACE_COURT.y + 0.5,
-    },
-    // Xarth's pad: its box and rows, where he stands, his pillars' south-west tiles, and outside
+    // Xarth's pad: its box and rows, where he stands, his pillars' south-west tiles
     xarth: {
         area: { ...toWorldBox(EXCHANGE_PAD_REAL), rows: EXCHANGE_PAD_ROWS },
         at: toWorld(XARTH_REAL),
         start: toWorld({ x: XARTH_REAL.x, y: XARTH_REAL.y - 6.5 }),
         pillars: EXCHANGE_PILLARS_REAL.map(toWorld),
-        retreat: toWorld(EXCHANGE_RETREAT_REAL),
     },
     // K'ril's nave
     kril: {
         area: toWorldBox(CHURCH_NAVE_REAL),
         at: toWorld(KRIL_REAL),
         start: toWorld({ x: KRIL_REAL.x, y: KRIL_REAL.y - 7.5 }),
-        retreat: toWorld(CHURCH_RETREAT_REAL),
     },
 };
 

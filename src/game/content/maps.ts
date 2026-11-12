@@ -558,11 +558,11 @@ export function canRetry(map: MapDef): boolean {
 }
 
 // The lair a retry starts in (LairDef.start): the map's only one, as long as it's open from
-// the start and a death there ends the run (with LairDef.retreat it doesn't, so a run that's
-// over didn't end there)
+// the start. With more than one, a retry starts the map over: the run that ended had beaten
+// whichever came before.
 export function getRetryLair(map: MapDef): LairDef | undefined {
     const lairs = map.lairs;
-    return lairs?.length === 1 && !lairs[0].retreat && !lairs[0].requires ? lairs[0] : undefined;
+    return lairs?.length === 1 && !lairs[0].requires ? lairs[0] : undefined;
 }
 
 // A map to walk round with nothing on it (FunMapDef.explore, and no waves): nothing hurts but a

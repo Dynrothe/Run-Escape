@@ -1021,11 +1021,10 @@ adventurer can have:
   `BossAttackDef.empowered` attacks usable). A `final` lair's boss wins the run, endless or not.
   One that `requires` others is sealed from the start (`Lair.locked`) until they're beaten. On a
   map with nothing coming (`isPeaceful`), hits land only while one's fought (`damagePlayer`), and
-  no wave comes while one's on (`stepDirector`). A death in one with a `retreat` beats the party
-  back (`Sim.beatBack`): everything of the fight gone, the boss asleep again, its pillars up and
-  the heroes out at `retreat`, whole and briefly immune. Without one, a death offers Retry
-  (`canRetry` in `maps.ts`), which starts the hero at its `start` (`getRetryLair`,
-  `GameClient.startRun`'s `atLair`), so it wakes on the first tick. `MapPropDef.lair` ties a prop
+  no wave comes while one's on (`stepDirector`). A death in one ends the run, as any death does,
+  and offers Retry (`canRetry` in `maps.ts`): on a map whose only lair is open from the start,
+  that starts the hero at its `start` (`getRetryLair`, `GameClient.startRun`'s `atLair`), so
+  it wakes on the first tick; with more than one (the Battle for Varrock's), the map over. `MapPropDef.lair` ties a prop
   to its lair: hidden once its boss is up, or swapped for `awake` (Yama's empty throne). `LairDef.opening` (`LairOpeningDef`, Yama's in `fun/yamaWakes.ts`) is a cinematic as it
   wakes, before its intro. Stepping onto the floor then puts the lair in `waking` (`Lair.wakeTick`),
   which holds every player where they stand, turned to `at` (`Sim.introHolds`, `introFacing`), with

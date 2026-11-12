@@ -573,8 +573,8 @@ export class BossFightView {
         }
     }
 
-    // A lair's pillars (LairDef.pillars), whole loc models on their tiles: standing, sinking into
-    // the ground as they crumble, and coming back up when the party's thrown out
+    // A lair's pillars (LairDef.pillars), whole loc models on their tiles: standing, and sinking into
+    // the ground as they crumble
     private drawLairPillars(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
         const def = lair.def.pillars;
         const model = def && this.assets.get("loc:" + def.locId);

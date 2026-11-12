@@ -399,8 +399,6 @@ const LAIR_STEPS = [
 // What's been so since before the run (a lair locked from the start, its pillars), so the view
 // draws it there already
 const LAIR_LONG_AGO = 10000;
-// Thrown out of a lair (LairDef.retreat): nothing can hurt them, nor come at them, for this long
-const BEATEN_BACK_TICKS = 4 * TICKS_PER_SECOND;
 
 // Enemies are kept this many ticks after dying for their death animation
 const CORPSE_TICKS = MAX_DEATH_ANIM_TICKS + DEATH_SINK_TICKS;
@@ -5454,9 +5452,6 @@ export class Sim {
         const def = lair.def;
         lair.state = "fighting";
         lair.boss = undefined;
-        // Its opening's once a run: a fight that's begun again after the party's been thrown out
-        // starts with its intro
-        this.lairOpens = this.lairOpens && !def.opening;
         this.sealLair(lair, this.tick);
         this.updateFlowFields();
         const enemy = getEnemy(def.enemyId);
@@ -5549,66 +5544,6 @@ export class Sim {
         const pillars = lair.def.pillars!;
         const size = pillars.size;
         this.showImpact(pillars.impact, pillar.x + size / 2, pillar.y + size / 2);
-    }
-
-    // The party's down in a lair that throws them out (LairDef.retreat): the fight's over, its boss
-    // back where it was asleep with all its hitpoints and its pillars up, and the party up again
-    // outside it, with all of theirs. The run goes on.
-    private beatBack(lair: Lair): void {
-        const def = lair.def;
-        const retreat = def.retreat!;
-        // The boss and all of its fight gone
-        for (const enemy of this.enemies) {
-            if (!enemy.dead) {
-                this.vanish(enemy);
-            }
-        }
-        this.intro = undefined;
-        this.aloneWith = undefined;
-        this.clearBossAttacks();
-        this.enemyProjectiles = [];
-        this.pools = [];
-        for (const pillars of this.wardPillars) {
-            pillars.endTick = Math.min(pillars.endTick, this.tick);
-        }
-        this.dimTo(this.baseAmbient, PHASE_LIGHT_SECONDS);
-        lair.state = "asleep";
-        lair.boss = undefined;
-        this.liftSeal(lair);
-        this.raisePillars(lair, this.tick);
-        // Out, side by side
-        const party = this.heroes.filter((hero) => !hero.left);
-        party.forEach((hero, i) => {
-            const player = hero.player;
-            const along = (i - (party.length - 1) / 2) * 1.5;
-            const spot = findFreeSpot(this.grid, retreat.x + along, retreat.y, player.radius);
-            player.x = player.prevX = spot.x;
-            player.y = player.prevY = spot.y;
-            player.hp = player.maxHp;
-            player.deathTick = -1;
-            player.invulnerable = IMMUNE_INVULNERABLE_TICKS;
-            player.flash = 0;
-            player.frozen = 0;
-            player.moving = false;
-            player.poisonEnd = -1;
-            player.poisonDamage = 0;
-            hero.down = false;
-            hero.outTick = -1;
-            hero.revive = undefined;
-            hero.immuneEndTick = this.tick + BEATEN_BACK_TICKS;
-            hero.drowsyEndTick = 0;
-        });
-        this.kitCasts = [];
-        this.rescaleParty();
-        this.updateFlowFields();
-        this.emit({ type: "notice", message: retreat.message });
-        this.emit({
-            type: "lair",
-            woken: false,
-            sound: def.seal.sound ?? -1,
-            x: def.at.x,
-            y: def.at.y,
-        });
     }
 
     // Each hero's way round, worked out again after the ground's changed
@@ -10440,12 +10375,6 @@ export class Sim {
         this.hero.down = true;
         this.hero.outTick = this.tick;
         if (!this.heroes.some((hero) => this.isUp(hero))) {
-            // In a lair that throws the party out (LairDef.retreat), the run goes on
-            const lair = this.lair;
-            if (lair?.state === "fighting" && lair.def.retreat) {
-                this.beatBack(lair);
-                return;
-            }
             this.endRun("dead");
             return;
         }

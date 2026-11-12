@@ -60,11 +60,10 @@ beaten on its own, one fought at a time.
   its lair wakes. Its intro then plays where it stood.
 - **Yama waits** (`LairDef.requires`): until both generals are dead, his palace is sealed from the
   start with the same fires, which go out with a notice as the second falls.
-- **Beaten back, not over** (`LairDef.retreat`): a death in a lair doesn't end the run. The hero's
-  thrown out to the retreat spot at full hitpoints, the boss is back asleep at full hitpoints,
-  and its pillars stand again. Losing a fight costs the time it took and the hordes' growth
-  meanwhile, not the run. This is what lets a player test whether they're ready. Only a death to
-  the hordes ends it, and Retry then starts at the gate (`getRetryLair` has no lair to start at).
+- **A death is a death**: dying in a lair ends the run, as dying to the hordes does, and Retry
+  starts at the gate (`getRetryLair` has no lair to start at). It was first a beat back
+  (`LairDef.retreat`: thrown out whole, the boss asleep again), taken out at Dynny's
+  request: dying to a boss should be dying.
 - **The second grows stronger** (`LairDef.empowered`): once a general's beaten, the other's
   fights are empowered: 1.5 times the hitpoints, 1.3 times the damage, 0.85 of the time between
   attacks, and attacks of the fallen one's (`BossAttackDef.empowered`), said on screen.
@@ -130,21 +129,21 @@ bloodrush leaves the ground burning (Shock wave puts it out).
 ## 6. Yama
 
 Unchanged but for three things: he waits for his generals (section 3), a death in his fight
-throws the hero out to the palace's court rather than ending the run, and his death wins it.
+ends the run, and his death wins it.
 
 ## 7. Building blocks
 
-| Need                         | What existed                                | What's new                                                                      |
-| ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
-| Hordes and levels            | Waves, events, level ups                    | `isPeaceful`: a map to explore with waves hurts and levels                      |
-| Several lairs                | `MapDef.lair` (Yama's)                      | `MapDef.lairs`, areas of their own, `requires`, `retreat`, `empowered`, `final` |
-| A general where it stands    | `MapDef.props`                              | `MapPropDef.lair`: hidden while its lair's awake or beaten                      |
-| Burn                         | Stacking debuffs                            | A debuff's `burn`: hitpoints a second for each stack, through armour            |
-| Cover from the Conflagration | The gaze's shadows (`cover`), its light     | Lair pillars (`LairDef.pillars`) that crumble (`crumbles`, `crumbleAt`)         |
-| Spreading fire               | A pool's lingering ground                   | A pool's `spreads`, and `dousedBy` a hero's button                              |
-| Corpses                      | The Nightmare's sleepwalkers (`walkTo`)     | `walkTo.heals`                                                                  |
-| Bodyguards' half damage      | `summonsAt`                                 | `BossDef.pact`                                                                  |
-| The desecration              | `interruptedBy` (Yama's meteor), `critical` | `breakable`: a share of its hitpoints, hit in its windup; `heal`                |
+| Need                         | What existed                                | What's new                                                              |
+| ---------------------------- | ------------------------------------------- | ----------------------------------------------------------------------- |
+| Hordes and levels            | Waves, events, level ups                    | `isPeaceful`: a map to explore with waves hurts and levels              |
+| Several lairs                | `MapDef.lair` (Yama's)                      | `MapDef.lairs`, areas of their own, `requires`, `empowered`, `final`    |
+| A general where it stands    | `MapDef.props`                              | `MapPropDef.lair`: hidden while its lair's awake or beaten              |
+| Burn                         | Stacking debuffs                            | A debuff's `burn`: hitpoints a second for each stack, through armour    |
+| Cover from the Conflagration | The gaze's shadows (`cover`), its light     | Lair pillars (`LairDef.pillars`) that crumble (`crumbles`, `crumbleAt`) |
+| Spreading fire               | A pool's lingering ground                   | A pool's `spreads`, and `dousedBy` a hero's button                      |
+| Corpses                      | The Nightmare's sleepwalkers (`walkTo`)     | `walkTo.heals`                                                          |
+| Bodyguards' half damage      | `summonsAt`                                 | `BossDef.pact`                                                          |
+| The desecration              | `interruptedBy` (Yama's meteor), `critical` | `breakable`: a share of its hitpoints, hit in its windup; `heal`        |
 
 ## 8. Checks
 
@@ -152,9 +151,9 @@ throws the hero out to the palace's court rather than ending the run, and his de
   then fights that lair (`EMPOWERED=1` as if its rival fell first). With `GOD=1` the bot's never
   hurt (only an unstopped meteor kills it), so the fight's length is how long the hero's damage
   takes against the boss's heals: what the fights are tuned by. Section 10 has what it found.
-- **Tests**: `core/VarrockGenerals.test.ts` (lairs wake, seal and beat back; empowerment; burn;
+- **Tests**: `core/VarrockGenerals.test.ts` (lairs wake, seal and end the run; empowerment; burn;
   cover and pillars; fire spreading, doused and out when he dies; corpses healing; the pact; the
-  desecration) and `core/Yama.test.ts` (his palace sealed until both are dead, thrown out, the
+  desecration) and `core/Yama.test.ts` (his palace sealed until both are dead, a death, the
   win). `scripts/game/check-lairs.ts` (run by `battleForVarrock.test.ts` with the cache): room
   for each boss where it rises, and for K'ril down his nave.
 - **Phone** (844 × 390, `frameProbe`, each fight's busiest moment): K'ril 62.6k, 67.1k with all
@@ -164,7 +163,6 @@ throws the hero out to the palace's court rather than ending the run, and his de
 
 ## 9. Open for Dynny
 
-- **Beaten back** (section 3) is our call: the alternative is that a death anywhere ends the run.
 - **Numbers**: hitpoints are tuned to the brief's clock on the bot (section 10, Tuned to the
   clock), to tune again by playtest. A player deals more than the bot, so if 8 and 15 minutes
   still come early, hitpoints are the knob: K'ril's heal goes with his, so he climbs steeply.

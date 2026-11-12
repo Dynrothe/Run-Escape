@@ -843,8 +843,8 @@ export const FUN_MAPS: MapDef[] = [
             { npcId: 3129, seq: 6935, ...BATTLE_FOR_VARROCK.kril.at, scale: 0.7, lair: "kril" },
         ],
         // Yama's two generals, each in a ruin of its own and either first, and then Yama. Stepping
-        // into a lair wakes its boss and every way out burns until it's dead; a death there throws
-        // the hero out, the boss back asleep. Whichever general's left grows stronger for the
+        // into a lair wakes its boss and every way out burns until it's dead; a death there ends
+        // the run, as any does. Whichever general's left grows stronger for the
         // other's death.
         lairs: [
             {
@@ -859,10 +859,6 @@ export const FUN_MAPS: MapDef[] = [
                 message: "Xarth wakes! The Grand Exchange is ringed with fire!",
                 victory: "Xarth is beaten. The fires round the Exchange die down.",
                 shout: "The flame... outlives me...",
-                retreat: {
-                    ...BATTLE_FOR_VARROCK.xarth.retreat,
-                    message: "Xarth's flames throw you out of the Exchange!",
-                },
                 empowered: {
                     by: ["kril"],
                     hp: 1.5,
@@ -897,10 +893,6 @@ export const FUN_MAPS: MapDef[] = [
                 message: "K'ril Tsutsaroth wakes! The church is sealed in fire!",
                 victory: "K'ril Tsutsaroth is beaten. The fires round the church die down.",
                 shout: "Zamorak... curse... you...",
-                retreat: {
-                    ...BATTLE_FOR_VARROCK.kril.retreat,
-                    message: "K'ril Tsutsaroth throws you out of the church!",
-                },
                 empowered: {
                     by: ["xarth"],
                     hp: 1.5,
@@ -925,10 +917,6 @@ export const FUN_MAPS: MapDef[] = [
                     lairs: ["xarth", "kril"],
                     message:
                         "Both of Yama's generals are dead. The fires round the palace die down!",
-                },
-                retreat: {
-                    ...BATTLE_FOR_VARROCK.yamaRetreat,
-                    message: "Yama throws you from his palace!",
                 },
                 final: true,
             },

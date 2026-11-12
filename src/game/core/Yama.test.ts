@@ -263,7 +263,7 @@ describe("his lair", () => {
     });
 
     test("a run that starts on his floor has his fight on at once, without his opening", () => {
-        // A retry starts the map over, as his lair throws the party out (getRetryLair)
+        // A retry starts the map over, as his generals came first (getRetryLair)
         expect(canRetry(MAP)).toBe(true);
         expect(getRetryLair(MAP)).toBeUndefined();
         const sim = createSim(LAIR.start);
@@ -274,7 +274,7 @@ describe("his lair", () => {
 });
 
 describe("his meteor", () => {
-    test("comes on its own clock, never picked, and kills whoever's up: they're thrown out", () => {
+    test("comes on its own clock, never picked, and kills whoever's up: the run's over", () => {
         const meteor = attackNamed("Meteor");
         expect(meteor.weight).toBe(0);
         expect(yama().boss!.critical!.attack).toBe("Meteor");
@@ -284,13 +284,10 @@ describe("his meteor", () => {
         sim["startBossAttack"](boss, meteor);
         run(sim, meteor.windup + 0.5);
         expect(struck(sim)).toBe(true);
-        // Out to the palace's court, whole again, and he's back on his throne (LairDef.retreat)
-        expect(sim.runOver).toBe(false);
-        expect(yamaLair(sim).state).toBe("asleep");
-        expect(sim.player.hp).toBe(sim.player.maxHp);
-        const out = Math.hypot(sim.player.x - LAIR.retreat!.x, sim.player.y - LAIR.retreat!.y);
-        expect(out).toBeLessThan(2);
-        expect(sim.enemies.some((e) => !e.dead && e.def.id === "yama")).toBe(false);
+        // Dead on his floor, as anywhere
+        expect(sim.runOver).toBe(true);
+        expect(sim.state).toBe("dead");
+        expect(sim.player.hp).toBe(0);
     });
 
     test("falls whole and breaks up where it lands, on its animation from where it cracks", () => {
