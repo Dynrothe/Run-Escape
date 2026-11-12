@@ -72,23 +72,25 @@ untouchable, and opens the next with his gaze: every brazier he can see goes out
 | Phase | Hitpoints | Status        | Adds                                                                    |
 | ----- | --------- | ------------- | ----------------------------------------------------------------------- |
 | 1     | 100-60%   | The prisoner  | Slam, Icicles, Spit, Gas                                                |
-| 2     | 60-25%    | Freezing gaze | The freezing gaze, every 10 s or so                                     |
-| 3     | 25-0%     | Awakened      | The gaze every 7 s or so, icicles twice, five spits; everything quicker |
+| 2     | 60-25%    | Freezing gaze | The freezing gaze, every 8 s or so                                      |
+| 3     | 25-0%     | Awakened      | The gaze every 6 s or so, icicles twice, five spits; everything quicker |
 
-He has 3,600 hitpoints, set by the shortbow's damage against him (about 55 a second: section 10). He starts an attack
-every 1.4 s, times the phase's tempo (1, 0.9, 0.8), and never moves.
+He has 13,600 hitpoints, set by the shortbow's damage against him with the shop's every upgrade
+(about 75 a second in the first phase: section 10), and his hits go through armour (`MapDef.hits`).
+He starts an attack every 1.15 s, times the phase's tempo (1, 0.85, 0.75), and never moves.
 
 ### His attacks, and the dodge arithmetic
 
-The Snow ranger has 25 hitpoints and moves 3.33 tiles a second. A big hit takes about a third.
+The Snow ranger has 25 hitpoints (50 with the shop's every upgrade) and moves 3.33 tiles a second.
+A big hit takes about a sixth of a full save's, his gaze a quarter.
 
 | Attack                                                                                     | Damage                          | Warning          | To be clear               |
 | ------------------------------------------------------------------------------------------ | ------------------------------- | ---------------- | ------------------------- |
-| Slam: round him, his arms                                                                  | 6                               | 0.9 s            | 6 tiles from him          |
-| Icicles: a ring of five round where you stood, one on it                                   | 4                               | 1.3 s            | a step out of the ring    |
-| Spit: three ice breaths along lines fanned at where you stood as he began (five, awakened) | 2 each                          | 0.9 s, the lines | off the fan's lines       |
-| Gas: spat at you, and the vent nearest puffs as it lands                                   | 4, and the vent's gas           | 1.2 s            | 2 tiles, and off the vent |
-| Freezing gaze: the whole room he can see                                                   | 10, frozen 2 s, and 25 cold     | 2.4 s            | behind a statue           |
+| Slam: round him, his arms                                                                  | 8                               | 0.85 s           | 6 tiles from him          |
+| Icicles: a ring of five round where you stood, one on it                                   | 5                               | 1 s (0.75 again) | a step out of the ring    |
+| Spit: three ice breaths along lines fanned at where you stood as he began (five, awakened) | 3 each, 11 t/s                  | 0.7 s, the lines | off the fan's lines       |
+| Gas: spat at you, and the vent nearest puffs as it lands                                   | 6, and the vent's gas           | 0.95 s           | 2 tiles, and off the vent |
+| Freezing gaze: the whole room he can see                                                   | 13, frozen 2 s, and 25 cold     | 2 s              | behind a statue           |
 | The vents: each puffs a 3 by 3 every 6 s, out of step                                      | 2% a 0.6 s, the cold 6 a second | 1 s, its frost   | off it                    |
 | The cold: rising 3 a second (the Snow ranger's 1.8)                                        | 10% at 100, frozen 1.5 s        | the bar          | a lit brazier, 3 tiles    |
 
@@ -196,6 +198,40 @@ first knobs for a playtest are his hitpoints and the spit.
 snow_ranger by seeds 1 and 2): with no pet, 1 win of 8, deaths at 5:03, 5:11, 7:24, 8:05, 10:36,
 15:29 and 15:50; with `PET=baron`, 2 wins, deaths at 5:25, 7:04, 7:15, 10:35, 13:59 and 16:23. A
 kiting ranger rarely lets six close round it, so for one (snow_ranger, seed 1) he never woke.
+
+**Hardened, 2026-11-12**, with Awakened Vardorvis (Dynny: "far too easy" with a fully upgraded
+save). Every round above was with nothing bought; a full save has 50 hitpoints, armour 3 (his spit's
+2 did 1), regeneration and a Ring of life. By the careful bot with `META=max` the old numbers won
+200 of 200, in 0:34-1:25, taking a median 9 of 50; phases 17 / 10 / 10 s.
+
+Retuned to `META=max`, kit and mechanics as they were:
+
+| What            | Before                     | After                           |
+| --------------- | -------------------------- | ------------------------------- |
+| His hits        | stopped by armour          | through armour (`MapDef.hits`)  |
+| Hitpoints       | 3,600                      | 13,600                          |
+| An attack every | 1.4 s, tempo 1 / 0.9 / 0.8 | 1.15 s, tempo 1 / 0.85 / 0.75   |
+| Slam            | 6, 0.9 s                   | 8, 0.85 s                       |
+| Icicles         | 4, 1.3 s (0.9 the second)  | 5, 1 s (0.75 the second)        |
+| Spit            | 2, 0.9 s, 9 t/s, every 3 s | 3, 0.7 s, 11 t/s, every 2.5 s   |
+| Gas             | 4, 1.2 s                   | 6, 0.95 s                       |
+| Freezing gaze   | 10, 2.4 s, every 10 s (7)  | 13, 2 s, every 8 s (6 awakened) |
+
+The careful bot, `META=max`, seeds 1-600 (the first round 1-300; hard 1-300):
+
+| Round | Numbers                         | Normal wins         | Phases (median) |
+| ----- | ------------------------------- | ------------------- | --------------- |
+| 0     | 3,600 hp, as built before (200) | 200 of 200          | 17 / 10 / 10 s  |
+| 1     | The table's, 13,000 hp          | 32 of 600 (1 in 19) | 56 / 37 / 32 s  |
+| 2     | 14,500 hp                       | 7 of 600 (1 in 86)  | 62 / 41 / 30 s  |
+| 3     | 13,600 hp (as built)            | 24 of 600 (1 in 25) | 58 / 37 / 30 s  |
+
+Wins in 1:49-2:19; it dies in every phase about as often, mostly to his spit, then his gas. Hard:
+0 of 300. Nothing bought: 0 of 200, all in the first phase. The bot that can't die (`GOD=1`, 20
+seeds) takes phase 1 (5,440 hp) in 55-87 s, median 71, about 75 a second; phases 2 and 3 in a
+median 46 and 43 s, quicker for their share, from the gaze's guard drops and Kindle's flares. The
+later phases stay shorter than a minute for a good player: their share's the design's (35% and
+25%), and his burst windows are the reward for hiding and kindling.
 
 ## 11. As built, and what differs from the act's design
 
