@@ -265,8 +265,8 @@ unlocks something in the game.
   the Arcane spirit shield needs the chest's piece before it can be bought. Upgrades already bought
   stay.
 - **Tumeken's guardian**: a pet (`content/pets.ts`, once pets are in).
-- **The jewels: the keris partisans**, a new melee family (all in the cache: 25979, 25981, 27287,
-  27291, and of Amascut 30891). Kalphites and scarabs are in the game already (the desert, the
+- **The jewels: the keris partisans**, a new family of melee stabs offered to any adventurer (all
+  in the cache: 25979, 25981, 27287, 27291, and of Amascut 30891). Kalphites and scarabs are in the game already (the desert, the
   Kalphite Queen, Kephri's scarabs), so their bonus has something to hit.
     - **Keris partisan**: killing the Kalphite Queen in the Kharidian Desert (OSRS gives it for
       Beneath Cursed Sands, a desert quest). Fast stabs, a third more against kalphites and scarabs.

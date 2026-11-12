@@ -239,7 +239,7 @@ const keris = (
     // hacksword_slash stands in for its sound, as the fang's
     sound: 2500,
     hitSound: -1,
-    style: "melee",
+    // Not a class weapon: any adventurer can be offered it (a stab, so its hits are melee)
     family: "keris",
     slayer: KERIS_KALPHITES,
     levels: kerisLevels(def.iconObjId),

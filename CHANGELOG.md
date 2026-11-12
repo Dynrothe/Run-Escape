@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The keris partisans can be offered to any adventurer, not only melee ones. Their stabs still
+  count as melee for style bonuses like Chivalry and the rings.
+
 ## 0.31.0 - 2026-11-11
 
 ### Added

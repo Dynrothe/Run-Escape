@@ -115,7 +115,7 @@ describe("seeded runs", () => {
     afterEach(() => usePortableMath(false));
 
     test("a wizard in Lumbridge, their spells chasing targets", () => {
-        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0x822696f2);
+        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0x8d27c304);
     }, 60000);
 
     test("a ranger in the Inferno on hard mode", () => {
