@@ -32,6 +32,8 @@ import { getMap, mapName } from "../content/maps";
 import { isHardUnlocked } from "../core/save";
 import { t } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
+import { useMenuKeys } from "./menuKeys";
+import { useDialog } from "./useDialog";
 
 // The Tombs of Amascut's raid level, and the way to its invocation board
 export function InvocationsButton({
@@ -81,10 +83,14 @@ export function InvocationBoard({
     // Decided as it's pressed, before the press focuses it (which shows it)
     const readOnly = useRef(false);
     const touch = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    useMenuKeys({ onBack: onClose, onConfirm: onClose });
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-invocations">
-                <h2 className="ui-invocations-title">Invocations</h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-invocations">
+                <h2 id={titleId} className="ui-invocations-title">
+                    Invocations
+                </h2>
                 {/* What scrolls on a short screen, so Reset All and Done stay in view */}
                 <div className="ui-invocations-scroll">
                     <div className="ui-invocations-body">

@@ -97,6 +97,7 @@ export const PETS: PetDef[] = [
         walkSeq: 10292,
         power: { kind: "bubble", every: 20, share: 0.25, push: 2.5, knockback: 3 },
     },
+    { id: "chompy_chick", npcId: 4002, idleSeq: 6764, walkSeq: 6765 },
 ];
 
 export const PET_BY_ID: Map<string, PetDef> = new Map(PETS.map((p) => [p.id, p]));

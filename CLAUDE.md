@@ -23,6 +23,8 @@ go stale. Add anything that cost you time to work out.
 | The Windows app, its game updates, releases            | `docs/DEVELOPMENT.md`, Desktop                                         |
 | The Android app, its bundled game and release signing  | `android/`, `scripts/android/`, `docs/DEVELOPMENT.md`, Android         |
 | The app's main process and update code                 | `desktop/`                                                             |
+| The app keeping to the website's build                 | `desktop/siteUpdate.ts`, `docs/DEVELOPMENT.md` (Following the website) |
+| The Android app keeping to it, and serving it          | `android/.../SiteGames.java`, `SiteUpdater.java`, `GamePathHandler`    |
 | The release workflow                                   | `.github/workflows/release.yml`                                        |
 | The checks on a pull request                           | `.github/workflows/check.yml`                                          |
 | What review looks for, before you open a pull request  | `docs/PR-REVIEW.md`                                                    |
@@ -43,6 +45,7 @@ go stale. Add anything that cost you time to work out.
 | Caskets and the inventory                              | `src/game/core/Loot.ts`                                                |
 | Phosani's Nightmare, the one-fight map (its arena too) | `src/game/content/phosani.ts`, `scaperune/maps/sisterhoodSanctuary.ts` |
 | Her fight: its design and playtest record              | `docs/design/phosanis-nightmare.md`                                    |
+| Thanksgiving Harvest: its enemies, turkeys, the Avian  | `content/thanksgivingenemies.ts`, `TurkeyDay.ts`, `characters.ts`      |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
 | A floor that rises and falls away (the Wardens')       | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
@@ -76,6 +79,7 @@ go stale. Add anything that cost you time to work out.
 | Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
 | Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
 | One tab saving, newer saves, unreadable ones           | `docs/DEVELOPMENT.md`, Saves                                           |
@@ -89,8 +93,10 @@ go stale. Add anything that cost you time to work out.
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
 | Hover and hold descriptions: HUD, bag, Armoury         | `src/game/ui/DescriptionButton.tsx`                                    |
+| The Armoury's Weapons and Passives tabs                | `src/game/ui/LoadoutCatalogue.tsx`                                     |
+| Menus' Esc and Enter, windows' focus, confirmations    | `ui/menuKeys.ts`, `ui/useDialog.ts`, `ui/ConfirmDialog.tsx`            |
 | Weapon stat lines on cards, pause and tooltips         | `src/game/content/weaponStats.ts`                                      |
-| The icon beside each stat line, on every screen        | `content/statIcons.ts`, `ui/StatLine.tsx`                              |
+| The icon beside each stat line, in any language        | `content/statIcons.ts`, `ui/StatLine.tsx`, `StatText` in `stats.ts`    |
 | How the player stands and runs with each weapon        | `src/game/content/stances.ts`                                          |
 | Stat names and types                                   | `src/game/content/stats.ts`, `types.ts`                                |
 | Balance bot                                            | `scripts/game/simulate-run.ts`                                         |
@@ -258,6 +264,15 @@ desktop build.
   never block the bundled game, and installing is always asked, never started by itself (it closes
   the game mid-run). What it remembers between launches is `UpdatePlan.java`'s, which has tests
   that need no device. See `docs/DEVELOPMENT.md`, Android, for the update flow.
+- **It keeps to the website's build**, when built with `-PgameSiteUrl` (`GAME_SITE_URL`), as the
+  Windows app does: `SiteUpdater.java` downloads it into `filesDir/site/<build>` off the UI thread,
+  on Wi-Fi only, and it's played when the game next starts over (the menu's Restart game, or
+  opening the app), never mid-run. `GamePathHandler.java` serves `/assets/game/` from that folder,
+  or the APK for the chunks it has, at the same address. What needs no device is in
+  `SiteFiles.java` (the same checks as `desktop/siteFiles.ts`: change one, change the other, and
+  put their cases in `desktop/siteFiles.cases.json`, which both run) and `SiteGames.java`, with
+  tests. It never follows a website older than the APK's own version, or one whose `minAndroid` is
+  newer. See `docs/DEVELOPMENT.md`, Following the website on Android.
 - It packs the same game zip as the Windows app, so their co-op build ids match.
   `scripts/android/prepare-game.ts` checks the slim cache the way `desktop/release-files.ts` does:
   change one, change the other.
@@ -348,3 +363,7 @@ desktop build.
   refuses one (see Desktop in `docs/DEVELOPMENT.md`).
 - **`minLauncher`**: raise `LAUNCHER_VERSION` in `desktop/version.ts` only if the game can't run on
   launchers already out there. It makes every player download a new zip by hand.
+- **`minAndroid`**: raise `MIN_ANDROID_APP` in `desktop/version.ts` when the game needs something
+  from the Android app that apps already out there don't have (an address `RelayPolicy.java` lets
+  out, a message the page sends the app). Older apps then play their APK's game, so deploy such a
+  build to the website only after its APK's released.

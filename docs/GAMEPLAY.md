@@ -80,48 +80,49 @@ version and how to run it.
   crier's bell. One can be made a favourite (`SaveData.favouriteCharacter`), and the game starts
   on them.
 
-    | Adventurer          | Fights with | Starts with            | Bonus                                             | Joins for                                            |
-    | ------------------- | ----------- | ---------------------- | ------------------------------------------------- | ---------------------------------------------------- |
-    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                               |                                                      |
-    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                 |                                                      |
-    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                  |                                                      |
-    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                                | Killing Count Draynor in Lumbridge                   |
-    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                                | Beating Lumbridge                                    |
-    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                       | Killing Ahrim in Barrows                             |
-    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                             | Beating Barrows                                      |
-    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                           | Surviving 10 minutes in the Wilderness               |
-    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                   | Beating the Wilderness                               |
-    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                  | Beating the Desert                                   |
-    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                               | Killing Damis in the Desert                          |
-    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                           | Beating the Fremennik Province                       |
-    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                    | Killing Dagannoth Rex in the Fremennik Province      |
-    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints               | Beating Karamja                                      |
-    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                 | Surviving 13 minutes on Karamja                      |
-    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                 | Beating Kourend                                      |
-    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                       | Killing Sarachnis in Kourend                         |
-    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                     | Beating Varlamore                                    |
-    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                 | Killing the Javelin Colossus in Varlamore            |
-    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                            | Beating Morytania                                    |
-    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster               | Killing the Pestilent Bloat in Morytania             |
-    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                    | Beating the God Wars Dungeon                         |
-    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                   | Killing Kree'arra in the God Wars Dungeon            |
-    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder                | Beating Prifddinas                                   |
-    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                    | Surviving 10 minutes in Prifddinas                   |
-    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                  |
-    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                    |
-    | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                             |
-    | Shadow walker       | Magic       | Shadow Burst           | Step between (a trait, below)                     | Beating the Lassar Undercity                         |
-    | Treasure hunter     | Ranged      | Bronze throwing knives | Dig site (a trait, below)                         | Opening 5 caskets in the Shadow Realm in one run     |
-    | Snow ranger         | Ranged      | Shortbow               | Shatter (a trait, below)                          | Beating Ghorrock                                     |
-    | Lantern-bearer      | Magic       | Fire Strike            | Lantern (a trait, below)                          | Beating the Scar                                     |
-    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange           |
-    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock              |
-    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                            |
-    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                 | Killing the AGS specer in Last Man Standing          |
-    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                 | Killing the Flag carrier in Castle Wars              |
-    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                   | Destroying the purple portal in Pest Control         |
-    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                    | Phosani's Nightmare only (everyone plays them there) |
-    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there) |
+    | Adventurer          | Fights with | Starts with            | Bonus                                             | Joins for                                             |
+    | ------------------- | ----------- | ---------------------- | ------------------------------------------------- | ----------------------------------------------------- |
+    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                               |                                                       |
+    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                 |                                                       |
+    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                  |                                                       |
+    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                                | Killing Count Draynor in Lumbridge                    |
+    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                                | Beating Lumbridge                                     |
+    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                       | Killing Ahrim in Barrows                              |
+    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                             | Beating Barrows                                       |
+    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                           | Surviving 10 minutes in the Wilderness                |
+    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                   | Beating the Wilderness                                |
+    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                  | Beating the Desert                                    |
+    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                               | Killing Damis in the Desert                           |
+    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                           | Beating the Fremennik Province                        |
+    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                    | Killing Dagannoth Rex in the Fremennik Province       |
+    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints               | Beating Karamja                                       |
+    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                 | Surviving 13 minutes on Karamja                       |
+    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                 | Beating Kourend                                       |
+    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                       | Killing Sarachnis in Kourend                          |
+    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                     | Beating Varlamore                                     |
+    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                 | Killing the Javelin Colossus in Varlamore             |
+    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                            | Beating Morytania                                     |
+    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster               | Killing the Pestilent Bloat in Morytania              |
+    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                    | Beating the God Wars Dungeon                          |
+    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                   | Killing Kree'arra in the God Wars Dungeon             |
+    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder                | Beating Prifddinas                                    |
+    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                    | Surviving 10 minutes in Prifddinas                    |
+    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                   |
+    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                     |
+    | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                              |
+    | Shadow walker       | Magic       | Shadow Burst           | Step between (a trait, below)                     | Beating the Lassar Undercity                          |
+    | Treasure hunter     | Ranged      | Bronze throwing knives | Dig site (a trait, below)                         | Opening 5 caskets in the Shadow Realm in one run      |
+    | Snow ranger         | Ranged      | Shortbow               | Shatter (a trait, below)                          | Beating Ghorrock                                      |
+    | Lantern-bearer      | Magic       | Fire Strike            | Lantern (a trait, below)                          | Beating the Scar                                      |
+    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange            |
+    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock               |
+    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                             |
+    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                 | Killing the AGS specer in Last Man Standing           |
+    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                 | Killing the Flag carrier in Castle Wars               |
+    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                   | Destroying the purple portal in Pest Control          |
+    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                    | Phosani's Nightmare only (everyone plays them there)  |
+    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there)  |
+    | Avian Assaulter     | Melee       | Rubber chicken         | Hits birds 15% harder, 45% faster, 180% more HP   | Thanksgiving Harvest only (everyone plays them there) |
 
 - **Traits**: Act II's adventurers have a trait, a way to play, rather than a bonus. The
   **Forester**'s is **Timber!**: every 25 kills his next swing fells a Strangled Tree along the
@@ -159,12 +160,17 @@ version and how to run it.
       everything around you; **Dinh's bulwark**, a slow bash that hits everything around
       you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
       hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
-      Amascut's chest brings in a keris of its own: **of breaching** now and then finds a gap in
+      Amascut's chest brings in a keris of its own. They're picked as the Ancient spells are:
+      only the plain keris is offered on a level up, and at its level 2 you pick which it
+      becomes, the plain one or a jewel's you've found, keeping its level (with no jewel found
+      there's no pick). A jewel found before the Kalphite Queen's kill still brings the plain
+      keris in, to take it. **Of breaching** now and then finds a gap in
       the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
       every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
       **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
       hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
-      amascut** has all of it but Tumeken's Light. You carry one keris at most.
+      amascut** has all of it but Tumeken's Light. You carry one keris at most, so they can't
+      be stacked.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
@@ -382,6 +388,17 @@ version and how to run it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
+    - **Polymorph**: for 10 seconds everything on the map turns into a sheep (shorn, red, green,
+      blue or yellow) that wanders about slowly, stopping now and then to graze, and can't hurt
+      you. Sheep say "Baa!" now and then, and die as sheep if they're killed. Elites and bosses
+      turn into golden sheep (a boss a giant one) that still come at you and attack as usual. One
+      in 1000 is the penguin dressed as a sheep from Cold War, which wanders with the rest but
+      says "Beh?", and when it's killed two KGP agents run out of it and off the screen. One in
+      3000 is an odd one that wanders off the other way. Whatever turns up while it lasts is a
+      sheep too, till the rest turn back, and picked up again it's the same flock for longer. A
+      frozen sheep stays put. What can't be hit stays as it is, and so do ordinary enemies that
+      can't move or carry a flag, and anything busy with its part in a fight (a boss's totem, a
+      rolling boulder, one walking off the map).
 - **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
@@ -489,6 +506,20 @@ version and how to run it.
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
+    - **Thanksgiving Harvest** (seasonal, open from the start): the Hosidius Vinery and the
+      countryside round it, starting on the path beside the Vinery. Farm animals, farmers,
+      bandits, foxes, imps and Chompy birds overrun the vines, and Professor Oddenstein, the Evil
+      Chicken and the Freaky Forester come for the harvest. Everyone plays the Avian Assaulter
+      there, solo or in co-op, and nowhere else. Their Rubber chicken strikes in front and behind,
+      has ten levels, does 20% more damage to bosses and heals on hit (25% for 3 HP, growing with
+      every upgrade, more with rarer ones). They find no other weapons, gear, passives or utility
+      items: only power-ups and shop skills. Once the chicken's maxed, level ups offer only a
+      shark, never coins, in every mode. Birds circle their head all run, as a look, without
+      stunning them. Enemies now and then drop a Cooked turkey, a feast or a fowl trick. Its quests
+      are Professor Oddenstein, the Evil Chickens, the Freaky Forester and the Chompy Slayer, whose
+      10,000 kills bring the Chompy chick; the Collection log also has Chompy bird drops, the
+      turkey's Magic secateurs and victory rewards, a Golden egg for a hard-mode win among them.
+      The Turkey hat and Golden egg are the cache's Pheasant hat and Golden pheasant egg.
     - **Phosani's Nightmare** (a boss fight, open once Hallowed Night's beaten): nothing but her.
       The run's one fight in her dream, as the real one is: a square of her dark floor walled round
       in the Sanctuary's stone, a gate north and south closed by its barrier, inside the Sisterhood Sanctuary's
@@ -595,7 +626,9 @@ version and how to run it.
   cut out of the cache. Killing it gives raid points (for clearing it, killing the boss fast and
   taking little damage), coins for them, and a supply chest between rooms that sells food and
   potions for points. The last boss's chest rolls for a purple, more likely the more points you
-  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. The Ghrazi rapier
+  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. A second of one
+  would do nothing, so no raid's chest gives one you've found already: a purple is one you haven't
+  got, and once you have all of a roll's there's nothing left for it to give. The Ghrazi rapier
   from the chest unlocks it as a weapon, and on hard or expert the chest has a roll of its own that
   can hold the Holy Scythe of Vitur (uncharged), which unlocks the Holy Scythe. The bosses pray
   against missiles and magic, so melee hits hardest (their overhead prayer shows it, Nylocas
@@ -656,6 +689,7 @@ version and how to run it.
       The Thread of Elidinis and the jewels are rolls of their own, and each brings something in:
       the Thread the **Divine rune pouch**, a rare passive that gives one more weapon slot, for a
       magic weapon, and offers magic weapons whatever your style; each jewel its keris partisan.
+      Like the Theatre's, it never gives anything you've found already.
       The end-of-raid board shows the raid level, each path's time, and every player's points,
       deaths and purple chance.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
@@ -995,6 +1029,9 @@ version and how to run it.
   rarity of what it becomes, and an upgrade into a piece still locked behind a map task waits
   for it. Each piece has its own upgrades: upgrading the Amulet of strength leaves the Amulet of
   power as it was.
+  Its Weapons and Passives tabs also show their effects, levels and unlock tasks for planning a
+  build. Weapons are grouped by combat style; shared weapons and all passives can be offered to
+  any style. Evolution results remain hidden until made, as in the Collection log.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
   (friends join with its eight-letter code or the invite link) or open to anyone browsing the
   rooms list, or join one. Everyone picks their own adventurer and brings their own skills,

@@ -1,14 +1,14 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { getEnemy } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
 import { getMapEnemies } from "../content/mapEnemies";
 import { MAP_BY_ID, RAID_MAPS, getMap } from "../content/maps";
 import { NYLOCAS_HALL_CROWD, NYLOCAS_RING, getRoomPoints } from "../content/raids";
-import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED } from "../content/theatre";
+import { EXPERT_HAGIOS_KEEP, RAID_NYLOCAS_SPEED, RING_REST } from "../content/theatre";
 import {
     TROPHIES,
     TROPHY_BY_ID,
-    getEveryTimeTrophiesFound,
+    getRaidChestTrophiesFound,
     isEveryTimeTrophy,
 } from "../content/trophies";
 import { BossAttackDef, MapDef, RaidRoomDef, emptyStats } from "../content/types";
@@ -201,7 +201,9 @@ describe("raids", () => {
         // And it's on the result, for the result screen
         const chest = sim.getResult().raidChest!;
         expect(chest.points).toBe(400);
-        expect(chest.chance).toBeGreaterThan(0);
+        // The test raid has no uniques of its own, so nothing to roll for (the Theatre's chance
+        // is tested below)
+        expect(chest.chance).toBe(0);
     });
 
     it("rolls the Theatre's uniques from its chest, more often with more points", () => {
@@ -233,7 +235,7 @@ describe("raids", () => {
         expect(many).toBeGreaterThan(100);
     });
 
-    it("gives a Lil' Zik look not found yet from expert's chest, till there are none left", () => {
+    it("gives a Lil' Zik look not found yet from expert's chest, and none once all are found", () => {
         const sim = raid(true);
         Object.assign(sim, { map: getMap("theatre_of_blood") });
         const looks = TROPHIES.filter(isEveryTimeTrophy).map((t) => t.id);
@@ -251,17 +253,13 @@ describe("raids", () => {
             found.add(got[0]);
         }
         expect([...found].sort()).toEqual([...looks].sort());
-        // Once they're all found, still one every time, and any of the five
+        // Once they're all found, none again: they're unlocks, so a second does nothing
         sim.heroes[0].trophiesFound = new Set(found);
-        const given = new Set<string>();
         for (let i = 0; i < 20; i++) {
             sim.trophies.clear();
             sim["openRaidChest"]();
-            const got = lookIn();
-            expect(got).toHaveLength(1);
-            given.add(got[0]);
+            expect(lookIn()).toEqual([]);
         }
-        expect(given.size).toBeGreaterThan(1);
         // And the last one missing is the one given, with the found ones brought in as a run
         // starts
         const last = raid(true, 0, undefined, new Set(looks.slice(1)));
@@ -271,9 +269,90 @@ describe("raids", () => {
             last["openRaidChest"]();
             expect([...last.trophies].filter((id) => looks.includes(id))).toEqual([looks[0]]);
         }
-        expect(getEveryTimeTrophiesFound(["lil_bloat", "ghrazi_rapier", "lil_zik"])).toEqual([
-            "lil_bloat",
-        ]);
+        // Every raid chest's trophy is brought in, the Theatre's and the Tombs', and nothing else
+        expect(
+            getRaidChestTrophiesFound([
+                "lil_bloat",
+                "ghrazi_rapier",
+                "jewel_of_the_sun",
+                "jar_of_dreams",
+                "lil_zik",
+            ]),
+        ).toEqual(["lil_bloat", "ghrazi_rapier", "jewel_of_the_sun"]);
+    });
+
+    it("never gives a Theatre unique found already, normal or hard, and none once all are", () => {
+        const tob = TROPHIES.filter(
+            (t) => t.from.kind === "raid" && t.from.mapId === "theatre_of_blood",
+        );
+        const normal = tob.filter(
+            (t) => t.from.kind === "raid" && !t.from.hard && !isEveryTimeTrophy(t),
+        );
+        const hard = tob.filter((t) => t.from.kind === "raid" && t.from.hard);
+        expect(normal.length).toBeGreaterThan(1);
+        expect(hard.length).toBeGreaterThan(0);
+        // All but one of each found: that one's the only unique a chest ever gives
+        const owned = new Set([...normal.slice(1), ...hard.slice(1)].map((t) => t.id));
+        const sim = raid(false, 0, undefined, owned);
+        Object.assign(sim, { map: getMap("theatre_of_blood"), hard: true });
+        sim.heroes[0].raidPointsEarned = 5000;
+        const given = new Set<string>();
+        for (let i = 0; i < 300; i++) {
+            sim.trophies.clear();
+            sim["openRaidChest"]();
+            for (const id of sim.trophies) {
+                expect(owned.has(id)).toBe(false);
+                given.add(id);
+            }
+        }
+        expect([...given].sort()).toEqual([normal[0].id, hard[0].id].sort());
+        // Found this run counts too: a second chest in it gives nothing the first did
+        sim.trophies.clear();
+        sim.trophies.add(normal[0].id);
+        sim.trophies.add(hard[0].id);
+        sim.takeEvents();
+        sim["openRaidChest"]();
+        expect(sim.heroes[0].raidChest!.found).toEqual([]);
+        expect(
+            sim
+                .takeEvents()
+                .some(
+                    (e) => e.type === "notice" && e.message.includes("nothing you haven't found"),
+                ),
+        ).toBe(true);
+        // Every purple found but a hard one left: no chance to show, the hard roll still made
+        sim.trophies.clear();
+        sim.trophies.add(normal[0].id);
+        let hardGiven = 0;
+        for (let i = 0; i < 200; i++) {
+            sim.trophies.delete(hard[0].id);
+            sim.takeEvents();
+            sim["openRaidChest"]();
+            expect(sim.heroes[0].raidChest!.chance).toBe(0);
+            expect(sim.heroes[0].raidChest!.purpleLeft).toBe(false);
+            const found = sim.heroes[0].raidChest!.found;
+            hardGiven += found.length;
+            if (found.length === 0) {
+                expect(sim.takeEvents()).toContainEqual(
+                    expect.objectContaining({
+                        type: "notice",
+                        message: "The chest holds no unique this time.",
+                    }),
+                );
+            }
+        }
+        expect(hardGiven).toBeGreaterThan(0);
+        expect(hardGiven).toBeLessThan(200);
+        // Everything found: no chance shown, and the chest says so
+        const all = raid(false, 0, undefined, new Set(tob.map((t) => t.id)));
+        Object.assign(all, { map: getMap("theatre_of_blood"), hard: true });
+        all.heroes[0].raidPointsEarned = 5000;
+        all.takeEvents();
+        all["openRaidChest"]();
+        const notices = all.takeEvents().flatMap((e) => (e.type === "notice" ? [e.message] : []));
+        expect([...all.trophies]).toEqual([]);
+        expect(all.getResult().raidChest!.chance).toBe(0);
+        expect(notices.some((m) => m.includes("nothing you haven't found"))).toBe(true);
     });
 
     it("keeps a raid's wins, normal and hard, when the save's loaded again", () => {
@@ -638,6 +717,65 @@ describe("the Theatre's bullet shapes", () => {
         expect(at()).not.toEqual(formed);
     });
 
+    it("an enraged Maiden's rings come one at a time, each in and rested before the next", () => {
+        const sim = raid();
+        sim.player.invulnerable = 1e9;
+        const def = getEnemy("maiden_of_sugadinti");
+        const maiden = sim.spawnEnemy(def, "boss", { x: 1018.5, y: 1040.5 })!;
+        maiden.bossState!.enraged = true;
+        const rings: { tick: number; interval: number }[] = [];
+        const fire = sim["fireVolley"].bind(sim);
+        sim["fireVolley"] = (...args: Parameters<typeof fire>) => {
+            const pattern = args[0].attack.pattern!;
+            if (pattern.shape === "closing") {
+                rings.push({ tick: sim.tick, interval: pattern.interval });
+            }
+            fire(...args);
+        };
+        for (let i = 0; i < 90 * TICKS_PER_SECOND; i++) {
+            sim.player.x = sim.player.prevX = 1018.5;
+            sim.player.y = sim.player.prevY = 1030.5;
+            maiden.hp = maiden.maxHp;
+            sim.step();
+        }
+        expect(rings.length).toBeGreaterThan(4);
+        for (let i = 1; i < rings.length; i++) {
+            const gap = rings[i].tick - rings[i - 1].tick;
+            // A tick's rounding
+            expect(gap).toBeGreaterThanOrEqual(
+                Math.round(rings[i - 1].interval * TICKS_PER_SECOND) - 1,
+            );
+        }
+    });
+
+    // Every boss's, not only the Theatre's: Sim.startPattern's ringsUntil goes by the interval
+    it("every ring that holds has closed in and rested before its next volley", () => {
+        const targets = [{ x: 0, y: 0, radius: 0.1, spare: true }];
+        let checked = 0;
+        for (const { id, boss } of ENEMIES) {
+            for (const attack of boss?.attacks ?? []) {
+                const pattern = attack.pattern;
+                if (pattern?.hold === undefined) {
+                    continue;
+                }
+                const { bullets } = volley(attack.name, id);
+                let ticks = 0;
+                while (bullets.count > 0) {
+                    bullets.step(targets);
+                    ticks++;
+                }
+                const rest = Math.round(RING_REST * TICKS_PER_SECOND);
+                const name = `${id}: ${attack.name}`;
+                // The next volley, a tick's rounding either way
+                expect(ticks + rest, name).toBeLessThanOrEqual(
+                    Math.round(pattern.interval * TICKS_PER_SECOND) + 1,
+                );
+                checked++;
+            }
+        }
+        expect(checked).toBeGreaterThanOrEqual(5);
+    });
+
     it("a closing ring hurts whoever walks into it while it stands", () => {
         const { attack, shot, bullets, sim, boss } = volley("Blood tide", "maiden_of_sugadinti");
         // The source a real attack would have taken (Sim.startPattern)
@@ -744,16 +882,30 @@ describe("the Theatre's bosses", () => {
             fired = sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid);
         }
         expect(fired).toBe(true);
+        const pattern = swarm.pattern!;
+        const patternTicks = Math.ceil(pattern.volleys * pattern.interval * TICKS_PER_SECOND);
+        // And what he's winding up then landing first
+        const longestWindup = Math.max(...def.boss!.attacks.map((a) => a.windup));
+        const waitTicks = patternTicks + Math.ceil(longestWindup * TICKS_PER_SECOND);
         bloat.bossState!.nextNap = sim.tick;
         sim.step();
         expect(sim["isNapping"](bloat)).toBe(false);
-        // Down once the last ring's out, with nothing new started meanwhile
-        for (let i = 0; i < 5 * TICKS_PER_SECOND && !sim["isNapping"](bloat); i++) {
+        // Down once the last ring's out. Meanwhile he fights on with nothing that fires more,
+        // rather than standing idle for the seconds between the swarm's rings.
+        const started: string[] = [];
+        let last = bloat.bossState!.windup;
+        for (let i = 0; i < waitTicks && !sim["isNapping"](bloat); i++) {
             sim.step();
-            expect(bloat.bossState!.windup).toBeUndefined();
+            const windup = bloat.bossState!.windup;
+            if (windup && windup !== last) {
+                started.push(windup.attack.name);
+                expect(windup.attack.pattern, windup.attack.name).toBeUndefined();
+            }
+            last = windup;
         }
         expect(sim["isNapping"](bloat)).toBe(true);
         expect(sim.bulletEmitters.some((e) => e.enemyUid === bloat.uid)).toBe(false);
+        expect(started.length).toBeGreaterThan(0);
     });
 
     it("drop nothing off their adds, and have no visitors, in their rooms", () => {

@@ -4,6 +4,7 @@ import {
     memo,
     useCallback,
     useEffect,
+    useId,
     useRef,
     useState,
     useSyncExternalStore,
@@ -56,7 +57,7 @@ import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
 import { invaderName } from "../content/invasions";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
 import { getInvocationBadge } from "../content/invocations";
-import { GEAR_SLOT_BY_ID } from "../content/items";
+import { GEAR_SLOT_BY_ID, UTILITY } from "../content/items";
 import {
     ACT_MAPS,
     CAMPAIGN_MAPS,
@@ -90,11 +91,11 @@ import {
     remixPrefix,
 } from "../content/remixes";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
-import { formatStats } from "../content/stats";
+import { StatText, formatStats } from "../content/stats";
 import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
 import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID, trophyName } from "../content/trophies";
-import { CharacterDef, CombatStyle, MapDef } from "../content/types";
+import { CharacterDef, CombatStyle, MapDef, Stats } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
@@ -118,6 +119,7 @@ import {
     isMapUnlocked,
 } from "../core/save";
 import { dateLocale, fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
+import { MAX_CAMERA_DISTANCE, MIN_CAMERA_DISTANCE } from "../render/CameraRig";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
@@ -127,8 +129,9 @@ import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
+import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
-import { DescriptionButton, ItemDescription } from "./DescriptionButton";
+import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { CampScreen, GauntletBadge, GauntletResultModal, GauntletScreen } from "./Gauntlet";
@@ -144,19 +147,22 @@ import { ItemIcon } from "./ItemIcon";
 import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
-import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
+import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
 import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
+import { SoundOrb } from "./SoundOrb";
 import { StatLine } from "./StatLine";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { AwakenRow, VaultScreen } from "./Vault";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
+import { releaseFocus, useMenuKeys } from "./menuKeys";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
+import { useDialog } from "./useDialog";
 
 type Props = {
     store: GameStore;
@@ -275,7 +281,7 @@ function Setting({
     children,
 }: {
     name: string;
-    text?: string;
+    text?: ReactNode;
     children: ReactNode;
 }): JSX.Element {
     return (
@@ -306,7 +312,7 @@ export function Toggle({
             onClick={(e) => {
                 onToggle();
                 // Give Enter and Space back to the screen
-                e.currentTarget.blur();
+                releaseFocus(e);
             }}
         >
             {on ? t("ui.common.on") : t("ui.common.off")}
@@ -488,6 +494,27 @@ function RunStatsSetting({ ui, client }: ScreenProps): JSX.Element | null {
     );
 }
 
+// Where the HUD shows worn gear (DisplaySettings.gearPanel). On a phone the row isn't drawn,
+// so off there means the pause menu only.
+function GearPanelSetting({ ui, client }: ScreenProps): JSX.Element {
+    return (
+        <Setting
+            name={t("settings.gear_panel.name")}
+            text={t(
+                isCoarsePointer
+                    ? "settings.gear_panel.desc.touch"
+                    : "settings.gear_panel.desc.mouse",
+            )}
+        >
+            <Toggle
+                on={ui.display.gearPanel}
+                label={t("settings.gear_panel.name")}
+                onToggle={() => client.toggleGearPanel()}
+            />
+        </Setting>
+    );
+}
+
 function AutoEquipSetting({ ui, client }: ScreenProps): JSX.Element {
     return (
         <Setting name={t("settings.auto_equip.name")} text={t("settings.auto_equip.desc")}>
@@ -514,7 +541,7 @@ function FrameRateSetting({ ui, client }: ScreenProps): JSX.Element {
                     onClick={(e) => {
                         client.setFrameRate(rate);
                         // Give Enter and Space back to the screen
-                        e.currentTarget.blur();
+                        releaseFocus(e);
                     }}
                 >
                     {t(`settings.frame_rate.${rate}`)}
@@ -537,7 +564,7 @@ function GitHubLink(): JSX.Element {
             rel="noopener noreferrer"
             title={t("ui.title.github")}
             aria-label={t("ui.title.github")}
-            onClick={(e) => e.currentTarget.blur()}
+            onClick={releaseFocus}
         >
             <svg className="ui-title-link-logo" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
@@ -555,7 +582,7 @@ function DiscordLink(): JSX.Element {
             rel="noopener noreferrer"
             title={t("ui.title.discord")}
             aria-label={t("ui.title.discord")}
-            onClick={(e) => e.currentTarget.blur()}
+            onClick={releaseFocus}
         >
             <svg className="ui-title-link-logo" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z" />
@@ -567,6 +594,7 @@ function DiscordLink(): JSX.Element {
 // Saves live in this browser; a file carries one to another, or keeps a copy
 function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
     const fileInput = useRef<HTMLInputElement>(null);
+    const [confirm, confirmDialog] = useConfirm();
     const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         // So picking the same file again still counts
@@ -576,17 +604,22 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
         }
         // Nothing's being saved, so an import wouldn't be kept
         if (ui.saveBlock) {
-            window.alert(t("settings.save.alert_save_block"));
+            void confirm(
+                messageOptions(t("confirm.import.failed"), t("settings.save.alert_save_block")),
+            );
             return;
         }
         let save: SaveData;
         try {
             save = importSave(await file.text(), GAME_VERSION);
         } catch (e) {
-            window.alert(
-                e instanceof NewerSaveError
-                    ? t("settings.save.newer_version", { file: file.name })
-                    : t("settings.save.invalid_file", { file: file.name }),
+            void confirm(
+                messageOptions(
+                    t("confirm.import.failed"),
+                    e instanceof NewerSaveError
+                        ? t("settings.save.newer_version", { file: file.name })
+                        : t("settings.save.invalid_file", { file: file.name }),
+                ),
             );
             return;
         }
@@ -596,23 +629,41 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 runs: s.runs,
                 wins: s.victories,
             });
-        const replace = window.confirm(
-            t("settings.save.confirm_replace", {
+        const replace = await confirm({
+            title: t("confirm.import.title"),
+            body: t("settings.save.confirm_replace", {
                 current: describe(ui.save),
                 imported: describe(save),
             }),
-        );
+            confirm: t("confirm.import.confirm"),
+            cancel: t("ui.common.cancel"),
+        });
         if (replace) {
             client.replaceSave(save);
         }
     };
+    const lastCopy = ui.save.lastExported;
     return (
-        <Setting name={t("settings.save.name")} text={t("settings.save.desc")}>
+        <Setting
+            name={t("settings.save.name")}
+            text={
+                <>
+                    {t("settings.save.desc")}
+                    <span className="ui-setting-note">
+                        {lastCopy === undefined
+                            ? t("settings.save.no_copy")
+                            : t("settings.save.last_copy", {
+                                  date: new Date(lastCopy).toLocaleDateString(dateLocale()),
+                              })}
+                    </span>
+                </>
+            }
+        >
             <button
                 className="ui-button ui-button-small"
                 onClick={(e) => {
                     client.exportSave();
-                    e.currentTarget.blur();
+                    releaseFocus(e);
                 }}
             >
                 {t("settings.save.export")}
@@ -623,7 +674,7 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 title={ui.saveBlock ? t("settings.save.import_disabled_title") : undefined}
                 onClick={(e) => {
                     fileInput.current?.click();
-                    e.currentTarget.blur();
+                    releaseFocus(e);
                 }}
             >
                 {t("settings.save.import")}
@@ -635,12 +686,14 @@ function SaveSetting({ ui, client }: ScreenProps): JSX.Element {
                 hidden
                 onChange={onFile}
             />
+            {confirmDialog}
         </Setting>
     );
 }
 
 // Saves that couldn't be read, kept as they were
 function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
+    const [confirm, confirmDialog] = useConfirm();
     return (
         <>
             {ui.unreadableSaves.map(({ key, time }) => {
@@ -655,19 +708,22 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
                             className="ui-button ui-button-small"
                             onClick={(e) => {
                                 client.exportUnreadableSave(key);
-                                e.currentTarget.blur();
+                                releaseFocus(e);
                             }}
                         >
                             {t("settings.save.export")}
                         </button>
                         <button
                             className="ui-button ui-button-small"
-                            onClick={(e) => {
-                                e.currentTarget.blur();
+                            onClick={async (e) => {
+                                releaseFocus(e);
                                 if (
-                                    window.confirm(
-                                        t("settings.unreadable.confirm_delete", { when }),
-                                    )
+                                    await confirm({
+                                        title: t("confirm.delete_unreadable.title"),
+                                        body: t("settings.unreadable.confirm_delete", { when }),
+                                        confirm: t("settings.unreadable.delete"),
+                                        cancel: t("ui.common.cancel"),
+                                    })
                                 ) {
                                     client.deleteUnreadableSave(key);
                                 }
@@ -678,6 +734,7 @@ function UnreadableSaveSettings({ ui, client }: ScreenProps): JSX.Element {
                     </Setting>
                 );
             })}
+            {confirmDialog}
         </>
     );
 }
@@ -693,13 +750,22 @@ function SettingsPanel({
         <div className="ui-panel rs-border rs-background ui-settings">
             <h2>{t("settings.title")}</h2>
             <div className="ui-settings-body">
+                {/* First: it's what a player can lose */}
+                <section className="ui-settings-section">
+                    <h3>{t("settings.section.save")}</h3>
+                    <SaveSetting ui={ui} client={client} />
+                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
+                    <UnreadableSaveSettings ui={ui} client={client} />
+                </section>
                 <section className="ui-settings-section">
                     <h3>{t("settings.section.sound")}</h3>
                     <SoundSettings ui={ui} client={client} />
                 </section>
                 <section className="ui-settings-section">
                     <h3>{t("settings.section.game")}</h3>
+                    <h4 className="ui-settings-group">{t("settings.group.general")}</h4>
                     <LanguageSetting />
+                    <h4 className="ui-settings-group">{t("settings.group.camera")}</h4>
                     <Setting
                         name={t("settings.camera_spin.name")}
                         text={t("settings.camera_spin.desc")}
@@ -720,28 +786,33 @@ function SettingsPanel({
                             onToggle={() => client.toggleScreenShake()}
                         />
                     </Setting>
+                    <h4 className="ui-settings-group">{t("settings.group.run")}</h4>
                     <PickupTimerSetting ui={ui} client={client} />
+                    <GearPanelSetting ui={ui} client={client} />
                     <PuzzleHelperSetting ui={ui} client={client} />
                     <AutoPauseSetting ui={ui} client={client} />
                     <AutoAlchSetting ui={ui} client={client} />
                     <AutoEquipSetting ui={ui} client={client} />
+                    <RunStatsSetting ui={ui} client={client} />
+                    <h4 className="ui-settings-group">{t("settings.group.coop")}</h4>
                     <MovePredictionSetting ui={ui} client={client} />
                     <CoopFlagSetting ui={ui} client={client} />
-                    <RunStatsSetting ui={ui} client={client} />
+                    <h4 className="ui-settings-group">{t("settings.group.performance")}</h4>
                     <FrameRateSetting ui={ui} client={client} />
                 </section>
-                {padKind && (
+                {padKind ? (
                     <section className="ui-settings-section">
                         <h3>{t("settings.section.controller")}</h3>
                         <PadControls />
                     </section>
+                ) : (
+                    !isCoarsePointer && (
+                        <section className="ui-settings-section">
+                            <h3>{t("settings.section.keyboard")}</h3>
+                            <KeyboardControls />
+                        </section>
+                    )
                 )}
-                <section className="ui-settings-section">
-                    <h3>{t("settings.section.save")}</h3>
-                    <SaveSetting ui={ui} client={client} />
-                    <CloudSaveSettings cloud={ui.cloud} client={client} saving={!ui.saveBlock} />
-                    <UnreadableSaveSettings ui={ui} client={client} />
-                </section>
             </div>
             <div className="ui-row">
                 <button className="ui-button" onClick={onClose}>
@@ -966,7 +1037,6 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                         {t("ui.title.not_saving")}
                     </button>
                 )}
-                {import.meta.env.DEV && <MapGeneratorButton client={client} />}
                 <button className="ui-version" onClick={() => setChangelogOpen(true)}>
                     {t("ui.title.whats_new", { version: GAME_VERSION })}
                 </button>
@@ -987,6 +1057,15 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                 <DiscordLink />
                 <GitHubLink />
             </div>
+            {/* Top right, as by the minimap in a run. After the menu, so Tab reaches
+                Singleplayer first. */}
+            <SoundOrb client={client} muted={ui.audio.muted} className="ui-title-sound" />
+            {/* A corner of its own, as it pushed the row above over the how-to-play line */}
+            {import.meta.env.DEV && (
+                <div className="ui-title-dev">
+                    <MapGeneratorButton client={client} />
+                </div>
+            )}
             {savePanel ? null : choicePanel ? (
                 choicePanel
             ) : ui.unreadableSave ? (
@@ -1061,6 +1140,15 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
         : endlessShown
           ? "ui.select.enter.endless"
           : "ui.select.enter";
+    // With the invocation board open, its own keys
+    useMenuKeys(
+        board
+            ? {}
+            : {
+                  onBack: () => client.showScreen("title"),
+                  onConfirm: () => void client.startRun(),
+              },
+    );
     return (
         <div className="ui-fill ui-select">
             <AdventurerPanel ui={ui} client={client} fixed={getMapCharacter(map)} />
@@ -1086,7 +1174,8 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
                 >
-                    <KeyHint pad="start" /> {t(enterKey, { map: shownMapName })}
+                    <KeyHint keyLabel="Enter" pad="start" className="ui-choice-key ui-word-key" />{" "}
+                    {t(enterKey, { map: shownMapName })}
                 </button>
             </div>
             {board && map.tombs && (
@@ -1212,10 +1301,16 @@ function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
                 {purple ? t("ui.raid.chest.purple") : t("ui.raid.chest.regular")}
             </div>
             <div className="ui-subtle">
+                {/* No purple left to find: no chance to show (a roll of its own can still give
+                    something, the Tombs' jewels or expert's looks) */}
                 {t(
                     chest.level !== undefined
-                        ? "ui.raid.chest.points_level"
-                        : "ui.raid.chest.points",
+                        ? chest.purpleLeft
+                            ? "ui.raid.chest.points_level"
+                            : "ui.raid.chest.points_level_none"
+                        : chest.purpleLeft
+                          ? "ui.raid.chest.points"
+                          : "ui.raid.chest.points_none",
                     {
                         points: fmtNum(chest.points),
                         level: chest.level ?? 0,
@@ -1308,7 +1403,12 @@ function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
                                 <td>{player.name || "You"}</td>
                                 <td>{player.points.toLocaleString("en-GB")}</td>
                                 <td>{player.deaths}</td>
-                                <td>{Math.round(player.chance * 100)}%</td>
+                                {/* None with no purple left to find, as their chest's line */}
+                                <td>
+                                    {player.chance === undefined
+                                        ? "–"
+                                        : `${Math.round(player.chance * 100)}%`}
+                                </td>
                             </tr>
                         ))}
                         {tombs.party.length > 1 && (
@@ -1623,10 +1723,21 @@ function AdventurerDetails({
                 <RichText text={characterDescription(character)} />
             </div>
             {/* What they bring, a stat to a line */}
-            {bonus.length > 0 && (
+            {(bonus.length > 0 || character.damageAgainst) && (
                 <div className="ui-select-bonus">
-                    {bonus.map((text) => (
-                        <StatLine key={text} text={text} />
+                    {character.damageAgainst && (
+                        <StatLine
+                            statKey="might"
+                            text={t("ui.character.damage_against", {
+                                percent: Math.round(character.damageAgainst.damage * 100),
+                                targets: list(
+                                    character.damageAgainst.tags.map((tag) => t(`ui.tag.${tag}`)),
+                                ),
+                            })}
+                        />
+                    )}
+                    {bonus.map((line) => (
+                        <StatLine key={line.text} text={line.text} english={line.english} />
                     ))}
                 </div>
             )}
@@ -1741,6 +1852,8 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
         setPeek(undefined);
     };
     const beaten = CAMPAIGN_MAPS.filter((m) => (save.mapVictories[m.id] ?? 0) > 0).length;
+    // The Thanksgiving preview intentionally themes the entire selector, not only its tile.
+    const thanksgivingTheme = (peek ?? ui.mapId) === "thanksgiving";
     const tile = (map: MapDef) => {
         const selected = map.id === ui.mapId;
         const shownMapName = mapName(map);
@@ -1749,10 +1862,13 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 key={map.id}
                 className={
                     "ui-card ui-map-tile" +
+                    (map.id === "thanksgiving" ? " ui-map-tile-thanksgiving" : "") +
                     (selected ? " ui-card-selected" : "") +
                     (isMapUnlocked(save, map.id) ? "" : " ui-card-locked")
                 }
                 aria-pressed={selected}
+                // Long names are cut off on the tile
+                title={shownMapName}
                 onMouseMove={() => setPeek(map.id)}
                 onFocus={() => setPeek(map.id)}
                 onBlur={() => setPeek(undefined)}
@@ -1773,11 +1889,18 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
+                        role="img"
                         aria-label={t("ui.map.beaten_hard")}
+                        title={t("ui.map.beaten_hard")}
                     />
                 ) : (
                     (save.mapVictories[map.id] ?? 0) > 0 && (
-                        <span className="ui-beaten" aria-label={t("ui.map.beaten")} />
+                        <span
+                            className="ui-beaten"
+                            role="img"
+                            aria-label={t("ui.map.beaten")}
+                            title={t("ui.map.beaten")}
+                        />
                     )
                 )}
             </button>
@@ -1785,7 +1908,10 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     };
     return (
         <div
-            className="ui-panel rs-border rs-background ui-select-panel ui-select-maps"
+            className={
+                "ui-panel rs-border rs-background ui-select-panel ui-select-maps" +
+                (thanksgivingTheme ? " ui-select-maps-thanksgiving" : "")
+            }
             onMouseLeave={stopPeeking(setPeek)}
         >
             <h2 className="ui-select-heading">
@@ -1871,6 +1997,7 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 key={peek ?? ui.mapId}
                 save={save}
                 map={getMap(peek ?? ui.mapId)}
+                expertShown={ui.coop.status === "offline"}
                 picked={(peek ?? ui.mapId) === ui.mapId ? ui.fightStage : undefined}
                 remixes={(peek ?? ui.mapId) === ui.mapId ? ui.remixes : undefined}
                 onRemix={
@@ -2273,6 +2400,7 @@ function stageVictoryText(map: MapDef, stage: number | undefined): string {
 function MapDetails({
     save,
     map,
+    expertShown,
     picked,
     onPick,
     remixes,
@@ -2288,6 +2416,7 @@ function MapDetails({
     // The selected map's Awakener's orb, on or not, and its switch (solo)
     awaken?: boolean;
     onAwaken?: () => void;
+    expertShown: boolean;
     // A fight in parts: the part picked to play, and picking one (the selected map's only)
     picked?: number;
     onPick?: (stage: number | undefined) => void;
@@ -2301,7 +2430,12 @@ function MapDetails({
     const hardEndless = save.hardEndlessBest[map.id];
     const shownMapName = mapName(map);
     return (
-        <div className="ui-select-details">
+        <div
+            className={
+                "ui-select-details" +
+                (map.id === "thanksgiving" ? " ui-select-details-thanksgiving" : "")
+            }
+        >
             <div className="ui-select-details-head">
                 <ItemIcon objId={map.iconObjId} size={36} />
                 <div>
@@ -2408,7 +2542,72 @@ function MapDetails({
             <div className="ui-card-text ui-card-description">
                 <RichText text={mapDescription(map)} />
             </div>
+            <MapModes save={save} map={map} expertShown={expertShown} />
             <MapTasks save={save} mapId={map.id} />
+        </div>
+    );
+}
+
+// What endless, hard and expert do on this map, or what it takes to open them: the switches in the
+// bar below only have room for their names
+function MapModes({
+    save,
+    map,
+    expertShown,
+}: {
+    save: SaveData;
+    map: MapDef;
+    expertShown: boolean;
+}): JSX.Element | null {
+    // The Tombs go by their invocations instead
+    if (map.tombs) {
+        return null;
+    }
+    const name = mapName(map);
+    const modes: { key: string; name: string; text: string; open: boolean }[] = [];
+    if (!map.raid) {
+        const open = isEndlessUnlocked(save, map.id);
+        modes.push({
+            key: "endless",
+            name: t("ui.endless.name"),
+            text: map.fight
+                ? t("ui.endless.tooltip.fight")
+                : map.fun
+                  ? t("ui.endless.tooltip.fun")
+                  : open
+                    ? t("ui.endless.tooltip.open")
+                    : t("ui.endless.tooltip.locked", { map: name }),
+            open: open || map.fight !== undefined,
+        });
+    }
+    const hardOpen = isHardUnlocked(save, map.id);
+    modes.push({
+        key: "hard",
+        name: t("ui.hard.name"),
+        text: hardOpen ? t("ui.hard.tooltip.open") : t("ui.hard.tooltip.locked", { map: name }),
+        open: hardOpen,
+    });
+    if (map.raid && expertShown) {
+        const expertOpen = isExpertUnlocked(save, map.id);
+        modes.push({
+            key: "expert",
+            name: t("ui.expert.name"),
+            text: expertOpen
+                ? t("ui.expert.tooltip.open")
+                : t("ui.expert.tooltip.locked", { map: name }),
+            open: expertOpen,
+        });
+    }
+    return (
+        <div className="ui-map-modes">
+            {modes.map((mode) => (
+                <div
+                    key={mode.key}
+                    className={"ui-map-mode" + (mode.open ? "" : " ui-map-mode-locked")}
+                >
+                    <span className="ui-map-mode-name">{mode.name}:</span> {mode.text}
+                </div>
+            ))}
         </div>
     );
 }
@@ -2484,11 +2683,16 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
     const [style, setStyle] = useState<CombatStyle>(() => getCharacter(ui.characterId).style);
     const page = save.skillPages[style];
     const coins = getSkillCoins(save, style);
+    const [confirm, confirmDialog] = useConfirm();
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-shop">
                 <h2>{t("ui.shop.heading")}</h2>
-                <p className="ui-subtle ui-shop-help">{t("ui.shop.help")}</p>
+                <p className="ui-subtle ui-shop-help">
+                    {t("ui.shop.help")}{" "}
+                    <span className="ui-shop-help-coins">{t("ui.shop.help_coins")}</span>
+                </p>
                 <div
                     className="ui-row ui-tabs ui-shop-tabs"
                     role="tablist"
@@ -2535,7 +2739,13 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                             <div key={upgrade.id} className="ui-shop-entry">
                                 <button
                                     className={
-                                        "ui-card ui-shop-card" + (affordable ? "" : " ui-card-dim")
+                                        "ui-card ui-shop-card" +
+                                        // Maxed is something done, not something missing
+                                        (cost === undefined
+                                            ? " ui-shop-card-maxed"
+                                            : affordable
+                                              ? ""
+                                              : " ui-card-dim")
                                     }
                                     aria-disabled={!affordable}
                                     title={
@@ -2573,7 +2783,16 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                                         {cost === undefined ? (
                                             t("ui.shop.maxed")
                                         ) : (
-                                            <Coins amount={cost} />
+                                            <>
+                                                <Coins amount={cost} />
+                                                {!affordable && (
+                                                    <span className="ui-card-short">
+                                                        {t("ui.common.short_by", {
+                                                            n: fmtNum(cost - coins),
+                                                        })}
+                                                    </span>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </button>
@@ -2597,20 +2816,39 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
                         );
                     })}
                 </div>
+                <p className="ui-shop-hint">
+                    {t(isCoarsePointer ? "ui.shop.hint.touch" : "ui.shop.hint.mouse")}
+                </p>
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
                         {t("ui.common.back")}
                     </button>
-                    <Coins amount={coins} />
+                    <span className="ui-shop-balance">
+                        {t("ui.shop.available")} <Coins amount={coins} />
+                    </span>
                     <button
                         className="ui-button"
                         disabled={Object.keys(page.upgrades).length === 0}
-                        onClick={() => client.refundUpgrades(style)}
+                        onClick={async () => {
+                            if (
+                                await confirm({
+                                    title: t("confirm.refund_all.title", {
+                                        style: STYLE_NAMES[style],
+                                    }),
+                                    body: t("confirm.refund_all.body"),
+                                    confirm: t("ui.shop.refund_all"),
+                                    cancel: t("ui.common.cancel"),
+                                })
+                            ) {
+                                client.refundUpgrades(style);
+                            }
+                        }}
                     >
                         {t("ui.shop.refund_all")}
                     </button>
                 </div>
             </div>
+            {confirmDialog}
         </div>
     );
 }
@@ -2651,10 +2889,12 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                     client={client}
                     questTracker={ui.display.questTracker}
                     damagePanel={ui.display.damagePanel}
+                    gearPanel={ui.display.gearPanel}
                     disabled={ui.overlay !== "none"}
+                    muted={ui.audio.muted}
                 />
             )}
-            <div className="ui-toasts">
+            <div className="ui-toasts" role="status" aria-relevant="additions">
                 {ui.toasts.map((toast) => (
                     <div key={toast.id} className="ui-toast">
                         {toast.text}
@@ -2839,9 +3079,13 @@ const Slots = memo(function Slots({
                                               })}
                                     </div>
                                     {slot.stats?.map((line) => (
-                                        <StatLine key={line} text={line} />
+                                        <StatLine
+                                            key={line.text}
+                                            text={line.text}
+                                            english={line.english}
+                                        />
                                     ))}
-                                    {slot.detail && <div>{slot.detail}</div>}
+                                    {slot.detail && <div>{slot.detail.text}</div>}
                                     {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                 </>
                             )
@@ -2887,16 +3131,27 @@ function EvolutionLine({
     );
 }
 
-// Worn gear, small, under the weapons and passives
+// Worn gear, small: a row under the weapons and passives, or with a gridId the gear panel's two
+// columns (DisplaySettings.gearPanel), shown while open
 const GearSlots = memo(function GearSlots({
     gear,
     disabled,
+    gridId,
+    open = true,
 }: {
     gear: GearSlotView[];
     disabled: boolean;
+    gridId?: string;
+    open?: boolean;
 }): JSX.Element {
     return (
-        <div className="ui-slots ui-gear-slots">
+        <div
+            id={gridId}
+            className={"ui-slots " + (gridId ? "ui-hud-gear-grid" : "ui-gear-slots")}
+            role="group"
+            aria-label={t("ui.hud.gear_slots")}
+            hidden={!open}
+        >
             {gear.map((slot) => (
                 <DescriptionButton
                     key={slot.slot}
@@ -2907,7 +3162,11 @@ const GearSlots = memo(function GearSlots({
                             ? tl(slot.item.name)
                             : t("ui.hud.gear_empty", { name: tl(slot.name) })
                     }
-                    className={"ui-slot ui-gear-slot" + (slot.item ? "" : " ui-gear-slot-empty")}
+                    className={
+                        "ui-slot ui-gear-slot" +
+                        (slot.slot === "ring" ? " ui-gear-ring-slot" : "") +
+                        (slot.item ? "" : " ui-gear-slot-empty")
+                    }
                     style={slot.item ? { borderColor: slot.item.rarity.color } : undefined}
                     description={slot.item && <ItemDescription item={slot.item} />}
                 >
@@ -2924,6 +3183,30 @@ const GearSlots = memo(function GearSlots({
         </div>
     );
 });
+
+// The worn gear under the damage panel (DisplaySettings.gearPanel), shut to start with on a
+// touch screen, where there's less room
+function GearPanel({ gear, disabled }: { gear: GearSlotView[]; disabled: boolean }): JSX.Element {
+    const [open, setOpen] = useState(!isCoarsePointer);
+    const gridId = useId();
+    return (
+        <div className="ui-hud-gear">
+            <button
+                className="ui-dps ui-gear-toggle"
+                type="button"
+                aria-label={t("ui.hud.gear")}
+                aria-expanded={open}
+                aria-controls={gridId}
+                title={t("ui.hud.gear_toggle_tooltip")}
+                onClick={() => setOpen((shown) => !shown)}
+            >
+                <span className="ui-dps-label">{t("ui.hud.gear_label")}</span>{" "}
+                <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
+            </button>
+            <GearSlots gear={gear} disabled={disabled} gridId={gridId} open={open} />
+        </div>
+    );
+}
 
 // Utility items, used with 1-4 (a controller's shoulder buttons) or a click
 const Inventory = memo(function Inventory({
@@ -2954,14 +3237,21 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
     return (
         <div className="ui-buffs">
             {buffs.map((buff) => (
-                <div
+                <DescriptionButton
                     key={buff.id}
+                    itemId={buff.id}
                     className={
                         "ui-buff" +
                         (buff.harmful ? " ui-buff-harmful" : "") +
                         (buff.secondsLeft === undefined ? " ui-buff-untimed" : "")
                     }
-                    title={tl(buff.name)}
+                    aria-label={tl(buff.name)}
+                    description={
+                        <>
+                            <strong>{tl(buff.name)}</strong>
+                            <span>{buff.description}</span>
+                        </>
+                    }
                 >
                     <ItemIcon objId={buff.objId} size={24} />
                     {buff.secondsLeft !== undefined && (
@@ -2973,7 +3263,7 @@ function Buffs({ buffs }: { buffs: BuffView[] }): JSX.Element {
                             />
                         </>
                     )}
-                </div>
+                </DescriptionButton>
             ))}
         </div>
     );
@@ -2986,13 +3276,17 @@ const Hud = memo(function Hud({
     client,
     questTracker,
     damagePanel,
+    gearPanel,
     disabled,
+    muted,
 }: {
     hud: HudView;
     client: GameClient;
     questTracker: boolean;
     damagePanel: boolean;
+    gearPanel: boolean;
     disabled: boolean;
+    muted: boolean;
 }): JSX.Element {
     return (
         <>
@@ -3001,12 +3295,13 @@ const Hud = memo(function Hud({
                 <div className="ui-hud-left">
                     <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
                     <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
-                    <GearSlots gear={hud.gear} disabled={disabled} />
+                    {!gearPanel && <GearSlots gear={hud.gear} disabled={disabled} />}
                 </div>
                 <RunTimer client={client} />
                 <TombsScabarasReading client={client} />
+                {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
                 <div className="ui-hud-right">
-                    <Minimap client={client} />
+                    <Minimap client={client} muted={muted} />
                     <KillsAndCoins client={client} />
                     {hud.round !== undefined && (
                         <div className="ui-round">{t("ui.hud.round", { round: hud.round })}</div>
@@ -3021,8 +3316,9 @@ const Hud = memo(function Hud({
                     {/* The dev server's testing buttons: a build drops them whole */}
                     {import.meta.env.DEV && <DevGodButton client={client} />}
                     {import.meta.env.DEV && <DevWardensButton client={client} />}
-                    <HudQuests open={questTracker} client={client} />
+                    <HudQuests open={questTracker} client={client} disabled={disabled} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
+                    {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
                 </div>
             </div>
             <BossBar mapId={hud.mapId} client={client} />
@@ -3057,6 +3353,56 @@ function XpBar({ level, client }: { level: number; client: GameClient }): JSX.El
 function RunTimer({ client }: { client: GameClient }): JSX.Element {
     const seconds = useHudNumber(client, (n) => n.seconds) ?? 0;
     return <div className="ui-timer">{formatTime(seconds)}</div>;
+}
+
+// A touch screen's zoom (a mouse has its wheel), behind a toggle beside the timer
+function CameraZoomSlider({
+    client,
+    disabled,
+}: {
+    client: GameClient;
+    disabled: boolean;
+}): JSX.Element {
+    const [zoom, setZoom] = useState(() => {
+        const range = MAX_CAMERA_DISTANCE - MIN_CAMERA_DISTANCE;
+        return Math.round(((MAX_CAMERA_DISTANCE - client.cameraRig.distance) / range) * 100);
+    });
+    const [open, setOpen] = useState(false);
+    const sliderId = useId();
+    return (
+        <div className="ui-mobile-zoom-control">
+            <button
+                className="ui-dps ui-mobile-zoom-toggle"
+                type="button"
+                aria-label={t("ui.hud.zoom")}
+                aria-expanded={open}
+                aria-controls={sliderId}
+                disabled={disabled}
+                onClick={() => setOpen((shown) => !shown)}
+            >
+                <span className="ui-dps-label">{t("ui.hud.zoom_label")}</span>
+                <span className="ui-dps-toggle">{open ? "▾" : "▸"}</span>
+            </button>
+            <input
+                id={sliderId}
+                className="ui-mobile-zoom"
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={zoom}
+                hidden={!open}
+                disabled={disabled}
+                onChange={(event) => {
+                    const value = Number(event.currentTarget.value);
+                    client.setCameraZoom(value);
+                    setZoom(value);
+                }}
+                onPointerUp={(event) => event.currentTarget.blur()}
+                aria-label={t("ui.hud.camera_zoom")}
+            />
+        </div>
+    );
 }
 
 function KillsAndCoins({ client }: { client: GameClient }): JSX.Element {
@@ -3310,10 +3656,18 @@ function TombsShadowsInfo({ client }: { client: GameClient }): JSX.Element | nul
     );
 }
 
-function HudQuests({ open, client }: { open: boolean; client: GameClient }): JSX.Element | null {
+function HudQuests({
+    open,
+    client,
+    disabled,
+}: {
+    open: boolean;
+    client: GameClient;
+    disabled: boolean;
+}): JSX.Element | null {
     const quests = useHudNumber(client, (n) => n.quests);
     return quests && quests.length > 0 ? (
-        <QuestTracker quests={quests} open={open} client={client} />
+        <QuestTracker quests={quests} open={open} client={client} disabled={disabled} />
     ) : null;
 }
 
@@ -3334,6 +3688,7 @@ function HpBar({ client }: { client: GameClient }): JSX.Element | null {
             <div className="ui-hp-fill" style={{ transform: `scaleX(${hp / maxHp})` }} />
             <span>
                 {hp} / {maxHp}
+                {poisoned && ` · ${t("ui.hud.poisoned")}`}
             </span>
         </div>
     );
@@ -3474,7 +3829,14 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
 
 // The client's minimap frame and compass around a canvas the game draws on
 // (runs face north, so the compass does too)
-const Minimap = memo(function Minimap({ client }: { client: GameClient }): JSX.Element {
+// The sound's orb sits at its upper left, where the client's hitpoints orb is
+const Minimap = memo(function Minimap({
+    client,
+    muted,
+}: {
+    client: GameClient;
+    muted: boolean;
+}): JSX.Element {
     const canvasRef = useCallback(
         (canvas: HTMLCanvasElement | null) => client.setMinimapCanvas(canvas),
         [client],
@@ -3484,6 +3846,7 @@ const Minimap = memo(function Minimap({ client }: { client: GameClient }): JSX.E
             <canvas className="ui-minimap-map" ref={canvasRef} />
             <img className="ui-minimap-frame" src={minimapFrame} />
             <img className="ui-minimap-compass" src={compass} />
+            <SoundOrb client={client} muted={muted} />
         </div>
     );
 });
@@ -3494,7 +3857,12 @@ function ChoiceStats({ stats }: { stats: WeaponStatLine[] }): JSX.Element {
     return (
         <div className="ui-choice-stats">
             {stats.map((line) => (
-                <StatLine key={line.label} text={formatWeaponStat(line)} className="ui-choice-stat">
+                <StatLine
+                    key={line.label}
+                    text={formatWeaponStat(line)}
+                    english={line.english}
+                    className="ui-choice-stat"
+                >
                     <span className="ui-choice-stat-label">{line.label}</span>{" "}
                     {line.from !== undefined && <>{line.from} → </>}
                     <span
@@ -3519,23 +3887,36 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
+    const keris = ui.choices.some((choice) => choice.isKeris);
     const banishes = ui.hud?.banishes ?? 0;
+    const coins = useHudNumber(client, (n) => n.coins) ?? 0;
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-levelup">
-                <h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-levelup">
+                <h2 id={titleId}>
                     {spell
                         ? t("ui.levelup.title.spell")
-                        : hilt
-                          ? t("ui.levelup.title.hilt")
-                          : t("ui.levelup.title.regular")}
+                        : keris
+                          ? t("ui.levelup.title.keris")
+                          : hilt
+                            ? t("ui.levelup.title.hilt")
+                            : t("ui.levelup.title.regular")}
+                    {/* In the heading, as a phone has no room for the line under it */}
+                    {ui.levelUpsLeft > 0 && (
+                        <span className="ui-levelup-more">
+                            {tp("ui.levelup.more_after", ui.levelUpsLeft)}
+                        </span>
+                    )}
                 </h2>
                 <p className="ui-subtle">
                     {spell
                         ? t("ui.levelup.sub.spell")
-                        : hilt
-                          ? t("ui.levelup.sub.hilt")
-                          : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
+                        : keris
+                          ? t("ui.levelup.sub.keris")
+                          : hilt
+                            ? t("ui.levelup.sub.hilt")
+                            : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (
@@ -3584,7 +3965,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                             <span className="ui-tag ui-tag-evolve">
                                                 {choice.isSpell
                                                     ? t("ui.levelup.tag.spell")
-                                                    : t("ui.levelup.tag.hilt")}
+                                                    : choice.isKeris
+                                                      ? t("ui.levelup.tag.keris")
+                                                      : t("ui.levelup.tag.hilt")}
                                             </span>
                                         )}
                                     </div>
@@ -3640,6 +4023,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                             <SkipButton
                                 cost={ui.hud.skip.cost}
                                 affordable={ui.hud.skip.affordable}
+                                short={ui.hud.skip.cost - coins}
                                 onSkip={() => client.skip()}
                             />
                         )}
@@ -3778,10 +4162,12 @@ function QuestTracker({
     quests,
     open,
     client,
+    disabled,
 }: {
     quests: QuestTrackView[];
     open: boolean;
     client: GameClient;
+    disabled: boolean;
 }): JSX.Element {
     return (
         <div className="ui-quest-tracker">
@@ -3792,18 +4178,33 @@ function QuestTracker({
             >
                 {t("ui.quest.heading")} {open ? "▾" : "▸"}
             </button>
-            {open && quests.map((quest) => <QuestTrack key={quest.id} quest={quest} />)}
+            {open &&
+                quests.map((quest) => (
+                    <QuestTrack key={quest.id} quest={quest} disabled={disabled} />
+                ))}
         </div>
     );
 }
 
-// Kept from the last update while its progress is the same (shareUnchanged)
-const QuestTrack = memo(function QuestTrack({ quest }: { quest: QuestTrackView }): JSX.Element {
+// Kept from the last update while its progress is the same (shareUnchanged). What it asks for is
+// the description a hover or hold brings up, as it is for a slot
+const QuestTrack = memo(function QuestTrack({
+    quest,
+    disabled,
+}: {
+    quest: QuestTrackView;
+    disabled: boolean;
+}): JSX.Element {
     return (
-        <div className={"ui-quest-track " + questTrackClass(quest)} title={tl(quest.task)}>
+        <DescriptionButton
+            itemId={quest.id}
+            disabled={disabled}
+            className={"ui-quest-track " + questTrackClass(quest)}
+            description={tl(quest.task)}
+        >
             <span className="ui-quest-track-name">{tl(quest.name)}</span>
             <span className="ui-quest-track-progress">{formatQuestProgress(quest)}</span>
-        </div>
+        </DescriptionButton>
     );
 });
 
@@ -3831,16 +4232,40 @@ function PauseModal({
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
     const quests = useHudNumber(client, (n) => n.quests) ?? [];
+    const activeEffects = useHudNumber(client, (n) => n.buffs) ?? [];
     const padKind = usePadKind();
     // The host can remove anyone still in the run (one who's stopped playing)
     const kickable =
         coop && ui.coop.room?.hostId === ui.coop.you
             ? ui.party.filter((member) => member.id && !member.left)
             : [];
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>({ modal: !coop });
+    const [confirm, confirmDialog] = useConfirm();
+    const host = coop && ui.coop.room?.hostId === ui.coop.you;
+    const quit = async () => {
+        const confirmed = await confirm(
+            coop
+                ? {
+                      title: t("confirm.leave.title"),
+                      body: host ? t("pause.quit.host_warning") : t("confirm.leave.body"),
+                      confirm: t("pause.quit.leave"),
+                      cancel: t("ui.common.cancel"),
+                  }
+                : {
+                      title: t("confirm.quit.title"),
+                      body: t("confirm.quit.body"),
+                      confirm: t("confirm.quit.confirm"),
+                      cancel: t("confirm.quit.cancel"),
+                  },
+        );
+        if (confirmed) {
+            client.quitRun();
+        }
+    };
     return (
         <div className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
-            <div className="ui-panel rs-border rs-background ui-pause">
-                <h2>{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-pause">
+                <h2 id={titleId}>{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
                 {coop && <p className="ui-subtle">{t("pause.coop_warning")}</p>}
                 {ui.saveBlock && ui.saveBlockClosed && (
                     <p className="ui-subtle">
@@ -3854,7 +4279,31 @@ function PauseModal({
                 )}
                 <div className="ui-pause-columns">
                     <div className="ui-pause-column">
-                        <div className="ui-pause-list">
+                        {hud.stats.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">
+                                    {t("pause.heading.your_stats")}
+                                </h3>
+                                <div className="ui-pause-stats">
+                                    {hud.stats.map((line) => (
+                                        <StatLine
+                                            key={line.text}
+                                            text={line.text}
+                                            english={line.english}
+                                        />
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        <div
+                            className={
+                                "ui-pause-list" +
+                                (hud.stats.length > 0 &&
+                                hud.weapons.length + hud.passives.length > 0
+                                    ? " ui-pause-loadout"
+                                    : "")
+                            }
+                        >
                             {[...hud.weapons, ...hud.passives].map((slot) => (
                                 <div key={slot.id} className="ui-pause-item">
                                     <ItemIcon
@@ -3869,9 +4318,13 @@ function PauseModal({
                                         </span>
                                         <span className="ui-pause-detail">
                                             {[...(slot.stats ?? []), slot.detail]
-                                                .filter((text): text is string => Boolean(text))
-                                                .map((text, i) => (
-                                                    <StatLine key={i} text={text} />
+                                                .filter((line): line is StatText => !!line)
+                                                .map((line, i) => (
+                                                    <StatLine
+                                                        key={i}
+                                                        text={line.text}
+                                                        english={line.english}
+                                                    />
                                                 ))}
                                         </span>
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
@@ -3884,18 +4337,6 @@ function PauseModal({
                                 </div>
                             ))}
                         </div>
-                        {hud.stats.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.your_stats")}
-                                </h3>
-                                <div className="ui-pause-stats">
-                                    {hud.stats.map((line) => (
-                                        <StatLine key={line} text={line} />
-                                    ))}
-                                </div>
-                            </>
-                        )}
                         {hud.gear.some((slot) => slot.item) && (
                             <>
                                 <h3 className="ui-pause-heading">
@@ -3912,9 +4353,7 @@ function PauseModal({
                                                             {tl(item.name)}
                                                         </span>
                                                         <span className="ui-pause-detail">
-                                                            {item.lines.map((line, i) => (
-                                                                <StatLine key={i} text={line} />
-                                                            ))}
+                                                            <ItemLines item={item} />
                                                             {item.set && (
                                                                 <span
                                                                     className={
@@ -3939,6 +4378,43 @@ function PauseModal({
                         )}
                     </div>
                     <div className="ui-pause-column">
+                        <h3 className="ui-pause-heading">{t("pause.heading.effects")}</h3>
+                        {activeEffects.length > 0 ? (
+                            <div className="ui-pause-list">
+                                {activeEffects.map((effect) => (
+                                    <div key={effect.id} className="ui-pause-item">
+                                        <ItemIcon objId={effect.objId} size={24} />
+                                        <span className="ui-pause-name">
+                                            {tl(effect.name)}
+                                            <span className="ui-pause-detail">
+                                                {effect.description}
+                                            </span>
+                                            {effect.secondsLeft !== undefined && (
+                                                <span className="ui-pause-detail">
+                                                    {t("pause.effects.left", {
+                                                        seconds: effect.secondsLeft,
+                                                    })}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span
+                                            className={
+                                                "ui-pause-level " +
+                                                (effect.harmful
+                                                    ? "ui-pause-effect-debuff"
+                                                    : "ui-pause-effect-buff")
+                                            }
+                                        >
+                                            {effect.harmful
+                                                ? t("pause.effects.debuff")
+                                                : t("pause.effects.buff")}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="ui-subtle">{t("pause.effects.none")}</div>
+                        )}
                         {quests.length > 0 && (
                             <>
                                 <h3 className="ui-pause-heading">{t("pause.heading.quests")}</h3>
@@ -3984,13 +4460,32 @@ function PauseModal({
                                 </div>
                             </>
                         )}
-                        {padKind && (
+                        {ui.toastLog.length > 0 && (
+                            <>
+                                <h3 className="ui-pause-heading">{t("pause.heading.recent")}</h3>
+                                <ul className="ui-pause-recent">
+                                    {ui.toastLog.map((text, i) => (
+                                        <li key={i}>{text}</li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                        {padKind ? (
                             <>
                                 <h3 className="ui-pause-heading">
                                     {t("pause.heading.controller")}
                                 </h3>
                                 <PadControls />
                             </>
+                        ) : (
+                            !isCoarsePointer && (
+                                <>
+                                    <h3 className="ui-pause-heading">
+                                        {t("pause.heading.keyboard")}
+                                    </h3>
+                                    <KeyboardControls />
+                                </>
+                            )
                         )}
                         <h3 className="ui-pause-heading">{t("pause.heading.settings")}</h3>
                         <LanguageSetting />
@@ -4000,6 +4495,7 @@ function PauseModal({
                             music={getMap(ui.mapId).music !== undefined}
                         />
                         <PickupTimerSetting ui={ui} client={client} />
+                        <GearPanelSetting ui={ui} client={client} />
                         <PuzzleHelperSetting ui={ui} client={client} />
                         <AutoPauseSetting ui={ui} client={client} />
                         <AutoAlchSetting ui={ui} client={client} />
@@ -4011,12 +4507,8 @@ function PauseModal({
                 <div className="ui-row">
                     <button
                         className="ui-button"
-                        title={
-                            coop && ui.coop.room?.hostId === ui.coop.you
-                                ? t("pause.quit.host_warning")
-                                : undefined
-                        }
-                        onClick={() => client.quitRun()}
+                        title={host ? t("pause.quit.host_warning") : undefined}
+                        onClick={quit}
                     >
                         {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
                     </button>
@@ -4025,12 +4517,16 @@ function PauseModal({
                     </button>
                 </div>
             </div>
+            {confirmDialog}
         </div>
     );
 }
 
 // Co-op's results name everyone else
 const MAX_LISTED_TEAMMATES = 3;
+
+// How long the results ignore Escape and Enter after they come up
+const RESULT_KEY_GUARD_MS = 600;
 
 // "Coif, Rune boots and Seers ring", or the first few "and 5 more"
 function listNames(names: string[], most = 3): string {
@@ -4117,10 +4613,20 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [changePlayer, multiplayer]);
+    // The map just played: a win can have moved the pick on to the one it opened
+    const played = getMap(result?.mapId ?? ui.mapId);
+    const canRetry = !result?.coop;
+    useMenuKeys({
+        onBack: () => client.leaveRun(),
+        onConfirm: () => (canRetry ? client.retry() : client.leaveRun()),
+        // Esc is the pause key: a run can end just as it's pressed
+        guardMs: RESULT_KEY_GUARD_MS,
+    });
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-result">
-                <h2 className={victory ? "ui-victory" : "ui-defeat"}>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-result">
+                <h2 id={titleId} className={victory ? "ui-victory" : "ui-defeat"}>
                     {victory && result
                         ? tl(stageVictoryText(getMap(result.mapId), result.stage))
                         : (result?.endedEarly ?? t("ui.result.dead"))}
@@ -4492,18 +4998,17 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     </div>
                 )}
                 <div className="ui-row">
-                    {/* A boss fight on your own: straight into it again */}
-                    {!ui.coop.room && getMap(ui.mapId).fight && (
+                    {/* On your own: straight into the same map again */}
+                    {canRetry && (
                         <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                            {nextFightLabel(getMap(ui.mapId), victory, result?.stage)}
+                            <KeyHint keyLabel="Enter" className="ui-choice-key ui-word-key" />{" "}
+                            {played.fight
+                                ? nextFightLabel(played, victory, result?.stage)
+                                : t("ui.result.play_again")}
                         </button>
                     )}
                     <button
-                        className={
-                            !ui.coop.room && getMap(ui.mapId).fight
-                                ? "ui-button"
-                                : "ui-button ui-button-go"
-                        }
+                        className={canRetry ? "ui-button" : "ui-button ui-button-go"}
                         onClick={() => client.leaveRun()}
                     >
                         {ui.coop.room ? t("ui.result.back_party") : t("ui.result.back_title")}

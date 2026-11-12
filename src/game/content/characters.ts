@@ -753,6 +753,32 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.3, regen: 10 },
         only: "beneath_cursed_sands",
     },
+    {
+        id: "avian_assaulter",
+        name: "Avian Assaulter",
+        description:
+            "Made for Thanksgiving Harvest, and everyone plays them there, and nowhere else: " +
+            "one dangerous bird, with a Rubber chicken and no other weapons, gear or items. " +
+            "Hits birds 15% harder, moves 45% faster and has nearly three times the hitpoints.",
+        style: "melee",
+        startingWeapon: "rubber_chicken",
+        // The chicken outfit, kept on over gear (fixedOutfit)
+        equipment: {
+            [EquipSlot.HEAD]: 11021,
+            [EquipSlot.TORSO]: 11020,
+            [EquipSlot.LEGS]: 11022,
+            [EquipSlot.FEET]: 11019,
+        },
+        fixedOutfit: true,
+        noItems: true,
+        // The stun birds, circling for show
+        overheadSpotAnim: 254,
+        // The Rubber chicken and nothing else: its ten levels are the run
+        maxWeapons: 1,
+        damageAgainst: { tags: ["bird"], damage: 0.15 },
+        bonus: { growth: 0.15, magnet: 0.5, cooldown: 0.35, moveSpeed: 0.45, maxHp: 1.8 },
+        only: "thanksgiving",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));

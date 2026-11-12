@@ -10,11 +10,16 @@ import {
     HudNumbers,
     HudView,
 } from "../client/GameStore";
+import { getItemView } from "../client/ItemViews";
+import { getItem } from "../content/items";
+import { DURATION_ICON, StatIconRef, statKeyIcon } from "../content/statIcons";
 import { createSave } from "../core/save";
+import { setLang, tp } from "../i18n";
 import { ChestModal } from "./ChestModal";
 import { ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
 import { GameUi } from "./GameUi";
+import { iconCache } from "./ItemIcon";
 
 afterEach(() => {
     cleanup();
@@ -63,6 +68,7 @@ function createChoice(changes: Partial<ChoiceView> = {}): ChoiceView {
         isEvolution: false,
         isHilt: false,
         isSpell: false,
+        isKeris: false,
         banishable: false,
         banished: false,
         ...changes,
@@ -89,17 +95,37 @@ describe("stat icons on the screens that show stats", () => {
                 createChoice({
                     title: "Dragon scimitar",
                     stats: [
-                        { label: "Damage", from: "10", value: "13", better: true },
-                        { label: "Attacks", from: "2.00/s", value: "1.67/s", better: false },
+                        {
+                            label: "Damage",
+                            english: "Damage",
+                            from: "10",
+                            value: "13",
+                            better: true,
+                        },
+                        {
+                            label: "Attacks",
+                            english: "Attacks",
+                            from: "2.00/s",
+                            value: "1.67/s",
+                            better: false,
+                        },
                     ],
                 }),
                 createChoice({
                     title: "Strength passive",
-                    stats: [{ label: "Damage", from: "+25%", value: "+30%", better: true }],
+                    stats: [
+                        {
+                            label: "Damage",
+                            english: "damage",
+                            from: "+25%",
+                            value: "+30%",
+                            better: true,
+                        },
+                    ],
                 }),
                 createChoice({
                     title: "Mystery upgrade",
-                    stats: [{ label: "Unknown bonus", value: "+10" }],
+                    stats: [{ label: "Unknown bonus", english: "Unknown bonus", value: "+10" }],
                 }),
             ],
         });
@@ -153,7 +179,7 @@ describe("stat icons on the screens that show stats", () => {
                     objId: 8839,
                     rarity: { name: "Rare", color: "#3fe03f" },
                     kindLabel: "Body slot",
-                    lines: ["+10% damage", "+2 armour"],
+                    lines: [{ text: "+10% damage" }, { text: "+2 armour" }],
                     set: { text: "Void knight 2/4: 3 worn give +10% damage", active: false },
                 },
                 replaces: {
@@ -163,7 +189,7 @@ describe("stat icons on the screens that show stats", () => {
                         objId: 1129,
                         rarity: { name: "Common", color: "#ffffff" },
                         kindLabel: "Body slot",
-                        lines: ["+1 armour"],
+                        lines: [{ text: "+1 armour" }],
                     },
                     alchCoins: 10,
                 },
@@ -213,6 +239,63 @@ describe("stat icons on the screens that show stats", () => {
             expect(changes[1].querySelector(".ui-icon")).not.toBeNull();
         } finally {
             vi.useRealTimers();
+        }
+    });
+
+    test("a casket's potion shows its stats with their icons in any language, and how long they last", () => {
+        vi.useFakeTimers();
+        // The icon cache answers with the icon's own id, so a line's image says which it has
+        vi.spyOn(iconCache, "get").mockImplementation((objId) => `obj:${objId}`);
+        vi.spyOn(iconCache, "getSprite").mockImplementation((id) => `sprite:${id}`);
+        vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
+        const iconSrc = (icon: StatIconRef | undefined) =>
+            icon?.spriteId !== undefined ? `sprite:${icon.spriteId}` : `obj:${icon?.objId}`;
+        try {
+            setLang("pt-BR");
+            const store = new GameStore(createSave());
+            const client = createMockClient(store, { playChestSound: vi.fn() });
+            const item = getItemView(getItem("battlemage_potion"));
+            const chest: ChestView = {
+                uid: 1,
+                tierColor: "#ffd700",
+                rarity: "rare",
+                casketObjId: 2724,
+                casketName: "Hard casket",
+                coins: 100,
+                alchCoins: 50,
+                isGear: false,
+                item,
+                changes: [],
+                carried: 0,
+                canStash: true,
+                instant: false,
+                recommended: "take",
+                queued: 0,
+            };
+            const view = render(
+                <ChestModal chest={chest} rerolls={0} banishes={0} client={client} />,
+            );
+            act(() => {
+                vi.advanceTimersByTime(2500);
+            });
+            const lines = [...view.container.querySelectorAll(".ui-chest-lines .ui-stat-line")];
+            expect(lines.map((line) => line.textContent)).toEqual([
+                ...item.lines.map((line) => line.text),
+                tp("canvas.lasts", 30),
+            ]);
+            expect(lines.map((line) => line.querySelector("img")?.getAttribute("src"))).toEqual(
+                [
+                    statKeyIcon("armor"),
+                    statKeyIcon("area"),
+                    statKeyIcon("duration"),
+                    DURATION_ICON,
+                ].map(iconSrc),
+            );
+        } finally {
+            setLang("en");
+            vi.useRealTimers();
+            vi.restoreAllMocks();
         }
     });
 
@@ -273,12 +356,12 @@ describe("stat icons on the screens that show stats", () => {
                         level: 2,
                         maxLevel: 8,
                         iconObjId: 1333,
-                        detail: "+15% damage",
-                        stats: ["Damage 13", "Attacks 1.25/s"],
+                        detail: { text: "+15% damage" },
+                        stats: [{ text: "Damage 13" }, { text: "Attacks 1.25/s" }],
                         rarityColor: "#fff",
                     },
                 ],
-                stats: ["+10% damage", "+1 armour"],
+                stats: [{ text: "+10% damage" }, { text: "+1 armour" }],
                 gear: [
                     {
                         slot: "head",
@@ -289,7 +372,7 @@ describe("stat icons on the screens that show stats", () => {
                             objId: 11663,
                             rarity: { name: "Rare", color: "#0f0" },
                             kindLabel: "Head slot",
-                            lines: ["+10% magic damage", "+1 armour"],
+                            lines: [{ text: "+10% magic damage" }, { text: "+1 armour" }],
                             set: { text: "Void knight 2/4", active: false },
                         },
                     },
@@ -298,6 +381,13 @@ describe("stat icons on the screens that show stats", () => {
         });
         store.setNumbers(createNumbers());
         const view = render(<GameUi store={store} client={client} />);
+
+        const leftColumn = view.container.querySelector(".ui-pause-column")!;
+        expect(leftColumn.firstElementChild).toHaveTextContent("Your stats");
+        expect(leftColumn.children[1]).toHaveClass("ui-pause-stats");
+        expect(leftColumn.children[2]).toHaveClass("ui-pause-loadout");
+        expect(leftColumn.children[2]).toHaveTextContent("Rune scimitar");
+        expect(leftColumn.children[3]).toHaveTextContent("Worn equipment");
 
         const [weapon, gear] = view.container.querySelectorAll(".ui-pause-item");
         const weaponLines = weapon.querySelectorAll(".ui-pause-detail > .ui-stat-line");
@@ -336,7 +426,7 @@ describe("stat icons on the screens that show stats", () => {
                     objId: 11663,
                     rarity: { name: "Rare", color: "#0f0" },
                     kindLabel: "Head slot",
-                    lines: ["+10% magic damage"],
+                    lines: [{ text: "+10% magic damage" }],
                     set: { text: "Void knight 2/4", active: true },
                 }}
             />,

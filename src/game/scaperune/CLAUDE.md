@@ -1221,8 +1221,9 @@ layouts stay put.
 On the dev server the title screen has a **Map generator** button: every setting in sections, presets, Random, Reset,
 Randomize, copying and pasting the settings as JSON, Generate with a preview from above, and Play. Randomize rolls what shapes
 the map, and leaves the size, heightmap, start, waves, `dressing`, `flatness`, `sites` and `sideStreets` as they are. It's temporary, so it's
-built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `MapGeneratorButton` line in
-`ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`.
+built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `ui-title-dev` corner around
+`MapGeneratorButton` in `ui/GameUi.tsx`, that corner's rules in `ui/GameUi.css` and `ui/Mobile.css`, and `setGeneratedMap`
+in `content/maps.ts`.
 
 Every Generate replaces one map, `scaperune_generated`, at map squares from x 70, y 134. `installGeneratedMap` replaces
 whatever kept the old one. A load still on its way for the old squares is dropped (`MapViewer.customMapVersion`). If you add

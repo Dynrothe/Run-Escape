@@ -1,3 +1,4 @@
+import { TURKEY_MAPS, TURKEY_OUTCOMES } from "./TurkeyDay";
 import { ENEMY_BY_ID } from "./enemies";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { TOMBS_ENEMIES } from "./tombs";
@@ -28,6 +29,7 @@ export function getMapEnemies(map: MapDef, remix: unknown[] = []): EnemyDef[] {
     const ids = new Set<string>();
     const seen = new Set<object>();
     const pumpkins = PUMPKIN_MAPS.includes(map.id) ? PUMPKIN_OUTCOMES : [];
+    const turkeys = TURKEY_MAPS.includes(map.id) ? TURKEY_OUTCOMES : []; // Add turkeys to the list of outcomes to check for enemies
     // Random events go by their effects: the rest is names and lines of chat
     const randomEvents = RANDOM_EVENTS.map((event) => event.effect);
     // The Tombs' rooms aren't waves, so their enemies are listed as they are
@@ -41,6 +43,7 @@ export function getMapEnemies(map: MapDef, remix: unknown[] = []): EnemyDef[] {
             map.raid,
             map.rule,
             pumpkins,
+            turkeys,
             randomEvents,
             tombs,
             remix,

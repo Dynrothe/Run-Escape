@@ -7,10 +7,12 @@ import { fmtNum, t, tl, tp } from "../i18n";
 import { BanishButton } from "./BanishButton";
 import "./ChestModal.css";
 import { Coins } from "./Coins";
+import { ItemLines } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
 import { RerollButton } from "./RerollButton";
 import { StatLine } from "./StatLine";
+import { useDialog } from "./useDialog";
 
 // Opening a reward casket: it drops in, rattles harder and harder while it
 // glows its tier's colour, then bursts open in the item's rarity colour (rays,
@@ -242,8 +244,12 @@ export function ChestModal({ chest, rerolls, banishes, client }: Props): JSX.Ele
         "--tier": chest.tierColor,
         "--rarity": chest.item.rarity.color,
     } as CSSProperties;
+    const { dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div
+            {...dialogProps}
+            aria-labelledby={undefined}
+            aria-label={tl(chest.casketName)}
             className="ui-modal ui-chest"
             data-phase={phase}
             data-rarity={chest.rarity}
@@ -364,11 +370,7 @@ function ChestCard({
                 </div>
             </div>
             <ul className="ui-chest-lines">
-                {item.lines.map((line) => (
-                    <li key={line}>
-                        <StatLine text={line} />
-                    </li>
-                ))}
+                <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
             </ul>
             {item.set && (
                 <div className={"ui-chest-set" + (item.set.active ? " ui-chest-set-on" : "")}>
@@ -392,7 +394,7 @@ function ChestCard({
                                     key={change.text}
                                     className={change.good ? "ui-good" : "ui-bad"}
                                 >
-                                    <StatLine text={change.text} />
+                                    <StatLine text={change.text} english={change.english} />
                                 </span>
                             ))}
                         </div>

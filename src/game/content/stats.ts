@@ -69,12 +69,18 @@ export function formatStat(key: StatKey, value: number): string {
     });
 }
 
-export function formatStats(stats: Partial<Stats>): string[] {
-    const lines: string[] = [];
+// A line as a screen shows it, in the player's language. english is what the line says in
+// English, or the label it starts with ("damage", "Venom lasts"), when the game built the line
+// itself: its icon goes by the English (statLineIcon), as no language file holds the line.
+export type StatText = { text: string; english?: string };
+
+// Each stat that isn't zero, a line each: "+10% damage", "-1 armour"
+export function formatStats(stats: Partial<Stats>): StatText[] {
+    const lines: StatText[] = [];
     for (const key of STAT_ORDER) {
         const value = stats[key];
         if (value) {
-            lines.push(formatStat(key, value));
+            lines.push({ text: formatStat(key, value), english: STAT_INFO[key].label });
         }
     }
     return lines;

@@ -4,13 +4,22 @@ import { tr } from "../i18n";
 // found. They do nothing in a run, but a few bring a weapon or a passive into the game (the
 // Theatre of Blood's rapier and Holy Scythe, the Tombs' jewels and Thread: UnlockTask "raidChest").
 export type TrophySource =
+    // This chance on each kill of a regular enemy on the map
+    | { kind: "enemy"; enemyId: string; mapId: string; chance: number }
     // This chance on each kill of the boss on the map, or hardChance on hard mode
     | { kind: "boss"; enemyId: string; mapId: string; chance: number; hardChance?: number }
     // This chance on each trick or treat pumpkin opened
     | { kind: "pumpkin"; chance: number }
+    // This chance on each cooked turkey carved
+    | { kind: "turkey"; chance: number }
+    // Rewards granted after winning an event map, optionally requiring a boss kill
+    | { kind: "map"; mapId: string; requiresBoss?: string; hard?: boolean }
+    // A quest's completion, recorded with its other rewards
+    | { kind: "quest"; mapId: string; questId: string }
     // A raid's chest, once its last boss is down: a purple's one of these by weight (Sim's
     // openRaidChest has the chance), and a hard raid's own are a roll of their own. An expert
-    // raid's own: one of them each time it's beaten.
+    // raid's own: one of them each time it's beaten, till they're all found. A chest only gives
+    // ones the player hasn't found (isRaidChestTrophy).
     | { kind: "raid"; mapId: string; weight: number; hard?: boolean; expert?: boolean }
     // The Tombs of Amascut's chest (Sim's openTombsChest), from raid level `level` up: a purple's
     // one of those with a weight, its chance going by the raid level; the rest (`chance`) a roll
@@ -250,7 +259,7 @@ TROPHIES.push(
         id,
         name,
         objId,
-        how: "One each time the Theatre of Blood's beaten on expert mode, a new one until you have them all.",
+        how: "One each time the Theatre of Blood's beaten on expert mode, until you have them all.",
         from: { ...TOB, weight: 1, expert: true },
     })),
     {
@@ -346,6 +355,77 @@ TROPHIES.push(
     },
 );
 
+// Thanksgiving Harvest's: Chompy bird drops, the turkey's secateurs, its victories' rewards
+// and its quest's pet. The Turkey hat and Golden egg are the cache's Pheasant hat and
+// Golden pheasant egg
+TROPHIES.push(
+    {
+        id: "rubber_chicken",
+        name: "Rubber chicken",
+        objId: 4566,
+        how: "A rare drop from a Chompy bird.",
+        from: { kind: "enemy", enemyId: "chompy_bird", mapId: "thanksgiving", chance: 1 / 200 },
+    },
+    {
+        id: "turkey_hat",
+        name: "Turkey hat",
+        objId: 28620,
+        how: "A rare drop from a Chompy bird.",
+        from: { kind: "enemy", enemyId: "chompy_bird", mapId: "thanksgiving", chance: 1 / 400 },
+    },
+    {
+        id: "magic_secateurs",
+        name: "Magic secateurs",
+        objId: 7409,
+        how: "Sometimes found when carving a roasted turkey.",
+        from: { kind: "turkey", chance: 1 / 5 },
+    },
+    {
+        id: "golden_feather",
+        name: "Golden feather",
+        objId: 10175,
+        how: "A very rare drop from a Chompy bird.",
+        from: { kind: "enemy", enemyId: "chompy_bird", mapId: "thanksgiving", chance: 1 / 1000 },
+    },
+    {
+        id: "chompy_hat",
+        name: "Chompy bird hat",
+        objId: 2978,
+        how: "Reward for defeating the Evil Chicken and completing Thanksgiving Harvest.",
+        from: { kind: "map", mapId: "thanksgiving", requiresBoss: "evil_chicken" },
+    },
+    {
+        id: "ledger_of_the_harvest",
+        name: "Ledger of the Harvest",
+        objId: 25688,
+        how: "Reward for defeating the Freaky Forester and completing Thanksgiving Harvest.",
+        from: {
+            kind: "map",
+            mapId: "thanksgiving",
+            requiresBoss: "freaky_forester_final",
+        },
+    },
+    {
+        id: "chompy_chick",
+        name: "Chompy chick",
+        objId: 13071,
+        how: "Complete the Chompy Slayer quest.",
+        from: { kind: "quest", questId: "thanksgiving_chompy_hunt", mapId: "thanksgiving" },
+    },
+    {
+        id: "golden_egg",
+        name: "Golden egg",
+        objId: 28663,
+        how: "Complete Thanksgiving Harvest on hard mode.",
+        from: {
+            kind: "map",
+            mapId: "thanksgiving",
+            requiresBoss: "freaky_forester_final",
+            hard: true,
+        },
+    },
+);
+
 export const TROPHY_BY_ID: Map<string, TrophyDef> = new Map(TROPHIES.map((t) => [t.id, t]));
 
 export function trophyName(trophy: TrophyDef): string {
@@ -353,15 +433,21 @@ export function trophyName(trophy: TrophyDef): string {
 }
 
 // A trophy a raid's chest gives one of every time (expert mode's Lil' Zik looks), one not found
-// yet while there's one left (Sim.openRaidChest)
+// yet till they're all found (Sim.openRaidChest)
 export function isEveryTimeTrophy(trophy: TrophyDef): boolean {
     return trophy.from.kind === "raid" && (trophy.from.expert ?? false);
 }
 
-// Those of them a save has found, for the chest to go by
-export function getEveryTimeTrophiesFound(trophies: readonly string[]): string[] {
+// A trophy from a raid's chest, the Theatre's or the Tombs'. They're unlocks, so a chest never
+// gives one the player has already (Sim.openRaidChest, Sim.openTombsChest)
+export function isRaidChestTrophy(trophy: TrophyDef): boolean {
+    return trophy.from.kind === "raid" || trophy.from.kind === "tombs";
+}
+
+// Those of them a save has found, for the chests to go by
+export function getRaidChestTrophiesFound(trophies: readonly string[]): string[] {
     return trophies.filter((id) => {
         const trophy = TROPHY_BY_ID.get(id);
-        return trophy !== undefined && isEveryTimeTrophy(trophy);
+        return trophy !== undefined && isRaidChestTrophy(trophy);
     });
 }

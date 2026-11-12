@@ -1,5 +1,6 @@
 import { Rarity } from "../content/rarity";
 import type { RemixId } from "../content/remixes";
+import { StatText } from "../content/stats";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
@@ -43,10 +44,11 @@ export type SlotView = {
     maxLevel: number;
     iconObjId: number;
     iconSpriteId?: number;
-    // What it adds up to so far: "+18% damage", "+15% damage to this weapon"
-    detail: string;
+    // What it adds up to so far: "+18% damage", "+15% damage to this weapon" (none for a
+    // weapon with no bonus)
+    detail?: StatText;
     // Weapons: their stats at this level ("Damage 13", "Attacks 0.74/s")
-    stats?: string[];
+    stats?: StatText[];
     // Weapons that evolve: the passive it takes, and what's done of it
     evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
     // The item's own rarity, for the slot's border
@@ -61,7 +63,9 @@ export type ItemView = {
     // "Head slot", "Utility"
     kindLabel: string;
     // What it does, a line per stat or effect
-    lines: string[];
+    lines: StatText[];
+    // A potion's stats last this long: in a run, stretched by the hero's effect duration
+    seconds?: number;
     // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
     // whether its bonus is on
     set?: { text: string; active: boolean };
@@ -74,6 +78,7 @@ export type InventorySlotView = { item: ItemView; count: number } | null;
 export type BuffView = {
     id: string;
     name: string;
+    description: string;
     objId: number;
     // A boss attack's drain rather than a potion or power-up
     harmful: boolean;
@@ -102,7 +107,7 @@ export type ChestView = {
     // Gear: what it replaces (alched when the new piece goes on) and what
     // changes
     replaces?: { item: ItemView; alchCoins: number };
-    changes: { text: string; good: boolean }[];
+    changes: (StatText & { good: boolean })[];
     // Utility: whether it fits in the inventory, and how many are carried
     canStash: boolean;
     carried: number;
@@ -152,7 +157,7 @@ export type HudView = {
     passives: SlotView[];
     // The player's stats from passives, gear, potions and their adventurer,
     // the ones that aren't zero: "+18% damage", "+2 armour"
-    stats: string[];
+    stats: StatText[];
     gear: GearSlotView[];
     inventory: InventorySlotView[];
     // Left this run, for a level up's rewards or a casket's item
@@ -369,6 +374,8 @@ export type ChoiceView = {
     isHilt: boolean;
     // A hilt pick that's the run's Ancient spell, not a godsword's hilt
     isSpell: boolean;
+    // A hilt pick that's the run's keris partisan: plain, or the jewel it takes
+    isKeris: boolean;
     // The rolled rarity of this offer, if it has one
     rarity?: { name: string; color: string };
     // Weapons: what this level changes, or a new weapon's stats
@@ -475,6 +482,8 @@ export type UiSnapshot = {
     // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
     cinematic?: boolean;
     choices: ChoiceView[];
+    // Level ups still to choose after the one showing
+    levelUpsLeft: number;
     chest?: ChestView;
     event?: EventView;
     // unlockedMap: the name of the map this run's win opened up;
@@ -504,6 +513,9 @@ export type UiSnapshot = {
         vault?: { key: string; best: boolean };
         // An Awakener's orb won (an Awakened fight), or spent on this run's final boss
         orbWon?: boolean;
+        // Played in a room to its end, so the party goes back together: no Play again, even once
+        // the room closes on the results
+        coop?: boolean;
     };
     toasts: Toast[];
     // The Forgotten Four (content/gauntlet.ts): the order and mode picked on its screen, and once
@@ -512,10 +524,15 @@ export type UiSnapshot = {
     // An act's ending being told (its id, content/acts.ts), over whatever screen's up: as the last
     // of its Awakened fights falls, or played again from its card
     actEnding?: string;
+    // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
+    toastLog: string[];
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;
 };
+
+// How many of the run's messages the pause menu keeps
+const TOAST_LOG_SIZE = 8;
 
 // The UI's view of the game: an immutable snapshot replaced on every change,
 // read by React through useSyncExternalStore.
@@ -544,7 +561,9 @@ export class GameStore {
             party: [],
             waitingOn: [],
             choices: [],
+            levelUpsLeft: 0,
             toasts: [],
+            toastLog: [],
             debug: false,
             audio: { muted: false, volume: 0.6, music: 0.6 },
             display: getDefaultDisplaySettings(),
@@ -591,7 +610,11 @@ export class GameStore {
         const toasts = this.snapshot.toasts.filter((t) => t.until > now && t.text !== text);
         const id = this.nextToastId++;
         toasts.push({ id, text, until: now + ms });
-        this.set({ toasts: toasts.slice(-4) });
+        const log = this.snapshot.toastLog;
+        this.set({
+            toasts: toasts.slice(-4),
+            toastLog: log[0] === text ? log : [text, ...log].slice(0, TOAST_LOG_SIZE),
+        });
         return id;
     }
 

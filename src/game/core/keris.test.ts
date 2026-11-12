@@ -7,7 +7,7 @@ import { CombatStyle, emptyStats } from "../content/types";
 import { WEAPONS, getWeapon, getWeaponStyle } from "../content/weapons";
 import { Rng } from "./Rng";
 import { Sim } from "./Sim";
-import { MAX_WEAPONS, fitsWithPouch, rollChoices } from "./Upgrades";
+import { MAX_WEAPONS, describeChoice, fitsWithPouch, hiltChoices, rollChoices } from "./Upgrades";
 import { Enemy, PassiveState, WeaponState } from "./entities";
 import { getEarnedUnlocks } from "./save";
 import { makeGrid } from "./world/testGrid";
@@ -113,6 +113,118 @@ describe("the keris partisans", () => {
                     mapId: "desert",
                     enemyId: "kalphite_queen_risen",
                 });
+            }
+        }
+    });
+
+    test("only the plain one's offered on a level up, whatever jewels are found", () => {
+        const keris = WEAPONS.filter((w) => w.family === "keris").map((w) => w.id);
+        const all = new Set(keris);
+        const rng = new Rng(4);
+        const offered = new Set<string>();
+        for (let i = 0; i < 3000; i++) {
+            for (const choice of rollChoices(rng, [], [], 0, "melee", all)) {
+                if (choice.kind === "newWeapon" && keris.includes(choice.weaponId)) {
+                    offered.add(choice.weaponId);
+                }
+            }
+        }
+        expect([...offered]).toEqual(["keris_partisan"]);
+    });
+
+    test("comes as the plain one to set a jewel found before the Queen's kill", () => {
+        // A save with a jewel but not the plain keris (its kill counts only in a run)
+        const unlocked = new Set(["keris_partisan_of_the_sun"]);
+        const rng = new Rng(4);
+        let offered = 0;
+        for (let i = 0; i < 3000; i++) {
+            for (const choice of rollChoices(rng, [], [], 0, "melee", unlocked)) {
+                if (choice.kind === "newWeapon" && choice.weaponId.startsWith("keris")) {
+                    expect(choice.weaponId).toBe("keris_partisan");
+                    offered++;
+                }
+            }
+        }
+        expect(offered).toBeGreaterThan(0);
+        // With neither, none at all
+        const nothing = new Set<string>();
+        for (let i = 0; i < 3000; i++) {
+            for (const choice of rollChoices(rng, [], [], 0, "melee", nothing)) {
+                expect(choice.kind === "newWeapon" && choice.weaponId.startsWith("keris")).toBe(
+                    false,
+                );
+            }
+        }
+        // And its pick has the jewel, and keeping it plain
+        const plain = { def: getWeapon("keris_partisan"), level: 2 } as WeaponState;
+        expect(hiltChoices(plain, unlocked).map((c) => c.kind === "hilt" && c.into)).toEqual([
+            "keris_partisan",
+            "keris_partisan_of_the_sun",
+        ]);
+    });
+
+    test("picks its jewel at level 2 from those found, keeping its level, as a burst its spell", () => {
+        const pickAt = (unlocked: string[]) => {
+            const sim = new Sim({
+                grid: makeGrid(openField(), 1000, 1000),
+                characterId: "warrior",
+                metaStats: emptyStats(),
+                seed: 3,
+                spawnX: 1036.5,
+                spawnY: 1036.5,
+                unlockedItems: new Set(unlocked),
+            });
+            sim.weapons = [];
+            sim.addWeapon("keris_partisan");
+            sim.xp = 200;
+            sim.step(0, 0);
+            expect(sim.state).toBe("levelUp");
+            sim.choices = [
+                { kind: "weaponLevel", weaponId: "keris_partisan", level: 2, quality: "common" },
+            ];
+            sim.choose(0);
+            return sim;
+        };
+        // Found nothing in the Tombs yet: no pick, it stays the plain one
+        const none = pickAt(["keris_partisan"]);
+        expect(none.choosingHilt).toBe(false);
+        expect(none.weapons[0].def.id).toBe("keris_partisan");
+
+        // The plain one and the jewels found, nothing else
+        const sim = pickAt([
+            "keris_partisan",
+            "keris_partisan_of_corruption",
+            "keris_partisan_of_the_sun",
+        ]);
+        expect(sim.choosingHilt).toBe(true);
+        expect(sim.choices.map((c) => c.kind === "hilt" && c.into)).toEqual([
+            "keris_partisan",
+            "keris_partisan_of_corruption",
+            "keris_partisan_of_the_sun",
+        ]);
+        expect(sim.reroll()).toBe(false);
+        // Each card is the keris it becomes, the plain one's whole description too
+        const cards = sim.choices.map(describeChoice);
+        expect(cards[0].text).toBe(getWeapon("keris_partisan").description);
+        expect(cards[1]).toMatchObject({ title: "Keris partisan of corruption", iconObjId: 27287 });
+        sim.choose(2);
+        expect(sim.weapons[0].def.id).toBe("keris_partisan_of_the_sun");
+        expect(sim.weapons[0].level).toBe(2);
+        expect(sim.choosingHilt).toBe(false);
+        // And it's the only keris: none offered again this run
+        const rng = new Rng(5);
+        for (let i = 0; i < 500; i++) {
+            for (const choice of rollChoices(
+                rng,
+                sim.weapons,
+                [],
+                0,
+                "melee",
+                new Set(WEAPONS.map((w) => w.id)),
+            )) {
+                expect(choice.kind === "newWeapon" && choice.weaponId.startsWith("keris")).toBe(
+                    false,
+                );
             }
         }
     });

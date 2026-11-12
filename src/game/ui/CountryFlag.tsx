@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
-
 import { FLAG_FRAMES, FLAG_SPRITE } from "../content/flags";
 import { getLang, useLang } from "../i18n";
-import { iconCache } from "./ItemIcon";
+import { useSpriteFrame } from "./useSpriteFrame";
 
 let regionNames: { lang: string; names: Intl.DisplayNames } | undefined;
 
@@ -33,24 +31,7 @@ type Props = {
 export function CountryFlag({ country, label, keepSpace }: Props): JSX.Element | null {
     useLang();
     const frame = country !== undefined ? FLAG_FRAMES[country] : undefined;
-    const cached = () => (frame !== undefined ? iconCache.getFrame(FLAG_SPRITE, frame) : undefined);
-    const [loaded, setLoaded] = useState(() => ({ frame, url: cached() }));
-    // Never the last country's flag while a new one's drawn
-    const url = loaded.frame === frame ? loaded.url : cached();
-    useEffect(() => {
-        if (frame === undefined) {
-            return;
-        }
-        let cancelled = false;
-        iconCache.requestFrame(FLAG_SPRITE, frame, (url) => {
-            if (!cancelled) {
-                setLoaded({ frame, url });
-            }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [frame]);
+    const url = useSpriteFrame(FLAG_SPRITE, frame);
     if (!country) {
         return keepSpace ? <span className="ui-flag" /> : null;
     }

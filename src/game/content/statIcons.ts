@@ -1,3 +1,4 @@
+import { englishOf } from "../i18n";
 import { STAT_INFO } from "./stats";
 import { StatKey } from "./types";
 
@@ -26,6 +27,9 @@ const DART = obj(811); // Rune dart
 const JAVELIN = obj(830); // Rune javelin
 const SCIMITAR = obj(1333); // Rune scimitar
 const VENOM = obj(12934); // Zulrah's scales
+
+// How long a potion lasts: a pocket watch, as the hourglass is effect duration's
+export const DURATION_ICON: StatIconRef = obj(2575); // Watch
 
 // Labels as the player reads them (lower case, without the number or sign in front),
 // from STAT_INFO, weaponStats and the passives' effects
@@ -100,15 +104,20 @@ function stripLead(text: string): string {
 
 // The icon for a stat by its key, for a menu that knows which stat it's showing
 export function statKeyIcon(key: StatKey): StatIconRef | undefined {
-    return statIconFor(STAT_INFO[key].label);
+    const icon = ICONS[STAT_INFO[key].label];
+    return icon && { ...icon };
 }
 
-// The icon for a stat line as shown to the player, by the label it starts with.
-// undefined when it isn't a stat.
-export function statIconFor(text: string): StatIconRef | undefined {
-    const rest = stripLead(text);
+// The icon for a stat line as shown to the player, by the label its English starts with.
+// undefined when it isn't a stat. Labels are English, so in another language a line goes by
+// its English: a line the game built brings its own (english, from StatText), and a text the
+// language files hold goes back to the one it was written from, by the files' keys. So
+// "Veneno mais forte: ..." gets no icon, as its English ("Stronger poison: ...") has none.
+export function statIconFor(text: string, english?: string): StatIconRef | undefined {
+    const rest = stripLead(english ?? englishOf(text) ?? text);
     for (const label of LABELS) {
-        if (rest.startsWith(label) && !/[a-z]/.test(rest[label.length] ?? "")) {
+        // A letter or an accent next means a longer word: "+5% luckiness" isn't luck
+        if (rest.startsWith(label) && !/[\p{L}\p{M}]/u.test(rest[label.length] ?? "")) {
             return { ...ICONS[label] };
         }
     }
@@ -119,7 +128,9 @@ export function statIconFor(text: string): StatIconRef | undefined {
 // sprites, which it keeps only if the game's lists name them
 export const STAT_ICON_OBJ_IDS: number[] = [
     ...new Set(
-        Object.values(ICONS).flatMap((icon) => (icon.objId !== undefined ? [icon.objId] : [])),
+        [...Object.values(ICONS), DURATION_ICON].flatMap((icon) =>
+            icon.objId !== undefined ? [icon.objId] : [],
+        ),
     ),
 ];
 export const STAT_ICON_SPRITE_IDS: number[] = [

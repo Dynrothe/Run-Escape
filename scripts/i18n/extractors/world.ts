@@ -7,6 +7,7 @@
 // The Sim emits these texts as they are in English and the drawing layer calls tl(text) on them,
 // so each one is here with the literal the Sim emits. Boss attacks' own names
 // (BossAttackDef.name) are keys in Sim.ts and aren't here.
+import { TURKEY_OUTCOMES } from "../../../src/game/content/TurkeyDay";
 import { ACTS, actSlotKey } from "../../../src/game/content/acts";
 import { ENEMIES } from "../../../src/game/content/enemies";
 import * as demos from "../../../src/game/content/floorDemos";
@@ -189,6 +190,20 @@ function pumpkinMessages(): Messages {
     return messages;
 }
 
+// The roasted turkey's, the same way
+function turkeyMessages(): Messages {
+    const messages: Messages = {};
+    put(messages, "turkey.shout.feast", "Feast!");
+    put(messages, "turkey.shout.fowl", "Fowl!");
+    TURKEY_OUTCOMES.forEach((outcome, i) => {
+        put(messages, `turkey.${i}.message`, outcome.message);
+        if (outcome.does.kind === "effect") {
+            put(messages, `turkey.${i}.effect`, (outcome.does.effect as { name?: string }).name);
+        }
+    });
+    return messages;
+}
+
 // Every `message` in a floor: its script's beats, triggers and phases
 function walkFloor(messages: Messages, prefix: string, value: unknown, path: string[]) {
     if (typeof value === "string") {
@@ -274,6 +289,7 @@ export default function extract(): Messages {
         ...mapMessages(),
         ...raidMessages(),
         ...pumpkinMessages(),
+        ...turkeyMessages(),
         ...floorMessages(),
         ...actMessages(),
         ...invocationAndRelicMessages(),

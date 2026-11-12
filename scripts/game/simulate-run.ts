@@ -102,7 +102,7 @@ import {
     wallGap,
 } from "./bossReads";
 import { loadRegionData } from "./collision-snapshot";
-import { TombsLog, chestAction, tombsMove, useItems } from "./tombsBot";
+import { TombsLog, chestAction, kerisPickRank, tombsMove, useItems } from "./tombsBot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
 // The Tombs' invocations, or a run's (all: every one but hard mode's, which HARD=1 is)
@@ -252,7 +252,8 @@ const CHOICE_PRIORITY: Record<UpgradeChoice["kind"], number> = {
 function choiceScore(choice: UpgradeChoice): number {
     const quality = "quality" in choice ? RARITY_ORDER.indexOf(choice.quality) : 0;
     // A Rare or better roll beats a Common pick of a better kind
-    return CHOICE_PRIORITY[choice.kind] * 10 - quality * 15;
+    // A keris pick: the best jewel found (kerisPickRank stays under one kind's step)
+    return CHOICE_PRIORITY[choice.kind] * 10 - quality * 15 - kerisPickRank(choice);
 }
 
 // Runs a set was started in (a piece worn), and finished in (its bonus), for

@@ -581,7 +581,7 @@
 }
 
 .ui-chest-kind {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-chest-upgraded {
@@ -604,7 +604,7 @@
 }
 
 .ui-chest-set-on {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 .ui-chest-lines {
@@ -621,7 +621,7 @@
     margin-top: 8px;
     padding-top: 6px;
     border-top: 1px solid rgba(107, 94, 74, 0.6);
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-chest-replaces {
@@ -647,7 +647,7 @@
 }
 
 .ui-bad {
-    color: #ff5a5a;
+    color: var(--ui-red-text);
 }
 
 .ui-chest-actions {

@@ -6,6 +6,7 @@ import {
     ImpactDef,
     LightLook,
     PlayerEffectDef,
+    PolymorphKind,
     RandomEventDef,
     Stats,
     ThrallDef,
@@ -155,6 +156,8 @@ export type BossState = {
     leap?: { toX: number; toY: number; switchTick: number; endTick: number };
     // It stands still until this tick, as its volleys go out
     channelEnd: number;
+    // Its rings that hold (BulletPatternDef.hold) are in by this tick, and no new one starts sooner
+    ringsUntil?: number;
     // BossDef.naps: down until this tick (-1 when it's up), and when it next goes down
     napEnd?: number;
     nextNap?: number;
@@ -165,9 +168,13 @@ export type BossState = {
     nextStare?: number;
     // Where it'll stare once it turns at nextStare, picked and said a moment before
     stareNext?: number;
-    // BossDef.stomp: hits since the player stepped under it, and the next one
+    // BossDef.stomp: hits since the player stepped under it, the next one and when it was set (to
+    // draw its ring filling), when the last stepped out, and whether its message has been said
     stomps?: number;
     nextStomp?: number;
+    stompFrom?: number;
+    stompLeft?: number;
+    stompSaid?: boolean;
     // How many times each row attack's been used (BulletPatternDef.rows), by name
     rowSets?: Record<string, number>;
     // The rhythms going (BossAttackDef.cycle)
@@ -353,6 +360,19 @@ export type EnemyAnim = "walk" | "idle" | "attack" | "death" | "jump";
 
 // Going over a ditch: from one side to the other, starting at tick start
 export type EnemyJump = { fromX: number; fromY: number; toX: number; toY: number; start: number };
+// Turned into an animal by a polymorph power-up (powerUpId's) till endTick, which of them by look
+// and variant (getPolymorphLook), harmless: a sheep (or the penguin) wanders dirX, dirY till
+// turnTick, when it picks another way, and the rare one walks away from the player. Whether it's
+// one at the moment is Sim.polymorphOf's to say.
+export type EnemyPolymorph = {
+    powerUpId: string;
+    look: PolymorphKind;
+    variant: number;
+    endTick: number;
+    dirX: number;
+    dirY: number;
+    turnTick: number;
+};
 export type EnemyFlung = {
     fromX: number;
     fromY: number;
@@ -413,6 +433,8 @@ export type Enemy = {
     lit?: boolean;
     // Jumping a ditch, and nothing else until it lands
     jump?: EnemyJump;
+    // A sheep or a penguin in disguise for a while (a polymorph power-up)
+    polymorph?: EnemyPolymorph;
     // Takes this much more damage from everything (0.25 = +25%) until
     // drainEnd (the Bandos godsword's Warstrike)
     drain: number;
@@ -918,6 +940,8 @@ export type WeaponState = {
     cooldown: number;
     // Extra damage from rare upgrade rolls (0.15 = +15%)
     bonus: number;
+    // Healing from rarity-scaled upgrades, on top of WeaponDef.bloodHeal's base
+    healGain?: { chance: number; hp: number };
     // Attacks made, for special attacks
     uses: number;
 };
@@ -1028,7 +1052,15 @@ type SimEventBody =
     // A boss attack was used (a swing landed, or projectiles were fired)
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
     // A boss's swing landed, hitting around (x, y)
-    | { type: "bossSwing"; x: number; y: number; radius: number }
+    | {
+          type: "bossSwing";
+          x: number;
+          y: number;
+          radius: number;
+          dirX?: number;
+          dirY?: number;
+          cone?: number;
+      }
     // Something of a fight's landed hard at (x, y): the camera shakes (0 to 1) and the screen
     // can flash (ImpactDef)
     | { type: "bossImpact"; x: number; y: number; shake: number; flash?: string }
@@ -1147,6 +1179,10 @@ type SimEventBody =
       }
     // A boss said something over its head
     | { type: "bossShout"; enemyUid: number; text: string }
+    // Any enemy said something over its head, with a sound (a polymorphed sheep's "Baa!")
+    | { type: "enemyShout"; enemyUid: number; text: string; sound: number; x: number; y: number }
+    // A polymorphed penguin was killed, and its escapees run off from where it fell
+    | { type: "polymorphEscape"; powerUpId: string; x: number; y: number }
     // Said over the player's head (Durial321's lines in Falador)
     | { type: "playerShout"; text: string }
     // A boss got back up when it should have died

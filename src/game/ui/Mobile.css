@@ -212,6 +212,12 @@
         filter: drop-shadow(1px 1px 0 #000);
     }
 
+    /* The sound's orb under the pause button, which has its place by the minimap */
+    .ui-minimap .ui-sound-orb {
+        left: -62px;
+        top: 56px;
+    }
+
     .ui-touch-items {
         position: absolute;
         right: calc(var(--safe-right) + 12px);
@@ -516,6 +522,12 @@
         bottom: calc(var(--safe-bottom) + 4px);
     }
 
+    .ui-title-dev {
+        left: auto;
+        right: calc(var(--safe-right) + 10px);
+        bottom: calc(var(--safe-bottom) + 4px);
+    }
+
     .ui-title-link {
         padding: 8px;
     }
@@ -648,6 +660,12 @@
         font-size: 14px;
     }
 
+    /* The footer's label says as much, in less of the cards' room */
+    .ui-shop-help-coins,
+    .ui-shop-hint {
+        display: none;
+    }
+
     .ui-shop-grid {
         flex: 1 1 auto;
         grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
@@ -655,7 +673,8 @@
 
     /* Armoury: the slots and the piece picked scroll apart */
 
-    .ui-armoury > .ui-subtle {
+    .ui-armoury > .ui-subtle,
+    .ui-armoury-legend {
         display: none;
     }
 
@@ -685,6 +704,10 @@
         justify-content: center;
     }
 
+    .ui-armoury-tab {
+        min-height: 44px;
+    }
+
     /* Quests and the collection log */
 
     .ui-quests > .ui-subtle,
@@ -697,8 +720,8 @@
         min-height: 44px;
     }
 
-    /* Run HUD: everything at the edges, the middle left to the fight. What's
-       only a look at the run (gear, quests) is in the pause menu. */
+    /* Run HUD: everything at the edges, the middle left to the fight. Gear has
+       its own panel on the right, behind a toggle; quests are in the pause menu. */
 
     .ui-xp {
         height: calc(var(--safe-top) + 12px);
@@ -721,6 +744,19 @@
         zoom: 0.72;
     }
 
+    /* Taller to press than they're drawn, as there's no room to draw them bigger. Weapons
+       grow up and passives down, each only half the gap toward the other, so neither row
+       covers the other's slots. */
+    .ui-slot::before {
+        content: "";
+        position: absolute;
+        inset: -6px 0 -2px;
+    }
+
+    .ui-hud-left > .ui-slots + .ui-slots .ui-slot::before {
+        inset: -2px 0 -6px;
+    }
+
     .ui-gear-slots,
     .ui-quest-tracker {
         display: none;
@@ -732,6 +768,35 @@
         top: 0;
         transform: translateX(-50%);
         font-size: 24px;
+    }
+
+    .ui-mobile-zoom-control {
+        position: absolute;
+        left: calc(50% + 25vw - 130px);
+        top: 1px;
+        width: clamp(76px, 16vw, 120px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .ui-mobile-zoom-toggle {
+        width: 100%;
+        padding: 0;
+        line-height: 18px;
+    }
+
+    .ui-mobile-zoom {
+        width: 100%;
+        height: 12px;
+        margin: 0;
+        padding: 0;
+        accent-color: var(--ui-orange);
+        pointer-events: auto;
+    }
+
+    .ui-mobile-zoom[hidden] {
+        display: none;
     }
 
     /* Co-op's countdown: one line where the clock was, so the boss bar, the
@@ -806,6 +871,19 @@
 
     .ui-minimap {
         zoom: 0.56;
+    }
+
+    /* The sound's orb near its own size beside the smaller minimap, under the pause button, which
+       has its place by the minimap (its zoom scales its own offsets too) */
+    .ui-minimap .ui-sound-orb {
+        zoom: 1.6;
+        left: -39px;
+        top: 67px;
+    }
+
+    .ui-title-sound {
+        top: calc(var(--safe-top) + 8px);
+        right: calc(var(--safe-right) + 8px);
     }
 
     .ui-touch-pause {

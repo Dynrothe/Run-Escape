@@ -1,5 +1,5 @@
 import { tr } from "../i18n";
-import { PowerUpDef, ThrallDef } from "./types";
+import { PolymorphEffect, PolymorphKind, PolymorphLook, PowerUpDef, ThrallDef } from "./types";
 
 // Power-ups drop now and then from enemies and are used as soon as they're
 // walked over. A kill is likelier to drop one the longer it's been since the
@@ -36,6 +36,23 @@ export const POWER_UPS: PowerUpDef[] = [
         // eat
         sound: 2393,
         effect: { kind: "pumpkin" },
+    },
+    {
+        // Thanksgiving's, from its enemies now and then (TurkeyDay.ts). No turkey in the
+        // cache is cooked, so it's a Cooked chompy, the map's own bird
+        id: "cooked_turkey",
+        name: "Cooked turkey",
+        description: "A feast or a foul trick.",
+        objId: 2878,
+        // A cooked chompy, small beside the other power-ups
+        scale: 2.25,
+        weight: 0,
+        price: 0,
+        color: "#d27d2d",
+        flash: "#ffcc00",
+        // eat
+        sound: 2393,
+        effect: { kind: "cooked_turkey" },
     },
     {
         id: "cannon",
@@ -202,6 +219,124 @@ export const POWER_UPS: PowerUpDef[] = [
         },
     },
     {
+        id: "polymorph",
+        name: "Polymorph",
+        description:
+            "For 10 seconds everything turns into harmless sheep. Elites and bosses become golden sheep, but still fight.",
+        objId: 1737,
+        weight: 2,
+        price: 60,
+        flash: "#f4f0e6",
+        sound: 967,
+        endSound: 968,
+        effect: {
+            kind: "polymorph",
+            seconds: 10,
+            speed: 0.35,
+            sheep: [
+                {
+                    npcId: 2694,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+                {
+                    npcId: 2697,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+                {
+                    npcId: 2698,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+                {
+                    npcId: 2699,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+                {
+                    npcId: 2788,
+                    idleSeq: 5345,
+                    walkSeq: 5344,
+                    deathSeq: 5343,
+                    scale: 1,
+                },
+                // Red, Green, Blue and Yellow Sheep
+                {
+                    npcId: 5305,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+                {
+                    npcId: 5306,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+                {
+                    npcId: 5307,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+                {
+                    npcId: 5308,
+                    idleSeq: 5335,
+                    walkSeq: 5334,
+                    deathSeq: 5336,
+                    scale: 1,
+                },
+            ],
+            // Elites and bosses, which go on fighting as golden sheep (a headbutt for every attack)
+            golden: {
+                npcId: 806,
+                idleSeq: 5345,
+                walkSeq: 5344,
+                deathSeq: 5343,
+                attackSeq: 5341,
+                scale: 1.3,
+                bossScale: 2.5,
+            },
+            // One in 1000 is the penguin dressed as a sheep from Cold War, which doesn't quite
+            // get the bleat right, and two KGP agents run out of it when it's killed
+            penguin: {
+                npcId: 731,
+                idleSeq: 3569,
+                walkSeq: 3568,
+                deathSeq: -1,
+                scale: 1,
+                chance: 1 / 1000,
+                shout: "Beh?",
+                shoutSounds: [1855],
+                escapees: { npcId: 842, walkSeq: 5666, count: 2, speed: 4.5, seconds: 5, scale: 1 },
+            },
+            // One in 3000 wanders off the other way
+            rare: {
+                npcId: 10594,
+                idleSeq: 232,
+                walkSeq: 233,
+                deathSeq: -1,
+                scale: 1,
+                chance: 1 / 3000,
+            },
+            shout: "Baa!",
+            shoutSeconds: 8,
+            shoutSounds: [3263, 3264],
+        },
+    },
+    {
         // Never rolled with the rest (weight 0): only a map with lighting drops it, at its
         // LightingDef.lanternWeight
         id: LANTERN_ID,
@@ -284,4 +419,34 @@ export function powerUpName(powerUp: PowerUpDef): string {
 
 export function powerUpDescription(powerUp: PowerUpDef): string {
     return tr(`powerup.${powerUp.id}.desc`, powerUp.description);
+}
+
+// A polymorph power-up's effect (EnemyPolymorph's powerUpId)
+export function getPolymorphEffect(id: string): PolymorphEffect {
+    const effect = getPowerUp(id).effect;
+    if (effect.kind !== "polymorph") {
+        throw new Error("Not a polymorph: " + id);
+    }
+    return effect;
+}
+
+// Each animal a polymorph can turn something into, with what it's known by (EnemyPolymorph's look
+// and variant)
+export function getPolymorphLooks(
+    effect: PolymorphEffect,
+): { look: PolymorphKind; variant: number; def: PolymorphLook }[] {
+    return [
+        ...effect.sheep.map((def, variant) => ({ look: "sheep" as const, variant, def })),
+        { look: "golden", variant: 0, def: effect.golden },
+        { look: "penguin", variant: 0, def: effect.penguin },
+        { look: "rare", variant: 0, def: effect.rare },
+    ];
+}
+
+export function getPolymorphLook(
+    effect: PolymorphEffect,
+    look: PolymorphKind,
+    variant: number,
+): PolymorphLook {
+    return look === "sheep" ? effect.sheep[variant] : effect[look];
 }

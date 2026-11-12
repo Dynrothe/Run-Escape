@@ -3,6 +3,7 @@ import { getUpgradeLine } from "../../content/armoury";
 import { INVOCATIONS } from "../../content/invocations";
 import { CASKET_GEAR } from "../../content/items";
 import { SHOP_UPGRADES } from "../../content/shop";
+import { TROPHIES, getRaidChestTrophiesFound } from "../../content/trophies";
 import { LOCKABLE_ITEMS } from "../../content/unlocks";
 import { createSave } from "../../core/save";
 import { GameStore } from "../GameStore";
@@ -53,8 +54,9 @@ describe("room codes", () => {
 describe("loadouts", () => {
     // The relay drops a loadout over its cap, and the player would play without
     // their shop bonuses and Armoury, so the biggest a save can make (every
-    // upgrade bought, every item unlocked, all gear upgraded all the way) keeps
-    // well under it. Lots more gear could need the cap raised.
+    // upgrade bought, every item unlocked, all gear upgraded all the way, every
+    // raid chest's trophy found) keeps well under it. Lots more gear could need
+    // the cap raised.
     it("stay well under the relay's cap, even for a save with everything", () => {
         const metaStats: Record<string, number> = {};
         for (const upgrade of SHOP_UPGRADES) {
@@ -68,7 +70,9 @@ describe("loadouts", () => {
             undefined,
             // A Tombs host with every invocation on
             INVOCATIONS.map((invocation) => invocation.id),
+            getRaidChestTrophiesFound(TROPHIES.map((trophy) => trophy.id)),
         );
+        expect(loadout.trophies?.length).toBeGreaterThan(0);
         expect(JSON.stringify(loadout).length).toBeLessThan(MAX_LOADOUT_BYTES / 2);
     });
 

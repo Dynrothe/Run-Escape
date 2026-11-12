@@ -38,7 +38,7 @@ import {
     takesInvocations,
     takesRelics,
 } from "../content/maps";
-import { formatPassiveValue, getPassive } from "../content/passives";
+import { getPassive, passiveValueText } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
@@ -50,7 +50,7 @@ import { RemixId, cleanRemixes, isRemixOpen } from "../content/remixes";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
-import { TROPHY_BY_ID, getEveryTimeTrophiesFound } from "../content/trophies";
+import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
 import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import {
@@ -61,7 +61,7 @@ import {
     isVaultOpen,
     parseWeekKey,
 } from "../content/vault";
-import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
+import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
@@ -119,7 +119,12 @@ import {
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { fmtNum, t, tl, tp } from "../i18n";
-import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
+import {
+    CameraRig,
+    MAX_CAMERA_DISTANCE,
+    MIN_CAMERA_DISTANCE,
+    getGroundReach,
+} from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { getRecipe, installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
@@ -150,6 +155,7 @@ import {
 } from "./GameAssets";
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
+import { padHints } from "./GamePad";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
     AbilityView,
@@ -416,6 +422,7 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
             isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
+            isKeris: choice.kind === "hilt" && getWeapon(choice.into).family === "keris",
             rarity: rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
@@ -445,7 +452,7 @@ export function cleanLoadout(loadout: Loadout | undefined): {
     }
     return {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
-        trophiesFound: new Set(getEveryTimeTrophiesFound(trophies.slice(0, 100))),
+        trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
         // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
         ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
@@ -735,6 +742,8 @@ export class GameClient implements GameFrameHandler {
     // The tick the boss on the bar was first up, in this sim, since there was none: the ability
     // hint's clock. A fight's start, not the run's: the Tombs' Nexus comes before each boss.
     private bossUp?: { sim: Sim; tick: number };
+    // The toast saying the sound's on or off, if one's up (see toggleMute)
+    private soundToast?: number;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
     private attractTick = 0;
@@ -1284,7 +1293,7 @@ export class GameClient implements GameFrameHandler {
                 : room && takesInvocations(getMap(room.mapId))
                   ? [...(this.save.runInvocations ?? [])]
                   : undefined,
-            getEveryTimeTrophiesFound(this.save.trophies),
+            getRaidChestTrophiesFound(this.save.trophies),
             room ? this.runRelics(getMap(room.mapId)) : undefined,
         );
     }
@@ -1461,9 +1470,27 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ audio: this.audio.settings });
     }
 
-    toggleMute(): void {
+    // M, the sound's orb or the sound setting. In a run, M and the orb say which way it went
+    // (announce): no setting's in sight, and the orb's off at the side. The setting shows it
+    // itself, and a toast from there would wait under the pause menu.
+    toggleMute(announce = false): void {
         this.audio.setSettings({ muted: !this.audio.settings.muted });
         this.store.set({ audio: this.audio.settings });
+        if (announce && this.sim) {
+            // Only the last of them: M pressed twice would say off and on at once
+            if (this.soundToast !== undefined) {
+                this.store.dismissToast(this.soundToast);
+            }
+            // A touch screen or a controller has no key for it
+            const key = !isCoarsePointer && padHints.get() === undefined;
+            this.soundToast = this.store.toast(
+                !this.audio.settings.muted
+                    ? t("canvas.sound_on")
+                    : key
+                      ? t("canvas.sound_off_key")
+                      : t("canvas.sound_off"),
+            );
+        }
     }
 
     toggleMenuSpin(): void {
@@ -1517,6 +1544,10 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ damagePanel: !this.display.damagePanel });
     }
 
+    toggleGearPanel(): void {
+        this.setDisplay({ gearPanel: !this.display.gearPanel });
+    }
+
     toggleMovePrediction(): void {
         this.setDisplay({ movePrediction: !this.display.movePrediction });
         this.coopRun?.setPrediction(this.display.movePrediction);
@@ -1552,6 +1583,15 @@ export class GameClient implements GameFrameHandler {
     // Takes hold from the next frame (update)
     setFrameRate(frameRate: FrameRate): void {
         this.setDisplay({ frameRate });
+    }
+
+    // The phone HUD's zoom slider: 0 is as far out as the wheel goes, 100 as close in
+    setCameraZoom(zoom: number): void {
+        if (this.sim) {
+            this.cameraRig.setDistance(
+                MAX_CAMERA_DISTANCE - ((MAX_CAMERA_DISTANCE - MIN_CAMERA_DISTANCE) * zoom) / 100,
+            );
+        }
     }
 
     private setDisplay(changes: Partial<DisplaySettings>): void {
@@ -1864,7 +1904,7 @@ export class GameClient implements GameFrameHandler {
             spawnX: map.spawn.x,
             spawnY: map.spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
-            trophiesFound: new Set(getEveryTimeTrophiesFound(this.save.trophies)),
+            trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
             pet: this.save.pet,
             endless,
             hard,
@@ -2084,6 +2124,8 @@ export class GameClient implements GameFrameHandler {
             chest: undefined,
             result: undefined,
             toasts: [],
+            // The pause menu's recent messages are this run's, not the title's or the lobby's
+            toastLog: [],
             party: [],
             waitingOn: [],
             revive: undefined,
@@ -2404,11 +2446,19 @@ export class GameClient implements GameFrameHandler {
         this.syncOverlay();
     }
 
-    // Ends the run where it stands (from the pause menu); coins found are kept.
-    // In co-op that's leaving the party (the host's leaving ends it for
-    // everyone).
+    // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
+    // results. In co-op that's leaving the party (the host's leaving ends it for everyone).
     quitRun(): void {
-        if (this.sim) {
+        const sim = this.sim;
+        if (sim && !this.coopRun) {
+            this.paused = false;
+            sim.giveUp();
+            // Before the overlay, or it would play as a death
+            this.finishRun(t("ui.result.gave_up"), "abandoned");
+            this.syncOverlay();
+            return;
+        }
+        if (sim) {
             this.finishRun();
         }
         // Quitting a fight of the Forgotten Four's gives the whole run up
@@ -2421,11 +2471,11 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
-    // The same boss fight again, from its results (MapDef.fight), on your own
+    // The same map again, from its results, on your own
     retry(): void {
         const map = this.sim?.map;
         const mapId = map?.id;
-        if (!mapId || this.coopRun || !map.fight) {
+        if (!mapId || this.coopRun) {
             return;
         }
         // A retry of the same part is without its cinematic; "Next fight", on to a part not played
@@ -2478,6 +2528,7 @@ export class GameClient implements GameFrameHandler {
             party: [],
             waitingOn: [],
             revive: undefined,
+            toastLog: [],
         });
     }
 
@@ -2812,6 +2863,8 @@ export class GameClient implements GameFrameHandler {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
                 endedEarly,
+                // As retry() goes by
+                ...(this.coopRun && { coop: true }),
             },
             ...(actEnding && { actEnding }),
         });
@@ -2883,7 +2936,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         if (code === "KeyM") {
-            this.toggleMute();
+            this.toggleMute(true);
             return;
         }
         if (code === "KeyQ" && this.sim) {
@@ -3930,6 +3983,8 @@ export class GameClient implements GameFrameHandler {
             this.store.set({
                 overlay: "levelUp",
                 choices: getChoiceViews(sim),
+                // The ones still to come after this
+                levelUpsLeft: Math.max(0, sim.pendingLevelUps - 1),
                 chest: undefined,
                 waitingOn,
             });
@@ -4180,13 +4235,8 @@ export class GameClient implements GameFrameHandler {
                     level: w.level,
                     maxLevel: w.def.levels.length,
                     iconObjId: level.objId ?? w.def.iconObjId,
-                    detail:
-                        w.bonus > 0
-                            ? t("canvas.weapon_bonus_damage", {
-                                  bonus: formatWeaponBonus(w.bonus),
-                              })
-                            : "",
-                    stats: weaponStats(w.def, level).map(formatWeaponStat),
+                    detail: w.bonus > 0 ? weaponBonusText(w.bonus) : undefined,
+                    stats: weaponStats(w.def, level).map(weaponStatText),
                     evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
@@ -4200,7 +4250,7 @@ export class GameClient implements GameFrameHandler {
                     maxLevel: def.maxLevel,
                     iconObjId: def.iconObjId,
                     iconSpriteId: def.iconSpriteId,
-                    detail: formatPassiveValue(def, p.value),
+                    detail: passiveValueText(def, p.value),
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),

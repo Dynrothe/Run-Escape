@@ -280,7 +280,15 @@ unlocks something in the game.
       Tumeken's Light: a keris has one special attack, and this one's is the Wrath.
     - **In the game** (`KERIS_PARTISANS` in `content/weapons.ts`): one `family`, so one a run;
       the plain one from the Queen's second form (`kalphite_queen_risen`, where her kill counts);
-      the rest `raidChest` unlocks on their jewels. Kalphites and scarabs, Kephri and her
+      the rest `raidChest` unlocks on their jewels. Only the plain one is offered on a level up:
+      the jewelled ones are `pickOnly`, and the plain one's `hilts` (`KERIS_PICK`) make its level
+      2 a pick of the plain one and every jewel's keris found, as Ice Burst's picks the run's
+      Ancient spell (no pick with no jewel found). The level-up window says so (`isKeris`). A
+      jewel found before the Queen's kill still brings the plain one in to take it
+      (`isOfferable` in `core/Upgrades.ts`). A jewel's keris comes on the plain one's offer, so
+      its bonus damage is a Rare's or better, not the Very rare's it had when jewels were offered
+      themselves. The balance bots set the best jewel found (`kerisPickRank` in
+      `scripts/game/tombsBot.ts`). Kalphites and scarabs, Kephri and her
       scarabs too, carry the `kalphite` tag (not the Scarab Mages, who are men), and `slayer`
       gives them the third. Breaching is
       `WeaponDef.breach` (6% a stab, 30% on a kalphite, triple, diamond bolts' Armour Piercing on
@@ -409,6 +417,16 @@ animations from a lister of those whose model or animation is in the raid's rang
     - **Invocations**: Mind the Gap (the gap at the foot, where her barrier stood, kills),
       Boulderdash, Shaking Things Up, Jungle Japes (banana peels root you, drawn as the Banana) and
       Gotta Have Faith (the sarcophagi's bolts hit harder: there's no prayer here to scale by).
+    - **Her shockwave**'s dust (451) doesn't reach the edge of what it hits, so its reach is
+      outlined in red too (`GroundPatternDef.edge`). It's chosen with a hero within 4 tiles, and
+      reaches 3.6 (5 with Shaking Things Up), so whoever's further out is hit as well.
+    - **Her stomp** (`BossDef.stomp`): whoever's right up against her (within `stomp.radius` of
+      her middle, which her solid body leaves you at) is stomped, harder each time they stay. A
+      red ring fills at her feet before each (`GameView.drawBossWindups`), the first waits a
+      moment (`stomp.first`), each lands with a flash, and a message says what it is as the first
+      ring starts. Without those, players took it as damage from nowhere. A step out doesn't put
+      the next off (it starts over only after `stomp.first` away), but one that came due while
+      nobody was under fills its ring again before it lands.
     - Her hitpoints go up with the path level (`TOMBS_BOSSES`), as does each path's boss's.
     - Her boulders are drawn as her Boulder NPC (11782) rolling (9518): the rows
       (`BulletPatternDef.look`), the shards, and the boulder that drops into each rockfall and boulder
@@ -435,7 +453,14 @@ animations from a lister of those whose model or animation is in the raid's rang
       Feeling Special), every quadrant but the next in the order is
       blasted for nearly half your hitpoints and its element, each throwing up a spray of its
       element's orbs, bright in its colour (drawn only). Four steps, one more every two path
-      levels.
+      levels, up to `memory.most`. He comes back where he vanished, or with a shadow of his dead,
+      just inside its quarter (`Sim.akkhaReappear`), where he can be hurt. His next special waits
+      till he's been back as long as he was gone, however many attacks he's made, at every raid
+      level. That was for 500, where every special's a blast, but it's easier everywhere: against
+      0.30.0 (November 2026, `ROOM=akkha` sweep, 10 seeds of each style), Entry with nothing
+      bought went from 14 wins of 30 to 21, in a median 11 to 13 minutes, not 18 to 21. Expert with
+      everything went from 0 of 30 to 4. Normal stayed at 0 or 1, with the bot held at his
+      shadows either way.
     - **Trailing orbs**: for a while, an orb (its quadrant's, 11800 to 11803) on every tile anyone
       leaves, armed after a moment, going off under whoever steps on it. Standing still drops none.
       Feeling Special drops one three tiles ahead too.
@@ -559,8 +584,11 @@ animations from a lister of those whose model or animation is in the raid's rang
       glinting out a tile, and the tiles it'll reach marked on the floor
       (`GameView.drawCrondisSpearTells`, yellow, as the floor's red; players found the glint
       alone too hard to time). **Poison** comes down each corridor from its waterfall's end every
-      9 s (less with path levels): pale first, the dark cloud a second behind it. Under a
-      waterfall (where you fill) it doesn't reach you, running or dry, as in OSRS. It's the
+      9 s, a little less with a path done but never under `cloudEveryLeast`: pale first, the dark
+      cloud a second behind it. Under a waterfall (where you fill) it doesn't reach you, running
+      or dry, as in OSRS, and it hits only inside its corridor, where it's drawn. Going in you
+      meet the clouds head on, so the least gap is set to leave time to walk the corridor between
+      two, even slowed by a trap: a trip in is timed, not luck. It's the
       Spitting Scarab's green splash (2155), faint for the pale: the room's own spot animations
       (2129 to 2131) draw nothing, and its poison floor tiles' activation can't be baked (a loc
       bakes with its own animation only).

@@ -38,7 +38,7 @@
 .ui-changelog-date {
     font-family: "OSRS Small", sans-serif;
     font-size: 14px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-changelog-heading {

@@ -58,6 +58,7 @@ import {
     VARDORVIS_START_DISTANCE,
     VARDORVIS_SWORD_LEVEL,
 } from "./vardorvis";
+import { THANKSGIVING_EVENTS, THANKSGIVING_WAVES } from "./waves";
 import {
     BARROWS_EVENTS,
     BARROWS_WAVES,
@@ -108,8 +109,8 @@ import {
 const SCAR_ARENA_WORLD = scarWorld(SCAR_BOSS_ARENA);
 
 // The maps, in the order they open up: beating one unlocks the next. Arenas
-// are whole map squares (64 tiles), in world tiles. Seasonal maps go last: they're
-// open from the start, and nothing waits on them.
+// are world-tile rectangles, usually aligned to 64-tile map squares. Seasonal
+// maps go last: they're open from the start, and nothing waits on them.
 export const MAPS: MapDef[] = [
     {
         id: "lumbridge",
@@ -810,6 +811,31 @@ export const MAPS: MapDef[] = [
     },
     // A quest in four parts after the desert, which opens the Tombs of Amascut
     BENEATH_CURSED_SANDS,
+    {
+        id: "thanksgiving",
+        name: "Thanksgiving Harvest",
+        description:
+            "Hosidius Vinery's grape fields are overrun by restless creatures and wild Chompies. " +
+            "Professor Oddenstein and the Evil Chicken interrupt the gathering, and the Freaky Forester " +
+            "challenges you at the end.",
+        // The Rubber chicken
+        iconObjId: 4566,
+        // Hosidius and the Vinery, map squares 27-29 x 54-56
+        arena: { baseX: 27 * 64, baseY: 54 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // The point marked in the requested Hosidius scene
+        spawn: { x: 1771.5, y: 3572.5 },
+        spawnFacing: { x: 0, y: 1 },
+        difficulty: { hp: 1.25, damage: 1.15 },
+        hard: { hp: 1.8, damage: 1.5 },
+        waves: THANKSGIVING_WAVES,
+        events: THANKSGIVING_EVENTS,
+        finalBossWarning: "The harvest feast is interrupted... the Freaky Forester approaches!",
+        victoryText: "The Freaky Forester is defeated! The harvest is safe!",
+        seasonal: true,
+        seasonalCharacter: "avian_assaulter",
+        noRandomEvents: ["highwayman"],
+        noLevelUpCoins: true,
+    },
 ];
 
 // The maps that open one after another
@@ -948,7 +974,7 @@ export function getRunCinematic(map: MapDef, stage: number): CinematicDef | unde
 // The adventurer everyone plays on a map, if it has one (Durial321 in
 // Falador, the Inquisitor against Phosani's Nightmare)
 export function getMapCharacter(map: MapDef): string | undefined {
-    return map.fun?.character ?? map.fight?.character;
+    return map.fun?.character ?? map.fight?.character ?? map.seasonalCharacter;
 }
 
 export function getMap(id: string): MapDef {

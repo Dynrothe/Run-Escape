@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import type { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
+import { getCharacter } from "../content/characters";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
 import { GameUi } from "./GameUi";
@@ -54,17 +55,23 @@ function renderShop(upgrades: Record<string, number>, coins = 0, characterId = "
     return { ...actions, save };
 }
 
+// Says yes to the question Refund all asks first
+async function refundAll(): Promise<void> {
+    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await act(async () => {
+        fireEvent.click(within(dialog).getByRole("button", { name: "Refund all" }));
+    });
+}
+
 test("skills explain how combat-style presets are used", () => {
     renderShop({});
     expect(screen.getByRole("tablist", { name: "Skill presets" })).toBeInTheDocument();
-    expect(
-        screen.getByText(
-            "Melee, Ranged and Magic are separate skill presets, used automatically by adventurers of that combat style.",
-        ),
-    ).toBeVisible();
+    expect(screen.getByText(/^Melee, Ranged and Magic are separate skill presets/)).toBeVisible();
+    expect(screen.getByText(/^Each preset has its own balance/)).toBeVisible();
 });
 
-test("switching class pages keeps purchases and single-rank refunds isolated", () => {
+test("switching class pages keeps purchases and single-rank refunds isolated", async () => {
     expect.hasAssertions();
     const actions = renderShop({}, 50000);
     fireEvent.click(screen.getByRole("button", { name: /^Strength\b/ }));
@@ -82,7 +89,7 @@ test("switching class pages keeps purchases and single-rank refunds isolated", (
     expect(actions.save.skillPages.melee).toEqual(melee);
     expect(actions.save.skillPages.ranged).toEqual(ranged);
     fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    await refundAll();
     expect(actions.refundUpgrades).toHaveBeenLastCalledWith("ranged");
     expect(actions.save.skillPages.melee).toEqual(melee);
     fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
@@ -197,13 +204,37 @@ test("unbought skills have no refund button", () => {
     expect(screen.queryByRole("button", { name: "Refund one Strength rank" })).toBeNull();
 });
 
-test("Refund all clears ranks that have no spending recorded", () => {
+test("Refund all asks first, and cancelling leaves everything as it was", async () => {
+    expect.hasAssertions();
+    const actions = renderShop({ strength: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(actions.refundUpgrades).not.toHaveBeenCalled();
+    await act(async () => {
+        fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    });
+    expect(actions.refundUpgrades).not.toHaveBeenCalled();
+    expect(actions.save.skillPages.melee.upgrades).toEqual({ strength: 2 });
+});
+
+test("an out-of-reach skill says how much it's short, and a maxed one doesn't look out of reach", () => {
+    expect.hasAssertions();
+    renderShop({ strength: 5 }, 0);
+    const maxed = screen.getByRole("button", { name: /^Strength\b/ });
+    expect(maxed).toHaveClass("ui-shop-card-maxed");
+    expect(maxed).not.toHaveClass("ui-card-dim");
+    const short = screen.getByRole("button", { name: /^Ring of life\b/ });
+    expect(short).toHaveClass("ui-card-dim");
+    expect(short).toHaveTextContent(/short/);
+});
+
+test("Refund all clears ranks that have no spending recorded", async () => {
     expect.hasAssertions();
     const actions = renderShop({ strength: 2 });
     actions.save.skillPages.melee.upgradesSpent = 0;
     fireEvent.click(screen.getByRole("tab", { name: "Ranged preset" }));
     fireEvent.click(screen.getByRole("tab", { name: "Melee preset" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refund all" }));
+    await refundAll();
     expect(actions.refundUpgrades).toHaveBeenCalledExactlyOnceWith("melee");
     expect(actions.save.skillPages.melee.upgrades).toEqual({});
     expect(screen.queryByRole("button", { name: "Refund one Strength rank" })).toBeNull();
@@ -246,7 +277,8 @@ function renderMaps(mapId = "lumbridge") {
     store.set({ screen: "characters", mapId });
     const actions = {
         selectMap: vi.fn((id: string) => store.set({ mapId: id })),
-        selectCharacter: vi.fn(),
+        selectCharacter: vi.fn((id: string) => store.set({ characterId: id })),
+        startRun: vi.fn(),
         toggleFavouriteCharacter: vi.fn(),
         playClick: vi.fn(),
     };
@@ -270,6 +302,55 @@ test("the map screen opens on the picked map's tab, and a map on another tab can
     renderMaps("theatre_of_blood");
     expect(screen.getByRole("tab", { name: "Bosses" })).toHaveAttribute("aria-selected", "true");
 }, 30000);
+
+test("Thanksgiving map selection has its autumn theme", () => {
+    renderMaps();
+    const thanksgiving = screen.getByRole("button", { name: "Thanksgiving Harvest" });
+    const mapPanel = document.querySelector(".ui-select-maps")!;
+    expect(thanksgiving).toHaveClass("ui-map-tile-thanksgiving");
+    fireEvent.mouseMove(thanksgiving);
+    expect(mapPanel).toHaveClass("ui-select-maps-thanksgiving");
+    expect(document.querySelector(".ui-select-details-thanksgiving")).not.toBeNull();
+    fireEvent.mouseMove(screen.getByRole("button", { name: "Lumbridge" }));
+    expect(mapPanel).not.toHaveClass("ui-select-maps-thanksgiving");
+    expect(document.querySelector(".ui-select-details-thanksgiving")).toBeNull();
+});
+
+test("the Avian Assaulter is only Thanksgiving's, and shown there with what they do", () => {
+    renderMaps();
+    // Not in the roster, to pick or to count
+    expect(screen.queryByRole("button", { name: "Avian Assaulter" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));
+    expect(document.querySelector(".ui-select-adventurers .ui-card-title")).toHaveTextContent(
+        "Avian Assaulter",
+    );
+    expect(document.querySelector(".ui-select-adventurers .ui-card-style")).toHaveTextContent(
+        "Melee",
+    );
+    expect(screen.getByText(getCharacter("avian_assaulter").description)).toBeInTheDocument();
+    expect(screen.getByText("+15% damage against birds")).toBeInTheDocument();
+});
+
+test("Thanksgiving fixes the adventurer as the Avian Assaulter, and other maps don't", () => {
+    const actions = renderMaps();
+    const enter = () => screen.getByRole("button", { name: /Enter / });
+    fireEvent.click(screen.getByRole("button", { name: "Thanksgiving Harvest" }));
+    expect(enter()).toBeEnabled();
+    expect(document.querySelector(".ui-select-fixed-note")).toHaveTextContent("Avian Assaulter");
+    fireEvent.click(enter());
+    expect(actions.startRun).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Lumbridge" }));
+    expect(document.querySelector(".ui-select-fixed-note")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Warrior" }));
+    expect(enter()).toBeEnabled();
+});
+
+test("the Thanksgiving map keeps its theme when selected and no longer hovered", () => {
+    renderMaps("thanksgiving");
+    const mapPanel = document.querySelector(".ui-select-maps")!;
+    fireEvent.mouseLeave(mapPanel);
+    expect(mapPanel).toHaveClass("ui-select-maps-thanksgiving");
+});
 
 test("the favourite button is the shown adventurer's, and stays as focus moves to it", () => {
     expect.hasAssertions();
@@ -333,6 +414,18 @@ function renderTitle(runs: number, lastExported?: number) {
     render(<GameUi store={store} client={client as unknown as GameClient} />);
     return { client, store };
 }
+
+test("the title has the sound's orb, which says whether the sound's on", () => {
+    const { store } = renderTitle(3);
+    expect(screen.getByRole("button", { name: "Sound on: turn it off" })).toBeInTheDocument();
+    act(() => store.set({ audio: { ...store.getSnapshot().audio, muted: true } }));
+    expect(screen.getByRole("button", { name: "Sound off: turn it on" })).toBeInTheDocument();
+});
+
+test("Tab reaches Singleplayer before the title's other buttons, the sound's orb included", () => {
+    renderTitle(3);
+    expect(screen.getAllByRole("button")[0]).toHaveTextContent("Singleplayer");
+});
 
 describe("the title's export reminder", () => {
     // Its own, as Node 25 and later have a localStorage that hides jsdom's
