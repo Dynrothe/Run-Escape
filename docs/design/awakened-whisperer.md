@@ -73,21 +73,22 @@ Three phases by her hitpoints, each a full bar of its own, and at each threshold
 | 2     | 65-30%    | The realm bleeds | Screech; a siphon of 7 at 48%                                              |
 | 3     | 30-0%     | Drowned          | Double volleys, double tentacles, everything quicker; a siphon of 8 at 14% |
 
-She has 560 hitpoints (the Shadow walker's burst does about 5 a second to her, so hitpoints are
-set by that: section 10). She starts an attack every 1.3 s, times the phase's tempo (1, 0.9,
-0.8), and drifts after the player at 1.6 tiles a second, keeping 2 tiles off, quicker by the
-phase.
+She has 1,650 hitpoints (the Shadow walker's burst does about 6 a second to her with the shop's
+every upgrade, so hitpoints are set by that: section 10), and her hits go through armour
+(`MapDef.hits`). She starts an attack every 0.95 s, times the phase's tempo (1, 0.85, 0.75), and
+drifts after the player at 1.6 tiles a second, keeping 2 tiles off, quicker by the phase.
 
 ### Her attacks, and the dodge arithmetic
 
-The Shadow walker has 25 hitpoints and moves 3.33 tiles a second. A big hit takes about a third.
+The Shadow walker has 25 hitpoints (50 with the shop's every upgrade) and moves 3.33 tiles a
+second. A big hit takes about a sixth of a full save's.
 
 | Attack                                                                                            | Damage                        | Warning                      | To be clear                       |
 | ------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------- | --------------------------------- |
-| Volley: three shots fanned along where you stood as she began (five, drowned)                     | 3 each                        | 0.8 s, the flight            | a step across the lines           |
-| Tentacles: a cross of bursts round where you stood, 6 tiles each way                              | 4                             | 1.3 s                        | off the cross's arms (diagonally) |
-| Shadow burst: a blast where you stood                                                             | 5                             | 1.2 s                        | 2.2 tiles out                     |
-| Screech: the whole city, wherever you are in it                                                   | 8                             | 2.2 s (she draws breath)     | the realm                         |
+| Volley: three shots fanned along where you stood as she began (five, drowned)                     | 6 each                        | 0.65 s, the flight (14 t/s)  | a step across the lines           |
+| Tentacles: a cross of bursts round where you stood, 6 tiles each way                              | 6                             | 0.85 s (0.75 the second)     | off the cross's arms (diagonally) |
+| Shadow burst: a blast where you stood                                                             | 8                             | 0.95 s                       | 2.4 tiles out                     |
+| Screech: the whole city, wherever you are in it                                                   | 11                            | 1.8 s (she draws breath)     | the realm                         |
 | The realm's tentacles: one rises near you every 6 s there (two at most) and lashes within 5 tiles | 3                             | its shot                     | out of reach, or a step           |
 | The realm itself: sanity                                                                          | 20% of your hitpoints at none | the bar, the edges darkening | out in time                       |
 
@@ -205,6 +206,40 @@ a quarter of it spent there, never thrown back by sanity. Her hitpoints are low 
 Vardorvis's because Shadow Burst is: about 5 a second to her (9 a burst every 1.9 s, and its
 drain), against the 2h sword's 45. The first knobs for a playtest are her hitpoints and the
 drowning volley.
+
+**Hardened, 2026-11-12**, with Awakened Vardorvis (Dynny: "far too easy" with a fully upgraded
+save). Every round above was with nothing bought; a full save has 50 hitpoints, armour 3 (taking
+most of each of her hits), regeneration and a Ring of life. By the careful bot with `META=max` the
+old numbers won 200 of 200, in 0:59-1:39, taking a median 7 of 50; phases 36 / 22 / 21 s.
+
+Retuned to `META=max`, kit and mechanics as they were:
+
+| What            | Before                     | After                            |
+| --------------- | -------------------------- | -------------------------------- |
+| Her hits        | stopped by armour          | through armour (`MapDef.hits`)   |
+| Hitpoints       | 560                        | 1,650                            |
+| An attack every | 1.3 s, tempo 1 / 0.9 / 0.8 | 0.95 s, tempo 1 / 0.85 / 0.75    |
+| Volley          | 3, 0.8 s, 10 t/s           | 6, 0.65 s, 14 t/s                |
+| Tentacles       | 4, 1.3 s (0.9 the second)  | 6, 0.85 s (0.75 the second)      |
+| Shadow burst    | 5, 1.2 s, 1.8 across       | 8, 0.95 s, 2 across              |
+| Screech         | 8, 2.2 s, every 11 s (8)   | 11, 1.8 s, every 9 s (7 drowned) |
+
+The careful bot, `META=max`, seeds 1-300 (the last 1-600; hard 1-300):
+
+| Round | Numbers                                                                  | Normal wins           | Phases (median) |
+| ----- | ------------------------------------------------------------------------ | --------------------- | --------------- |
+| 0     | 560 hp, as built before (200 seeds)                                      | 200 of 200            | 36 / 22 / 21 s  |
+| 1     | 1,300 hp, interval 1.1 s, volley 4 at 12 t/s, the rest as above          | 174 of 300 (1 in 1.7) | 73 / 45 / 39 s  |
+| 2     | 1,700 hp, interval 1 s, volley 5                                         | 74 of 300 (1 in 4.1)  | 98 / 56 / 48 s  |
+| 3     | 1,500 hp, interval 0.95 s, volley 14 t/s, tentacles 6 at 0.85 s, burst 8 | 33 of 300 (1 in 9.1)  | 85 / 51 / 42 s  |
+| 4     | Volley 6                                                                 | 19 of 300 (1 in 16)   |                 |
+| 5     | 1,650 hp (as built, 600 seeds)                                           | 21 of 600 (1 in 29)   | 94 / 53 / 45 s  |
+
+Wins in 2:39-3:28; it dies in phases 2 and 3 (565 of 579), to her volleys most of all. Hard: 0 of
+300, mostly in phase 1. Nothing bought: 0 of 200. The bot that can't die (`GOD=1`, 20 seeds)
+takes phase 1 (578 hp) in 73-107 s, median 93, about 6 a second, phases 2 and 3 in a median 56
+and 50 s: her siphons' stuns and her screech's guard drops speed them up. A person who takes the
+shocks' chances should be near a minute and a half in the first, under a minute after.
 
 ## 11. As built, and what differs from the act's design
 

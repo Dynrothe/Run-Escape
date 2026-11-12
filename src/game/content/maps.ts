@@ -703,8 +703,10 @@ export const MAPS: MapDef[] = [
             x: LASSAR_CATHEDRAL.x,
             y: LASSAR_CATHEDRAL.y - WHISPERER_START_DISTANCE,
         },
-        // Her hitpoints come from the event, her hits are tuned to the Shadow walker's hitpoints
+        // Her hitpoints come from the event, her hits are tuned to the Shadow walker's hitpoints with
+        // the shop's every upgrade: through armour, which would stop most of each of her hits
         difficulty: { hp: 1, damage: 1 },
+        hits: { scale: 1, throughArmor: true },
         hard: { hp: 1.3, damage: 1.3 },
         waves: [],
         events: [

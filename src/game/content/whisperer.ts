@@ -3,12 +3,12 @@ import { LASSAR_REALM } from "./lassar";
 import { BossAttackDef, EnemyDef, FightAbilityDef, ImpactDef, RealmRuleDef } from "./types";
 
 // The Awakened Whisperer, Act II's second Awakened fight (MapDef.fight, maps.ts), fought on her own
-// on her island in the Lassar Undercity, as the Shadow walker. Zachariah's way of a fight: an attack
-// about every 1.4 s by phase, her guard down when her screech finds no one, and a button that
-// rewards stepping in. Lassar's two worlds are the thread through it: she can only be hurt in the
-// city, her Soul Siphon can only be stopped in the realm (her souls go with the party, but can be
-// caught only there), and sanity's the clock in there. Blackstone, the button, turns the party
-// between the two, and coming out beside her it shocks her.
+// on her island in the Lassar Undercity, as the Shadow walker. Zachariah's way of a fight: an
+// attack about every 0.95 s, quicker by phase, her guard down when her screech finds no one, and a
+// button that rewards stepping in. Lassar's two worlds are the thread through it: she can only be
+// hurt in the city, her Soul Siphon can only be stopped in the realm (her souls go with the party,
+// but can be caught only there), and sanity's the clock in there. Blackstone, the button, turns the
+// party between the two, and coming out beside her it shocks her.
 // The design and its numbers: docs/design/awakened-whisperer.md.
 
 // Her animations (npc 12204, as the Lassar Undercity's Whisperer has them)
@@ -41,7 +41,7 @@ export const WHISPERER_BOSS_ARENA = { baseX: SPOT.x - HALF, baseY: SPOT.y - HALF
 
 // What the fight's tuned to (maps.ts): her hitpoints, Shadow Burst's level (its top), its reach
 // there, and tiles south of her the player starts
-export const WHISPERER_HITPOINTS = 560;
+export const WHISPERER_HITPOINTS = 1650;
 export const WHISPERER_BURST_LEVEL = 8;
 export const WHISPERER_BURST_REACH = 2.9;
 export const WHISPERER_START_DISTANCE = 6;
@@ -75,12 +75,12 @@ export const WHISPERER_BLACKSTONE: FightAbilityDef = {
 const VOLLEY: BossAttackDef = {
     name: "Volley",
     kind: "projectile",
-    damage: 3,
-    windup: 0.8,
+    damage: 6,
+    windup: 0.65,
     cooldown: 0,
     range: 16,
     radius: 0.5,
-    speed: 10,
+    speed: 14,
     count: 3,
     spread: 0.3,
     wave: { reach: 12 },
@@ -98,8 +98,8 @@ const VOLLEY: BossAttackDef = {
 const TENTACLES: BossAttackDef = {
     name: "Tentacles",
     kind: "ground",
-    damage: 4,
-    windup: 1.3,
+    damage: 6,
+    windup: 0.85,
     cooldown: 5,
     range: 20,
     weight: 3,
@@ -119,11 +119,11 @@ const TENTACLES: BossAttackDef = {
 const BURST: BossAttackDef = {
     name: "Shadow burst",
     kind: "blast",
-    damage: 5,
-    windup: 1.2,
+    damage: 8,
+    windup: 0.95,
     cooldown: 6,
     range: 14,
-    radius: 1.8,
+    radius: 2,
     weight: 3,
     seq: BURST_SEQ,
     sound: 436,
@@ -136,9 +136,9 @@ const BURST: BossAttackDef = {
 const SCREECH: BossAttackDef = {
     name: "Screech",
     kind: "swing",
-    damage: 8,
-    windup: 2.2,
-    cooldown: 11,
+    damage: 11,
+    windup: 1.8,
+    cooldown: 9,
     range: 999,
     radius: 40,
     weight: 3,
@@ -166,12 +166,12 @@ const ATTACKS: BossAttackDef[] = [
         name: "Tentacles twice",
         weight: 2,
         phases: [3],
-        chain: { times: 1, windup: 0.9 },
+        chain: { times: 1, windup: 0.75 },
     },
     BURST,
     SCREECH,
     // Quicker drowned
-    { ...SCREECH, name: "Drowning screech", cooldown: 8, phases: [3] },
+    { ...SCREECH, name: "Drowning screech", cooldown: 7, phases: [3] },
 ];
 
 const RISING: ImpactDef = {
@@ -214,7 +214,7 @@ export const WHISPERER_ENEMIES: EnemyDef[] = [
         hurtIn: 0,
         spawnMessage: "The Awakened Whisperer rises before her cathedral!",
         boss: {
-            attackInterval: 1.3,
+            attackInterval: 0.95,
             keepDistance: 2,
             enrage: { message: "" },
             bulletGrace: 0.6,
@@ -273,14 +273,14 @@ export const WHISPERER_ENEMIES: EnemyDef[] = [
                         status: "The realm bleeds",
                         message: "The realm bleeds into the city!",
                         opener: "Tentacles",
-                        tempo: 0.9,
+                        tempo: 0.85,
                         speed: 1.1,
                     },
                     {
                         status: "Drowned",
                         message: "Drowned!",
                         opener: "Drowning volley",
-                        tempo: 0.8,
+                        tempo: 0.75,
                         speed: 1.2,
                     },
                 ],
