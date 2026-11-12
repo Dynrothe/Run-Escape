@@ -680,8 +680,10 @@
     bottom: 8px;
 }
 
-/* A narrow window: the corner stacks, and the hint wraps to stay clear of it */
-@media (max-width: 1040px) and (pointer: fine) {
+/* A narrow window: the corner stacks, and the hint wraps to stay clear of it. A
+   tablet held upright too; a phone has a layout of its own (Mobile.css). */
+@media (max-width: 1040px) and (pointer: fine),
+    (max-width: 1040px) and (pointer: coarse) and (min-height: 521px) {
     .ui-title-utils {
         flex-wrap: wrap;
         justify-content: flex-end;
