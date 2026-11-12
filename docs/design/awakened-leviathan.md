@@ -80,33 +80,34 @@ untouchable.
 | 2     | 65-30%    | The dark       | Its glow out, the scene darker; the torrent; leeches; debris on its own |
 | 3     | 30-0%     | The pathfinder | The pathfinder's circle the only light; the torrent quicker; lightning  |
 
-It has 5,200 hitpoints, set by the bot (section 10): Fire Wave does about 55 a second to it when
-it can be aimed at. It starts an attack every 1.4 s, times the phase's tempo (1, 0.9, 0.8), and
-never moves.
+It has 17,500 hitpoints, set by the bot with the shop's every upgrade (section 10): Fire Wave does
+about 110 a second to it when it's lit. Its hits go through armour (`MapDef.hits`). It starts an
+attack every 1 s, times the phase's tempo (1, 0.85, 0.75), and never moves.
 
 ### Its attacks, and the dodge arithmetic
 
-The Lantern-bearer has 25 hitpoints and moves 3.33 tiles a second. A big hit takes about a third.
+The Lantern-bearer has 25 hitpoints (50 with the shop's every upgrade) and moves 3.33 tiles a
+second. A big hit takes about a sixth of a full save's, its torrent a quarter.
 
-| Attack                                                                       | Damage                        | Warning           | To be clear                  |
-| ---------------------------------------------------------------------------- | ----------------------------- | ----------------- | ---------------------------- |
-| Ranged orbs: three along lines fanned at where you stood as it began         | 3 each                        | 0.9 s, the lines  | off the fan's lines          |
-| Magic orbs: two, slow, turning after you                                     | 4 each                        | 0.9 s             | across them, or behind cover |
-| Melee orbs: one heavy one, quick, straight at you                            | 6                             | 0.9 s             | sideways as it's fired       |
-| Debris: after each volley, four pieces round you, standing 14 s (10 at most) | 5                             | 1.3 s, its shadow | off the shadow               |
-| Tail: round its pool, for anyone close                                       | 6                             | 0.9 s             | 7 tiles from its middle      |
-| Torrent (phase 2 on): everything it can see                                  | 10                            | 2.4 s (2 in 3)    | behind debris or the wreck   |
-| Leeches (phase 2): three Abyssal leeches beside you                          | 1 each, a tile off your light | they crawl        | kill them                    |
-| Falling debris (phase 2 on, on its own every 5 s): two pieces round you      | 5                             | 1.3 s, its shadow | off the shadow               |
-| Lightning (phase 3, on its own every 2.2 s): where you stand                 | 5                             | 1 s, its shadow   | a step                       |
+| Attack                                                                       | Damage                        | Warning            | To be clear                  |
+| ---------------------------------------------------------------------------- | ----------------------------- | ------------------ | ---------------------------- |
+| Ranged orbs: four along lines fanned at where you stood as it began          | 4 each, 12 t/s                | 0.75 s, the lines  | off the fan's lines          |
+| Magic orbs: two, slow, turning after you                                     | 5 each, 6.5 t/s               | 0.75 s             | across them, or behind cover |
+| Melee orbs: one heavy one, quick, straight at you                            | 10, 15 t/s                    | 0.75 s             | sideways as it's fired       |
+| Debris: after each volley, four pieces round you, standing 14 s (10 at most) | 7                             | 1 s, its shadow    | off the shadow               |
+| Tail: round its pool, for anyone close                                       | 8                             | 0.8 s              | 7 tiles from its middle      |
+| Torrent (phase 2 on): everything it can see                                  | 13                            | 2 s (1.7 in 3)     | behind debris or the wreck   |
+| Leeches (phase 2): three Abyssal leeches beside you                          | 1 each, a tile off your light | they crawl         | kill them                    |
+| Falling debris (phase 2 on, on its own every 3 s): two pieces round you      | 7                             | 1 s, its shadow    | off the shadow               |
+| Lightning (phase 3, on its own every 1.3 s): where you stand                 | 8                             | 0.75 s, its shadow | a step                       |
 
 **The torrent** is the fight's question: it can't be stepped out of in the open, only hidden from.
 Behind a piece of debris (or the wreck) it finds no one, and its guard's down for 3 s. The debris
 that hid someone is smashed. The orbs and the debris they bring are what to hide behind next time.
 
 **Out of the circle**, in phase 3, its hits do twice (the plain fight's rule); in it, yours do 1.5
-times. The abyss's lightning strikes where you stand every 2.2 s, so you keep moving with the
-circle, and the torrent comes every 8 s with a 2 s windup.
+times. The abyss's lightning strikes where you stand every 1.3 s, so you keep moving with the
+circle, and the torrent comes every 7 s with a 1.7 s windup.
 
 ## 4. Fighting back
 
@@ -206,6 +207,44 @@ The first knobs for a playtest are its hitpoints, the falling debris and the lig
 and lantern_bearer by seeds 1 to 6): with no pet no wins, median end 9:27 (mean 10:02), 12 of 24
 dead before 10:00; with `PET=lilviathan` no wins, median 10:25 (mean 10:28), 11 before 10:00. A
 small help, as the act's design asks; the sims' spread is wide.
+
+**Hardened, 2026-11-12**, with Awakened Vardorvis (Dynny: "far too easy" with a fully upgraded
+save). Every round above was with nothing bought; a full save has 50 hitpoints, armour 3 (its
+ranged orbs' 3 did 1), regeneration and a Ring of life. By the careful bot with `META=max` the old
+numbers won 200 of 200, in 0:40-1:50, taking a median 6 of 50; phases 18 / 33 / 13 s.
+
+Retuned to `META=max`, kit and mechanics as they were:
+
+| What            | Before                               | After                               |
+| --------------- | ------------------------------------ | ----------------------------------- |
+| Its hits        | stopped by armour                    | through armour (`MapDef.hits`)      |
+| Hitpoints       | 5,200                                | 17,500                              |
+| An attack every | 1.4 s, tempo 1 / 0.9 / 0.8           | 1 s, tempo 1 / 0.85 / 0.75          |
+| Ranged orbs     | three, 3, 0.9 s, 10 t/s              | four, 4, 0.75 s, 12 t/s             |
+| Magic orbs      | 4, 0.9 s, 5.5 t/s, turning 0.05      | 5, 0.75 s, 6.5 t/s, turning 0.08    |
+| Melee orb       | 6, 0.9 s, 11 t/s                     | 10, 0.75 s, 15 t/s                  |
+| Debris          | 5, 1.3 s; falling every 5 s          | 7, 1 s; falling every 3 s           |
+| Tail            | 6, 0.9 s                             | 8, 0.8 s                            |
+| Torrent         | 10, 2.4 s every 10 s (2 s every 8 s) | 13, 2 s every 8 s (1.7 s every 7 s) |
+| Lightning       | 5, 1 s, every 2.2 s                  | 8, 0.75 s, every 1.3 s              |
+
+The careful bot, `META=max`, seeds 1-300 (the last two 1-600; hard 1-300):
+
+| Round | Numbers                                                                                                                 | Normal wins           | Phases (median) |
+| ----- | ----------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------- |
+| 0     | 5,200 hp, as built before (200 seeds)                                                                                   | 200 of 200            | 18 / 33 / 13 s  |
+| 1     | 17,000 hp, interval 1.15 s, three ranged orbs, melee 8 at 13 t/s, lightning 6 at 0.85 s every 1.8 s, debris 6 every 4 s | 180 of 300 (1 in 1.7) | 51 / 94 / 35 s  |
+| 2     | Interval 1 s, four ranged orbs, melee 10 at 15 t/s, magic turning 0.08                                                  | 126 of 300 (1 in 2.4) | 53 / 103 / 33 s |
+| 3     | Debris 7, falling every 3 s in phase 2, lightning 7 every 1.5 s, tail 0.75 s                                            | 34 of 300 (1 in 8.8)  | 53 / 113 / 33 s |
+| 4     | 15,500 hp, lightning 8 at 0.75 s                                                                                        | 50 of 300 (1 in 6)    | 49 / 104 / 29 s |
+| 5     | 17,000 hp, falling every 3 s in phase 3 too                                                                             | 17 of 300 (1 in 18)   | 53 / 113 / 30 s |
+| 6     | 17,500 hp                                                                                                               | 51 of 600 (1 in 12)   | 54 / 113 / 32 s |
+| 7     | Lightning every 1.3 s, the tail back to 0.8 s (as built)                                                                | 27 of 600 (1 in 22)   | 54 / 113 / 32 s |
+
+Wins in 2:34-4:27; it dies in phase 3 (568 of 573), to lightning, then debris: it gets through the
+first two phases almost always, its reads there are exact. Hard: 1 of 300. Nothing bought: 0 of 200. The bot that can't die (`GOD=1`, 20 seeds) takes phase 1 (6,125 hp) in 52-58 s, about 110 a
+second, phase 2 (the dark) in a median 107 s, phase 3 in 42 (the circle's 1.5 times). The dark
+phase is the bot's slowest, as before: a player who keeps their light on it does better.
 
 ## 11. As built, and what differs from the act's design
 

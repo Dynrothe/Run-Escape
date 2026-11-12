@@ -79,6 +79,12 @@ describe("the gauntlet's run", () => {
         expect(isGauntletClean(run)).toBe(true);
     });
 
+    test("each fight's hits go through armour: they're tuned to a fully upgraded save", () => {
+        for (const id of GAUNTLET_FIGHTS) {
+            expect(getMap(id).hits).toEqual({ scale: 1, throughArmor: true });
+        }
+    });
+
     test("pays a raid room's points for a win, and carries a fifth of the hitpoints lost", () => {
         // Within par, no damage, ten guard drops: everything
         expect(getFightPoints(60, 0, 100, 10).total).toBe(50 + 100 + 50 + MAX_GUARD_POINTS);

@@ -789,7 +789,9 @@ export const MAPS: MapDef[] = [
             y: LEVIATHAN_SPOT_WORLD.y - LEVIATHAN_START_DISTANCE,
         },
         // Its hitpoints come from the event, its hits are tuned to the Lantern-bearer's hitpoints
+        // with the shop's every upgrade: through armour, which would stop most of each of its hits
         difficulty: { hp: 1, damage: 1 },
+        hits: { scale: 1, throughArmor: true },
         hard: { hp: 1.3, damage: 1.3 },
         waves: [],
         events: [
