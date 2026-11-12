@@ -40,8 +40,9 @@ const BODY_PART_SLOTS = [
 
 // The default male look from character creation
 export const DEFAULT_MALE_KITS = [0, 10, 18, 26, 33, 36, 42];
-// and the female one (body type B), which has no jaw
-export const DEFAULT_FEMALE_KITS = [45, -1, 56, 61, 67, 70, 79];
+// and the female one (body type B), clean-shaven. A jaw is the chin and mouth (the hair kits have
+// none), so without one the face has a hole.
+export const DEFAULT_FEMALE_KITS = [45, 296, 56, 61, 67, 70, 79];
 
 // Body colours: hair, torso, legs, feet, skin. Each player colour index picks a
 // replacement for the first colour in its row (index 0 keeps the original).

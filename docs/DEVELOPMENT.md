@@ -1439,7 +1439,9 @@ the sim never sees it.
   `scripts/cache/cosmetics.ts`: every item worn outside the weapon slot that both bodies can wear,
   one of each look (items with the same worn models and colours are one piece), with a rarity by
   its value in the cache (and the discontinued holiday rares made Very rare). The same script
-  lists the kits character creation offers. Run it again after moving to a newer cache. Prices
+  lists the kits character creation offers. Run it again after moving to a newer cache. A body
+  always has a jaw: it's the chin and mouth (the hair kits have none), so there's no "none", and
+  body type B's default is its clean-shaven one (296, the counterpart of type A's 14). Prices
   go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, except 3rd Age's dearer
   `THIRD_AGE_PRICE` (by name), paid from banked coins like the Armoury. An unlocked adventurer's own pieces are the player's for nothing
   (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
@@ -1491,6 +1493,13 @@ gets from the model's origin in any frame of any animation, so bosses' big swing
 puts the actors on the same frame of the same animation together and each run of them is one
 instanced draw: a crowd of one enemy is a few draws, not hundreds. The shader finds an actor's data
 by `DRAW_ID + gl_InstanceID`.
+
+A face's priority (OSRS's 0-11, `faceRenderPriorities`) is 4 bits of each vertex
+(`VertexBuffer.addVertex`): 1-12, after terrain's 0. OSRS paints a model's faces in priority order
+(10 and 11 among the rest by depth, so over what they're in front of), and the shaders get the same
+by pulling a higher priority a little towards the camera, which only matters where faces touch. It
+was 3 bits until the Wardrobe, and 7 and up wrapped under the rest: a tiara or a helm's trim sank
+into the hair or the helm. Alpha has 7 bits to make room.
 
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the

@@ -113,14 +113,13 @@ export function bodyColourName(colour: (typeof BODY_COLOURS)[number]): string {
 }
 
 // The kits a body type can pick for a body part. Hair and jaw go with either body, as in OSRS
-// (its own first), and a jaw can be bare.
+// (its own first). There's always a jaw: it's the chin and mouth, so a face without one has a hole.
 export function getBodyKits(bodyType: 0 | 1, part: number): number[] {
     const own = BODY_KIT_IDS[bodyType]?.[part] ?? [];
     if (part > JAW) {
         return own;
     }
-    const other = BODY_KIT_IDS[1 - bodyType]?.[part] ?? [];
-    return part === JAW ? [-1, ...own, ...other] : [...own, ...other];
+    return [...own, ...(BODY_KIT_IDS[1 - bodyType]?.[part] ?? [])];
 }
 
 export function getDefaultBody(bodyType: 0 | 1 = 0): BodyLook {

@@ -220,12 +220,10 @@ function BodyTab({ look, client }: { look: WardrobeLook; client: GameClient }): 
                                 ‹
                             </button>
                             <span className="ui-wardrobe-stepper-value">
-                                {body.kits[i] === -1
-                                    ? t("wardrobe.none")
-                                    : t("wardrobe.style_of", {
-                                          n: fmtNum(at + 1),
-                                          total: fmtNum(kits.length),
-                                      })}
+                                {t("wardrobe.style_of", {
+                                    n: fmtNum(at + 1),
+                                    total: fmtNum(kits.length),
+                                })}
                             </span>
                             <button
                                 className="ui-button ui-wardrobe-arrow"

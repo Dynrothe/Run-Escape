@@ -166,7 +166,8 @@ describe("a look", () => {
         });
         const body = getDefaultBody(1);
         expect(look?.body?.bodyType).toBe(1);
-        expect(look?.body?.kits).toEqual([body.kits[0], -1, ...body.kits.slice(2)]);
+        // A bare jaw (from before every face had one) puts the body's own back
+        expect(look?.body?.kits).toEqual(body.kits);
         expect(look?.body?.colors).toEqual([3, 0, 0, 0, 4]);
         // A hat isn't a cape, and the weapon slot isn't the Wardrobe's
         expect(look?.outfit).toEqual({ [EquipSlot.HEAD]: hat.objId });
@@ -180,6 +181,9 @@ describe("a look", () => {
             const body = getDefaultBody(bodyType);
             BODY_PARTS.forEach((_, part) => {
                 expect(getBodyKits(bodyType, part)).toContain(body.kits[part]);
+                // Every part is worn, the jaw too: without one the face has a hole
+                expect(getBodyKits(bodyType, part)).not.toContain(-1);
+                expect(body.kits[part]).not.toBe(-1);
             });
         }
         for (const colour of BODY_COLOURS) {

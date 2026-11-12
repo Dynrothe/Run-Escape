@@ -18,6 +18,11 @@ the version in the corner).
 - Hallowed Night pumpkins now hold a Black h'ween mask, a Jack lantern mask and a Skeleton mask
   too.
 
+### Fixed
+
+- Helmets, hats and tiaras show all of their trims and gems, which used to sink into the helm or
+  the hair.
+
 ## 0.31.0 - 2026-11-11
 
 ### Added
