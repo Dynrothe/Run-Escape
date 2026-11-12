@@ -7,8 +7,8 @@ the version in the corner).
 
 ### Changed
 
-- The keris partisans can be offered to any adventurer, not only melee ones. Their stabs still
-  count as melee for style bonuses like Chivalry and the rings.
+- The keris partisans, by Okaeri: any adventurer can be offered them now, not only melee ones.
+  Their stabs still count as melee for style bonuses like Chivalry and the rings.
 
 ## 0.31.0 - 2026-11-11
 

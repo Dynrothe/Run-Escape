@@ -147,9 +147,8 @@ version and how to run it.
       that stuns; the **Dragon warhammer**, whose every third blow is a Smash that makes what it
       hits take 30% more damage; the **Inquisitor's mace**, crushing blows a quarter harder on the
       undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
-      sides; and
-      the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
-      everything around you; **Dinh's bulwark**, a slow bash that hits everything around
+      sides; the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
+      everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
       you, further out than any other melee weapon.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**

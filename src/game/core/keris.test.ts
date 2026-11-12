@@ -415,7 +415,7 @@ describe("the Divine rune pouch", () => {
         expect(fitsWithPouch(whip, [...melee, weapon("fire_spells")], "melee", max)).toBe(true);
     });
 
-    test("offers a ranged adventurer magic weapons too, and no melee ones", () => {
+    test("offers a ranged adventurer magic weapons too, and no melee class weapons", () => {
         const ranged = ["throwing_knives", "shortbow", "toxic_blowpipe"].map(weapon);
         const offers = offered("ranged", ranged, [pouch], MAX_WEAPONS + 1);
         expect(offers.some((w) => w.style === "magic")).toBe(true);
