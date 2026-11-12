@@ -70,7 +70,6 @@ describe("the Battle for Varrock", () => {
             expect(lair.requires).toBeUndefined();
             expect(inside(lair, lair.at)).toBe(true);
             expect(inside(lair, lair.start)).toBe(true);
-            expect(inside(lair, lair.retreat!)).toBe(false);
             // Each grows stronger for the other's death
             expect(lair.empowered!.by).toEqual(
                 lairs.filter((l) => l !== lair && !l.final).map((l) => l.id),
@@ -103,7 +102,6 @@ describe("the Battle for Varrock", () => {
         const yama = lairs[2];
         expect(yama.requires!.lairs).toEqual(["xarth", "kril"]);
         expect(yama.final).toBe(true);
-        expect(yama.retreat).toBeDefined();
     });
 
     it("lays the palace's floor over its rooms, in one piece, still, in a phone's budget", () => {

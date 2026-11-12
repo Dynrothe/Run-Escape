@@ -97,7 +97,7 @@ const partySize = parseInt(process.env.PARTY ?? "1");
 // A map with lairs (MapDef.lairs: the Battle for Varrock's generals and Yama): the lair LAIR the
 // bot goes for, after FARM seconds of the map's hordes (kept out of every lair meanwhile), and
 // with EMPOWERED=1 as if its rival were beaten first (LairDef.empowered). Yama's generals are
-// beaten for him. The run's over when it's beaten, or beats the party back.
+// beaten for him. The run's over when it's beaten, or the party's dead.
 const lairTarget = process.env.LAIR;
 const farmSeconds = parseFloat(process.env.FARM ?? "0");
 const empoweredLair = process.env.EMPOWERED === "1";
@@ -1373,19 +1373,17 @@ function runOnce(characterId: string, seed: number) {
     let fightTicks = 0;
     // Ticks stood on roots (MapDef.rule)
     let rootTicks = 0;
-    // The lair it's going for, and whether it's been thrown out of it (LairDef.retreat)
+    // The lair it's going for
     const lair = prepareLair(sim);
     let lairWoken = false;
-    let beatenBack = false;
     let wokenAt = { seconds: 0, level: 0 };
-    // Its boss's share of hitpoints left, as last seen in the fight: a beat back puts it to sleep
-    // whole
+    // Its boss's share of hitpoints left, as last seen in the fight
     let lairHpLeft = 1;
     // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
     // weapon's reach (MapDef.fight.strikeReach)
     const phaseTicks: number[] = [];
     const reachTicks: number[] = [];
-    while (sim.tick < maxTicks && !sim.runOver && !beatenBack && lair?.state !== "beaten") {
+    while (sim.tick < maxTicks && !sim.runOver && lair?.state !== "beaten") {
         // Done farming: into the lair it's going for, which wakes it
         if (lair && !lairWoken && lair.state === "asleep" && sim.seconds >= farmSeconds) {
             sim.player.x = lair.def.start.x;
@@ -1397,10 +1395,6 @@ function runOnce(characterId: string, seed: number) {
         }
         if (lair?.state === "fighting" && lair.boss && !lair.boss.dead) {
             lairHpLeft = Math.max(0, lair.boss.hp) / Math.max(1, lair.boss.maxHp);
-        }
-        if (lair && lairWoken && lair.state === "asleep") {
-            beatenBack = true;
-            break;
         }
         if (sim.state === "levelUp") {
             const ranked = sim.choices
@@ -1596,7 +1590,7 @@ function runOnce(characterId: string, seed: number) {
                 `${formatClock(wokenAt.seconds)}, level ${wokenAt.level}, ` +
                 (lair.state === "beaten"
                     ? `beaten in ${Math.round(sim.seconds - wokenAt.seconds)}s`
-                    : `${beatenBack ? "beat the bot back" : "still up"} at ` +
+                    : `${sim.state === "dead" ? "killed the bot" : "still up"} at ` +
                       `${Math.round(100 * lairHpLeft)}% ` +
                       `after ${Math.round(sim.seconds - wokenAt.seconds)}s`),
         );

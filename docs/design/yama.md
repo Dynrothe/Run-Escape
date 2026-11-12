@@ -30,7 +30,7 @@ hitboxes exactly as drawn, nothing painted on the floor as an arrow, and phone u
 | Hitpoints | 25,200: for a hero of about 15 minutes of the hordes, straight after his second general      |
 | Phases    | 100–70%, 70–35%, 35–0%                                                                       |
 | Length    | About 2 minutes for that hero (varrock-generals.md, section 10)                              |
-| Death     | Thrown out to the palace's court, whole, to come back when you're ready                      |
+| Death     | The run's over, as any death ends it                                                         |
 
 He stays near the throne end and moves along it. He doesn't chase. The danger comes from the floor
 and from him at range, and close in he claws.

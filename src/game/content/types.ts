@@ -1955,7 +1955,7 @@ export type MapPropDef = {
     scale?: number;
     // A lair's boss, asleep (MapDef.lairs, by LairDef.id): from its fight's start drawn as awake
     // instead (his throne, empty), or not at all without it, as it's up and fighting; and so once
-    // it's beaten. Back as it was if the party's beaten back (LairDef.retreat).
+    // it's beaten.
     lair?: string;
     awake?: { npcId: number; seq: number };
 };
@@ -1965,8 +1965,9 @@ export type MapPropDef = {
 // (MapDef.floor), or an area of its own. The boss's intro plays (BossIntroDef, rising at at with
 // the players brought distance south of it), and every way out is sealed with fire until it's
 // dead. On a map to walk round with nothing coming (isPeaceful), hits land only while it's on.
-// Beaten, the seal lifts and the map's free to walk round again. A death there is retried from
-// start, without the map's opening cinematic, unless the lair beats the party back (retreat).
+// Beaten, the seal lifts and the map's free to walk round again. A death there ends the run, as
+// any does: Retry starts the run at start if it's the map's only lair (getRetryLair), or the map
+// over otherwise, without its opening cinematic either way.
 export type LairDef = {
     // Its name among the map's lairs (requires, empowered, MapPropDef.lair)
     id: string;
@@ -1993,10 +1994,6 @@ export type LairDef = {
     // Sealed from the run's start until these of the map's lairs are beaten (by id), with message on
     // screen as it opens (Yama's palace, until his generals are dead)
     requires?: { lairs: string[]; message: string };
-    // A death in its fight doesn't end the run: the party's thrown out to here, up again with all
-    // their hitpoints, and the boss is back where it was, asleep, with all of its own (message on
-    // screen). Retry then starts the map over, not at the lair.
-    retreat?: { x: number; y: number; message: string };
     // Fought after any of these lairs is beaten (by id), its boss is empowered: hp and damage times
     // its own, tempo times its time between attacks, and its attacks marked empowered too
     // (BossAttackDef.empowered). message: on screen as the other's beaten.
@@ -2007,7 +2004,7 @@ export type LairDef = {
     // boss's cover attacks (BossAttackDef.cover), drawn as locId size tiles across from their
     // south-west tiles. Sparing someone from one that crumbles them (BossAttackDef.crumbles) brings
     // that one down, with impact, and they all come down once the boss is down to crumbleAt of its
-    // hitpoints. Back up on a retreat.
+    // hitpoints.
     pillars?: {
         locId: number;
         scale?: number;

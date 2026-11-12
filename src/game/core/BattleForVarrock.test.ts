@@ -209,8 +209,9 @@ describe("a lair's boss waking", () => {
             characterId: HERO,
             metaStats: emptyStats(),
             seed: 1,
-            spawnX: xarth.retreat!.x,
-            spawnY: xarth.retreat!.y,
+            // Just south of the pad
+            spawnX: xarth.at.x,
+            spawnY: box.y0 - 2.5,
         });
         run(sim, 0.5);
         const { at } = xarth;
