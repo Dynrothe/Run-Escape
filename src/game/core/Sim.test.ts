@@ -4402,6 +4402,52 @@ describe("class weapons", () => {
         expect(sim.takeEvents().some((e) => e.type === "damage" && e.poison)).toBe(false);
     });
 
+    test("now and then the Toxic blowpipe fires Toxic Siphon, which hits harder and heals", () => {
+        const sim = armed("toxic_blowpipe", "ranger");
+        const def = getWeapon("toxic_blowpipe");
+        const siphon = def.siphon!;
+        const goblin = dummy(sim, 3, 0);
+        goblin.frozen = 1e6;
+        let specials = 0;
+        // Not so many that the hits' XP brings a level up
+        for (let i = 0; i < 120; i++) {
+            // Back where it was after the last darts' knockback
+            goblin.x = sim.player.x + 3;
+            goblin.y = sim.player.y;
+            sim.player.hp = 1;
+            attack(sim);
+            const shots = sim.projectiles.filter((p) => p.weapon?.id === def.id);
+            expect(shots.length).toBeGreaterThan(0);
+            const special = shots[0].siphon === true;
+            // The whole attack is the special, or none of it
+            expect(shots.every((p) => (p.siphon === true) === special)).toBe(true);
+            if (special) {
+                specials++;
+                expect(shots[0]).toMatchObject({
+                    spotAnim: siphon.projectileSpotAnim,
+                    damage: def.levels[0].damage * siphon.damage,
+                });
+            }
+            // Let the darts land
+            sim.weapons[0].cooldown = 1e9;
+            for (let t = 0; t < 0.5 * TICKS_PER_SECOND; t++) {
+                sim.player.invulnerable = 100;
+                sim.step(0, 0);
+            }
+            sim.takeEvents();
+            const healed = sim.player.hp - 1;
+            if (special) {
+                expect(healed).toBeGreaterThan(0);
+                expect(healed).toBeLessThanOrEqual(siphon.max * shots.length);
+            } else {
+                expect(healed).toBe(0);
+            }
+        }
+        // One attack in 25
+        expect(specials).toBeGreaterThan(0);
+        expect(specials).toBeLessThan(16);
+    });
+
     test("the Sanguinesti staff heals now and then, a little", () => {
         const sim = armed("sanguinesti_staff", "wizard");
         dummy(sim, 3, 0).frozen = 1e6;

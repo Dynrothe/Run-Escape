@@ -2161,13 +2161,22 @@ export const WEAPONS: WeaponDef[] = [
         name: "Toxic blowpipe",
         kind: "missile",
         description:
-            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads.",
+            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads. Now and then its special, Toxic Siphon, hits harder and heals you.",
         iconObjId: 12926,
         playerSeq: 5061,
         sound: 2707,
         hitSound: -1,
         rarity: "rare",
         style: "ranged",
+        // Its special attack, as in OSRS: half again the damage, and half of it back as hitpoints
+        siphon: {
+            name: "Toxic Siphon",
+            chance: 1 / 25,
+            damage: 1.5,
+            heal: 0.5,
+            max: 3,
+            projectileSpotAnim: 1043,
+        },
         levels: levels(
             {
                 damage: 5,
