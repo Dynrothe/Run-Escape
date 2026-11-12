@@ -74,6 +74,14 @@ describe("Awakened Vardorvis", () => {
         });
     });
 
+    test("his hits go through armour, as the shop's every upgrade has it", () => {
+        const metaStats = emptyStats();
+        metaStats.armor = 3;
+        const sim = createSim({ metaStats });
+        expect(sim.stats.armor).toBe(3);
+        expect(sim["damagePlayer"](6, AWAKENED_VARDORVIS_ID, false)).toBe(6);
+    });
+
     test("his roots creep in from his clearing's edge and stay inside it", () => {
         const sim = createSim();
         expect(sim.rule?.def).toBe(VARDORVIS_ROOTS);

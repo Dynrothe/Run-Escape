@@ -74,30 +74,37 @@ Hitpoints by the bot (section 10). Three phases by his hitpoints, each a full ba
 at each threshold he goes down on one knee for 2 s, untouchable, the tendrils bursting round him,
 and rises into the next.
 
-| Phase | Hitpoints | Status         | Adds                                                                           |
-| ----- | --------- | -------------- | ------------------------------------------------------------------------------ |
-| 1     | 100-70%   | The axes swing | Strike, Dart (and its vines), Swinging axes; roots creep in from the edge      |
-| 2     | 70-35%    | The wood wakes | Strangle, the roots rise on their own, blood captors come up at the root front |
-| 3     | 35-0%     | Severed        | His head tears free and gazes; double darts; he walks quicker                  |
+| Phase | Hitpoints | Status         | Adds                                                                      |
+| ----- | --------- | -------------- | ------------------------------------------------------------------------- |
+| 1     | 100-70%   | The axes swing | Strike, Dart (and its vines), Swinging axes; roots creep in from the edge |
+| 2     | 70-35%    | The wood wakes | Strangle, the roots rise, both axes at once                               |
+| 3     | 35-0%     | Severed        | His head tears free and gazes; double darts; he walks quicker             |
 
-He has 4,000 hitpoints. He starts an attack every 1.4 s, times the phase's tempo (1, 0.9, 0.9),
-and walks after the player at 3 tiles a second (the Forester's is 3.3), quicker by the phase.
+He has 12,800 hitpoints. He starts an attack every 1.15 s, times the phase's tempo (1, 0.85,
+0.75), and walks after the player at 3 tiles a second (the Forester's is 3.3), 1.15 and 1.25 times
+that in the later phases. His hits go **through armour** (`MapDef.hits`): he's tuned to a save
+with the shop's every upgrade (50 hitpoints, armour 3, a Ring of life), and armour 3 would take
+most of every hit of his (section 10).
 
 ### His attacks, and the dodge arithmetic
 
-The Forester has 25 hitpoints, moves 3.33 tiles a second and is 0.35 across. A big hit takes about
-a third.
+The Forester has 25 hitpoints (50 with the shop's every upgrade), moves 3.33 tiles a second (3.67)
+and is 0.35 across. A big hit takes about a fifth of a full save's hitpoints.
 
-| Attack                                                                                   | Damage                                             | Warning                    | To be clear                                 | Takes |
-| ---------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------- | ------------------------------------------- | ----- |
-| Strike: a wedge 2.5 tiles out in front (short of the sword's 2.75), and under him        | 4                                                  | 0.75 s                     | at its tip, or to his side                  | 0.3 s |
-| Dart: a strip 2 wide and 8 long; he dashes down it                                       | 6                                                  | 0.9 s (0.65 the second)    | 1.35 tiles sideways                         | 0.4 s |
-| Bleeding vines: a ring of six bursts round where you stood, 0.2 s after a dart           | 2                                                  | 1.1 s                      | out of the ring, or stay between its bursts | 0.4 s |
-| Swinging axes: an axe from a corner (both, severed), at where you stood, across and back | 3 each way                                         | 1.1 s (he raises his arms) | 1.35 tiles off each line                    | 0.4 s |
-| Strangle: a tendril whipped along the ground at you, 7 tiles a second                    | 2, then bound 1.5 s and struck twice (3 each)      | 1 s, then its flight       | 0.95 tiles sideways                         | 0.3 s |
-| The roots rise: tendrils burst from up to 8 rooted cells within 8 tiles of you           | 4                                                  | 1.3 s (the roots stir)     | off the cell                                | 0.3 s |
-| His head's gaze: a shot every 3.5 s                                                      | 2                                                  | its flight                 | a step                                      |       |
-| Roots underfoot                                                                          | 1% every 0.5 s after 0.5 s on them, and 25% slower | the sprouting, 1.5 s       | off them, or cut them                       |       |
+| Attack                                                                                | Damage                                             | Warning                    | To be clear                                 | Takes  |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------- | ------------------------------------------- | ------ |
+| Strike: a wedge 2.5 tiles out in front (short of the sword's 2.75), and under him     | 6                                                  | 0.6 s                      | at its tip, or to his side                  | 0.3 s  |
+| Dart: a strip 2.2 wide and 8 long; he dashes down it                                  | 9                                                  | 0.7 s (0.6 the second)     | 1.3 tiles sideways                          | 0.4 s  |
+| Bleeding vines: a ring of six bursts round where you stood, 0.2 s after a dart        | 3                                                  | 0.9 s                      | out of the ring, or stay between its bursts | 0.4 s  |
+| Swinging axes: an axe from a corner (both, from the second phase), at where you stood | 4 each way                                         | 0.9 s (he raises his arms) | 1.2 tiles off each line, 9 tiles a second   | 0.35 s |
+| Strangle: a tendril whipped along the ground at you, 9 tiles a second                 | 3, then bound 1.5 s and struck twice (4 each)      | 0.8 s, then its flight     | 0.8 tiles sideways                          | 0.25 s |
+| The roots rise: tendrils burst from up to 12 rooted cells within 8 tiles of you       | 5                                                  | 0.9 s (the roots stir)     | off the cell                                | 0.35 s |
+| His head's gaze: a shot every 3 s, 11 tiles a second                                  | 3                                                  | its flight                 | a step                                      |        |
+| Roots underfoot                                                                       | 1% every 0.5 s after 0.5 s on them, and 25% slower | the sprouting, 1.5 s       | off them, or cut them                       |        |
+
+Every warning leaves at least 0.2 s over what the step takes at the Forester's own speed (more
+with the shop's), and his axes are still in flight as he darts and strikes: from the second phase
+both cross the clearing every 5 s or so, so the dodges come on top of each other.
 
 **Dart** is the lunge of Zachariah's fight with the Stranglewood in it: he dashes down the strip,
 his axes sweeping, to its end (stopping at whoever it hits), and the ground he crossed takes root
@@ -113,13 +120,13 @@ stood. Caught, you're dragged to his feet and held, and he strikes twice. Dodged
 **The roots** are the Stranglewood's rule (`RootsRuleDef`), on his arena: they creep in from the
 clearing's edge from 5 s, quicker as the fight goes on (a spread every 3 s, every 1.8 s by three
 minutes), two fronts at first and three by then. The ring they make is what closes the arena in,
-phase by phase. Root hearts are the fight's **blood captors**: a Large Tendril (12225, 120
+phase by phase. Root hearts are the fight's **blood captors**: a Large Tendril (12225, 200
 hitpoints) comes up at the root front every 30 s from 0:40 (at most two), and while it stands it
-heals him half a percent of his hitpoints every 2 s (no higher than the top of the phase he's in)
+heals him 0.2% of his hitpoints every 2 s (no higher than the top of the phase he's in)
 and its roots creep twice as fast. Killed, it clears 5 tiles round it.
 
 **His head** (12226) tears free at 35%, as in OSRS, and floats at the arena's edge gazing at you:
-a shot every 3.5 s. It can be cut down (300 hitpoints, its own small bar), or lived with.
+a shot every 3 s. It can be cut down (450 hitpoints, its own small bar), or lived with.
 
 ## 4. Fighting back
 
@@ -224,7 +231,7 @@ a head and two captors are lighter than the map's crowd.
 - **His clearing, not a cut of its own** (section 2): the Stranglewood's map and square, the roots
   kept to a ring in it (`RootsRuleDef.ring`). A default to confirm.
 - **Captors from 0:40, by the clock**, not from the second phase: the rule's hearts come by time.
-  Phase 1 takes the bot about 30 s, so they come in the second phase anyway.
+  Phase 1 takes the bot about a minute now, so the first comes up in it.
 - **Chop goes off with him out of reach** (`FightAbilityDef.cut`): it clears the roots round you and
   hits a captor or his head in reach, so it's worth pressing to cut your way out.
 - **Not in the fight**: the Strangled (no waves), Kasonde and the bear (the map's), the prayer
@@ -270,6 +277,66 @@ all 24 clear. Other knobs tried (seeds 1-200 or 1-600): 4,000 hp alone 1 in 15, 
 every 4.5 s alone 1 in 13, tempo 0.9 alone 1 in 17, 3,800 hp with the head at 5 s 1 in 5.6. Near
 these numbers the rate isn't smooth: 4,050 hp gave 1 in 5.2 and 4,100 1 in 9.4 (the bot's whole run
 shifts with a few hitpoints), so read it as about 1 in 5 to 1 in 9, centred near 1 in 7.
+
+**Hardened, 2026-11-12** (Dynny's playtest on normal with a fully upgraded save: "far too easy",
+too much damage done and every ability easy to dodge). Every round above was played by a bot with
+nothing bought (`META` unset): 25 hitpoints and no armour. A full save has 50 hitpoints, armour 3,
+regeneration and a Ring of life, and the flat 3 took most of every hit of his (his Strike 4 did 1,
+his dart 6 did 3). By the careful bot with `META=max` the old numbers were 4 wins in 4, in 1:15 to
+1:22, taking 12 to 17 damage of 50, phases 22-24 s, 22-33 s and 25-37 s.
+
+Retuned to `META=max`, kit and mechanics as they were, numbers and timing only:
+
+| What                | Before                                             | After                                                 |
+| ------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| His hits            | stopped by armour                                  | through armour (`MapDef.hits`)                        |
+| Hitpoints           | 4,000                                              | 12,800                                                |
+| An attack every     | 1.4 s, tempo 1 / 0.9 / 0.9                         | 1.15 s, tempo 1 / 0.85 / 0.75                         |
+| His walk by phase   | x1 / 1.1 / 1.2                                     | x1 / 1.15 / 1.25                                      |
+| Strike              | 4, 0.75 s                                          | 6, 0.6 s                                              |
+| Dart                | 6, 0.9 s (0.65 the second), 2 wide                 | 9, 0.7 s (0.6 the second), 2.2 wide                   |
+| Bleeding vines      | 2, 1.1 s                                           | 3, 0.9 s                                              |
+| Swinging axes       | 3, 1.1 s, every 7 s, 7 t/s, 0.9 wide; both severed | 4, 0.9 s, every 5 s, 9 t/s, 1 wide; both from phase 2 |
+| Strangle, its blows | 2 and 3, 1 s, 7 t/s                                | 3 and 4, 0.8 s, 9 t/s                                 |
+| The roots rise      | 4, 1.3 s, up to 8 cells                            | 5, 0.9 s, up to 12 cells                              |
+| His head            | 300 hp, 2 every 3.5 s, 9 t/s                       | 450 hp, 3 every 3 s, 11 t/s                           |
+| Blood captors       | 120 hp, heal 0.5% every 2 s                        | 200 hp, heal 0.2% every 2 s                           |
+
+The dodging is the point: every warning is shorter but still at least 0.2 s over the step it asks
+for at the Forester's own speed (a quicker double dart, 0.5 s, left no time and was put back to
+0.6 with the strip at 2.2 not 2.4), and with both axes crossing from the second phase and coming
+round every 5 s they're in flight as he darts and strikes. The captors heal about what they did
+(24 a pulse, was 20), not a share of three times the hitpoints.
+
+The careful bot, `META=max`, seeds 1-600 (hard 1-300):
+
+| Round | Numbers                                                                                                            | Normal wins         | Wins in   | Phases (median) | Hard     |
+| ----- | ------------------------------------------------------------------------------------------------------------------ | ------------------- | --------- | --------------- | -------- |
+| 0     | 4,000 hp, as eased (4 seeds)                                                                                       | 4 of 4              | 1:15-1:22 | 24 / 29 / 32 s  |          |
+| 1     | The table's, 12,000 hp, interval 1.2 s, Strike 5, dart 8, 2.4 wide, double dart 0.5 s, roots 10 at 1 s (300 seeds) | 16 of 300 (1 in 19) | 3:22-4:28 | 62 / 93 / 87 s  | 0 of 200 |
+| 2     | Strike 6, roots 12 at 0.9 s (300 seeds)                                                                            | 15 of 300 (1 in 20) |           |                 |          |
+| 3     | Interval 1.15 s                                                                                                    | 11 of 600 (1 in 55) | 3:27-4:19 |                 |          |
+| 4     | Dart 2.2 wide, double dart 0.6 s                                                                                   | 39 of 600 (1 in 15) | 3:13-4:43 |                 |          |
+| 5     | Dart 9                                                                                                             | 34 of 600 (1 in 18) |           |                 |          |
+| 6     | 13,000 hp                                                                                                          | 13 of 600 (1 in 46) | 3:57-5:09 |                 |          |
+| 7     | 12,500 hp                                                                                                          | 36 of 600 (1 in 17) |           |                 |          |
+| 8     | 12,800 hp (as built)                                                                                               | 24 of 600 (1 in 25) | 3:52-4:57 | 65 / 105 / 99 s | 0 of 300 |
+
+As before the rate isn't smooth in his hitpoints (12,500 1 in 17, 13,000 1 in 46), so read 12,800 as
+about 1 in 20 to 1 in 35. It dies in phase 3 (481 of 576 deaths), to his vines, both axes, darts
+and his head's shots (it never cuts the head down). Hard mode dies in phase 2. Nothing bought
+(`META` unset, 25 hitpoints), it's 0 of 200: the fight's now for a full save.
+
+**What a full save deals**: the bot that can't die (`GOD=1 META=max DODGE=1`, 20 seeds) takes
+phase 1 (3,840 hp) in 52-80 s, median 70, about 55 a second with Chop and his guard downs; phases 2
+and 3 take 82-136 s and 79-169 s (medians 105 and 104) with the captors healing. A person who
+stays on him and cuts the captors and his head down should do better than the bot by a good
+margin: about a minute to a minute and a half a phase.
+
+**The gauntlet** (`GAUNTLET=1 DODGE=1 META=max`, 24 seeds, up to 60 retries a fight): 18 of 24
+clear, with 731 tries at Vardorvis for 18 wins (about 1 in 40), and the other three won first try
+every time (Whisperer 1:08-1:29, Duke 0:38-0:59, Leviathan 0:55-1:50). The game's retries have no
+limit.
 
 ## 11. Not verified
 

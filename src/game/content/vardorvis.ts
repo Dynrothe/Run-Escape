@@ -11,11 +11,11 @@ import {
 
 // Awakened Vardorvis, Act II's first Awakened fight (MapDef.fight, maps.ts), fought on his own in
 // his clearing in the Stranglewood, as the Forester. Zachariah's way of a fight: an attack about
-// every 1.4 s by phase, his guard down when a dart or a strangle of his misses, a dart into one of
-// his pillars sticking him there, and a button that rewards stepping in. The Stranglewood's roots
-// are the thread through it: they creep in from the clearing's edge, his dart roots the ground it
-// crosses, his tendrils erupt from them, his captors (root hearts) stand in them and heal him, and
-// the Forester's sword and Chop cut them back.
+// every 1.15 s, quicker by phase, his guard down when a dart or a strangle of his misses, a dart
+// into one of his pillars sticking him there, and a button that rewards stepping in. The
+// Stranglewood's roots are the thread through it: they creep in from the clearing's edge, his dart
+// roots the ground it crosses, his tendrils erupt from them, his captors (root hearts) stand in
+// them and heal him, and the Forester's sword and Chop cut them back.
 // The design and its numbers: docs/design/awakened-vardorvis.md.
 
 // His animations (npc 12223, skeleton 2151, as the Stranglewood's Vardorvis has them)
@@ -69,7 +69,7 @@ export const VARDORVIS_FEATURES: ArenaFeatures = {
 
 // What the fight's tuned to (maps.ts): his hitpoints, the Forester's 2h sword's level, and tiles
 // south of him the player starts
-export const VARDORVIS_HITPOINTS = 4000;
+export const VARDORVIS_HITPOINTS = 12800;
 export const VARDORVIS_SWORD_LEVEL = 8;
 export const VARDORVIS_START_DISTANCE = 6;
 
@@ -99,7 +99,8 @@ export const VARDORVIS_CHOP: FightAbilityDef = {
     sound: 2500,
 };
 
-// The Forester has 25 hitpoints: a big hit takes about a third
+// Tuned to a Forester with the shop's every upgrade (50 hitpoints, his hits through its armour,
+// MapDef.hits): a big hit takes about a fifth
 const OPENS = 2;
 const RADIUS = 1;
 const DART_LENGTH = 8;
@@ -109,8 +110,8 @@ const DART_LENGTH = 8;
 const STRIKE: BossAttackDef = {
     name: "Strike",
     kind: "swing",
-    damage: 4,
-    windup: 0.75,
+    damage: 6,
+    windup: 0.6,
     cooldown: 0,
     range: 2.5,
     radius: 2.5,
@@ -128,14 +129,14 @@ const STRIKE: BossAttackDef = {
 const DART: BossAttackDef = {
     name: "Dart",
     kind: "swing",
-    damage: 6,
-    windup: 0.9,
+    damage: 9,
+    windup: 0.7,
     cooldown: 3,
     range: 7,
     weight: 4,
     seq: DART_SEQ,
     sound: 7133,
-    line: { width: 2, length: DART_LENGTH, dash: DART_LENGTH - RADIUS },
+    line: { width: 2.2, length: DART_LENGTH, dash: DART_LENGTH - RADIUS },
     opens: OPENS,
     rule: { lane: 1 },
     impact: {
@@ -149,8 +150,8 @@ const DART: BossAttackDef = {
 const VINES: BossAttackDef = {
     name: "Bleeding vines",
     kind: "ground",
-    damage: 2,
-    windup: 1.1,
+    damage: 3,
+    windup: 0.9,
     cooldown: 999,
     range: 0,
     weight: 0,
@@ -165,22 +166,22 @@ const VINES: BossAttackDef = {
 };
 
 // His axes (npc 12227, spinning) thrown in from a corner of the square at where you stood, right
-// across and back; severed, from two corners at once
+// across and back; from the second phase, from two corners at once
 const AXES: BossAttackDef = {
     name: "Swinging axes",
     kind: "projectile",
-    damage: 3,
-    windup: 1.1,
-    cooldown: 7,
+    damage: 4,
+    windup: 0.9,
+    cooldown: 5,
     range: 999,
     weight: 2,
     count: 1,
-    phases: [1, 2],
+    phases: [1],
     seq: DEATH_SEQ,
     sound: 7065,
-    speed: 7,
+    speed: 9,
     // The spinning axe's width
-    radius: 0.9,
+    radius: 1,
     from: "knights",
     lookId: "vardorvis_axe",
     boomerang: { reach: 2 * HALF, toEdge: true },
@@ -192,8 +193,8 @@ const AXES: BossAttackDef = {
 const STRANGLE: BossAttackDef = {
     name: "Strangle",
     kind: "projectile",
-    damage: 2,
-    windup: 1,
+    damage: 3,
+    windup: 0.8,
     cooldown: 6,
     range: 10,
     minRange: 2.5,
@@ -201,7 +202,7 @@ const STRANGLE: BossAttackDef = {
     phases: [2, 3],
     seq: ROOTS_SEQ,
     spotAnim: VINE_BURST,
-    speed: 7,
+    speed: 9,
     radius: 0.6,
     impactSpotAnim: TENDRIL_BURST,
     wave: { reach: 11 },
@@ -214,7 +215,7 @@ const STRANGLE: BossAttackDef = {
 const BLOWS: BossAttackDef = {
     name: "Strangling blows",
     kind: "swing",
-    damage: 3,
+    damage: 4,
     windup: 0.35,
     cooldown: 0,
     range: 999,
@@ -230,8 +231,8 @@ const BLOWS: BossAttackDef = {
 const ROOTS_RISE: BossAttackDef = {
     name: "The roots rise",
     kind: "ground",
-    damage: 4,
-    windup: 1.3,
+    damage: 5,
+    windup: 0.9,
     cooldown: 6,
     range: 999,
     weight: 3,
@@ -239,7 +240,7 @@ const ROOTS_RISE: BossAttackDef = {
     seq: ROOTS_SEQ,
     sound: 7101,
     ground: {
-        spots: [{ shape: "rule", count: 8, within: 8 }],
+        spots: [{ shape: "rule", count: 12, within: 8 }],
         radius: 1.1,
         spotAnim: TENDRIL_BURST,
         alpha: 0.35,
@@ -251,10 +252,10 @@ const ATTACKS: BossAttackDef[] = [
     STRIKE,
     DART,
     // Severed, he darts twice, the second aimed afresh and quicker
-    { ...DART, name: "Darts", weight: 3, phases: [3], chain: { times: 1, windup: 0.65 } },
+    { ...DART, name: "Darts", weight: 3, phases: [3], chain: { times: 1, windup: 0.6 } },
     VINES,
     AXES,
-    { ...AXES, name: "Both axes", count: 2, phases: [3] },
+    { ...AXES, name: "Both axes", count: 2, phases: [2, 3] },
     STRANGLE,
     BLOWS,
     ROOTS_RISE,
@@ -287,7 +288,7 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
         sounds: SOUNDS,
         spawnMessage: "Awakened Vardorvis rises in his clearing!",
         boss: {
-            attackInterval: 1.4,
+            attackInterval: 1.15,
             keepDistance: 1.5,
             enrage: { message: "" },
             bulletGrace: 0.6,
@@ -350,15 +351,15 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
                         status: "The wood wakes",
                         message: "The wood wakes!",
                         opener: "The roots rise",
-                        tempo: 0.9,
-                        speed: 1.1,
+                        tempo: 0.85,
+                        speed: 1.15,
                     },
                     {
                         status: "Severed",
                         message: "Severed!",
                         opener: "Darts",
-                        tempo: 0.9,
-                        speed: 1.2,
+                        tempo: 0.75,
+                        speed: 1.25,
                     },
                 ],
                 threshold: {
@@ -397,15 +398,15 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
         walkSeq: 10348,
         attackSeq: 10348,
         deathSeq: -1,
-        hp: 300,
-        damage: 2,
+        hp: 450,
+        damage: 3,
         speed: 0,
         radius: 0.45,
         xp: 0,
         sounds: SOUNDS,
         stationary: true,
         healthBar: true,
-        shot: { range: 16, interval: 3.5, speed: 9, spotAnim: HEAD_SHOT },
+        shot: { range: 16, interval: 3, speed: 11, spotAnim: HEAD_SHOT },
     },
     // His blood captors: drawn as the wood's root hearts (the Large Tendril), which heal him while
     // they stand
@@ -417,7 +418,7 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
         walkSeq: 10363,
         attackSeq: 10365,
         deathSeq: -1,
-        hp: 120,
+        hp: 200,
         damage: 3,
         speed: 0,
         radius: 1.2,
@@ -429,7 +430,7 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
         healthBar: true,
         spawnMessage: "A blood captor pushes up through the roots!",
         heals: {
-            fraction: 0.005,
+            fraction: 0.002,
             interval: 2,
             // Across most of the clearing: it stands where it came up (stationary), so its seek
             // is only how far it looks

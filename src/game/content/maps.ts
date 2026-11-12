@@ -657,8 +657,10 @@ export const MAPS: MapDef[] = [
             x: STRANGLEWOOD_CLEARING.x,
             y: STRANGLEWOOD_CLEARING.y - VARDORVIS_START_DISTANCE,
         },
-        // His hitpoints come from the event, his hits are tuned to the Forester's hitpoints
+        // His hitpoints come from the event, his hits are tuned to the Forester's hitpoints with
+        // the shop's every upgrade: through armour, which would stop most of each of his hits
         difficulty: { hp: 1, damage: 1 },
+        hits: { scale: 1, throughArmor: true },
         hard: { hp: 1.3, damage: 1.3 },
         waves: [],
         events: [
