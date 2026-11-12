@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- The Armoury's key, by Jp66600: the Weapons and Passives tabs show it too, where a "?" marks one
+  still locked.
+
 ## 0.31.0 - 2026-11-11
 
 ### Added

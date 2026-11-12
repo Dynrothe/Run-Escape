@@ -50,51 +50,50 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
                         </button>
                     ))}
                 </div>
+                <p className="ui-subtle">
+                    {t(tab === "gear" ? "armoury.intro" : `armoury.catalogue.${tab}_intro`)}
+                </p>
+                {/* What the tiles' borders mean, on every tab. A "?" is gear not found yet, or a
+                    weapon or passive still locked. */}
+                <div className="ui-armoury-legend">
+                    {RARITY_ORDER.map((rarity) => (
+                        <span key={rarity} className="ui-armoury-legend-item">
+                            <span
+                                className="ui-armoury-legend-swatch"
+                                style={{ borderColor: RARITIES[rarity].color }}
+                            />
+                            {tl(RARITIES[rarity].name)}
+                        </span>
+                    ))}
+                    <span className="ui-armoury-legend-item">
+                        <span className="ui-armoury-legend-swatch ui-armoury-legend-missing">
+                            ?
+                        </span>
+                        {t(tab === "gear" ? "armoury.legend.not_found" : "armoury.legend.locked")}
+                    </span>
+                </div>
                 {tab === "gear" ? (
-                    <>
-                        <p className="ui-subtle">{t("armoury.intro")}</p>
-                        {/* What the tiles' borders mean */}
-                        <div className="ui-armoury-legend">
-                            {RARITY_ORDER.map((rarity) => (
-                                <span key={rarity} className="ui-armoury-legend-item">
-                                    <span
-                                        className="ui-armoury-legend-swatch"
-                                        style={{ borderColor: RARITIES[rarity].color }}
-                                    />
-                                    {tl(RARITIES[rarity].name)}
-                                </span>
-                            ))}
-                            <span className="ui-armoury-legend-item">
-                                <span className="ui-armoury-legend-swatch ui-armoury-legend-missing">
-                                    ?
-                                </span>
-                                {t("armoury.legend.not_found")}
-                            </span>
-                        </div>
-                        <div className="ui-armoury-body">
-                            <div className="ui-armoury-slots">
-                                {GEAR_SLOTS.map((slot) => (
-                                    <div key={slot.id} className="ui-armoury-slot">
-                                        <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
-                                        <div className="ui-armoury-pieces">
-                                            {CASKET_GEAR.filter((g) => g.slot === slot.id).map(
-                                                (g) => (
-                                                    <ArmouryTile
-                                                        key={g.id}
-                                                        save={save}
-                                                        itemId={g.id}
-                                                        selected={g.id === selected}
-                                                        onSelect={() => setSelected(g.id)}
-                                                    />
-                                                ),
-                                            )}
-                                        </div>
+                    <div className="ui-armoury-body">
+                        <div className="ui-armoury-slots">
+                            {GEAR_SLOTS.map((slot) => (
+                                <div key={slot.id} className="ui-armoury-slot">
+                                    <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
+                                    <div className="ui-armoury-pieces">
+                                        {CASKET_GEAR.filter((g) => g.slot === slot.id).map((g) => (
+                                            <ArmouryTile
+                                                key={g.id}
+                                                save={save}
+                                                itemId={g.id}
+                                                selected={g.id === selected}
+                                                onSelect={() => setSelected(g.id)}
+                                            />
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                            <ArmouryDetails save={save} itemId={selected} client={client} />
+                                </div>
+                            ))}
                         </div>
-                    </>
+                        <ArmouryDetails save={save} itemId={selected} client={client} />
+                    </div>
                 ) : (
                     <LoadoutCatalogue kind={tab} save={save} />
                 )}

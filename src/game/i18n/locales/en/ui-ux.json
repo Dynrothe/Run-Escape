@@ -25,6 +25,7 @@
     "ui.shop.hint.mouse": "Click a skill to buy a rank · right-click to refund one",
     "ui.shop.hint.touch": "Tap a skill to buy a rank · tap its icon to refund one",
     "armoury.legend.not_found": "Not found yet",
+    "armoury.legend.locked": "Locked",
     "quest.hide_done": "Hide completed",
     "quest.show_done": "Show completed",
     "quest.none_left": "Nothing left: every quest is done.",
