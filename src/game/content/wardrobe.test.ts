@@ -5,6 +5,10 @@ import { getBareAppearance, getCharacterAppearance } from "../client/GameAssets"
 import { makeLoadout } from "../client/coop/CoopLobby";
 import { buyCosmetic, canWearCosmetic, createSave, migrateSave } from "../core/save";
 import { CHARACTERS, getCharacter } from "./characters";
+import { getTrophyMap } from "./collectionLog";
+import { getMap } from "./maps";
+import { PUMPKIN_MAPS } from "./trickOrTreat";
+import { TROPHIES } from "./trophies";
 import {
     BODY_COLOURS,
     BODY_PARTS,
@@ -18,13 +22,16 @@ import {
     getCosmeticPrice,
     getDefaultBody,
     getPieceAdventurer,
+    getPieceTrophy,
     isWearingOutfit,
     saveOutfit,
     wearOutfit,
     wearsWardrobe,
 } from "./wardrobe";
 
-const hat = COSMETICS.find((c) => c.slot === EquipSlot.HEAD && !getPieceAdventurer(c.objId))!;
+const hat = COSMETICS.find(
+    (c) => c.slot === EquipSlot.HEAD && !getPieceAdventurer(c.objId) && !getPieceTrophy(c.objId),
+)!;
 const cape = COSMETICS.find((c) => c.slot === EquipSlot.CAPE && !getPieceAdventurer(c.objId))!;
 
 describe("the Wardrobe's store", () => {
@@ -63,6 +70,79 @@ describe("the Wardrobe's store", () => {
         save.coins = price;
         expect(buyCosmetic(save, hat.objId)).toBe(false);
         expect(buyCosmetic(save, -5)).toBe(false);
+    });
+});
+
+describe("found pieces", () => {
+    const found = COSMETICS.filter((c) => getPieceTrophy(c.objId));
+    const named = (re: RegExp) => COSMETICS.filter((c) => re.test(c.name));
+
+    it("are the Halloween masks, raids' armour and Thanksgiving's hats", () => {
+        const masks = named(/h'ween mask|halloween mask|^jack lantern mask$|^skeleton mask$/i);
+        expect(masks).toHaveLength(6);
+        expect(PUMPKIN_MAPS).toEqual(["halloween"]);
+        for (const mask of masks) {
+            expect(getPieceTrophy(mask.objId)?.objId).toBe(mask.objId);
+            expect(getPieceTrophy(mask.objId)?.from.kind).toBe("pumpkin");
+        }
+        const raids = named(
+            /^(justiciar |masori (mask|body|chaps)|elidinis' ward|avernic defender$|ghommal's avernic)/i,
+        );
+        expect(raids).toHaveLength(15);
+        const hats = named(/^chompy bird hat$/i);
+        expect(hats).toHaveLength(18);
+        for (const piece of [...masks, ...raids, ...hats]) {
+            expect(found).toContain(piece);
+        }
+        expect(getPieceTrophy(22322)?.id).toBe("avernic_defender_hilt");
+        expect(getPieceTrophy(28620)?.id).toBe("turkey_hat");
+    });
+
+    it("come from a map's Collection log, and are no adventurer's own", () => {
+        for (const piece of found) {
+            const trophy = getPieceTrophy(piece.objId)!;
+            expect(getMap(getTrophyMap(trophy)).id).toBe(getTrophyMap(trophy));
+            expect(getPieceAdventurer(piece.objId)).toBeUndefined();
+        }
+    });
+
+    it("are every trophy that's worn", () => {
+        for (const trophy of TROPHIES) {
+            if (COSMETIC_BY_ID.has(trophy.objId)) {
+                expect(getPieceTrophy(trophy.objId)?.id).toBe(trophy.id);
+            }
+        }
+    });
+
+    it("can't be bought, and are worn once their trophy's found", () => {
+        const save = createSave();
+        save.coins = 1_000_000;
+        for (const piece of found) {
+            expect(buyCosmetic(save, piece.objId)).toBe(false);
+            const trophy = getPieceTrophy(piece.objId)!.id;
+            expect(canWearCosmetic(save, piece.objId)).toBe(save.trophies.includes(trophy));
+            if (!save.trophies.includes(trophy)) {
+                save.trophies.push(trophy);
+            }
+            expect(canWearCosmetic(save, piece.objId)).toBe(true);
+        }
+        expect(save.coins).toBe(1_000_000);
+        expect(save.cosmetics).toBeUndefined();
+    });
+
+    it("stay on a loaded look only with their trophy", () => {
+        const [red, blue] = named(/^(red|blue) halloween mask$/i);
+        const save = createSave();
+        save.trophies = [getPieceTrophy(red.objId)!.id];
+        save.cosmetics = [red.objId, blue.objId];
+        save.look = { outfit: { [EquipSlot.HEAD]: blue.objId } };
+        const loaded = migrateSave(JSON.parse(JSON.stringify(save)));
+        expect(loaded.cosmetics).toBeUndefined();
+        expect(loaded.look?.outfit).toBeUndefined();
+        save.look = { outfit: { [EquipSlot.HEAD]: red.objId } };
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).look?.outfit).toEqual({
+            [EquipSlot.HEAD]: red.objId,
+        });
     });
 });
 

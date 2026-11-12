@@ -12,6 +12,11 @@ the version in the corner).
   bronze helms to partyhats, and you can try each one on first. Your unlocked adventurers' own
   pieces are free, you can save outfits to put on again in one go, and co-op shows everyone's
   look.
+- The Wardrobe doesn't sell what the Collection log finds: Halloween masks, Justiciar and Masori
+  armour, the Avernic defender, Elidinis' ward, and the Turkey and Chompy bird hats are yours to
+  wear once found.
+- Hallowed Night pumpkins now hold a Black h'ween mask, a Jack lantern mask and a Skeleton mask
+  too.
 
 ## 0.31.0 - 2026-11-11
 

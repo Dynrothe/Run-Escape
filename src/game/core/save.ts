@@ -39,6 +39,7 @@ import {
     cleanLook,
     cleanSavedOutfits,
     getCosmeticPrice,
+    getPieceTrophy,
     ownsCosmetic,
 } from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
@@ -325,7 +326,10 @@ export function migrateSave(raw: unknown): SaveData {
         save.favouriteCharacter = data.favouriteCharacter;
     }
     if (Array.isArray(data.cosmetics)) {
-        const owned = new Set(data.cosmetics.filter((id) => COSMETIC_BY_ID.has(id)));
+        // A found piece is the trophy's, never bought
+        const owned = new Set(
+            data.cosmetics.filter((id) => COSMETIC_BY_ID.has(id) && !getPieceTrophy(id)),
+        );
         if (owned.size > 0) {
             save.cosmetics = [...owned];
         }
@@ -361,16 +365,21 @@ export function migrateSave(raw: unknown): SaveData {
     return save;
 }
 
-// The Wardrobe's pieces this save can wear: bought, or an unlocked adventurer's
+// The Wardrobe's pieces this save can wear: bought, an unlocked adventurer's, or found
 export function canWearCosmetic(save: SaveData, objId: number): boolean {
-    return ownsCosmetic(save.cosmetics ?? [], save.unlockedCharacters, objId);
+    return ownsCosmetic(save, objId);
 }
 
 // Buys a piece in the Wardrobe's store. False when it can't be (owned already, not in the store,
-// or too expensive).
+// only ever found, or too expensive).
 export function buyCosmetic(save: SaveData, objId: number): boolean {
     const cosmetic = COSMETIC_BY_ID.get(objId);
-    if (!cosmetic || canWearCosmetic(save, objId) || save.coins < getCosmeticPrice(cosmetic)) {
+    if (
+        !cosmetic ||
+        getPieceTrophy(objId) ||
+        canWearCosmetic(save, objId) ||
+        save.coins < getCosmeticPrice(cosmetic)
+    ) {
         return false;
     }
     save.coins -= getCosmeticPrice(cosmetic);

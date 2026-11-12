@@ -152,6 +152,9 @@ The Wardrobe's store is every wearable item in the cache, generated into `conten
 the script's filters (`JUNK`, `RARES`, the slots) and run it again, then
 `scripts/i18n/extract.ts` for their names. Prices are by rarity in `content/wardrobe.ts`. An
 adventurer's own outfit pieces are free once they're unlocked, so a new adventurer needs nothing more.
+A piece that's only found, never sold (the Halloween masks, raid armour), is a trophy (`trophies.ts`)
+named in `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts`, with any pieces it makes besides its
+own item. A new trophy that's a worn item goes there too, or the store sells it.
 `slim-plan.ts` bakes every piece on both bodies. See The Wardrobe in `docs/DEVELOPMENT.md`.
 
 ## Collection log reward

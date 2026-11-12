@@ -10,6 +10,7 @@ import { CHARACTERS } from "./characters";
 import { BODY_KIT_IDS, COSMETIC_ROWS } from "./cosmeticItems";
 import { GEAR_SLOTS } from "./items";
 import { Rarity } from "./rarity";
+import { TROPHY_BY_ID, TrophyDef } from "./trophies";
 import { CharacterDef } from "./types";
 
 // The Wardrobe: how the player looks, on every adventurer. A body (its type, kits and colours, as
@@ -149,17 +150,67 @@ export function getPieceAdventurer(objId: number): string | undefined {
     return ADVENTURER_PIECES.get(objId);
 }
 
-// Whether a piece can be worn: bought, or an unlocked adventurer's
-export function ownsCosmetic(
-    owned: readonly number[],
-    unlockedCharacters: readonly string[],
-    objId: number,
-): boolean {
-    if (owned.includes(objId)) {
+// Pieces the store never sells, each worn once its trophy's in the Collection log: trophy id ->
+// the pieces it brings besides its own item (if that's worn): what it makes in OSRS, or other
+// looks of it
+const FOUND_PIECE_TROPHIES: Record<string, number[]> = {
+    // The Hallowed Night's pumpkins
+    red_halloween_mask: [],
+    blue_halloween_mask: [],
+    green_halloween_mask: [],
+    black_hween_mask: [],
+    jack_lantern_mask: [],
+    skeleton_mask: [],
+    // The Theatre of Blood's chest: the defender the hilt makes, and Ghommal's
+    avernic_defender_hilt: [22322, 27550, 27552],
+    justiciar_faceguard: [],
+    justiciar_chestguard: [],
+    justiciar_legguards: [],
+    // The Tombs of Amascut's chest, and each piece fortified (and the ward's ornament)
+    masori_mask: [27235],
+    masori_body: [27238],
+    masori_chaps: [27241],
+    elidinis_ward: [27251, 27253],
+    // Thanksgiving Harvest, and every other look of the Chompy bird hat
+    turkey_hat: [],
+    chompy_hat: [
+        2979, 2980, 2981, 2982, 2983, 2984, 2985, 2986, 2987, 2988, 2989, 2990, 2991, 2992, 2993,
+        2994, 2995,
+    ],
+};
+
+const FOUND_PIECES = new Map<number, TrophyDef>(
+    Object.entries(FOUND_PIECE_TROPHIES).flatMap(([id, also]) => {
+        const trophy = TROPHY_BY_ID.get(id)!;
+        return [trophy.objId, ...also]
+            .filter((objId) => COSMETIC_BY_ID.has(objId))
+            .map((objId) => [objId, trophy] as const);
+    }),
+);
+
+// The trophy that brings this piece, if it's found rather than bought
+export function getPieceTrophy(objId: number): TrophyDef | undefined {
+    return FOUND_PIECES.get(objId);
+}
+
+// What a save says of the pieces a player has
+export type WardrobeOwner = {
+    cosmetics?: readonly number[];
+    unlockedCharacters: readonly string[];
+    trophies: readonly string[];
+};
+
+// Whether a piece can be worn: bought, an unlocked adventurer's, or found
+export function ownsCosmetic(owner: WardrobeOwner, objId: number): boolean {
+    const trophy = FOUND_PIECES.get(objId);
+    if (trophy) {
+        return owner.trophies.includes(trophy.id);
+    }
+    if (owner.cosmetics?.includes(objId)) {
         return true;
     }
     const adventurer = ADVENTURER_PIECES.get(objId);
-    return adventurer !== undefined && unlockedCharacters.includes(adventurer);
+    return adventurer !== undefined && owner.unlockedCharacters.includes(adventurer);
 }
 
 function cleanBody(raw: unknown): BodyLook | undefined {

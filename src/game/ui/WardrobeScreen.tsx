@@ -5,7 +5,10 @@ import { HSL_RGB_MAP } from "../../rs/util/ColorUtil";
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
 import { characterName, getCharacter } from "../content/characters";
+import { getTrophyMap } from "../content/collectionLog";
+import { getMap, mapName } from "../content/maps";
 import { RARITIES, RARITY_ORDER, Rarity } from "../content/rarity";
+import { trophyName } from "../content/trophies";
 import {
     BODY_COLOURS,
     BODY_PARTS,
@@ -24,12 +27,13 @@ import {
     getCosmeticPrice,
     getDefaultBody,
     getPieceAdventurer,
+    getPieceTrophy,
     isWearingOutfit,
     ownsCosmetic,
     wearsWardrobe,
 } from "../content/wardrobe";
 import { SaveData } from "../core/save";
-import { fmtNum, t, tl } from "../i18n";
+import { fmtNum, t, tl, tr } from "../i18n";
 import { Coins } from "./Coins";
 import { ItemIcon } from "./ItemIcon";
 import "./WardrobeScreen.css";
@@ -303,8 +307,7 @@ function OutfitTab({
         }
         client.setLook({ ...look, outfit: next });
     };
-    const owned = (cosmetic: CosmeticDef) =>
-        ownsCosmetic(save.cosmetics ?? [], save.unlockedCharacters, cosmetic.objId);
+    const owned = (cosmetic: CosmeticDef) => ownsCosmetic(save, cosmetic.objId);
     return (
         <div className="ui-wardrobe-list">
             <p className="ui-subtle">{t("wardrobe.outfit_intro")}</p>
@@ -570,8 +573,7 @@ function StoreTab({
     const [hideOwned, setHideOwned] = useState(false);
     const [page, setPage] = useState(0);
     const [selected, setSelected] = useState<number>();
-    const owned = (objId: number) =>
-        ownsCosmetic(save.cosmetics ?? [], save.unlockedCharacters, objId);
+    const owned = (objId: number) => ownsCosmetic(save, objId);
     const query = search.trim().toLowerCase();
     const shown = useMemo(
         () =>
@@ -731,9 +733,11 @@ function StoreDetails({
             </div>
         );
     }
-    const owned = ownsCosmetic(save.cosmetics ?? [], save.unlockedCharacters, piece.objId);
+    const owned = ownsCosmetic(save, piece.objId);
     const price = getCosmeticPrice(piece);
     const adventurer = getPieceAdventurer(piece.objId);
+    // Found on a map, never sold
+    const trophy = getPieceTrophy(piece.objId);
     const worn = look.outfit?.[piece.slot] === piece.objId;
     const slot = WARDROBE_SLOTS.find((s) => s.equipSlot === piece.slot);
     const wear = () =>
@@ -758,15 +762,33 @@ function StoreDetails({
             {owned ? (
                 <>
                     <div className="ui-card-style">
-                        {adventurer && !save.cosmetics?.includes(piece.objId)
-                            ? t("wardrobe.from_adventurer", {
-                                  name: characterName(getCharacter(adventurer)),
-                              })
-                            : t("wardrobe.owned")}
+                        {trophy
+                            ? trophy.objId === piece.objId
+                                ? t("wardrobe.found")
+                                : t("wardrobe.found_with", { name: trophyName(trophy) })
+                            : adventurer && !save.cosmetics?.includes(piece.objId)
+                              ? t("wardrobe.from_adventurer", {
+                                    name: characterName(getCharacter(adventurer)),
+                                })
+                              : t("wardrobe.owned")}
                     </div>
                     <button className="ui-button ui-button-go" disabled={worn} onClick={wear}>
                         {worn ? t("wardrobe.wearing") : t("wardrobe.wear")}
                     </button>
+                </>
+            ) : trophy ? (
+                <>
+                    <div className="ui-card-style">
+                        {t("wardrobe.not_sold", {
+                            map: mapName(getMap(getTrophyMap(trophy))),
+                        })}
+                    </div>
+                    {trophy.objId !== piece.objId && (
+                        <p className="ui-subtle">
+                            {t("wardrobe.comes_with", { name: trophyName(trophy) })}
+                        </p>
+                    )}
+                    <p className="ui-subtle">{tr(`trophy.${trophy.id}.how`, trophy.how)}</p>
                 </>
             ) : (
                 <>

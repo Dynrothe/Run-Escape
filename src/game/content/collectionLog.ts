@@ -19,7 +19,7 @@ export type RewardEntry = { id: string; name: string; objId: number; how: string
 
 // The map a trophy's from: a pumpkin's are the Hallowed Night's, a turkey's Thanksgiving, the
 // Tombs' chest the raid.
-function trophyMap(trophy: TrophyDef): string {
+export function getTrophyMap(trophy: TrophyDef): string {
     if (trophy.from.kind === "pumpkin") return "halloween";
     if (trophy.from.kind === "turkey") return "thanksgiving";
     if (trophy.from.kind === "tombs") return "tombs_of_amascut";
@@ -37,7 +37,7 @@ function bringsIn(mapId: string): boolean {
 // tab
 export const REWARD_MAPS: string[] = [
     ...new Set([
-        ...TROPHIES.map(trophyMap),
+        ...TROPHIES.map(getTrophyMap),
         ...FIGHT_MAPS.filter((map) => bringsIn(map.id)).map((map) => map.id),
     ]),
 ];
@@ -60,7 +60,7 @@ export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
         how: t("log.bring_in", { task: describeUnlockTask(weapon.unlock!) }),
         found: save.unlockedItems.includes(weapon.id),
     }));
-    const trophies = TROPHIES.filter((trophy) => trophyMap(trophy) === mapId).map(
+    const trophies = TROPHIES.filter((trophy) => getTrophyMap(trophy) === mapId).map(
         ({ id, name, objId, how }) => ({
             id,
             name,

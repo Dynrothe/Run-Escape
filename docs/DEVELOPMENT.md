@@ -1443,6 +1443,13 @@ the sim never sees it.
   go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, paid from banked coins like the
   Armoury. An unlocked adventurer's own pieces are the player's for nothing
   (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
+  Collection log finds are never sold: `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts` names the
+  trophies whose pieces are worn once the trophy's in the save (`getPieceTrophy`): the trophy's
+  own item if it's worn, and any others listed with it (what it makes in OSRS, as the hilt's
+  defender, or other looks of it, as Masori (f) or the Chompy bird hat's). `ownsCosmetic` goes by
+  the trophy alone for those, and `buyCosmetic` and loading a save's `cosmetics` refuse them. The
+  Store still lists them, to try on, with where they're found in place of a price. A trophy
+  that's a worn item belongs in the list, or the store sells it.
 - **Saved** as `SaveData.cosmetics` (the pieces bought) and `SaveData.look` (a `WardrobeLook`).
   `cleanLook` drops what this game doesn't know, and for the save, pieces it can't wear.
   `SaveData.outfits` are outfits kept by name (`SavedOutfit`: the pieces and `overGear`, not the

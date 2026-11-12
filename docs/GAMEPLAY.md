@@ -281,7 +281,10 @@ version and how to run it.
 - **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
-  mask or a Scythe inside, for the Collection log. Those do nothing in a run.
+  mask (red, blue or green), a Jack lantern mask or a Skeleton mask (1 in 100 each), or a Black
+  h'ween mask or a Scythe (1 in 200 each) inside, for the Collection log. Those do nothing in a
+  run, but a mask found is yours to wear in the Wardrobe, and finding one is the only way to get
+  it.
 - **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, Lil' Zik from
   Verzik with its looks from expert clears, and the Dark squirrel from Justiciar Zachariah) can be
   taken along, picked under the adventurers. It
@@ -701,10 +704,15 @@ version and how to run it.
   outfits can be saved under a name and put on again in one go (they keep the pieces, not the
   body). The Store has
   every item OSRS can wear outside the weapon slot, one of each look, nearly three thousand of
-  them, from 150 coins for a Common piece to 5,000 for a Very rare one (partyhats, h'ween masks,
-  3rd age, gilded). Pick one to try it on. Every unlocked adventurer's own pieces are yours for
-  nothing. Gear found in a run goes on over the outfit unless it's kept on, and the weapon is
-  always the run's. Adventurers who are someone in particular (the Avian Assaulter's chicken,
+  them, from 150 coins for a Common piece to 5,000 for a Very rare one (partyhats, 3rd age,
+  gilded). Pick one to try it on. Every unlocked adventurer's own pieces are yours for
+  nothing. Collection log finds that are worn aren't sold, and are yours once found: the
+  Halloween masks (the h'ween masks, the Jack lantern and the Skeleton mask, from Hallowed
+  Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)
+  from the Theatre of Blood, Masori armour and Elidinis' ward (and their fortified looks) from
+  the Tombs of Amascut, and Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
+  it). They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
+  weapon is always the run's. Adventurers who are someone in particular (the Avian Assaulter's chicken,
   Durial321) keep their own look. It's looks only, and in co-op everyone sees each other's.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
   (friends join with its eight-letter code or the invite link) or open to anyone browsing the
