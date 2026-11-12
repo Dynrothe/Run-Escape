@@ -266,6 +266,9 @@ desktop build.
 
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
+- `sim.equip(id)` wears a piece, and `sim.openCasket(tier)` opens a casket at once: set
+  `sim.chests[0].itemId` to choose its item, then call `game.syncOverlay()`, or its window never
+  shows (nothing in a run's tick asks for it).
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
 - `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
   any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
