@@ -827,6 +827,12 @@ Build order step 15. Where it differs from 7.3, and why:
   the Leviathan (the earlier 2 and 2.5 were 4 seeds). Its fights earn
   165 to 220 points. With Rest skipped (`BLESS=best`) the wounds carry: fights 2 to 4 start at
   81% to 97%.
+  All four hardened, 2026-11-12 (tuned to a full save, `META=max`, each about 1 in 25 on its own:
+  the awakened-\*.md 10s), with `META=max` and up to 80 retries a fight, 1 of 12 runs clears: the
+  climb on top of fights tuned that close takes Vardorvis 1 in 30 at x1, the Whisperer 1 in 276
+  at x1.05 (wounded), the Duke 1 in 43 and the Leviathan 1 in 161. With the Whisperer first (6 runs)
+  she's 1 in 26 at x1, the Duke 1 in 21 at x1.05, the Leviathan 1 in 63 at x1.1, Vardorvis 0 in 82
+  at x1.15. The climb is the knob if the gauntlet's to stay clearable for most players.
 - **Not kept**: a run in progress isn't saved; reloading the page mid-gauntlet loses it.
 - **Phones**: the camp and the order screen fit 844x390; the heaviest fight start measured is
   Vardorvis's, 61.5k (54.1k of it the world).
