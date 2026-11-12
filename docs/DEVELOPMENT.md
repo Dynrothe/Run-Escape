@@ -2258,7 +2258,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   HUD only shows it in the panel.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
-  there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
+  there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS,
+  all but `src/index.css`, which comes after it (Prettier sorts `index.tsx`'s imports): the
+  page's height for a touch screen, `100dvh`, is there for that reason. Under `100vh` the bottom
+  of every screen was under a 12.9" iPad's edge.
   A panel whose contents can grow (an error line, a row of pages) has to fit or scroll there: the
   desktop's `90vh` cap leaves its buttons below the screen. Give it the screen's height less the
   safe area. The full-height panels (the shop, pause and the like) then hide their overflow and
@@ -2267,6 +2270,13 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   into the item buttons' column there, where the Tombs' fight button sits. Its lines let taps
   through to the button, but the DPS doesn't, so with a fight button over the items it keeps left
   of that column (`.ui-damage-beside-ability`). Anything new to tap in that column needs the same.
+- A tablet is `pointer: coarse` too, but taller than 520px, so it gets the desktop's layout with
+  the touch controls over it. The HUD lets pointers through to the stick, so whatever a finger
+  has to reach there takes them back (`pointer-events: auto`) in `Mobile.css`'s plain
+  `(pointer: coarse)` block, not the phone's. The camera's zoom slider is in the HUD's right
+  column on a tablet, with the other toggles, and by the timer on a phone. The title's corner
+  keeps clear of the home bar, and held upright it stacks as a narrow window's does. Check a
+  tablet at 760x560 and 760x1000 in the browser pane: under 768 wide it emulates touch.
 - A touch screen also gets a pixel ratio capped at 1.5 (2 elsewhere, `DeviceUtil.pixelRatio`), 2
   workers instead of 4, textures at half size (64 a side, a quarter of the memory), 60 frames a
   second at most unless the Frame rate setting says otherwise (see Keeping it light on a phone),

@@ -3,6 +3,15 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.31.1 - 2026-11-12
+
+### Fixed
+
+- The camera's zoom slider works on tablets like the iPad. It's under the minimap there, with
+  the other toggles.
+- The title screen's bottom row on an iPad: the buttons in the corner were half off the bottom
+  of the screen, and held upright they covered the hint.
+
 ## 0.31.0 - 2026-11-11
 
 ### Added
