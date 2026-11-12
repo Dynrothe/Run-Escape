@@ -1410,9 +1410,10 @@
     overflow-y: auto;
 }
 
-/* The casket's card has its border inside its size */
+/* The casket's card has its border inside its size, and leaves the casket and its caption their
+   least (ChestModal.css) */
 .ui-choice-countdown ~ .ui-modal > .ui-chest-card {
-    max-height: calc(100% - 12px);
+    max-height: calc(100% - 220px);
 }
 
 /* A narrow window has room between six slots and the minimap for the time alone */

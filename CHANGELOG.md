@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Gear from a casket, by Jp66600: a table sets each of its stats beside the piece you're wearing,
+  with the difference, and both pieces' set bonuses show.
+
 ## 0.31.0 - 2026-11-11
 
 ### Added
