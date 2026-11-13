@@ -14,45 +14,10 @@ the version in the corner).
   look. Drag your adventurer round to see them from every side, or press Random for a new look.
 - Hallowed Night pumpkins now hold a Black h'ween mask, a Jack lantern mask and a Skeleton mask
   too.
-- The Battle for Varrock, on the Fun tab: Varrock burnt to ruins, every street and building where it
-  stands, broken walls and broken breaches in the city wall, Gypsy Aris's tent ablaze, a crater
-  where the square's fountain was, fires still burning (walk through one and it burns you) and the
-  dead where they fell, up to Yama on his throne in the palace. Fight the hordes of Yama's demons
-  in its streets as Justiciar Zachariah, with his Saradomin sword, and his lunge, shock wave, ice
-  barrage, lightning and the Owl's gaze, his ultimate, on buttons of your own, for as long as you
-  like. His sword's blows land heavy, shaking the ground and staggering what they hit. There are
-  no items here: each level offers three blessings of Saradomin to choose from, from his strength
-  to a faster sword or another shock wave either side. Beat both his generals and the palace opens:
-  step onto its floor and Yama speaks from his throne, goes from it in embers and rises before it:
-  the palace is sealed in fire, the floor rises under you, and only the Owl's gaze stops his
-  meteor. Freeze his void flares with Ice barrage and shatter them with Lightning for food. It
-  opens on Yama on his throne, facing the last of the palace guard (any key, click or tap skips
-  it). Lunge through his rising floor unharmed, and keep your gaze out of his reach: up close he
-  swats you away.
-- Yama's generals in the Battle for Varrock, in either order: Xarth on the Grand Exchange's pad,
-  ringed with fire, who burns you, blasts the pad unless you hide behind a pillar, sets the floor
-  alight and raises the dead, and K'ril Tsutsaroth in the church, with his bodyguards and a
-  desecration you must break. Beat one and the other grows stronger. Die to either and the run's
-  over. A fresh hero is no match for them: farm the hordes first, about
-  eight minutes for the first and fifteen for the second, and Yama comes straight after.
-- The Battle for Varrock's objective, at the top of the screen for a few seconds as the run starts
-  and as each general falls: find and slay Yama's two generals, then Yama himself.
-- Beating the second of Yama's generals shows the fires round Varrock palace going out.
-- Yama's fight in the Battle for Varrock has its own music, Forged Through Fire.
-- In the Battle for Varrock, beating one of Yama's generals heals you to full, food drops twice as
-  often, and a Holy elixir heals twice as much.
-- In the Battle for Varrock, the timer stops while you fight a general or Yama, and the hordes
-  wait with it: they come back as they were, not a few waves on.
-- Xarth's attacks have his own sounds, and so do Yama's shadow lanes and Void Flares.
-- Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
-  maps to play in any order, each harder the more of the others you've beaten. The first is the
-  Stranglewood; the Lassar Undercity, Ghorrock and the Scar are coming.
-- The Stranglewood: the Strangled, their boars, lynxes and bears in the real wood round
-  Vardorvis's arena, with Kasonde, a great Strangled Bear and Vardorvis himself. Roots creep in
-  from the wood, slowing and hurting you: cut them back with your hits, and kill the root hearts
-  that make them grow. With its own music, Strangled and Blood Rush.
-- The Forester, for beating the Stranglewood: a bronze 2h sword, and Timber!, a tree felled along
-  the ground every 25 kills. Beating Vardorvis also finds the Executioner's axe head.
+- The Battle for Varrock, on the Fun tab: Varrock burnt to ruins and overrun by Yama's demons.
+  Play as Justiciar Zachariah, with his Saradomin sword and his moves on buttons of your own, and
+  choose a blessing of Saradomin at each level instead of items. Slay Yama's two generals, Xarth
+  on the Grand Exchange and K'ril Tsutsaroth in the church, and the palace opens for Yama himself.
 
 ### Fixed
 
