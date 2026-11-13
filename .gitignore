@@ -40,3 +40,13 @@ world.json
 /android/app/src/main/assets/game/
 *.jks
 *.keystore
+
+# Meme / video arena assets & generated media
+*.webm
+*.mp4
+public/*.bin
+public/*.mp3
+src/media/music/bad_*
+bad apple/
+tmp/
+

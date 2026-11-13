@@ -80,6 +80,8 @@ import {
     getGroundReach,
 } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
+import { BadAppleController, getBadApplePlayer, getVideoPlayer } from "../scaperune/badApple";
+import { BAD_APPLE_SCREEN_WORLD_RECT } from "../scaperune/maps/badApple";
 import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
@@ -179,14 +181,16 @@ const TITLE_MAP = MAPS[0];
 // Wiki, in src/media/music: a track's file is its name in lower case with
 // underscores (massacre.ogg, the_bane_of_ashihama.ogg). A track with no
 // recording there plays nothing, so a map can name one before it's in.
-const MUSIC_FILES = import.meta.glob("../../media/music/*.ogg", {
+const MUSIC_FILES = import.meta.glob("../../media/music/*.{ogg,mp3}", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
 
 function musicFor(track: string): string | undefined {
     const file = track.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-    return MUSIC_FILES[`../../media/music/${file}.ogg`];
+    return (
+        MUSIC_FILES[`../../media/music/${file}.ogg`] ?? MUSIC_FILES[`../../media/music/${file}.mp3`]
+    );
 }
 
 // Title screen camera: lower and slowly circling the character (RS angle units
@@ -533,6 +537,7 @@ export class GameClient implements GameFrameHandler {
 
     sim?: Sim;
     paused = false;
+    private wasStoppedBehindMenu = false;
     save: SaveData;
     // The save was written by a newer version of the game, so it's not saved
     // over (unless the player says so, see saveOverNewer)
@@ -1661,9 +1666,18 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         usePortableMath(false);
+        let badApple: BadAppleController | undefined;
+        if (map.video) {
+            const player = await getVideoPlayer(map.video.binUrl, map.video);
+            badApple = new BadAppleController(player, map.video.rect);
+        } else if (mapId === "scaperune_bad_apple") {
+            const player = await getBadApplePlayer();
+            badApple = new BadAppleController(player, BAD_APPLE_SCREEN_WORLD_RECT);
+        }
         const sim = new Sim({
             grid: this.grid,
             mapId,
+            badApple,
             characterId,
             metaStats: getMetaStats(this.save, getCharacter(characterId).style),
             seed: (Math.random() * 0x7fffffff) | 0,
@@ -1756,9 +1770,18 @@ export class GameClient implements GameFrameHandler {
             metaStats: loadoutStats(hero.loadout),
             ...cleanLoadout(hero.loadout),
         }));
+        let badApple: BadAppleController | undefined;
+        if (map.video) {
+            const player = await getVideoPlayer(map.video.binUrl, map.video);
+            badApple = new BadAppleController(player, map.video.rect);
+        } else if (game.mapId === "scaperune_bad_apple") {
+            const player = await getBadApplePlayer();
+            badApple = new BadAppleController(player, BAD_APPLE_SCREEN_WORLD_RECT);
+        }
         const sim = new Sim({
             grid: this.grid,
             mapId: game.mapId,
+            badApple,
             characterId: party[focus].characterId,
             metaStats: party[focus].metaStats,
             seed: game.seed,
@@ -1822,6 +1845,7 @@ export class GameClient implements GameFrameHandler {
             this.audio.stopMusic();
         }
         this.paused = false;
+        this.wasStoppedBehindMenu = false;
         this.runRecorded = false;
         this.reportRun = this.options.stress
             ? undefined
@@ -2118,6 +2142,7 @@ export class GameClient implements GameFrameHandler {
     pause(): void {
         if (this.sim && !this.sim.runOver) {
             this.paused = true;
+            this.audio.pauseMusic();
             this.syncOverlay();
         }
     }
@@ -2149,7 +2174,9 @@ export class GameClient implements GameFrameHandler {
 
     resume(): void {
         this.paused = false;
+        this.wasStoppedBehindMenu = false;
         this.accumulator = 0;
+        this.audio.resumeMusic();
         this.syncOverlay();
     }
 
@@ -2159,6 +2186,7 @@ export class GameClient implements GameFrameHandler {
         const sim = this.sim;
         if (sim && !this.coopRun) {
             this.paused = false;
+        this.wasStoppedBehindMenu = false;
             sim.giveUp();
             // Before the overlay, or it would play as a death
             this.finishRun(t("ui.result.gave_up"), "abandoned");
@@ -2205,6 +2233,7 @@ export class GameClient implements GameFrameHandler {
         this.endCinematic();
         this.reportRun = undefined;
         this.paused = false;
+        this.wasStoppedBehindMenu = false;
         this.audio.stopMusic();
         this.grid = this.grids.get(TITLE_MAP.id)!;
         this.renderer.setPlane(this.grid.plane);
@@ -2449,10 +2478,19 @@ export class GameClient implements GameFrameHandler {
     // ---- Frame ----
 
     update(deltaTimeMs: number, camera: Camera): void {
+        const stoppedBehindMenu = this.isStoppedBehindMenu();
+        if (stoppedBehindMenu !== this.wasStoppedBehindMenu) {
+            this.wasStoppedBehindMenu = stoppedBehindMenu;
+            if (stoppedBehindMenu) {
+                this.audio.pauseMusic();
+            } else {
+                this.audio.resumeMusic();
+            }
+        }
         this.renderer.fpsLimit = frameCap(
             this.display.frameRate,
             isCoarsePointer,
-            this.isStoppedBehindMenu(),
+            stoppedBehindMenu,
         );
         this.fps = this.fps * 0.95 + (deltaTimeMs > 0 ? 1000 / deltaTimeMs : 0) * 0.05;
         this.input.pollPads(performance.now(), this.isPlaying() ? "run" : "menu");
@@ -2498,6 +2536,9 @@ export class GameClient implements GameFrameHandler {
                 const move = this.input.getMoveVector(this.move);
                 // Stood still while the cinematic plays
                 const held = this.cinematic !== undefined;
+                if (sim.badApple) {
+                    sim.badApple.musicSeconds = this.audio.getMusicTime();
+                }
                 sim.step(held ? 0 : move.x, held ? 0 : move.y);
                 this.handleEvents(sim, sim.takeEvents());
             }
@@ -2902,7 +2943,14 @@ export class GameClient implements GameFrameHandler {
         if (!sim) {
             return true;
         }
-        return !this.coopRun && (this.paused || sim.state !== "playing");
+        const overlay = this.store.getSnapshot().overlay;
+        return (
+            !this.coopRun &&
+            (this.paused ||
+                sim.state !== "playing" ||
+                overlay !== "none" ||
+                sim.isChoosing())
+        );
     }
 
     // A co-op run: frames step at the run's pace, the host's whenever it
@@ -3367,6 +3415,11 @@ export class GameClient implements GameFrameHandler {
             this.store.set({ overlay: "paused", choices: [], chest: undefined, waitingOn });
         } else {
             this.store.set({ overlay: "none", choices: [], chest: undefined, waitingOn });
+        }
+        if (this.isStoppedBehindMenu()) {
+            this.audio.pauseMusic();
+        } else {
+            this.audio.resumeMusic();
         }
     }
 

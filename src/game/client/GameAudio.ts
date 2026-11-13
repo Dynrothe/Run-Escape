@@ -156,6 +156,25 @@ export class GameAudio {
         }
     }
 
+    pauseMusic(): void {
+        if (this.music?.element) {
+            this.music.element.pause();
+        }
+    }
+
+    resumeMusic(): void {
+        if (this.music?.element && !this.settings.muted) {
+            this.music.element.play().catch(() => {});
+        }
+    }
+
+    getMusicTime(): number | undefined {
+        if (this.music?.element) {
+            return this.music.element.currentTime;
+        }
+        return undefined;
+    }
+
     setSettings(settings: Partial<AudioSettings>): void {
         this.settings = { ...this.settings, ...settings };
         this.applyVolume();

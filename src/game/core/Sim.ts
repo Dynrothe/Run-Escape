@@ -195,6 +195,7 @@ import {
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
+import type { BadAppleController } from "../scaperune/badApple";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
 import {
@@ -714,6 +715,7 @@ export type SimOptions = {
     // For trying things out on the dev server (?raidtest): a raid's rooms this many seconds
     // apart, and every level up's pick straight to its max
     testing?: SimTesting;
+    badApple?: BadAppleController;
 };
 
 export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
@@ -1409,6 +1411,7 @@ export class Sim {
     // A floor that rises and falls away (MapDef.floor)
     // Laid afresh when the party wipes on the Wardens (failWardens)
     floor: ArenaFloor | undefined;
+    readonly badApple?: BadAppleController;
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
@@ -1901,6 +1904,7 @@ export class Sim {
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
             : undefined;
+        this.badApple = options.badApple;
         // Building it takes a while, so it's done here, with the map, rather
         // than on the tick the first flier turns up (getFlight still can)
         if (hasFliers(this.map)) {
@@ -3252,6 +3256,7 @@ export class Sim {
         this.stepEnemyProjectiles();
         this.stepBossFight();
         this.stepFloor();
+        this.stepBadApple();
         this.stepPickups();
         this.stepRandomEvents();
         this.cleanUp();
@@ -13348,6 +13353,10 @@ export class Sim {
         if (!floor) {
             return;
         }
+        if (this.badApple) {
+            // Video-driven arenas handle floor states and gentle entity pushing without lethal floor hazards
+            return;
+        }
         const def = floor.def;
         const origin = () => this.floorTarget().player;
         const { rose, fell, back, messages } = floor.step(this.tick, origin);
@@ -13452,6 +13461,45 @@ export class Sim {
         }
         if (floor.hasEffects) {
             this.stepFloorEffects(floor);
+        }
+    }
+
+    private stepBadApple(): void {
+        const badApple = this.badApple;
+        if (!badApple) {
+            return;
+        }
+        const { rose, fell } = badApple.step(this.tick, this.grid, this.floor);
+        if (fell.length > 0 || rose.length > 0) {
+            for (const enemy of this.enemies) {
+                if (!enemy.dead && this.grid.isDropped(Math.floor(enemy.x), Math.floor(enemy.y))) {
+                    this.killEnemy(enemy);
+                }
+            }
+            this.forEachHeroInReach(() => {
+                const player = this.player;
+                const tileX = Math.floor(player.x);
+                const tileY = Math.floor(player.y);
+                if (this.grid.isDropped(tileX, tileY)) {
+                    const to = findFreeSpot(
+                        this.grid,
+                        player.x,
+                        player.y,
+                        PLAYER_RADIUS,
+                        (tx, ty) => !this.grid.isDropped(tx, ty),
+                    );
+                    player.x = to.x;
+                    player.y = to.y;
+                }
+            });
+            const current = this.hero;
+            for (const hero of this.heroes) {
+                if (this.isUp(hero)) {
+                    this.use(hero);
+                    this.updateFlowField();
+                }
+            }
+            this.use(current);
         }
     }
 
@@ -13571,6 +13619,9 @@ export class Sim {
     // A share of the player's hitpoints, armour or not; a fall always lands, a slab not again
     // until the grace is up
     private hitByFloor(share: number, sound: number, fall: boolean): void {
+        if (this.badApple || share <= 0) {
+            return;
+        }
         const hero = this.hero;
         if (!fall && this.tick < hero.floorGraceEnd) {
             return;

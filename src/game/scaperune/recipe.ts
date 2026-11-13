@@ -88,6 +88,8 @@ export type MapRecipe = {
             | "cinematic"
             | "spawnFacing"
             | "lighting"
+            | "music"
+            | "video"
         >
     >;
 };

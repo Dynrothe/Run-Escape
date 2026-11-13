@@ -7,6 +7,7 @@ import {
 import { PALETTE_RECIPE } from "../palette";
 import { MapRecipe } from "../recipe";
 import { BACKDROP_TEST_RECIPE } from "./backdropTest";
+import { BAD_APPLE_MAP, BAD_POSTMAN_MAP } from "./badApple";
 import { CLIFF_GALLERY } from "./cliffGallery";
 import { DARK_TEST } from "./darkTest";
 import { DEPTH_TEST_RECIPE } from "./depthTest";
@@ -145,4 +146,6 @@ export const SCAPERUNE_DEV_MAPS: MapRecipe[] = [
     ...FLOOR_DEMOS,
     DARK_TEST,
     GLOW_TEST,
+    BAD_APPLE_MAP,
+    BAD_POSTMAN_MAP,
 ];

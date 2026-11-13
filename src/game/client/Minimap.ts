@@ -5,6 +5,7 @@ import { POWER_UP_COLOR, getPowerUp } from "../content/powerups";
 import { VISITOR_COLOR } from "../content/randomEvents";
 import { MapDef } from "../content/types";
 import { Sim } from "../core/Sim";
+import { BAD_APPLE_HEIGHT, BAD_APPLE_WIDTH, BadAppleController } from "../scaperune/badApple";
 import { PlayerPose, getPlayerPose } from "./PlayerPose";
 
 const MAP_SQUARE_SIZE = 64;
@@ -65,6 +66,8 @@ export class Minimap {
     private readonly enemyDots = new DotList();
     private readonly eliteDots = new DotList();
     private readonly bosses: Sim["enemies"] = [];
+    private badAppleCanvas?: HTMLCanvasElement;
+    private badAppleFrameIndex = -1;
 
     constructor(readonly mapViewer: MapViewer) {}
 
@@ -248,6 +251,19 @@ export class Minimap {
             );
         }
 
+        if (sim.badApple) {
+            const badApple = sim.badApple;
+            const screenCanvas = this.getBadAppleCanvas(badApple);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(
+                screenCanvas,
+                toX(badApple.rect.x0),
+                toY(badApple.rect.y1 + 1),
+                badApple.player.width * scale,
+                badApple.player.height * scale,
+            );
+        }
+
         // A tile's worth, at least a couple of pixels
         const dot = Math.max(2, Math.round(scale));
         const outline = Math.max(1, Math.round(pixel));
@@ -324,6 +340,38 @@ export class Minimap {
             drawDot(ctx, x, y, marker, outline, TEAMMATE_COLOR);
         }
         drawDot(ctx, half, half, Math.round(dot * 1.4), outline, PLAYER_COLOR);
+    }
+
+    private getBadAppleCanvas(badApple: BadAppleController): HTMLCanvasElement {
+        const w = badApple.player.width;
+        const h = badApple.player.height;
+        if (
+            !this.badAppleCanvas ||
+            this.badAppleCanvas.width !== w ||
+            this.badAppleCanvas.height !== h
+        ) {
+            this.badAppleCanvas = document.createElement("canvas");
+            this.badAppleCanvas.width = w;
+            this.badAppleCanvas.height = h;
+        }
+        if (this.badAppleFrameIndex !== badApple.currentFrameIndex) {
+            const ctx = this.badAppleCanvas.getContext("2d")!;
+            const imgData = ctx.createImageData(w, h);
+            const pixels = badApple.currentPixels;
+            const data = imgData.data;
+            for (let i = 0; i < pixels.length; i++) {
+                const at = i * 4;
+                const isBlocked = pixels[i] === 1;
+                const val = isBlocked ? 20 : 230;
+                data[at] = val;
+                data[at + 1] = val;
+                data[at + 2] = val;
+                data[at + 3] = isBlocked ? 240 : 180;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            this.badAppleFrameIndex = badApple.currentFrameIndex;
+        }
+        return this.badAppleCanvas;
     }
 }
 

@@ -2076,6 +2076,14 @@ export type MapDef = {
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
+    // A live dynamic arena driven by 1-bit RLE video frames (e.g. Bad Apple)
+    video?: {
+        binUrl: string;
+        rect: { x0: number; y0: number; x1: number; y1: number };
+        width?: number;
+        height?: number;
+        fps?: number;
+    };
 };
 
 // What a light looks like and how far it reaches (docs/DEVELOPMENT.md, Lights). Every kind of light
