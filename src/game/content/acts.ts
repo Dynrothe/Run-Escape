@@ -47,8 +47,7 @@ export const FALLEN_EMPIRE: ActDef = {
     id: "fallen_empire",
     name: "The Fallen Empire",
     requires: "inferno",
-    // Hidden until it ships
-    released: false,
+    released: true,
     // The Inferno is 3.75 and 2.7: the first step's harder than it (the bot wins fewer runs and
     // dies sooner, Kasonde at 5:00 its first wall), and the last map played is always the hardest
     steps: [

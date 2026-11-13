@@ -3,7 +3,7 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.32.0 - 2026-11-14
 
 ### Added
 
@@ -129,9 +129,6 @@ the version in the corner).
   the Fun tab, under the fun maps.
 - Monsters, bosses and adventurers take under a third of the memory they did, and load faster, so
   maps start sooner and run lighter, most of all on phones. They look just the same.
-- Act II is harder: its first map is now tougher than the Inferno, and each step after it too.
-- The Stranglewood's ruined town has its walls back: low walls round its huts' yards and its
-  tents' lower walls, still light enough for a phone.
 - A run's coin bonuses (hard mode, Act II's steps, invocations) add together now, up to +300%,
   rather than multiplying.
 - Right clicking in the game no longer opens the browser's menu.
@@ -148,7 +145,6 @@ the version in the corner).
 
 ### Fixed
 
-- Black squares in the Stranglewood's town, where cellar entries and dark floor were left behind.
 - The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
   that heal you for half the damage they deal.
 - An attack you hide from behind a pillar no longer flashes a red box over half the screen as it

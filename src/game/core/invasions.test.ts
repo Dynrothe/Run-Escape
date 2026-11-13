@@ -147,6 +147,7 @@ describe("Awakened invasions", () => {
         }
     });
 
+    // 2 s alone, over 5 in the full suite
     it("leave a run without them as it was, and roll nothing when not open", () => {
         const plain = createSim();
         const closed = createSim({ invasions: false });
@@ -161,7 +162,7 @@ describe("Awakened invasions", () => {
             endless += createSim({ seed, invasions: true, endless: true }).invasion ? 1 : 0;
         }
         expect(endless).toBe(0);
-    });
+    }, 30000);
 
     for (const def of INVADERS) {
         it(`bring ${def.id}'s pocket while it lives, and pay when it falls`, () => {

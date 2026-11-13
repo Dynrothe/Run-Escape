@@ -172,6 +172,7 @@ describe("remixes", () => {
         expect(iced).toBeGreaterThan(0);
     });
 
+    // Two minutes of two sims: 2 s alone, over 5 in the full suite
     it("play the same from the same seed, all four on", () => {
         const a = createSim({ remixes: ALL });
         const b = createSim({ remixes: ALL });
@@ -192,7 +193,7 @@ describe("remixes", () => {
         }
         expect(syncHash(a)).toBe(syncHash(b));
         expect(a.rule!.hash()).toBe(b.rule!.hash());
-    });
+    }, 30000);
 
     it("set their own records, relic-free, not the map's hard ones", () => {
         const save = createSave();

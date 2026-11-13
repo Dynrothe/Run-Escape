@@ -320,8 +320,8 @@ desktop build.
   its window never shows (nothing in a run's tick asks for it).
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
 - `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
-  any boss or the Wardens), and an act that isn't out yet (Act II). Without it the dev server
-  plays as players will, the tunnel included.
+  any boss or the Wardens), and an act that isn't out yet (`ActDef.released`). Without it the
+  dev server plays as players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the

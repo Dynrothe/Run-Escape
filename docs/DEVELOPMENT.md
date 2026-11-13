@@ -2228,7 +2228,7 @@ browser tab that isn't being painted, `?notice` shows the notice even after it's
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
 `?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
 Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens) and an
-act that isn't out yet (`ActDef.released`, Act II's),
+act that isn't out yet (`ActDef.released`),
 `?director=battle_for_varrock` (dev only) opens the shot editor on a map's cinematics (see Props
 and opening cinematics), `?wholeFrames` bakes actors' frames as posed copies of their models, not
 as positions (see What gets drawn). F3
