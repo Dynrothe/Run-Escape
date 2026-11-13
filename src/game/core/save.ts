@@ -1,3 +1,4 @@
+import { isMapOut } from "../content/acts";
 import {
     getArmouryCost,
     getNextUpgrade,
@@ -814,10 +815,15 @@ export function isMapUnlocked(save: SaveData, mapId: string): boolean {
     if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId) || isDevMap(mapId)) {
         return true;
     }
-    // An act's maps open together once the map it requires has been beaten, in any order
-    const act = MAP_BY_ID.get(mapId)?.act;
-    if (act) {
-        return (save.mapVictories[act.requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0;
+    // An act's maps open together once the map it requires has been beaten, in any order, and
+    // not at all while the act isn't out (isMapOut)
+    const map = MAP_BY_ID.get(mapId);
+    const act = map?.act;
+    if (map && act) {
+        return (
+            isMapOut(map) &&
+            ((save.mapVictories[act.requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0)
+        );
     }
     // A boss fight opens once the map it's the hard mode of has been beaten
     const fight = MAP_BY_ID.get(mapId)?.fight;

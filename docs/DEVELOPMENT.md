@@ -2099,7 +2099,8 @@ opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
 `?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
-Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens),
+Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens) and an
+act that isn't out yet (`ActDef.released`, Act II's),
 `?director=battle_for_varrock` (dev only) opens the shot editor on a map's cinematics (see Props
 and opening cinematics). F3
 shows collision and stats.

@@ -9,6 +9,7 @@ import { tr } from "../i18n";
 import { CHARACTERS } from "./characters";
 import { BODY_KIT_IDS, COSMETIC_ROWS } from "./cosmeticItems";
 import { GEAR_SLOTS } from "./items";
+import { isCharacterOut } from "./maps";
 import { Rarity } from "./rarity";
 import { TROPHY_BY_ID, TrophyDef } from "./trophies";
 import { CharacterDef } from "./types";
@@ -155,7 +156,8 @@ export function wearsWardrobe(character: CharacterDef): boolean {
 // once they're unlocked
 const ADVENTURER_PIECES = new Map<number, string>();
 for (const character of CHARACTERS) {
-    if (character.only || !wearsWardrobe(character)) {
+    // (not one who isn't out yet, isCharacterOut: the store names who brings it)
+    if (character.only || !wearsWardrobe(character) || !isCharacterOut(character)) {
         continue;
     }
     for (const objId of Object.values(character.equipment)) {

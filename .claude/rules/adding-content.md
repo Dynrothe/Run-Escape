@@ -325,6 +325,10 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   screen (`ActPage`), not the Campaign list. Its toughness is the act's step (`ActDef.steps`, set
   by how many of the act's other maps were beaten, the host's in co-op): its `difficulty` is the
   first step's, and the step scales its bosses' event hitpoints too. Sim it with `STEP=0` to `3`.
+  An act stays hidden and its maps locked until `ActDef.released` (`isActOut`), with what they
+  bring in: an adventurer they unlock (`isCharacterOut`) and the Collection log's tab for their
+  finds. Anywhere new that lists maps, adventurers or finds needs the same check. The dev server
+  shows an act that isn't out with `?devtools`; sims and tests play it either way.
 - `rule` is what the map's played by (`RunRuleDef`, `core/rules/`): the sim runs it each tick on
   its own Rng, so nothing else about a run changes. A rule only reads the grid and its def, never
   a map's own data, so it can go on any map. A new kind needs a class implementing `RunRule`, a

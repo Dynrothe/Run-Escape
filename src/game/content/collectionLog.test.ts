@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { createSave } from "../core/save";
-import { REWARD_MAPS, getRewards } from "./collectionLog";
+import { isMapOut } from "./acts";
+import { REWARD_MAPS, getRewards, getTrophyMap } from "./collectionLog";
+import { MAP_BY_ID, getMap } from "./maps";
 import { TROPHIES } from "./trophies";
 
 describe("the Collection log's rewards", () => {
@@ -11,12 +13,16 @@ describe("the Collection log's rewards", () => {
         expect(REWARD_MAPS).toContain("thanksgiving");
     });
 
-    it("lists every trophy once, under its own map", () => {
+    it("lists every trophy once, under its own map, but a map's that isn't out yet", () => {
         const save = createSave();
         const listed = REWARD_MAPS.flatMap((mapId) => getRewards(save, mapId).map((r) => r.id));
         for (const trophy of TROPHIES) {
-            expect(listed.filter((id) => id === trophy.id)).toHaveLength(1);
+            const map = MAP_BY_ID.get(getTrophyMap(trophy));
+            const out = !map || isMapOut(map);
+            expect(listed.filter((id) => id === trophy.id)).toHaveLength(out ? 1 : 0);
         }
+        // An act still to come has no tab (ActDef.released): the Stranglewood's
+        expect(REWARD_MAPS.includes("stranglewood")).toBe(isMapOut(getMap("stranglewood")));
         // The Tombs of Amascut's chest's, under the raid
         expect(getRewards(save, "tombs_of_amascut").map((r) => r.id)).toContain("tumekens_shadow");
         // The Theatre's aren't under the Hallowed Night

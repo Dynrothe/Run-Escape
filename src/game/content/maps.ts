@@ -6,13 +6,14 @@ import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/si
 import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
+import { isMapOut } from "./acts";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
-import { CinematicDef, EnemyDef, LairDef, MapDef } from "./types";
+import { CharacterDef, CinematicDef, EnemyDef, LairDef, MapDef } from "./types";
 import { THANKSGIVING_EVENTS, THANKSGIVING_WAVES } from "./waves";
 import {
     BARROWS_EVENTS,
@@ -623,6 +624,13 @@ export function getRunCinematic(map: MapDef, stage: number): CinematicDef | unde
 // Falador, the Inquisitor against Phosani's Nightmare)
 export function getMapCharacter(map: MapDef): string | undefined {
     return map.fun?.character ?? map.fight?.character ?? map.seasonalCharacter;
+}
+
+// Whether an adventurer is out for players: not one brought in on a map that isn't (isMapOut,
+// the Forester of an act still to come)
+export function isCharacterOut(character: CharacterDef): boolean {
+    const map = character.unlock && MAP_BY_ID.get(character.unlock.mapId);
+    return !map || isMapOut(map);
 }
 
 export function getMap(id: string): MapDef {

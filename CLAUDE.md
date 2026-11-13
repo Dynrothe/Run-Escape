@@ -62,6 +62,7 @@ go stale. Add anything that cost you time to work out.
 | Blessings in place of items, level by level (Varrock)  | `content/blessings.ts`, `Sim.bless`, `client/BlessingViews.ts`         |
 | A floor that rises and falls away (the Wardens')       | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | Act II: its maps, steps and its tab on the map screen  | `content/acts.ts`, `ui/GameUi.tsx` (`ActPage`)                         |
+| An act still to come, hidden (`ActDef.released`)       | `content/acts.ts` (`isActOut`), `content/maps.ts` (`isCharacterOut`)   |
 | A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |
 | The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
 | Adventurers' traits (the Forester's Timber!)           | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
@@ -289,7 +290,8 @@ desktop build.
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
 - `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
-  any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
+  any boss or the Wardens), and an act that isn't out yet (Act II). Without it the dev server
+  plays as players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the

@@ -503,8 +503,10 @@ version and how to run it.
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
       can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark squirrel, a
       pet, 1 time in 10, and every time on hard mode.
-- **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
-  Inferno. Its four maps (the Stranglewood now; the Lassar Undercity, Ghorrock and the Scar shown as
+- **Act II, the Fallen Empire**: not out yet. Until it is (`ActDef.released`), its tab, the
+  Stranglewood, the Forester and the Executioner's axe head are hidden and the map stays locked;
+  the dev server shows them with `?devtools`. A tab of the map screen beside Bosses, opened by
+  beating the Inferno. Its four maps (the Stranglewood now; the Lassar Undercity, Ghorrock and the Scar shown as
   coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
   a step harder for every other Act II map you've beaten: step 0 is a little past the Inferno
   (enemies 3.9 times the hitpoints, 2.8 times the damage), up to step 3 (4.35 and 3.1), and each

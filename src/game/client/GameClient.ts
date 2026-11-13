@@ -1036,7 +1036,8 @@ export class GameClient implements GameFrameHandler {
         return true;
     }
 
-    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps. Without
+    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps (and an
+    // act that isn't out yet, isActOut). Without
     // it the dev server plays as players will (the Tombs of Amascut, listed with the raids, has none
     // of its testing buttons), phones on the tunnel included.
     get devTools(): boolean {

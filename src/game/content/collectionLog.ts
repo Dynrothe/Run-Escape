@@ -1,6 +1,7 @@
 import { SaveData } from "../core/save";
 import { t, tr } from "../i18n";
-import { FIGHT_MAPS } from "./maps";
+import { isMapOut } from "./acts";
+import { FIGHT_MAPS, MAP_BY_ID } from "./maps";
 import { TROPHIES, TrophyDef } from "./trophies";
 import { describeUnlockTask } from "./unlocks";
 import { WEAPONS } from "./weapons";
@@ -34,13 +35,16 @@ function bringsIn(mapId: string): boolean {
 }
 
 // Every map with trophies or a boss fight's weapon to find, in the order they're listed, each a
-// tab
+// tab, but for a map that isn't out yet (isMapOut)
 export const REWARD_MAPS: string[] = [
     ...new Set([
         ...TROPHIES.map(getTrophyMap),
         ...FIGHT_MAPS.filter((map) => bringsIn(map.id)).map((map) => map.id),
     ]),
-];
+].filter((mapId) => {
+    const map = MAP_BY_ID.get(mapId);
+    return !map || isMapOut(map);
+});
 
 // A map's rewards: the weapons it brings in (its boss's drops, its chest's), then its trophies
 export function getRewards(save: SaveData, mapId: string): RewardEntry[] {

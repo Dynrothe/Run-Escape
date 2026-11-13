@@ -33,7 +33,7 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
-import { ActDef, FALLEN_EMPIRE, getAct, getActMapIds, getActStep } from "../content/acts";
+import { ActDef, FALLEN_EMPIRE, getAct, getActMapIds, getActStep, isActOut } from "../content/acts";
 import {
     CHARACTERS,
     characterDescription,
@@ -53,6 +53,7 @@ import {
     SEASONAL_MAPS,
     getMap,
     getMapCharacter,
+    isCharacterOut,
     isPeaceful,
     mapDescription,
     mapFinalBossWarning,
@@ -1486,8 +1487,9 @@ export function AdventurerPanel({
 }: ScreenProps & { fixed?: string }): JSX.Element {
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
-    // The roster: not an adventurer played on one map alone (CharacterDef.only)
-    const roster = CHARACTERS.filter((c) => !c.only);
+    // The roster: not an adventurer played on one map alone (CharacterDef.only), or one who
+    // isn't out yet (isCharacterOut)
+    const roster = CHARACTERS.filter((c) => !c.only && isCharacterOut(c));
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
     return (
@@ -1800,6 +1802,8 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
         groups: [{ id: "dev_maps", name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
     },
 ]
+    // An act's tab only once it's out (isActOut)
+    .filter((tab) => !tab.act || isActOut(tab.act))
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
     .filter((tab) => tab.groups.length > 0);
 
