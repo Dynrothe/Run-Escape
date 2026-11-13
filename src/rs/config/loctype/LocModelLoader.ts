@@ -8,6 +8,7 @@ import { TextureLoader } from "../../texture/TextureLoader";
 import { SeqType } from "../seqtype/SeqType";
 import { SeqTypeLoader } from "../seqtype/SeqTypeLoader";
 import { LocModelType } from "./LocModelType";
+import { MODEL_SIMPLIFY } from "./LocOverrides";
 import { LocType } from "./LocType";
 import { LocTypeLoader } from "./LocTypeLoader";
 
@@ -100,6 +101,10 @@ export class LocModelLoader {
         if (!model) {
             model = this.modelLoader.getModel(id);
             if (model) {
+                const simplify = MODEL_SIMPLIFY.get(id);
+                if (simplify) {
+                    model.simplify(simplify.keep, simplify.seams);
+                }
                 if (mirrored) {
                     model.mirror();
                 }

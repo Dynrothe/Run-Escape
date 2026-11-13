@@ -33,16 +33,35 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
-import { ActDef, FALLEN_EMPIRE, getAct, getActMapIds, getActStep, isActOut } from "../content/acts";
+import {
+    ACT_BY_ID,
+    ActDef,
+    FALLEN_EMPIRE,
+    actEndingLines,
+    actEndingTitle,
+    actName,
+    actSlotBoss,
+    actSlotName,
+    getAct,
+    getActFightsBeaten,
+    getActMapIds,
+    getActStep,
+    isActEnded,
+    isActOut,
+} from "../content/acts";
 import {
     CHARACTERS,
     characterDescription,
     characterName,
     getCharacter,
 } from "../content/characters";
+import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
+import { invaderName } from "../content/invasions";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
+import { getInvocationBadge } from "../content/invocations";
 import { GEAR_SLOT_BY_ID, UTILITY } from "../content/items";
 import {
+    ACT_MAPS,
     CAMPAIGN_MAPS,
     DEV_MAPS,
     FIGHT_MAPS,
@@ -58,9 +77,23 @@ import {
     mapDescription,
     mapFinalBossWarning,
     mapName,
+    takesInvocations,
+    takesRelics,
 } from "../content/maps";
 import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
+import { RELIC_BY_ID, relicName } from "../content/relics";
+import {
+    REMIX_BY_ID,
+    REMIX_IDS,
+    RemixId,
+    getMapRemixes,
+    isRemixOpen,
+    remixDescription,
+    remixKey,
+    remixName,
+    remixPrefix,
+} from "../content/remixes";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
 import {
@@ -73,19 +106,24 @@ import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID, trophyName } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef, Stats } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
+import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
 import {
     NewerSaveError,
+    RecordSetup,
     SaveData,
     getFightStage,
     getNextUpgradeCost,
     getReachedStages,
+    getRemixBest,
     getSkillCoins,
+    hasGauntletLooks,
     importSave,
     isEndlessUnlocked,
     isExpertUnlocked,
+    isGauntletOpen,
     isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
@@ -106,14 +144,22 @@ import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButt
 import { DirectorPanel } from "./DirectorPanel";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
+import { CampScreen, GauntletBadge, GauntletResultModal, GauntletScreen } from "./Gauntlet";
 import { InventoryItem } from "./InventoryItem";
-import { InvocationBoard, InvocationsButton } from "./Invocations";
+import {
+    InvocationBadges,
+    InvocationBoard,
+    InvocationsButton,
+    RunInvocationBoard,
+    RunInvocationsButton,
+} from "./Invocations";
 import { ItemIcon } from "./ItemIcon";
 import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
 import { QuestScreen } from "./QuestScreen";
+import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
@@ -121,6 +167,7 @@ import { SoundOrb } from "./SoundOrb";
 import { StatLine } from "./StatLine";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
+import { AwakenRow, VaultScreen } from "./Vault";
 import { WardrobeScreen } from "./WardrobeScreen";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
@@ -206,6 +253,15 @@ export function GameUi({ store, client }: Props): JSX.Element {
         case "coop":
             screen = <CoopScreen ui={ui} client={client} />;
             break;
+        case "gauntlet":
+            screen = <GauntletScreen ui={ui} client={client} />;
+            break;
+        case "vault":
+            screen = <VaultScreen ui={ui} client={client} />;
+            break;
+        case "camp":
+            screen = <CampScreen ui={ui} client={client} />;
+            break;
         case "run":
             screen = <RunScreen ui={ui} client={client} />;
             break;
@@ -217,6 +273,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             onClickCapture={onClickCapture}
         >
             {screen}
+            {ui.actEnding && (
+                <ActEndingModal key={ui.actEnding} actId={ui.actEnding} client={client} />
+            )}
             {ui.saveBlock && !ui.saveBlockClosed ? (
                 <SaveBlockPanel block={ui.saveBlock} client={client} />
             ) : (
@@ -1086,7 +1145,9 @@ function TitleHint(): JSX.Element {
 function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
     const map = getMap(ui.mapId);
     const [board, setBoard] = useState(false);
-    const shownMapName = mapName(getMap(ui.mapId));
+    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET), or remixed
+    const runBoard = takesInvocations(map, ui.remixes.length > 0);
+    const shownMapName = remixedMapName(map, ui.remixes);
     // A raid's expert mode, solo only for now (GameClient.toggleExpert)
     const expertShown = map.raid !== undefined && ui.coop.status === "offline";
     const endlessShown = ui.endless && !map.fun && !map.tombs;
@@ -1125,6 +1186,7 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                         {!map.raid && <EndlessSwitch ui={ui} client={client} />}
                         <HardSwitch ui={ui} client={client} />
                         {expertShown && <ExpertSwitch ui={ui} client={client} />}
+                        {runBoard && <RunInvocationsButton ui={ui} onOpen={() => setBoard(true)} />}
                     </>
                 )}
                 <button
@@ -1137,6 +1199,9 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
             </div>
             {board && map.tombs && (
                 <InvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
+            )}
+            {board && runBoard && (
+                <RunInvocationBoard ui={ui} client={client} onClose={() => setBoard(false)} />
             )}
         </div>
     );
@@ -1587,6 +1652,9 @@ export function AdventurerPanel({
                 })}
             </div>
             <PetRow ui={ui} client={client} />
+            {ACT_MAPS.some((m) => isMapUnlocked(ui.save, m.id)) && (
+                <RelicRow ui={ui} client={client} />
+            )}
             <AdventurerDetails
                 key={shown}
                 save={ui.save}
@@ -1597,7 +1665,8 @@ export function AdventurerPanel({
     );
 }
 
-// The pet to take along, from those found (looks only): none until one's been found
+// The pet to take along, from those found: none until one's been found. Most are looks only; a
+// fighting one (PetDef.power) says what it does
 function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
     const found = getFoundPets(ui.save.trophies);
     if (found.length === 0) {
@@ -1610,6 +1679,7 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
               getPetTrophy(PET_BY_ID.get(chosen)!).name,
           )
         : t("ui.common.none");
+    const power = chosen ? PET_BY_ID.get(chosen)?.power : undefined;
     return (
         <div className="ui-pet-row">
             <span className="ui-pet-label">
@@ -1645,6 +1715,32 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     );
                 })}
             </div>
+            {power && (
+                <span className="ui-pet-power">
+                    {power.kind === "call"
+                        ? t("ui.pet.power_call", {
+                              every: power.every,
+                              reach: power.reach,
+                              soul: power.soul,
+                              heal: Math.round(power.heal * 100),
+                          })
+                        : power.kind === "gas"
+                          ? t("ui.pet.power_gas", {
+                                crowd: power.crowd,
+                                reach: power.reach,
+                                seconds: power.seconds,
+                                slow: Math.round(power.slow * 100),
+                                every: power.every,
+                            })
+                          : power.kind === "bubble"
+                            ? t("ui.pet.power_bubble", {
+                                  every: power.every,
+                                  share: Math.round(power.share * 100),
+                                  push: power.push,
+                              })
+                            : t("ui.pet.power_leap", { every: power.every, reach: power.reach })}
+                </span>
+            )}
         </div>
     );
 }
@@ -1742,15 +1838,25 @@ function getMapGroupHint(group: MapGroup): string | undefined {
 }
 
 // The map screen's tabs, each a list or two of maps in the order they open; an act's is its own
-// page (ActPage) rather than lists
+// page (ActPage) rather than lists. The campaign is Act I (its id stays "campaign").
 const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[] = [
     {
         id: "campaign",
-        name: "Campaign",
+        name: "Act I",
+        groups: [{ id: "campaign", name: "Act I", maps: CAMPAIGN_MAPS }],
+    },
+    // Beside Act I, open once the Inferno's beaten
+    {
+        id: "fallen_empire",
+        name: "Act II",
         groups: [
-            { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
-            { id: "campaign", name: "Campaign", maps: CAMPAIGN_MAPS },
+            {
+                id: "fallen_empire",
+                name: FALLEN_EMPIRE.name,
+                maps: getActMapIds(FALLEN_EMPIRE).map((id) => getMap(id)),
+            },
         ],
+        act: FALLEN_EMPIRE,
     },
     {
         id: "bosses",
@@ -1764,19 +1870,6 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
             },
             { id: "raids", name: "Raids", hint: "room by room", maps: RAID_MAPS },
         ],
-    },
-    // Beside Bosses, open once the Inferno's beaten
-    {
-        id: "fallen_empire",
-        name: "Act II",
-        groups: [
-            {
-                id: FALLEN_EMPIRE.id,
-                name: FALLEN_EMPIRE.name,
-                maps: getActMapIds(FALLEN_EMPIRE).map((id) => getMap(id)),
-            },
-        ],
-        act: FALLEN_EMPIRE,
     },
     {
         id: "fun",
@@ -1794,6 +1887,7 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
                 hint: "nothing to fight, open from the start",
                 maps: FUN_MAPS.filter((map) => map.fun?.explore),
             },
+            { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
         ],
     },
     {
@@ -1858,6 +1952,13 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
             >
                 <ItemIcon objId={map.iconObjId} size={20} />
                 <span className="ui-map-name">{shownMapName}</span>
+                <InvocationBadge points={save.invocationBest?.[map.id]?.points ?? 0} />
+                {/* Its final boss beaten awakened, by an Awakener's orb */}
+                {(save.awakenedWins?.[map.id] ?? 0) > 0 && (
+                    <span className="ui-awakened-mark" title={t("ui.awaken.marked")}>
+                        <ItemIcon objId={AWAKENERS_ORB_OBJ} size={14} />
+                    </span>
+                )}
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
@@ -1942,6 +2043,9 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                                     setPeek(mapId);
                                     client.selectMap(mapId);
                                 }}
+                                onEnding={() => client.showActEnding(tab.act!.id)}
+                                onGauntlet={ui.coop.room ? undefined : () => client.openGauntlet()}
+                                onVault={() => client.openVault()}
                             />
                         )}
                         {!tab.act &&
@@ -1968,6 +2072,16 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 map={getMap(peek ?? ui.mapId)}
                 expertShown={ui.coop.status === "offline"}
                 picked={(peek ?? ui.mapId) === ui.mapId ? ui.fightStage : undefined}
+                remixes={(peek ?? ui.mapId) === ui.mapId ? ui.remixes : undefined}
+                onRemix={
+                    (peek ?? ui.mapId) === ui.mapId ? (id) => client.toggleRemix(id) : undefined
+                }
+                awaken={(peek ?? ui.mapId) === ui.mapId ? ui.awaken : undefined}
+                onAwaken={
+                    (peek ?? ui.mapId) === ui.mapId && !ui.coop.room
+                        ? () => client.toggleAwaken()
+                        : undefined
+                }
                 onPick={
                     (peek ?? ui.mapId) === ui.mapId ? (s) => client.pickFightStage(s) : undefined
                 }
@@ -1984,16 +2098,28 @@ function ActPage({
     selected,
     onPeek,
     onPick,
+    onEnding,
+    onGauntlet,
+    onVault,
 }: {
     act: ActDef;
     save: SaveData;
     selected: string;
     onPeek: (mapId: string | undefined) => void;
     onPick: (mapId: string) => void;
+    onEnding: () => void;
+    // The Forgotten Four's screen, once it's open (not in a co-op room: solo for now)
+    onGauntlet?: () => void;
+    // The weekly Vault's screen, once it's open
+    onVault: () => void;
 }): JSX.Element {
+    const orbs = save.awakenerOrbs ?? 0;
     const open = (save.mapVictories[act.requires] ?? 0) > 0;
     const ids = getActMapIds(act);
     const beaten = ids.filter((id) => (save.mapVictories[id] ?? 0) > 0).length;
+    // Its Awakened fights, filling the middle card in as they fall; all four, the act's done
+    const awakened = getActFightsBeaten(act, save.mapVictories);
+    const ended = isActEnded(act, save.mapVictories);
     const areas = ["a", "b", "c", "d"];
     return (
         <div className={"ui-act" + (open ? "" : " ui-act-closed")}>
@@ -2019,30 +2145,109 @@ function ActPage({
                     >
                         <ItemIcon objId={slot.iconObjId} size={20} />
                         <span className="ui-act-card-text">
-                            <span className="ui-map-name">{slot.name}</span>
+                            <span className="ui-map-name">{actSlotName(act, slot)}</span>
                             <span className="ui-act-line">
-                                {map ? slot.boss : `${slot.boss}: coming soon`}
+                                {map
+                                    ? actSlotBoss(act, slot)
+                                    : t("ui.act.coming_soon", { boss: actSlotBoss(act, slot) })}
                             </span>
                         </span>
                         {(save.hardVictories[slot.mapId ?? ""] ?? 0) > 0 ? (
                             <span
                                 className="ui-beaten ui-beaten-hard"
-                                aria-label="Beaten on hard"
+                                aria-label={t("ui.map.beaten_hard")}
                             />
                         ) : (
-                            wins > 0 && <span className="ui-beaten" aria-label="Beaten" />
+                            wins > 0 && (
+                                <span className="ui-beaten" aria-label={t("ui.map.beaten")} />
+                            )
                         )}
                     </button>
                 );
             })}
-            <div className="ui-card ui-act-middle" style={{ gridArea: "m" }}>
-                <span className="ui-map-name">{act.name}</span>
+            <div
+                className={
+                    "ui-card ui-act-middle" +
+                    (act.id === FALLEN_EMPIRE.id && hasGauntletLooks(save) ? " ui-act-gold" : "")
+                }
+                style={{ gridArea: "m" }}
+            >
+                <span className="ui-map-name">{actName(act)}</span>
                 <span className="ui-act-line">
-                    {open
-                        ? `${beaten} / ${act.slots.length} beaten, in any order. Each is harder ` +
-                          "the more of the others you've beaten."
-                        : `Beat ${getMap(act.requires).name} to open it.`}
+                    {ended
+                        ? t("ui.act.ended", { title: actEndingTitle(act) })
+                        : open
+                          ? t("ui.act.beaten_any_order", { beaten, total: act.slots.length })
+                          : t("ui.act.beat_to_open", { map: mapName(getMap(act.requires)) })}
                 </span>
+                {open && beaten > 0 && (
+                    <span
+                        className="ui-act-awakened"
+                        aria-label={t("ui.act.awakened_beaten", {
+                            beaten: awakened,
+                            total: act.slots.length,
+                        })}
+                        title={t("ui.act.awakened_beaten", {
+                            beaten: awakened,
+                            total: act.slots.length,
+                        })}
+                    >
+                        {act.slots.map((slot) => {
+                            const fight = slot.fightId ? MAP_BY_ID.get(slot.fightId) : undefined;
+                            const won = !!fight && (save.mapVictories[fight.id] ?? 0) > 0;
+                            return (
+                                <span
+                                    key={slot.name}
+                                    className={
+                                        "ui-act-awakened-icon" + (won ? "" : " ui-act-awakened-not")
+                                    }
+                                >
+                                    <ItemIcon
+                                        objId={fight?.iconObjId ?? slot.iconObjId}
+                                        size={18}
+                                    />
+                                </span>
+                            );
+                        })}
+                        {/* In the icons' row, so a phone's short card has room for it */}
+                        {ended && act.ending && (
+                            <button className="ui-button ui-act-ending-again" onClick={onEnding}>
+                                {t("ui.act.ending_again")}
+                            </button>
+                        )}
+                    </span>
+                )}
+                {/* The Forgotten Four, the act's last test (act-2-fallen-empire.md 7.3), the weekly
+                    Vault, and the Awakener's orbs held, side by side so a phone's card has room */}
+                {ended && act.id === FALLEN_EMPIRE.id && (
+                    <span className="ui-act-extras">
+                        {isGauntletOpen(save) && (
+                            <button
+                                className="ui-button ui-button-go ui-act-gauntlet"
+                                disabled={!onGauntlet}
+                                title={onGauntlet ? undefined : t("ui.gauntlet.solo_only")}
+                                onClick={onGauntlet}
+                            >
+                                {t("ui.gauntlet.title")}
+                            </button>
+                        )}
+                        {isVaultOpen(save.mapVictories) && (
+                            <button className="ui-button ui-act-vault" onClick={onVault}>
+                                {t("ui.vault.title")}
+                            </button>
+                        )}
+                        {orbs > 0 && (
+                            <span
+                                className="ui-orbs"
+                                title={t("ui.awaken.orbs_tooltip")}
+                                aria-label={t("ui.awaken.orbs", { n: fmtNum(orbs) })}
+                            >
+                                <ItemIcon objId={AWAKENERS_ORB_OBJ} size={18} />
+                                {fmtNum(orbs)}
+                            </span>
+                        )}
+                    </span>
+                )}
             </div>
         </div>
     );
@@ -2061,17 +2266,191 @@ function ActDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element
     return (
         <>
             <div className="ui-card-style">
-                {`${act.name}, step ${step} of ${last}` +
-                    (coins > 0 ? `: coins +${Math.round(coins * 100)}%` : "")}
+                {coins > 0
+                    ? t("ui.act.step_coins", {
+                          act: actName(act),
+                          step,
+                          last,
+                          coins: Math.round(coins * 100),
+                      })
+                    : t("ui.act.step", { act: actName(act), step, last })}
             </div>
             {best && (
                 <div className="ui-card-style">
-                    Best: {formatTime(best.seconds)}
-                    {best.step < last ? ` (at step ${best.step})` : ""}
+                    {best.step < last
+                        ? t("ui.act.best_at_step", {
+                              time: formatTime(best.seconds),
+                              step: best.step,
+                          })
+                        : t("ui.act.best", { time: formatTime(best.seconds) })}
+                    <RecordSetupText record={best} />
                 </div>
             )}
         </>
     );
+}
+
+// A map's best at invocations (SaveData.invocationBest) and its badges, on a map that takes them
+function InvocationDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element | null {
+    if (!takesInvocations(map)) {
+        return null;
+    }
+    const best = save.invocationBest?.[map.id];
+    return (
+        <div className="ui-card-style ui-invocation-record">
+            <span>
+                {best
+                    ? t("ui.invocations.best", {
+                          points: best.points,
+                          time: formatTime(best.seconds),
+                      })
+                    : t("ui.invocations.none_yet")}
+                {best && <RecordSetupText record={{ relics: best.relics }} />}
+            </span>
+            <InvocationBadges best={best?.points ?? 0} />
+        </div>
+    );
+}
+
+// A map with remixes in its name: theirs before it ("Frozen Lumbridge", "Fallen Inferno")
+export function remixedMapName(map: MapDef, remixes: readonly RemixId[]): string {
+    const name = mapName(map);
+    if (remixes.length === 0) {
+        return name;
+    }
+    return t("ui.remix.map_name", {
+        remixes: remixPrefix(remixes),
+        map: getLang() === "en" ? name.replace(/^The /, "") : name,
+    });
+}
+
+// Remixes on the map's card (content/remixes.ts): a switch for each the map takes, lit once it's
+// open; the records of the set that's on, and a badge for the most beaten at once there
+function RemixRow({
+    save,
+    map,
+    on,
+    onToggle,
+}: {
+    save: SaveData;
+    map: MapDef;
+    on: RemixId[];
+    onToggle: (id: RemixId) => void;
+}): JSX.Element | null {
+    const ids = getMapRemixes(map);
+    const open = ids.filter((id) => isRemixOpen(save.mapVictories, map, id));
+    if (open.length === 0) {
+        return null;
+    }
+    const record = on.length > 0 ? save.remixVictories?.[remixKey(map.id, on)] : undefined;
+    const best = getRemixBest(save, map.id);
+    const setName = remixPrefix(on);
+    return (
+        <div className="ui-remixes">
+            <div className="ui-remix-row">
+                <span className="ui-remix-label">{t("ui.remix.label")}</span>
+                {REMIX_IDS.map((id) => {
+                    const takes = ids.includes(id);
+                    const isOpen = open.includes(id);
+                    const lit = on.includes(id);
+                    const from = getMap(REMIX_BY_ID.get(id)!.from);
+                    return (
+                        <button
+                            key={id}
+                            className={
+                                "ui-button ui-button-small ui-remix" +
+                                (lit ? " ui-remix-on" : "") +
+                                (isOpen ? "" : " ui-remix-locked")
+                            }
+                            disabled={!isOpen}
+                            aria-pressed={lit}
+                            title={
+                                !takes
+                                    ? t("ui.remix.own", { name: remixName(id) })
+                                    : isOpen
+                                      ? remixDescription(id)
+                                      : map.act
+                                        ? t("ui.remix.locked_act")
+                                        : t("ui.remix.locked", { map: mapName(from) })
+                            }
+                            onClick={(e) => {
+                                onToggle(id);
+                                e.currentTarget.blur();
+                            }}
+                        >
+                            <ItemIcon objId={REMIX_BY_ID.get(id)!.iconObjId} size={18} />
+                            {remixName(id)}
+                        </button>
+                    );
+                })}
+                {best > 0 && (
+                    <span
+                        className={
+                            "ui-remix-badge" + (best === REMIX_IDS.length ? " ui-remix-fallen" : "")
+                        }
+                        title={t("ui.remix.badge_tooltip", { count: best })}
+                    >
+                        {best === REMIX_IDS.length
+                            ? remixPrefix(REMIX_IDS)
+                            : `${best}/${REMIX_IDS.length}`}
+                    </span>
+                )}
+            </div>
+            {on.length > 0 && (
+                <div className="ui-card-style">
+                    {record && record.wins > 0
+                        ? t("ui.remix.record", {
+                              name: setName,
+                              times: tp("ui.map.beaten_times", record.wins),
+                              time: record.seconds ? formatTime(record.seconds) : "-",
+                          }) +
+                          (record.hard
+                              ? ` ${t("ui.remix.on_hard", { times: tp("ui.map.beaten_times", record.hard) })}`
+                              : "")
+                        : t("ui.remix.none_yet", { name: setName })}
+                    {record?.endless &&
+                        ` ${t("ui.remix.endless", {
+                            round: record.endless.round,
+                            time: formatTime(record.endless.seconds),
+                        })}`}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// What a record was set with, after it: its invocation points and relics (save.ts, RecordSetup)
+function RecordSetupText({ record }: { record: RecordSetup }): JSX.Element | null {
+    const parts = [
+        ...(record.points ? [t("ui.invocations.points", { points: record.points })] : []),
+        ...(record.relics && record.relics.length > 0
+            ? [
+                  t("ui.relics.with", {
+                      relics: list(
+                          record.relics.flatMap((id) => {
+                              const relic = RELIC_BY_ID.get(id);
+                              return relic ? [relicName(relic)] : [];
+                          }),
+                      ),
+                  }),
+              ]
+            : []),
+    ];
+    return parts.length > 0 ? <span className="ui-record-setup"> ({parts.join(", ")})</span> : null;
+}
+
+// The highest invocation badge a map's been beaten at, on its list card
+function InvocationBadge({ points }: { points: number }): JSX.Element | null {
+    const badge = getInvocationBadge(points);
+    return badge > 0 ? (
+        <span
+            className="ui-invocation-badge ui-invocation-badge-won ui-invocation-badge-small"
+            aria-label={t("ui.invocations.badge_aria", { points: badge })}
+            title={t("ui.invocations.badge_aria", { points: badge })}
+        >
+            {badge}
+        </span>
+    ) : null;
 }
 
 // The result screen's button back into a boss fight: a fight in parts (MapDef.stages) goes on to
@@ -2097,9 +2476,19 @@ function MapDetails({
     expertShown,
     picked,
     onPick,
+    remixes,
+    onRemix,
+    awaken,
+    onAwaken,
 }: {
     save: SaveData;
     map: MapDef;
+    // The selected map's remixes on, and their switches
+    remixes?: RemixId[];
+    onRemix?: (id: RemixId) => void;
+    // The selected map's Awakener's orb, on or not, and its switch (solo)
+    awaken?: boolean;
+    onAwaken?: () => void;
     expertShown: boolean;
     // A fight in parts: the part picked to play, and picking one (the selected map's only)
     picked?: number;
@@ -2170,7 +2559,6 @@ function MapDetails({
                                       })
                                     : t("ui.map.not_beaten")}
                     </div>
-                    {unlocked && <ActDetails save={save} map={map} />}
                     {map.stages && unlocked && onPick && reached > 1 && (
                         <div className="ui-row ui-fight-parts">
                             {map.stages.slice(0, reached).map((part, i) => (
@@ -2189,12 +2577,21 @@ function MapDetails({
                             ))}
                         </div>
                     )}
+                    {unlocked && <ActDetails save={save} map={map} />}
+                    {unlocked && <InvocationDetails save={save} map={map} />}
+                    {unlocked && remixes && onRemix && (
+                        <RemixRow save={save} map={map} on={remixes} onToggle={onRemix} />
+                    )}
+                    {unlocked && CAMPAIGN_MAPS.includes(map) && takesRelics(map) && (
+                        <AwakenRow save={save} map={map} on={awaken} onToggle={onAwaken} />
+                    )}
                     {endless && (
                         <div className="ui-card-style">
                             {t("ui.map.endless_best", {
                                 round: endless.round,
                                 time: formatTime(endless.seconds),
                             })}
+                            <RecordSetupText record={endless} />
                         </div>
                     )}
                     {hardWins > 0 && (
@@ -2210,6 +2607,7 @@ function MapDetails({
                                 round: hardEndless.round,
                                 time: formatTime(hardEndless.seconds),
                             })}
+                            <RecordSetupText record={hardEndless} />
                         </div>
                     )}
                 </div>
@@ -2595,9 +2993,78 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
                 <RunEventModal key={ui.event.uid} event={ui.event} client={client} />
             )}
             {ui.overlay === "paused" && hud && <PauseModal ui={ui} hud={hud} client={client} />}
-            {(ui.overlay === "dead" || ui.overlay === "victory") && (
-                <ResultModal ui={ui} client={client} />
+            {ui.gauntlet?.run && hud && !ui.cinematic && ui.overlay === "none" && (
+                <GauntletBadge run={ui.gauntlet.run} />
             )}
+            {(ui.overlay === "dead" || ui.overlay === "victory") &&
+                (ui.gauntlet?.run && ui.gauntlet.run.phase !== "fight" ? (
+                    <GauntletResultModal view={ui.gauntlet} save={ui.save} client={client} />
+                ) : (
+                    <ResultModal ui={ui} client={client} />
+                ))}
+        </div>
+    );
+}
+
+// Milliseconds between the lines of an act's ending coming in
+const ENDING_LINE_MS = 2600;
+
+// An act's ending (ActDef.ending), told a line at a time over whatever's up: as the last of its
+// Awakened fights falls, and again from its card. A click brings the rest in at once.
+function ActEndingModal({
+    actId,
+    client,
+}: {
+    actId: string;
+    client: GameClient;
+}): JSX.Element | null {
+    const act = ACT_BY_ID.get(actId);
+    const lines = act ? actEndingLines(act) : [];
+    const [shown, setShown] = useState(1);
+    useEffect(() => {
+        if (shown >= lines.length) {
+            return;
+        }
+        const timer = window.setTimeout(() => setShown((n) => n + 1), ENDING_LINE_MS);
+        return () => window.clearTimeout(timer);
+    }, [shown, lines.length]);
+    if (!act) {
+        return null;
+    }
+    const done = shown >= lines.length;
+    return (
+        <div className="ui-modal ui-act-ending-modal" onClick={() => setShown(lines.length)}>
+            <div
+                className="ui-panel rs-border rs-background ui-act-ending"
+                role="dialog"
+                aria-label={actEndingTitle(act)}
+            >
+                <span className="ui-act-ending-act">{actName(act)}</span>
+                <h2 className="ui-act-ending-title">{actEndingTitle(act)}</h2>
+                <div className="ui-act-ending-icons">
+                    {act.slots.map((slot) => (
+                        <ItemIcon key={slot.name} objId={slot.iconObjId} size={26} />
+                    ))}
+                </div>
+                {lines.slice(0, shown).map((line, i) => (
+                    <p key={i} className="ui-act-ending-line">
+                        {line}
+                    </p>
+                ))}
+                <button
+                    className={"ui-button" + (done ? " ui-button-go" : "")}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        if (done) {
+                            client.showActEnding(undefined);
+                        } else {
+                            setShown(lines.length);
+                        }
+                    }}
+                >
+                    {done ? t("ui.act.ending_close") : t("ui.act.ending_all")}
+                </button>
+            </div>
         </div>
     );
 }
@@ -2996,6 +3463,8 @@ const Hud = memo(function Hud({
                     <KitButtons client={client} />
                 </div>
                 <HpBar client={client} />
+                <SanityBar client={client} />
+                <ColdBar client={client} />
             </div>
         </>
     );
@@ -3357,6 +3826,41 @@ function HpBar({ client }: { client: GameClient }): JSX.Element | null {
     );
 }
 
+// Sanity, under hitpoints, on a map of two worlds (RealmRuleDef.sanity): full in the city, draining
+// in the Shadow Realm
+function SanityBar({ client }: { client: GameClient }): JSX.Element | null {
+    const sanity = useHudNumber(client, (n) => n.sanity);
+    const max = useHudNumber(client, (n) => n.sanityMax);
+    if (sanity === undefined || !max) {
+        return null;
+    }
+    return (
+        <div className="ui-sanity" title={t("ui.hud.sanity")}>
+            <div className="ui-sanity-fill" style={{ transform: `scaleX(${sanity / max})` }} />
+            <span>{t("ui.hud.sanity_value", { sanity, max })}</span>
+        </div>
+    );
+}
+
+// Cold, under hitpoints, on a map that's cold (ColdRuleDef.cold): it fills as it rises, and frosts
+// over from 80, where weapons slow too
+function ColdBar({ client }: { client: GameClient }): JSX.Element | null {
+    const cold = useHudNumber(client, (n) => n.cold);
+    const max = useHudNumber(client, (n) => n.coldMax);
+    if (cold === undefined || !max) {
+        return null;
+    }
+    return (
+        <div
+            className={"ui-cold" + (cold >= max * 0.8 ? " ui-cold-high" : "")}
+            title={t("ui.hud.cold")}
+        >
+            <div className="ui-cold-fill" style={{ transform: `scaleX(${cold / max})` }} />
+            <span>{t("ui.hud.cold_value", { cold, max })}</span>
+        </div>
+    );
+}
+
 // The boss's bar while it's out, and a warning in the last minute before it is
 // (in a raid's hall, what the hall wants of you)
 function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.Element | null {
@@ -3430,18 +3934,20 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
             )}
             {boss.fight && (
                 <div className="ui-boss-status">
-                    {boss.fight.outOfReach
-                        ? t("ui.hud.boss_status.out_of_reach")
-                        : boss.fight.guard === "stunned"
-                          ? t("ui.hud.boss_status.stunned")
-                          : boss.fight.guard === "exposed"
-                            ? t("ui.hud.boss_status.guard_down")
-                            : ((boss.fight.status ? tl(boss.fight.status) : undefined) ??
-                              (boss.fight.stage === "totems"
-                                  ? t("ui.hud.boss_status.charge_totems")
-                                  : boss.fight.stage === "finale"
-                                    ? t("ui.hud.boss_status.stay_on_feet")
-                                    : t("ui.hud.boss_status.break_shield")))}
+                    {boss.fight.otherWorld && !boss.fight.guard
+                        ? t("ui.hud.boss_status.other_world")
+                        : boss.fight.outOfReach && !boss.fight.otherWorld
+                          ? t("ui.hud.boss_status.out_of_reach")
+                          : boss.fight.guard === "stunned"
+                            ? t("ui.hud.boss_status.stunned")
+                            : boss.fight.guard === "exposed"
+                              ? t("ui.hud.boss_status.guard_down")
+                              : ((boss.fight.status ? tl(boss.fight.status) : undefined) ??
+                                (boss.fight.stage === "totems"
+                                    ? t("ui.hud.boss_status.charge_totems")
+                                    : boss.fight.stage === "finale"
+                                      ? t("ui.hud.boss_status.stay_on_feet")
+                                      : t("ui.hud.boss_status.break_shield")))}
                     {boss.fight.curseAttacks !== undefined && (
                         <span className="ui-boss-curse">
                             {t("ui.hud.boss_cursed", { attacks: boss.fight.curseAttacks })}
@@ -3662,6 +4168,27 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                                 short={ui.hud.skip.cost - coins}
                                 onSkip={() => client.skip()}
                             />
+                        )}
+                        {/* Reloaded (content/relics.ts) */}
+                        {ui.hud?.keep && ui.hud.keep.kept > 0 && (
+                            <button
+                                className="ui-button"
+                                disabled={!ui.hud.keep.canTake}
+                                title={t("ui.levelup.take_kept_tooltip")}
+                                onClick={() => client.takeKept()}
+                            >
+                                {t("ui.levelup.take_kept", { kept: ui.hud.keep.kept })}
+                            </button>
+                        )}
+                        {ui.hud?.keep && ui.hud.keep.left > 0 && (
+                            <button
+                                className="ui-button"
+                                disabled={!ui.hud.keep.canKeep}
+                                title={t("ui.levelup.keep_tooltip")}
+                                onClick={() => client.keepOffer()}
+                            >
+                                {t("ui.levelup.keep", { left: ui.hud.keep.left })}
+                            </button>
                         )}
                     </div>
                 )}
@@ -4267,9 +4794,43 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 )}
                 {result?.tombs && <TombsBoardView tombs={result.tombs} />}
                 {result?.raidChest && <RaidChestView chest={result.raidChest} />}
+                {result?.hard && result.victory && result.relics && (
+                    <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
+                )}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
                         {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
+                    </p>
+                )}
+                {/* Act II's extras (act-2-fallen-empire.md 8.6): an invader felled, an orb spent
+                    or won, the Vault's week */}
+                {result?.invasion?.killed && (
+                    <p className="ui-unlocked">
+                        {t("ui.result.invader_killed", { name: invaderName(result.invasion.id) })}
+                    </p>
+                )}
+                {result?.invasion?.came && !result.invasion.killed && (
+                    <p className="ui-subtle">
+                        {t("ui.result.invader_lived", { name: invaderName(result.invasion.id) })}
+                    </p>
+                )}
+                {result?.awakened?.seen && (
+                    <p className={result.victory ? "ui-unlocked" : "ui-subtle"}>
+                        {result.victory
+                            ? t("ui.result.awakened_won", {
+                                  coins: fmtNum(result.awakened.casketCoins ?? 0),
+                              })
+                            : t("ui.result.awakened_spent")}
+                    </p>
+                )}
+                {result?.orbWon && <p className="ui-unlocked">{t("ui.result.orb_won")}</p>}
+                {result?.vault && (
+                    <p className={result.vault.best ? "ui-unlocked" : "ui-subtle"}>
+                        {result.vault.best
+                            ? t("ui.result.vault_best", {
+                                  week: parseWeekKey(result.vault.key)?.week ?? 0,
+                              })
+                            : t("ui.result.vault_not_best")}
                     </p>
                 )}
                 {result?.unlockedMap && (
@@ -4430,6 +4991,29 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                                                 {result.expert
                                                     ? t("ui.expert.name")
                                                     : t("ui.hard.name")}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {result.points !== undefined && (
+                                        <tr>
+                                            <td>{t("ui.result.stat.invocations")}</td>
+                                            <td>
+                                                {t("ui.invocations.points", {
+                                                    points: result.points,
+                                                })}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {result.relics && (
+                                        <tr>
+                                            <td>{t("ui.result.stat.relics")}</td>
+                                            <td>
+                                                {list(
+                                                    result.relics.flatMap((id) => {
+                                                        const relic = RELIC_BY_ID.get(id);
+                                                        return relic ? [relicName(relic)] : [];
+                                                    }),
+                                                )}
                                             </td>
                                         </tr>
                                     )}

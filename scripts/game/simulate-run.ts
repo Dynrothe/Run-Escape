@@ -3,6 +3,7 @@
 //
 //   bun run tsx scripts/game/simulate-run.ts                 # every character once
 //   bun run tsx scripts/game/simulate-run.ts wizard 3        # one character, 3 seeds
+//   bun run tsx scripts/game/simulate-run.ts wizard,monk 3   # some characters
 //   bun run tsx scripts/game/simulate-run.ts "" 2 5          # everyone, 2 seeds, 5 minutes
 //   MAP=barrows bun run tsx scripts/game/simulate-run.ts     # another map (Lumbridge by default)
 //   UNLOCKS=none bun run tsx scripts/game/simulate-run.ts    # nothing from map tasks (all by default)
@@ -10,6 +11,7 @@
 //   ARMOURY=max bun run tsx scripts/game/simulate-run.ts     # all gear upgraded in the Armoury (none by default)
 //   ENDLESS=1 bun run tsx scripts/game/simulate-run.ts       # an endless run (up to 90 minutes)
 //   HARD=1 bun run tsx scripts/game/simulate-run.ts          # on hard mode
+//   PET=butch bun run tsx scripts/game/simulate-run.ts       # with a fighting pet along
 //   EXPERT=1 MAP=theatre_of_blood ...  # a raid's expert mode (hard, and the Nylocas's colours)
 //   WEAPON=crystal_bow bun run tsx scripts/game/simulate-run.ts ranger  # start with this weapon instead
 //   FINAL_BOSS=the_nightmare BOSS_ARENA=48 bun run tsx ...   # another final boss, on a square of the map
@@ -26,11 +28,20 @@
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
 //   MAP=tombs_of_amascut ...   # the Tombs of Amascut, the whole raid (tombsBot.ts)
+//   INVOCATIONS=run_glass_cannon,run_blood_moon MAP=desert ...  # a run's invocations, on a map
+//                                          # from the Desert on (INVOCATIONS=all for all nine;
+//                                          # HARD=1 is hard mode's preset)
+//   RELICS=trickster,globetrotter ...      # relics on (content/relics.ts)
 //   INVOCATIONS=walk_for_it,insanity ...   # its invocations (INVOCATIONS=all for every one the
 //                                          # board allows: one of a group that's one at a time)
+//   GAUNTLET=1 DODGE=1 ...  # the Forgotten Four, all four fights chained (runGauntlet: ORDER=,
+//                           # RETRIES=3, HARD=1, BLESS=best|none); the seeds are runs
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
 //                    # half the chances to use the fight's button
+//   REACT=0.25 ...   # moves as a person reacts: each step it decides is taken this many seconds
+//                    # later (by default the tick a boss's windup starts)
+//   FROM=101 ...     # the first seed (1 by default), to split a long sweep across processes
 //   GAZE=never ...   # a hero with their own buttons (the Battle for Varrock's Justiciar) never
 //                    # casts the Owl's gaze; GAZE=waste casts it whenever it's ready, not only at
 //                    # the meteor it stops (Yama's). A map with one lair to retry at starts there
@@ -41,7 +52,14 @@
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS, getCharacter } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
-import { INVOCATIONS } from "../../src/game/content/invocations";
+import {
+    BLESSINGS,
+    BLESSING_BY_ID,
+    BlessingId,
+    GAUNTLET_FIGHTS,
+    GauntletFightOptions,
+} from "../../src/game/content/gauntlet";
+import { INVOCATIONS, RUN_INVOCATIONS } from "../../src/game/content/invocations";
 import { CASKET_GEAR, getGear } from "../../src/game/content/items";
 import { getMap, getRetryLair } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
@@ -52,6 +70,22 @@ import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
 import { BossWindup, Enemy, Lair, SimEvent } from "../../src/game/core/entities";
+import {
+    GauntletRun,
+    chooseBlessing,
+    gauntletFightId,
+    gauntletFightOptions,
+    gauntletRetries,
+    gauntletSeconds,
+    isGauntletClean,
+    leaveGauntletCamp,
+    loseGauntletFight,
+    retryGauntletFight,
+    startGauntlet,
+    winGauntletFight,
+} from "../../src/game/core/gauntlet";
+import { ColdRule } from "../../src/game/core/rules/ColdRule";
+import { RealmRule } from "../../src/game/core/rules/RealmRule";
 import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
@@ -60,9 +94,12 @@ import {
     buttonMove,
     cageGap,
     coneStep,
+    darkFightMove,
     dodgeOrbs,
     dodgeShots,
+    fanStep,
     inSquare,
+    kindleMove,
     laneStep,
     lungeStep,
     offMarks,
@@ -71,6 +108,7 @@ import {
     otherBlasts,
     outOfPool,
     pressButton,
+    realmMove,
     shelter,
     sidestepBullets,
     stripStep,
@@ -80,19 +118,44 @@ import { loadRegionData } from "./collision-snapshot";
 import { TombsLog, chestAction, kerisPickRank, tombsMove, useItems } from "./tombsBot";
 
 const [characterArg, seedsArg, minutesArg] = process.argv.slice(2);
-// The Tombs' invocations
+// The Tombs' invocations, or a run's (all: every one but hard mode's, which HARD=1 is)
 const invocations =
     process.env.INVOCATIONS === "all"
-        ? INVOCATIONS.map((i) => i.id)
+        ? process.env.MAP === "tombs_of_amascut"
+            ? INVOCATIONS.map((i) => i.id)
+            : RUN_INVOCATIONS.filter((i) => !i.hard).map((i) => i.id)
         : (process.env.INVOCATIONS ?? "").split(",").filter(Boolean);
-const characters = characterArg ? [characterArg] : CHARACTERS.map((c) => c.id);
+const relics = (process.env.RELICS ?? "").split(",").filter(Boolean);
+// Remixes (content/remixes.ts) on the map: REMIX=overgrown,shadow,frozen,dark (or all)
+const remixes =
+    process.env.REMIX === "all"
+        ? ["overgrown", "shadow", "frozen", "dark"]
+        : (process.env.REMIX ?? "").split(",").filter(Boolean);
+// Awakened invasions (content/invasions.ts): INVADE=1 rolls by the seed as a run does once
+// they're open; INVADE=invading_duke@400 makes that one come at 6:40
+const invade = process.env.INVADE;
+const invadeAt = invade?.includes("@") ? invade.split("@") : undefined;
+const invasionOptions = invade
+    ? {
+          invasions: true,
+          ...(invadeAt && {
+              testing: { invasion: { invader: invadeAt[0], at: parseFloat(invadeAt[1]) } },
+          }),
+      }
+    : {};
+// An Awakener's orb on the final boss (AWAKEN=1)
+const awakened = process.env.AWAKEN === "1";
+const characters = characterArg ? characterArg.split(",") : CHARACTERS.map((c) => c.id);
 const seeds = parseInt(seedsArg ?? "1");
 // Cells round it, each way, the bot looks at for roots to keep off
 const ROOT_LOOK = 3;
 // How often to print progress (REPORT=15 for every 15 seconds)
 const REPORT_SECONDS = parseInt(process.env.REPORT ?? "60");
 
-const map = getMap(process.env.MAP ?? "lumbridge");
+// The map being played (GAUNTLET=1 changes it fight by fight, with ARENA and grid)
+let map = getMap(
+    process.env.GAUNTLET === "1" ? "awakened_vardorvis" : (process.env.MAP ?? "lumbridge"),
+);
 const endless = process.env.ENDLESS === "1";
 const hard = process.env.HARD === "1";
 const expert = process.env.EXPERT === "1";
@@ -111,7 +174,7 @@ const armoury =
     process.env.ARMOURY === "max"
         ? Object.fromEntries(CASKET_GEAR.map((g) => [g.id, getUpgradeLine(g.id).length - 1]))
         : undefined;
-const ARENA = map.arena;
+let ARENA = map.arena;
 // Her map's not on every branch, so she can be tried on any map, in a square
 // around its spawn
 const finalBoss = process.env.FINAL_BOSS;
@@ -122,6 +185,10 @@ const sloppy = process.env.SLOPPY === "1";
 // A sloppy bot's lapses: these seconds in every SLOPPY_EVERY it backs off from the boss
 const SLOPPY_EVERY = 10;
 const SLOPPY_LAPSE = 3;
+// A person's reaction time (REACT, in seconds): the bot otherwise steps out of a windup on the tick
+// it starts, so a shorter warning costs it far less than it costs a person
+const reactTicks = Math.round(parseFloat(process.env.REACT ?? "0") * TICKS_PER_SECOND);
+const firstSeed = parseInt(process.env.FROM ?? "1");
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
@@ -134,6 +201,23 @@ const farmSeconds = parseFloat(process.env.FARM ?? "0");
 const empoweredLair = process.env.EMPOWERED === "1";
 // An act's map's step (content/acts.ts)
 const actStep = parseInt(process.env.STEP ?? "0");
+// A map of two worlds (RealmRule): whether the bot dives into puddles (REALM=0 never), and how well
+// it has to be to
+const REALM_DIVES = process.env.REALM !== "0";
+const REALM_DIVE_HP = 0.6;
+// Under the cold (ColdRule): the bot goes to warm itself from this cold (COLD=0 never), until it's
+// down to the next, and steps out of a vent's gas
+const COLD_SEEKS = process.env.COLD !== "0";
+// In the dark (LightingDef.litTargetsOnly): the bot keeps clear of Persten's false lanterns,
+// goes for a light leech when there's nothing lit to fight, by a fire when it's dimmed, and stays
+// in the pathfinder's circle through the Leviathan's last third (DARK=0 none of it)
+const DARK_SEEKS = process.env.DARK !== "0";
+const COLD_GO = 45;
+const COLD_DONE = 15;
+// Whether it's on its way to warm itself, by hero
+const warming = new Map<number, boolean>();
+// A pet taken along (PET=butch): a fighting one's power plays (PetDef.power)
+const pet = process.env.PET || undefined;
 if (finalBoss) {
     map.events = map.events.map((e) =>
         e.kind === "finalBoss" ? { at: e.at, kind: e.kind, enemyId: finalBoss, hp: e.hp } : e,
@@ -147,12 +231,33 @@ if (finalBoss) {
         };
     }
 }
-console.time(`${map.name} arena`);
-const grid =
-    process.env.FLAT === "1"
-        ? makeGrid(new Array(ARENA.sizeY).fill(".".repeat(ARENA.sizeX)), ARENA.baseX, ARENA.baseY)
-        : new ArenaGrid(loadRegionData(map));
-console.timeEnd(`${map.name} arena`);
+function loadGrid(): ArenaGrid {
+    console.time(`${map.name} arena`);
+    const loaded =
+        process.env.FLAT === "1"
+            ? makeGrid(
+                  new Array(ARENA.sizeY).fill(".".repeat(ARENA.sizeX)),
+                  ARENA.baseX,
+                  ARENA.baseY,
+              )
+            : new ArenaGrid(loadRegionData(map));
+    console.timeEnd(`${map.name} arena`);
+    return loaded;
+}
+let grid = loadGrid();
+const grids = new Map<string, ArenaGrid>([[map.id, grid]]);
+
+// To another map (the gauntlet's next fight), its grid loaded once
+function useMap(id: string): void {
+    map = getMap(id);
+    ARENA = map.arena;
+    let loaded = grids.get(id);
+    if (!loaded) {
+        loaded = loadGrid();
+        grids.set(id, loaded);
+    }
+    grid = loaded;
+}
 
 // Like a person might: take evolutions, fill the weapon slots, then upgrade;
 // between two of the same kind, the rarer roll
@@ -222,7 +327,7 @@ function botMove(sim: Sim): { x: number; y: number } {
     let threat = 0;
     // A map's root hearts (MapDef.rule) are worth walking up to and cutting down, as a person
     // would: they make the roots round them grow
-    const heart = sim.rule instanceof RootRule ? sim.rule.def.hearts.enemyId : undefined;
+    const heart = sim.roots?.def.hearts.enemyId;
     for (const enemy of sim.enemies) {
         if (enemy.dead) {
             continue;
@@ -303,15 +408,15 @@ function botMove(sim: Sim): { x: number; y: number } {
     }
     // Off the roots (MapDef.rule): a person steps off what slows and hurts them, the nearer the
     // more, and harder once they're on it
-    if (sim.rule instanceof RootRule) {
-        const rule = sim.rule;
+    if (sim.roots && sim.realm?.layer !== 1) {
+        const rule = sim.roots;
         const on = rule.isRooted(player.x, player.y);
         let rx = 0;
         let ry = 0;
         for (let dy = -ROOT_LOOK; dy <= ROOT_LOOK; dy++) {
             for (let dx = -ROOT_LOOK; dx <= ROOT_LOOK; dx++) {
-                const x = player.x + dx * CELL;
-                const y = player.y + dy * CELL;
+                const x = player.x + dx * rule.cell;
+                const y = player.y + dy * rule.cell;
                 if ((dx !== 0 || dy !== 0) && rule.isRooted(x, y)) {
                     const d2 = dx * dx + dy * dy;
                     rx -= dx / d2;
@@ -324,6 +429,83 @@ function botMove(sim: Sim): { x: number; y: number } {
             const push = on ? 2 : 0.35;
             ax += (rx / len) * push;
             ay += (ry / len) * push;
+        }
+    }
+    // A map of two worlds (RealmRule): as a person would, into a puddle that opens near them while
+    // they're well (REALM=0 never), and in the realm after its lost souls, then into the portal
+    const realm = sim.realm;
+    if (realm && REALM_DIVES) {
+        const goal = realmGoal(sim, realm);
+        if (goal) {
+            // Round walls, by the walk to it (an older map's puddle can be past one)
+            const way = wayTo(sim, goal.x, goal.y);
+            const gx = way.x - player.x;
+            const gy = way.y - player.y;
+            const d = Math.hypot(gx, gy);
+            if (d > 0.05) {
+                ax += (gx / d) * goal.pull;
+                ay += (gy / d) * goal.pull;
+            }
+        }
+    }
+    // Under the cold (ColdRule): to a brazier when it's cold (lit, or out to relight), and out of
+    // a vent's gas
+    const cold = sim.cold;
+    if (cold && COLD_SEEKS) {
+        const goal = coldGoal(sim, cold);
+        if (goal) {
+            const way = wayTo(sim, goal.x, goal.y);
+            const gx = way.x - player.x;
+            const gy = way.y - player.y;
+            const d = Math.hypot(gx, gy);
+            if (d > 0.05) {
+                ax += (gx / d) * goal.pull;
+                ay += (gy / d) * goal.pull;
+            }
+        }
+        // Off the embers (they burn), but by them
+        for (const ember of cold.embers) {
+            const ex = player.x - ember.x;
+            const ey = player.y - ember.y;
+            const d = Math.hypot(ex, ey);
+            if (d < 2 && d > 0.01) {
+                ax += (ex / d) * 2;
+                ay += (ey / d) * 2;
+            }
+        }
+        for (const vent of cold.vents) {
+            const vx = player.x - vent.x;
+            const vy = player.y - vent.y;
+            const d = Math.hypot(vx, vy);
+            if (d < 3 && d > 0.01 && cold.ventState(vent, sim.tick)) {
+                ax += (vx / d) * 3;
+                ay += (vy / d) * 3;
+            }
+        }
+    }
+    if (sim.litTargetsOnly && DARK_SEEKS) {
+        const goal = darkGoal(sim);
+        if (goal) {
+            const gx = goal.x - player.x;
+            const gy = goal.y - player.y;
+            const d = Math.hypot(gx, gy);
+            if (d > 0.05) {
+                ax += (gx / d) * goal.pull;
+                ay += (gy / d) * goal.pull;
+            }
+        }
+        // A lantern with no beam is a false one: give it room
+        for (const enemy of sim.enemies) {
+            if (enemy.dead || !enemy.def.caught || !enemy.def.explodes) {
+                continue;
+            }
+            const ex = player.x - enemy.x;
+            const ey = player.y - enemy.y;
+            const d = Math.hypot(ex, ey);
+            if (d < enemy.def.explodes.radius + 1 && d > 0.01) {
+                ax += (ex / d) * 3;
+                ay += (ey / d) * 3;
+            }
         }
     }
     // Round the fires that burn (MapDef.burns), and out of one at once
@@ -346,6 +528,127 @@ function botMove(sim: Sim): { x: number; y: number } {
         return { x: 0, y: 0 };
     }
     return slide(sim, { x: ax / len, y: ay / len }, look);
+}
+
+// Where a map of two worlds takes the bot (RealmRule), and how hard: the puddle while it's well,
+// in the realm the nearest lost soul, then the portal home
+function realmGoal(sim: Sim, realm: RealmRule): { x: number; y: number; pull: number } | undefined {
+    const player = sim.player;
+    if (realm.layer === 0) {
+        const puddle = realm.puddle;
+        const well = player.hp >= player.maxHp * REALM_DIVE_HP;
+        if (puddle && well && Math.hypot(puddle.x - player.x, puddle.y - player.y) < 20) {
+            return { ...puddle, pull: 3 };
+        }
+        return undefined;
+    }
+    if (realm.portal) {
+        return { ...realm.portal, pull: 4 };
+    }
+    let best: { x: number; y: number; pull: number } | undefined;
+    let bestD = Infinity;
+    for (const enemy of sim.enemies) {
+        if (!enemy.dead && enemy.def.caught) {
+            const d = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+            if (d < bestD) {
+                bestD = d;
+                best = { x: enemy.x, y: enemy.y, pull: 2.5 };
+            }
+        }
+    }
+    return best;
+}
+
+// Where the dark takes the bot (LightingDef.litTargetsOnly), and how hard: into the only light
+// while there is one (the Leviathan's pathfinder), after a light leech within 9 tiles when nothing
+// near's lit and it's well, by the nearest fire or left light while its own's dimmed
+function darkGoal(sim: Sim): { x: number; y: number; pull: number } | undefined {
+    const player = sim.player;
+    const only = sim.onlyLightEnemy();
+    if (only) {
+        return { x: only.x, y: only.y, pull: 4 };
+    }
+    const own = sim.lights.find((l) => l.kind === "player" && l.id === sim.focus);
+    const base = sim.lighting?.player?.radius ?? 0;
+    const dimmed = own !== undefined && own.radius < base - 0.5;
+    let litNear = false;
+    let leech: { x: number; y: number } | undefined;
+    let leechD = 9;
+    for (const enemy of sim.enemies) {
+        if (enemy.dead) {
+            continue;
+        }
+        const d = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (enemy.def.light && !enemy.def.caught && !enemy.boss && d < leechD) {
+            leechD = d;
+            leech = enemy;
+        } else if (d < 6 && sim.isEnemyLit(enemy) && !enemy.def.caught) {
+            litNear = true;
+        }
+    }
+    // Not when hurt: a leech runs, and a chase into the dark is a chase into the crowd
+    if (leech && (!litNear || dimmed) && player.hp > player.maxHp * 0.5) {
+        return { x: leech.x, y: leech.y, pull: 0.8 };
+    }
+    if (dimmed) {
+        let best: { x: number; y: number; pull: number } | undefined;
+        let bestD = 12;
+        for (const light of sim.lights) {
+            if (light.kind !== "map" && light.kind !== "left") {
+                continue;
+            }
+            const d = Math.hypot(light.x - player.x, light.y - player.y);
+            if (d < bestD) {
+                bestD = d;
+                best = { x: light.x, y: light.y, pull: d > light.radius - 1 ? 1.5 : 0 };
+            }
+        }
+        return best;
+    }
+    return undefined;
+}
+let dimTicks = 0;
+
+// Where the cold takes the bot (ColdRule), and how hard: once it's cold, to the nearest lit brazier
+// (or the nearest out, to relight), staying until it's warm again
+function coldGoal(sim: Sim, cold: ColdRule): { x: number; y: number; pull: number } | undefined {
+    const player = sim.player;
+    const level = cold.coldOf(sim.focus);
+    let going = warming.get(sim.focus) ?? false;
+    if (!going && level >= COLD_GO) {
+        going = true;
+    } else if (going && level <= COLD_DONE) {
+        going = false;
+    }
+    warming.set(sim.focus, going);
+    if (!going) {
+        return undefined;
+    }
+    let best: { x: number; y: number; pull: number } | undefined;
+    let bestD = Infinity;
+    for (const brazier of cold.braziers) {
+        // An out one costs a relight: count it further off
+        const lit = cold.isLit(brazier, sim.tick);
+        const walk = walkTiles(sim, brazier.midX, brazier.midY);
+        if (walk === undefined) {
+            continue;
+        }
+        const d = walk + (lit ? 0 : 10);
+        if (d < bestD) {
+            bestD = d;
+            // Beside it, not into it
+            const dx = player.x - brazier.midX;
+            const dy = player.y - brazier.midY;
+            const len = Math.hypot(dx, dy) || 1;
+            best = {
+                x: brazier.midX + (dx / len) * 1.8,
+                y: brazier.midY + (dy / len) * 1.8,
+                // Harder the colder it is: a melee bot otherwise fights on until it freezes
+                pull: 3.5 + Math.max(0, level - COLD_GO) / 8,
+            };
+        }
+    }
+    return best;
 }
 
 // A push away from the burning scenery round the bot (MapDef.burns), the nearer the more, and
@@ -489,6 +792,28 @@ function slide(sim: Sim, move: { x: number; y: number }, look: number): { x: num
     return move;
 }
 
+// How far round itself a boss swings at whoever's close (a round swing it uses only within its
+// own reach, as the Whisperer's lash), if a weapon reaching this far can hit it from outside that
+function closeSwing(boss: Enemy, phaseIndex: number, reach: number): number | undefined {
+    let close: number | undefined;
+    for (const attack of boss.def.boss?.attacks ?? []) {
+        const radius = attack.radius ?? 0;
+        if (
+            attack.kind === "swing" &&
+            attack.weight > 0 &&
+            !attack.line &&
+            attack.cone === undefined &&
+            !attack.cover &&
+            attack.range <= radius &&
+            radius + 1 < reach &&
+            (!attack.phases || attack.phases.includes(phaseIndex + 1))
+        ) {
+            close = Math.max(close ?? 0, radius);
+        }
+    }
+    return close;
+}
+
 // A phased boss's fight, as a careful person plays it, or undefined outside one. With DODGE it
 // also keeps out of any boss's ground marks that hurt and makes for a closing ring's way out,
 // phased or not.
@@ -550,6 +875,12 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         return { x: (x - player.x) / length, y: (y - player.y) / length };
     };
     if (dodges) {
+        // A fight of two worlds (the Awakened Whisperer's): her souls in the realm first, and
+        // nothing to step out of for a blow the realm's out of (her screech)
+        const realm = realmMove(sim);
+        if (realm) {
+            return realm;
+        }
         // A sandstorm over the room but at a boss's feet (BossAttackDef.outside): in to it first
         const storm = shelter(sim);
         if (storm) {
@@ -590,10 +921,10 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // that's into the square's edge
         const windup = state.windup;
         const square = sim.map.bossArena;
-        // Phosani's and Zachariah's fights (one-fight maps, not the quest's) are read as they
-        // always were: bullets before a lunge, no orbs of their own, and the near side of a strip
-        // whatever the square says (their squares are smaller than the floor they're fought on)
-        const older = sim.map.fight !== undefined && !sim.map.stages;
+        // Phosani's and Zachariah's fights are read as they always were: bullets before a lunge, no
+        // orbs of their own, and the near side of a strip whatever the square says (their squares
+        // are smaller than the floor they're fought on). Later fights get everything below.
+        const older = sim.map.id === "phosani" || sim.map.id === "zachariah";
         const room = older ? () => true : inSquare(sim);
         const across = (x: number, y: number, dirX: number, dirY: number, half: number) =>
             stripStep(sim, x, y, dirX, dirY, half, room);
@@ -606,6 +937,14 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         const lunge = lungeStep(sim, boss, room);
         if (lunge) {
             return lunge;
+        }
+        // A fanned wave (the Awakened Duke's spit): to where none of its lines reach
+        const fan =
+            windup?.attack.wave && !windup.from && (windup.attack.count ?? 1) > 1 && !older
+                ? fanStep(sim, boss, windup, room)
+                : undefined;
+        if (fan) {
+            return fan;
         }
         if (windup && (windup.attack.wave || windup.attack.boomerang)) {
             const half = windup.attack.radius ?? 0.35;
@@ -649,7 +988,7 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // Off sparks about to land under it, in a fight in parts (Static, a lattice, a trail of
         // its own steps), or a rift still open, before anything that keeps it moving round the
         // boss: to the nearest spot clear of them all
-        if (sim.map.stages) {
+        if (sim.map.stages || sim.ability?.kindle) {
             const step = offMarks(sim, room);
             if (step) {
                 return step;
@@ -658,7 +997,12 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // Out of a swing's reach round the boss, and off where a blast's to land, as it winds up:
         // what anyone steps out of
         // (not Phosani's or Zachariah's: older, above)
-        if (!older && windup?.attack.kind === "swing") {
+        if (
+            !older &&
+            windup?.attack.kind === "swing" &&
+            windup.attack.world === undefined &&
+            !windup.attack.cover
+        ) {
             const reach = (windup.attack.radius ?? 2) + player.radius + 0.5;
             const dx = player.x - boss.x;
             const dy = player.y - boss.y;
@@ -696,6 +1040,7 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         }
         // Out of the boss's sight behind a pillar, as it gazes (BossAttackDef.cover): the nearest
         // spot within reach that's hidden from it
+        // (and debris, which hides as a pillar does: Sim.coverPillars)
         const pillars = sim.coverPillars(boss);
         if (state.windup?.attack.cover && pillars && pillars.length > 0) {
             let best: { x: number; y: number } | undefined;
@@ -769,6 +1114,16 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
             }
         }
     }
+    // A fight under the cold with a button that lights braziers (the Awakened Duke's): its own read
+    const kindle = dodges ? kindleMove(sim, boss) : undefined;
+    if (kindle) {
+        return kindle;
+    }
+    // A fight in the dark with a button that stuns (the Awakened Leviathan's): its own read
+    const dark = dodges ? darkFightMove(sim, boss) : undefined;
+    if (dark) {
+        return dark;
+    }
     // A less careful person: now and then backs off and loses reach
     if (sloppy && (sim.tick / TICKS_PER_SECOND) % SLOPPY_EVERY < SLOPPY_LAPSE) {
         const away = towards(boss.x, boss.y);
@@ -781,10 +1136,20 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     if (punish) {
         return punish;
     }
-    // A weapon that reaches only so far (MapDef.fight.strikeReach): back in reach of him
+    // A weapon that reaches only so far (MapDef.fight.strikeReach): back in reach of him, and out
+    // of what he swings all round him if it reaches past that (the Whisperer's lash), as a person
+    // who's learned it keeps to the ring between
     const reach = sim.map.fight?.strikeReach;
-    if (reach !== undefined && Math.hypot(boss.x - player.x, boss.y - player.y) > reach - 1.5) {
-        return towards(boss.x, boss.y);
+    if (reach !== undefined) {
+        const away = Math.hypot(boss.x - player.x, boss.y - player.y);
+        const close = closeSwing(boss, phase.index, reach);
+        if (close !== undefined && away < close + player.radius + 0.5) {
+            const to = towards(boss.x, boss.y);
+            return { x: -to.x, y: -to.y };
+        }
+        if (away > reach - (close !== undefined ? 0.75 : 1.5)) {
+            return towards(boss.x, boss.y);
+        }
     }
     // A fight in parts: back from the square's edges before they're a corner to be caught in,
     // away from the boss as it goes, as a person keeps room to step either way
@@ -1467,7 +1832,7 @@ function prepareLair(sim: Sim): Lair | undefined {
     return lair;
 }
 
-function runOnce(characterId: string, seed: number) {
+function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOptions) {
     const sim = new Sim({
         grid,
         characterId,
@@ -1483,8 +1848,14 @@ function runOnce(characterId: string, seed: number) {
         expert,
         armoury,
         invocations,
+        pet,
+        relics,
+        remixes,
         // A fight in parts (MapDef.stages): which, STAGE=0 for the first
         stage: parseInt(process.env.STAGE ?? "0"),
+        gauntlet,
+        ...invasionOptions,
+        awakened,
     });
     // Another weapon to start with, to compare weapons on one character
     if (process.env.WEAPON) {
@@ -1503,20 +1874,33 @@ function runOnce(characterId: string, seed: number) {
     let lastX = sim.player.x;
     let lastY = sim.player.y;
     let move = { x: 0, y: 0 };
+    // The moves decided and not yet taken (REACT), and the one being taken
+    const reacting: { tick: number; move: { x: number; y: number } }[] = [];
+    let taken = move;
     let chests = 0;
     let powerUps = 0;
     const started = new Set<string>();
     const finished = new Set<string>();
     const recentHits: { tick: number; event: SimEvent }[] = [];
+    const invasionLog: { from?: number; down?: number } = {};
     const startTime = performance.now();
     if (fresh && finalBoss) {
         sim.startIntro(getEnemy(finalBoss), "finalBoss");
     }
     let fightTicks = 0;
-    // A boss's finale (its last stand), counted on its own, not in its last phase
-    let finaleTicks = 0;
     // Ticks stood on roots (MapDef.rule)
     let rootTicks = 0;
+    // A map of two worlds' (RealmRule): times into the realm, thrown back out of sanity, and ticks
+    // there
+    let dives = 0;
+    let lapses = 0;
+    let realmTicks = 0;
+    // Under the cold (ColdRule): times frozen solid, and ticks at 50 or over
+    let freezes = 0;
+    let coldTicks = 0;
+    dimTicks = 0;
+    // A boss's finale (its last stand), counted on its own, not in its last phase
+    let finaleTicks = 0;
     // The lair it's going for
     const lair = prepareLair(sim);
     let lairWoken = false;
@@ -1645,10 +2029,28 @@ function runOnce(characterId: string, seed: number) {
         if (smites) {
             pressButton(sim, sloppy);
         }
-        const pressed = uncursed(sim, move);
+        if (reacting[reacting.length - 1]?.move !== move) {
+            reacting.push({ tick: sim.tick + reactTicks, move });
+        }
+        while (reacting.length > 0 && reacting[0].tick <= sim.tick) {
+            taken = reacting.shift()!.move;
+        }
+        const pressed = uncursed(sim, taken);
         sim.step(pressed.x, pressed.y);
         if (sim.rule?.hurtsAt(sim.player.x, sim.player.y)) {
             rootTicks++;
+        }
+        if (sim.realm?.layer === 1) {
+            realmTicks++;
+        }
+        if (sim.cold && sim.cold.coldOf(sim.focus) >= 50) {
+            coldTicks++;
+        }
+        if (sim.lighting?.player) {
+            const own = sim.lights.find((l) => l.kind === "player" && l.id === sim.focus);
+            if (own && own.radius < sim.lighting.player.radius - 0.5) {
+                dimTicks++;
+            }
         }
         for (const enemy of sim.enemies) {
             const state = enemy.bossState;
@@ -1701,10 +2103,24 @@ function runOnce(characterId: string, seed: number) {
             }
         }
         for (const event of sim.takeEvents()) {
+            // An invader's coming and going (INVADE)
+            if (event.type === "bossSpawned" && event.enemyId.startsWith("invading_")) {
+                invasionLog.from = sim.seconds;
+            } else if (event.type === "kill" && event.enemyId.startsWith("invading_")) {
+                invasionLog.down = sim.seconds;
+            }
             if (event.type === "playerHit") {
                 recentHits.push({ tick: sim.tick, event });
             } else if (event.type === "powerUp") {
                 powerUps++;
+            } else if (event.type === "frozenSolid") {
+                freezes++;
+            } else if (event.type === "worldTurned") {
+                if (event.layer === 1) {
+                    dives++;
+                } else if (event.lapse) {
+                    lapses++;
+                }
             } else if (event.type === "bossAbsorbBlast") {
                 absorbed.push(event.absorbed);
             } else if (event.type === "bossGuard" && event.cause.endsWith(" (broken)")) {
@@ -1735,8 +2151,17 @@ function runOnce(characterId: string, seed: number) {
                     `coins ${String(sim.coins).padStart(4)}  ${weapons} | ${passives} | ${gear}` +
                     // How much of the ground's rooted (MapDef.rule), and how long the bot's spent
                     // on it
-                    (sim.rule instanceof RootRule
-                        ? `  roots ${Math.round(sim.rule.cover * 100)}% (on ${Math.round((100 * rootTicks) / Math.max(1, sim.tick))}%)`
+                    (sim.roots
+                        ? `  roots ${Math.round(sim.roots.cover * 100)}% (on ${Math.round((100 * rootTicks) / Math.max(1, sim.tick))}%)`
+                        : "") +
+                    (sim.realm
+                        ? `  realm ${dives} dives, ${lapses} lapses, ${Math.round((100 * realmTicks) / Math.max(1, sim.tick))}% there`
+                        : "") +
+                    (sim.cold
+                        ? `  cold ${Math.round(sim.cold.coldOf(sim.focus))}, ${freezes} frozen, ${Math.round((100 * coldTicks) / Math.max(1, sim.tick))}% over 50`
+                        : "") +
+                    (sim.litTargetsOnly
+                        ? `  dark ${Math.round((100 * dimTicks) / Math.max(1, sim.tick))}% dimmed`
                         : ""),
             );
             if (endless) {
@@ -1864,8 +2289,38 @@ function runOnce(characterId: string, seed: number) {
             (endless ? `round ${result.round}, ` : "") +
             `level ${result.level}, ${result.kills} kills, ${result.coins} coins, ${chests} caskets, ` +
             `${powerUps} power-ups, stuck ${Math.round(pinnedTicks / TICKS_PER_SECOND)}s ` +
+            (sim.realm
+                ? `realm ${dives} dives ${lapses} lapses ${sim.realm.realmCaskets} caskets ` +
+                  `${Math.round((100 * realmTicks) / Math.max(1, sim.tick))}% `
+                : "") +
+            (sim.cold
+                ? `cold ${freezes} frozen ${Math.round((100 * coldTicks) / Math.max(1, sim.tick))}% over 50 `
+                : "") +
+            (sim.litTargetsOnly
+                ? `dark ${Math.round((100 * dimTicks) / Math.max(1, sim.tick))}% dimmed `
+                : "") +
             `(${(ms / sim.tick).toFixed(3)}ms per tick)`,
     );
+    if (sim.invasion) {
+        const { invader, at } = sim.invasion;
+        console.log(
+            `  invasion: ${invader.id} due ${formatClock(at)}, ` +
+                (invasionLog.from === undefined
+                    ? "never came"
+                    : `came ${formatClock(invasionLog.from)}, ` +
+                      (invasionLog.down !== undefined
+                          ? `down ${formatClock(invasionLog.down)} (${Math.round(invasionLog.down - invasionLog.from)}s)`
+                          : "still up")),
+        );
+    }
+    if (result.awakened) {
+        console.log(
+            `  awakened: ${result.awakened.seen ? "came" : "never came"}` +
+                (result.awakened.casketCoins !== undefined
+                    ? `, master casket ${result.awakened.casketCoins} coins`
+                    : ""),
+        );
+    }
     return result;
 }
 
@@ -1891,7 +2346,10 @@ function runParty(characterId: string, seed: number) {
             metaStats,
             unlockedItems,
             armoury,
+            pet,
+            relics,
         })),
+        remixes,
     });
     const maxTicks = (endless ? 90 * 60 : runSeconds()) * TICKS_PER_SECOND;
     const moves = sim.heroes.map(() => ({ x: 0, y: 0 }));
@@ -1987,14 +2445,99 @@ function runParty(characterId: string, seed: number) {
     );
 }
 
-for (const characterId of characters) {
-    for (let seed = 1; seed <= seeds; seed++) {
-        if (partySize > 1) {
-            runParty(characterId, seed);
+// The Forgotten Four (GAUNTLET=1, content/gauntlet.ts), on core/gauntlet.ts as the game runs it:
+// the four fights in ORDER (fight map ids, comma separated; the act's by default), each as its
+// adventurer, wounds carried, the camp's blessing bought by gauntletBlessing, and a fight lost
+// retried up to RETRIES times (3 by default) before the run's given up. Each seed is one run;
+// each try of a fight plays on its own seed.
+function runGauntlet(seed: number): void {
+    const order = process.env.ORDER ? process.env.ORDER.split(",") : [...GAUNTLET_FIGHTS];
+    const retries = parseInt(process.env.RETRIES ?? "3");
+    let run = startGauntlet(order, hard);
+    const bought: string[] = [];
+    while (run.phase === "fight") {
+        useMap(gauntletFightId(run));
+        const options = gauntletFightOptions(run);
+        const character = map.fight!.character;
+        const trySeed = seed * 1000 + run.index * 10 + run.tries;
+        console.log(
+            `\ngauntlet seed ${seed}, fight ${run.index + 1} ${map.id} as ${character}, try ` +
+                `${run.tries + 1}: climb x${options.climb}, starts at ` +
+                `${Math.round(options.hp * 100)}% hp, blessing ${options.blessing ?? "none"}`,
+        );
+        const result = runOnce(character, trySeed, options);
+        const end = result.gauntlet!;
+        if (!result.victory) {
+            run = loseGauntletFight(run);
+            if (run.tries >= retries) {
+                break;
+            }
+            run = retryGauntletFight(run);
             continue;
         }
-        console.log(`\n${characterId} seed ${seed}`);
-        runOnce(characterId, seed);
+        run = winGauntletFight(run, {
+            seconds: result.seconds,
+            hp: end.hp,
+            maxHp: end.maxHp,
+            damageTaken: result.stats.damageTaken,
+            guardDowns: end.guardDowns,
+        });
+        const done = run.done[run.done.length - 1];
+        console.log(
+            `  won in ${formatClock(done.seconds)}: ${done.points.total} points ` +
+                `(speed ${done.points.speed}, safe ${done.points.safe}, guard ${done.points.guard}), ` +
+                `left at ${Math.round(end.hp)}/${end.maxHp} hp -> wounds ${Math.round(done.wound * 100)}%`,
+        );
+        if (run.phase === "camp") {
+            const blessing = gauntletBlessing(run);
+            if (blessing) {
+                run = chooseBlessing(run, blessing);
+                bought.push(blessing);
+            }
+            console.log(
+                `  camp: ${run.points} points left, bought ${blessing ?? "nothing"}, next starts at ` +
+                    `${Math.round((1 - run.wound) * 100)}% hp`,
+            );
+            run = leaveGauntletCamp(run);
+        }
+    }
+    const cleared = run.phase === "cleared";
+    console.log(
+        `gauntlet seed ${seed}: ${cleared ? (isGauntletClean(run) ? "CLEARED clean" : "CLEARED with retries") : `stopped at fight ${run.index + 1} (${gauntletFightId(run)})`}, ` +
+            `${run.done.length}/4 won, ${gauntletRetries(run)} retries, fight time ${formatClock(gauntletSeconds(run))}, ` +
+            `order ${order.join(" ")}, blessings ${bought.join(" ") || "none"}, ` +
+            `fights ${run.done.map((d) => `${d.fightId.replace("awakened_", "")} ${formatClock(d.seconds).trim()} r${d.retries}`).join(", ")}`,
+    );
+}
+
+// The camp's pick, as a careful player might: Rest when the wounds are a tenth or more, else the
+// dearest blessing the points run to (BLESS=best: never Rest, so the wounds carry; BLESS=none)
+function gauntletBlessing(run: GauntletRun): BlessingId | undefined {
+    const rest = BLESSING_BY_ID.get("rest")!;
+    if (process.env.BLESS === "none") {
+        return undefined;
+    }
+    if (process.env.BLESS !== "best" && run.wound >= 0.1 && run.points >= rest.price) {
+        return "rest";
+    }
+    const affordable = BLESSINGS.filter((b) => b.id !== "rest" && b.price <= run.points);
+    return affordable.sort((a, b) => b.price - a.price)[0]?.id;
+}
+
+if (process.env.GAUNTLET === "1") {
+    for (let seed = firstSeed; seed < firstSeed + seeds; seed++) {
+        runGauntlet(seed);
+    }
+} else {
+    for (const characterId of characters) {
+        for (let seed = firstSeed; seed < firstSeed + seeds; seed++) {
+            if (partySize > 1) {
+                runParty(characterId, seed);
+                continue;
+            }
+            console.log(`\n${characterId} seed ${seed}`);
+            runOnce(characterId, seed);
+        }
     }
 }
 if (setsStarted.size > 0) {

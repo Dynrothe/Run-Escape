@@ -7,6 +7,110 @@ the version in the corner).
 
 ### Added
 
+- Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
+  maps to play in any order, each harder the more of the others you've beaten: the Stranglewood,
+  the Lassar Undercity, Ghorrock and the Scar.
+- Invocations on every map from the Desert on and on Act II's maps: opt-in handicaps picked on
+  the map's card, each worth points that add to the run's coins, with badges for wins at 100, 200
+  and 300 points. Hard mode there is a preset of four of them, and plays as it always has.
+- Relics: once Act II is open, four slots on the adventurer screen, a tier opened for each Act II
+  map beaten. One relic a tier stays picked from run to run, on Act I and Act II maps.
+- The Stranglewood: the Strangled, their boars, lynxes and bears in the real wood round
+  Vardorvis's arena, with Kasonde, a great Strangled Bear and Vardorvis himself. Roots creep in
+  from the wood, slowing and hurting you: cut them back with your hits, and kill the root hearts
+  that make them grow. With its own music, Strangled and Blood Rush.
+- The Forester, for beating the Stranglewood: a bronze 2h sword, and Timber!, a tree felled along
+  the ground every 25 kills. Beating Vardorvis also finds the Executioner's axe head.
+- Awakened Vardorvis, Act II's first Awakened fight, on the Bosses tab once the Stranglewood's
+  beaten: you play the Forester in his clearing, with Chop, a button that hits hard and clears
+  the roots round you. Make his dart miss, or run it into a pillar, and cut down his captors
+  before they heal him.
+- The Lassar Undercity: crawling hands, ghosts, leeches and ancient guardians in the real sunken
+  city, with the Shadow Keeper, the Forsaken Assassin and the Whisperer. Black puddles open into
+  the Shadow Realm, the real one, drawn in the city's place: walk in and your party follows, the
+  city waits, and the realm's shadows come with double bones and coins. Your sanity drains there:
+  catch three lost souls to open the way back before it runs out. With its own music, The Fallen
+  Empire and Song of the Silent Choir.
+- The Shadow walker, for beating the Lassar Undercity: Shadow Burst, and Step between, a big hit
+  dodged into the shadows every 30 seconds. And the Treasure hunter, for opening 5 caskets in the
+  Shadow Realm in one run: her caskets left on the ground bury themselves and come up a tier
+  better. Beating the Whisperer also finds the Siren's staff.
+- Ghorrock: ice warriors, spiders, wolves, icefiends and giants in the frozen yard of Ghorrock
+  Prison, with Ketla the Unworthy, Jhallan and Duke Sucellus, who wakes in the prison's mouth and
+  freezes whatever his gaze finds: hide behind the yard's statues. The cold rises all the time,
+  slowing you and then your weapons, and at its worst freezes you solid. Stay by the braziers and
+  relight them as they burn down; kill the pyrefiends for their embers; fire weapons warm you.
+  Gas vents puff, and the pools are ice you slide on. With its own music, Prison Break and Eye
+  See You.
+- The Snow ranger, for beating Ghorrock: a shortbow, and Shatter, every fourth hit chilling, and
+  what's killed chilled or frozen bursting into shards. On ice she never slides, and the cold
+  gets to her slower. Beating Duke Sucellus also finds the Eye of the Duke.
+- The Scar: imps, leeches, abyssal walkers and antibodies, the Scar's demons and hellhounds in the
+  dark of the Leviathan's lair, the real Scar with its sea drained to the flesh under it. There's
+  a light round you, and your weapons only aim at what's lit, so bring the light to them: pick up
+  lanterns, kill light leeches for the light they leave where they die, and fight by the fires.
+  Abyssal leeches dim your light. The Scarred black demon roars your light down to almost
+  nothing, Persten the Deceitful lights false lanterns that burst (they have no beam), and the
+  Leviathan rises in its pool, its orbs breaking on the debris its roars bring down. In its last
+  third only its pathfinder's circle of light is left: hit harder inside it, get hurt more out of
+  it. With its own music, Scar Tissue and Colossus of the Deep.
+- The Lantern-bearer, for beating the Scar: Fire Strike, and Lantern, enemies close to her taking
+  20% more and slowed; where it's dark, her light's twice the size. Beating the Leviathan also
+  finds the Leviathan's lure.
+- Remixes: beating an Act II map puts its rule on every first-campaign map, switched on from the
+  map's card: Overgrown (roots creep in), Shadow (puddles into the Shadow Realm), Frozen (the
+  cold, with braziers and ice) and Dark (darkness, weapons only aim at what's lit). Any of them
+  can be on at once, all four is "Fallen", and each set has its own records on the card. They
+  pay +30% coins for one and +25% for each more, take invocations on every map, and once all
+  four Act II maps are beaten they go on each other's maps too.
+- The Soulreaper axe, for melee adventurers, once you've found all four of its pieces from Act
+  II's final bosses: kills near you give it souls, each a harder hit, and at five its next swing
+  is a Harvest, a spin all round you that costs you a few hitpoints.
+- Butch, Awakened Vardorvis's pet, the first pet that fights: take him along and every few
+  seconds he leaps on an enemy near you, hitting everything round where he lands.
+- The Awakened Whisperer, Act II's second Awakened fight, on the Bosses tab once the Lassar
+  Undercity's beaten: you play the Shadow walker on her island, with Blackstone, a button that
+  turns you between the city and the Shadow Realm. She can only be hurt in the city; her Soul
+  Siphon can only be stopped in the realm, where your sanity drains. Leave her screech behind in
+  the city, and catch every soul of a siphon to break it.
+- The Wisp, the Awakened Whisperer's pet: take it along and it calls the bones and coins near you
+  to you, and now and then sends you a lost soul that heals you.
+- The Awakened Duke Sucellus, Act II's third Awakened fight, on the Bosses tab once Ghorrock's
+  beaten: you play the Snow ranger in his room in Ghorrock Prison, under the cold, with Kindle, a
+  button that lights the brazier beside you. His freezing gaze puts out every brazier it can see:
+  hide behind the statues, and relight the braziers by his alcove to burn him.
+- Baron, the Awakened Duke's pet: take him along and when a crowd closes round you he wakes and
+  spits his gas, slowing and poisoning what's in it.
+- The Awakened Leviathan, Act II's fourth Awakened fight, on the Bosses tab once the Scar's
+  beaten: you play the Lantern-bearer at its pool in the dark, with Shadow, a button that stuns it
+  from close by. Once its glow goes out only your own light finds it, so you fight within reach of
+  its tail; its torrent can only be hidden from behind debris, and the debris that hides you is
+  smashed; and at the last only the pathfinder's circle is lit.
+- Lil'viathan, the Awakened Leviathan's pet: take it along and every 20 seconds it blows a bubble
+  round you that takes the next hit and pops, knocking back what's near.
+- The Fallen Empire's ending: beat all four Awakened fights, in any order, and the act's story is
+  told. The act's middle card fills in as they fall, and tells it again once they're all down.
+- The Forgotten Four: once all four Awakened are beaten, fight them one after another, from the
+  act's middle card. Drag the four into your order first; each fight's boss is tougher and quicker
+  than the last's. Each is its own adventurer and kit, and a fifth of the hitpoints you lose
+  carries to the next. Between fights, a camp: the fight just won pays points for one blessing on
+  the next (Rest, Saradomin's blessing, Second wind, Ancient focus or Steady hands). Fall, and
+  retry that fight or start over. Your first clear gives two Awakener's orbs; your first clean
+  one, with no retries, makes the Soulreaper axe and the four fighting pets blood-touched, turns
+  the act's card gold and opens its hard mode. On your own for now.
+- Awakened invasions: once all four Act II maps are beaten, a run from the Desert on can be
+  invaded, between 6:00 and 12:00, by Vardorvis, the Whisperer, Duke Sucellus or the Leviathan
+  (1 in 4, 1 in 2 on hard). Each brings a pocket of its own map round where it comes, for as
+  long as it lives: roots creeping in, a puddle into the Whisperer's realm (she can only be hurt
+  there), a ring of cold, or a bubble of dark. Kill it for a master casket and a pile of coins;
+  the Collection log counts each.
+- Awakener's orbs: each Awakened win gives one. Spend one on a campaign map's card to awaken its
+  final boss for a run: 1.6 times its hitpoints, enraged from 75% and 20% faster, darker and
+  glowing violet. A win always opens a master casket and marks the map's card. Leave before the
+  boss comes and the orb's kept.
+- The weekly Vault, on the act's middle card once all four Awakened are beaten: one run a week,
+  the same for everyone (a map, its remixes, three invocations and an adventurer, from the week),
+  with your best time and kills kept for each week. A party can play it from the host's room.
 - The Wardrobe, on the title screen: pick your body, hair, beard and colours, and dress every
   adventurer slot by slot. Its store sells nearly three thousand outfit pieces for coins, from
   bronze helms to partyhats, and you can try each one on first. Your unlocked adventurers' own
@@ -19,17 +123,15 @@ the version in the corner).
   choose a blessing of Saradomin at each level instead of items. Slay Yama's two generals, Xarth
   on the Grand Exchange and K'ril Tsutsaroth in the church, and the palace opens for Yama himself.
 
-### Fixed
-
-- The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
-  that heal you for half the damage they deal.
-- An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
-  lands.
-- On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
-  the pause menu.
-  
 ### Changed
 
+- The map screen's Campaign tab is now Act I, with Act II beside it, and the seasonal maps are on
+  the Fun tab, under the fun maps.
+- Act II is harder: its first map is now tougher than the Inferno, and each step after it too.
+- The Stranglewood's ruined town has its walls back: low walls round its huts' yards and its
+  tents' lower walls, still light enough for a phone.
+- A run's coin bonuses (hard mode, Act II's steps, invocations) add together now, up to +300%,
+  rather than multiplying.
 - Right clicking in the game no longer opens the browser's menu.
 - Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
   a whole hitpoint at a time.
@@ -39,6 +141,16 @@ the version in the corner).
   Their stabs still count as melee for style bonuses like Chivalry and the rings.
 - Gear from a casket, by Jp66600: a table sets each of its stats beside the piece you're wearing,
   with the difference, and both pieces' set bonuses show.
+
+### Fixed
+
+- Black squares in the Stranglewood's town, where cellar entries and dark floor were left behind.
+- The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
+  that heal you for half the damage they deal.
+- An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
+  lands.
+- On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
+  the pause menu.
 
 ## 0.31.1 - 2026-11-12
 

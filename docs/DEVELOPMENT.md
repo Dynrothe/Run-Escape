@@ -1030,7 +1030,11 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       that way: the camera moves north only as far as keeps the boss and its overhead prayer below
       the boss bar, and not at all for a boss more than `RAID_LEAN_MAX` tiles' lean off
       (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
-      strike to its targets within that reach, and the boss bar says when it's out of it.
+      strike to its targets within that reach, and the boss bar says when it's out of it. An aura
+      ignores it: there it's only the ring, the boss bar's "Out of reach!" and the bot's spacing,
+      so keep it the aura's radius. `MapDef.fight.stats` adds to the fight's adventurer's stats
+      (the Awakened Whisperer's: `auraArea`, Shadow Burst wider, to reach her from outside her
+      lash).
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
       it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`)
       (`dropGuard`: `BossState.exposedEnd`, every hit doubled in `damageEnemy`, a reach-limited
@@ -1062,6 +1066,36 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       (`abilityBosses`): one with its guard down first, then the nearer (`abilityTarget`).
       `guide` has the button coach (the Tombs' and their quest's): a hint early in a fight, until
       it's first used, and a pulsing ring with a tag while the guard's down.
+    - A fight on a map of two worlds (the Awakened Whisperer's, `MapDef.rule` a `RealmRuleDef`
+      with no souls of its own, `souls.count` 0, so no portal): `FightAbilityDef.turn`
+      (Blackstone) turns the party at the rule's turn of the tick (`fireTurn`, then
+      `turnWithAbility` from `stepRule`), every hero's button waiting its cooldown, and coming out
+      into the city it hits the boss in reach (`abilityTarget`). `EnemyDef.hurtIn` keeps a boss
+      of both worlds out of reach in the other (`damageEnemy` shows it blocked); `caughtIn`
+      catches a soul only in one world; `BossAttackDef.world` is begun only while the party's in
+      that world and finds no one once it's gone into the other (with `opens`, the guard drops);
+      `BossDef.siphon` stuns the boss when the last of its siphon's souls (`siphonLeft`, both
+      worlds) is caught with none of them reaching it (`siphonSoulGone`, `BossState.siphonLost`).
+    - A fight under the cold (the Awakened Duke's, `MapDef.rule` a `ColdRuleDef` with
+      `braziers.stayLit`, so they don't all go out as the boss is up from the start):
+      `FightAbilityDef.kindle` (Kindle) is taken only beside a brazier (`kindleBrazier`), lights it
+      at once for its full burn (`ColdRule.kindle`), and one that was out or guttering, within
+      `flare` of the boss, hits it (`fireKindle`). `BossAttackDef.rule.snuff` on a `cover` swing
+      puts out every lit brazier the boss can see (`ColdRule.snuffSeen`, `behindPillar` from where
+      it gazes), and `rule.chills` adds cold to whoever it hits (`bossHit`). The camera can lean
+      a set share of the way to a boss, up to a set distance (`BossLookDef.lean` as an object),
+      to frame one that never moves at the end of a small room.
+    - A fight in the dark on another map's ground (the Awakened Leviathan's, on the Scar's recipe
+      through `MapRecipe.fights`, with its own `lighting`): `ArenaFeatures.wreckage` stands as
+      debris from the start and never goes (`Sim.debris` entries with `wreck`; `glows` ones are
+      fires, drawn unlit and lit by the map's `lights`, and neither block nor hide). A `cover`
+      swing reads the debris and the wreck as pillars too (`Sim.coverPillars`, each
+      `DEBRIS_COVER` across), and with `smashes` the debris (not the wreck) that hid someone goes
+      as it lands (`smashDebris`); `coverWash` gives its windup a wash of its own for the shadows to
+      show against. `FightAbilityDef.stun` stuns the boss it lands on (`dropGuard`, its
+      `stunGrace` holding). `EnemyDef.light.phases` puts a boss's own light out in its other
+      phases (`lightInPhase` in `stepLights`), so only what the players carry lights it then, and
+      `BossLookDef.darkGlow` draws a faint glow on it meanwhile that weapons don't aim by.
     - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
       till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
       its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
@@ -1684,9 +1718,32 @@ cache by `scaperune/maps/wardensFloor.ts`, its script in `content/wardensFloor.t
 ### Pets
 
 A pet (`content/pets.ts`) is a trophy with a follower NPC, taken along as `SaveData.pet`. The sim
-never sees one: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
+never sees where one is: `client/PetFollowers.ts` walks each player's pet on the sim's ticks, from
 `GameClient.update`, and `GameView` only draws it (on the menus, `GameClient.submitActors` stands
-it beside the character). So a pet can't change a run, and co-op's copies agree without it.
+it beside the character). So a looks-only pet can't change a run, and co-op's copies agree without
+it.
+
+- **Fighting pets** (`PetDef.power`, Act II's Awakened fights' pets, Butch first) are the
+  exception. The pet's id goes in as `SimOptions.pet` (solo) or `HeroOptions.pet` (each co-op
+  player's, from their `Loadout.pet`, kept only if the game has that pet), and `Sim.stepPets`
+  plays its power on the sim's ticks for that hero: Butch's leap onto the nearest enemy within
+  `reach` every `every` seconds, a cleave where he lands scaled as power-ups' damage is
+  (`pet:butch` in `damageBySource`). It emits `petLeap`, and `PetFollowers.leap` flies the
+  follower there and walks it back. Not on a boss fight map (`MapDef.fight`). A run with a
+  looks-only pet or none plays as before (`Vardorvis.test.ts`). The bot takes one with `PET=butch`.
+  The Wisp's power is a `call` (`Sim.stepCallingPet`): every `every` seconds the bones and coins
+  within `reach` of its hero are set `attracted` (as a magnet does), and every `soul` seconds that
+  its hero's hurt, a heal of `heal` of their hitpoints lands `travel` seconds later
+  (`Hero.petSoulTick`, `petSoulLands`), with the soul's glow on them. It emits nothing.
+  Baron's is `gas` (`Sim.stepGasPet`): once `crowd` enemies are within `reach` of its hero, a cloud
+  `size` tiles across lands round them for `seconds` (`Hero.petCloud`), slowing what's in it
+  (`Enemy.slowed`, `slowPace`) and poisoning it (`envenom`, `pet:baron`), the Duke's gas spot
+  animation kept up over it; then it sleeps `every` seconds. It emits `petGas`.
+  Lil'viathan's is `bubble`: every `every` seconds without one, a bubble round its hero
+  (`Hero.petBubble`, drawn as the Leviathan's magic orb round them by `GameView.drawPetBubble`).
+  The next enemy's hit on them (`damagePlayer`, after Step between) takes up to `share` of their
+  most hitpoints off it and pops it (`popBubble`), knocking back what's within `push` tiles as a
+  weapon's knockback does, and the wait starts again. It emits `petBubble`.
 
 - **Where it goes:** just behind its player as they're drawn, which for a co-op guest's own hero
   is the predicted pose (`view.localPlayerPose`), ahead of the sim. It keeps clear of thralls, walks
@@ -1706,6 +1763,18 @@ it beside the character). So a pet can't change a run, and co-op's copies agree 
   animations. The cache has two NPCs for each pet: `scripts/cache/find-npcs.ts` marks the one
   that's the follower (it's the one with the Metamorphosis option). The other one looks different
   for some pets.
+
+### An act's ending
+
+An act (`content/acts.ts`) can have an ending (`ActDef.ending`): a title and a few lines of story,
+told once every one of its slots' Awakened fights (`ActSlotDef.fightId`) is beaten, whichever was
+last (`isActEnded`). As a win is banked (`GameClient`, after `recordRun`), `takeActEnding` returns
+an act whose ending is due and marks it told in the save (`SaveData.actEndings`), and the store's
+`actEnding` puts `ActEndingModal` over whatever's up, a line at a time (a click shows the rest).
+Once the act's ended its middle card on the map screen says so and plays it again
+(`GameClient.showActEnding`); the card fills in a pet's icon for each Awakened fight beaten. The
+lines are in `world.json` (`act.<id>.ending.*`, from the extractor). What opens once the act's
+ended (the Forgotten Four gauntlet, build order step 15) goes by `isActEnded` too.
 
 ### The Wardrobe
 
@@ -1923,6 +1992,13 @@ colour added. So a pixel costs the same however many lights there are. `GameWebG
 changes the programs over as a run starts (the first time, it builds the lit set and the light
 map's texture; changing over loads the map squares again and remakes the actors' draw calls).
 
+**A pocket of the dark** (an invading Leviathan's, `Sim.darkPocket`): a run that'll have one is lit
+from the start (`POCKET_LIGHTING`, ambient 1), as the programs are picked as a run starts. The pocket
+is the light map's alpha (`LightMap.darken`), and `u_ambient.w` its ambient: with that over 0 the
+shader mixes from the map's ambient to the pocket's by the alpha, and only adds lights by it too, so
+out of the pocket the map's drawn exactly as unlit. The alpha's only in the light map's 64 tiles round
+the view, so a pocket further off than that would be drawn lit.
+
 **Drawn at full brightness** (`ActorDrawOptions.unlit`): projectiles, spot animations, power-ups and
 caskets on the ground, power-ups' effects, bosses' hazards and everything the boss fight's view draws
 (`ActorRenderer.unlitAtLeast`). A hit's flash shows too. The overlay (hitsplats, health bars,
@@ -1952,6 +2028,16 @@ windups, loot beams) was never lit.
   on a boss lights it while its guard's down (a core exposed).
 - **The scene getting darker**: `phases: [{ ... }, { ..., light: 0.1 }]` on a boss, or
   `sim.dimTo(0.1, 2)` and back with `sim.dimTo(sim.baseAmbient, 2)`.
+- **A player's light smaller for a while**: a `dim` effect (`PlayerEffectDef`), on an enemy's
+  `touches` or a boss attack's `effect`: `tiles` off it a dose, stacking to `stacks` (the Scar's
+  Abyssal leeches), or `to` a cap (its black demon's roar). It's shown with the debuffs
+  (`Debuff.light`), and a light's never under 1.5 tiles. The Lantern-bearer's trait
+  (`CharacterTraitDef` lantern) makes her own `light` times the size.
+- **One light and nothing else**: `onlyLight: { inside, outside }` on an enemy with a `light`.
+  While it's up `stepLights` makes only its light, so the players', the map's and what's left go
+  dark; hits from inside it do `inside` times, and a boss's hits on anyone out of it `outside`
+  times. With `circles: { radius, speed }` it goes round the final boss (the Leviathan's
+  pathfinder). A boss bigger than two tiles counts as lit by its edge, not its middle.
 
 `scaperune_dark` is a dark map with the rule, fires and lanterns; `scaperune_glow` is a map at its
 usual brightness with glowing scenery, a blue light of its own and the wizard's fire spells.
@@ -2061,6 +2147,8 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         map, FRESH=1 straight at it, SAFE_WAVES=1
                                                         with what a run earned, FLAT=1 with no
                                                         walls, DODGE=1 dodging a boss's attacks,
+                                                        REACT=0.25 each step that late, as a
+                                                        person reacts, FROM=101 from that seed,
                                                         PARTY=4 a co-op party of that adventurer;
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see

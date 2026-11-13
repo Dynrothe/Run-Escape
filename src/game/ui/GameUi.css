@@ -920,6 +920,13 @@
     color: #ffffff;
 }
 
+/* What a fighting pet does (PetDef.power), under its row */
+.ui-pet-power {
+    flex-basis: 100%;
+    color: #c8c8c8;
+    font-size: 0.85em;
+}
+
 .ui-pet-tiles {
     display: flex;
     flex-wrap: wrap;
@@ -1084,6 +1091,88 @@
 /* Not open yet: the whole act faded */
 .ui-act-closed {
     opacity: 0.6;
+}
+
+/* The act's Awakened fights on its middle card, each faded until it's fallen */
+.ui-act-awakened {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.ui-act-awakened-not {
+    opacity: 0.3;
+    filter: grayscale(1);
+}
+
+.ui-act-ending-again {
+    margin-left: 6px;
+    padding: 1px 8px;
+    font-size: 12px;
+}
+
+/* An act's ending, told a line at a time (ActEndingModal) */
+.ui-act-ending-modal {
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+/* Over whatever screen's up, so in the game's own type, as .ui-fill's is */
+.ui-act-ending {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-text);
+    text-shadow: 1px 1px 0 #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: min(560px, calc(92vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    overflow-y: auto;
+    text-align: center;
+}
+
+.ui-act-ending-act {
+    color: #b8aa8a;
+    font-size: 13px;
+}
+
+.ui-act-ending-title {
+    margin: 2px 0 6px;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 22px;
+    color: var(--ui-orange);
+}
+
+.ui-act-ending-icons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.ui-act-ending-line {
+    margin: 0 0 10px;
+    line-height: 1.35;
+    animation: ui-act-ending-in 1.2s ease-out;
+}
+
+@keyframes ui-act-ending-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-act-ending-line {
+        animation: none;
+    }
 }
 
 /* A tick for a map that's been beaten */
@@ -2442,6 +2531,64 @@
     transform-origin: left;
 }
 
+/* Sanity, under hitpoints on a map of two worlds: the Shadow Realm's violet */
+.ui-sanity {
+    position: relative;
+    width: min(280px, calc(60vw / var(--ui-scale)));
+    height: 12px;
+    margin-top: 2px;
+    background: #1a0f2a;
+    border: 2px solid #000;
+}
+
+.ui-sanity-fill {
+    height: 100%;
+    background: #8a6ad8;
+    transform-origin: left;
+}
+
+.ui-sanity span {
+    position: absolute;
+    inset: 0;
+    text-align: center;
+    font-size: 11px;
+    line-height: 12px;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* Cold (ColdRuleDef), under hitpoints: icy, frost creeping in from its edge as it fills */
+.ui-cold {
+    position: relative;
+    width: min(280px, calc(60vw / var(--ui-scale)));
+    height: 12px;
+    margin-top: 2px;
+    background: #0d1a26;
+    border: 2px solid #000;
+}
+
+.ui-cold-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6fb6e8, #d8f0ff);
+    transform-origin: left;
+}
+
+.ui-cold-high {
+    box-shadow:
+        inset 0 0 6px #e8f8ff,
+        0 0 6px #9fd8ff;
+}
+
+.ui-cold span {
+    position: absolute;
+    inset: 0;
+    text-align: center;
+    font-size: 11px;
+    line-height: 12px;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+}
+
 /* Poisoned: a sicker green, like the client's hitpoints orb */
 .ui-hp-poisoned {
     border-color: #2f5f00;
@@ -3430,6 +3577,125 @@
     gap: 4px;
 }
 
+/* A run's board (Invocations.tsx, RunInvocationBoard): Act II's invocations, then hard mode's row */
+.ui-invocations-groups {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ui-invocations-group-title {
+    color: #ff981f;
+    font-size: 13px;
+}
+
+.ui-invocation-locked {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* The badges at 100, 200 and 300 points: lit once a map's been beaten at as many */
+.ui-invocation-badges {
+    display: flex;
+    gap: 4px;
+}
+
+.ui-invocation-badge {
+    min-width: 30px;
+    padding: 0 3px;
+    border: 1px solid #4a4336;
+    background: rgba(0, 0, 0, 0.3);
+    color: #777777;
+    font-size: 12px;
+    text-align: center;
+}
+
+.ui-invocation-badge-on {
+    border-color: var(--ui-yellow);
+}
+
+.ui-invocation-badge-won {
+    border-color: #b08a3a;
+    background: rgba(176, 138, 58, 0.25);
+    color: var(--ui-yellow);
+}
+
+/* On a map's list card, beside its name */
+.ui-invocation-badge-small {
+    min-width: 0;
+    margin-left: auto;
+    font-size: 10px;
+    line-height: 13px;
+}
+
+.ui-invocation-record {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+}
+
+.ui-record-setup {
+    color: #c8c8c8;
+}
+
+/* The adventurer screen's relics (Relics.tsx): a slot a tier, as the pet's row */
+.ui-relic-row {
+    display: flex;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 4px 2px;
+}
+
+.ui-relic-slots {
+    display: flex;
+    gap: 4px;
+}
+
+.ui-relic-slot {
+    justify-content: center;
+    width: 36px;
+    height: 34px;
+    padding: 0;
+}
+
+.ui-relic-tier {
+    color: #888888;
+    font-size: 12px;
+}
+
+.ui-relic-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(460px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.ui-relic-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ui-relic-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    text-align: left;
+}
+
+.ui-relic-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 /* A phone: the reward potential goes under the icons */
 @media (max-width: 560px) {
     .ui-invocations-body {
@@ -3507,6 +3773,54 @@
     gap: 2px;
     margin-top: 6px;
     color: var(--ui-white);
+}
+
+/* Remixes on a map's card (content/remixes.ts): a switch for each, lit when it's on */
+.ui-remixes {
+    margin-top: 2px;
+}
+
+.ui-remix-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px 4px;
+}
+
+.ui-remix-label {
+    color: var(--ui-yellow, #ffff00);
+    margin-right: 2px;
+}
+
+.ui-remix {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 5px 1px 2px;
+    color: #9a9a9a;
+    font-size: 12px;
+}
+
+.ui-remix-on {
+    color: var(--ui-green);
+    border-color: var(--ui-green);
+}
+
+.ui-remix-locked {
+    opacity: 0.4;
+}
+
+.ui-remix-badge {
+    margin-left: 4px;
+    padding: 0 4px;
+    border: 1px solid #a08040;
+    color: #ffb000;
+    font-size: 11px;
+}
+
+.ui-remix-fallen {
+    border-color: #ffd700;
+    color: #ffd700;
 }
 
 /* A key that's a word ("Enter") beside a button's text */

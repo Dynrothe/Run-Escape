@@ -268,6 +268,7 @@ export class WebGLMapSquare {
         return new WebGLMapSquare(
             mapX,
             mapY,
+            mapPos,
 
             borderSize,
             tileRenderFlags,
@@ -323,6 +324,8 @@ export class WebGLMapSquare {
     constructor(
         readonly mapX: number,
         readonly mapY: number,
+        // Where it's drawn, the draw calls' u_mapPos: its own place, or a twin's (drawAt)
+        private readonly mapPos: vec2,
 
         readonly borderSize: number,
         readonly tileRenderFlags: Uint8Array[][],
@@ -379,6 +382,23 @@ export class WebGLMapSquare {
         this.id = getMapSquareId(mapX, mapY);
         this.npcDataTextureOffsets = new Array(NPC_DATA_TEXTURE_BUFFER_SIZE).fill(-1);
         this.boxVisible = new Uint8Array((cullBoxes?.length ?? 0) / FLOATS_PER_BOX);
+    }
+
+    // Drawn at another square's place (a twin's, MapManager.twin), its culling boxes with it
+    drawAt(mapX: number, mapY: number): void {
+        const dx = (mapX - this.mapPos[0]) * 64;
+        const dz = (mapY - this.mapPos[1]) * 64;
+        this.mapPos[0] = mapX;
+        this.mapPos[1] = mapY;
+        const boxes = this.cullBoxes;
+        if (boxes) {
+            for (let o = 0; o < boxes.length; o += FLOATS_PER_BOX) {
+                boxes[o] += dx;
+                boxes[o + 2] += dz;
+                boxes[o + 3] += dx;
+                boxes[o + 5] += dz;
+            }
+        }
     }
 
     updateBoxVisibility(frustum: Frustum): void {

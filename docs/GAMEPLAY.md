@@ -125,6 +125,10 @@ version and how to run it.
     | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                   |
     | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                     |
     | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                              |
+    | Shadow walker       | Magic       | Shadow Burst           | Step between (a trait, below)                     | Beating the Lassar Undercity                          |
+    | Treasure hunter     | Ranged      | Bronze throwing knives | Dig site (a trait, below)                         | Opening 5 caskets in the Shadow Realm in one run      |
+    | Snow ranger         | Ranged      | Shortbow               | Shatter (a trait, below)                          | Beating Ghorrock                                      |
+    | Lantern-bearer      | Magic       | Fire Strike            | Lantern (a trait, below)                          | Beating the Scar                                      |
     | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange            |
     | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock               |
     | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                             |
@@ -138,7 +142,18 @@ version and how to run it.
 - **Traits**: Act II's adventurers have a trait, a way to play, rather than a bonus. The
   **Forester**'s is **Timber!**: every 25 kills his next swing fells a Strangled Tree along the
   ground ahead of him, 8 tiles long, for four times the swing's damage, and his swings cut roots 2
-  tiles further out than they reach.
+  tiles further out than they reach. The **Shadow walker**'s is **Step between**: once every 30
+  seconds, a hit that would take over a fifth of her hitpoints takes her into the shadows instead,
+  a second and a half out of reach and 3 tiles on the way she faces; in the Lassar Undercity's
+  city it takes her (and her party) into the Shadow Realm. The **Treasure hunter**'s is **Dig
+  site**: a casket left on the ground buries itself after 3 seconds; walked over again from 20
+  seconds it's a tier better, and at 60 seconds it's lost. The **Snow ranger**'s is **Shatter**:
+  every fourth hit of hers chills what it hits for a second (at half its pace), and anything she
+  kills while it's chilled or frozen bursts, its shards hitting everything within 3 tiles for a
+  quarter of its hitpoints (a tenth of an elite's or a boss's). Under Ghorrock's cold she never
+  slides on ice, and her cold rises 40% slower. The **Lantern-bearer**'s is **Lantern**: enemies
+  within 3 tiles of her take 20% more from her hits and are 10% slower, and where it's dark her
+  light's twice the size.
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
   a Very rare one, offered in about one run in twenty, and Rare ones. A new weapon is always
@@ -194,20 +209,27 @@ version and how to run it.
   on hover what to do for it. Everything from Lumbridge, the Barrows and the Wilderness is there
   from the start.
 
-    | Map            | For beating it                                   | For its bosses                                                                                       |
-    | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
-    | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
-    | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
-    | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
-    | Varlamore      | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
-    | Morytania      | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
-    | God Wars       | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
-    | Prifddinas     | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
-    | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
-    | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
-    | Phosani's      |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
-    | Stranglewood   | The Forester, the Executioner's axe head         |                                                                                                      |
+    | Map                | For beating it                                   | For its bosses                                                                                       |
+    | ------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+    | Desert             | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
+    | Fremennik          | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
+    | Karamja            | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
+    | Kourend            | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
+    | Varlamore          | Dizana's quiver, Colossal blade, Thunder khopesh | Dual macuahuitl (Manticore), Blue moon spear (Shockwave Colossus), Eclipse atlatl (Javelin Colossus) |
+    | Morytania          | Ivandis flail                                    | Dragon claws (Pestilent Bloat)                                                                       |
+    | God Wars           | Godsword, Torva, Virtus and the Zaryte vambraces | Armadyl crossbow (Kree'arra)                                                                         |
+    | Prifddinas         | Crystal bow, Crystal armour                      | Crystal staff (surviving 10 minutes)                                                                 |
+    | Inferno            |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
+    | Hallowed Night     |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
+    | Phosani's          |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
+    | Stranglewood       | The Forester, the Executioner's axe head         |                                                                                                      |
+    | Lassar Undercity   | The Shadow walker, the Siren's staff             | The Treasure hunter (5 caskets opened in the Shadow Realm in one run)                                |
+    | Ghorrock           | The Snow ranger, the Eye of the Duke             |                                                                                                      |
+    | The Scar           | The Lantern-bearer, the Leviathan's lure         |                                                                                                      |
+    | Awakened Vardorvis | Butch                                            |                                                                                                      |
+    | Awakened Whisperer | The Wisp                                         |                                                                                                      |
+    | Awakened Duke      | Baron                                            |                                                                                                      |
+    | Awakened Leviathan | Lil'viathan                                      |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -322,16 +344,109 @@ version and how to run it.
   leaves him open. He never starts one while your gaze is too far from ready. Killing him wins
   the run, and dying to him ends it.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
-  Sands), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+  Sands, Awakened Vardorvis, the Awakened Whisperer, the Awakened Duke Sucellus, the Awakened Leviathan), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
+- **The Forgotten Four** (`content/gauntlet.ts`, `core/gauntlet.ts`): Act II's four Awakened
+  fights one after another, opened from the act's middle card once all four are beaten. The order
+  screen's four cards are dragged into order (or moved with their arrows or the arrow keys); the
+  first beaten comes first to start with. The bosses climb: hitpoints and tempo times 1, 1.05,
+  1.1 and 1.15 by place. Each fight is its own adventurer and kit, with no pets, items or relics,
+  and starts at full hitpoints less a fifth of what the last one ended down. Between fights a 45 s
+  camp (Ready to skip): the fight won pays points as a raid room does (50 for the win, up to 100
+  for speed within 2:00, none by 5:00, up to 50 for little damage, 5 a guard drop up to 50), spent
+  on one blessing for the next fight or kept: Rest (60, clears the wounds), Steady hands (80,
+  guard drops 0.5 s longer), Ancient focus (100, the button 25% quicker), Saradomin's blessing
+  (120, +20% hitpoints) and Second wind (150, once, falling leaves you at 30% and untouchable for
+  3 s). A fall offers Retry this fight (as it was come into) or Start over. Records are the fights'
+  time, camps left out, kept for each order, a clean clear (no retries) beating one with retries.
+  The first clear on each mode gives two Awakener's orbs (`SaveData.awakenerOrbs`); the first
+  clean one gives the blood-touched Soulreaper axe (the cache's ornamented axe, 33335) and
+  fighting pets (a red glow: the cache has no recolour of theirs), the act card's gold border and
+  the gauntlet's hard mode (each fight's own hard). The fights don't count as the fights' own wins
+  or drop anything. Solo only for now.
+- **Awakened invasions** (`content/invasions.ts`, `content/invaders.ts`, `core/rules/invasion.ts`):
+  once all four Act II maps are beaten, a campaign run from the Desert on (not endless) rolls by its
+  seed, 1 in 4 (1 in 2 on hard), for one of the four Act II final bosses to come as a mid-run boss
+  between 6:00 and 12:00, with 1.5 times the map's toughest mid-run boss's hitpoints. It brings a
+  pocket 24 tiles across round where it comes and keeps to it while it lives: Vardorvis's roots
+  creeping in from its edge (3-tile cells, no hearts), the Whisperer's realm through a puddle that
+  opens in it every 20 s (she can only be hurt in the realm), Duke Sucellus's cold rising in it
+  (1.5 times Ghorrock's, a ring of ice round its edge, thawing out of it), or the Leviathan's dark
+  (the Scar's, only in it; weapons aim only at what's lit in it). A rule a remix has on already
+  doesn't come; with all four on, nothing does. Each invader's kit leaves out its summons and what
+  needs its own map (the Duke's vents and gaze). Its kill drops a master casket and 100 to 200
+  coins, and counts on its Act II map's Collection log tab (`SaveData.invasions`).
+- **Awakener's orbs** (`SaveData.awakenerOrbs`, object 28334): each Awakened fight won gives one
+  (the gauntlet's first clears two, its fights none). On a campaign map's card (solo, not endless)
+  the orb's switch awakens its final boss for one run: 1.6 times its hitpoints, enraged from 75%,
+  its attacks and walk 20% quicker, tinted dark violet and glowing. The orb's spent once the boss
+  comes. Its fall opens a master casket (its coins the run's, its gear found for the Armoury), and
+  a win marks the map's tile with an orb (`SaveData.awakenedWins`).
+- **The weekly Vault** (`content/vault.ts`, `ui/Vault.tsx`): open once all four Awakened fights
+  are beaten, from the act's middle card. The ISO week in UTC (it turns Monday 00:00 UTC) is the
+  seed, which picks a campaign map from the Desert on, one or two remixes, three invocations (not
+  hard mode's) and an adventurer (lent, unlocked or not). No relics, never hard or endless, no
+  invasions or orbs; the shop's upgrades are the player's own. Its best each week is kept (a win
+  beats a fall, then the quicker win or the longer fall, then kills), for the last 12 weeks. A host
+  can make it the room's run: everyone plays the Vault's adventurer on its seed.
 - **Hard mode**: the switch beside Endless, open once you've beaten the map (from the start on fun
   maps). Enemies have more hitpoints and hit harder, more of them come at once, every elite is two,
   and bosses enrage at 65% of their hitpoints and attack 15% faster. How much tougher depends on the map: the early ones gain the most, as a player who's
   bought everything walks through them, and the late ones the least. Experience from bones is 10%
   lower, as the bigger crowd drops more, and coins are worth 25% more. It can be endless too, with
-  records of its own. A win counts as a win on the map, and turns its tick gold.
+  records of its own. A win counts as a win on the map, and turns its tick gold. From the Desert
+  on, and on Act II's maps, hard mode is a preset of four invocations (below) worth 180 points.
+- **Invocations**: on a map from the Desert on, and on Act II's maps, the Invocations button beside
+  Hard opens a board of opt-in handicaps, as the Tombs of Amascut's: Walk the Path (enemies 15%
+  faster, 10 points), Upset Stomach (no food drops, no Sandwich lady, 15), Overly Draining (no
+  rerolls or banishes, 10), Glass Cannon (half your hitpoints, 20), Hardcore (no Ring of life, and no
+  getting back up in co-op, 15), Feeling Special? (bosses enrage at 75%, 10), Aerial Assault (bosses'
+  patterns half as many bullets again, 15), Ancient Haste (the run's clock 25% faster, the final boss
+  at 12:00, 10) and Blood Moon (every boss a minute early, 15). Hard mode's four are a row of their
+  own that the Hard switch turns on together. Each point adds 1.5% to the run's coins (hard mode's
+  four pay its 25% between them); every coin bonus (invocations, hard mode, Act II's steps) adds
+  together, up to +300%. A map's card shows its best win at invocations, and badges for winning at
+  100, 200 and 300 points. In co-op the host's invocations count. Boss fights, raids and the
+  gauntlet don't take them (their Hard is their own).
+- **Relics**: once Act II is open, a row of four slots on the adventurer screen. Each Act II map
+  beaten opens the next tier, and one relic a tier stays picked across runs: tier 1 Endless Harvest
+  (bones within 10 tiles fly to you every 20 s), Production Prodigy (caskets never stop the run:
+  better gear's worn, the rest alched for 25% more) or Trickster (every 15 s the next hit misses);
+  tier 2 Globetrotter (power-ups 20% more often, and they wait twice as long), Banker's Note (coins
+  come to you from anywhere) or Fairy's Flight (10% faster, and every 10 s walking into a crowd
+  throws it aside); tier 3 Bloodthirsty (every 50 kills heal 5%), Specialist (a weapon slot fewer,
+  weapons hit 25% harder) or Grimoire (start with a second weapon, a Common of your class); tier 4
+  Last Recall (once a run, falling takes you back to the start with half your hitpoints and stuns
+  what's there) or Reloaded (twice a run, keep a level up's offer and take it at a later level up).
+  They're on campaign and Act II maps, each player's own in co-op, and off in boss fights, raids and
+  the Tombs. A win with a relic on counts, but sets no hard-mode record; records show the relics
+  they were set with.
+- **Remixes**: beating an Act II map opens its rule on every first-campaign map, a switch for each
+  on the map's card (under its records): Overgrown (the Stranglewood's roots, creeping in from
+  blocked ground), Shadow (Lassar's puddles into the Shadow Realm, drawn as the map darker and
+  washed violet), Frozen (Ghorrock's cold, six braziers and pools of ice placed by the run's seed
+  round the start, no vents) and Dark (the Scar's dark, with fires placed by the seed, lanterns
+  and light leeches for light). Any can be on at once; all four is Fallen. Each rule is gentler
+  on the earlier maps: 0.7 of its Act II strength on Lumbridge, up to all of it on the Inferno.
+  Each brings its Act II map's enemies, a quarter of the crowd between them, and a few elites
+  (Strangled Bears, pyrefiends, light leeches). Paired, they mind each other: roots don't grow on
+  ice and embers burn them, the realm has no roots or braziers and its cold rises half as fast
+  again, braziers and embers are lights in the dark, and your light's smaller in the realm. +30%
+  coins for one, +25% for each more. A remixed map takes invocations whatever map it is. Each set
+  of remixes on each map keeps its own records (wins, the best time, wins on hard, the best
+  endless round), relic-free: a win with a relic on counts as a win of the map but no remix
+  record; and a remixed win sets none of the map's hard, act or invocation records. The card
+  shows the badge for the most remixes beaten at once there. Once all four Act II maps are beaten
+  they take each other's remixes (not their own). In co-op the host's remixes count.
+- **The Soulreaper axe**: a Rare melee weapon, offered only to melee adventurers, once all four of
+  its pieces are found (one from each Act II final boss, the first time its map's beaten). A sweep
+  ahead, 42 damage every 1.9 s. Kills within 4 tiles give it souls, up to 5 (circling your head),
+  each +8% to its hits. At 5, the next swing with anything in reach is a Harvest: a spin 3.5
+  tiles round for three times a swing's damage (+20% a level after the first), bosses and elites
+  hit twice, costing 8% of your max hitpoints (never below 1, and not while you're under 20%).
+  At level 5 each kill it makes heals 1, up to what it cost.
 - **Late endless caskets**: past fifteen minutes in any endless run, fun maps included, a casket that
   would drop only has a 25% chance to, and only 25 can lie on the ground at once. A round's master
   casket skips the chance but not the limit. Past the limit you get "You have a funny feeling there
@@ -403,8 +518,18 @@ version and how to run it.
 - **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, Lil' Zik from
   Verzik with its looks from expert clears, and the Dark squirrel from Justiciar Zachariah) can be
   taken along, picked under the adventurers. It
-  follows just behind you, keeping clear of your thralls, on every map. It's only for looks, and
-  in co-op the party sees each other's.
+  follows just behind you, keeping clear of your thralls, on every map. Most are only for looks,
+  and in co-op the party sees each other's. **Butch**, from Awakened Vardorvis, fights: every 6
+  seconds, with an enemy within 5 tiles of you, he leaps on the nearest and hits everything round
+  where he lands (a tile and a half), about what a power-up does, growing as the enemies do. **The
+  Wisp**, from the Awakened Whisperer, calls the bones and coins within 8 tiles of you to you every
+  10 seconds, and once a minute that you're hurt sends you a lost soul that heals 5% of your
+  hitpoints as it reaches you. **Baron**, from the Awakened Duke Sucellus, naps beside you: when 6
+  or more enemies are within 3 tiles of you he wakes and spits the Duke's gas round you, a 3 by 3
+  cloud for 4 seconds that slows what's in it by 45% and poisons it, then sleeps for 15 seconds.
+  **Lil'viathan**, from the Awakened Leviathan, blows a bubble round you every 20 seconds that takes
+  the next enemy's hit, up to a quarter of your hitpoints, and pops, knocking back what's within
+  2.5 tiles. Not in boss fights, where your kit is the whole run.
 - **Random events** come every two or three minutes, the first between 1:30 and 2:30, and never the
   same one twice in a row. Most are someone appearing 7 to 11 tiles away, with an orange beam, a
   minimap dot and an arrow if they're off screen. They wait 30 seconds, blinking for the last 5, and
@@ -471,6 +596,25 @@ version and how to run it.
       round its edge and in thickets. The Strangled, Strangled Boars from 2:00, Strangled Lynxes
       from 4:00 that rush the last few tiles, and the Strangled Bear, an elite that leaves roots
       behind it. Played by its **roots** (below).
+    - **The Lassar Undercity** (Act II, open once the Inferno's beaten): the real sunken city
+      under Ice Mountain, its streets cleared of clutter so there's room to fight, round the
+      drowned middle where the Whisperer's cathedral stands on its island. Crawling hands,
+      Wighted Leeches from 2:00 whose bite drains a while, Ghosts from 4:00 that go through walls,
+      and Ancient Guardians, slow and hard, which are its elites too. Played by its **Shadow
+      Realm** (below).
+    - **Ghorrock** (Act II, open once the Inferno's beaten): the frozen yard of Ghorrock Prison,
+      built for the game (the prison itself is cells and corridors), under the cliff the prison's
+      cut into, with its Heavy Door, its flags, cages, iron maidens and dead, frozen pools and gas
+      vents. Ice warriors, Ice spiders from 2:00, Icefiends from 3:00 whose hits chill you, Ice
+      wolves from 4:00 and Ice giants, slow and heavy, from 5:00; Pyrefiends and from 8:00 the
+      Flaming pyrelord are its fire elites. Played by its **cold** (below).
+    - **The Scar** (Act II, open once the Inferno's beaten): the Leviathan's lair, the real Scar
+      with its sea of sludge drained to the flesh under it, the sludge left in pools and along its
+      shore, the brain's ridges west and the Abyssal Rift's island north-west, nerves, brain
+      matter and broken boats over the floor. Scarred imps, Abyssal leeches from 1:00 whose hits
+      dim your light, Abyssal walkers from 3:00, slow and tough, Scarred lesser demons from 4:00,
+      Scarred hellhounds from 6:00, and Abyssal antibodies swarming late on; Scarred greater
+      demons are its elites. Light leeches wander among them. Played in **the dark** (below).
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
@@ -507,15 +651,44 @@ version and how to run it.
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
       can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark squirrel, a
       pet, 1 time in 10, and every time on hard mode.
-- **Act II, the Fallen Empire**: not out yet. Until it is (`ActDef.released`), its tab, the
-  Stranglewood, the Forester and the Executioner's axe head are hidden and the map stays locked;
-  the dev server shows them with `?devtools`. A tab of the map screen beside Bosses, opened by
-  beating the Inferno. Its four maps (the Stranglewood now; the Lassar Undercity, Ghorrock and the Scar shown as
-  coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
-  a step harder for every other Act II map you've beaten: step 0 is a little past the Inferno
-  (enemies 3.9 times the hitpoints, 2.8 times the damage), up to step 3 (4.35 and 3.1), and each
+    - **Awakened Vardorvis** (a boss fight, open once the Stranglewood's beaten: Act II's first
+      Awakened fight): nothing but him, in his clearing in the Stranglewood, the fight kept to the
+      square round his ring of pillars. No waves, no picks, no items: you play the Forester with
+      his 2h sword at its top level and **Chop**. He rises in the clearing's middle with you south
+      of him, to Blood Rush. It can't be endless; it has a hard mode once it's beaten. Beating him
+      finds **Butch**, his pet, every time.
+    - **The Awakened Whisperer** (a boss fight, open once the Lassar Undercity's beaten: Act II's
+      second Awakened fight): nothing but her, on her island before the drowned cathedral, the
+      fight kept to the square round her spot, in both the city and its Shadow Realm. No waves, no
+      picks, no items: you play the Shadow walker with Shadow Burst at its top level (30% wider
+      there) and **Blackstone**. Too close to her and her tentacles lash all round her; the burst
+      and Blackstone reach past that. She rises on the island with you south of her, to Song of
+      the Silent Choir.
+      It can't be endless; it has a hard mode once it's beaten. Beating her finds **the Wisp**, her
+      pet, every time.
+    - **The Awakened Duke Sucellus** (a boss fight, open once Ghorrock's beaten: Act II's third
+      Awakened fight): nothing but him, in his room in Ghorrock Prison (the real room, widened to
+      his alcove's width), under Ghorrock's cold. No waves, no picks, no items: you play the Snow
+      ranger with her shortbow at its top level and **Kindle**. He wakes in his alcove with you
+      south of him, to Eye See You. It can't be endless; it has a hard mode once it's beaten.
+      Beating him finds **Baron**, his pet, every time.
+    - **The Awakened Leviathan** (a boss fight, open once the Scar's beaten: Act II's fourth
+      Awakened fight): nothing but it, in its pool on the Scar's own ground, in the dark. No waves,
+      no picks, no items: you play the Lantern-bearer with Fire spells at their top level and
+      **Shadow**. It rises with you south of its pool, to Colossus of the Deep. It can't be endless;
+      it has a hard mode once it's beaten. Beating it finds **Lil'viathan**, its pet, every time.
+- **Act II, the Fallen Empire**: not out yet. Until it is (`ActDef.released`), its tab and what
+  it brings in (its maps, the adventurers they unlock, their Collection log tab) are hidden and its
+  maps stay locked; the dev server shows them with `?devtools`. A tab of the map screen beside
+  Act I, opened by beating the Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
+  played in any order, each a normal fifteen-minute run with a rule of its own. Each is
+  a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno
+  (enemies 4.2 times the hitpoints, 2.9 times the damage), up to step 3 (4.65 and 3.2), and each
   step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
-  step it was won at, and an easier one shows its step until it's beaten at a harder one.
+  step it was won at, and an easier one shows its step until it's beaten at a harder one. The
+  middle card fills in with each Awakened fight beaten, and when the fourth falls, whichever it
+  is, **the act's ending** is told, a few lines over the results; from then the card says the
+  act's done and tells it again.
 - **Roots** (the Stranglewood's rule): from 0:30, roots creep in from the wood, a few fronts at a
   time, quicker as the run goes on (every 3 seconds at first, every 1.8 by 12:00). A patch about to
   take root has roots creeping in towards it for a second and a half first; then they take it. On
@@ -527,6 +700,41 @@ version and how to run it.
   twice as fast, and killing it clears 7 tiles round it, where nothing grows for 40 seconds, and
   drops an elite casket. The clearing where the run starts is never taken. Left alone the roots
   close in on it; roots don't block, so you're never stuck, only slowed and hurt.
+- **The Shadow Realm** (the Lassar Undercity's rule): from 1:30, every minute a black puddle opens
+  8 to 12 tiles from you for 15 seconds, blinking its last 3. Walk into it and a second and a half
+  later the whole party is pulled into the Shadow Realm, the cache's own twin of the city, drawn
+  darker and violet. The city waits as it was while you're away: its crowd stands still, and its
+  elites and rings wait for you to come back (its bosses don't). In the realm its Shadows come,
+  Shadow Keepers later on, and Tentacles rise near you now and then and lash out; bones and coins
+  are worth double and caskets are half as likely again. Your **sanity** (the bar under your
+  hitpoints) drains 4 a second there and 5 more for each hit, and refills 10 a second in the city;
+  below 30 the screen's edges close in. Catch the three **lost souls** (walk into them; they run)
+  and an Anima Portal opens where the last was caught for 5 seconds: stand in it a moment to go
+  back, or let it close and the souls come again. At no sanity you're thrown back with a quarter of
+  your hitpoints gone, and whatever was lying on the realm's ground is lost. In co-op each player's
+  sanity is their own; the first whose runs out takes the party back.
+- **The cold** (Ghorrock's rule): each player's **cold** (the bar under your hitpoints) rises 2 a
+  second, 5 on ice or in a vent's gas. From 50 you're 15% slower and tinted pale; from 80 30%
+  slower and your weapons 15% slower; at 100 you're frozen solid in an ice block for a second and
+  a half, losing a tenth of your hitpoints, and it drops back to 70. Within 3.5 tiles of a lit
+  **brazier** (six round the yard) it falls 15 a second. Each burns 40 seconds, its fire dying
+  down over the last 10, then goes out: stand beside one for a second and a half to light it
+  again (one guttering too), or kill a **fire elite** within 6 tiles of it. A fire elite leaves
+  **embers** where it falls for 12 seconds: within 2 tiles the cold falls 20 a second, but
+  standing on them burns. Every hit of a fire weapon (Fire spells, Flames of Zamorak, Burning
+  claws, Toktz-mej-tal) takes 0.4 off. Eight **gas vents** puff in turn, each every 7 seconds for
+  a second and a half after a second's warning, hurting 2% of your hitpoints every 0.6 seconds in
+  the cloud. The **pools** are ice: you slide on them. In co-op the braziers are the party's and
+  each player's cold their own.
+- **The dark** (the Scar's rule): everything's drawn dark but a light of 5 tiles round each
+  player, the nine fires (3 tiles each) and what else gives off light, and your weapons only aim
+  at what's in a light (half a tile of grace); their shots carry on and hit whatever they meet.
+  The minimap only shows what's lit, and faint arrows show what's coming at you out of the dark.
+  **Lanterns** are a power-up (two lie by the start): 4 tiles more light for 30 seconds,
+  shrinking back over the last 5. **Light leeches** wander off from you with a light of their
+  own; killed, their light (4 tiles) stays where they fell for 20 seconds. An **Abyssal leech**'s
+  hit takes a tile off your light for 8 seconds, up to three at once. In co-op each player has
+  their own light, and anyone's light is everyone's to aim by.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
@@ -666,6 +874,32 @@ version and how to run it.
       dart and the vines that burst round where it lands, and the roots you left uncut within 8
       tiles of you erupting. At a third of his hitpoints his head tears free and shoots at you.
       He drops the Executioner's axe head the first time.
+    - **The Lassar Undercity**: the **Shadow Keeper** at 5:00, who drags the party into the Shadow
+      Realm as he comes and stays there (he has to be killed in his world: thrown back, you meet
+      him again on your next dive), grasping, bursting shadow and calling shadows in; **the
+      Forsaken Assassin** at 10:00, who goes between the worlds with you, stabs, fades and darts in
+      out of the other world, a shadow on the ground first; at 15:00 **the Whisperer** rises in
+      her cathedral, in both worlds: three-shot volleys, a cross of tentacles bursting up round you
+      and shadow bursts, and at 80%, 55% and 30% she pulls everyone into the realm and siphons its
+      souls, six coming to her and each that reaches her healing her: catch them first. She drops
+      the Siren's staff the first time.
+    - **Ghorrock**: **Ketla the Unworthy** at 5:00, snuffing every brazier she passes, grasping,
+      throwing frost and calling icefiends in; **Jhallan** at 10:00, slow and never giving up,
+      clawing and pouncing, whose shadows step out of the cold at half his hitpoints; at 15:00
+      **Duke Sucellus** wakes in the prison's mouth, never moving, and every brazier goes out. His
+      slam up close, icicles falling round you, his spit from range, gas spat at you that sets the
+      vent nearest it puffing, and his **freezing gaze**: the yard lights up and the statues in
+      front of him cast shadows; anyone not in one when it lands is hit hard and frozen. He drops
+      the Eye of the Duke the first time.
+    - **The Scar**: the **Scarred black demon** at 5:00, clawing and breathing fire, whose roar
+      snuffs the light of everyone near it down to 2 tiles for 6 seconds; **Persten the
+      Deceitful** at 10:00, burning, who lights false lanterns round you: they've no beam, and
+      they burst when they're walked into. At 15:00 **the Leviathan** rises in its pool and never
+      leaves it: volleys of orbs, ranged, magic and melee, and after each a roar and debris falling
+      round you. The debris stays a while, and its orbs break on it: get behind it. Up close, its
+      tail. At a third of its hitpoints the dark takes every light but the **Abyssal
+      pathfinder**'s, going round its pool: inside it you hit half again as hard, out of it its
+      hits hurt twice as much. It drops the Leviathan's lure the first time.
     - **Hallowed Night**: **Slash Bash**, whose disease stacks up to four times and whose bile leaves
       pools for 7 seconds, and **The Mimic**, which lies on the map as a master casket until you walk
       onto it or 25 seconds pass, then bites, flings candy that brings its Third Age minions, and
@@ -771,6 +1005,76 @@ version and how to run it.
       guard's down; a press a moment early is held till it can go off. His lightning hurts only within the
       swirl on each cell, and never him, and the knights' swords fly right across the court. A boss fight has no
       items, so no item bar, and its results have Retry.
+    - **Awakened Vardorvis**: the man of the Stranglewood, awakened, quick and close. Three
+      phases on his hitpoints, each a bar of its own (kneeling a moment at 70% and 35%). His
+      **Strike** is a wedge in front of him; his **Dart**, a strip two wide and eight long that
+      carries him down it and roots the ground he crosses, with a ring of **bleeding vines**
+      bursting round where you stood; his **Swinging axes** come in from two of the square's
+      corners at where you stood, across and back. From the second phase his **Strangle**, a
+      tendril along the ground that drags whoever it catches to his feet and holds them for two
+      blows, and **the roots rise**: the roots round you erupt. At 35% his head tears free and
+      shoots from the clearing's edge (it can be cut down), and he darts twice in a row. A dart or a
+      strangle that misses leaves his guard down for two seconds (double damage); a dart into one
+      of his pillars sticks him there, stunned (not again for 8 s). The **roots** close in from the
+      square's edge from the start, quicker over three minutes, and from 0:40 a **blood captor**
+      comes up at their front every 30 seconds (two at most) and heals him while it stands.
+      **Chop**, the fight's button (Space, a controller's A, or the round button on a touch screen),
+      brings the sword down overhead: a heavy blow on him from within 3 tiles (4 with his guard
+      down, and doubled), the same on a captor or his head in reach, and it clears the roots
+      within 3 tiles of you whether he's there or not, every four seconds.
+    - **The Awakened Whisperer**: the siren of the Shadow Realm, awakened. Three phases on her
+      hitpoints, each a bar of its own (sinking a moment at 65% and 30%). Her **Volley** is three
+      shots fanned along where you stood as she began (five when she's drowned); her
+      **Tentacles** burst in a cross round where you stood (twice in a row, drowned); her
+      **Shadow burst** lands where you stood. From the second phase her **Screech** hits the
+      whole city wherever you are in it, after a long breath: only the realm's out of it, and when
+      it finds no one her guard's down for three seconds (double damage). She can only be hurt in
+      the city; in the realm she's there and attacking, but out of reach, the realm's tentacles
+      rise near you every few seconds, and your **sanity** drains (faster than in the map, and a
+      hit takes more): at none you're thrown back with a fifth of your hitpoints gone. Once a
+      phase (at 82%, 48% and 14%) she **siphons**: six to eight souls drift in to her, and each
+      that reaches her heals her (no higher than the top of her phase). They're in the realm: you
+      see them from the city, but can catch them (walk into them) only there. Catch every one of a
+      siphon and it breaks: she reels, stunned for three and a half seconds. **Blackstone**, the
+      fight's button, turns the whole party between the city and the realm, every three seconds
+      (everything in the air or on the ground is gone as the world turns); coming out into the
+      city within 3 tiles of her (4 with her guard down), its shock hits her, doubled with her
+      guard down.
+    - **The Awakened Duke Sucellus**: the prisoner of Ghorrock, awakened, never moving from his
+      alcove. Three phases on his hitpoints, each a bar of its own (a roar at 60% and 25%). His
+      **Slam** hits round him when you're near; his **Icicles** fall in a ring round where you
+      stood and on it (twice in a row, awakened); his **Spit** is three ice breaths along lines
+      fanned at where you stood as he began (five, awakened); his **Gas** lands where you stood
+      and sets the vent nearest it puffing. From the second phase his **Freezing gaze** (it opens
+      each phase, and comes more often in the last) sees the whole room: behind one of the
+      prison's statues it can't find you, and finding no one his guard's down for three seconds
+      (double damage); in the open it freezes you for two seconds and chills you. Every lit
+      brazier it sees goes out: the two by his alcove are always in his sight, the two in the
+      south corners behind statues. The cold is the map's, faster: it rises three a second (the
+      Snow ranger's 40% slower), only the four braziers hold it off, and at 100 you're frozen
+      solid. The nine vents in the floor puff in turn. **Kindle**, the fight's button, lights the
+      brazier beside you at once for its full burn, every six seconds; one that was out or dying,
+      lit by his alcove, flares into him for a heavy blow (doubled with his guard down).
+    - **The Awakened Leviathan**: the Scar's sleeper, awakened, never leaving its pool. Three
+      phases on its hitpoints, each a bar of its own (a roar at 65% and 30%). The fight's in the
+      dark: your light is half the Scar's (the Lantern-bearer's 5 tiles), two fires burn in the
+      wreck round its pool, and your spells only aim at what's lit. Its **orbs** come by style:
+      ranged, three along lines fanned at where you stood as it began; magic, two slow ones that
+      turn after you; melee, one heavy one straight at you. After each volley **debris** falls
+      round you (its shadow first): it stays 14 seconds, ten at most, and its orbs break on it.
+      Close to its pool its **Tail** sweeps 7 tiles round it. In the first phase it glows and can be
+      hit from anywhere. From the second its glow is out (the dark phase): only your own light finds
+      it, so you fight within reach of its tail; debris falls on its own every few seconds, its
+      **Leeches** come for your light (each a tile off it), and its **Torrent** sweeps everything it
+      can see: behind debris, or the wreck of broken boats and pillars round the pool, it can't find
+      you, and finding no one its guard's down for three seconds (double damage). The debris that
+      hid you is smashed; the wreck stands. In its last phase the **Abyssal pathfinder** goes round
+      it, the only light there is: in it your hits do half as much again, out of it its hits do
+      double, and the abyss's **Lightning** strikes where you stand every couple of seconds.
+      **Shadow**, the fight's button, every 15 seconds, within 6.5 tiles of its middle (inside its
+      tail's sweep): a shadow spell that stuns it for three seconds, whatever it was winding up
+      lost (a torrent too), its guard down and its back lit. Not again within four seconds of a
+      stun: then only its guard drops.
     - **The Theatre of Blood**: the **Maiden of Sugadinti**, the **Pestilent Bloat** (who only
       really takes damage while he's down), **Nylocas Vasilias**, **Sotetseg** and his maze,
       **Xarpus** and his acid, and **Verzik Vitur** in her three forms, each a bullet hell in its

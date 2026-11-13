@@ -4,6 +4,7 @@ import { FloorEffect, LightLook, LightingDef } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { EFFECT_BURN, EFFECT_ICE } from "../core/floorLayout";
 import { gazeOccluders } from "../core/gazeSight";
+import { POCKET_DARK } from "../core/rules/invasion";
 import type { CinematicLight } from "./CinematicView";
 import { GazeShade } from "./GazeLight";
 import { LightBudget, lightKey } from "./LightBudget";
@@ -15,6 +16,9 @@ import type { PlayerPose } from "./PlayerPose";
 // the map's, enemies') are what weapons aim by; the rest are only drawn and never touch the sim:
 // glowing scenery, spells and effects (SPOT_LIGHTS), a floor's tiles (FLOOR_LIGHTS), bosses'
 // windups and marks, and a boss's exposed core. Flicker and pulse are drawn only, too.
+
+// Tiles at a dark pocket's edge over which it fades into the day
+const POCKET_EDGE = 2.5;
 
 // What kind of thing a light's from, for its key (lightKey)
 const KIND_PLAYER = 1;
@@ -48,6 +52,10 @@ export const GLOW_LOC_STRIDE = 3;
 export type LightTarget = {
     setAmbient(level: number, color: number): void;
     beginLights(x: number, y: number): void;
+    // A pocket of the dark (an invading Leviathan's): its ambient (0 none), and where it is, once
+    // the lights have begun
+    setDarkPocket(level: number): void;
+    darken(x: number, y: number, radius: number, edge: number, amount: number): void;
     addLight(
         x: number,
         z: number,
@@ -202,10 +210,19 @@ export class SceneLights {
                 });
             }
             const exposed = enemy.def.boss?.look?.exposedLight;
+            const dark = enemy.def.boss?.look?.darkGlow;
+            const phases = enemy.def.light?.phases;
+            const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
+            const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
             if (exposed && sim.isExposed(enemy)) {
-                const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
-                const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
                 this.offer(lightKey(KIND_EXPOSED, enemy.uid), x, y, exposed.radius, exposed);
+            } else if (
+                dark &&
+                phases &&
+                !phases.includes((enemy.bossState?.phase?.index ?? 0) + 1)
+            ) {
+                // Its own light's out: faintly seen all the same (BossLookDef.darkGlow)
+                this.offer(lightKey(KIND_EXPOSED, enemy.uid), x, y, dark.radius, dark);
             }
         }
         // The Wardens: the obelisk flickering open, pyramids about to hit, the enrage's
@@ -268,6 +285,12 @@ export class SceneLights {
         });
 
         target.beginLights(px, py);
+        const pocket = sim.darkPocket;
+        const dark = pocket ? sim.darkPocketAt(tick) : 0;
+        target.setDarkPocket(dark > 0 ? POCKET_DARK.ambient : 0);
+        if (pocket && dark > 0) {
+            target.darken(pocket.x, pocket.y, pocket.radius, POCKET_EDGE, dark);
+        }
         budget.end(px, py, deltaSeconds, (x, y, radius, r, g, b) => {
             target.addLight(x, y, radius, r, g, b);
         });

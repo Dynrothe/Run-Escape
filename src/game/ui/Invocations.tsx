@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
+import { formatTime } from "../client/GameView";
 import {
+    COIN_BONUS_CAP,
+    HARD_PRESET,
     INVOCATIONS,
+    INVOCATION_BADGES,
     INVOCATION_BY_ID,
     INVOCATION_GROUPS,
     MAX_INVOCATION_PRESETS,
@@ -11,12 +15,22 @@ import {
     MAX_RAID_LEVEL,
     OFF_SPRITE,
     RAID_BAND_SPRITES,
+    RUN_INVOCATIONS,
+    RUN_SET,
+    RunInvocationDef,
     TOMBS_UNIQUES,
+    getInvocationCoins,
+    getInvocationPoints,
     getRaidBand,
     getRaidLevel,
     getRaidLevelScale,
+    invocationDescription,
+    invocationName,
     presetName,
 } from "../content/invocations";
+import { getMap, mapName } from "../content/maps";
+import { isHardUnlocked } from "../core/save";
+import { t } from "../i18n";
 import { ItemIcon } from "./ItemIcon";
 import { useMenuKeys } from "./menuKeys";
 import { useDialog } from "./useDialog";
@@ -345,6 +359,209 @@ export function InvocationPresets({
                     All {MAX_INVOCATION_PRESETS} are used: delete one, or save over one by its name.
                 </span>
             )}
+        </div>
+    );
+}
+
+// ---- A run's invocations (content/invocations.ts, RUN_SET) ----
+
+// On a map from the Desert on: the points the card's invocations come to (hard mode's preset with
+// them when the Hard switch is on), and the way to the board
+// A co-op room's board goes by its map and its Hard (room)
+type RoomSetup = { mapId: string; hard: boolean };
+
+export function RunInvocationsButton({
+    ui,
+    room,
+    onOpen,
+}: {
+    ui: UiSnapshot;
+    room?: RoomSetup;
+    onOpen: () => void;
+}): JSX.Element {
+    const points = getInvocationPoints(runBoardOn(ui, room));
+    return (
+        <button className="ui-button ui-invocations-button" onClick={onOpen}>
+            {t("ui.invocations.title")}
+            <span className="ui-invocations-level">{t("ui.invocations.points", { points })}</span>
+        </button>
+    );
+}
+
+// What's on the run's board: the card's picks, and hard mode's preset while the Hard switch is on
+// (and open)
+function runBoardOn(ui: UiSnapshot, room?: RoomSetup): string[] {
+    const hard = room ? room.hard : ui.hard && isHardUnlocked(ui.save, ui.mapId);
+    return [...(ui.save.runInvocations ?? []), ...(hard ? HARD_PRESET : [])];
+}
+
+// The run's board, as the Tombs' is: each invocation's icon lit while it's on, what one does below
+// it, and beside it the points, the coins they add and the badges they're worth. Hard mode's four
+// are a row of their own, which the Hard switch turns on and off together.
+export function RunInvocationBoard({
+    ui,
+    client,
+    room,
+    onClose,
+}: {
+    ui: UiSnapshot;
+    client: GameClient;
+    room?: RoomSetup;
+    onClose: () => void;
+}): JSX.Element {
+    const mapId = room?.mapId ?? ui.mapId;
+    const map = getMap(mapId);
+    const on = runBoardOn(ui, room);
+    const points = getInvocationPoints(on);
+    const coins = Math.round(Math.min(COIN_BONUS_CAP, getInvocationCoins(on)) * 100);
+    const hardOpen = isHardUnlocked(ui.save, mapId);
+    const best = ui.save.invocationBest?.[mapId];
+    const [shown, setShown] = useState<string>();
+    const pointed = shown === undefined ? undefined : RUN_SET.byId.get(shown);
+    const readOnly = useRef(false);
+    const touch = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    const icon = (invocation: RunInvocationDef) => {
+        const picked = on.includes(invocation.id);
+        const locked = invocation.hard && !hardOpen;
+        const name = invocationName(invocation);
+        return (
+            <button
+                key={invocation.id}
+                className={
+                    "ui-invocation" +
+                    (picked ? " ui-invocation-on" : "") +
+                    (locked ? " ui-invocation-locked" : "")
+                }
+                aria-label={name}
+                aria-pressed={picked}
+                title={name}
+                onMouseEnter={() => setShown(invocation.id)}
+                onFocus={() => setShown(invocation.id)}
+                onPointerDown={(e) => {
+                    readOnly.current = e.pointerType === "touch" && shown !== invocation.id;
+                }}
+                onClick={() => {
+                    const read = readOnly.current;
+                    readOnly.current = false;
+                    setShown(invocation.id);
+                    if (!read && !locked) {
+                        client.toggleRunInvocation(invocation.id);
+                    }
+                }}
+            >
+                <ItemIcon
+                    objId={-1}
+                    spriteId={picked ? invocation.icon : invocation.icon + OFF_SPRITE}
+                    size={36}
+                />
+            </button>
+        );
+    };
+    return (
+        <div className="ui-modal">
+            <div className="ui-panel rs-border rs-background ui-invocations">
+                <h2 className="ui-invocations-title">{t("ui.invocations.title")}</h2>
+                <div className="ui-invocations-scroll">
+                    <div className="ui-invocations-body">
+                        <div
+                            className="ui-invocations-groups"
+                            onMouseLeave={() => setShown(undefined)}
+                        >
+                            <div className="ui-invocations-grid">
+                                {RUN_INVOCATIONS.filter((i) => !i.hard).map(icon)}
+                            </div>
+                            <div className="ui-invocations-group-title">
+                                {hardOpen
+                                    ? t("ui.invocations.hard_group")
+                                    : t("ui.hard.tooltip.locked", { map: mapName(map) })}
+                            </div>
+                            <div className="ui-invocations-grid ui-invocations-grid-hard">
+                                {RUN_INVOCATIONS.filter((i) => i.hard).map(icon)}
+                            </div>
+                        </div>
+                        <div className="ui-invocations-reward">
+                            <div className="ui-invocations-reward-title">
+                                {t("ui.invocations.total")}
+                            </div>
+                            <div className="ui-invocations-level-row">
+                                <span className="ui-invocations-number">{points}</span>
+                            </div>
+                            <div className="ui-invocations-bar" aria-hidden>
+                                <div
+                                    className="ui-invocations-bar-fill"
+                                    style={{
+                                        width: `${Math.min(100, (points / INVOCATION_BADGES[INVOCATION_BADGES.length - 1]) * 100)}%`,
+                                    }}
+                                />
+                            </div>
+                            <div className="ui-invocations-scale">
+                                {t("ui.invocations.coins", { percent: coins })}
+                            </div>
+                            <InvocationBadges points={points} best={best?.points ?? 0} />
+                            {best && (
+                                <div className="ui-invocations-scale">
+                                    {t("ui.invocations.best", {
+                                        points: best.points,
+                                        time: formatTime(best.seconds),
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="ui-invocations-detail">
+                        {pointed ? (
+                            <>
+                                <span className="ui-invocations-detail-name">
+                                    {invocationName(pointed)}{" "}
+                                    <span className="ui-invocations-detail-level">
+                                        {t("ui.invocations.detail_points", {
+                                            points: pointed.level,
+                                        })}
+                                    </span>
+                                </span>
+                                <span>{invocationDescription(pointed)}</span>
+                            </>
+                        ) : (
+                            <span className="ui-subtle">
+                                {touch
+                                    ? t("ui.invocations.tap_hint")
+                                    : t("ui.invocations.point_hint")}
+                            </span>
+                        )}
+                    </div>
+                    <span className="ui-subtle">{t("ui.invocations.coin_cap")}</span>
+                </div>
+                <div className="ui-invocations-buttons">
+                    <button className="ui-button" onClick={() => client.clearRunInvocations()}>
+                        {t("ui.invocations.reset")}
+                    </button>
+                    <button className="ui-button ui-button-go" onClick={onClose}>
+                        {t("ui.invocations.done")}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// The card's badges at 100, 200 and 300 points: lit once beaten at as many (best), and the next the
+// board's points would earn marked
+export function InvocationBadges({ points, best }: { points?: number; best: number }): JSX.Element {
+    return (
+        <div className="ui-invocation-badges">
+            {INVOCATION_BADGES.map((badge) => (
+                <span
+                    key={badge}
+                    className={
+                        "ui-invocation-badge" +
+                        (best >= badge ? " ui-invocation-badge-won" : "") +
+                        (points !== undefined && points >= badge ? " ui-invocation-badge-on" : "")
+                    }
+                    title={t("ui.invocations.badge_aria", { points: badge })}
+                >
+                    {badge}
+                </span>
+            ))}
         </div>
     );
 }

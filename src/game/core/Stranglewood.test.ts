@@ -3,7 +3,7 @@ import { getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { MAPS, getMap } from "../content/maps";
 import { STRANGLEWOOD_ROOTS } from "../content/stranglewood";
-import { emptyStats } from "../content/types";
+import { CharacterTraitDef, emptyStats } from "../content/types";
 import { HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { usePortableMath } from "./fmath";
 import { syncHash } from "./lockstep";
@@ -59,7 +59,17 @@ describe("the Stranglewood", () => {
 
     test("is played by its roots, and nothing else is", () => {
         expect(createSim().rule?.def).toBe(STRANGLEWOOD_ROOTS);
-        for (const map of MAPS.filter((m) => m.id !== "stranglewood")) {
+        // Awakened Vardorvis's clearing has its own (Vardorvis.test.ts), Lassar and the Awakened
+        // Whisperer's island their realms (Lassar.test.ts, Whisperer.test.ts)
+        const ruled = [
+            "stranglewood",
+            "awakened_vardorvis",
+            "lassar_undercity",
+            "awakened_whisperer",
+            "ghorrock",
+            "awakened_duke",
+        ];
+        for (const map of MAPS.filter((m) => !ruled.includes(m.id))) {
             expect(createSim({ mapId: map.id }).rule).toBeUndefined();
         }
     });
@@ -162,7 +172,12 @@ describe("the Stranglewood", () => {
 describe("Act II", () => {
     test("opens once the Inferno's beaten, its maps in any order", () => {
         const act = MAPS.filter((map) => map.act);
-        expect(act.map((map) => map.id)).toEqual(["stranglewood"]);
+        expect(act.map((map) => map.id)).toEqual([
+            "stranglewood",
+            "lassar_undercity",
+            "ghorrock",
+            "scar",
+        ]);
         expect(act.every((map) => map.act!.requires === FALLEN_EMPIRE.requires)).toBe(true);
         expect(getMap(FALLEN_EMPIRE.requires).act).toBeUndefined();
     });
@@ -186,8 +201,8 @@ describe("Act II", () => {
     test("a step's enemies are tougher and its coins worth more", () => {
         const first = createSim({ actStep: 0 });
         const last = createSim({ actStep: 3 });
-        expect(first.difficulty).toEqual({ hp: 3.9, damage: 2.8 });
-        expect(last.difficulty).toEqual({ hp: 4.35, damage: 3.1 });
+        expect(first.difficulty).toEqual({ hp: 4.2, damage: 2.9 });
+        expect(last.difficulty).toEqual({ hp: 4.65, damage: 3.2 });
         expect(first.coinScale).toBe(1);
         expect(last.coinScale).toBeCloseTo(1.3);
         const goblin = (sim: Sim) => sim.spawnEnemy(getEnemy("strangled"), "normal")!.maxHp;
@@ -195,7 +210,7 @@ describe("Act II", () => {
         // A boss's own hitpoints too
         const boss = (sim: Sim) =>
             sim.spawnEnemy(getEnemy("kasonde"), "boss", undefined, 3600)!.maxHp;
-        expect(boss(last) / boss(first)).toBeCloseTo(4.35 / 3.9, 2);
+        expect(boss(last) / boss(first)).toBeCloseTo(4.65 / 4.2, 2);
         expect(last.getResult().actStep).toBe(3);
     });
 
@@ -210,7 +225,10 @@ describe("Act II", () => {
 describe("the Forester", () => {
     test("fells a tree every so many kills, and cuts roots further out", () => {
         const sim = createSim({ characterId: "forester" });
-        const trait = getCharacter("forester").trait!;
+        const trait = getCharacter("forester").trait as Extract<
+            CharacterTraitDef,
+            { kind: "timber" }
+        >;
         expect(sim.weapons.map((w) => w.def.id)).toEqual(["two_handed_sword"]);
         sim.heroes[0].traitKills = trait.every - 1;
         const victim = sim.spawnEnemy(getEnemy("strangled"), "normal", {

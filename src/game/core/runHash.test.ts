@@ -1,3 +1,4 @@
+import { HARD_PRESET } from "../content/invocations";
 import { emptyStats } from "../content/types";
 import { HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { fm, usePortableMath } from "./fmath";
@@ -122,6 +123,14 @@ describe("seeded runs", () => {
         expect(run({ party: [hero("ranger")], mapId: "inferno", hard: true }, 120)).toBe(
             0xd61a2ada,
         );
+    }, 60000);
+
+    // Hard mode is a preset of invocations there (content/invocations.ts, HARD_PRESET): the
+    // preset on its own is the same run, tick for tick
+    test("the same, as hard mode's invocations", () => {
+        expect(
+            run({ party: [hero("ranger")], mapId: "inferno", invocations: [...HARD_PRESET] }, 120),
+        ).toBe(0xd61a2ada);
     }, 60000);
 
     test("a party of four in the God Wars, armies fighting each other", () => {

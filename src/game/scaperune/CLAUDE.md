@@ -2085,6 +2085,35 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   difficulty order and unique enemies tests.
 - A recipe only writes a loc's id, type and rotation. To scale a model, or lift one off the ground so it floats, give a loc nothing else uses a new model
   and size, or a `height`, in `src/rs/config/loctype/LocOverrides.ts`. Check the world index first.
+- A map drawn as two worlds (the Lassar Undercity and its Shadow Realm, `maps/lassarUndercity.ts`) gives its recipe a
+  `twin`: a second recipe on squares of its own, installed with it and pinned in `grid-hash.ts` with it, which the game
+  draws in the map's place while the party's in the other world (`MapDef.twin`, `MapManager.twin`). Only the map's own
+  collision is used, so build the twin from the same cut, its locs off where the map's twins are.
+- A boss fight on a shipped map's own ground (Awakened Vardorvis in the Stranglewood, the Awakened Whisperer in the
+  Lassar Undercity) is a `MapDef` of its own with the map's `arena`; name it in that recipe's `fights`, or the game
+  (`getRecipe`, `installRecipe`) and the slim cache won't find the recipe for the fight's id and draw nothing there.
+- A map whose rule reads places off it (Ghorrock's braziers, vents, ice pools and the statues that hide you from the
+  Duke's gaze, `maps/ghorrock.ts`) exports them in grid tiles, and the content turns them into world tiles for the rule
+  (`ColdRuleDef`) and the `MapDef`'s `features`. What the game draws in their place (the braziers, which it lights and
+  puts out) is blocked in the grid and handed on as `standIns`, so `view-weight.ts` counts it. Its ice is painted with
+  an overlay here and given to the sim as an effect mask from the same shapes (`core/world/EffectMask.ts`).
+- A boss room cut from the cache and widened (the Awakened Duke's, `maps/dukesRoom.ts`) moves the cut's locs as it
+  lays them (its side walls and what's along them out, its south rocks down), paints the cache's border floor where
+  the room's grown, and clears `TILE_BLOCKED` on what was under the old walls. A cut from a square with levels above
+  its ground floor can mark some of its tiles as bridges there (level 1's flags): clear the upper levels' flags, or
+  the room's collision has holes no one can see. A boss that never moves and sits on blocked ground (his alcove)
+  needs its own tiles open, or `findFreeSpot` moves it into the room; he's solid himself.
+- A cut whose real ground is mostly blocked (the Scar's sea of sludge, `maps/scar.ts`) can be drained: take its
+  overlay off what's to be walked, clear `TILE_BLOCKED`, then paint it back where it's wanted with `paintField`. Mind
+  what lay on it: the sludge's ripples are floor decoration that only reads on sludge. An island's raised rim may be a
+  level of its own (a bridge's deck in the map's terms): take off all of it that's joined, not a circle of it, or
+  stubs of rim stand about; check-maps holds the cache's bridges to being roads, so cover any left with
+  `closedRoads`. Paint the sludge back over the islands' bare floor too, or each island stands on squares of its own
+  floor. Masses built of thousands of one-tile pieces (the Scar's brain) are hollowed by depth from their own edge,
+  wherever it faces, never from what's walked: a hollow that follows the walked ground leaves walls with nothing
+  behind them. What's past the depth shows the cache's floor under it (the brain's is hidden, so black, as its
+  filler is). Thinning a wall's pieces at random leaves holes and stubs; draw them lighter instead
+  (`MODEL_SIMPLIFY` in `LocOverrides.ts`, which `view-weight.ts` counts too).
 - `bossArena` on the `MapDef` gives a phased boss a square of its own. The player's brought to its middle and
   can't leave while the boss is up. Without it, her totems are in the corners of the whole map.
 - Blending brown soil into blue ground goes through green, so give a soil underlay low saturation. Thin overlay

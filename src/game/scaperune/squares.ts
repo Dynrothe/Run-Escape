@@ -10,8 +10,11 @@ import { SCAPERUNE_DEV_MAPS } from "./maps/devMaps";
 import { SCAPERUNE_MAPS } from "./maps/shippedMaps";
 import type { BuildContext, MapRecipe } from "./recipe";
 
+// A map's recipe: its own, or the one a boss fight's fought on (MapRecipe.fights)
 export function getRecipe(mapId: string): MapRecipe | undefined {
-    return [...SCAPERUNE_MAPS, ...SCAPERUNE_DEV_MAPS].find((recipe) => recipe.id === mapId);
+    return [...SCAPERUNE_MAPS, ...SCAPERUNE_DEV_MAPS].find(
+        (recipe) => recipe.id === mapId || recipe.fights?.includes(mapId),
+    );
 }
 
 export function createBuildContext(maps: MapFileLoader, locTypes: LocTypeLoader): BuildContext {
@@ -74,12 +77,20 @@ const installed = new Set<string>();
 // nothing for a real map.
 export async function installRecipe(mapViewer: MapViewer, mapId: string): Promise<void> {
     const recipe = getRecipe(mapId);
-    if (!recipe || installed.has(mapId)) {
+    // Once a recipe, whichever map it's for (a fight on another map's ground shares it)
+    if (!recipe || installed.has(recipe.id)) {
         return;
     }
     const context = createBuildContext(mapViewer.mapFileLoader, mapViewer.locTypeLoader);
-    await mapViewer.addCustomMapSquares(buildRecipeSquares(recipe, context));
-    installed.add(mapId);
+    const squares = buildRecipeSquares(recipe, context);
+    // Its twin's squares too, drawn in its place (MapDef.twin)
+    if (recipe.twin) {
+        for (const [id, square] of buildRecipeSquares(recipe.twin, context)) {
+            squares.set(id, square);
+        }
+    }
+    await mapViewer.addCustomMapSquares(squares);
+    installed.add(recipe.id);
 }
 
 // The same for a scene builder on its own, in a script. Does nothing for a real
@@ -90,5 +101,8 @@ export function installRecipeInSceneBuilder(sceneBuilder: SceneBuilder, mapId: s
         const { mapFileLoader, locTypeLoader } = sceneBuilder;
         const context = createBuildContext(mapFileLoader, locTypeLoader);
         addCustomMapSquares(mapFileLoader, buildRecipeSquares(recipe, context));
+        if (recipe.twin) {
+            addCustomMapSquares(mapFileLoader, buildRecipeSquares(recipe.twin, context));
+        }
     }
 }

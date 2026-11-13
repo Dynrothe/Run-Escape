@@ -2667,6 +2667,135 @@ export class ModelData extends Entity {
         this.invalidate();
     }
 
+    // Fewer triangles, for a heavy model seen from afar: its shortest edges collapsed, one at a
+    // time, until keep of its faces are left. A collapse that would turn a face over is skipped,
+    // and a vertex on its tile's edges (x or z at 63 or more out, a 1 by 1 piece's) or on the
+    // ground never moves, so pieces still meet their neighbours and the ground exactly. Each face
+    // left keeps its colour. seams: false for a loc that meets nothing, whose edges can move too.
+    // Only for untextured, unanimated models (it leaves any other alone)
+    simplify(keep: number, seams = true): void {
+        if (this.faceTextures || this.faceSkins || this.vertexSkins || this.textureFaceCount > 0) {
+            return;
+        }
+        const vx = this.verticesX;
+        const vy = this.verticesY;
+        const vz = this.verticesZ;
+        const fixed = new Uint8Array(this.verticesCount);
+        for (let v = 0; v < this.verticesCount; v++) {
+            const edge = seams && (Math.abs(vx[v]) >= 63 || Math.abs(vz[v]) >= 63);
+            fixed[v] = edge || vy[v] >= -1 ? 1 : 0;
+        }
+        const a = Array.from(this.indices1.subarray(0, this.faceCount));
+        const b = Array.from(this.indices2.subarray(0, this.faceCount));
+        const c = Array.from(this.indices3.subarray(0, this.faceCount));
+        const alive = new Uint8Array(this.faceCount).fill(1);
+        let left = this.faceCount;
+        const target = Math.max(4, Math.round(this.faceCount * keep));
+        const normal = (i: number, j: number, k: number): [number, number, number] => {
+            const ux = vx[j] - vx[i];
+            const uy = vy[j] - vy[i];
+            const uz = vz[j] - vz[i];
+            const wx = vx[k] - vx[i];
+            const wy = vy[k] - vy[i];
+            const wz = vz[k] - vz[i];
+            return [uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx];
+        };
+        // Whether moving u onto v keeps every face round u the way it faced
+        const keepsFacing = (u: number, v: number): boolean => {
+            for (let f = 0; f < a.length; f++) {
+                if (!alive[f]) {
+                    continue;
+                }
+                const has = a[f] === u || b[f] === u || c[f] === u;
+                if (!has || a[f] === v || b[f] === v || c[f] === v) {
+                    continue;
+                }
+                const before = normal(a[f], b[f], c[f]);
+                const after = normal(
+                    a[f] === u ? v : a[f],
+                    b[f] === u ? v : b[f],
+                    c[f] === u ? v : c[f],
+                );
+                const dot = before[0] * after[0] + before[1] * after[1] + before[2] * after[2];
+                const size = Math.hypot(...before) * Math.hypot(...after);
+                if (size === 0 || dot < size * 0.3) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        const blocked = new Set<string>();
+        while (left > target) {
+            let best = -1;
+            let bestU = 0;
+            let bestV = 0;
+            for (let f = 0; f < a.length; f++) {
+                if (!alive[f]) {
+                    continue;
+                }
+                for (const [p, q] of [
+                    [a[f], b[f]],
+                    [b[f], c[f]],
+                    [c[f], a[f]],
+                ]) {
+                    const length =
+                        (vx[p] - vx[q]) ** 2 + (vy[p] - vy[q]) ** 2 + (vz[p] - vz[q]) ** 2;
+                    if (best >= 0 && length >= best) {
+                        continue;
+                    }
+                    if (!fixed[p] && !blocked.has(`${p},${q}`)) {
+                        [best, bestU, bestV] = [length, p, q];
+                    } else if (!fixed[q] && !blocked.has(`${q},${p}`)) {
+                        [best, bestU, bestV] = [length, q, p];
+                    }
+                }
+            }
+            if (best < 0) {
+                break;
+            }
+            if (!keepsFacing(bestU, bestV)) {
+                blocked.add(`${bestU},${bestV}`);
+                continue;
+            }
+            for (let f = 0; f < a.length; f++) {
+                if (!alive[f]) {
+                    continue;
+                }
+                if (a[f] === bestU) a[f] = bestV;
+                if (b[f] === bestU) b[f] = bestV;
+                if (c[f] === bestU) c[f] = bestV;
+                if (a[f] === b[f] || b[f] === c[f] || a[f] === c[f]) {
+                    alive[f] = 0;
+                    left--;
+                }
+            }
+        }
+        let kept = 0;
+        const perFace = [
+            this.faceColors,
+            this.faceRenderTypes,
+            this.faceRenderPriorities,
+            this.faceAlphas,
+            this.textureCoords,
+        ];
+        for (let f = 0; f < a.length; f++) {
+            if (!alive[f]) {
+                continue;
+            }
+            this.indices1[kept] = a[f];
+            this.indices2[kept] = b[f];
+            this.indices3[kept] = c[f];
+            for (const values of perFace) {
+                if (values) {
+                    values[kept] = values[f];
+                }
+            }
+            kept++;
+        }
+        this.faceCount = kept;
+        this.invalidate();
+    }
+
     calculateVertexNormals(): void {
         if (!this.normals) {
             this.normals = new Array(this.usedVertexCount);

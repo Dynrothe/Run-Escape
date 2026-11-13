@@ -5,13 +5,22 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
-import { getAct, getActStep } from "../content/acts";
+import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { getBlessing } from "../content/blessings";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
-import { getRaidBand, saveInvocationPreset, toggleInvocation } from "../content/invocations";
+import { BlessingId, CAMP_SECONDS, GAUNTLET_FIGHTS, isGauntletOrder } from "../content/gauntlet";
+import { INVADER_BY_ID } from "../content/invaders";
+import { isInvasionOpen, rollInvasion, takesInvasions } from "../content/invasions";
+import {
+    RUN_SET,
+    getRaidBand,
+    isHardInvocation,
+    saveInvocationPreset,
+    toggleInvocation,
+} from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
@@ -28,6 +37,8 @@ import {
     isCoopMap,
     isDevMap,
     isFunMap,
+    takesInvocations,
+    takesRelics,
 } from "../content/maps";
 import { getPassive, passiveValueText } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
@@ -36,6 +47,8 @@ import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
 import { RARITIES, Rarity, rarityName } from "../content/rarity";
+import { RelicTier, cleanRelics, getOpenRelicTiers, pickRelic } from "../content/relics";
+import { RemixId, cleanRemixes, isRemixOpen } from "../content/remixes";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
@@ -49,15 +62,38 @@ import {
     emptyStats,
 } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
+import {
+    VaultRun,
+    getVault,
+    getVaultAt,
+    isBetterVault,
+    isVaultOpen,
+    parseWeekKey,
+} from "../content/vault";
 import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
 import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
-import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
+import {
+    GauntletRun,
+    chooseBlessing,
+    gauntletFightId,
+    gauntletFightOptions,
+    gauntletRetries,
+    gauntletSeconds,
+    leaveGauntletCamp,
+    loseGauntletFight,
+    retryGauntletFight,
+    startGauntlet,
+    winGauntletFight,
+} from "../core/gauntlet";
 import { CoopAction, applyAction, hasBadNumber } from "../core/lockstep";
+import { POCKET_COLD_WASH, invasionContent } from "../core/rules/invasion";
+import { remixContent } from "../core/rules/remix";
 import {
     NewerSave,
     SaveData,
@@ -65,24 +101,33 @@ import {
     buyArmouryUpgrade,
     buyCosmetic,
     buyUpgrade,
+    canAwaken,
     canWearCosmetic,
+    cleanRunInvocations,
     exportSave,
     getEarnedUnlocks,
     getFightStage,
     getFinishedQuests,
+    getGauntletOrder,
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
     getReachedStages,
     getStartingCharacter,
+    hasGauntletLooks,
     isEndlessRecord,
     isEndlessUnlocked,
     isExpertUnlocked,
+    isGauntletHardOpen,
+    isGauntletOpen,
+    isHardRecord,
     isHardUnlocked,
     isMapUnlocked,
+    recordGauntlet,
     recordRun,
     refundUpgrade,
     refundUpgrades,
+    takeActEnding,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
 import { fmtNum, t, tl, tp } from "../i18n";
@@ -93,7 +138,7 @@ import {
     getGroundReach,
 } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
-import { installRecipe } from "../scaperune/squares";
+import { getRecipe, installRecipe } from "../scaperune/squares";
 import { BLESSING_COLOR, getBlessingViews } from "./BlessingViews";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
@@ -120,6 +165,7 @@ import {
     getOfferedAttackSeqs,
     getRunAppearance,
     getRunAttackSeqs,
+    setGauntletLooks,
 } from "./GameAssets";
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
@@ -290,6 +336,24 @@ function getRegionInput(map: MapDef): RegionDataInput {
     return locs ? { ...region, glowLocs: Object.keys(locs).map(Number) } : region;
 }
 
+// A map of two worlds' squares and its twin's (MapDef.twin, MapManager.twin): its recipe's
+// squares, or those under its arena
+function getTwinSquares(map: MapDef) {
+    if (!map.twin) {
+        return undefined;
+    }
+    const recipe = getRecipe(map.id);
+    const { baseX, baseY, sizeX, sizeY } = map.arena;
+    return {
+        x0: recipe ? recipe.mapX : Math.floor(baseX / 64),
+        y0: recipe ? recipe.mapY : Math.floor(baseY / 64),
+        x1: recipe ? recipe.mapX + recipe.squaresX - 1 : Math.floor((baseX + sizeX - 1) / 64),
+        y1: recipe ? recipe.mapY + recipe.squaresY - 1 : Math.floor((baseY + sizeY - 1) / 64),
+        dx: Math.round(map.twin.dx / 64),
+        shown: false,
+    };
+}
+
 // The world fades out past the arena's edge. A ScapeRune map's world carries on: it
 // has scenery there (scaperune/CLAUDE.md).
 function setPlayArea(
@@ -436,6 +500,8 @@ export function cleanLoadout(loadout: Loadout | undefined): {
     unlockedItems: Set<string>;
     trophiesFound: Set<string>;
     armoury: Record<string, number>;
+    pet?: string;
+    relics?: string[];
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
     const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
@@ -449,6 +515,10 @@ export function cleanLoadout(loadout: Loadout | undefined): {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
         trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
+        // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
+        ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
+        // Their relics, each player's own (the Sim keeps them off maps that take none)
+        ...(Array.isArray(loadout?.relics) && { relics: cleanRelics(loadout.relics) }),
     };
 }
 
@@ -488,6 +558,9 @@ export type GameClientOptions = {
     // ?raidtest on the dev server: solo runs with a raid's rooms two minutes apart and every
     // level up at its max (SimTesting); "short" for the rooms alone
     raidTest?: "max" | "short";
+    // ?invade=invading_duke@20 on the dev server: that invader at that second of the map's clock
+    // on a map that takes invasions, once they're open (SimTesting.invasion)
+    invade?: string;
     // ?director=<map id> on the dev server: a run there with the shot editor open (direct)
     director?: string;
 };
@@ -700,6 +773,11 @@ export class GameClient implements GameFrameHandler {
     // meanwhile)
     private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
+    // The weekly Vault's week, while its run's the one going (content/vault.ts)
+    private runVault?: string;
+    // The Forgotten Four, while it's being run (content/gauntlet.ts), and its camp's timer
+    private gauntletRun?: GauntletRun;
+    private campTimer?: number;
     // Boss attacks' instructions (BossAttackDef.message): each shown once a run, and one at a
     // time, each held long enough to read, as a busy phase can bring several at once. Those
     // waiting too long are dropped: the attack they were for is long gone.
@@ -804,6 +882,7 @@ export class GameClient implements GameFrameHandler {
         readonly options: GameClientOptions,
     ) {
         this.save = store.getSnapshot().save;
+        setGauntletLooks(hasGauntletLooks(this.save));
         this.grid = titleGrid;
         this.grids.set(TITLE_MAP.id, titleGrid);
         this.sounds = new GameSounds(audio);
@@ -1130,11 +1209,60 @@ export class GameClient implements GameFrameHandler {
         this.persist();
     }
 
+    // A run's invocations, on a map from the Desert on (content/invocations.ts, RUN_SET): on if it
+    // was off, off if it was on. Hard mode's are the Hard switch's, not the board's.
+    toggleRunInvocation(id: string): void {
+        if (isHardInvocation(id)) {
+            this.toggleHard();
+            return;
+        }
+        this.save.runInvocations = cleanRunInvocations(
+            toggleInvocation(this.save.runInvocations ?? [], id, RUN_SET),
+        );
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    clearRunInvocations(): void {
+        this.save.runInvocations = [];
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    // A relic picked for its tier (content/relics.ts), or the tier left empty; only an open tier's
+    selectRelic(tier: RelicTier, relicId: string | undefined): void {
+        if (tier > getOpenRelicTiers(this.save.mapVictories)) {
+            return;
+        }
+        const relics = pickRelic(this.save.relics ?? [], tier, relicId);
+        this.save.relics = relics.length > 0 ? relics : undefined;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
+    // The relics a run here starts with: the open tiers' picks, on a map that takes them
+    private runRelics(map: MapDef): string[] | undefined {
+        if (!takesRelics(map)) {
+            return undefined;
+        }
+        const relics = cleanRelics(this.save.relics, getOpenRelicTiers(this.save.mapVictories));
+        return relics.length > 0 ? relics : undefined;
+    }
+
     // In a room, the lobby's told (its raid level goes by the host's: Loadout.invocations)
     private invocationsChanged(): void {
         if (this.coop.room) {
             this.coop.setMe({ loadout: this.getLoadout() });
         }
+    }
+
+    // An act's ending told again from its card, once the act's done; closed with no id
+    showActEnding(actId: string | undefined): void {
+        const act = actId === undefined ? undefined : ACT_BY_ID.get(actId);
+        if (act && !isActEnded(act, this.save.mapVictories)) {
+            return;
+        }
+        this.store.set({ actEnding: act?.id });
     }
 
     // The pet to take along (one of the trophies found), or none
@@ -1161,6 +1289,8 @@ export class GameClient implements GameFrameHandler {
                 this.sounds.denied();
                 return;
             }
+            // Another map: the room's next run isn't the Vault's any more
+            this.store.set({ vaultRoom: undefined });
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -1174,7 +1304,32 @@ export class GameClient implements GameFrameHandler {
             endless: snapshot.endless && isEndlessUnlocked(this.save, mapId),
             hard: snapshot.hard && isHardUnlocked(this.save, mapId),
             expert: snapshot.expert && isExpertUnlocked(this.save, mapId),
+            remixes: this.openRemixes(mapId, snapshot.remixes),
+            awaken: snapshot.awaken && canAwaken(this.save, mapId),
         });
+    }
+
+    // An Awakener's orb on the map's final boss, for the next run (solo: an orb's the player's own)
+    toggleAwaken(): void {
+        const { mapId, awaken } = this.store.getSnapshot();
+        this.store.set({ awaken: !awaken && canAwaken(this.save, mapId) && !this.coop.room });
+    }
+
+    // Of these remixes, those open on the map (content/remixes.ts, isRemixOpen)
+    private openRemixes(mapId: string, ids: readonly string[]): RemixId[] {
+        const map = getMap(mapId);
+        return cleanRemixes(ids).filter((id) => isRemixOpen(this.save.mapVictories, map, id));
+    }
+
+    // A remix's switch on the map's card, once it's open there. In a room the host's go on the run
+    // (GameStart.remixes), as their invocations do.
+    toggleRemix(id: RemixId): void {
+        const { mapId, remixes } = this.store.getSnapshot();
+        if (remixes.includes(id)) {
+            this.store.set({ remixes: remixes.filter((r) => r !== id) });
+        } else if (isRemixOpen(this.save.mapVictories, getMap(mapId), id)) {
+            this.store.set({ remixes: cleanRemixes([...remixes, id]) });
+        }
     }
 
     // Endless runs, for a map that's been beaten (the room's, hosting one)
@@ -1339,10 +1494,15 @@ export class GameClient implements GameFrameHandler {
                 ...this.save.armoury,
             },
             this.save.pet,
-            // A Tombs room's lobby shows the host's raid level
-            room && getMap(room.mapId).tombs ? [...(this.save.invocations ?? [])] : undefined,
+            // A Tombs room's lobby shows the host's raid level, and a run's its invocation points
+            room && getMap(room.mapId).tombs
+                ? [...(this.save.invocations ?? [])]
+                : room && takesInvocations(getMap(room.mapId))
+                  ? [...(this.save.runInvocations ?? [])]
+                  : undefined,
             getRaidChestTrophiesFound(this.save.trophies),
             this.save.look,
+            room ? this.runRelics(getMap(room.mapId)) : undefined,
         );
     }
 
@@ -1364,6 +1524,29 @@ export class GameClient implements GameFrameHandler {
             this.sounds.denied();
             return;
         }
+        // The weekly Vault, if the room's on its map for it: its seed, remixes, invocations and
+        // adventurer for everyone
+        const vaultKey = this.store.getSnapshot().vaultRoom;
+        const vault = vaultKey !== undefined ? getVault(vaultKey) : undefined;
+        if (vault && vault.mapId === map.id) {
+            this.coop.start({
+                seed: vault.seed,
+                mapId: map.id,
+                endless: false,
+                hard: false,
+                invocations: vault.invocations,
+                remixes: vault.remixes,
+                vault: vault.key,
+                heroes: room.members.map((member) => ({
+                    id: member.id,
+                    name: member.name,
+                    characterId: vault.characterId,
+                    loadout: member.loadout ?? makeLoadout({}, [], {}),
+                })),
+            });
+            return;
+        }
+        const remixes = this.openRemixes(map.id, this.store.getSnapshot().remixes);
         // The room's modes, which the relay checked everyone has (or takes
         // anyone for, with anyMap), so the run is what the lobby said
         const { anyMap } = this.store.getSnapshot().coop;
@@ -1377,8 +1560,14 @@ export class GameClient implements GameFrameHandler {
             // An act's map is at the host's step (content/acts.ts)
             ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             stage: getFightStage(this.save, map.id),
-            // The Tombs' raid level is the host's, as the invocation board set it
+            // The Tombs' raid level is the host's, as the invocation board set it, and so are a
+            // run's invocations (the room's Hard is hard mode's), and its remixes
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
+            ...(takesInvocations(map, remixes.length > 0) && {
+                invocations: this.save.runInvocations ?? [],
+            }),
+            ...(remixes.length > 0 && { remixes }),
+            ...(isInvasionOpen(this.save.mapVictories) && { invasions: true }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1751,6 +1940,7 @@ export class GameClient implements GameFrameHandler {
     private useSave(save: SaveData, toFavourite = false): void {
         const lookWas = JSON.stringify(this.save?.look);
         this.save = save;
+        setGauntletLooks(hasGauntletLooks(save));
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
         const starting = getStartingCharacter(save);
@@ -1827,9 +2017,12 @@ export class GameClient implements GameFrameHandler {
         mapId: string,
         back: Screen,
         pets: (string | undefined)[],
+        remixes: readonly string[] = [],
+        // What else the run can bring in (an invasion's: invasionContent)
+        extra: unknown[] = [],
     ): Promise<boolean> {
         const map = getMap(mapId);
-        const enemies = getMapEnemies(map);
+        const enemies = getMapEnemies(map, [...remixContent(remixes), ...extra]);
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
@@ -1861,28 +2054,67 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // cinematic: false to start without the map's opening cinematic (a retry). atLair: start at
-    // its lair's start (getRetryLair), in it, so its fight's on again at once (a retry)
+    // cinematic: false to start without the map's opening cinematic (a retry)
+    // gauntlet: a fight of the Forgotten Four's (this.gauntletRun), on its mode, nothing else on
+    // vault: the weekly Vault's run (content/vault.ts): its map, seed, remixes, invocations and
+    // adventurer, none of the player's relics, never hard or endless
+    // atLair: start at its lair's start (getRetryLair), in it, so its fight's on again at once (a
+    // retry)
     async startRun(
         mapId: string = this.store.getSnapshot().mapId,
         cinematic = true,
+        gauntlet?: GauntletRun,
+        vault?: VaultRun,
         atLair = false,
     ): Promise<void> {
+        if (vault) {
+            mapId = vault.mapId;
+        }
         if (!isMapUnlocked(this.save, mapId)) {
             return;
         }
         const map = getMap(mapId);
+        const snapshot = this.store.getSnapshot();
+        const plain = !gauntlet && !vault;
         // Fun maps are always endless, and some have everyone play one
         // adventurer (Durial321 in Falador)
         const endless =
-            map.fun !== undefined ||
-            (this.store.getSnapshot().endless && isEndlessUnlocked(this.save, mapId));
-        const hard = this.store.getSnapshot().hard && isHardUnlocked(this.save, mapId);
-        const expert = this.store.getSnapshot().expert && isExpertUnlocked(this.save, mapId);
-        const characterId = getMapCharacter(map) ?? this.store.getSnapshot().characterId;
-        if (!(await this.travelTo(mapId, "characters", [this.save.pet]))) {
+            plain &&
+            (map.fun !== undefined || (snapshot.endless && isEndlessUnlocked(this.save, mapId)));
+        const hard = gauntlet
+            ? gauntlet.hard
+            : plain && snapshot.hard && isHardUnlocked(this.save, mapId);
+        const expert = plain && snapshot.expert && isExpertUnlocked(this.save, mapId);
+        const characterId = vault?.characterId ?? getMapCharacter(map) ?? snapshot.characterId;
+        const remixes = vault
+            ? vault.remixes
+            : gauntlet
+              ? []
+              : this.openRemixes(mapId, snapshot.remixes);
+        const seed = vault?.seed ?? (Math.random() * 0x7fffffff) | 0;
+        // Awakened invasions, once open (rolled by the seed: its invader's baked with the map), and
+        // an orb on the final boss
+        const invasions = plain && isInvasionOpen(this.save.mapVictories);
+        const forced = this.forcedInvasion();
+        const invasion =
+            invasions && !endless
+                ? forced && INVADER_BY_ID.has(forced.invader) && takesInvasions(map)
+                    ? { invader: INVADER_BY_ID.get(forced.invader)!, at: forced.at, hp: 0 }
+                    : rollInvasion(map, seed, hard, remixes)
+                : undefined;
+        const awakened = plain && !endless && snapshot.awaken && canAwaken(this.save, mapId);
+        if (
+            !(await this.travelTo(
+                mapId,
+                "characters",
+                [this.save.pet],
+                remixes,
+                invasionContent(invasion),
+            ))
+        ) {
             return;
         }
+        this.runVault = vault?.key;
         usePortableMath(false);
         const spawn = (atLair && getRetryLair(map)?.start) || map.spawn;
         const sim = new Sim({
@@ -1890,11 +2122,12 @@ export class GameClient implements GameFrameHandler {
             mapId,
             characterId,
             metaStats: getMetaStats(this.save, getCharacter(characterId).style),
-            seed: (Math.random() * 0x7fffffff) | 0,
+            seed,
             spawnX: spawn.x,
             spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
             trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
+            pet: this.save.pet,
             endless,
             hard,
             expert,
@@ -1902,11 +2135,24 @@ export class GameClient implements GameFrameHandler {
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
             actStep: getActStep(map, this.save.mapVictories),
-            invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
+            invocations: vault
+                ? vault.invocations
+                : map.tombs
+                  ? (this.save.invocations ?? [])
+                  : takesInvocations(map, remixes.length > 0)
+                    ? (this.save.runInvocations ?? [])
+                    : undefined,
+            relics: vault ? [] : this.runRelics(map),
+            remixes,
+            invasions,
+            awakened,
             stage: this.chosenStage(mapId),
+            gauntlet: gauntlet && gauntletFightOptions(gauntlet),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
-                : undefined,
+                : forced
+                  ? { invasion: forced }
+                  : undefined,
         });
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
@@ -1960,7 +2206,18 @@ export class GameClient implements GameFrameHandler {
         const pets = game.heroes.map((hero) =>
             typeof hero.loadout?.pet === "string" ? hero.loadout.pet : undefined,
         );
-        if (!(await this.travelTo(game.mapId, "coop", pets))) {
+        const invasion = game.invasions
+            ? rollInvasion(getMap(game.mapId), game.seed, game.hard, game.remixes ?? [])
+            : undefined;
+        if (
+            !(await this.travelTo(
+                game.mapId,
+                "coop",
+                pets,
+                game.remixes ?? [],
+                game.endless ? [] : invasionContent(invasion),
+            ))
+        ) {
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1994,9 +2251,12 @@ export class GameClient implements GameFrameHandler {
             actStep: game.actStep,
             stage: game.stage,
             invocations: game.invocations,
+            remixes: game.remixes,
+            invasions: game.invasions === true,
             party,
             focus,
         });
+        this.runVault = game.vault && parseWeekKey(game.vault) ? game.vault : undefined;
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
         run.setPrediction(this.display.movePrediction);
@@ -2050,7 +2310,8 @@ export class GameClient implements GameFrameHandler {
         this.shownBrightness = map.brightness ?? 1;
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
-        this.renderer.setLighting(map.lighting !== undefined);
+        this.renderer.setLighting(sim.lighting !== undefined);
+        this.renderer.setTwin(getTwinSquares(map));
         this.sceneLights.reset();
         this.minimap.setMap(map);
         const music = map.music && musicFor(map.music);
@@ -2174,6 +2435,14 @@ export class GameClient implements GameFrameHandler {
             case "skip":
                 if (done) {
                     this.sounds.buy();
+                    this.syncOverlay();
+                } else {
+                    this.sounds.denied();
+                }
+                break;
+            case "keep":
+            case "takeKept":
+                if (done) {
                     this.syncOverlay();
                 } else {
                     this.sounds.denied();
@@ -2309,6 +2578,26 @@ export class GameClient implements GameFrameHandler {
         return this.act(index === undefined ? { kind: "banishChest" } : { kind: "banish", index });
     }
 
+    // Reloaded (content/relics.ts): the level up's offer kept for later, or a kept one taken now.
+    // Checked here in co-op too, as with a reroll (see reroll).
+    keepOffer(): boolean {
+        const sim = this.sim;
+        if (!sim || (this.coopRun && !sim.canKeepOffer)) {
+            this.sounds.denied();
+            return false;
+        }
+        return this.act({ kind: "keep" });
+    }
+
+    takeKept(): boolean {
+        const sim = this.sim;
+        if (!sim || (this.coopRun && !sim.canTakeKept)) {
+            this.sounds.denied();
+            return false;
+        }
+        return this.act({ kind: "takeKept" });
+    }
+
     // Takes none of the level up's rewards, for coins from the run. False when
     // it can't be skipped or there aren't the coins.
     skip(): boolean {
@@ -2422,6 +2711,8 @@ export class GameClient implements GameFrameHandler {
         if (sim) {
             this.finishRun();
         }
+        // Quitting a fight of the Forgotten Four's gives the whole run up
+        this.dropGauntlet();
         if (this.coopRun) {
             this.coop.leave();
         }
@@ -2443,7 +2734,7 @@ export class GameClient implements GameFrameHandler {
         const played = this.sim?.stage;
         const onward = map.stages !== undefined && this.chosenStage(mapId) !== played;
         this.leaveRun();
-        void this.startRun(mapId, onward, true);
+        void this.startRun(mapId, onward, undefined, undefined, true);
     }
 
     leaveRun(show = true): void {
@@ -2469,6 +2760,7 @@ export class GameClient implements GameFrameHandler {
         this.renderer.setWash(undefined);
         this.shownWash = undefined;
         this.renderer.setLighting(false);
+        this.renderer.setTwin(undefined);
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
@@ -2489,6 +2781,235 @@ export class GameClient implements GameFrameHandler {
             revive: undefined,
             toastLog: [],
         });
+    }
+
+    // ---- The Forgotten Four (content/gauntlet.ts, core/gauntlet.ts) ----
+    // Each fight is its own run (startRun with the gauntlet's run), the camp a screen between
+    // them. On your own for now: co-op's chained runs and shared camp aren't built.
+
+    // Its screen, to put the fights in order: from the act's middle card, once it's open
+    // ?invade (GameClientOptions.invade): the invader and its second
+    private forcedInvasion(): { invader: string; at: number } | undefined {
+        const [invader, at] = (this.options.invade ?? "").split("@");
+        return invader ? { invader, at: parseFloat(at) || 5 } : undefined;
+    }
+
+    // The weekly Vault's screen (content/vault.ts), once the act's four Awakened are beaten
+    openVault(): void {
+        if (!isVaultOpen(this.save.mapVictories) || this.sim) {
+            this.sounds.denied();
+            return;
+        }
+        this.store.set({ screen: "vault" });
+    }
+
+    // This week's Vault, solo
+    startVault(): void {
+        if (!isVaultOpen(this.save.mapVictories) || this.coop.room) {
+            return;
+        }
+        const vault = getVaultAt(Date.now());
+        void this.startRun(vault.mapId, true, undefined, vault);
+    }
+
+    // Hosting a room: its next run's this week's Vault, on the Vault's map, for everyone (each
+    // player's records their own)
+    vaultForRoom(): void {
+        const room = this.hostedRoom();
+        if (!room || !isVaultOpen(this.save.mapVictories)) {
+            return;
+        }
+        const vault = getVaultAt(Date.now());
+        if (room.mapId !== vault.mapId) {
+            this.coop.setMap(vault.mapId, false, false);
+        }
+        this.store.set({ vaultRoom: vault.key, screen: "coop" });
+    }
+
+    openGauntlet(): void {
+        if (!isGauntletOpen(this.save) || this.coop.room || this.sim) {
+            return;
+        }
+        const last = this.store.getSnapshot().gauntlet;
+        this.store.set({
+            screen: "gauntlet",
+            gauntlet: {
+                order: last?.order ?? getGauntletOrder(this.save),
+                hard: (last?.hard ?? false) && isGauntletHardOpen(this.save),
+            },
+        });
+    }
+
+    // The order picked on its screen, kept for next time
+    setGauntletOrder(order: string[]): void {
+        const view = this.store.getSnapshot().gauntlet;
+        if (!view || view.run || !isGauntletOrder(order)) {
+            return;
+        }
+        this.save.gauntletOrder = [...order];
+        this.persist();
+        this.store.set({ gauntlet: { ...view, order: [...order] } });
+    }
+
+    setGauntletHard(hard: boolean): void {
+        const view = this.store.getSnapshot().gauntlet;
+        if (!view || view.run) {
+            return;
+        }
+        this.store.set({ gauntlet: { ...view, hard: hard && isGauntletHardOpen(this.save) } });
+    }
+
+    beginGauntlet(): void {
+        const view = this.store.getSnapshot().gauntlet;
+        if (!view || view.run || !isGauntletOpen(this.save) || this.coop.room) {
+            return;
+        }
+        this.setGauntlet(startGauntlet(view.order, view.hard));
+        void this.startGauntletFight(true);
+    }
+
+    private setGauntlet(run: GauntletRun, more: { campEnds?: number } = {}): void {
+        this.gauntletRun = run;
+        const view = this.store.getSnapshot().gauntlet;
+        this.store.set({
+            gauntlet: {
+                order: run.order,
+                hard: run.hard,
+                run,
+                ...more,
+                ...(view?.rewards && run.phase === "cleared" && { rewards: view.rewards }),
+            },
+        });
+    }
+
+    private async startGauntletFight(cinematic: boolean): Promise<void> {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "fight") {
+            return;
+        }
+        await this.startRun(gauntletFightId(run), cinematic, run);
+        // It couldn't get there: back to the gauntlet's screen
+        if (!this.sim) {
+            this.dropGauntlet();
+            this.openGauntlet();
+        }
+    }
+
+    // A fight's end: a win pays its points and carries its wounds, and the last clears the
+    // gauntlet, which is recorded; a fall waits on Retry this fight or Start over
+    private finishGauntletFight(result: RunResult): void {
+        const run = this.gauntletRun!;
+        const end = result.gauntlet!;
+        if (!result.victory) {
+            this.setGauntlet(loseGauntletFight(run));
+            return;
+        }
+        const next = winGauntletFight(run, {
+            seconds: result.seconds,
+            hp: end.hp,
+            maxHp: end.maxHp,
+            damageTaken: result.stats.damageTaken,
+            guardDowns: end.guardDowns,
+        });
+        this.setGauntlet(next);
+        if (next.phase !== "cleared") {
+            return;
+        }
+        const rewards = recordGauntlet(this.save, {
+            order: next.order,
+            hard: next.hard,
+            seconds: gauntletSeconds(next),
+            retries: gauntletRetries(next),
+        });
+        this.persist();
+        this.cloud?.savePoint();
+        setGauntletLooks(hasGauntletLooks(this.save));
+        this.store.set({ gauntlet: { ...this.store.getSnapshot().gauntlet!, rewards } });
+    }
+
+    // From a fight won, to the camp: its points to spend, CAMP_SECONDS to spend them in
+    toGauntletCamp(): void {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "camp") {
+            return;
+        }
+        this.leaveRun(false);
+        this.setGauntlet(run, { campEnds: performance.now() + CAMP_SECONDS * 1000 });
+        this.store.set({ screen: "camp", overlay: "none", result: undefined });
+        window.clearTimeout(this.campTimer);
+        this.campTimer = window.setTimeout(() => this.leaveGauntletCamp(), CAMP_SECONDS * 1000);
+    }
+
+    chooseGauntletBlessing(id: BlessingId | undefined): void {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "camp") {
+            return;
+        }
+        this.setGauntlet(chooseBlessing(run, id), {
+            campEnds: this.store.getSnapshot().gauntlet?.campEnds,
+        });
+    }
+
+    // Ready, or the camp's time is up: on to the next fight
+    leaveGauntletCamp(): void {
+        window.clearTimeout(this.campTimer);
+        this.campTimer = undefined;
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "camp") {
+            return;
+        }
+        this.setGauntlet(leaveGauntletCamp(run));
+        void this.startGauntletFight(true);
+    }
+
+    // The fight fallen in, from its start again, with what it was come into with
+    retryGauntletFight(): void {
+        const run = this.gauntletRun;
+        if (!run || run.phase !== "fallen") {
+            return;
+        }
+        this.leaveRun(false);
+        this.setGauntlet(retryGauntletFight(run));
+        void this.startGauntletFight(false);
+    }
+
+    // Start over: back to the order screen, the run's order and mode on it
+    restartGauntlet(): void {
+        const run = this.gauntletRun;
+        this.dropGauntlet();
+        if (this.sim) {
+            this.leaveRun(false);
+        }
+        this.store.set({
+            gauntlet: run && { order: run.order, hard: run.hard },
+            overlay: "none",
+            result: undefined,
+        });
+        this.openGauntlet();
+    }
+
+    // Out of the gauntlet altogether (its screen's Back, the results' Leave), to the map screen
+    // it was opened from
+    leaveGauntlet(): void {
+        const run = this.gauntletRun;
+        this.dropGauntlet();
+        if (run) {
+            this.store.set({ gauntlet: { order: run.order, hard: run.hard } });
+        }
+        if (this.sim) {
+            this.leaveRun();
+        }
+        this.store.set({ screen: "characters" });
+    }
+
+    private dropGauntlet(): void {
+        window.clearTimeout(this.campTimer);
+        this.campTimer = undefined;
+        this.gauntletRun = undefined;
+        const view = this.store.getSnapshot().gauntlet;
+        if (view?.run) {
+            this.store.set({ gauntlet: { order: view.order, hard: view.hard } });
+        }
     }
 
     // endedEarly: why a co-op run ended before anyone won or fell
@@ -2517,6 +3038,10 @@ export class GameClient implements GameFrameHandler {
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
+        if (this.gauntletRun && result.gauntlet) {
+            this.finishGauntletFight(result);
+            return;
+        }
         // A fight in parts: Retry plays the part lost again (one replayed, too, not the furthest
         // reached), and Next fight the one after it. chosenStage falls back to the next not
         // beaten when that isn't reached yet.
@@ -2535,7 +3060,7 @@ export class GameClient implements GameFrameHandler {
         const lockedItems = LOCKABLE_ITEMS.filter((i) => !this.save.unlockedItems.includes(i.id));
         const endlessRecord = result.endless && isEndlessRecord(this.save, result);
         const firstHardWin =
-            result.hard &&
+            isHardRecord(result) &&
             result.victory &&
             !isDevMap(sim.map.id) &&
             !this.save.hardVictories[sim.map.id];
@@ -2547,7 +3072,14 @@ export class GameClient implements GameFrameHandler {
             : result.trophies.filter((id) => !this.save.trophies.includes(id));
         // A co-op run's numbers can come from another player's modified game,
         // and a NaN in a solo one's would come back from the save as 0 coins
-        const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
+        const vaultKey = this.runVault;
+        const vaultBest =
+            vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
+        const quests = hasBadNumber(result)
+            ? []
+            : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
+        // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
+        const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
         // A run's results: a save point for cloud save
         this.cloud?.savePoint();
@@ -2576,6 +3108,8 @@ export class GameClient implements GameFrameHandler {
                 newGear: newGear.map((id) => getItem(id).name),
                 newTrophies: newTrophies.map((id) => TROPHY_BY_ID.get(id)!.name),
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
+                ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
+                orbWon: result.victory && GAUNTLET_FIGHTS.includes(result.mapId),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
@@ -2583,6 +3117,7 @@ export class GameClient implements GameFrameHandler {
                 // As retry() goes by
                 ...(this.coopRun && { coop: true }),
             },
+            ...(actEnding && { actEnding }),
         });
         // The room sees this player's new unlocks and upgrades next run
         this.coop.setMe({ loadout: this.getLoadout(), unlocks: this.getUnlocks() });
@@ -2861,7 +3396,7 @@ export class GameClient implements GameFrameHandler {
             );
             this.cameraOffsetY = this.cameraLean.y + pan.y + shake.y;
         }
-        const lighting = sim.map.lighting;
+        const lighting = sim.lighting;
         if (lighting) {
             // Lit round the view's middle, which a cinematic takes away from the player
             this.sceneLights.update(
@@ -2884,10 +3419,26 @@ export class GameClient implements GameFrameHandler {
             sim.map.raid && sim.raidStage === "waves"
                 ? sim.map.raid.rooms[sim.raidRoom].hall
                 : undefined;
-        const hallBrightness = hall?.brightness;
-        if (hall?.wash !== this.shownWash) {
-            this.shownWash = hall?.wash;
-            this.renderer.setWash(hall?.wash);
+        // A map of two worlds' realm (RealmRuleDef.look): its twin drawn in the city's place, darker
+        // and washed with its colour
+        const realm = sim.realm?.layer === 1 ? sim.realm.def.look : undefined;
+        if (sim.map.twin) {
+            this.renderer.setTwinShown(realm !== undefined);
+        }
+        const hallBrightness =
+            hall?.brightness ?? (realm && realm.brightness * (sim.map.brightness ?? 1));
+        // Under the cold, its cold light (ColdRuleDef.look)
+        // An invading Duke's pocket, seen from in it (core/rules/invasion.ts)
+        const wash =
+            hall?.wash ??
+            realm?.wash ??
+            sim.cold?.def.look.wash ??
+            (sim.pocket?.kind === "cold" && sim.inPocket(sim.player.x, sim.player.y)
+                ? POCKET_COLD_WASH
+                : undefined);
+        if (wash !== this.shownWash) {
+            this.shownWash = wash;
+            this.renderer.setWash(wash);
         }
         // A gaze's light, brought up as it winds up and let down after (BossAttackDef.cover),
         // eased both ways so it never steps
@@ -3434,10 +3985,14 @@ export class GameClient implements GameFrameHandler {
         if (!at) {
             return { x: 0, y: 0 };
         }
-        const dx = (at.x - px) * BOSS_LEAN;
-        const dy = (at.y - py) * BOSS_LEAN;
+        const lean = at.def.boss!.look!.lean;
+        const share = typeof lean === "object" ? lean.share : BOSS_LEAN;
+        const phone = this.cameraRig.distance === PHONE_RUN_DISTANCE;
+        const max = typeof lean === "object" ? (phone ? lean.phone : lean.max) : BOSS_LEAN_MAX;
+        const dx = (at.x - px) * share;
+        const dy = (at.y - py) * share;
         const length = Math.hypot(dx, dy);
-        const scale = length > BOSS_LEAN_MAX ? BOSS_LEAN_MAX / length : 1;
+        const scale = length > max ? max / length : 1;
         return { x: dx * scale, y: dy * scale };
     }
 
@@ -3729,6 +4284,60 @@ export class GameClient implements GameFrameHandler {
                 }
                 case "roundStarted":
                     this.store.toast(describeRound(sim), 7000);
+                    break;
+                case "worldTurned": {
+                    // The realm's quiet, and back in the city its track (or the final boss's)
+                    const look = sim.realm?.def.look;
+                    const track =
+                        event.layer === 1
+                            ? look?.music
+                            : sim.bossSpawned
+                              ? (sim.map.bossMusic ?? sim.map.music)
+                              : sim.map.music;
+                    const music = track && musicFor(track);
+                    if (music) {
+                        this.audio.playMusic(music);
+                    }
+                    // A fight's own way between them (FightAbilityDef.turn: Blackstone)
+                    const turned = sim.ability?.turn === true;
+                    this.store.toast(
+                        t(
+                            event.layer === 1
+                                ? turned
+                                    ? "toast.blackstone_in"
+                                    : "toast.realm_in"
+                                : event.lapse
+                                  ? "toast.realm_lapse"
+                                  : turned
+                                    ? "toast.blackstone_out"
+                                    : "toast.realm_out",
+                        ),
+                    );
+                    break;
+                }
+                case "frozenSolid":
+                    if (event.hero === sim.focus) {
+                        // An invading Duke's cold has no braziers: out of it is the way
+                        this.store.toast(
+                            t(
+                                sim.cold?.def.area
+                                    ? "toast.frozen_solid_pocket"
+                                    : "toast.frozen_solid",
+                            ),
+                        );
+                    }
+                    break;
+                case "soulCaught":
+                    if (event.siphon) {
+                        // A boss's siphon's (BossDef.siphon): its last says so itself
+                        if (event.left > 0) {
+                            this.store.toast(tp("toast.siphon_left", event.left));
+                        }
+                    } else if (event.left > 0) {
+                        this.store.toast(tp("toast.souls_left", event.left));
+                    } else {
+                        this.store.toast(t("toast.portal_open"));
+                    }
                     break;
                 case "powerUp":
                     this.store.toast(tl(event.message));
@@ -4036,6 +4645,10 @@ export class GameClient implements GameFrameHandler {
                     stage: phase.stage,
                     status:
                         phase.stage === "finale" ? undefined : phases?.phases[phase.index]?.status,
+                    // Out of reach in this world (EnemyDef.hurtIn: the Awakened Whisperer, in the
+                    // realm), or of the fight's weapon
+                    otherWorld:
+                        shownBoss.def.hurtIn !== undefined && shownBoss.def.hurtIn !== sim.layer,
                     outOfReach:
                         reach !== undefined &&
                         Math.hypot(shownBoss.x - player.x, shownBoss.y - player.y) > reach,
@@ -4146,6 +4759,10 @@ export class GameClient implements GameFrameHandler {
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             hpShare: getHpShare(sim.player.hp, sim.player.maxHp),
+            sanity: sim.realm && Math.ceil(sim.realm.sanityOf(sim.focus)),
+            sanityMax: sim.realm?.def.sanity.max,
+            cold: sim.cold && Math.floor(sim.cold.coldOf(sim.focus)),
+            coldMax: sim.cold?.def.cold.max,
             poisoned: sim.player.poisonEnd !== -1,
             xpFraction: Math.min(
                 1,
@@ -4215,6 +4832,15 @@ export class GameClient implements GameFrameHandler {
             banishes: sim.banishesLeft,
             skip: sim.canSkip
                 ? { cost: sim.skipCost, affordable: sim.coins >= sim.skipCost }
+                : undefined,
+            // Reloaded: keeping this offer, and taking a kept one
+            keep: sim.hasRelic("reloaded", sim.heroes[sim.focus])
+                ? {
+                      left: sim.heroes[sim.focus].relics.keepsLeft,
+                      kept: sim.heroes[sim.focus].relics.kept.length,
+                      canKeep: sim.canKeepOffer,
+                      canTake: sim.canTakeKept,
+                  }
                 : undefined,
         };
         const previous = this.store.getSnapshot().hud;

@@ -24,7 +24,8 @@ function collectEnemyIds(value: unknown, found: Set<string>, seen: Set<object>):
 // The enemies a run on the map can bring on screen: its waves, events and
 // bosses, what its rule brings in (a root heart), random events' too, and whatever they summon,
 // split into, rise as or spawn in turn.
-export function getMapEnemies(map: MapDef): EnemyDef[] {
+// remix: what the run's remixes bring in too (core/rules/remix.ts, remixContent)
+export function getMapEnemies(map: MapDef, remix: unknown[] = []): EnemyDef[] {
     const ids = new Set<string>();
     const seen = new Set<object>();
     const pumpkins = PUMPKIN_MAPS.includes(map.id) ? PUMPKIN_OUTCOMES : [];
@@ -46,6 +47,7 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
             turkeys,
             randomEvents,
             tombs,
+            remix,
         ],
         ids,
         seen,

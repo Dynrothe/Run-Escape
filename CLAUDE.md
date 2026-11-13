@@ -39,6 +39,8 @@ go stale. Add anything that cost you time to work out.
 | Level up choices, and when a weapon can evolve         | `src/game/core/Upgrades.ts`                                            |
 | Evolution recipes, for the UI                          | `src/game/content/evolutions.ts`                                       |
 | Hard mode's numbers (each map's are on its `MapDef`)   | `src/game/content/hard.ts`                                             |
+| A run's invocations, hard mode's preset, coin bonuses  | `content/invocations.ts` (`RUN_SET`), `maps.ts` (`takesInvocations`)   |
+| Relics: tiers, picks, each one's rule on its hero      | `content/relics.ts`, `Sim.ts` (Relics), `ui/Relics.tsx`                |
 | Co-op's numbers: the party's scaling, boss copies      | `src/game/content/coop.ts`                                             |
 | Caskets and the inventory                              | `src/game/core/Loot.ts`                                                |
 | Phosani's Nightmare, the one-fight map (its arena too) | `src/game/content/phosani.ts`, `scaperune/maps/sisterhoodSanctuary.ts` |
@@ -65,7 +67,25 @@ go stale. Add anything that cost you time to work out.
 | An act still to come, hidden (`ActDef.released`)       | `content/acts.ts` (`isActOut`), `content/maps.ts` (`isCharacterOut`)   |
 | A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |
 | The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
-| Adventurers' traits (the Forester's Timber!)           | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
+| The Lassar Undercity: its enemies, bosses, the realm   | `content/lassar.ts`, `scaperune/maps/lassarUndercity.ts`               |
+| A map of two worlds (the realm), its twin on screen    | `core/rules/RealmRule.ts`, `Sim.turnWorld`, `MapManager.twin`          |
+| Ghorrock: its enemies, bosses, the yard and its cold   | `content/ghorrock.ts`, `scaperune/maps/ghorrock.ts`                    |
+| The cold: braziers, embers, vents, each player's cold  | `core/rules/ColdRule.ts`, `Sim.stepCold`, `GameView.drawCold`          |
+| The effect mask: tile effects on any map (ice)         | `core/world/EffectMask.ts`                                             |
+| The Scar: its enemies, bosses, the drained sea         | `content/scar.ts`, `scaperune/maps/scar.ts`                            |
+| A dimmed light, the only light, a boss's debris        | `PlayerEffectDef` dim, `EnemyDef.onlyLight`, `BossAttackDef.debris`    |
+| Remixes: Act II rules on older maps, stacked, records  | `content/remixes.ts`, `core/rules/remix.ts`, `RuleSet` in `RunRule.ts` |
+| The Soulreaper axe: souls, Harvest, its pieces         | `WeaponDef.souls`, `Sim.harvest`, `UnlockTask` pieces                  |
+| Adventurers' traits (Timber!, Shatter and the rest)    | `CharacterDef.trait` in `content/types.ts`, `fellTree` in `Sim.ts`     |
+| Awakened Vardorvis: his fight, Chop, his captors       | `content/vardorvis.ts`, `docs/design/awakened-vardorvis.md`            |
+| The Awakened Whisperer: Blackstone, siphon, screech    | `content/whisperer.ts`, `docs/design/awakened-whisperer.md`            |
+| Awakened Duke Sucellus: his room, Kindle, the cold     | `content/duke.ts`, `scaperune/maps/dukesRoom.ts`, `awakened-duke.md`   |
+| The Awakened Leviathan: Shadow, the wreck, the torrent | `content/leviathan.ts`, `docs/design/awakened-leviathan.md`            |
+| Fighting pets (Butch, the Wisp, Baron, Lil'viathan)    | `PetDef.power` in `content/pets.ts`, `Sim.stepPets`                    |
+| An act's ending: told once, its card, the save         | `ActDef.ending`, `takeActEnding` in `save.ts`, `ActEndingModal`        |
+| The Forgotten Four gauntlet: climb, camp, records      | `content/gauntlet.ts`, `core/gauntlet.ts`, `ui/Gauntlet.tsx`           |
+| Awakened invasions: who invades, their pockets         | `content/invasions.ts`, `invaders.ts`, `core/rules/invasion.ts`        |
+| Awakener's orbs on a final boss, the weekly Vault      | `AWAKENED` in `Sim.ts`, `canAwaken`, `vault.ts`, `ui/Vault.tsx`        |
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |
@@ -207,6 +227,10 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   or held by a boss. A lot of it means the bot can't get round that map, not that the map is hard.
 - Without `DODGE=1` the bot ignores the bullets, rings and marks of a boss without phases (the
   Theatre's): sim a change to those with it.
+- With `DODGE=1` the bot steps out of a windup the tick it starts, so a shorter warning costs it
+  next to nothing. Sim a boss fight's warnings with `REACT=0.25` too, each step taken a quarter of
+  a second late, as a person reacts: the Awakened fights' hardening left the bot 1 win in 25, and
+  none at all with it. A boss fight's hundreds of seeds can be split across processes with `FROM=`.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
   `src/` in the same checkout meanwhile, since each run reads the source when it starts.
 - **Run sweeps as one process per map.** The script already loops over adventurers and seeds, so

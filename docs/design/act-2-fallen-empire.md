@@ -51,7 +51,7 @@ playtest.
 
 ## 1. The shape of the act
 
-**Opening.** The act needs the first campaign completed. Beating the Inferno opens the Fallen Empire screen, a tab beside the map list's Bosses tab. The four
+**Opening.** The act needs the first campaign completed. Beating the Inferno opens the Fallen Empire screen, a tab beside the map list's Act I tab (the campaign's). The four
 maps are cards round a fifth in the middle. The middle card fills in as the Awakened are beaten and plays the act's
 ending at the fourth. Each card shows its boss (drawn as the boss bar draws it), its rule in a line, its records, and
 its rewards faded until earned, as map cards do now.
@@ -65,12 +65,15 @@ the chain moves.
 
 | Other Act II maps beaten | Enemies' hitpoints | Their damage | Coins  |
 | ------------------------ | ------------------ | ------------ | ------ |
-| 0 (the first you play)   | 3.9                | 2.8          | as now |
-| 1                        | 4.05               | 2.9          | +10%   |
-| 2                        | 4.2                | 3.0          | +20%   |
-| 3 (the last)             | 4.35               | 3.1          | +30%   |
+| 0 (the first you play)   | 4.2                | 2.9          | as now |
+| 1                        | 4.35               | 3.0          | +10%   |
+| 2                        | 4.5                | 3.1          | +20%   |
+| 3 (the last)             | 4.65               | 3.2          | +30%   |
 
-The Inferno is 3.75 and 2.7, so the first step is a small one up. Hard mode multiplies on top as the Inferno's does
+The Inferno is 3.75 and 2.7. The first draft's step 0 (3.9 and 2.8) was a small step up, and the bot won and lasted
+longer on it than in the Inferno, so it was raised (2026-11-10): Act II's first map is harder than the first campaign's
+last (the numbers are in #159). Damage is the steep one: 3.0 at step 0 put a wall at Kasonde, with most runs ending
+there. Hard mode multiplies on top as the Inferno's does
 (`{ hp: 1.4, damage: 1.2 }`). Whatever the order, the last map is the hardest, and a map you go back to after
 finishing the act is always at step 3, so every player ends up on the same footing.
 
@@ -224,6 +227,12 @@ worst it can be): its world at most about 59k. The heaviest pieces were the ruin
 1,600 triangles each), its pillars and walls, and trees. `view-weight.ts` counts locs alone and comes out under the game's
 own count where walls are heavy, so measure with `frameProbe.sample` in the game.
 
+The town was then dressed again (2026-11-10): its huts' low walls and its tents' lower pieces are put back as the
+cheap low wall (48620, 194 triangles), half the huts' and a third of the tents', paid for by the town's pillars (all
+but Vardorvis's), its bushes and two thirds of its ferns. Its black squares were cellar entries (48722, 48723, 48745, 48746) and black floor tiles (overlay 36) left under the thinned pieces: the entries are left out and each such tile
+takes its neighbour's floor. Measured in the game, every open cell rooted, the heaviest view is the ruins' at 66.6k,
+and the town's are 58k to 64k.
+
 ## 4. The Lassar Undercity (the Whisperer)
 
 ### 4.1 Found in the cache: the Shadow Realm is a real twin
@@ -329,6 +338,53 @@ The city is heavy: 3,000 to 3,600 locs in each of its middle squares (40,99 and 
 time, so the twin costs memory, not triangles. Measure the busiest street and the cathedral's forecourt first. If they're
 over budget, the realm's tentacles are the first thing to cut (each is a few hundred triangles).
 
+### 4.11 As built (2026-11-10)
+
+Built in #159 as build order step 6. Where it differs from the above, and why:
+
+- **The arena** is a ScapeRune cut (`scaperune/maps/lassarUndercity.ts`) of squares 40 to 42 by 98 to 100, with 43 east
+  of it for the margin, set down at squares 62 to 66 by 104 to 108; the realm is the same cut of 36 to 39, set down six
+  squares west of it (`MapRecipe.twin`, `MapDef.twin`). The city's one-tile clutter (crates, barrels, rubble, stalls'
+  shelves) and doors come off, but its lamps and braziers: in OSRS they cut its streets into pockets that don't join, and
+  without them it's one piece of 21,900 open tiles. Ground a rise south of it hides from the camera (its steps down to
+  the water) is blocked. The realm's locs come off wherever their city twins do, so both are drawn alike.
+- **The twin on screen**: the renderer keeps both sets of squares loaded and, while the party's in the realm, draws each
+  city square's twin in its place (`MapManager.twin`, `WebGLMapSquare.drawAt`). The swap is instant, with the realm's
+  brightness (0.75 of the city's: 0.6 hid its Shadows) and violet wash. Memory: both sets are loaded, about twice a one-world map's geometry.
+- **The start** is the forecourt at the top of the causeway to the cathedral's island, and the Whisperer rises on the
+  island (her arena in OSRS); the island's floor is the cache's near-black navy, so the map's drawn at brightness 1.6.
+- **The way back**: the third soul opens the Anima Portal where it was caught, and it takes a second's standing in it to
+  go through (one at your feet would otherwise take you back the moment the last soul's caught, leaving no choice). If
+  it closes unused, three more souls come.
+- **The waiting world**: both worlds wait, the realm as well as the city (its crowd and drops are kept for your next
+  dive), but its lost souls, which come new each time. While the party's in the realm the city's elites and rings wait
+  too; its bosses don't. On a lapse the realm's ground is cleared.
+- **Co-op**: the first player whose sanity runs out takes the whole party back (the party's always in one world).
+- **The Tentacle** in the realm is a riser (`RealmRuleDef.risers`): one comes up 3 to 6 tiles from the party every 8
+  seconds there, two at most, and lashes out at whoever comes within 5 tiles (a shot, not the X). The Whisperer's
+  tentacles are a cross round you (the ground attacks' `cross`), not an X.
+- **The realm's elites**: from 4:00 each dive brings a Shadow Keeper in as an elite (`RealmRuleDef.elite`), so the
+  Treasure hunter's five caskets in one run can be done; by the bot's sweeps it's at most one a run without it.
+- **The Forsaken Assassin** goes between the worlds with the party (`EnemyDef.realm` both), and his dart lands out of
+  nowhere with a mark on the ground first.
+- **Soul Siphon**: at 80%, 55% and 30% she pulls everyone into the realm, and six souls come to her from 12 tiles out,
+  each healing her 2.5% as it reaches her (`EnemyHealsDef.once`); catching them counts towards the way back.
+- **Sanity's whisper** below 30 isn't in: the edges close in, without a sound.
+- **The bot** (`simulate-run.ts`) walks into a puddle near it while it's over 60% hitpoints (`REALM=0` never), chases
+  lost souls in the realm and takes the portal home.
+- **Music**: The Fallen Empire in the city, Lassar Silence (the area's near-silent track) in the realm, Song of the
+  Silent Choir from 15:00.
+- **The Shadow walker**: her step lasts 1.5 seconds, out 3 tiles on the way she faces; enemies don't lose her beyond
+  that. **The Treasure hunter**: a casket buries itself after 3 seconds on the ground.
+- **Sims** (`META=max ARMOURY=max`, 8 adventurers by 3 seeds, the bot diving): at step 0, 1 win of 24 with a median end of
+  10:05 and 12 deaths before 10:00, against the Stranglewood's 1, 6:31 and 14 (its Kasonde wall at 5:00; Lassar's
+  deaths spread from 5:09 to 17:00, the Forsaken Assassin at 10:00 the most); at step 1, 0 wins, 7:46 and 14 against 2,
+  7:11 and 14. The bot went in 4 times a run (median), was thrown back twice, and spent about an eighth of the run there.
+- **Phones**: thinned for the busiest views (lamps to a quarter, furniture to a third), measured with `frameProbe` at
+  844 by 390 on the phone camera. The ruined houses' walls were thinned to a fifth and less at first (64k in the city,
+  66.4k in the realm), but that left the houses as bare floors with stairs, so they stand whole (Dynny's call, 11-11):
+  the heaviest view is now 134k in the city and 135k in the realm, over the 69k phone line.
+
 ## 5. Ghorrock (Duke Sucellus)
 
 ### 5.1 Found in the cache: the prison is too cramped
@@ -432,6 +488,56 @@ About three weeks: the map is the long part.
 A hand-made map can be built to budget: `view-weight.ts PHONE=1` checks it as it's made. Braziers are the cost to
 watch, with a fire spot animation each.
 
+### 5.11 As built (2026-11-10)
+
+Built in #159 as build order step 9. Where it differs from the above, and why:
+
+- **The yard** is a hand-made recipe (`scaperune/maps/ghorrock.ts`) on squares 62 to 66 by 112 to 116, three by three of
+  arena with a square of margin round it: snow (underlays 58 and 216) at brightness 1.3 under a cold wash, so it's white
+  rather than the grey the game's lighting makes of it. North is the cliff the prison's cut into, in faces of 64 over two
+  tiles with two-tile ledges up to 160 (`map-depth.md`'s cliff wall north), the yard ending at its foot. In it, behind
+  the Duke, the prison's Heavy Door (49093) between two of its pillars (46628), with its flags (48950), cages (46634,
+  49452), iron maidens (48959) and racks (48947) along the foot. Across the yard: tables and smashed chairs (46675,
+  49087), skeletons, snow rocks (19686), ice-covered boulders (5039), snowy trees (1330 to 1332) and the snow's ice mounds
+  (60404, 60405). A fence (4246) on its other three sides, and a snowy wood past it.
+- **The ice**: ten frozen pools, about 13.5% of the yard, painted with overlay 151, a blue-grey (no overlay has the
+  floors' glassy ice texture, 53). The sim's ice is the **effect mask** (`core/world/EffectMask.ts`, one byte a tile over
+  any map's arena) painted from the same ellipses (`ColdRuleDef.ice`); the drawn ice's edges are smoothed, so the two
+  can differ by a tile at the rim. Enemies never slide (the ice wolves don't need anything of their own).
+- **Braziers**: the prison's own don't read: its unlit one (48122) is a dark block from above and its lit one (48901)
+  burns violet, not warm. Drawn instead is an iron brazier (46614) at 1.8 times its size with a fire (25155) in its bowl
+  while it's lit, its flames dying down over their last 10 seconds. Each is a stand-in blocking its 2 by 2. Standing by
+  one relights it while it's guttering too, so it can be tended. Two of the six stand in the Duke's square.
+- **Vents**: their jets are the cache's Steam Vent (15214) in the map; the Gas jet (49762) and the Gas (49761) are near
+  invisible on snow. As a vent frosts over the Gas shows; its puff is the Duke's own gas (spot animation 2431) over the 3
+  by 3. The gas hurts 2% every 0.6 seconds (the table's "a tick" read as a game tick), and the cold rises 5 a second in it.
+- **Embers** are five small fires (5249) over their 3 by 3. They burn 2% every half second.
+- **How the cold shows**: a bar under hitpoints (frosting at 80), your character pale from 50 and the frozen blue from
+  80, and the Ice Block (49144) round you while you're frozen. The breath puffs from 80 aren't in.
+- **Fire weapons**: Fire spells, Flames of Zamorak, Burning claws and Toktz-mej-tal. The Tome of fire is a passive
+  (weapons recharge faster), not a weapon; Burning claws is its evolution.
+- **Ketla** snuffs braziers within 3 tiles of her as she goes (`EnemyDef.plants`, what roots a Strangled Bear's trail on
+  the Stranglewood), and calls icefiends. **Jhallan**'s shadows are three of his unattackable twin (12355) at half his
+  hitpoints.
+- **Duke Sucellus** is drawn at 0.55 of his size (his arms span his whole room in OSRS) and never moves. He wakes at the
+  north edge of a 32-tile square in front of the prison, with seven of the prison's statues (49090) in it for cover, none
+  more than 9 tiles from anywhere in it. His slam, icicles (a ring of five and one under you, spot animation 2434), his
+  spit (three of the King Black Dragon's ice breaths, 396; his own spot animations nearby don't fly), gas spat at you
+  whose landing sets the nearest vent puffing (`BossAttackDef.rule.vent`), and the **freezing gaze**: Zachariah's
+  (`cover`), 12 damage and a 2-second freeze. It's every fifth attack or so, not counted: its cooldown is about five
+  attacks and it's the heaviest pick. His animations (10176 to 10180) are picked by length: they're skeletal, and
+  `classify-npc-seqs.ts` can't tell them apart.
+- **The bot** (`simulate-run.ts`) goes to the nearest lit brazier (an out one counts 10 tiles further, as it has to be
+  relit) once its cold reaches 45 (before it slows) and stays until 15, steps out of a vent's gas and off embers. `COLD=0` never warms.
+- **Sims** (`META=max ARMOURY=max`, 8 adventurers by 3 seeds, the bot warming itself): at step 0, 1 win of 24 with a
+  median end of 8:14 and 15 deaths before 10:00, against the Stranglewood's 1, 6:31 and 14 and Lassar's 1, 10:05 and 12;
+  at step 1, 0 wins, 8:28 and 14, against 2, 7:11 and 14 and 0, 7:46 and 14. The bot was frozen once a run (median) and
+  spent about a third of the run at 50 cold or more. The first pass was harder (6:14 and 21 before 10:00): Ketla's
+  frost came three at a time every 3 seconds, and the ice giants (44 hitpoints, 4 damage) walled the crowd from 6:00;
+  she now throws two every 4 seconds and calls three icefiends, and the giants are 40 and 3, one fewer at 6:00.
+- **Phones** (`frameProbe` at 844 by 390 on the phone camera): the yard's world is light, at most 12.5k in front of
+  the Duke's statues, 33k with its crowd; the heaviest view is the Duke's fight at 49k, 39k of it actors.
+
 ## 6. The Scar (the Leviathan)
 
 ### 6.1 The rule: the dark
@@ -522,6 +628,85 @@ light leeches and fires.
 A plus: what's in the dark needn't be drawn in detail. Culling the scene past the lights' reach could make the Scar
 one of the cheapest maps on a phone.
 
+### 6.9 As built (2026-11-10)
+
+Built in #159 as build order step 12. Where it differs from the above, and why:
+
+- **The arena isn't open.** The Scar in the cache is a sea of abyssal sludge (overlay 302, a grey-green that hides
+  what's under it) with islands of flesh in it, and the sea is blocked: of the 2 by 2 squares only about a thousand
+  tiles are walked, in pieces. The 11,264 tiles above counted the floor, not what's walkable. So the map
+  (`scaperune/maps/scar.ts`) cuts squares 31 to 32 by 99 to 100 whole and sets them down at squares 62 to 65 by 120 to
+  123 with a square of margin, then drains the sea to the flesh under it and lays the Scar's own floor cracks over
+  it (49247 to 49282, as its islands have; 49376 to 49385 are the sludge's ripples, and come off what's drained). The
+  sludge comes back as a band along the arena's edge running out into the margin's sea and six pools, blocked, and
+  the Leviathan's pool. The shore runs on over the islets' own floor, so they stand in it as in the cache, and the
+  sludge lies level, a little under the floor (each body at the lowest of its shore, less 6), with the darker of the
+  cache's two fleshes for two tiles round it. The islands stay as they are: the brain west and north (a wall, about
+  two fifths of the arena), the Abyssal Rift's island north-west with its nerves and fires. Over the drained floor
+  the Scar's kit is scattered: nerves, nerve formations, brain matter, broken boats, broken pillars and vents. About
+  7,800 tiles are open.
+- **The Leviathan's island** is a ring of the brain's rim round his pool, its top a walkway on a level of its own: it
+  comes off whole (every piece of the rim joined to his pool), so his pool's fought from open ground (the rim's north
+  half kept behind him was 80k triangles in a phone's view). His pool is sludge, radius 4, and not blocked: he
+  stands in it, solid.
+- **The dark** is the lighting (`content/scar.ts`, `SCAR_LIGHTING`): ambient 0.3 a little blue (0.19, the dev map's,
+  left the flesh black outside the lights), a light of 5 round
+  each player, nine fires (49342, the Scar's own) as lights of 3 that weapons aim by, lanterns at weight 6 among the
+  power-ups and two lying by the start. It isn't a `RunRuleDef`: everything it needs is in the lighting and the
+  enemies, so the Dark remix (step 13) can put it on any map as lighting.
+- **Abyssal leeches**: their hit is a `dim` (`PlayerEffectDef`), a tile off your light for 8 seconds, stacking to 3,
+  shown with the debuffs. A light never goes below 1.5 tiles.
+- **Light leeches** wander off from you (`EnemyDef.flees`, 4 tiles) with a pale green light of 2.5; killed, a light
+  of 4 stays where they fell for 20 seconds. One in six of the first minute's crowd is one, one in forty or so later,
+  and three come as elites.
+- **The Scarred black demon**'s roar is a swing 10 tiles round it with a `dim` to 2 tiles for 6 seconds, every 12
+  seconds or so; a lantern doesn't help through it.
+- **Persten the Deceitful** lights three false lanterns 5 tiles round you every 14 seconds or so: the Abyssal
+  lantern's model, lit, but with no beam (a real one's a power-up, which has one). Walked into, one bursts for 6
+  in 2 tiles; left, it's gone after 20 seconds. They're enemies (`EnemyDef.caught` with `explodes`).
+- **The Leviathan** is drawn at 0.8 of his size and never moves. Three volleys, ranged, magic and melee orbs
+  (spot animations 2487 to 2489, beside his model in the cache), and after each a roar and four pieces of debris
+  falling round you (`BossAttackDef.debris`: a Broken Pillar, 49343, standing 14 seconds, ten at most). His orbs
+  break on debris. Debris doesn't block walking. Up close, his tail. He glows the abyss's teal (a light of 5 on him),
+  so he's seen and can be aimed at from round his pool, and the camera leans to keep him in view (`BossLookDef.lean`).
+- **His enrage**: at a third of his hitpoints the Abyssal pathfinder (12220) comes, going round him 7 tiles out a tile
+  a second (`EnemyDef.circles`), with a light of 4, and while it's up it's the only light (`EnemyDef.onlyLight`):
+  players' lights, the fires and what's left go dark. Hits from inside its light do 1.5 times, his hits on anyone
+  out of it twice.
+- **What a player sees**: enemies in the dark are drawn dark, the minimap only shows what's lit, and faint arrows
+  show what's coming out of the dark (the lighting step's).
+- **The Lantern-bearer**: Fire Strike (the wizard's Fire spells), the Ancient d'hide coif and body and the Abyssal
+  lantern in her hand. Lantern: enemies within 3 tiles take 20% more from all her hits and are 10% slower; her light
+  on a map with players' lights is twice the size (10 tiles on the Scar).
+- **The bot** (`simulate-run.ts`): keeps clear of false lanterns, goes after a light leech when nothing near's lit
+  (or it's dimmed), to the nearest fire or left light while it's dimmed, and stays in the pathfinder's circle;
+  `DARK=0` none of it.
+- **Music**: Scar Tissue, and Colossus of the Deep from 15:00.
+- **Numbers after the sims**: the crowd's lesser demons 30 hitpoints and 4 damage, hellhounds 26 and 4, walkers 44
+  and 3; a ring of 16 hellhounds at 7:30. The black demon comes with 4,400 hitpoints, claws for 5, breathes 3 three at
+  a time and roars for 3. Persten attacks every 2.8 seconds, her fire wave 4 (every other attack at most) and her
+  flames 4. The first pass (demons and hounds 3 damage, Persten's wave every attack at 5) ended most runs at Persten
+  (10:13 to 10:30) and few before 10:00.
+- **Sims** (`META=max ARMOURY=max`, 8 adventurers by 3 seeds, the bot in the dark): at step 0, 1 win of 24 with a
+  median end of 7:01 and 15 deaths before 10:00, against the Stranglewood's 1, 6:31 and 14, Lassar's 1, 10:05 and 12
+  and Ghorrock's 1, 8:14 and 15; at step 1, 0 wins, 7:06 and 15, against 2, 7:11 and 14, 0, 7:46 and 14 and 0, 8:28 and 14. The black demon at 5:00 is its wall (about a third of the runs end there), as Kasonde is the Stranglewood's. The
+  bot's light was dimmed about 5% of the run (median). With `DARK=0` (the bot doing nothing about the dark) step 0
+  was 0 wins, 8:04 and 14: the same within the sims' spread, which is wide (two sweeps of the same map a tweak apart
+  gave medians of 5:42 and 7:46).
+- **Phones** (`frameProbe` at 844 by 390 on the phone camera): the brain in the cache is walls (49223) and the tops of
+  its rims (49232 to 49235) round a middle of black filler (49236) on a hidden floor, thousands of one-tile pieces
+  of 340 to 520 triangles: a view of the rift's island was 180k. So it's drawn two tiles in from its edge, wherever
+  that edge faces, then a ring of the filler, and past that the hidden floor, black as the filler is; and its
+  pieces are drawn lighter (`MODEL_SIMPLIFY` in `LocOverrides.ts`, `ModelData.simplify`: the walls a fifth of their
+  faces, the tops an eighth, the filler a fifth, the shortest edges collapsed first, never one on a tile's edge, so
+  pieces still meet), as is the kit (two fifths). The islands' kit is still thinned (`KEPT`). The heaviest view is
+  38.7k by `view-weight.ts`. In the game the heaviest is a crowd of 51 on the rift's island, 63.0k (34.4k of it the
+  world); the heaviest world alone is 42.0k, on the rift's island; the Leviathan's fight is 27.0k up and 38.3k
+  enraged with a crowd. The light map costs the same as on any lit map;
+  nothing past the lights is culled. The first build (2026-11-10) hollowed the brain to a tile round the ground
+  that's walked, filled its hollows with sludge and thinned its walls to two fifths: stubs of wall, flat squares of
+  sludge and holes, which this replaced.
+
 ## 7. The finale: the Awakened
 
 The finale is two things, both built now: **four separate Awakened fights**, each opened by beating its Act II map,
@@ -586,6 +771,82 @@ Pets, items and relics stay out of the gauntlet, as they're out of the fights: e
 
 **In co-op** (decided, 13.2): a party can run it together, each player as the fight's adventurer. The camp's
 blessings and the carried wounds are each player's own, and the room's retry is the host's call.
+
+### 7.4 As built: the Forgotten Four (2026-11-11)
+
+Build order step 15. Where it differs from 7.3, and why:
+
+- **Each fight is its own run, not a room of one.** The Theatre chains rooms inside one Sim on one
+  map; the four fights are four maps from four regions (the Stranglewood, Lassar with its twin,
+  the Duke's room, the Scar), each with its own grid, lights, rule and music. Loading four arenas
+  into one Sim would be a new engine. So `GameClient` chains four runs, each a fight map started
+  with `SimOptions.gauntlet` (its climb, the hitpoints it starts at, its blessing), and the camp is
+  a screen between them, as the Theatre's supply chest is a screen between rooms. The run's state
+  (`core/gauntlet.ts`, plain data) is the same one the bot plays (`GAUNTLET=1`).
+- **The camp is a screen, not a map.** It's 45 s (Ready skips it) of the last fight's points, the
+  next fight's card with its climb and wounds, and the five blessings. No camp map was built, so no
+  shipped map hash changes.
+- **Points**: as a raid room's (`getRoomPoints`), 50 for the win, up to 100 for speed (all within
+  2:00 of the fight's start, none by 5:00), up to 50 for little damage taken (none at a whole bar),
+  and 5 a guard drop up to 50: at most 250 a fight. The careful bot makes 165 to 220 a fight.
+- **Blessings and prices**: Rest 60, Steady hands 80, Ancient focus 100, Saradomin's blessing 120,
+  Second wind 150. One a camp, for the next fight and its retries; points not spent are kept.
+  Picking another gives the first back. Second wind stands you up once at 30%, untouchable 3 s;
+  Steady hands lengthens the guard's drop, not a stun; Ancient focus is the button's cooldown
+  times 0.75; Saradomin's blessing is +20% maximum hitpoints.
+- **The climb** multiplies the fight's boss's hitpoints (its event's) and divides its tempo (its
+  attack interval and its patterns' windups, as `BossPhasesDef.tempo` does). The fights
+  themselves are untouched.
+- **Wounds** are a fifth of the hitpoints missing at the fight's end (so at most a fifth), of the
+  next adventurer's whole. Rest clears them.
+- **Retry this fight** starts it again with the wounds, points and blessing it was come into with.
+  **Start over** goes back to the order screen with the run's order on it.
+- **Records**: per mode (normal, hard) and per order (13.2), the fights' time with the camps left
+  out, whether it was clean, and its retries; a clean clear beats one with retries, then the
+  quicker. The fights in it don't count as the fights' own wins, records or drops (no pets, no
+  pieces), so the gauntlet can't farm what step 16 pays per Awakened win.
+- **Rewards**: the first clear on each mode gives two Awakener's orbs (`SaveData.awakenerOrbs`,
+  kept for step 16). The first clean clear (either mode) gives the looks: the Soulreaper axe drawn
+  as the cache's ornamented axe (object 33335, "Soulreaper axe (o)"), and the four fighting pets
+  with a red glow, since the cache has no recolour of theirs; the act's middle card's gold border;
+  and hard mode (each fight on its own hard). The ornament kit's icon (28336) stands for the looks
+  on the results. Only this player's axe and pet look blood-touched in co-op.
+- **Default order**: the order the fights were first beaten (`SaveData.awakenedOrder`, kept from
+  this build on; saves from before fall back to the act's order for what they don't know), then
+  the order last picked.
+- **Co-op**: not built; the gauntlet is solo for now. Co-op's runs start from one `GameStart`, and
+  chaining four of them, with a camp every copy agrees on and each player's own wounds and
+  blessings, needs new lobby messages and a host-driven retry: its own job. The act card's button
+  is greyed in a room with a note.
+- **Bot** (`simulate-run.ts` `GAUNTLET=1 DODGE=1`, normal, the act's order): with no retries all
+  6 seeds fall at the first fight, Vardorvis, the one it wins least. With up to 25 retries a fight
+  it clears all 7 runs, with 7 to 40 retries, in 6:28 to 7:17 of fighting; a fight takes it about
+  20 tries at Vardorvis, 2 at the Whisperer and the Duke and 8 at the Leviathan. Vardorvis eased
+  after (4,000 hp, severed tempo 0.9; awakened-vardorvis.md 10): 24 seeds with up to 40 retries all
+  clear, in 5:46 to 7:18, at 5.9 tries a win at Vardorvis, 3.7 the Whisperer, 5.4 the Duke and 8.1
+  the Leviathan (the earlier 2 and 2.5 were 4 seeds). Its fights earn
+  165 to 220 points. With Rest skipped (`BLESS=best`) the wounds carry: fights 2 to 4 start at
+  81% to 97%.
+  All four hardened, 2026-11-12 (tuned to a full save, `META=max`, each about 1 in 25 on its own:
+  the awakened-\*.md 10s), with `META=max` and up to 80 retries a fight, 1 of 12 runs clears: the
+  climb on top of fights tuned that close takes Vardorvis 1 in 30 at x1, the Whisperer 1 in 276
+  at x1.05 (wounded), the Duke 1 in 43 and the Leviathan 1 in 161. With the Whisperer first (6 runs)
+  she's 1 in 26 at x1, the Duke 1 in 21 at x1.05, the Leviathan 1 in 63 at x1.1, Vardorvis 0 in 82
+  at x1.15. The climb is the knob if the gauntlet's to stay clearable for most players.
+  All four eased, 2026-11-13 (Dynny: "way too hard to beat"; each now about 1 in 4 for the bot
+  with a person's reaction, `REACT=0.25`, and nearly always for the careful one: the
+  awakened-\*.md 10s). Climb unchanged, 24 seeds with up to 40 retries a fight: the careful bot
+  clears all 24 in 8:05-10:06 of fighting, at 1, 1, 2.5 and 1.4 tries a win; the reacting bot
+  all 24 in 8:39-11:50, at 4.6, 5.7, 5.9 and 10.6. The last fight at x1.15 is still the steep
+  step, and the climb's still the knob.
+  A fifth harder, the same day (Dynny: "about 20% harder"; every hit x1.2, `AWAKENED_HITS`, and the
+  Whisperer's lash): the careful bot clears 23 of 24 in 8:24-10:41, at 1.1, 1.1, 6.1 and 1.5
+  tries a win (one climb ran out of retries at the Duke); the reacting bot 11 of 24 in
+  8:38-10:16, at 19.3, 10.8, 25.8 and 43.6, the rest out of retries at the Leviathan (7), the
+  Duke (4) and Vardorvis (2).
+- **Not kept**: a run in progress isn't saved; reloading the page mid-gauntlet loses it.
+- **Phones**: the camp and the order screen fit 844x390; the heaviest fight start measured is
+  Vardorvis's, 61.5k (54.1k of it the world).
 
 ## 8. Rewards
 
@@ -734,7 +995,191 @@ For a player who's bought everything, each of these changes what a run is like:
    seed. The sim is deterministic already, so this is mostly a screen. **What it changes**: one fixed challenge, new
    each week, that can be compared with friends.
 
-The act's ending is the last: the middle card's story, told when the fourth Awakened falls.
+The act's ending is the last: the middle card's story, told when the fourth Awakened falls. As
+built (`awakened-leviathan.md` section 9): "The Forgotten Four", five lines over the results of
+whichever Awakened fight is beaten fourth, told once (`SaveData.actEndings`) and again from the
+card.
+
+### 8.7 As built: remixes and the Soulreaper axe (2026-11-11)
+
+Built in #159 as build order steps 5, 7, 10 and 13 together (the four rules were already map-agnostic, so one
+pull of work put all four on). Where it differs from 8.2 and 8.3, and why:
+
+- **What a remix is in the code.** `content/remixes.ts` has the four (which Act II map each comes from, its word,
+  its elites), which maps take them (`getMapRemixes`: every first-campaign survival map, and the Act II maps but
+  their own) and when they're open (`isRemixOpen`: its Act II map beaten; on an Act II map, all four beaten). What
+  one puts on a run is `core/rules/remix.ts` (`buildRemixRun`), done by the Sim as it starts, on the map's own grid
+  and by the run's seed, so every co-op copy places the same: each Act II rule's def with this map's places and
+  numbers in it, the map's waves with the remixes' crowds in, its events with their elites, and the Dark remix's
+  lighting. Several rules on one run are one `RuleSet` (`RunRule.ts`): every hook goes to each. A run without
+  remixes builds nothing new, so every pinned run plays as it did (`runHash.test.ts`).
+- **The switches** are on the map's card, under its records (`RemixRow` in `GameUi.tsx`), not in the bottom bar
+  beside Hard and Endless: on a phone that bar is full. A switch for each of the four, greyed until open (its
+  tooltip says what opens it; on an Act II map its own rule's says it's the map's own), the records of the set
+  that's on under them, and a badge for the most beaten at once (Fallen for all four). The run's button says
+  the set: "Enter Frozen Dark Lumbridge", "Enter Fallen Inferno" (a leading "The" dropped). They're the
+  screen's, not the save's: picking another map keeps those that are open on it.
+- **How hard on each map**: `getRemixToughness`, 0.7 on Lumbridge rising evenly to 1 on the Inferno (and the Act
+  II maps). Roots creep that much slower (their spreads' seconds divided by it), sanity drains and the cold rises
+  that much slower (times it), and the player's light is that much bigger (divided by it: 7.1 tiles on Lumbridge,
+  5 on the Inferno). The Dark's ambient goes from 0.36 to the Scar's 0.3.
+- **Overgrown**: the Stranglewood's roots in cells of 3 by 3 tiles, not 2 (`RootsRuleDef.cell`; 8.3's answer for a
+  map over 69k, and every first-campaign map's busiest view is, below), their spreads' seconds 1.5 times as long so a
+  front still moves as many tiles a second, from each map's blocked ground (water, buildings, walls: the wood),
+  never within 10 tiles of the middle of an Act II map's final fight; no safe circle on campaign maps, whose final
+  bosses can come anywhere. Elites: three Strangled Bears (4:00, 8:40, 13:00), whose trail roots.
+- **Shadow**: the realm as the palette (brightness 0.7, not 8.3's 0.55, which hid the darker maps such as the Barrows, and Lassar's violet wash), Lassar's puddles, sanity,
+  souls, portal, risers and realm elites as they are. Puddles open where Lassar's do (8 to 12 tiles off), so on a
+  walled map one can be past a wall; the realm's waves are Lassar's realm waves.
+- **Frozen**: Ghorrock's cold, with six braziers placed by the seed on open, outdoor ground joined to the start,
+  within 40 tiles of it and 20 apart (10 if a cramped map can't fit six), and twelve ice pools (2 to 5 tiles
+  across each way) within 60. No gas vents: they're Ghorrock's scenery, not something to place. The braziers
+  don't block (Ghorrock's are stand-ins in the map). The ice is drawn a tile at a time over the map's own ground,
+  only where it can be walked, as the cache's slippery Ice (loc 21148, animated, 1.45 times its size and turned by the tile so neighbours overlap). Elites: four pyrefiends and two
+  flaming pyrelords, whose embers relight braziers. The final boss still puts every brazier out.
+- **Dark**: the Scar's lighting, with nine fires (loc 5249, lights of 3 that weapons aim by) placed by the seed
+  within 60 tiles of the start and 15 apart, two lanterns by the start and lanterns among the power-ups. The
+  "lights from what's already there" (lava, lamps) aren't in: the sim doesn't have the map's scenery, and lights
+  weapons aim by have to be the sim's, so fires are placed instead. Elites: three light leeches.
+- **The crowd**: each wave keeps its size and cap; the remixes' enemies (wave i of each one's Act II map, all paced
+  alike) take a quarter of its weight between them, split evenly, so one remix or four, a quarter of what comes is
+  theirs. Their hitpoints are the map's difficulty's, on the same curve as the map's own.
+- **Pairs**, as 8.3's table, all built: roots don't take on ice (`RootRule.exclude`) and a fire elite's embers
+  burn them 2 tiles round; in the realm the roots stand still and don't slow, hurt or get cut, and aren't drawn;
+  in the realm there are no braziers (not drawn, no warmth) and the cold rises 1.5 times as fast; under the dark a
+  lit brazier is a light of 4 and embers of 2; and in the realm the player's light is 0.8 of its size (4 not 5).
+  Roots in the dark are drawn as the lighting draws them; their sprouts aren't drawn unlit (left as they are).
+  With all four, sanity and cold are the two bars under hitpoints already.
+- **Coins**: 0.3 for one, 0.25 for each more, added to hard mode's or the invocations', and Act II's steps, under
+  the +300% cap. A remixed map takes invocations whatever it is (`takesInvocations(map, true)`): Lumbridge, the Barrows and
+  the Wilderness get the board when remixed.
+- **Records** (`SaveData.remixVictories`, keyed `lumbridge:dark+frozen`): wins, the best time, wins on hard (the
+  gold tick) and the best endless round, relic-free. A remixed win counts as a win of the map (its tick, quests),
+  but sets none of the map's own hard, act, invocation or endless records: they stay the plain map's. No
+  `SAVE_VERSION` bump.
+- **Co-op**: the host's remixes go in `GameStart.remixes` (as its invocations), each copy's Sim keeping those the
+  map takes. The lobby doesn't show them yet.
+- **The bot** (`simulate-run.ts`): `REMIX=overgrown,frozen` or `REMIX=all`. Its goals for the realm and the cold now
+  walk round walls (`wayTo`, the flow field), and it picks a brazier by the walk to it: on an old map a straight line
+  to one is often through a castle.
+
+- **Sims** (`simulate-run.ts`, `META=max ARMOURY=max`, warrior, wizard, ranger and barbarian by seeds 1 and 2, each
+  remix alone and all four, against none; wins of 8, the median end, deaths before 10:00):
+
+    | Map       | None        | Overgrown   | Shadow      | Frozen      | Dark        | All four    |
+    | --------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- |
+    | Lumbridge | 8, 15:46, 0 | 7, 15:52, 0 | 6, 15:41, 0 | 6, 16:07, 0 | 8, 15:59, 0 | 5, 16:31, 0 |
+    | Karamja   | 1, 10:39, 3 | 2, 16:12, 2 | 0, 14:19, 0 | 1, 9:24, 5  | 0, 11:00, 3 | 1, 14:15, 2 |
+    | Inferno   | 1, 7:54, 7  | 0, 8:00, 7  | 1, 7:54, 5  | 0, 8:31, 6  | 0, 8:00, 7  | 0, 7:48, 7  |
+
+    The remixes cost a win or two on Lumbridge and the Inferno, and on Karamja the bot lasted longer with most of them
+    on: the remixes' quarter of the crowd is in place of a quarter of Karamja's own, which hit harder than the Act II
+    maps' early waves, and the realm's drops are double. Eight runs a cell is a small sample (a seed's course moves a
+    median by minutes). The bot dived 3 to 7 times a run and was frozen at most once (median). These were run with
+    2-by-2 root cells; the 3-by-3 cells came after, for phones.
+
+- **Phones** (`frameProbe.sample(30)` at 844 by 390 on the phone camera, all four on, 3 minutes in with its crowd, at
+  the start; "all rooted" is every open cell rooted, the worst the roots can be): the first-campaign maps' own
+  worlds are well over 69k at their starts (the Barrows 114k, Kourend 212k, Prifddinas 224k, Varlamore 164k:
+  they were never thinned for phones, as Act II's maps were), so no remix can bring those under it. What the
+  remixes add is actors: the roots at full cover cost 9.6k to 17.6k at 2 by 2 cells and 5.6k to 8.8k at 3 by 3; ice
+  and fires a few hundred; braziers a few models; the realm and the dark nothing in triangles. Under 69k with all
+  four on: the Desert (41k), Fremennik (53k), the Wilderness (45k); over it already without them: the rest. The
+  table is in #159.
+
+**The Soulreaper axe** (`soulreaper_axe`, object 28338): as 8.2. It's opened by a new unlock task, `pieces`, all
+four of the trophies found (they already dropped from the final bosses); the Scar's card lists it. Its swing is the
+godswords' (seq 7045); OSRS's own axe animations weren't looked up. `WeaponDef.souls` holds its numbers; a kill by
+anything within 4 tiles of a hero holding it gives that hero a soul (kills the Harvest makes count too, so a big
+spin can leave one). Each soul is +8% to its hits. Harvest (`Sim.harvest`) is a full circle 3.5 tiles round (with
+the area stat), three times the swing's damage plus 0.2 a level after the first, bosses and elites taking it a
+second time, its price a hitsplat of 8% of max hitpoints (never below 1, never while under 20%), with the Dragon
+axe special's spot animation (479) on the player. At level 5 each kill it makes heals 1, up to the price. The souls
+are drawn as soul runes (object 566) circling the head, bigger and flashing at five: no Lost Soul model is loaded
+on every map, and a rune reads as a soul.
+
+### 8.8 As built: invasions, orbs and the weekly Vault (2026-11-11)
+
+Build order step 16, the act's last. Where it differs from 8.6, and why:
+
+- **An invasion is a mid-run boss.** `content/invasions.ts` rolls it as the run starts, on an Rng
+  of its own off the run's seed (`rollInvasion`), so the run's own Rng never moves for it: a run
+  without one plays exactly as before, and nothing's rolled at all unless the player has opened
+  invasions (`SimOptions.invasions`, the host's in co-op, `GameStart.invasions`). One rolled is an
+  event among the map's (a `boss` at its second, `invasionEvent`), so it comes as the map's
+  mid-run bosses do: its co-op copies, its spawn 12 to 16 tiles off, its boss bar. The Desert on
+  means the campaign maps that take invocations unremixed; never endless (the rounds would bring
+  it again and again), never with a stage or a map rule of its own.
+- **The invaders** (`content/invaders.ts`) are the Act II maps' own final bosses, made over: no
+  entrance (an entrance sends the crowd and any other boss off the map), no summons (the
+  Whisperer's siphon, the Leviathan's pathfinder and its dark, Vardorvis's head are each their
+  own map's), and none of the attacks that need their map's scenery (the Duke's gas at a vent, his
+  gaze hidden from behind pillars). Their hitpoints are 1.5 times the map's toughest mid-run
+  boss's (the Desert 5,700, the Inferno 11,100), with hard mode's and co-op's on top.
+- **The pocket** (`core/rules/invasion.ts`) is 24 tiles across, round where the invader comes, and
+  the invader keeps to it (pulled back to its edge, and never brought back near the player as a
+  boss left behind is): to fight it is to go in. Each is its map's own rule with a place to keep
+  to: the Stranglewood's roots kept to the circle and creeping in from its edge
+  (`RootsRuleDef.ring`, as Vardorvis's clearing; 3-tile cells as the remixes', a front out in a
+  minute, no root hearts); Lassar's realm with its puddle opening only in the circle
+  (`RealmRuleDef.area`), every 20 s, and the Whisperer hurt only in the realm (`EnemyDef.hurtIn`),
+  so the puddle's the way to her; Ghorrock's cold rising only in the circle, 1.5 times as fast as
+  Ghorrock's as there are no braziers, thawing out of it as by a brazier (`ColdRuleDef.area`), with
+  three pools of ice in it and a ring of ice round its edge to show where it is; and the Scar's
+  dark only in the circle (`Sim.darkPocket`), where weapons only aim at what's lit. The rule comes
+  with the invader (`Sim.startPocket`, on its own seed) and goes when it falls (`endPocket`: the
+  party's brought back out of the realm first, the dark fades over 2 s).
+- **The dark** needed the renderer: the lit programs are picked as a run starts, so a run that'll
+  have a Leviathan's pocket is lit from the start, at ambient 1 (`POCKET_LIGHTING`); the pocket is
+  the light map's alpha, and the shader only darkens and lights by it (`lights.glsl`), so the rest
+  of the map is drawn as it always is. It's only in the light map's 64 tiles round the view.
+- **No pocket that's on already**: a remix that's the same rule (Overgrown's roots, Shadow's
+  realm, Frozen's cold, Dark's dark) keeps that invader away; with all four on, none comes.
+- **Rewards**: its kill drops a master casket (its own drop, `EnemyDef.caskets`) and a boss's
+  coins twice over, read as an elite casket's (what a mid-run boss drops) twice: 100 to 200 coins
+  on the ground. Each kill counts on its Act II map's Collection log tab (`SaveData.invasions`), a
+  line for each invader.
+- **Awakener's orbs**: each Awakened fight won gives one (`recordRun`; the gauntlet's fights never
+  get there, and its first clears give their two). On a campaign map's card, under the remixes, an
+  orb's switch (`AwakenRow`, solo, not endless) awakens its final boss for the next run: 1.6 times
+  its hitpoints, enraged from 75% (bosses in phases don't enrage; they get the tempo), its attacks
+  and walk 20% quicker (as the gauntlet's climb is), drawn darker in its own colours with a violet
+  cast, in a soft violet glow round it (two see-through shells, `ActorDrawOptions.glow`) breathing
+  every 2.5 s; enraged, a redder violet, the glow brighter, wider and quicker (`GameView`
+  `AWAKENED_LOOK`). Sim's tints for it are unchanged. The orb's spent once the boss comes (`RunResult.awakened.seen`): a run
+  left before it keeps it. Its fall opens a master casket at once, as the run's over as it falls:
+  its coins are the run's, and its gear's found for the Armoury. A win marks the map's tile with
+  an orb (`SaveData.awakenedWins`). The orbs held show on the card and on the act's middle card.
+- **The weekly Vault** (`content/vault.ts`, `ui/Vault.tsx`), opened with the four Awakened fights
+  (the act's table): the ISO week in UTC, Monday 00:00, is its key ("2026-W46") and its seed (the
+  key's FNV hash), which picks a campaign map from the Desert on, one or two remixes, three of the
+  run invocations (not hard mode's) and an adventurer from the roster, lent whether it's unlocked
+  or not. No relics, never hard or endless, no invasion or orb: the run's what the seed says, and
+  what's still each player's own is what they've bought in the shop and the Armoury. Its best each
+  week is kept (`SaveData.vault`, the latest 12 weeks): a win beats a fall, then the quicker win
+  or the longer fall, then the kills. It's a run on its map as any other too (its coins, its
+  remixes' records). A host's Vault screen makes it the room's run (the room goes to its map;
+  `GameStart.vault` gives everyone its seed and adventurer).
+
+- **Bot** (`simulate-run.ts` `INVADE=1`, or `INVADE=invading_duke@360` to make one come; `AWAKEN=1`):
+  each invader made to come at 6:00 on the Desert (`META=max ARMOURY=max DODGE=1`, warrior, wizard
+  and ranger by seeds 1 and 2): all 24 came on time and 8 were killed before 10:00, in 10 to 71 s
+  (the Duke and the Leviathan 6 of 12, Vardorvis 1 of 6, the Whisperer 1 of 6: the bot only dives
+  for a puddle it happens on, and it doesn't go into a pocket to fight; a wizard kills them
+  quickest). Two runs died to the Duke or the Leviathan with it. On Karamja one warrior died to the
+  Duke in 42 s, frozen four times. The orb's awakened final boss against the plain one, same seeds
+  (warrior, wizard, ranger, barbarian by seeds 1 to 3): Lumbridge 12 of 12 plain, 10 of 12
+  awakened; the Desert 6 of the 9 that reached the Kalphite Queen plain, 4 of 9 awakened;
+  Fremennik 3 of 9 either way. Each awakened win opened its master casket (185 to 348 coins).
+
+- **Phones** (`frameProbe.sample(30)` at 844x390, the Desert, the crowd cleared, the camera 7
+  tiles west of the pocket's middle, a minute after it came; then the same spot once the invader's
+  dead): the roots and Vardorvis +6.9k (17.1k against 10.2k), the realm's pocket +2.4k (28.6k against
+  26.2k: its puddle and the Whisperer), the cold +14.5k (33.6k against 19.1k: the Duke and his ring
+  and pools of ice, thinned to single tiles after a first measure), the dark +10.4k in actors (the
+  Leviathan; the dark itself is a texture). The heaviest is the cold's, so a map already near 69k
+  (Karamja's 63k where it was measured) goes over with it; the Barrows, Kourend and Prifddinas are
+  over before anything's added. An orb's awakened boss adds nothing (it's the same model, tinted).
 
 ## 9. Invocations and Relics
 
@@ -784,6 +1229,55 @@ shows invocation points, and hard-mode, remix and weekly Vault records are relic
 Each relic is a small sim rule on the hero (deterministic, in co-op each player's own), and the adventurer screen gets
 a row of four slots. About a week for the two systems, with invocations' card switches.
 
+### 9.3 As built (2026-11-10)
+
+**One system, two boards.** The Tombs' invocations were generalised rather than copied: an invocation set
+(`content/invocations.ts`, `InvocationSet`) is a board's list and groups, and cleaning, toggling and points work on
+any set. The Tombs keep their own set, raid level, presets, save field (`invocations`) and co-op field as they were.
+A run's set is `RUN_SET`, ids `run_*` (the Tombs already have a Walk the Path, an Upset Stomach and so on that mean
+other things there), saved as `SaveData.runInvocations`, and sent in co-op in the same `GameStart.invocations` (the
+Sim cleans it by the map's board). Which maps take them is `takesInvocations(map, remixed)` in `maps.ts`: campaign
+maps from the Desert on and the Act II maps; `remixed` is the hook for remixes on the earlier maps.
+
+**Hard mode's preset** is four invocations, so a hard run is the same run: Hardened Foes (the map's hard hitpoints
+and damage, and the weapons' hard-mode balance, 90 points), Thronging (the crowd x1.25, bones' experience x0.9, 40),
+Elite Guard (two elites, 25) and Short Fuse (bosses enrage at 65%, attack 15% faster, fire the map's hard bullets,
+and co-op's more copies, 25). Together 180 points, so the nine above (120) and hard mode come to 300, the top badge.
+They pay hard mode's +25% coins between them (each 6.25%), not 1.5% a point. Checked: the pinned hard Inferno run is
+the same hash with the preset alone (`runHash.test.ts`), and seeded bot runs on hard (the Desert x4, the Inferno, the
+Stranglewood) print the same, line for line, before and after. The Hard switch turns all four on and off; they
+aren't picked one by one on the board for now (a row of their own, lit with the switch), so a hard record is always
+the whole preset. Off the board's maps (Lumbridge to the Wilderness, boss fights, raids) Hard is the switch it was.
+
+**Coins** add together now: 1 + (hard mode or the invocations' + an act's step), up to +300% (`COIN_BONUS_CAP`).
+Before, hard mode multiplied the act's step; that changes only hard runs on Act II's later steps.
+
+**How a few read in the sim.** Hardcore's "no getting back up" is co-op's revives. Ancient Haste runs the map's
+clock (`mapSeconds`: waves, events, the ramp, endless rounds) 25% fast; the run's time stays real. Blood Moon moves
+every boss and final boss event a minute earlier. Upset Stomach is the Tombs' On a Diet for runs, and keeps the
+Sandwich lady away.
+
+**Relics** (`content/relics.ts`, rules in `Sim.ts` under Relics, the row in `ui/Relics.tsx`): tier N opens with N Act
+II maps beaten, so all four can be open. Picks are `SaveData.relics`; a run takes the open tiers' picks, and in co-op
+each player's come in their loadout. They're on campaign and Act II maps (`takesRelics`), and off in boss fights,
+raids, the Tombs, quests in parts, the seasonal and fun maps. How the less obvious ones read:
+
+- Production Prodigy's "auto rules" are Auto equip's (`shouldAutoEquip`), in the sim: better gear is worn, the rest
+  alched (for 25% more), a utility item taken.
+- Fairy's Flight: the player was never held back by a crowd (they shove it), so the push is a knockback: walking with
+  4 or more enemies within 1.5 tiles throws them aside, every 10 s.
+- Specialist's "25% harder" is +25% might. Grimoire's weapon is a Common of the class's damage style, by the seed.
+- Last Recall comes after a Ring of life, and stuns (freezes) everything within 8 tiles of the start for 3 s.
+- Reloaded: twice a run, Keep for later puts a level up's offer by (that level up goes by); at a later level up,
+  Take kept offer plays it first as an extra pick, then the level up's own. What can't be had as offered any more
+  (a weapon level already taken) drops off it.
+
+**Records.** `SaveData.invocationBest` keeps each map's win at the most points (ties to the quicker), with its
+relics; the card shows it and the badges, and the map list shows the highest badge. Act records and endless records
+keep the points and relics they were set with. A win with a relic on counts as a win, but sets no hard-mode (or
+expert) record or win, so those stay relic-free (13.2); the remix and weekly records will do the same when they
+come.
+
 ## 10. Build order
 
 Everything lands on one branch, `act-2`, in one pull request (#159), at Dynny's word. Lighting came first, then the
@@ -796,20 +1290,20 @@ last. Each step lists its sims (`MAP=x`), its phone numbers and its cache additi
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------- |
 | 1   | **Lighting**, as an engine feature: lights from any source, a changeable darkness, `litTargetsOnly` (6.8). Done                           | -            | done       |
 | 2   | **Stranglewood**, with the act's screen, `act.requires`, Act II's steps, `RunRuleDef`, roots, the Forester. Done                          | -            | done       |
-| 3   | **Awakened Vardorvis**, with fighting pets (Butch first), and its design doc. Early, so its playtest rounds run beside the next steps     | 2            | 2 weeks    |
-| 4   | **Invocations and relics** (tier 1 opens with the Stranglewood)                                                                           | 2            | 1.5 weeks  |
+| 3   | **Awakened Vardorvis**, with fighting pets (Butch first), and its design doc. Built, first pass (`awakened-vardorvis.md`); playtest next  | 2            | 2 weeks    |
+| 4   | **Invocations and relics** (tier 1 opens with the Stranglewood). Built (9.3)                                                              | 2            | 1.5 weeks  |
 | 5   | The Overgrown remix, with the remix switches, sets and records                                                                            | 2            | 4 days     |
-| 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter                        | 2            | 2.5 weeks  |
+| 6   | **Lassar Undercity**: the twin, layers, sanity, souls, the party's flip, the Shadow walker and the Treasure hunter. Built (4.11)          | 2            | 2.5 weeks  |
 | 7   | The Shadow remix                                                                                                                          | 5, 6         | 3 days     |
-| 8   | Awakened Whisperer, Wisp                                                                                                                  | 3, 6         | 2 weeks    |
-| 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger                                                  | 2            | 3 weeks    |
+| 8   | **Awakened Whisperer**, the Wisp. Built, first pass (`awakened-whisperer.md`)                                                             | 3, 6         | 2 weeks    |
+| 9   | **Ghorrock**: the ScapeRune map, the effect mask, cold, braziers, vents, the Snow ranger. Built (5.11)                                    | 2            | 3 weeks    |
 | 10  | The Frozen remix                                                                                                                          | 5, 9         | 3 days     |
-| 11  | Awakened Duke Sucellus, Baron                                                                                                             | 3, 9         | 2 weeks    |
-| 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer                                                         | 1, 2         | 1.5 weeks  |
+| 11  | **Awakened Duke Sucellus**, Baron. Built, first pass (`awakened-duke.md`)                                                                 | 3, 9         | 2 weeks    |
+| 12  | **The Scar**, on the lighting: lanterns, light leeches, fires, the Lantern-bearer. Built (6.9)                                            | 1, 2         | 1.5 weeks  |
 | 13  | The Dark remix, all four stacked (every first-campaign map measured with all four on), and the Soulreaper axe (all four pieces now exist) | 12           | 1.5 weeks  |
-| 14  | Awakened Leviathan, Lil'viathan, the act's ending                                                                                         | 3, 12        | 2 weeks    |
-| 15  | **The Forgotten Four** gauntlet                                                                                                           | 3, 8, 11, 14 | 1.5 weeks  |
-| 16  | Awakened invasions, Awakener's orbs, the weekly Vault                                                                                     | 14           | 1.5 weeks  |
+| 14  | **Awakened Leviathan**, Lil'viathan, the act's ending. Built, first pass (`awakened-leviathan.md`)                                        | 3, 12        | 2 weeks    |
+| 15  | **The Forgotten Four** gauntlet. Built, solo (7.4)                                                                                        | 3, 8, 11, 14 | 1.5 weeks  |
+| 16  | Awakened invasions, Awakener's orbs, the weekly Vault. Built (8.8)                                                                        | 14           | 1.5 weeks  |
 
 The sizes are reasoned from the code, not prototyped, and leave out playtest rounds.
 
@@ -889,7 +1383,7 @@ Nothing is open now.
 - How any of the four cuts looks from the play camera, or what it costs a phone: nothing here was drawn.
 - The spot animations for Vardorvis's axes and vines, the puddle's ripple, the gas vents and the Soulreaper spin:
   each pull request looks them up.
-- Which brazier id reads as lit (48122 or 48901).
+- Which brazier id reads as lit (48122 or 48901): neither (5.11).
 - Whether the Scar's filler squares draw a floor.
 - Root growth's numbers against the bot, and every other number here.
 - The music tracks' assignments are from the OSRS Wiki's pages ("Blood Rush", "Song of the Silent Choir" and "Eye See

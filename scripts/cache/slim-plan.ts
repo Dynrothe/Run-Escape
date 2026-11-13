@@ -18,6 +18,7 @@ import {
 import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { ENEMIES } from "../../src/game/content/enemies";
+import { BLOOD_SOULREAPER_AXE_OBJ } from "../../src/game/content/gauntlet";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
@@ -137,6 +138,8 @@ function getWornObjs(): [EquipSlot, number][] {
             }
         }
     }
+    // The Soulreaper axe, blood-touched (the Forgotten Four's look, setGauntletLooks in GameAssets.ts)
+    worn.push([EquipSlot.WEAPON, BLOOD_SOULREAPER_AXE_OBJ]);
     for (const passive of PASSIVES) {
         for (const piece of passive.equipment ?? []) {
             for (const objId of piece.objIds) {

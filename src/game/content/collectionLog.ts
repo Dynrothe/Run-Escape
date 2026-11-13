@@ -1,7 +1,9 @@
 import { SaveData } from "../core/save";
-import { t, tr } from "../i18n";
+import { t, tp, tr } from "../i18n";
 import { isMapOut } from "./acts";
-import { FIGHT_MAPS, MAP_BY_ID } from "./maps";
+import { INVADERS } from "./invaders";
+import { invaderName } from "./invasions";
+import { FIGHT_MAPS, MAP_BY_ID, getMap } from "./maps";
 import { TROPHIES, TrophyDef } from "./trophies";
 import { describeUnlockTask } from "./unlocks";
 import { WEAPONS } from "./weapons";
@@ -14,6 +16,9 @@ import { WEAPONS } from "./weapons";
 // The log's sentences, for locales/en/gen.json: {task} is describeUnlockTask's
 export const LOG_MESSAGES: Record<string, string> = {
     "log.bring_in": "{task} to bring it in.",
+    "log.invasion": "Kill it when it invades an older map, from the Desert on.",
+    "log.invasion_kills.one": "Killed invading an older map once.",
+    "log.invasion_kills.other": "Killed invading an older map {n} times.",
 };
 
 export type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
@@ -73,5 +78,16 @@ export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
             found: save.trophies.includes(id),
         }),
     );
-    return [...weapons, ...trophies];
+    // An Act II map's boss as an Awakened invader (content/invasions.ts): a line counting each kill
+    const invasions = INVADERS.filter((invader) => invader.mapId === mapId).map((invader) => {
+        const kills = save.invasions?.[invader.id] ?? 0;
+        return {
+            id: invader.id,
+            name: invaderName(invader.id),
+            objId: getMap(mapId).iconObjId,
+            how: kills > 0 ? tp("log.invasion_kills", kills) : t("log.invasion"),
+            found: kills > 0,
+        };
+    });
+    return [...weapons, ...trophies, ...invasions];
 }

@@ -1,4 +1,4 @@
-import { isMapOut } from "../content/acts";
+import { ACTS, ACT_BY_ID, FALLEN_EMPIRE, isActEnded, isMapOut } from "../content/acts";
 import {
     getArmouryCost,
     getNextUpgrade,
@@ -7,10 +7,24 @@ import {
 } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import { ENEMY_BY_ID } from "../content/enemies";
-import { InvocationPreset, cleanInvocationPresets, cleanInvocations } from "../content/invocations";
+import {
+    FIRST_CLEAR_ORBS,
+    GAUNTLET_FIGHTS,
+    gauntletOrderKey,
+    isGauntletOrder,
+} from "../content/gauntlet";
+import { INVADER_BY_ID } from "../content/invaders";
+import {
+    InvocationPreset,
+    RUN_SET,
+    cleanInvocationPresets,
+    cleanInvocations,
+    isHardInvocation,
+} from "../content/invocations";
 import { ITEM_BY_ID, getGear } from "../content/items";
 import {
     ALL_MAPS,
+    CAMPAIGN_MAPS,
     MAPS,
     MAP_BY_ID,
     RAID_MAPS,
@@ -19,9 +33,12 @@ import {
     isFunMap,
     isRaidMap,
     isSeasonalMap,
+    takesRelics,
 } from "../content/maps";
 import { isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
+import { cleanRelics } from "../content/relics";
+import { cleanRemixes, parseRemixKey, remixKey } from "../content/remixes";
 import { SHOP_UPGRADES, SHOP_UPGRADE_BY_ID, getPageCost, getUpgradeCost } from "../content/shop";
 import { TROPHIES, TROPHY_BY_ID } from "../content/trophies";
 import {
@@ -33,6 +50,7 @@ import {
     emptyStats,
 } from "../content/types";
 import { LOCKABLE_ITEMS, LOCKABLE_ITEM_BY_ID, LockableItem, isAvailable } from "../content/unlocks";
+import { VAULT_WEEKS_KEPT, VaultRecord, isBetterVault, parseWeekKey } from "../content/vault";
 import {
     COSMETIC_BY_ID,
     SavedOutfit,
@@ -122,6 +140,14 @@ export type SaveData = {
     invocations?: string[];
     // Saved setups of the invocation board, to load in one go (content/invocations.ts)
     invocationPresets?: InvocationPreset[];
+    // A run's invocations, as last picked on a map's card (content/invocations.ts, RUN_SET): not
+    // hard mode's, which the Hard switch is
+    runInvocations?: string[];
+    // Map id -> its win at the most invocation points (as many and quicker, of those), with the
+    // relics it was set with
+    invocationBest?: Record<string, InvocationRecord>;
+    // The relics picked, one a tier (content/relics.ts); only the open tiers' go on a run
+    relics?: string[];
     // The Scabaras room's been beaten once: its puzzle helper's unlocked (DisplaySettings.puzzleHelper)
     scabarasBeaten?: boolean;
     // The pet taken along on runs (pets.ts), one of the trophies found
@@ -129,6 +155,30 @@ export type SaveData = {
     // An act's map id -> its best win (content/acts.ts): the quickest at the highest step it's
     // been won at, so an easier one's kept, with its step, until it's beaten at a harder one
     actBest?: Record<string, ActRecord>;
+    // A set of remixes on a map (content/remixes.ts, remixKey: "lumbridge:dark+frozen") -> its
+    // records, relic-free (act-2-fallen-empire.md, 8.3)
+    remixVictories?: Record<string, RemixRecord>;
+    // The acts (content/acts.ts) whose ending has been told: it's told once, as the last of the
+    // act's Awakened fights falls, and again only from its card
+    actEndings?: string[];
+    // The act's Awakened fights in the order they were first beaten: the Forgotten Four's order to
+    // start with (content/gauntlet.ts), and the order last picked for it
+    awakenedOrder?: string[];
+    gauntletOrder?: string[];
+    // The Forgotten Four's clears and records, on normal and on hard
+    gauntlet?: { normal?: GauntletModeRecord; hard?: GauntletModeRecord };
+    // Awakener's orbs held (act-2-fallen-empire.md 8.6): each Awakened fight won gives one, and the
+    // gauntlet's first clears two; one's spent awakening a campaign map's final boss for a run
+    // (spent once it comes: a run left before it keeps the orb)
+    awakenerOrbs?: number;
+    // A campaign map's id -> the times its final boss was beaten awakened (its card's mark)
+    awakenedWins?: Record<string, number>;
+    // Awakened invasions (content/invasions.ts): invader id -> the times one's been killed, for
+    // the Collection log
+    invasions?: Record<string, number>;
+    // The weekly Vault (content/vault.ts): a week's key ("2026-W46") -> its best run, the latest
+    // VAULT_WEEKS_KEPT weeks
+    vault?: Record<string, VaultRecord>;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
     // The Wardrobe (content/wardrobe.ts): the pieces bought in its store, by item id, and the body
@@ -142,11 +192,39 @@ export type SaveData = {
     lastExported?: number;
 };
 
+// What a record was set with: its run's invocation points and the relics on (content/relics.ts),
+// when there were any
+export type RecordSetup = { points?: number; relics?: string[] };
+
 // The round reached, and how long the run lasted (on an act's map, at which step)
-export type EndlessRecord = { round: number; seconds: number; step?: number };
+export type EndlessRecord = { round: number; seconds: number; step?: number } & RecordSetup;
 
 // A win on an act's map: how long it took, at which step
-export type ActRecord = { seconds: number; step: number };
+export type ActRecord = { seconds: number; step: number } & RecordSetup;
+
+// A set of remixes' records on a map (SaveData.remixVictories): wins, the quickest, wins on hard (its
+// gold tick), and the furthest endless run
+export type RemixRecord = {
+    wins: number;
+    seconds?: number;
+    hard?: number;
+    endless?: { round: number; seconds: number };
+};
+
+// A clear of the Forgotten Four: the fights' time (the camps left out), whether no fight was
+// retried, its order and its retries
+export type GauntletRecord = { seconds: number; clean: boolean; order: string[]; retries: number };
+
+// The gauntlet's clears on a mode, and the best of each order it's been run in (13.2: times
+// compare within an order; a clean clear beats one with retries, then the quicker)
+export type GauntletModeRecord = {
+    clears: number;
+    cleanClears: number;
+    best: Record<string, GauntletRecord>;
+};
+
+// A win at invocation points (SaveData.invocationBest)
+export type InvocationRecord = { points: number; seconds: number; relics?: string[] };
 
 export function createSave(): SaveData {
     return {
@@ -181,6 +259,23 @@ export function createSave(): SaveData {
 }
 
 // Brings any older save up to the current version, filling in what's missing
+// A run's invocations as the card keeps them: the board's own, not hard mode's (the Hard switch's)
+export function cleanRunInvocations(ids: readonly unknown[]): string[] {
+    return cleanInvocations(ids, RUN_SET).filter((id) => !isHardInvocation(id));
+}
+
+// What a record was set with, from a save: points a whole number above 0, relics this game knows
+function cleanSetup(record: unknown): RecordSetup {
+    const { points, relics } = (record ?? {}) as { points?: unknown; relics?: unknown };
+    const kept = cleanRelics(relics);
+    return {
+        ...(typeof points === "number" && Number.isFinite(points) && points > 0
+            ? { points: Math.floor(points) }
+            : {}),
+        ...(kept.length > 0 && { relics: kept }),
+    };
+}
+
 export function migrateSave(raw: unknown): SaveData {
     const save = createSave();
     if (!raw || typeof raw !== "object") {
@@ -270,7 +365,7 @@ export function migrateSave(raw: unknown): SaveData {
             for (const [id, record] of Object.entries(from)) {
                 const round = num(record?.round, 0);
                 if (ALL_MAPS.some((m) => m.id === id) && round > 0) {
-                    to[id] = { round, seconds: num(record?.seconds, 0) };
+                    to[id] = { round, seconds: num(record?.seconds, 0), ...cleanSetup(record) };
                     if (typeof record.step === "number" && record.step >= 0) {
                         to[id].step = Math.floor(record.step);
                     }
@@ -324,7 +419,44 @@ export function migrateSave(raw: unknown): SaveData {
             const seconds = num(record?.seconds, 0);
             if (MAP_BY_ID.get(id)?.act && seconds > 0) {
                 save.actBest ??= {};
-                save.actBest[id] = { seconds, step: Math.max(0, Math.floor(num(record?.step, 0))) };
+                save.actBest[id] = {
+                    seconds,
+                    step: Math.max(0, Math.floor(num(record?.step, 0))),
+                    ...cleanSetup(record),
+                };
+            }
+        }
+    }
+    if (data.remixVictories && typeof data.remixVictories === "object") {
+        for (const [key, record] of Object.entries(data.remixVictories)) {
+            const parsed = parseRemixKey(key);
+            if (!parsed || !MAP_BY_ID.has(parsed.mapId) || !record || typeof record !== "object") {
+                continue;
+            }
+            const clean: RemixRecord = { wins: Math.max(0, Math.floor(num(record.wins, 0))) };
+            const seconds = num(record.seconds, 0);
+            if (seconds > 0) {
+                clean.seconds = seconds;
+            }
+            const hard = Math.floor(num(record.hard, 0));
+            if (hard > 0) {
+                clean.hard = hard;
+            }
+            const round = Math.floor(num(record.endless?.round, 0));
+            if (round > 0) {
+                clean.endless = { round, seconds: num(record.endless?.seconds, 0) };
+            }
+            save.remixVictories ??= {};
+            save.remixVictories[remixKey(parsed.mapId, parsed.remixes)] = clean;
+        }
+    }
+    if (data.invocationBest && typeof data.invocationBest === "object") {
+        for (const [id, record] of Object.entries(data.invocationBest)) {
+            const points = Math.floor(num(record?.points, 0));
+            const seconds = num(record?.seconds, 0);
+            if (MAP_BY_ID.has(id) && points > 0 && seconds > 0) {
+                save.invocationBest ??= {};
+                save.invocationBest[id] = { points, seconds, ...cleanSetup(record) };
             }
         }
     }
@@ -335,8 +467,70 @@ export function migrateSave(raw: unknown): SaveData {
     if (presets.length > 0) {
         save.invocationPresets = presets;
     }
+    if (Array.isArray(data.runInvocations)) {
+        save.runInvocations = cleanRunInvocations(data.runInvocations);
+    }
+    const relics = cleanRelics(data.relics);
+    if (relics.length > 0) {
+        save.relics = relics;
+    }
     if (data.scabarasBeaten === true) {
         save.scabarasBeaten = true;
+    }
+    if (Array.isArray(data.actEndings)) {
+        for (const id of data.actEndings) {
+            if (typeof id === "string" && ACT_BY_ID.has(id) && !save.actEndings?.includes(id)) {
+                save.actEndings ??= [];
+                save.actEndings.push(id);
+            }
+        }
+    }
+    if (isGauntletOrder(data.gauntletOrder)) {
+        save.gauntletOrder = [...data.gauntletOrder];
+    }
+    if (Array.isArray(data.awakenedOrder)) {
+        const order = data.awakenedOrder.filter(
+            (id, i, all) => GAUNTLET_FIGHTS.includes(id) && all.indexOf(id) === i,
+        );
+        if (order.length > 0) {
+            save.awakenedOrder = order;
+        }
+    }
+    for (const mode of ["normal", "hard"] as const) {
+        const record = migrateGauntletMode(data.gauntlet?.[mode], num);
+        if (record) {
+            save.gauntlet = { ...save.gauntlet, [mode]: record };
+        }
+    }
+    const orbs = Math.floor(num(data.awakenerOrbs, 0));
+    if (orbs > 0) {
+        save.awakenerOrbs = orbs;
+    }
+    for (const [id, wins] of Object.entries(data.awakenedWins ?? {})) {
+        const count = Math.floor(num(wins, 0));
+        if (MAP_BY_ID.has(id) && count > 0) {
+            save.awakenedWins = { ...save.awakenedWins, [id]: count };
+        }
+    }
+    for (const [id, kills] of Object.entries(data.invasions ?? {})) {
+        const count = Math.floor(num(kills, 0));
+        if (INVADER_BY_ID.has(id) && count > 0) {
+            save.invasions = { ...save.invasions, [id]: count };
+        }
+    }
+    for (const [key, record] of Object.entries(data.vault ?? {})) {
+        const seconds = num(record?.seconds, 0);
+        if (parseWeekKey(key) && seconds > 0) {
+            save.vault = {
+                ...save.vault,
+                [key]: {
+                    seconds,
+                    kills: Math.max(0, Math.floor(num(record.kills, 0))),
+                    victory: record.victory === true,
+                    runs: Math.max(1, Math.floor(num(record.runs, 1))),
+                },
+            };
+        }
     }
     if (
         typeof data.favouriteCharacter === "string" &&
@@ -551,6 +745,12 @@ export type RunSummary = {
     expert?: boolean;
     // An act's map: the step it was played at (content/acts.ts)
     actStep?: number;
+    // A run's invocation points, and the player's relics (Sim's RunResult)
+    points?: number;
+    relics?: string[];
+    // Its remixes (content/remixes.ts): it sets their records (SaveData.remixVictories), not the
+    // map's own hard, act, invocation and endless ones
+    remixes?: string[];
     victory: boolean;
     seconds: number;
     level: number;
@@ -565,9 +765,196 @@ export type RunSummary = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills?: Record<string, number>;
     caskets?: number;
+    // Of those, the ones opened in a map's Shadow Realm (RealmRuleDef)
+    realmCaskets?: number;
     // The Scabaras room was beaten: its puzzle helper's unlocked
     scabarasBeaten?: boolean;
+    // An Awakened invasion (Sim's RunResult): its invader and whether it fell
+    invasion?: { id: string; came: boolean; killed: boolean };
+    // The final boss awakened by an orb: whether it came, so the orb's spent
+    awakened?: { seen: boolean };
+    // The weekly Vault's run: its week's key (content/vault.ts)
+    vault?: string;
 };
+
+function migrateGauntletMode(
+    data: unknown,
+    num: (value: unknown, fallback: number) => number,
+): GauntletModeRecord | undefined {
+    if (!data || typeof data !== "object") {
+        return undefined;
+    }
+    const raw = data as Partial<GauntletModeRecord>;
+    const clears = Math.max(0, Math.floor(num(raw.clears, 0)));
+    if (clears === 0) {
+        return undefined;
+    }
+    const best: Record<string, GauntletRecord> = {};
+    for (const record of Object.values(raw.best ?? {})) {
+        const seconds = num(record?.seconds, 0);
+        if (isGauntletOrder(record?.order) && seconds > 0) {
+            best[gauntletOrderKey(record.order)] = {
+                seconds,
+                clean: record.clean === true,
+                order: [...record.order],
+                retries: Math.max(0, Math.floor(num(record.retries, 0))),
+            };
+        }
+    }
+    return {
+        clears,
+        cleanClears: Math.min(clears, Math.max(0, Math.floor(num(raw.cleanClears, 0)))),
+        best,
+    };
+}
+
+// The Forgotten Four opens once every Awakened fight of the act's is beaten (act-2-fallen-empire.md,
+// 7.3), its hard mode with its first clean clear on normal
+export function isGauntletOpen(save: SaveData): boolean {
+    return isActEnded(FALLEN_EMPIRE, save.mapVictories);
+}
+
+export function isGauntletHardOpen(save: SaveData): boolean {
+    return (save.gauntlet?.normal?.cleanClears ?? 0) > 0;
+}
+
+// The first clean clear's looks (on either mode): the blood-touched Soulreaper axe and fighting
+// pets, and the act's middle card's gold border
+export function hasGauntletLooks(save: SaveData): boolean {
+    return (
+        (save.gauntlet?.normal?.cleanClears ?? 0) > 0 || (save.gauntlet?.hard?.cleanClears ?? 0) > 0
+    );
+}
+
+// The order the gauntlet's screen starts on: the one last picked, or the fights in the order they
+// were first beaten (those beaten before that was kept, in the act's order after)
+export function getGauntletOrder(save: SaveData): string[] {
+    if (isGauntletOrder(save.gauntletOrder)) {
+        return [...save.gauntletOrder];
+    }
+    const first = (save.awakenedOrder ?? []).filter((id) => GAUNTLET_FIGHTS.includes(id));
+    return [...first, ...GAUNTLET_FIGHTS.filter((id) => !first.includes(id))];
+}
+
+// A gauntlet clear just done, and what it gave: its first clear (on that mode) gives Awakener's
+// orbs, its first clean clear on normal the looks and hard mode, and a record for its order
+export type GauntletClear = {
+    order: string[];
+    hard: boolean;
+    seconds: number;
+    retries: number;
+};
+
+export type GauntletRewards = {
+    firstClear: boolean;
+    firstCleanClear: boolean;
+    orbs: number;
+    // The looks, the gold border and hard mode, just now
+    looks: boolean;
+    hardOpened: boolean;
+    record: boolean;
+    // The order's best before this one
+    previous?: GauntletRecord;
+};
+
+function isBetterGauntlet(record: GauntletRecord, than: GauntletRecord | undefined): boolean {
+    if (!than) {
+        return true;
+    }
+    if (record.clean !== than.clean) {
+        return record.clean;
+    }
+    return record.seconds < than.seconds;
+}
+
+export function recordGauntlet(save: SaveData, clear: GauntletClear): GauntletRewards {
+    const mode = clear.hard ? "hard" : "normal";
+    const hadLooks = hasGauntletLooks(save);
+    const hadHard = isGauntletHardOpen(save);
+    const before = save.gauntlet?.[mode] ?? { clears: 0, cleanClears: 0, best: {} };
+    const clean = clear.retries === 0;
+    const record: GauntletRecord = {
+        seconds: clear.seconds,
+        clean,
+        order: [...clear.order],
+        retries: clear.retries,
+    };
+    const key = gauntletOrderKey(clear.order);
+    const previous = before.best[key];
+    const better = isBetterGauntlet(record, previous);
+    const after: GauntletModeRecord = {
+        clears: before.clears + 1,
+        cleanClears: before.cleanClears + (clean ? 1 : 0),
+        best: better ? { ...before.best, [key]: record } : before.best,
+    };
+    save.gauntlet = { ...save.gauntlet, [mode]: after };
+    const firstClear = before.clears === 0;
+    const orbs = firstClear ? FIRST_CLEAR_ORBS : 0;
+    if (orbs > 0) {
+        save.awakenerOrbs = (save.awakenerOrbs ?? 0) + orbs;
+    }
+    return {
+        firstClear,
+        firstCleanClear: clean && before.cleanClears === 0,
+        orbs,
+        looks: !hadLooks && hasGauntletLooks(save),
+        hardOpened: !hadHard && isGauntletHardOpen(save),
+        record: better,
+        ...(previous && { previous }),
+    };
+}
+
+// An act whose ending's due (every one of its Awakened fights beaten, its ending not told yet),
+// marked told: it's told once (SaveData.actEndings). Undefined if none is.
+export function takeActEnding(save: SaveData): string | undefined {
+    const act = ACTS.find(
+        (act) =>
+            act.ending &&
+            isActEnded(act, save.mapVictories) &&
+            !(save.actEndings ?? []).includes(act.id),
+    );
+    if (!act) {
+        return undefined;
+    }
+    save.actEndings = [...(save.actEndings ?? []), act.id];
+    return act.id;
+}
+
+// Awakener's orbs an Awakened fight's win gives (act-2-fallen-empire.md 7.2)
+export const AWAKENED_WIN_ORBS = 1;
+
+// Whether an orb can awaken this map's final boss: one held, on a campaign map's survival run
+export function canAwaken(save: SaveData, mapId: string): boolean {
+    const map = MAP_BY_ID.get(mapId);
+    return (
+        (save.awakenerOrbs ?? 0) > 0 &&
+        map !== undefined &&
+        CAMPAIGN_MAPS.includes(map) &&
+        takesRelics(map)
+    );
+}
+
+// A Vault run's week, its best kept if it's better, and only the latest weeks
+export function recordVault(
+    save: SaveData,
+    key: string,
+    run: { seconds: number; kills: number; victory: boolean },
+): boolean {
+    if (!parseWeekKey(key)) {
+        return false;
+    }
+    const best = save.vault?.[key];
+    const better = isBetterVault(run, best);
+    const runs = (best?.runs ?? 0) + 1;
+    const record: VaultRecord = better
+        ? { seconds: run.seconds, kills: run.kills, victory: run.victory, runs }
+        : { ...best!, runs };
+    const weeks = { ...save.vault, [key]: record };
+    // Keys sort as their weeks do ("2026-W46")
+    const kept = Object.keys(weeks).sort().slice(-VAULT_WEEKS_KEPT);
+    save.vault = Object.fromEntries(kept.map((week) => [week, weeks[week]]));
+    return better;
+}
 
 // Banks the run, and pays out the quests it finished. Returns those quests.
 export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
@@ -586,26 +973,72 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         const next = (run.stage ?? 0) + 1;
         save.fightStages = { ...save.fightStages, [run.mapId]: next >= stages.length ? 0 : next };
     }
+    // An Awakener's orb on the final boss is spent once it's come, won or not
+    if (run.awakened?.seen) {
+        save.awakenerOrbs = Math.max(0, (save.awakenerOrbs ?? 0) - 1) || undefined;
+        if (run.victory) {
+            save.awakenedWins = {
+                ...save.awakenedWins,
+                [run.mapId]: (save.awakenedWins?.[run.mapId] ?? 0) + 1,
+            };
+        }
+    }
+    if (run.invasion?.killed && INVADER_BY_ID.has(run.invasion.id)) {
+        const id = run.invasion.id;
+        save.invasions = { ...save.invasions, [id]: (save.invasions?.[id] ?? 0) + 1 };
+    }
+    if (run.vault) {
+        recordVault(save, run.vault, run);
+    }
     if (run.victory && beatsMap(run)) {
+        if (GAUNTLET_FIGHTS.includes(run.mapId) && !save.awakenedOrder?.includes(run.mapId)) {
+            save.awakenedOrder = [...(save.awakenedOrder ?? []), run.mapId];
+        }
+        // Each Awakened fight won gives an Awakener's orb (the gauntlet's fights don't come here)
+        if (GAUNTLET_FIGHTS.includes(run.mapId)) {
+            save.awakenerOrbs = (save.awakenerOrbs ?? 0) + AWAKENED_WIN_ORBS;
+        }
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
-        if (run.hard) {
+        // A win with relics on still counts, but sets only the map's ordinary records
+        // (act-2-fallen-empire.md, 13.2): not hard mode's. A remixed win sets its remixes' instead.
+        const remixed = isRemixed(run);
+        if (remixed) {
+            // An endless one's recorded as it ends, below
+            if (!run.endless) {
+                recordRemix(save, run);
+            }
+        } else if (isHardRecord(run)) {
             save.hardVictories[run.mapId] = (save.hardVictories[run.mapId] ?? 0) + 1;
         }
-        if (run.expert) {
+        if (run.expert && isRelicFree(run)) {
             save.expertVictories[run.mapId] = (save.expertVictories[run.mapId] ?? 0) + 1;
         }
-        if (!run.endless && isActRecord(save, run)) {
+        if (!remixed && !run.endless && isActRecord(save, run)) {
             save.actBest ??= {};
-            save.actBest[run.mapId] = { seconds: run.seconds, step: run.actStep ?? 0 };
+            save.actBest[run.mapId] = {
+                seconds: run.seconds,
+                step: run.actStep ?? 0,
+                ...runSetup(run),
+            };
+        }
+        if (!remixed && !run.endless && isInvocationRecord(save, run)) {
+            save.invocationBest ??= {};
+            save.invocationBest[run.mapId] = {
+                points: run.points!,
+                seconds: run.seconds,
+                ...(run.relics && run.relics.length > 0 && { relics: [...run.relics] }),
+            };
         }
     }
     save.totalKills += run.kills;
     save.bestSeconds = Math.max(save.bestSeconds, run.seconds);
     save.bestLevel = Math.max(save.bestLevel, run.level);
-    if (run.endless && isEndlessRecord(save, run)) {
-        const records = run.hard ? save.hardEndlessBest : save.endlessBest;
-        records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds };
+    if (run.endless && isRemixed(run)) {
+        recordRemix(save, run);
+    } else if (run.endless && isEndlessRecord(save, run)) {
+        const records = isHardRecord(run) ? save.hardEndlessBest : save.endlessBest;
+        records[run.mapId] = { round: run.round ?? 1, seconds: run.seconds, ...runSetup(run) };
         if (MAP_BY_ID.get(run.mapId)?.act) {
             records[run.mapId].step = run.actStep ?? 0;
         }
@@ -719,9 +1152,83 @@ export function isEndlessRecord(save: SaveData, run: RunSummary): boolean {
     if (isDevMap(run.mapId)) {
         return false;
     }
-    const best = (run.hard ? save.hardEndlessBest : save.endlessBest)[run.mapId];
+    const best = (isHardRecord(run) ? save.hardEndlessBest : save.endlessBest)[run.mapId];
     const round = run.round ?? 1;
     return !best || round > best.round || (round === best.round && run.seconds > best.seconds);
+}
+
+// A run with remixes on (content/remixes.ts)
+export function isRemixed(run: RunSummary): boolean {
+    return (run.remixes?.length ?? 0) > 0;
+}
+
+// A remixed run's records (SaveData.remixVictories): only a relic-free run's. A win counts once
+// (an endless run is recorded as it ends, won or not).
+function recordRemix(save: SaveData, run: RunSummary): void {
+    if (!isRelicFree(run) || isDevMap(run.mapId)) {
+        return;
+    }
+    const key = remixKey(run.mapId, cleanRemixes(run.remixes));
+    const record: RemixRecord = save.remixVictories?.[key] ?? { wins: 0 };
+    if (run.victory) {
+        record.wins++;
+        if (run.hard) {
+            record.hard = (record.hard ?? 0) + 1;
+        }
+        if (!run.endless && (record.seconds === undefined || run.seconds < record.seconds)) {
+            record.seconds = run.seconds;
+        }
+    }
+    if (run.endless) {
+        const round = run.round ?? 1;
+        const best = record.endless;
+        if (!best || round > best.round || (round === best.round && run.seconds > best.seconds)) {
+            record.endless = { round, seconds: run.seconds };
+        }
+    }
+    save.remixVictories ??= {};
+    save.remixVictories[key] = record;
+}
+
+// The most remixes a map's been beaten with at once (its card's badge), relic-free
+export function getRemixBest(save: SaveData, mapId: string): number {
+    let most = 0;
+    for (const [key, record] of Object.entries(save.remixVictories ?? {})) {
+        const parsed = parseRemixKey(key);
+        if (parsed?.mapId === mapId && record.wins > 0) {
+            most = Math.max(most, parsed.remixes.length);
+        }
+    }
+    return most;
+}
+
+// No relics on (content/relics.ts): hard mode's records are relic-free
+export function isRelicFree(run: RunSummary): boolean {
+    return !run.relics || run.relics.length === 0;
+}
+
+// A hard run that sets hard mode's records: one with no relics on
+export function isHardRecord(run: RunSummary): boolean {
+    return run.hard === true && isRelicFree(run);
+}
+
+// What a record keeps of the run that set it
+function runSetup(run: RunSummary): RecordSetup {
+    return {
+        ...(run.points !== undefined && run.points > 0 && { points: run.points }),
+        ...(run.relics && run.relics.length > 0 && { relics: [...run.relics] }),
+    };
+}
+
+// Whether a win is its map's best at invocations (SaveData.invocationBest): at more points than the
+// one kept, or as many and quicker
+export function isInvocationRecord(save: SaveData, run: RunSummary): boolean {
+    const points = run.points ?? 0;
+    if (!run.victory || points <= 0 || isDevMap(run.mapId)) {
+        return false;
+    }
+    const best = save.invocationBest?.[run.mapId];
+    return !best || points > best.points || (points === best.points && run.seconds < best.seconds);
 }
 
 // Whether a win on an act's map is its best (SaveData.actBest): at a higher step than the one
@@ -736,7 +1243,7 @@ export function isActRecord(save: SaveData, run: RunSummary): boolean {
 }
 
 // Beating a map counts from any run so far; the rest need doing in one run
-function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean {
+export function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean {
     switch (task.kind) {
         case "beatMap":
             return ((task.hard ? save.hardVictories : save.mapVictories)[task.mapId] ?? 0) > 0;
@@ -748,6 +1255,12 @@ function isTaskDone(save: SaveData, task: UnlockTask, run?: RunSummary): boolean
             return (
                 save.trophies.includes(task.trophyId) ||
                 (run?.trophies ?? []).includes(task.trophyId)
+            );
+        case "realmCaskets":
+            return run?.mapId === task.mapId && (run.realmCaskets ?? 0) >= task.count;
+        case "pieces":
+            return task.trophyIds.every(
+                (id) => save.trophies.includes(id) || (run?.trophies ?? []).includes(id),
             );
     }
 }

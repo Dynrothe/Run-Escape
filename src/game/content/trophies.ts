@@ -93,6 +93,79 @@ export const TROPHIES: TrophyDef[] = [
         from: { kind: "boss", enemyId: "vardorvis", mapId: "stranglewood", chance: 1 },
     },
     {
+        id: "sirens_staff",
+        name: "Siren's staff",
+        objId: 28323,
+        how: "From the Whisperer, the first time she's beaten in the Lassar Undercity.",
+        from: { kind: "boss", enemyId: "whisperer", mapId: "lassar_undercity", chance: 1 },
+    },
+    {
+        id: "eye_of_the_duke",
+        name: "Eye of the Duke",
+        objId: 28321,
+        how: "From Duke Sucellus, the first time he's beaten in Ghorrock.",
+        from: { kind: "boss", enemyId: "duke_sucellus", mapId: "ghorrock", chance: 1 },
+    },
+    {
+        id: "leviathans_lure",
+        name: "Leviathan's lure",
+        objId: 28325,
+        how: "From the Leviathan, the first time it's beaten in the Scar.",
+        from: { kind: "boss", enemyId: "the_leviathan", mapId: "scar", chance: 1 },
+    },
+    // Awakened Vardorvis's pet, certain: the fight's the gate (act-2-fallen-empire.md, 7.2)
+    {
+        id: "butch",
+        name: "Butch",
+        objId: 28248,
+        how: "From Awakened Vardorvis, the first time he's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_vardorvis",
+            mapId: "awakened_vardorvis",
+            chance: 1,
+        },
+    },
+    // The Awakened Whisperer's, certain, as Butch is
+    {
+        id: "wisp",
+        name: "Wisp",
+        objId: 28246,
+        how: "From the Awakened Whisperer, the first time she's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_whisperer",
+            mapId: "awakened_whisperer",
+            chance: 1,
+        },
+    },
+    // The Awakened Duke's, certain, as Butch and the Wisp are
+    {
+        id: "baron",
+        name: "Baron",
+        objId: 28250,
+        how: "From the Awakened Duke Sucellus, the first time he's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_duke",
+            mapId: "awakened_duke",
+            chance: 1,
+        },
+    },
+    // The Awakened Leviathan's, certain, as the other three are
+    {
+        id: "lilviathan",
+        name: "Lil'viathan",
+        objId: 28252,
+        how: "From the Awakened Leviathan, the first time it's beaten.",
+        from: {
+            kind: "boss",
+            enemyId: "awakened_leviathan",
+            mapId: "awakened_leviathan",
+            chance: 1,
+        },
+    },
+    {
         id: "black_hween_mask",
         name: "Black h'ween mask",
         objId: 11847,

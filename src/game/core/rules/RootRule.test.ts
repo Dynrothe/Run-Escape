@@ -52,6 +52,11 @@ class Host implements RuleHost {
     isEnemyAlive(uid: number): boolean {
         return this.spawned.some((e) => e.uid === uid) && !this.dead.has(uid);
     }
+    upHeroes(): number[] {
+        return [0, ...this.heroes];
+    }
+    finalBossUp = false;
+    turnWorld(): void {}
 }
 
 function run(rule: RootRule, host: Host, seconds: number): void {

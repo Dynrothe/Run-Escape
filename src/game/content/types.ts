@@ -210,8 +210,13 @@ export type EnemyDef = {
     // creature that share its animations (the Strangled's)
     looks?: number[];
     // Lays the map's rule's stuff (roots, MapDef.rule) this many tiles round it as it goes: a
-    // Strangled Bear's trail
+    // Strangled Bear's trail. Under the cold (ColdRuleDef), it snuffs braziers that near instead
+    // (Ketla's)
     plants?: number;
+    // Under the cold (ColdRuleDef): a fire elite, whose death leaves embers and relights the
+    // braziers near it; and a hit of its takes chills more off a player's warmth (an icefiend's)
+    embers?: boolean;
+    chills?: number;
     // Rushes the last range tiles to the player at speed times its pace (a Strangled Lynx's
     // pounce)
     pounce?: { range: number; speed: number };
@@ -263,7 +268,16 @@ export type EnemyDef = {
     // A light it carries (the Scar's light leeches, a fire elite), and one it leaves where it dies
     // for seconds. A sim light: on a map with lighting.litTargetsOnly, weapons can aim by it. Off a
     // map with lighting it does nothing.
-    light?: LightLook & { left?: LightLook & { seconds: number } };
+    // phases: a boss's, only in these of its phases (BossDef.phases, counting from 1): the Awakened
+    // Leviathan's glow, put out in the dark.
+    light?: LightLook & { left?: LightLook & { seconds: number }; phases?: number[] };
+    // Goes round the final boss radius tiles out from its middle, speed tiles a second, never
+    // stopping (the Abyssal pathfinder round the Leviathan's pool). Stationary otherwise.
+    circles?: { radius: number; speed: number };
+    // While it's up, its own light (light) is the only one: the players', the map's and what's
+    // been left go dark. A player's hits from inside it do inside times their damage, and a
+    // boss's hits on someone out of it outside times theirs (the Leviathan's enrage).
+    onlyLight?: { inside: number; outside: number };
     // What it is, for the weapons that hit some things harder
     tags?: EnemyTag[];
     // Runs from the player when they're within range tiles instead of coming
@@ -291,6 +305,17 @@ export type EnemyDef = {
     // then master). The flag carrier's flag is worth a second; a Pest Control
     // portal's is smaller, as there are four of them.
     caskets?: CasketTier[];
+    // On a map of two worlds (RealmRuleDef): both, it goes between them with the party (a boss of
+    // both); drags, it pulls the party into the realm as it comes, and stays there
+    realm?: "both" | "drags";
+    // Caught by walking into it, not killed (a lost soul, RealmRuleDef.souls)
+    caught?: boolean;
+    // On a map of two worlds, caught only in this one (0 the city, 1 the realm): the Awakened
+    // Whisperer's siphoned souls, which go with the party but can be caught only in the realm
+    caughtIn?: 0 | 1;
+    // On a map of two worlds, hurt only in this one: the Awakened Whisperer, out of reach in the
+    // realm
+    hurtIn?: 0 | 1;
 };
 
 export type EnemySpawnsDef = {
@@ -325,6 +350,8 @@ export type EnemyHealsDef = {
     seek?: number;
     // Shown on what it heals
     spotAnim?: number;
+    // Heals once and is gone into what it heals (the Whisperer's siphoned souls)
+    once?: boolean;
 };
 
 export type EnemyRevivesDef = {
@@ -396,6 +423,20 @@ export type EnemyShotDef = {
 export type PlayerEffectDef =
     // Can't move for a moment (the King Black Dragon's ice breath)
     | { kind: "freeze"; seconds: number }
+    // Their light (LightingDef.player) smaller for a while, shown with the debuffs: tiles off it a
+    // dose, stacking up to stacks, each dose starting the clock again (an Abyssal leech's); or
+    // to: no more than that many tiles (a Scarred black demon's roar). Nothing on a map without
+    // lights round players.
+    | {
+          kind: "dim";
+          id: string;
+          name: string;
+          iconObjId: number;
+          seconds: number;
+          tiles?: number;
+          stacks?: number;
+          to?: number;
+      }
     // Damage every second for a while (poison breath)
     | { kind: "poison"; damage: number; seconds: number }
     // Stats lowered for a while (Karil's tainted shot, Ahrim's curses).
@@ -902,8 +943,22 @@ export type BossAttackDef = {
     floorAt?: "boss";
     // What it does with the map's rule (MapDef.rule), as it lands: heart, a root heart where the
     // boss lands, the first time it's used; lane, roots laid along the way a surge or lunge went,
-    // radius tiles either side of it. Nothing on a map without a rule.
-    rule?: { heart?: boolean; lane?: number };
+    // radius tiles either side of it; vent, under the cold (ColdRuleDef), the gas vent nearest
+    // the spot it's aimed at puffs as it lands; snuff, under the cold, a swing that's hidden from
+    // behind a pillar (cover) puts out every lit brazier it can see; chills, under the cold, a hit
+    // adds this much cold. Nothing on a map without a rule.
+    rule?: { heart?: boolean; lane?: number; vent?: boolean; snuff?: boolean; chills?: number };
+    // Ground attacks: each spot leaves a piece of debris, locId, standing seconds, most at once
+    // (the oldest goes first): cover the boss's projectiles break on. Not in anyone's way.
+    debris?: { locId: number; seconds: number; most: number };
+    // A swing hidden from (cover): the wash over the arena as it winds up, its colour (r, g, b)
+    // and how strong at its height, in place of a gaze's warm one (BossFightView.paintGaze): in
+    // the dark, a pale one the shadows show against
+    coverWash?: { rgb: string; alpha: number };
+    // A swing hidden from (cover): each piece of debris (not the wreck, ArenaFeatures.wreckage)
+    // that hid someone from it is smashed as it lands, with impact on it (the Awakened Leviathan's
+    // torrent: cover's used up)
+    smashes?: { impact?: ImpactDef };
     // Seconds before this attack can be used again, on top of the boss's
     // attack interval
     cooldown: number;
@@ -1118,6 +1173,10 @@ export type BossAttackDef = {
     // or blast, a wave or boomerang that reached no one, a surge that crossed without hitting
     // anyone, a ground mark that landed on no one
     opens?: number;
+    // On a map of two worlds, begun only while the party's in this one, and landing only on whoever's
+    // in it there: gone into the other, it misses (and with opens, the guard's down). The Awakened
+    // Whisperer's screech, which the realm's out of.
+    world?: 0 | 1;
     // A spell it channels (BossDef.guard): its guard's down from the moment it begins until it's
     // cast (a summon's walkTo: until its walkers are all in or dead), and the fight's button
     // landing on it meanwhile breaks it: nothing's cast (walkers scatter, no blast), and its
@@ -1258,7 +1317,22 @@ export type FightAbilityDef = {
     playerSeq?: number;
     // Coaches the player (AbilityButton): early in a fight, until it's used, a hint says what it's
     // for, and while the guard's down it pulses with a tag saying so. The Tombs' and their quest's.
-    guide?: boolean;
+    guide?: boolean; // Clears the map's rule (its roots) within this many tiles of the player as it goes, and so goes
+    // off with the boss out of reach too, hitting whatever else is in reach (Awakened Vardorvis's
+    // Chop: his captors and his head)
+    cut?: number;
+    // Turns the party between the worlds of a map of two (RealmRuleDef), whether the boss is there
+    // or not: coming out into the city within reach of it, it hits it for damage (the Awakened
+    // Whisperer's Blackstone)
+    turn?: boolean;
+    // Lights the brazier within reach tiles of the player at once, for its full burn, under the
+    // cold (ColdRuleDef), whether the boss is near or not; and one that was out or dying, lit
+    // within flare tiles of the boss, flares into it for damage (the Awakened Duke's Kindle).
+    // Taken only beside a brazier.
+    kindle?: { reach: number; flare: number };
+    // Stuns the boss it lands on for this many seconds (BossDef.guard: its guard down, whatever it
+    // was winding up lost), as an attack of its arena's does (the Awakened Leviathan's Shadow)
+    stun?: number;
 };
 
 // A spot animation an impact shows, scaled so its model's radius is fit tiles when that's set
@@ -1528,6 +1602,8 @@ export type BossDef = {
         distance?: number;
         message?: string;
         shout?: string;
+        // Pulls the party into the realm first, on a map of two worlds (RealmRuleDef)
+        realm?: boolean;
     }[];
     // While any of these enemies is up, it takes this share of what hits it (K'ril's bodyguards)
     pact?: { enemyIds: string[]; taken: number };
@@ -1634,6 +1710,10 @@ export type BossDef = {
     look?: BossLookDef;
     // Its guard drops after a miss, and its arena can stun it (BossGuardDef)
     guard?: BossGuardDef;
+    // Its siphon (the Awakened Whisperer's Soul Siphon): its summons of enemyId (EnemyHealsDef
+    // once) caught to the last with none reaching it break it, stunned stun seconds with its
+    // guard down (BossDef.guard's stun look), and message on screen
+    siphon?: { enemyId: string; stun: number; message: string };
     // Keeps within this many tiles of where it first stood, going after the player only along
     // there (Yama by his throne): what reaches them is what it sends across the floor
     home?: number;
@@ -1672,7 +1752,13 @@ export type BossLookDef = {
     // A light on it while its guard's down (Sim.isExposed): a core lit up. Only drawn, on a map
     // with lighting.
     exposedLight?: LightLook;
-    lean?: boolean;
+    // A faint glow on it in the phases its own light's out (EnemyDef.light phases): it's seen, but
+    // not lit to aim at. Only drawn.
+    darkGlow?: LightLook;
+    // The camera leans towards it (GameClient's BOSS_LEAN), or share of the way, up to max tiles
+    // (phone on a phone, whose short screen would put the player under the HUD): a big one that
+    // never moves at the end of a small room (the Awakened Duke) is framed with you
+    lean?: boolean | { share: number; max: number; phone: number };
     title?: string;
     subtitle?: string;
     edge?: string | null;
@@ -1708,6 +1794,11 @@ export type ArenaFeatures = {
     rise?: { x: number; y: number };
     // Other statues an attack animates, by group (BossAttackDef.statues group)
     statues?: Record<string, ArenaStatue[]>;
+    // Wreckage standing from the start, as debris does (BossAttackDef.debris) but never going: the
+    // boss's projectiles break on it and it hides from a swing with cover. Drawn as locId, turned
+    // rotation quarter turns, playing its own animation; glows: drawn unlit, a fire (the Awakened
+    // Leviathan's broken boats and pillars, and a fire or two in them, which LightingDef lights).
+    wreckage?: { x: number; y: number; locId: number; rotation?: number; glows?: boolean }[];
 };
 
 // How a character fights, for the weapons only their class can find
@@ -1910,6 +2001,26 @@ export type WeaponDef = {
     // same level (the godsword's blade takes a hilt): the level up's next
     // choice is the pick, each shown as its hilt
     hilts?: { level: number; into: { weaponId: string; hiltObjId: number }[] };
+    // Sweeps: kills by anything within reach tiles of the player give a soul, up to max, each
+    // making its hits damage more. At max, the next swing with something in reach is a Harvest:
+    // a full spin harvest.radius tiles round for harvest.damage times a swing's damage (plus
+    // perLevel a level after the first), bosses and elites hit twice, spotAnim on the player,
+    // costing cost of their max hitpoints (never below 1, and not while under floor of them).
+    // From healsAt, each kill it makes heals 1, up to what it cost. (The Soulreaper axe.)
+    souls?: {
+        reach: number;
+        max: number;
+        damage: number;
+        harvest: {
+            radius: number;
+            damage: number;
+            perLevel: number;
+            cost: number;
+            floor: number;
+            healsAt: number;
+            spotAnim: number;
+        };
+    };
 };
 
 // An enchanted bolt's effect, when the Armadyl crossbow's bolt procs one
@@ -1997,7 +2108,12 @@ export type UnlockTask =
     // Last this many seconds in a run on the map
     | { kind: "survive"; mapId: string; seconds: number }
     // Find this trophy in the raid's chest on the map (trophies.ts says when it can come)
-    | { kind: "raidChest"; mapId: string; trophyId: string };
+    | { kind: "raidChest"; mapId: string; trophyId: string }
+    // Open this many caskets in one run on the map, in its Shadow Realm (RealmRuleDef)
+    | { kind: "realmCaskets"; mapId: string; count: number }
+    // Have found every one of these trophies (an item's pieces: the Soulreaper axe's); mapId is
+    // the map whose card lists it
+    | { kind: "pieces"; mapId: string; trophyIds: string[] };
 
 // What a quest asks for, counted over every run since quests came in
 export type QuestObjective =
@@ -2126,19 +2242,61 @@ export type HeroAbilityDef = {
 // strip `length` tiles long and `width` across ahead of them, hitting everything in it for
 // `damage` times the swing's own, drawn as locId falling over; and their swings cut what a map's
 // rule lays (roots) cutReach tiles further out.
-export type CharacterTraitDef = {
-    kind: "timber";
-    name: string;
-    every: number;
-    length: number;
-    width: number;
-    damage: number;
-    cutReach: number;
-    locId: number;
-    sound?: number;
-    // What it throws up as it lands, along the strip (ImpactDef)
-    impact?: ImpactDef;
-};
+export type CharacterTraitDef =
+    | {
+          kind: "timber";
+          name: string;
+          every: number;
+          length: number;
+          width: number;
+          damage: number;
+          cutReach: number;
+          locId: number;
+          sound?: number;
+          // What it throws up as it lands, along the strip (ImpactDef)
+          impact?: ImpactDef;
+      }
+    // step (the Shadow walker's): once every `every` seconds, a hit that would take over share of
+    // her hitpoints takes her into the shadows instead, seconds she can't be touched, and out
+    // distance tiles on the way she's facing; on a map of two worlds (RealmRuleDef), in the
+    // city, into the realm
+    | {
+          kind: "step";
+          name: string;
+          every: number;
+          share: number;
+          seconds: number;
+          distance: number;
+          spotAnim?: number;
+      }
+    // dig (the Treasure hunter's): a casket left on the ground buries itself after buries
+    // seconds; dug up (walked over) from ready seconds it's a tier better, and at gone it's lost
+    | { kind: "dig"; name: string; buries: number; ready: number; gone: number }
+    // shatter (the Snow ranger's): every `every`th hit of hers chills what it hits for chill
+    // seconds (at half pace); anything killed frozen or chilled shatters, hitting everything within
+    // reach tiles for share of its hitpoints (eliteShare an elite's or a boss's). Under the cold
+    // (ColdRuleDef) she never slides on ice, and her cold rises coldRise as fast
+    | {
+          kind: "shatter";
+          name: string;
+          every: number;
+          chill: number;
+          reach: number;
+          share: number;
+          eliteShare: number;
+          coldRise: number;
+          spotAnim?: number;
+      }
+    // lantern (the Lantern-bearer's): enemies within reach tiles of her take damage more from
+    // every hit and are slow slower; her own light (LightingDef.player) is light times the size
+    | {
+          kind: "lantern";
+          name: string;
+          reach: number;
+          damage: number;
+          slow: number;
+          light: number;
+      };
 
 export type ShopUpgradeDef = {
     id: string;
@@ -2278,6 +2436,9 @@ export type MapDef = {
         ability?: FightAbilityDef;
         // Gear (items.ts, by id) everyone starts the fight wearing: the kit it's tuned to
         gear?: string[];
+        // What the fight adds to its adventurer's stats (the Awakened Whisperer's: Shadow Burst
+        // wider, to reach her from outside her lash)
+        stats?: Partial<Stats>;
         // Played on your own only (a quest's fights): never a co-op room's map
         solo?: boolean;
     };
@@ -2308,6 +2469,9 @@ export type MapDef = {
     // The rule it's played by (RunRuleDef, core/rules): what makes it that map, run by the sim
     // every tick
     rule?: RunRuleDef;
+    // A twin of the map drawn in its place while the party's in the other world (RealmRuleDef):
+    // its squares are dx tiles west or east (ScapeRune's MapRecipe.twin). The sim never sees it.
+    twin?: { dx: number };
     // Lights, and how bright the rest is (LightingDef). Unset on every map that's drawn as it
     // always was: those pay nothing for lights.
     lighting?: LightingDef;
@@ -2384,7 +2548,7 @@ export type BlessingKitDef = {
 // map's grid and what's here, never an Act II map's own data, so it works on any map (the remixes
 // put them on old ones). Shared things (roots) are the party's; what it does to a player is each
 // player's own.
-export type RunRuleDef = RootsRuleDef;
+export type RunRuleDef = RootsRuleDef | RealmRuleDef | ColdRuleDef;
 
 // The Stranglewood's: roots creep in from the wood (the arena's blocked ground), slowing and
 // hurting whoever's on them and speeding enemies; hits cut them back, and root hearts make them
@@ -2392,6 +2556,9 @@ export type RunRuleDef = RootsRuleDef;
 // where its roots stand, all of it.
 export type RootsRuleDef = {
     kind: "roots";
+    // Tiles a cell is across (2 when unset): 3 on the older maps a remix puts them on, where a phone's
+    // view of them would cost too much at 2 (act-2-fallen-empire.md, 8.3)
+    cell?: number;
     // Seconds into the run they start creeping
     start: number;
     // How many creeping fronts there are, and the seconds between each one's spreads, from start to
@@ -2403,6 +2570,9 @@ export type RootsRuleDef = {
     sprout: number;
     // The circle roots never take (a final fight's clearing), in world tiles
     safe?: { x: number; y: number; radius: number };
+    // The circle they're kept in (a boss fight's clearing), in world tiles: nothing roots outside
+    // it, and they creep in from its edge as from the wood
+    ring?: { x: number; y: number; radius: number };
     // On roots: a player's this much slower, and after grace seconds on them loses share of their
     // hitpoints every `every` seconds; enemies are haste faster (not fliers)
     slow: number;
@@ -2432,6 +2602,147 @@ export type RootsRuleDef = {
         loops: number[];
         recolor?: [from: number, to: number][];
         cutSpotAnim: number;
+    };
+};
+
+// The Lassar Undercity's: the city and its Shadow Realm (core/rules/RealmRule.ts). Black puddles open
+// in the city; walk into one and the whole party's pulled into the realm, where other enemies come,
+// drops are richer and each player's sanity drains. Catching lost souls opens the way back; at no
+// sanity a player's thrown back, hurt, and what's on the realm's ground is lost. Whichever world the
+// party isn't in waits as it was. On a map with a twin (MapDef.twin) the realm is drawn as that; on
+// any other, as the look's brightness and wash alone.
+export type RealmRuleDef = {
+    kind: "realm";
+    // A puddle opens every `every` seconds from `from`, at a spot min to max tiles from a player, for
+    // open seconds (blinking its last blink), radius tiles across; walked into, the party follows
+    // after pull seconds
+    puddles: {
+        from: number;
+        every: number;
+        distance: [min: number, max: number];
+        open: number;
+        blink: number;
+        radius: number;
+        pull: number;
+    };
+    // Each player's, 0 to max: refills refill a second in the city, drains drain a second in the
+    // realm, and an enemy's hit there takes hit more. Under low the screen's edges darken. At 0
+    // they're thrown back with lapse of their hitpoints gone.
+    sanity: { max: number; refill: number; drain: number; hit: number; low: number; lapse: number };
+    // count lost souls (enemyId) come into the realm with the party, min to max tiles off; catch
+    // them all (walk into them) and a portal opens at the catcher's feet for portal.seconds,
+    // portal.radius tiles across; missed, the souls come again. None (count 0): no way back but
+    // the fight's button (FightAbilityDef.turn) or sanity running out
+    souls: { enemyId: string; count: number; distance: [min: number, max: number] };
+    portal: { seconds: number; radius: number };
+    // Puddles open only in this circle, world tiles (an invader's pocket, core/rules/invasion.ts),
+    // not round a player
+    area?: { x: number; y: number; radius: number };
+    // What drops are worth in the realm: bones' experience and coins times these, and a casket
+    // this much likelier
+    drops: { bones: number; coins: number; caskets: number };
+    // The realm's own waves, by the map's clock, in the city's place while the party's there
+    waves: WaveDef[];
+    // Now and then something of the realm's rises near the party there (a tentacle): enemyId,
+    // every `every` seconds in the realm, at most max at once, min to max tiles off
+    risers?: { enemyId: string; every: number; max: number; distance: [min: number, max: number] };
+    // From `from` seconds, each dive brings one of these in as an elite (its casket the realm's
+    // surest), min to max tiles off
+    elite?: { enemyId: string; from: number; distance: [min: number, max: number] };
+    // How it's drawn: the realm's brightness and wash over the world, its music, the puddle's and
+    // the portal's scenery, and the ripple as the world turns
+    look: {
+        brightness: number;
+        wash: string;
+        music?: string;
+        puddleLocId: number;
+        portalLocId: number;
+        flipSpotAnim?: number;
+    };
+};
+
+// Ghorrock's: the cold (core/rules/ColdRule.ts). Each player's cold rises all the time, faster on
+// ice and in freezing gas; it slows them, then their weapons, and at the top freezes them solid
+// for a moment, hurt. Braziers warm whoever's near one while it burns, and burn down: standing by
+// one relights it, as does killing a fire elite (EnemyDef.embers) near it, whose embers warm too.
+// Gas vents puff in turn, and ice (an effect mask on the map's tiles) slides. Every place is in
+// world tiles, so a remix can bring its own.
+export type ColdRuleDef = {
+    kind: "cold";
+    // Each player's, 0 to max: rises rise a second, fast on ice or in gas; from each slow's at
+    // they're pace slower (the last also weapons times slower); at max they're frozen for freeze
+    // seconds, losing share of their hitpoints, and it drops to after
+    cold: {
+        max: number;
+        rise: number;
+        fast: number;
+        slows: { at: number; pace: number; weapons?: number }[];
+        freeze: { seconds: number; share: number; after: number };
+    };
+    // Where the braziers stand (their south-west tiles, size tiles across): within reach tiles
+    // of a lit one the cold falls warm a second. Each burns burn seconds (guttering its last
+    // gutter), and is lit again by standing within relight.reach for relight.seconds, or by a fire
+    // elite killed within relight.kill tiles
+    braziers: {
+        at: { x: number; y: number }[];
+        size: number;
+        reach: number;
+        warm: number;
+        burn: number;
+        gutter: number;
+        relight: { reach: number; seconds: number; kill: number };
+        // Left lit as the final boss wakes (a fight's, where he's up from the start); they all
+        // go out when unset
+        stayLit?: boolean;
+    };
+    // A fire elite's embers: size tiles across for seconds, warming warm a second within reach
+    // tiles, and burning share of the hitpoints of whoever stands on them every `every` seconds
+    embers: {
+        size: number;
+        seconds: number;
+        reach: number;
+        warm: number;
+        share: number;
+        every: number;
+    };
+    // A hit by one of these weapons takes perHit off the cold
+    fire: { weapons: string[]; perHit: number };
+    // Gas vents: each puffs a cloud size tiles across every `every` seconds, out of step with the
+    // others, frosting over warn seconds first and lasting puff; inside, share of your hitpoints
+    // every hurtEvery seconds
+    vents: {
+        at: { x: number; y: number }[];
+        size: number;
+        every: number;
+        warn: number;
+        puff: number;
+        share: number;
+        hurtEvery: number;
+    };
+    // The ice (an effect mask: core/world/EffectMask.ts): ellipses of tiles, rx by ry about x, y,
+    // where a player slides, grip of the way to where they steer each tick
+    ice: { pools: { x: number; y: number; rx: number; ry: number }[]; grip: number };
+    // The cold only rises in this circle, world tiles (an invader's pocket, core/rules/invasion.ts),
+    // and falls thaw a second out of it
+    area?: { x: number; y: number; radius: number; thaw: number };
+    // How it's drawn: a brazier, drawn brazierScale as big, with fire (fireScale as big) in it
+    // while it's lit; a vent's gas as it frosts over (its jet is the map's) and the spot animation
+    // of its puff; the ice block round someone frozen; the fire of a fire elite's embers; a wash
+    // over the whole map; and the spot animation a relight throws up
+    look: {
+        brazierLocId: number;
+        fireLocId: number;
+        brazierScale?: number;
+        fireScale?: number;
+        gasLocId: number;
+        puffSpotAnim: number;
+        iceBlockLocId: number;
+        embersLocId: number;
+        wash?: string;
+        relightSpotAnim?: number;
+        // One puff over a vent's cloud, this much bigger, rather than five (his room's nine
+        // vents' puffs are heavy for a phone)
+        puffOne?: number;
     };
 };
 

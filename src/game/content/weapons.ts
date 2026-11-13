@@ -2911,6 +2911,63 @@ export const WEAPONS: WeaponDef[] = [
             },
         ),
     },
+    // Act II's (act-2-fallen-empire.md, 8.2): made from its four final bosses' pieces, melee only
+    {
+        id: "soulreaper_axe",
+        name: "Soulreaper axe",
+        kind: "sweep",
+        description:
+            "A heavy sweep ahead. Kills near you give it souls, each a harder hit; at five, its next swing is a Harvest, a spin all round you that costs you some hitpoints.",
+        iconObjId: 28338,
+        playerSeq: GODSWORD_SEQ,
+        sound: GODSWORD_SOUND,
+        hitSound: -1,
+        rarity: "rare",
+        style: "melee",
+        souls: {
+            reach: 4,
+            max: 5,
+            damage: 0.08,
+            harvest: {
+                radius: 3.5,
+                damage: 3,
+                perLevel: 0.2,
+                cost: 0.08,
+                floor: 0.2,
+                healsAt: 5,
+                // The Dragon axe's special's swirl (Lumber Up), round the player
+                spotAnim: 479,
+            },
+        },
+        unlock: {
+            kind: "pieces",
+            mapId: "scar",
+            trophyIds: [
+                "executioners_axe_head",
+                "sirens_staff",
+                "eye_of_the_duke",
+                "leviathans_lure",
+            ],
+        },
+        levels: levels(
+            {
+                damage: 42,
+                cooldown: 1.9,
+                amount: 1,
+                area: 2.8,
+                arc: 1.0,
+                pierce: 0,
+                speed: 0,
+                duration: 0,
+                knockback: 0.6,
+                objId: 28338,
+            },
+            { damage: 50, description: "+8 damage." },
+            { area: 3.0, description: "Sweeps further." },
+            { cooldown: 1.7, description: "Swings faster." },
+            { damage: 60, description: "+10 damage. Harvest heals 1 for each kill it makes." },
+        ),
+    },
 ];
 
 // Every other level of a melee weapon pushes harder

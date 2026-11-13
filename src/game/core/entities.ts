@@ -136,6 +136,8 @@ export type BossState = {
     stolenCoins: number;
     // Times it has got back up
     rises: number;
+    // Its siphon's souls that have reached it, of the lot that's out (BossDef.siphon)
+    siphonLost?: number;
     // Below half its hitpoints: faster, and with its enraged attacks
     enraged: boolean;
     // Enraged by its partner's death (BossDef enrage.partner): its interval's times this instead
@@ -468,6 +470,10 @@ export type Enemy = {
     // Any boss; the final one ends the run when it dies
     boss: boolean;
     finalBoss: boolean;
+    // An Awakened invader's pocket (content/invasions.ts), which it keeps to; and a final boss
+    // awakened by an Awakener's orb (SimOptions.awakened), drawn with a violet glow
+    pocket?: { x: number; y: number; radius: number };
+    awakened?: boolean;
     // Bosses that fight with attacks of their own
     bossState?: BossState;
     // What its hits are multiplied by beyond its def's: a boss's attacks, an
@@ -481,6 +487,11 @@ export type Enemy = {
     attackCooldown: number;
     // Ticks left frozen (Ice spells)
     frozen: number;
+    // Chilled, at half pace, until this tick (the Snow ranger's Shatter)
+    chilled?: number;
+    // Slowed, at slowPace, until this tick (Baron's gas: PetDef.power gas)
+    slowed?: number;
+    slowPace?: number;
     // Ticks left staggered by a heavy blow (WeaponDef.heavy): standing, and not striking
     staggered?: number;
     // Under LightingDef.litTargetsOnly, whether it stood in a sim light as this tick's lights were
@@ -746,10 +757,14 @@ export type Pickup = {
     pileUid: number;
     // Caskets only
     tier?: CasketTier;
+    // Dug up a tier better (the Treasure hunter's trait, CharacterTraitDef dig)
+    dug?: boolean;
     // Power-ups only: which one
     powerUp?: string;
     // A casket that's really a boss (EnemyDef.disguise)
     disguise?: DisguisedBoss;
+    // Power-ups only: how many times as long as usual it waits to be picked up (Globetrotter)
+    lasts?: number;
 };
 
 // Co-op: a boss's copies (content/coop.ts bossCopies), with one boss's
@@ -976,6 +991,8 @@ export type DamageSource =
     | `powerUp:${string}`
     // A fight's button (MapDef.fight.ability), and its arena's attacks that turned on the boss
     | `ability:${string}`
+    // A fighting pet's (PetDef.power)
+    | `pet:${string}`
     | "court"
     | "recoil"
     | "other";
@@ -1055,6 +1072,8 @@ export type Debuff = {
     stats: Partial<Stats>;
     startTick: number;
     endTick: number;
+    // A dim (PlayerEffectDef dim): tiles off the player's light, or no more than to tiles
+    light?: { off: number; to?: number };
 };
 
 export type PassiveState = {
@@ -1095,7 +1114,15 @@ type SimEventBody =
     // A projectile hit something and has a sound for it
     | { type: "impact"; sound: number; x: number; y: number }
     // sound: the boss attack's hit sound, instead of the enemy's attack sound
-    | { type: "playerHit"; amount: number; enemyId: string; elite: boolean; sound?: number }
+    // missed: Trickster's (content/relics.ts), a hit that didn't land
+    | {
+          type: "playerHit";
+          amount: number;
+          enemyId: string;
+          elite: boolean;
+          sound?: number;
+          missed?: boolean;
+      }
     | { type: "playerPoisoned"; amount: number }
     // A boss attack was used (a swing landed, or projectiles were fired)
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
@@ -1152,12 +1179,20 @@ type SimEventBody =
     // A statue the fight draws (BossAttackDef.statues) starts this animation:
     // the one of locId whose south-west tile is x, y
     | { type: "statueSeq"; locId: number; x: number; y: number; seq: number }
+    // A hero's fighting pet leaps onto an enemy there (PetDef.power), for the follower to show
+    | { type: "petLeap"; owner: number; x: number; y: number }
+    // A hero's pet spat its gas round x, y (PetDef.power gas)
+    | { type: "petGas"; owner: number; x: number; y: number }
+    // A hero's Lil'viathan blew its bubble round them, or it popped (PetDef.power bubble)
+    | { type: "petBubble"; owner: number; popped: boolean }
     // Its totems' blast, from each totem to the boss
     | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
     // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it
     | { type: "bossAbsorbBlast"; x: number; y: number; absorbed: number }
     // The player's controls were shuffled, or came back
     | { type: "playerCursed"; cursed: boolean }
+    // The Soulreaper axe's Harvest, a spin all round them (WeaponDef.souls)
+    | { type: "harvest"; x: number; y: number }
     | {
           type: "slash";
           x: number;
@@ -1250,6 +1285,14 @@ type SimEventBody =
     // or was brought back by the teammate at index by
     | { type: "heroDown" }
     | { type: "heroLeft" }
+    // The party's turned to the other world (RealmRule): 1 the realm, 0 the city; lapse, thrown
+    // back out of sanity
+    | { type: "worldTurned"; layer: 0 | 1; lapse: boolean }
+    // A lost soul caught, and how many of this lot are left (siphon: one of a boss's siphon's,
+    // BossDef.siphon, with the rest of its lot left in either world)
+    | { type: "soulCaught"; left: number; siphon?: boolean }
+    // Frozen solid under the cold (ColdRuleDef), the hero by index
+    | { type: "frozenSolid"; hero: number }
     | { type: "heroRevived"; by: number }
     // Co-op: a hero found or bought an extra revive
     | { type: "extraRevive" };

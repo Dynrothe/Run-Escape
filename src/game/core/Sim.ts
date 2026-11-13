@@ -39,6 +39,16 @@ import {
 } from "../content/endless";
 import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import {
+    ANCIENT_FOCUS,
+    BlessingId,
+    GauntletFightOptions,
+    SARADOMIN_HP,
+    SECOND_WIND_HP,
+    SECOND_WIND_SECONDS,
+    STEADY_HANDS_SECONDS,
+    isBlessingId,
+} from "../content/gauntlet";
+import {
     HARD_BOSS_INTERVAL,
     HARD_COINS,
     HARD_CROWD,
@@ -47,18 +57,49 @@ import {
     HARD_XP,
     getHardScale,
 } from "../content/hard";
+import { INVADER_BY_ID, PocketKind } from "../content/invaders";
+import {
+    INVASION,
+    Invasion,
+    getInvaderHp,
+    invasionEvent,
+    rollInvasion,
+    takesInvasions,
+} from "../content/invasions";
 import {
     ACCELERATION,
+    AERIAL_ASSAULT,
+    ANCIENT_HASTE,
+    BLOOD_MOON,
+    COIN_BONUS_CAP,
     DEADLY_PRAYERS,
+    FEELING_SPECIAL_ENRAGE,
+    GLASS_CANNON_HP,
+    HARD_PRESET,
     QUIET_PRAYERS,
+    RUN_SET,
     TOMBS_ATTEMPTS,
+    TOMBS_SET,
+    WALK_THE_PATH,
     cleanInvocations,
+    getInvocationCoins,
+    getInvocationPoints,
     getRaidLevel,
     getRaidLevelScale,
+    hasHardPreset,
 } from "../content/invocations";
-import { CASKETS, getGear, getItem } from "../content/items";
-import { getMap, hasFliers, hasPoison, isPeaceful } from "../content/maps";
+import { CASKETS, CASKET_TIERS, getGear, getItem } from "../content/items";
+import {
+    CAMPAIGN_MAPS,
+    getMap,
+    hasFliers,
+    hasPoison,
+    isPeaceful,
+    takesInvocations,
+    takesRelics,
+} from "../content/maps";
 import { canLevelPassive, getPassive, getPassiveGain } from "../content/passives";
+import { PET_BY_ID, PetDef, PetPowerDef } from "../content/pets";
 import {
     LANTERN_ID,
     POWER_UPS,
@@ -99,6 +140,19 @@ import {
     givesItems,
 } from "../content/randomEvents";
 import { RARITIES, RARITY_ORDER, type Rarity } from "../content/rarity";
+import {
+    BLOODTHIRSTY,
+    ENDLESS_HARVEST,
+    FAIRYS_FLIGHT,
+    GLOBETROTTER,
+    LAST_RECALL,
+    PRODUCTION_PRODIGY,
+    RELOADED,
+    SPECIALIST,
+    TRICKSTER,
+    cleanRelics,
+} from "../content/relics";
+import { RemixId, getMapRemixes, getRemixCoins } from "../content/remixes";
 import { countSetPieces, getActiveSets, getItemSet, getSet } from "../content/sets";
 import { SHOP_UPGRADES } from "../content/shop";
 import { SOUNDS } from "../content/sounds";
@@ -200,7 +254,8 @@ import {
     ZebakDef,
     emptyStats,
 } from "../content/types";
-import type { CharacterTraitDef } from "../content/types";
+import type { CharacterTraitDef, ColdRuleDef } from "../content/types";
+import { isAvailable } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
 import { getWeaponDamageMultiplier } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
@@ -218,6 +273,7 @@ import {
     rollBossCasketTier,
     rollCasketItem,
     rollCasketTier,
+    shouldAutoEquip,
 } from "./Loot";
 import { MovementRules, movePlayer, walkToward, yawFromVector } from "./PlayerMovement";
 import { Rng, hashChance } from "./Rng";
@@ -310,7 +366,18 @@ import {
 } from "./floorLayout";
 import { fm } from "./fmath";
 import { gazeOccluders, hiddenFrom } from "./gazeSight";
-import { RuleHost, RunRule, createRunRule } from "./rules/RunRule";
+import { type Brazier, ColdRule } from "./rules/ColdRule";
+import { RealmLayer, RealmRule } from "./rules/RealmRule";
+import { RootRule } from "./rules/RootRule";
+import { RuleHost, RuleSet, RunRule, createRunRule } from "./rules/RunRule";
+import {
+    POCKET_DARK,
+    POCKET_LIGHTING,
+    PocketPlace,
+    pocketPlace,
+    pocketRule,
+} from "./rules/invasion";
+import { RemixRun, buildRemixRun } from "./rules/remix";
 import { ArenaGrid } from "./world/ArenaGrid";
 import { Vec2, findFreeSpot, isCircleFree, moveCircle } from "./world/Collision";
 import { FlightGrid } from "./world/FlightGrid";
@@ -381,11 +448,28 @@ const RING_PULSE_TICKS = 5;
 const MAX_RING_EFFECTS = 10;
 // How many enemies are looked at for the thickest crowd
 const MAX_CROWD_CHECKS = 60;
+// The Overgrown and Frozen remixes together: a fire elite's embers burn the roots this far round
+const EMBERS_BURN_ROOTS = 2;
+// The Frozen and Shadow remixes together: the cold rises this much faster in the realm
+const REALM_COLD = 1.5;
+// The Shadow and Dark remixes together: the player's light is this much of its size in the realm
+const REALM_LIGHT = 0.8;
+// The Frozen and Dark remixes together: a lit brazier and embers are lights this big (tiles)
+const BRAZIER_LIGHT = 4;
+const EMBERS_LIGHT = 2;
+const BRAZIER_GLOW = { color: 0xff9a4a, flicker: 0.2 };
+
 // Lights (MapDef.lighting): tiles past a light's edge that weapons can still aim
 // (litTargetsOnly; never more than the light's own radius, so one going out lights nothing), seconds over which a light an enemy left goes out, and over which a boss's
 // phase changes the scene's ambient (and back as it falls)
 const LIGHT_GRACE = 0.5;
 const LEFT_LIGHT_FADE = 3;
+// How far round a piece of debris (BossAttackDef.debris) a projectile breaks on it, tiles
+const DEBRIS_RADIUS = 0.8;
+// How many tiles across a piece of debris (or the wreck) hides someone from a swing with cover
+const DEBRIS_COVER = 1.6;
+// However dimmed, a player's light is never less than this, tiles
+const MIN_PLAYER_LIGHT = 1.5;
 const PHASE_LIGHT_SECONDS = 2;
 // Ticks a fallen rock lies there before it's gone
 const ROCK_LINGER_TICKS = 2 * TICKS_PER_SECOND;
@@ -496,6 +580,15 @@ const ENRAGED_INTERVAL = 0.7;
 const ENRAGED_SPEED = 1.3;
 const ENRAGED_TINT = 0xff7a66;
 
+// A final boss awakened by an Awakener's orb (act-2-fallen-empire.md 8.6, SimOptions.awakened): its
+// hitpoints times hp, enraged from enrageAt, tempo times quicker (its attacks and its walk), drawn
+// darker and violet (enraged, a redder violet)
+export const AWAKENED = { hp: 1.6, enrageAt: 0.75, tempo: 1.2 };
+const AWAKENED_TINT = 0x8a62c8;
+const AWAKENED_ENRAGED_TINT = 0xb05ab8;
+// The pocket rule's seed off the run's
+const POCKET_SEED = 0x3c0ffee5;
+
 // A boss's entrance: how fast what's left runs for the edge at most, in tiles a
 // second, and how long before the end it's all gone. Further off than that
 // speed gets it, it just goes.
@@ -531,6 +624,14 @@ const IMPACT_TICKS = 90;
 // A press of the fight's button held this long when it can't go off yet, and only if the boss
 // is no further than this past its reach (MapDef.fight.ability)
 const ABILITY_BUFFER_SECONDS = 0.3;
+// The soul's glow (Lassar's own) where the Wisp's soul reaches its hero (PetDef.power call)
+const PET_SOUL_SPOTANIM = 2447;
+// Baron's gas (PetDef.power gas): the Duke's own
+const PET_GAS_SPOTANIM = 2431;
+// Lil'viathan's bubble (PetDef.power bubble) blown, and popping: the Leviathan's magic orb and
+// its splash
+const PET_BUBBLE_SPOTANIM = 2488;
+const PET_BUBBLE_POP_SPOTANIM = 2490;
 const ABILITY_BUFFER_REACH = 1.5;
 // Tiles apart an impact's trail is laid along its way (ImpactDef.trail)
 const TRAIL_GAP = 1.5;
@@ -572,6 +673,8 @@ const HEAVY_HIT_SPOTS = 6;
 const BLESSING_CHOICES = 3;
 // Tiles from the player a strike (WeaponDef kind strike) finds its targets within
 const STRIKE_REACH = 12;
+// A chilled enemy's pace (CharacterTraitDef shatter)
+const CHILL_PACE = 0.5;
 // Ice Barrage's freeze, on a player frozen by a boss
 export const FREEZE_SPOTANIM = 369;
 const ENEMY_PROJECTILE_RADIUS = 0.35;
@@ -783,9 +886,30 @@ export type SimOptions = {
     // An act's map (MapDef.act): how many of the act's other maps had been beaten as it started
     // (the host's, in co-op), which sets its toughness (content/acts.ts). 0 when unset.
     actStep?: number;
+    // The solo hero's pet (SaveData.pet); a party's are each hero's (HeroOptions.pet)
+    pet?: string;
+    // The solo hero's relics (SaveData.relics); a party's are each hero's (HeroOptions.relics)
+    relics?: readonly string[];
+    // Remixes (content/remixes.ts): Act II rules on this map, those it takes (the host's, in co-op)
+    remixes?: readonly string[];
+    // A fight of the Forgotten Four's (content/gauntlet.ts): its climb, the hitpoints it starts at
+    // and its blessing. Ignored off a boss fight (MapDef.fight).
+    gauntlet?: GauntletFightOptions;
+    // Awakened invasions are open (content/invasions.ts, the host's in co-op): the run rolls for
+    // one by its seed. Unset, nothing's rolled and the run plays as it always has.
+    invasions?: boolean;
+    // An Awakener's orb spent on the map's final boss (AWAKENED): only on a campaign map's
+    // survival run, not endless
+    awakened?: boolean;
 };
 
-export type SimTesting = { raidRoomSeconds?: number; maxLevelUps?: boolean };
+export type SimTesting = {
+    raidRoomSeconds?: number;
+    maxLevelUps?: boolean;
+    // An invasion made to come: this invader (content/invaders.ts) at this second of the map's
+    // clock, on a map that takes them, whatever the roll
+    invasion?: { invader: string; at: number };
+};
 
 // A raid's chest at the end: the points it went by, the chance of a purple they gave, whether
 // there was a purple left to find (not once they're all found: no chance to show then), and the
@@ -829,8 +953,23 @@ export type RunResult = {
     actStep?: number;
     // The Tombs of Amascut's board
     tombs?: TombsSummary;
+    // A run's invocations (content/invocations.ts, RUN_SET), hard mode's preset among them, and
+    // the points they come to; and the player's relics (content/relics.ts). Each only when any.
+    invocations?: string[];
+    points?: number;
+    relics?: string[];
+    // The run's remixes (content/remixes.ts), when any
+    remixes?: RemixId[];
     // The Scabaras room was beaten (Sim.scabarasBeaten)
     scabarasBeaten?: boolean;
+    // A fight of the Forgotten Four's: the hitpoints it ended on, of the most, and the times the
+    // boss's guard dropped (core/gauntlet.ts scores it)
+    gauntlet?: { hp: number; maxHp: number; guardDowns: number };
+    // An Awakened invasion the run rolled: its invader, whether it came, whether it fell
+    invasion?: { id: string; came: boolean; killed: boolean };
+    // The final boss awakened by an orb: whether it came (the orb's spent then), and the master
+    // casket its fall opened (its coins are in the run's)
+    awakened?: { seen: boolean; casketCoins?: number };
     // The round reached (1 outside endless runs)
     round: number;
     victory: boolean;
@@ -850,6 +989,8 @@ export type RunResult = {
     // For quests: enemy id -> times killed, and reward caskets opened
     enemyKills: Record<string, number>;
     caskets: number;
+    // Of those, the ones opened in a map's Shadow Realm (RealmRuleDef)
+    realmCaskets?: number;
     stats: RunStats;
 };
 
@@ -869,9 +1010,45 @@ export type RunStats = {
 // One adventurer in a run: everything that's theirs rather than the party's.
 // A run on your own has one; co-op has one for each player, and the run's
 // level, XP, coins and kills are shared.
+// A hero's pet, if it's one that fights (PetDef.power): looks-only pets are the client's alone
+function fightingPet(id: string | undefined): {
+    pet?: PetDef;
+    petReadyTick: number;
+    petSoulTick: number;
+    petSoulLands: number;
+    petCloud?: PetCloud;
+    petBubble?: boolean;
+} {
+    const pet = id === undefined ? undefined : PET_BY_ID.get(id);
+    if (!pet?.power) {
+        return { petReadyTick: 0, petSoulTick: 0, petSoulLands: -1 };
+    }
+    const power = pet.power;
+    return {
+        pet,
+        // Baron's awake from the start
+        petReadyTick: power.kind === "gas" ? 0 : secondsToTicks(power.every),
+        petSoulTick: power.kind === "call" ? secondsToTicks(power.soul) : 0,
+        petSoulLands: -1,
+    };
+}
+
+// Baron's gas cloud (PetDef.power gas): its middle, and the tick it's gone
+type PetCloud = { x: number; y: number; until: number };
+
 export type Hero = {
     // Where it is in Sim.heroes
     index: number;
+    // A fighting pet taken along (PetDef.power), and the tick it can next leap (or call). The
+    // Wisp's soul: the tick it can next send one, and the tick the one on its way lands (-1 none)
+    pet?: PetDef;
+    petReadyTick: number;
+    petSoulTick: number;
+    petSoulLands: number;
+    // Baron's gas, while it's out
+    petCloud?: PetCloud;
+    // Lil'viathan's bubble round them, while it's up (PetDef.power bubble)
+    petBubble?: boolean;
     // A raid's points, for its supply chest, and damage taken before this room, which it's
     // scored on
     raidPoints: number;
@@ -1007,9 +1184,17 @@ export type Hero = {
     // and when it next can
     ruleTicks: number;
     ruleHurtNext: number;
+    // The Soulreaper axe's souls (WeaponDef.souls), 0 to its max
+    souls: number;
+    // Under the cold (ColdRuleDef): frozen solid in an ice block until this tick; and the Snow
+    // ranger's hits towards her next chill (CharacterTraitDef shatter)
+    frozenSolid: number;
+    traitHits: number;
     // Their adventurer's trait (CharacterDef.trait): kills towards it, and whether it's ready
     traitKills: number;
     traitReady: boolean;
+    // A trait on a clock of its own (the Shadow walker's step): the tick it's ready again
+    traitNext: number;
     // What they're pressing, for the next tick
     moveX: number;
     moveY: number;
@@ -1034,8 +1219,28 @@ export type Hero = {
     // that couldn't go off yet is held till this one (ABILITY_BUFFER_SECONDS)
     abilityReadyTick: number;
     abilityHeldUntil: number;
+    // Their relics (content/relics.ts) and what each has to keep
+    relics: RelicState;
     // A hero's own buttons (CharacterDef.abilities): the tick each can be used again from
     kitReadyTicks: number[];
+};
+
+// A hero's relics on this run (none where the map takes none), and their clocks and counts
+export type RelicState = {
+    ids: string[];
+    // Trickster: the tick the next hit's missed from
+    trickReady: number;
+    // Fairy's Flight: the tick the next push through a crowd's ready
+    pushReady: number;
+    // Bloodthirsty: kills towards the next heal
+    kills: number;
+    // Last Recall: used this run
+    recalled: boolean;
+    // Reloaded: the offers kept for later, the keeps left, and the offer put by while a kept one's
+    // taken (it comes back next)
+    kept: UpgradeChoice[][];
+    keepsLeft: number;
+    resume?: UpgradeChoice[];
 };
 
 // A hero's own move on its way (CharacterDef.abilities, useKitAbility): it lands at landTick,
@@ -1071,6 +1276,10 @@ export type HeroOptions = {
     unlockedItems?: ReadonlySet<string>;
     trophiesFound?: ReadonlySet<string>;
     armoury?: ArmouryUpgrades;
+    // The pet taken along (SaveData.pet): only a fighting one (PetDef.power) does anything here
+    pet?: string;
+    // Their relics (SaveData.relics), on the maps that take them (maps.ts, takesRelics)
+    relics?: readonly string[];
 };
 
 // The Apmeken room (content/tombs.ts): the wave it's on (its group's uids, and when it came), the
@@ -1518,24 +1727,94 @@ export class Sim {
     // A floor that rises and falls away (MapDef.floor)
     // Laid afresh when the party wipes on the Wardens (failWardens)
     floor: ArenaFloor | undefined;
-    // The map's rule (MapDef.rule, core/rules): roots creeping in
-    readonly rule: RunRule | undefined;
+    // The map's rule (MapDef.rule, core/rules) and its remixes' (content/remixes.ts), one RuleSet
+    // when there's more than one
+    // (An invader's pocket adds its own for as long as it lives: startPocket)
+    rule: RunRule | undefined;
+    rules: RunRule[];
+    // The roots, the map's or a remix's (RootsRuleDef)
+    roots: RootRule | undefined;
+    // The run's remixes, what they put on it (core/rules/remix.ts), and the map's and theirs' waves
+    // and events
+    readonly remixes: RemixId[];
+    readonly remixRun: RemixRun | undefined;
+    // The same, on a map of two worlds (RealmRuleDef): which the party's in, and what's kept of the
+    // other while it's away (its enemies and what's on its ground), standing still
+    realm: RealmRule | undefined;
+    // The same, under the cold (ColdRuleDef): braziers, vents, ice and each player's cold
+    cold: ColdRule | undefined;
+    // An Awakened invasion (content/invasions.ts), rolled as the run starts; the run's events with
+    // it in; its pocket once it's come (its place, its rule, whether it's over); the dark's
+    // pocket, its place and when it came and went (drawn; what it does is isLit's)
+    readonly invasion: Invasion | undefined;
+    private readonly invasionEvents?: RunEventDef[];
+    pocket?: { kind: PocketKind; place: PocketPlace; rule?: RunRule; over: boolean };
+    darkPocket?: PocketPlace & { from: number; until: number };
+    private invaderKilled = false;
+    // An Awakener's orb on the final boss (SimOptions.awakened), and whether it came
+    readonly awakened: boolean;
+    private awakenedSeen = false;
+    private awakenedCasketCoins?: number;
+    private readonly runSeed: number;
+    private otherEnemies: Enemy[] = [];
+    private otherPickups: Pickup[] = [];
+    // A step between in the city (the Shadow walker's trait): into the realm when the rule's next
+    private stepIntoRealm = false;
+    // The fight's button that turns the party (FightAbilityDef.turn), pressed: by which hero (-1
+    // none), turned at the rule's turn of the tick
+    private abilityTurn = -1;
     // An act's map: the step it's played at, and its toughness there (the map's own off an act)
     readonly actStep: number;
     readonly difficulty: { hp: number; damage: number };
     readonly endless: boolean;
     readonly hard: boolean;
     readonly expert: boolean;
-    // The Tombs of Amascut: the invocations on, and the raid level they come to
+    // The invocations on (content/invocations.ts): the Tombs of Amascut's, and the raid level they
+    // come to; or a run's (RUN_SET, maps from the Desert on), hard mode's preset among them
     readonly invocations: string[];
     readonly raidLevel: number;
+    // A run's invocation points (0 off a map that takes them), for its records
+    readonly invocationPoints: number;
+    // Hard mode's parts (HARD_PRESET): each a run invocation on maps that take them, and all hard
+    // mode elsewhere
+    private readonly hardFoes: boolean;
+    private readonly hardCrowd: boolean;
+    private readonly hardElites: boolean;
+    private readonly hardBosses: boolean;
+    // Ancient Haste: how fast the run's clock goes (mapSeconds)
+    private readonly clockRate: number;
+    // Blood Moon: the map's events with its bosses a minute early (mapEvents), made once
+    private earlyEvents?: { stage: number; events: RunEventDef[] };
+    // Where the run started (SimOptions.spawnX/Y), for Last Recall
+    private readonly start: Vec2;
     // A map's lights (MapDef.lighting), and whether weapons only aim at what's lit
     readonly lighting: LightingDef | undefined;
-    readonly litTargetsOnly: boolean;
+    // (On while an invading Leviathan's dark pocket is: startPocket)
+    litTargetsOnly: boolean;
     // On a map with lighting, this tick's sim lights (stepLights): each player's, the map's, and
     // what enemies carry and leave. Empty on any other map.
     lights: Light[] = [];
     private leftLights: LeftLight[] = [];
+    // Whether any enemy here can be the only light (EnemyDef.onlyLight), and what goes round the
+    // final boss's angles (EnemyDef.circles), by uid
+    private readonly hasOnlyLight: boolean;
+    private readonly circleAngles = new Map<number, number>();
+    // A Lantern-bearer's in the party (CharacterTraitDef lantern)
+    private hasLanterns = false;
+    // This tick's only light (stepLights), if there is one
+    private onlyLight: Enemy | undefined;
+    // Debris a boss's ground attack left (BossAttackDef.debris): its projectiles break on it
+    // and the wreck standing from the start (ArenaFeatures.wreckage: wreck, never going)
+    debris: {
+        x: number;
+        y: number;
+        locId: number;
+        until: number;
+        from: number;
+        wreck?: boolean;
+        rotation?: number;
+        glows?: boolean;
+    }[] = [];
     // The scene's ambient as it changes over time (dimTo): from, to, over these ticks
     private dim = { from: 1, to: 1, startTick: 0, endTick: 0 };
 
@@ -1660,6 +1939,13 @@ export class Sim {
     tombsPathsDone: string[] = [];
     // A fight in parts: the part this run is (MapDef.stages)
     readonly stage: number;
+    // A fight of the Forgotten Four's (SimOptions.gauntlet), and what it's done with: the times the
+    // boss's guard dropped, and its Second wind, until it's used
+    readonly gauntlet?: GauntletFightOptions;
+    guardDowns = 0;
+    private secondWindLeft = false;
+    // The fight's button with Ancient focus, quicker
+    private readonly focusedAbility?: FightAbilityDef;
     // Ticks spent in the Nexus, which the run's clock leaves out (not the Wardens' room's)
     nexusTicks = 0;
     // Dev only: nothing hurts the player (GameClient.toggleDevGod), for watching a fight's mechanics
@@ -2018,18 +2304,73 @@ export class Sim {
         this.enemyHash = new SpatialHash(2, this.grid);
         this.pileHash = new SpatialHash(PILE_RADIUS, this.grid);
         this.map = getMap(options.mapId ?? "lumbridge");
-        this.lighting = this.map.lighting;
+        this.gauntlet = cleanGauntletFight(this.map.fight ? options.gauntlet : undefined);
+        this.secondWindLeft = this.blessed("second_wind");
+        const ability = this.map.fight?.ability;
+        if (ability && this.blessed("ancient_focus")) {
+            this.focusedAbility = { ...ability, cooldown: ability.cooldown * ANCIENT_FOCUS };
+        }
+        // Remixes: those the map takes, placed by the seed on its grid
+        this.remixRun = buildRemixRun(
+            this.map,
+            (options.remixes ?? []).filter((id) => getMapRemixes(this.map).includes(id as RemixId)),
+            this.grid,
+            options.seed,
+            { x: options.spawnX, y: options.spawnY },
+        );
+        this.remixes = this.remixRun?.remixes ?? [];
+        this.runSeed = options.seed;
+        // An Awakened invasion: rolled on an Rng of its own, only once they're open, so a run
+        // without one plays as it did
+        this.invasion =
+            options.invasions && !options.endless ? this.rollInvasion(options) : undefined;
+        if (this.invasion) {
+            const events = this.remixRun?.events ?? this.map.events;
+            this.invasionEvents = [...events, invasionEvent(this.invasion)].sort(
+                (a, b) => a.at - b.at,
+            );
+        }
+        this.awakened =
+            options.awakened === true &&
+            !options.endless &&
+            CAMPAIGN_MAPS.includes(this.map) &&
+            takesRelics(this.map);
+        // A run an invading Leviathan's coming to is lit from the start, as bright as ever till
+        // its dark comes (POCKET_LIGHTING)
+        this.lighting =
+            this.remixRun?.lighting ??
+            this.map.lighting ??
+            (this.invasion?.invader.pocket === "dark" ? POCKET_LIGHTING : undefined);
         this.litTargetsOnly = this.lighting?.litTargetsOnly === true;
+        this.hasOnlyLight =
+            this.lighting !== undefined &&
+            [...ENEMY_BY_ID.values()].some(
+                (e) => e.onlyLight !== undefined && e.light !== undefined,
+            );
         this.dim.from = this.dim.to = this.lighting?.ambient ?? 1;
+        // The wreck standing from the start, as debris that never goes (ArenaFeatures.wreckage)
+        for (const wreck of this.map.features?.wreckage ?? []) {
+            this.debris.push({ ...wreck, from: 0, until: Number.MAX_SAFE_INTEGER, wreck: true });
+        }
         this.rng = new Rng(options.seed);
         this.floor = this.map.floor
             ? new ArenaFloor(this.map.floor, this.grid, this.rng, TICKS_PER_SECOND)
             : undefined;
         this.setUpLairs({ x: options.spawnX, y: options.spawnY });
         // On its own Rng, so a map without one plays as it did
-        this.rule = this.map.rule
-            ? createRunRule(this.map.rule, this.grid, options.seed, TICKS_PER_SECOND)
-            : undefined;
+        this.rules = [
+            ...(this.map.rule ? [this.map.rule] : []),
+            ...(this.remixRun?.rules ?? []),
+        ].map((def) => createRunRule(def, this.grid, options.seed, TICKS_PER_SECOND));
+        this.rule = this.rules.length > 1 ? new RuleSet(this.rules) : this.rules[0];
+        this.realm = this.rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
+        this.cold = this.rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
+        this.roots = this.rules.find((rule): rule is RootRule => rule instanceof RootRule);
+        // Overgrown and Frozen: roots don't grow on ice
+        const cold = this.cold;
+        if (this.roots && cold) {
+            this.roots.exclude((x, y) => cold.iceAt(x + 0.5, y + 0.5));
+        }
         this.actStep = this.map.act ? Math.max(0, Math.floor(options.actStep ?? 0)) : 0;
         this.difficulty = getStepDifficulty(this.map, this.actStep);
         // Building it takes a while, so it's done here, with the map, rather
@@ -2040,9 +2381,28 @@ export class Sim {
         // Fun maps are endless from the start
         this.endless = (options.endless ?? false) || this.map.fun !== undefined;
         this.expert = (options.expert ?? false) && this.map.raid !== undefined;
-        // The Tombs go by their invocations instead
-        this.hard = ((options.hard ?? false) || this.expert) && !this.map.tombs;
-        this.invocations = this.map.tombs ? cleanInvocations(options.invocations ?? []) : [];
+        // The Tombs go by their invocations instead. A map with the runs' board has hard mode as a
+        // preset of them, so its hard runs play as they always have.
+        const board = this.map.tombs
+            ? TOMBS_SET
+            : takesInvocations(this.map, this.remixes.length > 0)
+              ? RUN_SET
+              : undefined;
+        const picked = board ? cleanInvocations(options.invocations ?? [], board) : [];
+        const runBoard = board === RUN_SET;
+        this.invocations =
+            runBoard && options.hard
+                ? cleanInvocations([...picked, ...HARD_PRESET], RUN_SET)
+                : picked;
+        this.hard = runBoard
+            ? hasHardPreset(this.invocations)
+            : ((options.hard ?? false) || this.expert) && !this.map.tombs;
+        this.invocationPoints = runBoard ? getInvocationPoints(this.invocations) : 0;
+        this.hardFoes = runBoard ? this.invoked("run_hard_foes") : this.hard;
+        this.hardCrowd = runBoard ? this.invoked("run_hard_crowd") : this.hard;
+        this.hardElites = runBoard ? this.invoked("run_hard_elites") : this.hard;
+        this.hardBosses = runBoard ? this.invoked("run_hard_bosses") : this.hard;
+        this.clockRate = this.invoked("run_ancient_haste") ? ANCIENT_HASTE : 1;
         const stage = Math.floor(options.stage ?? 0);
         this.stage = Number.isFinite(stage)
             ? Math.max(0, Math.min(stage, (this.map.stages?.length ?? 1) - 1))
@@ -2057,14 +2417,15 @@ export class Sim {
         }
         this.hardScale = this.map.tombs
             ? getRaidLevelScale(this.raidLevel)
-            : this.hard
+            : this.hardFoes
               ? { ...getHardScale(this.map), bossHp: getHardScale(this.map).hp }
               : { hp: 1, damage: 1, bossHp: 1 };
-        this.bulletScale = this.map.tombs
-            ? getRaidLevelScale(this.raidLevel).bullets
-            : this.hard
-              ? (this.map.hard?.bullets ?? 1)
-              : 1;
+        this.bulletScale =
+            (this.map.tombs
+                ? getRaidLevelScale(this.raidLevel).bullets
+                : this.hardBosses
+                  ? (this.map.hard?.bullets ?? 1)
+                  : 1) * (this.invoked("run_aerial_assault") ? AERIAL_ASSAULT : 1);
         const party: HeroOptions[] = options.party ?? [
             {
                 name: "",
@@ -2073,12 +2434,14 @@ export class Sim {
                 unlockedItems: options.unlockedItems,
                 trophiesFound: options.trophiesFound,
                 armoury: options.armoury,
+                pet: options.pet,
+                relics: options.relics,
             },
         ];
         this.weaponDamageMultipliers = Object.fromEntries(
             WEAPONS.map((weapon) => [
                 `weapon:${weapon.id}`,
-                getWeaponDamageMultiplier(weapon, party.length, this.hard, options.balance),
+                getWeaponDamageMultiplier(weapon, party.length, this.hardFoes, options.balance),
             ]),
         );
         this.partyScale = getPartyScale(party.length);
@@ -2093,12 +2456,17 @@ export class Sim {
                 this.nextPlayerChatSeconds = this.rng.range(...fun.playerChat.every);
             }
         }
+        this.start = { x: options.spawnX, y: options.spawnY };
         party.forEach((hero, index) => {
             this.heroes.push(this.createHero(hero, index, options.spawnX, options.spawnY));
         });
+        this.hasLanterns = this.heroes.some(
+            (hero) => getCharacter(hero.characterId).trait?.kind === "lantern",
+        );
         for (const hero of this.heroes) {
             this.use(hero);
             this.addWeapon(getCharacter(hero.characterId).startingWeapon);
+            this.grimoire();
             // A boss fight's kit: the weapon at its level, and nothing more ever
             if (this.map.fight) {
                 this.weapons[0].level = this.map.fight.weaponLevel;
@@ -2109,10 +2477,17 @@ export class Sim {
             }
             this.updateStats();
             hero.player.hp = hero.player.maxHp;
-            hero.revivesLeft = hero.stats.revival;
-            hero.rerollsLeft = BASE_REROLLS + hero.stats.reroll;
+            // The gauntlet's wounds, carried from the last fight
+            if (this.gauntlet) {
+                hero.player.hp = Math.max(1, Math.round(hero.player.maxHp * this.gauntlet.hp));
+            }
+            // Hardcore: no Ring of life. Overly Draining: no rerolls or banishes.
+            hero.revivesLeft = this.invoked("run_hardcore") ? 0 : hero.stats.revival;
+            hero.rerollsLeft = this.invoked("run_overly_draining")
+                ? 0
+                : BASE_REROLLS + hero.stats.reroll;
             hero.rerollsAtStart = hero.rerollsLeft;
-            hero.banishesLeft = hero.stats.banish;
+            hero.banishesLeft = this.invoked("run_overly_draining") ? 0 : hero.stats.banish;
             // Testing: the starting weapon at its max too
             if (this.testing?.maxLevelUps) {
                 this.maxEverything();
@@ -2157,6 +2532,7 @@ export class Sim {
             unlockedItems: options.unlockedItems,
             trophiesFound: options.trophiesFound,
             armoury: options.armoury,
+            ...fightingPet(options.pet),
             player: {
                 x: start.x,
                 y: start.y,
@@ -2237,9 +2613,13 @@ export class Sim {
             glideX: 0,
             glideY: 0,
             ruleTicks: 0,
+            souls: 0,
             ruleHurtNext: 0,
             traitKills: 0,
             traitReady: false,
+            frozenSolid: 0,
+            traitHits: 0,
+            traitNext: 0,
             moveX: 0,
             moveY: 0,
             down: false,
@@ -2250,6 +2630,15 @@ export class Sim {
             immuneEndTick: 0,
             abilityReadyTick: 0,
             abilityHeldUntil: -1,
+            relics: {
+                ids: takesRelics(this.map) ? cleanRelics(options.relics ?? []) : [],
+                trickReady: 0,
+                pushReady: 0,
+                kills: 0,
+                recalled: false,
+                kept: [],
+                keepsLeft: RELOADED.keeps,
+            },
             kitReadyTicks: (getCharacter(options.characterId).abilities ?? []).map(() => 0),
         };
     }
@@ -2290,8 +2679,11 @@ export class Sim {
         return hero.down && !hero.left && this.revivesLeftFor(hero) > 0;
     }
 
-    // Co-op: the times a hero can still be revived, for the UI
+    // Co-op: the times a hero can still be revived, for the UI (none with Hardcore on)
     revivesLeftFor(hero: Hero): number {
+        if (this.invoked("run_hardcore")) {
+            return 0;
+        }
         return Math.max(0, REVIVES_PER_PLAYER + hero.extraRevives - hero.revived);
     }
 
@@ -2474,8 +2866,9 @@ export class Sim {
         const start = this.round > 1 ? LATER_ROUND_START : 0;
         return (
             start +
-            this.clockSeconds -
-            (this.roundStartTick - this.roundStartHeldTicks) / TICKS_PER_SECOND
+            (this.clockSeconds -
+                (this.roundStartTick - this.roundStartHeldTicks) / TICKS_PER_SECOND) *
+                this.clockRate
         );
     }
 
@@ -2511,7 +2904,29 @@ export class Sim {
 
     // The map's events, or this part's of a fight in parts
     get mapEvents(): RunEventDef[] {
-        return this.map.stages?.[this.stage]?.events ?? this.map.events;
+        const events =
+            this.map.stages?.[this.stage]?.events ??
+            this.invasionEvents ??
+            this.remixRun?.events ??
+            this.map.events;
+        if (!this.invoked("run_blood_moon")) {
+            return events;
+        }
+        // Blood Moon: every boss a minute early, in order with the rest
+        if (this.earlyEvents?.stage !== this.stage) {
+            const early = events.map((event) =>
+                event.kind === "boss" || event.kind === "finalBoss"
+                    ? { ...event, at: Math.max(0, event.at - BLOOD_MOON) }
+                    : event,
+            );
+            this.earlyEvents = { stage: this.stage, events: early.sort((a, b) => a.at - b.at) };
+        }
+        return this.earlyEvents.events;
+    }
+
+    // Upset Stomach (a run's) and On a Diet (the Tombs'): no food drops
+    private get noFood(): boolean {
+        return this.invoked("on_a_diet") || this.invoked("run_upset_stomach");
     }
 
     getResult(): RunResult {
@@ -2524,7 +2939,36 @@ export class Sim {
             ...(this.hero.raidChest && { raidChest: this.hero.raidChest }),
             ...(this.map.act && { actStep: this.actStep }),
             ...(this.map.tombs && { tombs: this.tombsSummary() }),
+            ...(!this.map.tombs &&
+                this.invocations.length > 0 && {
+                    invocations: [...this.invocations],
+                    points: this.invocationPoints,
+                }),
+            ...(this.hero.relics.ids.length > 0 && { relics: [...this.hero.relics.ids] }),
+            ...(this.remixes.length > 0 && { remixes: [...this.remixes] }),
+            ...(this.invasion && {
+                invasion: {
+                    id: this.invasion.invader.id,
+                    came: this.pocket !== undefined,
+                    killed: this.invaderKilled,
+                },
+            }),
+            ...(this.awakened && {
+                awakened: {
+                    seen: this.awakenedSeen,
+                    ...(this.awakenedCasketCoins !== undefined && {
+                        casketCoins: this.awakenedCasketCoins,
+                    }),
+                },
+            }),
             ...(this.scabarasBeaten && { scabarasBeaten: true }),
+            ...(this.gauntlet && {
+                gauntlet: {
+                    hp: Math.max(0, this.player.hp),
+                    maxHp: this.player.maxHp,
+                    guardDowns: this.guardDowns,
+                },
+            }),
             round: this.round,
             victory: this.state === "victory",
             seconds: this.seconds,
@@ -2537,6 +2981,7 @@ export class Sim {
             trophies: [...this.trophies],
             enemyKills: { ...this.enemyKills },
             caskets: this.casketsOpened,
+            ...(this.realm && { realmCaskets: this.realm.realmCaskets }),
             stats: this.getRunStats(),
         };
     }
@@ -2591,6 +3036,8 @@ export class Sim {
         const stats = emptyStats();
         addStats(stats, getCharacter(this.characterId).bonus);
         addStats(stats, this.metaStats);
+        // A boss fight's own (MapDef.fight.stats)
+        addStats(stats, this.map.fight?.stats ?? {});
         for (const passive of this.passives) {
             const def = getPassive(passive.id);
             for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {
@@ -2621,6 +3068,17 @@ export class Sim {
         for (const debuff of this.debuffs) {
             addStats(stats, debuff.stats);
         }
+        // Relics that are stats (content/relics.ts)
+        if (this.hasRelic("fairys_flight")) {
+            stats.moveSpeed += FAIRYS_FLIGHT.moveSpeed;
+        }
+        if (this.hasRelic("globetrotter")) {
+            stats.powerUpRate += GLOBETROTTER.rate;
+        }
+        if (this.hasRelic("specialist")) {
+            stats.weaponSlots -= SPECIALIST.slots;
+            stats.might += SPECIALIST.might;
+        }
         const blessings = this.map.blessings;
         if (blessings) {
             for (const { id, count } of this.blessings) {
@@ -2635,7 +3093,13 @@ export class Sim {
         stats.might += stats.levelMight * Math.min(this.level - 1, LEVEL_MIGHT_LEVELS);
         this.stats = stats;
         const player = this.player;
-        const maxHp = Math.round(PLAYER_BASE_HP * (1 + stats.maxHp));
+        // Glass Cannon: half the hitpoints
+        const maxHp = Math.round(
+            PLAYER_BASE_HP *
+                (1 + stats.maxHp) *
+                (this.invoked("run_glass_cannon") ? GLASS_CANNON_HP : 1) *
+                (this.blessed("saradomin") ? 1 + SARADOMIN_HP : 1),
+        );
         if (maxHp !== player.maxHp) {
             // Swapping off max hitpoints never kills
             player.hp = Math.max(Math.min(player.hp, 1), player.hp + maxHp - player.maxHp);
@@ -2701,8 +3165,11 @@ export class Sim {
     private nextLevelUp(): void {
         this.pendingLevelUps--;
         this.choices = [];
+        // Reloaded: the offer put by for a kept one comes back as it was
+        const resume = this.hero.relics.resume;
+        this.hero.relics.resume = undefined;
         if (this.pendingLevelUps > 0) {
-            this.choices = this.roll();
+            this.choices = resume ?? this.roll();
         } else {
             this.settle();
         }
@@ -3081,7 +3548,10 @@ export class Sim {
         const item = getItem(chest.itemId);
         if (action === "alch") {
             this.declineSetPiece(item.id);
-            const coins = this.alchValue(item.id, chest.upgrades);
+            const coins = Math.round(
+                this.alchValue(item.id, chest.upgrades) *
+                    (this.hasRelic("production_prodigy") ? PRODUCTION_PRODIGY.alch : 1),
+            );
             this.gainCoins(coins);
             this.emit({ type: "alch", itemId: item.id, coins });
             return;
@@ -3244,10 +3714,20 @@ export class Sim {
     // What coins found in the run are worth: less in endless runs, and less
     // again in their later rounds (see endless.ts), and more on hard mode
     get coinScale(): number {
-        const scale =
-            (this.endless ? endlessCoinScale(this.round) : 1) * (this.hard ? HARD_COINS : 1);
-        // An act's later steps pay more (content/acts.ts)
-        return this.map.act ? scale * (1 + getStepCoins(this.map, this.actStep)) : scale;
+        // The bonuses add together, up to the cap (act-2-fallen-empire.md, 8.3): hard mode (in its
+        // preset's invocations where the map has the board), the invocations, an act's later steps
+        const bonus =
+            (this.invocations.length > 0 && !this.map.tombs
+                ? getInvocationCoins(this.invocations)
+                : this.hard
+                  ? HARD_COINS - 1
+                  : 0) +
+            (this.map.act ? getStepCoins(this.map, this.actStep) : 0) +
+            getRemixCoins(this.remixes.length);
+        return (
+            (this.endless ? endlessCoinScale(this.round) : 1) *
+            (1 + Math.min(COIN_BONUS_CAP, bonus))
+        );
     }
 
     // Coins for high alching an item, as the run pays them
@@ -3432,6 +3912,7 @@ export class Sim {
         this.stepChat();
         this.rebuildEnemyHash();
         this.stepEnemies();
+        this.stepCircling();
         this.stepGlyphs();
         if (this.lighting) {
             this.stepLights();
@@ -3446,6 +3927,7 @@ export class Sim {
         this.stepPendingHits();
         this.stepTurrets();
         this.stepThralls();
+        this.stepPets();
         this.stepRocks();
         this.stepRampages();
         this.stepRings();
@@ -3458,6 +3940,7 @@ export class Sim {
         this.stepBossFight();
         this.stepFloor();
         this.stepRule();
+        this.stepRelics();
         this.stepPickups();
         this.stepRandomEvents();
         this.cleanUp();
@@ -3527,7 +4010,7 @@ export class Sim {
                       ? this.ruleMovement()
                       : undefined,
         });
-        if (this.floor?.hasEffects) {
+        if (this.floor?.hasEffects || this.cold) {
             this.hero.glideX = player.x - player.prevX;
             this.hero.glideY = player.y - player.prevY;
         }
@@ -3684,9 +4167,14 @@ export class Sim {
         const events = this.raidRoomDef?.events ?? this.mapEvents;
         while (this.eventIndex < events.length && events[this.eventIndex].at <= seconds) {
             const event = events[this.eventIndex];
+            // The city's crowd waits while the party's in the realm (RealmRule): its elites and
+            // rings come when it's back. Bosses don't wait.
+            if (this.realm?.layer === 1 && (event.kind === "elite" || event.kind === "ring")) {
+                break;
+            }
             this.useSpawnHero();
             if (event.kind === "elite") {
-                for (let i = 0; i < (this.hard ? HARD_ELITES : 1); i++) {
+                for (let i = 0; i < (this.hardElites ? HARD_ELITES : 1); i++) {
                     this.spawnEnemy(getEnemy(event.enemyId), "elite");
                 }
             } else if (event.kind === "ring") {
@@ -3700,6 +4188,9 @@ export class Sim {
             ) {
                 // Nowhere to put it this tick; bosses can't be skipped
                 break;
+            } else if (getEnemy(event.enemyId).realm === "drags" && this.realm?.layer === 0) {
+                // It pulls the party into the realm with it (EnemyDef.realm)
+                this.realm.turn(this.ruleHost, 1);
             }
             this.eventIndex++;
         }
@@ -3733,7 +4224,7 @@ export class Sim {
         const wave = this.currentWave();
         // Endless runs' later rounds bring bigger crowds, and so do hard mode
         // and co-op's players
-        const soloCrowd = roundCrowd(this.round) * (this.hard ? HARD_CROWD : 1);
+        const soloCrowd = roundCrowd(this.round) * (this.hardCrowd ? HARD_CROWD : 1);
         const crowd = soloCrowd * this.partyScale.crowd;
         const alive = this.countAlive();
         const maxAlive = Math.min(Math.round(wave.maxAlive * crowd), MAX_ENEMIES);
@@ -3954,7 +4445,7 @@ export class Sim {
         const square = inArena ? this.map.bossArena : undefined;
         const points = this.bossSpawnPoints(
             def,
-            bossCopies(this.heroes.length, this.hard),
+            bossCopies(this.heroes.length, this.hardBosses),
             square ? ARENA_SPAWN_MIN_DISTANCE : BOSS_SPAWN_MIN_DISTANCE,
             square ? ARENA_SPAWN_MAX_DISTANCE : BOSS_SPAWN_MAX_DISTANCE,
             def.spawnAt,
@@ -4004,6 +4495,10 @@ export class Sim {
             const finalBoss = type === "finalBoss";
             if (finalBoss) {
                 this.bossSpawned = true;
+            }
+            // An invader brings its pocket (each of its co-op copies keeps to the first's)
+            if (INVADER_BY_ID.has(def.id)) {
+                this.startPocket(boss);
             }
             if (def.spawnSpotAnim !== undefined) {
                 this.addEffect(def.spawnSpotAnim, boss.x, boss.y, 0, 60);
@@ -4085,18 +4580,31 @@ export class Sim {
         if (bossHp !== undefined && this.map.act) {
             bossHp *= difficulty.hp / this.map.difficulty.hp;
         }
+        // The gauntlet's climb: its later fights' bosses tougher (SimOptions.gauntlet)
+        if (type === "finalBoss" && this.gauntlet && bossHp !== undefined) {
+            bossHp *= this.gauntlet.climb;
+        }
+        const awakened = type === "finalBoss" && this.awakened;
+        // The orb's spent once it's come (RunResult.awakened)
+        if (awakened) {
+            this.awakenedSeen = true;
+        }
         let hp =
             (boss ? (bossHp ?? def.hp * difficulty.hp) : def.hp * hpScale * difficulty.hp) *
             this.roundHp *
             (boss ? this.hardScale.bossHp : this.hardScale.hp) *
-            (boss ? this.partyScale.bossHp : this.partyScale.hp);
+            (boss ? this.partyScale.bossHp : this.partyScale.hp) *
+            (awakened ? AWAKENED.hp : 1);
         // What its hits are multiplied by: its touch, a boss's attacks, its
         // explosion (and in co-op, harder for each player)
         let hitScale = bossDamage * (boss ? 1 : damageScale) * this.partyScale.damage;
         let scale = def.scale ?? 1;
         let tint = 0xffffff;
         let xp =
-            def.xp * roundScale(ROUND_XP, this.round) * this.partyXp * (this.hard ? HARD_XP : 1);
+            def.xp *
+            roundScale(ROUND_XP, this.round) *
+            this.partyXp *
+            (this.hardCrowd ? HARD_XP : 1);
         if (type === "elite") {
             hp *= 8;
             hitScale *= 1.25;
@@ -4147,13 +4655,19 @@ export class Sim {
             hp: Math.max(1, Math.round(hp)),
             maxHp: Math.max(1, Math.round(hp)),
             damage: Math.round(def.damage * hitScale),
-            speed: (def.speed * (type === "elite" ? 0.85 : 1)) / TICKS_PER_SECOND,
+            speed:
+                (def.speed *
+                    (type === "elite" ? 0.85 : 1) *
+                    (this.invoked("run_walk_the_path") ? WALK_THE_PATH : 1) *
+                    (awakened ? AWAKENED.tempo : 1)) /
+                TICKS_PER_SECOND,
             radius: def.radius,
             scale,
-            tint,
+            tint: awakened ? AWAKENED_TINT : tint,
             elite: type === "elite",
             boss,
             finalBoss: type === "finalBoss",
+            ...(awakened && { awakened: true }),
             bossState:
                 (boss || def.minionAttacks) && def.boss
                     ? {
@@ -4447,7 +4961,7 @@ export class Sim {
             // The final boss waits for the player, and what can't move stays
             // put; anything else left behind comes back
             const stationary = enemy.def.stationary ?? false;
-            if (distance > RELOCATE_DISTANCE && !enemy.finalBoss && !stationary) {
+            if (distance > RELOCATE_DISTANCE && !enemy.finalBoss && !stationary && !enemy.pocket) {
                 this.relocate(enemy);
                 continue;
             }
@@ -4626,6 +5140,37 @@ export class Sim {
                 const foe = this.separate(enemy, faction, apart);
 
                 const touching = distance < enemy.radius + player.radius + 0.1;
+                // Something that bursts as it's walked into (EnemyDef.caught with explodes: one
+                // of Persten's false lanterns)
+                if (touching && enemy.def.caught && enemy.def.explodes) {
+                    this.explode(enemy);
+                    this.vanish(enemy);
+                    continue;
+                }
+                // A lost soul's caught by walking into it (EnemyDef.caught), in its world
+                // (EnemyDef.caughtIn: a siphon's, only in the realm)
+                if (
+                    touching &&
+                    enemy.def.caught &&
+                    this.realm &&
+                    (enemy.def.caughtIn === undefined || enemy.def.caughtIn === this.layer)
+                ) {
+                    this.realm.onCaught(this.ruleHost, enemy.uid, player.x, player.y);
+                    this.vanish(enemy);
+                    if (enemy.def.spawnSpotAnim !== undefined) {
+                        this.addEffect(enemy.def.spawnSpotAnim, enemy.x, enemy.y, 0, 40);
+                    }
+                    const siphon = this.siphonOf(enemy.def.id);
+                    this.emit({
+                        type: "soulCaught",
+                        left: siphon ? this.siphonLeft(enemy.def.id) : this.realm.soulsLeft,
+                        siphon: siphon !== undefined,
+                    });
+                    if (siphon) {
+                        this.siphonSoulGone(siphon, false);
+                    }
+                    continue;
+                }
                 if (lapping) {
                     moveX += dirX * enemy.speed * this.laps!.speed;
                     moveY += dirY * enemy.speed * this.laps!.speed;
@@ -4641,6 +5186,18 @@ export class Sim {
                         : this.rule && !enemy.def.flies && !enemy.def.stationary
                           ? this.rule.enemyPace(enemy.x, enemy.y)
                           : 1;
+                    // Chilled (the Snow ranger's Shatter): half pace
+                    if (enemy.chilled !== undefined && this.tick < enemy.chilled) {
+                        pace *= CHILL_PACE;
+                    }
+                    // In Baron's gas (PetDef.power gas)
+                    if (enemy.slowed !== undefined && this.tick < enemy.slowed) {
+                        pace *= enemy.slowPace ?? 1;
+                    }
+                    // In the Lantern-bearer's glow (CharacterTraitDef lantern)
+                    if (this.hasLanterns) {
+                        pace *= this.lanternPace(enemy);
+                    }
                     // A pouncer's rush, the last few tiles (EnemyDef.pounce)
                     const pounce = enemy.def.pounce;
                     if (pounce && distance <= pounce.range) {
@@ -4699,6 +5256,10 @@ export class Sim {
                 enemy.vx = enemy.vy = 0;
             }
             this.moveEnemy(enemy, moveX, moveY, flight?.grid ?? grid);
+            // An invader keeps to its pocket
+            if (enemy.pocket && (moveX !== 0 || moveY !== 0)) {
+                this.keepToPocket(enemy, enemy.pocket);
+            }
             this.keepOffPlayer(enemy, player, flight?.grid ?? grid);
 
             if (enemy.bossState) {
@@ -5004,6 +5565,24 @@ export class Sim {
         ) {
             return 0;
         }
+        // Trickster: it misses
+        if (this.trickedHit()) {
+            if (grace) {
+                player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+            }
+            this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
+            return 0;
+        }
+        // An enemy's hit in the realm takes sanity too (RealmRuleDef.sanity.hit)
+        if (this.realm?.layer === 1 && ENEMY_BY_ID.has(enemyId)) {
+            this.realm.onHurt(this.hero.index);
+        }
+        // An icefiend's hit chills (EnemyDef.chills, under the cold)
+        const chills = this.cold && ENEMY_BY_ID.get(enemyId)?.chills;
+        if (chills) {
+            const index = this.hero.index;
+            this.cold!.setCold(index, this.cold!.coldOf(index) + chills);
+        }
         // Quiet Prayers: armour stops less. Deadly Prayers: a hit leaves the player open, so the
         // next within a second does more.
         const stops = this.stats.armor * (this.invoked("quiet_prayers") ? QUIET_PRAYERS : 1);
@@ -5020,7 +5599,21 @@ export class Sim {
         const openUntil = this.tombsOpenUntil.get(this.hero.index) ?? -1;
         const opened =
             this.invoked("deadly_prayers") && this.tick <= openUntil ? DEADLY_PRAYERS : 1;
-        const amount = Math.max(1, Math.round(damage * opened - armor));
+        let amount = Math.max(1, Math.round(damage * opened - armor));
+        if (this.stepBetween(amount)) {
+            return 0;
+        }
+        // Lil'viathan's bubble takes an enemy's hit, up to its share of their hitpoints, and pops
+        if (this.hero.petBubble && ENEMY_BY_ID.has(enemyId)) {
+            amount = this.popBubble(amount);
+            if (amount <= 0) {
+                if (grace) {
+                    player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
+                }
+                this.emit({ type: "playerHit", amount: 0, enemyId, elite, sound, missed: true });
+                return 0;
+            }
+        }
         if (this.invoked("deadly_prayers")) {
             this.tombsOpenUntil.set(this.hero.index, this.tick + secondsToTicks(1));
         }
@@ -5289,20 +5882,34 @@ export class Sim {
             // Kephri's Soldier Scarab: her shield, or her hitpoints on her last
             const feed = target.def.boss?.kephri?.shields.soldierFeed ?? 0;
             this.restoreKephri(target, kephri, feed, heals.fraction);
-        } else if (phase) {
+        } else if (phase && phase.stage !== "hp") {
             // Only its shield can be fed
             phase.shield = Math.min(
                 phase.shieldMax,
                 phase.shield + Math.max(1, Math.round(phase.shieldMax * heals.fraction)),
             );
         } else {
+            // A fight on its hitpoints (Awakened Vardorvis's captors) heals no further than the
+            // top of the phase it's in
+            const phases = target.def.boss?.phases?.phases;
+            const top =
+                phase && phases && phase.index > 0
+                    ? (phases[phase.index - 1].until ?? 1) * target.maxHp
+                    : target.maxHp;
             target.hp = Math.min(
-                target.maxHp,
+                Math.max(target.hp, top),
                 target.hp + Math.max(1, Math.round(target.maxHp * heals.fraction)),
             );
         }
         if (heals.spotAnim !== undefined) {
             this.addEffect(heals.spotAnim, target.x, target.y, 0, 40, target.uid);
+        }
+        if (heals.once) {
+            this.vanish(enemy);
+            if (target.def.boss?.siphon?.enemyId === enemy.def.id) {
+                this.siphonSoulGone(target, true);
+            }
+            return;
         }
         enemy.anim = "attack";
         enemy.animStart = tick;
@@ -5962,7 +6569,10 @@ export class Sim {
             }
             return [this.apmekenTrickle(room.wave)];
         }
-        return this.raidRoomDef?.waves ?? this.map.waves;
+        if (this.realm?.layer === 1) {
+            return this.realm.def.waves;
+        }
+        return this.raidRoomDef?.waves ?? this.remixRun?.waves ?? this.map.waves;
     }
 
     private apmekenTrickle(wave: number): WaveDef {
@@ -12064,19 +12674,6 @@ export class Sim {
         return this.lairs.find((lair) => lair.unsealTick >= 0 && this.tick < lair.unsealEndTick);
     }
 
-    // The pillars a boss's cover attacks are hidden from by (BossAttackDef.cover): its lair's
-    // standing ones, if it has any, or the map's
-    coverPillars(enemy: Enemy): { x: number; y: number; size: number }[] | undefined {
-        const lair = this.lairs.find((one) => one.boss === enemy);
-        const pillars = lair?.def.pillars;
-        if (!lair || !pillars) {
-            return this.map.features?.pillars;
-        }
-        return lair.pillars
-            .filter((pillar) => pillar.standing)
-            .map(({ x, y }) => ({ x, y, size: pillars.size }));
-    }
-
     // Each of its lair's pillars that hid someone from a boss's cover attack crumbles
     // (BossAttackDef.crumbles)
     private crumbleShelter(
@@ -13774,13 +14371,18 @@ export class Sim {
     // The tempo of the phase a boss is in (BossPhasesDef tempo): what its
     // interval and its patterns' windups are multiplied by
     private phaseTempo(enemy: Enemy): number {
+        // The gauntlet's climb: its later fights' bosses quicker (SimOptions.gauntlet); an orb's
+        // awakened final boss too (AWAKENED)
+        const climb = enemy.finalBoss
+            ? (this.gauntlet?.climb ?? 1) * (enemy.awakened ? AWAKENED.tempo : 1)
+            : 1;
         // Empowered, its lair's tempo on top (LairDef.empowered)
         const empowered = enemy.bossState?.tempo ?? 1;
         const phase = enemy.bossState?.phase;
         if (!phase || phase.stage === "finale") {
-            return empowered;
+            return empowered / climb;
         }
-        return (enemy.def.boss?.phases?.phases[phase.index]?.tempo ?? 1) * empowered;
+        return ((enemy.def.boss?.phases?.phases[phase.index]?.tempo ?? 1) * empowered) / climb;
     }
 
     // Frees the slots of dead bosses, once no bullet or volley of theirs is
@@ -14311,23 +14913,43 @@ export class Sim {
         if (!rule) {
             return;
         }
+        if (this.stepIntoRealm) {
+            this.stepIntoRealm = false;
+            this.realm?.turn(this.ruleHost, 1);
+        }
+        if (this.abilityTurn >= 0) {
+            const index = this.abilityTurn;
+            this.abilityTurn = -1;
+            this.turnWithAbility(index);
+        }
         rule.step(this.ruleHost);
-        const def = rule.def;
-        const grace = secondsToTicks(def.hurt.grace);
-        const every = Math.max(1, secondsToTicks(def.hurt.every));
-        this.forEachHeroInReach(() => {
-            const { player } = this;
-            if (!this.isUp(this.hero) || !rule.hurtsAt(player.x, player.y)) {
-                this.hero.ruleTicks = 0;
-                return;
-            }
-            this.hero.ruleTicks++;
-            if (this.hero.ruleTicks >= grace && this.tick >= this.hero.ruleHurtNext) {
-                this.hero.ruleHurtNext = this.tick + every;
-                const damage = Math.max(1, Math.round(player.maxHp * def.hurt.share));
-                this.damagePlayer(damage, def.kind, false, -1, true, false);
-            }
-        });
+        // Each of the run's rules that wears players down: the cold, then the roots (which aren't in
+        // the realm: RuleSet)
+        if (this.cold) {
+            this.stepCold(this.cold, this.cold.def);
+        }
+        const roots = this.realm?.layer === 1 ? undefined : this.roots;
+        if (roots) {
+            const def = roots.def;
+            const grace = secondsToTicks(def.hurt.grace);
+            const every = Math.max(1, secondsToTicks(def.hurt.every));
+            this.forEachHeroInReach(() => {
+                const { player } = this;
+                if (!this.isUp(this.hero) || !roots.hurtsAt(player.x, player.y)) {
+                    this.hero.ruleTicks = 0;
+                    return;
+                }
+                this.hero.ruleTicks++;
+                if (this.hero.ruleTicks >= grace && this.tick >= this.hero.ruleHurtNext) {
+                    this.hero.ruleHurtNext = this.tick + every;
+                    const damage = Math.max(1, Math.round(player.maxHp * def.hurt.share));
+                    this.damagePlayer(damage, def.kind, false, -1, true, false);
+                }
+            });
+        }
+        if (!this.cold && !this.roots) {
+            return;
+        }
         // What lays the rule's stuff as it goes (EnemyDef.plants: a bear's trail)
         if (this.tick % RULE_TRAIL_TICKS === 0) {
             for (const enemy of this.enemies) {
@@ -14336,6 +14958,63 @@ export class Sim {
                 }
             }
         }
+    }
+
+    // The cold (ColdRuleDef), each player's: it rises, faster on ice and in gas (slower for the
+    // Snow ranger), and falls by a lit brazier or embers. At the top they're frozen solid a moment,
+    // hurt, and it drops back. The gas and the embers hurt on a clock of their own.
+    private stepCold(cold: ColdRule, def: ColdRuleDef): void {
+        const tuning = def.cold;
+        const tick = this.tick;
+        const gasEvery = Math.max(1, secondsToTicks(def.vents.hurtEvery));
+        const emberEvery = Math.max(1, secondsToTicks(def.embers.every));
+        this.forEachHeroInReach(() => {
+            const { player, hero } = this;
+            if (!this.isUp(hero)) {
+                return;
+            }
+            const trait = this.trait;
+            // In the realm (the Frozen and Shadow remixes together) there are no braziers, and the
+            // cold rises faster
+            const realm = this.realm?.layer === 1;
+            const rise =
+                (trait?.kind === "shatter" ? trait.coldRise : 1) * (realm ? REALM_COLD : 1);
+            // Out of its circle (an invader's pocket, ColdRuleDef.area), it thaws
+            const area = def.area;
+            const out =
+                area !== undefined && fm.hypot(player.x - area.x, player.y - area.y) > area.radius;
+            const warmth = out ? area.thaw : realm ? 0 : cold.warmthAt(player.x, player.y, tick);
+            const gas = cold.gasAt(player.x, player.y, tick);
+            const change =
+                warmth > 0
+                    ? -warmth
+                    : (gas || cold.iceAt(player.x, player.y) ? tuning.fast : tuning.rise) * rise;
+            let now = cold.coldOf(hero.index) + change / TICKS_PER_SECOND;
+            if (now >= tuning.max) {
+                // Frozen solid in an ice block
+                now = tuning.freeze.after;
+                const ticks = secondsToTicks(tuning.freeze.seconds);
+                player.frozen = Math.max(player.frozen, ticks);
+                hero.frozenSolid = tick + ticks;
+                this.addEffect(FREEZE_SPOTANIM, player.x, player.y, 0, 40);
+                const damage = Math.max(1, Math.round(player.maxHp * tuning.freeze.share));
+                this.damagePlayer(damage, "cold", false, -1, true, false);
+                this.emit({ type: "frozenSolid", hero: hero.index });
+            }
+            cold.setCold(hero.index, now);
+            if (tick < hero.ruleHurtNext) {
+                return;
+            }
+            if (gas) {
+                hero.ruleHurtNext = tick + gasEvery;
+                const damage = Math.max(1, Math.round(player.maxHp * def.vents.share));
+                this.damagePlayer(damage, "gas", false, -1, true, false);
+            } else if (cold.onEmbers(player.x, player.y)) {
+                hero.ruleHurtNext = tick + emberEvery;
+                const damage = Math.max(1, Math.round(player.maxHp * def.embers.share));
+                this.damagePlayer(damage, "embers", false, -1, true, false);
+            }
+        });
     }
 
     // What the map's rule can ask of the run (RuleHost)
@@ -14355,10 +15034,116 @@ export class Sim {
             }
             return out;
         },
-        spawnRuleEnemy: (enemyId, x, y) =>
-            sim.spawnEnemy(getEnemy(enemyId), "normal", sim.walkableSpot(x, y))?.uid,
+        spawnRuleEnemy: (enemyId, x, y, elite) =>
+            sim.spawnEnemy(getEnemy(enemyId), elite ? "elite" : "normal", sim.walkableSpot(x, y))
+                ?.uid,
         isEnemyAlive: (uid) => sim.enemies.some((enemy) => enemy.uid === uid && !enemy.dead),
+        upHeroes: () => {
+            const out: number[] = [];
+            for (const hero of sim.heroes) {
+                if (sim.isUp(hero)) {
+                    out.push(hero.index, hero.player.x, hero.player.y);
+                }
+            }
+            return out;
+        },
+        get finalBossUp() {
+            return sim.bossSpawned;
+        },
+        turnWorld: (to, lapse) => sim.turnWorld(to, lapse),
     }))(this);
+
+    // Which world the party's in: 0 the city (and every map of one world), 1 the realm
+    get layer(): RealmLayer {
+        return this.realm?.layer ?? 0;
+    }
+
+    // The boss whose siphon (BossDef.siphon) these souls are, if they're one's
+    private siphonOf(enemyId: string): Enemy | undefined {
+        return this.enemies.find(
+            (enemy) => !enemy.dead && enemy.def.boss?.siphon?.enemyId === enemyId,
+        );
+    }
+
+    // How many of a siphon's souls are still out, in either world
+    siphonLeft(enemyId: string): number {
+        let left = 0;
+        for (const list of [this.enemies, this.otherEnemies]) {
+            for (const enemy of list) {
+                if (!enemy.dead && enemy.def.id === enemyId) {
+                    left++;
+                }
+            }
+        }
+        return left;
+    }
+
+    // One of a siphon's souls is gone, caught or into the boss (lost): the last of a lot caught with
+    // none lost breaks it, stunned with its guard down
+    private siphonSoulGone(boss: Enemy, lost: boolean): void {
+        const state = boss.bossState;
+        const siphon = boss.def.boss?.siphon;
+        if (!state || !siphon) {
+            return;
+        }
+        if (lost) {
+            state.siphonLost = (state.siphonLost ?? 0) + 1;
+        }
+        if (this.siphonLeft(siphon.enemyId) > 0) {
+            return;
+        }
+        const clean = (state.siphonLost ?? 0) === 0;
+        state.siphonLost = 0;
+        if (clean && !boss.dead) {
+            this.dropGuard(boss, siphon.stun, true, "Soul Siphon");
+            this.emit({ type: "notice", message: siphon.message });
+        }
+    }
+
+    // The party turns to the other world (RealmRule.turn): the world it leaves stands still, kept
+    // aside as it is, and the one it comes to carries on from where it was. What goes with the
+    // party (EnemyDef.realm both, a boss of both worlds; drags, one that pulls it in, into the
+    // realm only) is moved across. What's in the air is gone. lapse: the hero whose sanity ran
+    // out, thrown back hurt, and what's on the realm's ground is lost.
+    turnWorld(to: RealmLayer, lapse?: number): void {
+        const goes = (enemy: Enemy) =>
+            !enemy.dead &&
+            (enemy.def.realm === "both" || (to === 1 && enemy.def.realm === "drags"));
+        // The realm's lost souls don't wait: new ones come each time
+        if (to === 0) {
+            for (const enemy of this.enemies) {
+                if (enemy.def.caught) {
+                    this.vanish(enemy);
+                }
+            }
+        }
+        const leaving = this.enemies.filter((enemy) => !enemy.dead && !goes(enemy));
+        const coming = this.otherEnemies.filter((enemy) => !enemy.dead);
+        const along = this.enemies.filter(goes);
+        this.otherEnemies = leaving;
+        this.enemies = [...coming, ...along];
+        const ground = this.pickups.filter((pickup) => pickup.value >= 0);
+        this.pickups = this.otherPickups;
+        this.otherPickups = ground;
+        if (lapse !== undefined) {
+            this.otherPickups = [];
+            const hero = this.heroes[lapse];
+            if (hero && this.isUp(hero)) {
+                this.as(lapse, () => {
+                    const share = this.realm!.def.sanity.lapse;
+                    const damage = Math.max(1, Math.round(this.player.maxHp * share));
+                    this.damagePlayer(damage, "realm", false, -1, true, false);
+                });
+            }
+        }
+        this.projectiles = [];
+        this.enemyProjectiles = [];
+        this.hazards = [];
+        this.pools = [];
+        this.pendingHits = [];
+        this.rebuildEnemyHash();
+        this.emit({ type: "worldTurned", layer: to, lapse: lapse !== undefined });
+    }
 
     // The floor's tiles that do something to whoever's on them (FloorEffect): burning and healing
     // players every so often, and burning enemies
@@ -14408,8 +15193,44 @@ export class Sim {
 
     // How the map's rule moves the player where they stand (on roots, slower), or nothing
     private ruleMovement(): MovementRules["floor"] {
+        const cold = this.cold;
+        if (cold) {
+            const moves = this.coldMovement(cold);
+            // Under the cold and on roots too (remixes stacked): both slow
+            if (this.rules.length > 1) {
+                const roots = this.rule!.playerPace(this.player.x, this.player.y);
+                if (roots !== 1) {
+                    return { ...moves, pace: (moves?.pace ?? 1) * roots };
+                }
+            }
+            return moves;
+        }
         const pace = this.rule!.playerPace(this.player.x, this.player.y);
         return pace !== 1 ? { pace } : undefined;
+    }
+
+    // Under the cold (ColdRuleDef): slower the colder they are, and sliding on ice (the Snow
+    // ranger never does)
+    private coldMovement(cold: ColdRule): MovementRules["floor"] {
+        const player = this.player;
+        const pace = 1 - this.coldSlow(cold).pace;
+        if (cold.iceAt(player.x, player.y) && this.trait?.kind !== "shatter") {
+            const glide = { x: this.hero.glideX, y: this.hero.glideY, grip: cold.def.ice.grip };
+            return { pace, glide };
+        }
+        return pace !== 1 ? { pace } : undefined;
+    }
+
+    // What the hero's cold slows them by (ColdRuleDef.cold slows): the last step it's past
+    private coldSlow(cold: ColdRule): { pace: number; weapons: number } {
+        const level = cold.coldOf(this.hero.index);
+        let slow = { pace: 0, weapons: 0 };
+        for (const step of cold.def.cold.slows) {
+            if (level >= step.at) {
+                slow = { pace: step.pace, weapons: step.weapons ?? 0 };
+            }
+        }
+        return slow;
     }
 
     // How a floor's tile moves the player on it (FloorEffect haste, slow and ice), or nothing
@@ -14718,6 +15539,10 @@ export class Sim {
     ): void {
         const { attack, x, y, radius } = hazard;
         const grab = attack.ground?.grab;
+        // What stays where it fell (BossAttackDef.debris): cover the boss's projectiles break on
+        if (show && attack.debris) {
+            this.leaveDebris(attack.debris, x, y);
+        }
         if (show && attack.impact) {
             // Its spot animations at every mark, and one shake and flash for all that land at once
             const first = this.impactTick !== this.tick;
@@ -15118,7 +15943,15 @@ export class Sim {
         const state = enemy.bossState!;
         const def = enemy.def.boss!;
         // A fight in phases gets harder by the phase instead
-        const enrageAt = def.enrage.at ?? (this.hard ? HARD_ENRAGE_AT : ENRAGE_AT);
+        // An orb's awakened final boss is enraged sooner (AWAKENED)
+        const enrageAt = Math.max(
+            def.enrage.at ??
+                Math.max(
+                    this.hardBosses ? HARD_ENRAGE_AT : ENRAGE_AT,
+                    this.invoked("run_feeling_special") ? FEELING_SPECIAL_ENRAGE : 0,
+                ),
+            enemy.awakened ? AWAKENED.enrageAt : 0,
+        );
         if (!def.phases && !state.enraged && enemy.hp <= enemy.maxHp * enrageAt) {
             this.enrage(enemy);
         }
@@ -15276,6 +16109,8 @@ export class Sim {
                 (!attack.expert || this.expert) &&
                 (!attack.empowered || state.tempo !== undefined) &&
                 (!attack.phases || !phase || attack.phases.includes(phase.index + 1)) &&
+                // Some only while the party's in one world (BossAttackDef.world)
+                (attack.world === undefined || attack.world === this.layer) &&
                 !(attack.parasite && this.parasite) &&
                 // Some only with an invocation on (BossAttackDef.onlyWith)
                 (!attack.onlyWith || this.invoked(attack.onlyWith)) &&
@@ -15622,7 +16457,7 @@ export class Sim {
             def.attackInterval *
             tempo *
             (state.enraged ? (state.furyTempo ?? ENRAGED_INTERVAL) : 1) *
-            (this.hard ? HARD_BOSS_INTERVAL : 1) *
+            (this.hardBosses ? HARD_BOSS_INTERVAL : 1) *
             drowsy;
         enemy.attackCooldown = Math.round((interval ?? usual) * TICKS_PER_SECOND);
         // Timed to strike as it lands (BossAttackDef.strikeAt), what it does first before that
@@ -16184,7 +17019,12 @@ export class Sim {
         }
         const end = this.tick + secondsToTicks(seconds);
         const wasOpen = this.isExposed(boss);
-        state.exposedEnd = Math.max(state.exposedEnd ?? 0, end);
+        // Steady hands, a blessing of the gauntlet's: its guard down longer, not its stun
+        const steady = this.blessed("steady_hands") ? secondsToTicks(STEADY_HANDS_SECONDS) : 0;
+        state.exposedEnd = Math.max(state.exposedEnd ?? 0, end + steady);
+        if (!wasOpen) {
+            this.guardDowns++;
+        }
         if (stunned) {
             const wasStunned = this.isStunned(boss);
             state.stunEnd = Math.max(state.stunEnd ?? 0, end);
@@ -16426,7 +17266,12 @@ export class Sim {
 
     // The fight's button: a fight map's own (MapDef.fight.ability), or the Tombs' (TombsDef.ability)
     get ability(): FightAbilityDef | undefined {
-        return this.map.fight?.ability ?? this.map.tombs?.ability;
+        return this.focusedAbility ?? this.map.fight?.ability ?? this.map.tombs?.ability;
+    }
+
+    // Whether this fight of the gauntlet's has a blessing (SimOptions.gauntlet)
+    blessed(id: BlessingId): boolean {
+        return this.gauntlet?.blessing === id;
     }
 
     // The fight's button (Sim.ability), for the current hero: whether it went off
@@ -16853,8 +17698,17 @@ export class Sim {
             return false;
         }
         const ready = this.tick >= this.hero.abilityReadyTick;
+        if (ability.turn) {
+            return (ready || this.abilityNearlyReady(ability)) && this.canTurn();
+        }
+        if (ability.kindle) {
+            return (
+                (ready || this.abilityNearlyReady(ability)) && this.kindleBrazier(0) !== undefined
+            );
+        }
         return (
-            (ready && this.abilityTarget(ability) !== undefined) || this.abilityNearlyReady(ability)
+            (ready && (this.abilityTarget(ability) !== undefined || this.abilityCuts(ability))) ||
+            this.abilityNearlyReady(ability)
         );
     }
 
@@ -16862,6 +17716,17 @@ export class Sim {
     // ABILITY_BUFFER_REACH)
     private abilityNearlyReady(ability: FightAbilityDef): boolean {
         const soon = this.tick + secondsToTicks(ABILITY_BUFFER_SECONDS);
+        // One that turns the world goes off wherever the boss is
+        if (ability.turn) {
+            return this.hero.abilityReadyTick <= soon && this.canTurn();
+        }
+        // One that lights a brazier goes off beside one, wherever the boss is
+        if (ability.kindle) {
+            return (
+                this.hero.abilityReadyTick <= soon &&
+                this.kindleBrazier(ABILITY_BUFFER_REACH) !== undefined
+            );
+        }
         const player = this.player;
         const near = this.abilityBosses().some(
             (boss) =>
@@ -16901,15 +17766,26 @@ export class Sim {
         return this.isExposed(boss) ? (ability.openReach ?? ability.reach) : ability.reach;
     }
 
+    // A button that clears the rule round you (FightAbilityDef.cut) goes off with no boss in reach
+    private abilityCuts(ability: FightAbilityDef): boolean {
+        return ability.cut !== undefined && !this.intro;
+    }
+
     // The fight's button going off for the current hero, if it can now
     private fireAbility(ability: FightAbilityDef): boolean {
         const hero = this.hero;
         if (this.tick < hero.abilityReadyTick) {
             return false;
         }
+        if (ability.turn) {
+            return this.fireTurn(ability);
+        }
+        if (ability.kindle) {
+            return this.fireKindle(ability, ability.kindle);
+        }
         const boss = this.abilityTarget(ability);
         if (!boss) {
-            return false;
+            return this.fireCut(ability);
         }
         hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
         const player = this.player;
@@ -16945,8 +17821,181 @@ export class Sim {
         } else {
             this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
         }
+        // A button that stuns it (FightAbilityDef.stun: the Awakened Leviathan's Shadow)
+        if (ability.stun !== undefined && !boss.dead) {
+            this.dropGuard(boss, ability.stun, true, ability.name);
+        }
         this.breakChannel(boss);
+        this.cutWithAbility(ability, boss);
         return true;
+    }
+
+    // The brazier a button that lights one (FightAbilityDef.kindle) would light, for the current
+    // hero, more tiles out than its reach
+    private kindleBrazier(more: number): Brazier | undefined {
+        const kindle = this.ability?.kindle;
+        if (!kindle || !this.cold || this.intro) {
+            return undefined;
+        }
+        return this.cold.brazierNear(this.player.x, this.player.y, kindle.reach + more);
+    }
+
+    // A button that lights the brazier beside the hero (FightAbilityDef.kindle: the Awakened
+    // Duke's Kindle): at once, for its full burn, and lit near enough the boss it flares into it
+    private fireKindle(
+        ability: FightAbilityDef,
+        kindle: { reach: number; flare: number },
+    ): boolean {
+        const brazier = this.kindleBrazier(0);
+        if (!brazier) {
+            return false;
+        }
+        const hero = this.hero;
+        const player = this.player;
+        const cold = this.cold!;
+        // Only one that was out or dying flares
+        const low =
+            !cold.isLit(brazier, this.tick) ||
+            brazier.litUntil - this.tick < secondsToTicks(cold.def.braziers.gutter);
+        hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
+        cold.kindle(brazier, this.tick);
+        if (ability.playerSeq !== undefined) {
+            player.attackSeq = ability.playerSeq;
+            player.attackStart = this.tick;
+        }
+        const boss = this.abilityBosses().find(
+            (enemy) =>
+                low &&
+                !enemy.dead &&
+                enemy.shieldEnd <= this.tick &&
+                fm.hypot(enemy.x - brazier.midX, enemy.y - brazier.midY) <= kindle.flare,
+        );
+        this.showImpact(ability.impact, brazier.midX, brazier.midY);
+        if (boss) {
+            this.showImpact(ability.impact, boss.x, boss.y);
+        }
+        this.emit({
+            type: "ability",
+            abilityId: ability.id,
+            enemyId: boss?.def.id ?? "",
+            sound: ability.sound ?? -1,
+            x: brazier.midX,
+            y: brazier.midY,
+            opened: boss !== undefined && this.isExposed(boss),
+        });
+        if (boss) {
+            this.damageSource = `ability:${ability.id}`;
+            this.damageEnemy(boss, ability.damage, 0, brazier.midX, brazier.midY);
+            this.breakChannel(boss);
+        }
+        return true;
+    }
+
+    // Whether the party can be turned to the other world by the fight's button now: on a map of two
+    // worlds, the fight begun, and not already on its way
+    private canTurn(): boolean {
+        const realm = this.realm;
+        return realm !== undefined && !this.intro && realm.pullTick < 0 && this.abilityTurn < 0;
+    }
+
+    // A button that turns the world (FightAbilityDef.turn: Blackstone): pressed now, it goes at the
+    // rule's turn of the tick (turnWithAbility), not in the middle of whatever else is going on
+    private fireTurn(ability: FightAbilityDef): boolean {
+        if (!this.canTurn()) {
+            return false;
+        }
+        // The party's turned together, so everyone's waits (co-op: no turning straight back)
+        const ready = this.tick + secondsToTicks(ability.cooldown);
+        for (const hero of this.heroes) {
+            hero.abilityReadyTick = Math.max(hero.abilityReadyTick, ready);
+        }
+        this.abilityTurn = this.hero.index;
+        return true;
+    }
+
+    // The party turns, by a hero's press of the fight's button: coming out into the city within its
+    // reach of the boss, it hits it
+    private turnWithAbility(index: number): void {
+        const ability = this.ability;
+        const realm = this.realm;
+        const hero = this.heroes[index];
+        if (!ability || !realm || !hero || !this.isUp(hero)) {
+            return;
+        }
+        const to = realm.layer === 1 ? 0 : 1;
+        realm.turn(this.ruleHost, to);
+        this.as(index, () => {
+            const player = this.player;
+            if (ability.playerSeq !== undefined) {
+                player.attackSeq = ability.playerSeq;
+                player.attackStart = this.tick;
+            }
+            const boss = to === 0 ? this.abilityTarget(ability) : undefined;
+            this.showImpact(ability.impact, boss?.x ?? player.x, boss?.y ?? player.y);
+            this.emit({
+                type: "ability",
+                abilityId: ability.id,
+                enemyId: boss?.def.id ?? "",
+                sound: ability.sound ?? -1,
+                x: boss?.x ?? player.x,
+                y: boss?.y ?? player.y,
+                opened: boss !== undefined && this.isExposed(boss),
+            });
+            if (boss) {
+                this.damageSource = `ability:${ability.id}`;
+                this.damageEnemy(boss, ability.damage, 0, player.x, player.y);
+                this.breakChannel(boss);
+            }
+        });
+    }
+
+    // A cutting button (FightAbilityDef.cut) with the boss out of reach: it clears the rule round
+    // the hero all the same, and hits whatever else is in reach
+    private fireCut(ability: FightAbilityDef): boolean {
+        if (!this.abilityCuts(ability)) {
+            return false;
+        }
+        const hero = this.hero;
+        const player = this.player;
+        hero.abilityReadyTick = this.tick + secondsToTicks(ability.cooldown);
+        if (ability.playerSeq !== undefined) {
+            player.attackSeq = ability.playerSeq;
+            player.attackStart = this.tick;
+        }
+        this.showImpact(ability.impact, player.x, player.y);
+        this.emit({
+            type: "ability",
+            abilityId: ability.id,
+            enemyId: "",
+            sound: ability.sound ?? -1,
+            x: player.x,
+            y: player.y,
+            opened: false,
+        });
+        this.damageSource = `ability:${ability.id}`;
+        this.cutWithAbility(ability, undefined);
+        return true;
+    }
+
+    // What a cutting button does besides its blow on the boss: the rule cleared round the hero,
+    // and everything else in its reach hit
+    private cutWithAbility(ability: FightAbilityDef, boss: Enemy | undefined): void {
+        if (ability.cut === undefined) {
+            return;
+        }
+        const player = this.player;
+        this.rule?.onSwing(player.x, player.y, 1, 0, ability.cut, Math.PI, 0);
+        for (const enemy of [...this.enemies]) {
+            if (
+                enemy === boss ||
+                enemy.dead ||
+                enemy.bossState ||
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) > ability.reach + enemy.def.radius
+            ) {
+                continue;
+            }
+            this.damageEnemy(enemy, ability.damage, 0, player.x, player.y);
+        }
     }
 
     private tombsAbilityBosses(): Enemy[] {
@@ -17077,6 +18126,192 @@ export class Sim {
         return best;
     }
 
+    // Each hero's fighting pet (PetDef.power): Butch's leap onto the nearest enemy near them, with
+    // a cleave where he lands. Not in a boss fight, where the kit is the whole run.
+    private stepPets(): void {
+        if (this.map.fight) {
+            return;
+        }
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            const power = hero.pet?.power;
+            if (power?.kind === "call") {
+                if (this.isUp(hero)) {
+                    this.use(hero);
+                    this.stepCallingPet(hero, power);
+                }
+                continue;
+            }
+            if (power?.kind === "gas") {
+                this.use(hero);
+                this.stepGasPet(hero, power);
+                continue;
+            }
+            // Lil'viathan: a bubble round its hero every so often, while there isn't one
+            if (power?.kind === "bubble") {
+                if (!hero.petBubble && this.tick >= hero.petReadyTick && this.isUp(hero)) {
+                    hero.petBubble = true;
+                    this.use(hero);
+                    this.addEffect(PET_BUBBLE_SPOTANIM, this.player.x, this.player.y, 0, 30);
+                    this.emit({ type: "petBubble", owner: hero.index, popped: false });
+                }
+                continue;
+            }
+            if (!power || this.tick < hero.petReadyTick || !this.isUp(hero)) {
+                continue;
+            }
+            this.use(hero);
+            const player = this.player;
+            const target = this.nearestEnemies(player.x, player.y, power.reach, 1)[0];
+            if (!target) {
+                continue;
+            }
+            hero.petReadyTick = this.tick + secondsToTicks(power.every);
+            const { x, y } = target;
+            this.emit({ type: "petLeap", owner: hero.index, x, y });
+            const hit: Enemy[] = [];
+            this.queryTouching(x, y, power.cleave + 1, (enemy) => {
+                if (
+                    !enemy.dead &&
+                    fm.hypot(enemy.x - x, enemy.y - y) <= power.cleave + enemy.radius
+                ) {
+                    hit.push(enemy);
+                }
+            });
+            this.damageSource = `pet:${hero.pet!.id}`;
+            const damage = power.damage * this.powerUpDamageScale();
+            for (const enemy of hit) {
+                this.damageEnemy(enemy, damage, 0, x, y);
+            }
+        }
+        this.use(current);
+    }
+
+    // The Wisp (PetDef.power call), for the current hero: every so often the bones and coins near
+    // them come to them, as a magnet's do, and once a while, when they're hurt, a soul that heals
+    // them as it reaches them
+    private stepCallingPet(hero: Hero, power: Extract<PetPowerDef, { kind: "call" }>): void {
+        const player = this.player;
+        const tick = this.tick;
+        if (tick >= hero.petReadyTick) {
+            hero.petReadyTick = tick + secondsToTicks(power.every);
+            for (const pickup of this.pickups) {
+                if (
+                    !pickup.attracted &&
+                    (pickup.kind === "bones" || pickup.kind === "coins") &&
+                    fm.hypot(pickup.x - player.x, pickup.y - player.y) <= power.reach
+                ) {
+                    pickup.attracted = true;
+                }
+            }
+        }
+        if (hero.petSoulLands >= 0 && tick >= hero.petSoulLands) {
+            hero.petSoulLands = -1;
+            this.heal(Math.max(1, Math.round(player.maxHp * power.heal)));
+            this.addEffect(PET_SOUL_SPOTANIM, player.x, player.y, 0, 40);
+        }
+        if (hero.petSoulLands < 0 && tick >= hero.petSoulTick && player.hp < player.maxHp) {
+            hero.petSoulTick = tick + secondsToTicks(power.soul);
+            hero.petSoulLands = tick + secondsToTicks(power.travel);
+        }
+    }
+
+    // Baron (PetDef.power gas), for the current hero: asleep till a crowd's round them, then a
+    // cloud of gas round them that slows and poisons what's in it, then asleep again
+    private stepGasPet(hero: Hero, power: Extract<PetPowerDef, { kind: "gas" }>): void {
+        const tick = this.tick;
+        const cloud = hero.petCloud;
+        if (cloud) {
+            if (tick >= cloud.until) {
+                hero.petCloud = undefined;
+            } else {
+                const half = power.size / 2;
+                const pace = 1 - power.slow;
+                const poison = power.poison * this.powerUpDamageScale();
+                const poisonTicks = secondsToTicks(power.poisonSeconds);
+                this.damageSource = `pet:${hero.pet!.id}`;
+                this.queryTouching(cloud.x, cloud.y, half + 1, (enemy) => {
+                    if (
+                        enemy.dead ||
+                        Math.abs(enemy.x - cloud.x) > half ||
+                        Math.abs(enemy.y - cloud.y) > half
+                    ) {
+                        return;
+                    }
+                    enemy.slowed = tick + 1;
+                    enemy.slowPace = pace;
+                    if (enemy.venomEnd < tick) {
+                        this.envenom(enemy, poison, poisonTicks);
+                    }
+                });
+                // Its puff kept up while it lasts
+                if ((cloud.until - tick) % TICKS_PER_SECOND === 0) {
+                    this.puffPetGas(cloud.x, cloud.y, power.size);
+                }
+            }
+            return;
+        }
+        if (tick < hero.petReadyTick || !this.isUp(hero)) {
+            return;
+        }
+        const player = this.player;
+        if (
+            this.nearestEnemies(player.x, player.y, power.reach, power.crowd).length < power.crowd
+        ) {
+            return;
+        }
+        hero.petReadyTick = tick + secondsToTicks(power.seconds + power.every);
+        hero.petCloud = { x: player.x, y: player.y, until: tick + secondsToTicks(power.seconds) };
+        this.puffPetGas(player.x, player.y, power.size);
+        this.emit({ type: "petGas", owner: hero.index, x: player.x, y: player.y });
+    }
+
+    // Lil'viathan's bubble (PetDef.power bubble) round the current hero pops, taking up to its
+    // share of their hitpoints off a hit and knocking back what's near: what's left of the hit
+    private popBubble(amount: number): number {
+        const hero = this.hero;
+        const power = hero.pet?.power;
+        if (power?.kind !== "bubble") {
+            return amount;
+        }
+        const player = this.player;
+        hero.petBubble = false;
+        hero.petReadyTick = this.tick + secondsToTicks(power.every);
+        const taken = Math.min(amount, Math.round(player.maxHp * power.share));
+        this.addEffect(PET_BUBBLE_POP_SPOTANIM, player.x, player.y, 0, 40);
+        this.emit({ type: "petBubble", owner: hero.index, popped: true });
+        const near: Enemy[] = [];
+        this.queryTouching(player.x, player.y, power.push + 1, (enemy) => {
+            if (
+                !enemy.dead &&
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) <= power.push + enemy.radius
+            ) {
+                near.push(enemy);
+            }
+        });
+        // Knocked back as a weapon's hit knocks them (damageEnemy), with no hit
+        for (const enemy of near) {
+            const resist = enemy.def.knockbackResist ?? 0;
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const length = fm.hypot(dx, dy);
+            if (resist < 1 && !enemy.boss && !enemy.def.stationary && length > 0.001) {
+                const k = (power.knockback * (1 - resist)) / 4;
+                enemy.vx += (dx / length) * k;
+                enemy.vy += (dy / length) * k;
+            }
+        }
+        return amount - taken;
+    }
+
+    // Baron's gas over its cloud, size tiles across
+    private puffPetGas(x: number, y: number, size: number): void {
+        const effect = this.addEffect(PET_GAS_SPOTANIM, x, y, 0, 60);
+        if (effect) {
+            effect.fitRadius = size / 2;
+        }
+    }
+
     // Seconds until a hero's button can be used again
     abilitySecondsLeft(hero: Hero = this.hero): number {
         return Math.max(0, hero.abilityReadyTick - this.tick) / TICKS_PER_SECOND;
@@ -17097,7 +18332,7 @@ export class Sim {
         const enrage = enemy.def.boss!.enrage;
         state.enraged = true;
         enemy.speed *= ENRAGED_SPEED;
-        enemy.tint = ENRAGED_TINT;
+        enemy.tint = enemy.awakened ? AWAKENED_ENRAGED_TINT : ENRAGED_TINT;
         this.emit({
             type: "bossEnraged",
             enemyId: enemy.def.id,
@@ -17349,6 +18584,10 @@ export class Sim {
                 const at = attack.leap ? spots[0] : enemy;
                 this.rule.plantHeart(this.ruleHost, at.x, at.y);
             }
+            // Under the cold, the vent nearest where it lands puffs (BossAttackDef.rule vent)
+            if (attack.rule?.vent && this.cold && spots.length > 0) {
+                this.cold.puffNearest(spots[0].x, spots[0].y, this.tick);
+            }
             const radius = attack.radius ?? 2;
             // A lunge's strip (BossAttackDef.line), a blast's square (square)
             const line = attack.kind === "swing" ? attack.line : undefined;
@@ -17446,6 +18685,14 @@ export class Sim {
                     if (attack.crumbles) {
                         sheltered.push({ x: player.x, y: player.y, radius: player.radius });
                     }
+                    // The debris that hid them is smashed (BossAttackDef.smashes)
+                    if (attack.smashes) {
+                        this.smashDebris(attack, windup.at?.x ?? enemy.x, windup.at?.y ?? enemy.y);
+                    }
+                }
+                // Gone into the other world (BossAttackDef.world): it finds no one
+                if (hit && attack.world !== undefined && attack.world !== this.layer) {
+                    hit = false;
                 }
                 if (hit && attack.blockable && this.glyphBlocks(enemy, player.x, player.y)) {
                     // Behind the glyph: it takes the blow
@@ -17487,6 +18734,15 @@ export class Sim {
                 for (const { x, y } of spots) {
                     this.showImpact(attack.impact, x, y);
                 }
+            }
+            // Under the cold, every lit brazier it can see goes out (BossAttackDef.rule snuff)
+            if (attack.rule?.snuff && this.cold) {
+                const pillars = this.map.features?.pillars;
+                const fromX = windup.at?.x ?? enemy.x;
+                const fromY = windup.at?.y ?? enemy.y;
+                this.cold.snuffSeen(this.tick, (brazier) =>
+                    behindPillar(pillars, fromX, fromY, brazier.midX, brazier.midY),
+                );
             }
             // Missed everyone: its guard's down (BossDef.guard)
             if (!landed && attack.opens !== undefined) {
@@ -18012,6 +19268,10 @@ export class Sim {
         ) {
             const summon = summonsAt[state.summonsDone];
             const summoned = getEnemy(summon.enemyId);
+            // Into the realm first, everyone (the Whisperer's Soul Siphon)
+            if (summon.realm && this.realm?.layer === 0) {
+                this.realm.turn(this.ruleHost, 1);
+            }
             let spawned = 0;
             for (let i = 0; i < summon.count; i++) {
                 const distance = summon.distance ?? 2;
@@ -18114,6 +19374,88 @@ export class Sim {
         }
     }
 
+    // A piece of debris down at x, y (BossAttackDef.debris), the oldest gone past the most
+    private leaveDebris(debris: NonNullable<BossAttackDef["debris"]>, x: number, y: number): void {
+        this.debris = this.debris.filter((d) => d.until > this.tick);
+        this.debris.push({
+            x,
+            y,
+            locId: debris.locId,
+            from: this.tick,
+            until: this.tick + secondsToTicks(debris.seconds),
+        });
+        // The wreck doesn't count, and never goes
+        const fallen = this.debris.filter((d) => !d.wreck);
+        if (fallen.length > debris.most) {
+            this.debris.splice(this.debris.indexOf(fallen[0]), 1);
+        }
+    }
+
+    // What hides a hero from a boss's swing with cover (BossAttackDef.cover): its lair's standing
+    // pillars, if it has any, or the map's pillars, and each piece of debris and the wreck
+    // standing, as a square DEBRIS_COVER across
+    coverPillars(enemy: Enemy): { x: number; y: number; size: number }[] | undefined {
+        const lair = this.lairs.find((one) => one.boss === enemy);
+        const lairPillars = lair?.def.pillars;
+        if (lair && lairPillars) {
+            return lair.pillars
+                .filter((pillar) => pillar.standing)
+                .map(({ x, y }) => ({ x, y, size: lairPillars.size }));
+        }
+        const pillars = this.map.features?.pillars;
+        if (this.debris.length === 0) {
+            return pillars;
+        }
+        const half = DEBRIS_COVER / 2;
+        return [
+            ...(pillars ?? []),
+            ...this.debris
+                .filter((d) => d.until > this.tick && !d.glows)
+                .map((d) => ({ x: d.x - half, y: d.y - half, size: DEBRIS_COVER })),
+        ];
+    }
+
+    // The debris (not the wreck) that hid the current hero from a swing (BossAttackDef.smashes),
+    // smashed: gone, with impact where it stood
+    private smashDebris(attack: BossAttackDef, fromX: number, fromY: number): void {
+        const player = this.player;
+        const half = DEBRIS_COVER / 2;
+        this.debris = this.debris.filter((d) => {
+            if (
+                d.wreck ||
+                d.until <= this.tick ||
+                !inShadow(
+                    [{ x: d.x - half, y: d.y - half, size: DEBRIS_COVER }],
+                    fromX,
+                    fromY,
+                    player.x,
+                    player.y,
+                    player.radius,
+                )
+            ) {
+                return true;
+            }
+            this.showImpact(attack.smashes?.impact, d.x, d.y);
+            return false;
+        });
+    }
+
+    // Whether a spot's on debris (BossAttackDef.debris)
+    private onDebris(x: number, y: number): boolean {
+        for (const d of this.debris) {
+            const dx = x - d.x;
+            const dy = y - d.y;
+            if (
+                !d.glows &&
+                d.until > this.tick &&
+                dx * dx + dy * dy <= DEBRIS_RADIUS * DEBRIS_RADIUS
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private stepEnemyProjectiles(): void {
         for (const projectile of this.enemyProjectiles) {
             projectile.prevX = projectile.x;
@@ -18154,6 +19496,20 @@ export class Sim {
             }
             if (projectile.attack.blockable && this.hitsGlyph(projectile)) {
                 projectile.life = 0;
+                continue;
+            }
+            // It breaks on debris (BossAttackDef.debris)
+            if (this.debris.length > 0 && this.onDebris(projectile.x, projectile.y)) {
+                projectile.life = 0;
+                if (projectile.attack.impactSpotAnim !== undefined) {
+                    this.addEffect(
+                        projectile.attack.impactSpotAnim,
+                        projectile.x,
+                        projectile.y,
+                        0,
+                        30,
+                    );
+                }
                 continue;
             }
             const reach = projectile.radius + player.radius;
@@ -18215,8 +19571,14 @@ export class Sim {
         if (showImpact && attack.impactSpotAnim !== undefined) {
             this.addEffect(attack.impactSpotAnim, player.x, player.y, 0, 30);
         }
+        // Out of the only light (EnemyDef.onlyLight), a boss's hits hurt more
+        const only = this.onlyLight;
+        const dark =
+            only && enemy?.boss && !this.inOnlyLight(player.x, player.y)
+                ? only.def.onlyLight!.outside
+                : 1;
         const amount = this.damagePlayer(
-            damage,
+            damage * dark,
             enemyId,
             false,
             attack.hitSound,
@@ -18234,6 +19596,12 @@ export class Sim {
         }
         if (attack.effect) {
             this.applyPlayerEffect(attack.effect, enemy);
+        }
+        // Under the cold, it chills (BossAttackDef.rule chills: the Awakened Duke's gaze)
+        const chills = this.cold ? attack.rule?.chills : undefined;
+        if (chills) {
+            const index = this.hero.index;
+            this.cold!.setCold(index, this.cold!.coldOf(index) + chills);
         }
         if (attack.push && enemy && !this.hero.down) {
             this.pushFrom(enemy, attack.push);
@@ -18292,6 +19660,27 @@ export class Sim {
                 );
                 player.poisonEnd = this.tick + ticks;
                 break;
+            case "dim": {
+                // Only where players carry a light (LightingDef.player)
+                if (!this.lighting?.player) {
+                    break;
+                }
+                const had = this.debuffs.find((d) => d.id === effect.id)?.stacks ?? 0;
+                const stacks = Math.min(effect.stacks ?? 1, had + 1);
+                this.debuffs = this.debuffs
+                    .filter((d) => d.id !== effect.id)
+                    .concat({
+                        id: effect.id,
+                        name: stacks > 1 ? `${effect.name} x${stacks}` : effect.name,
+                        iconObjId: effect.iconObjId,
+                        stats: {},
+                        stacks,
+                        light: { off: (effect.tiles ?? 0) * stacks, to: effect.to },
+                        startTick: this.tick,
+                        endTick: this.tick + ticks,
+                    });
+                break;
+            }
             case "debuff":
                 this.debuffs = this.debuffs
                     .filter((d) => d.id !== effect.id)
@@ -18363,11 +19752,22 @@ export class Sim {
 
     private playerDied(): void {
         const player = this.player;
+        // Second wind, a blessing of the gauntlet's: once, back on their feet
+        if (this.secondWindLeft) {
+            this.secondWindLeft = false;
+            player.hp = Math.max(1, Math.round(player.maxHp * SECOND_WIND_HP));
+            player.invulnerable = SECOND_WIND_SECONDS * TICKS_PER_SECOND;
+            this.emit({ type: "revive" });
+            return;
+        }
         if (this.revivesLeft > 0) {
             this.revivesLeft--;
             player.hp = player.maxHp;
             player.invulnerable = 3 * TICKS_PER_SECOND;
             this.emit({ type: "revive" });
+            return;
+        }
+        if (this.lastRecall()) {
             return;
         }
         player.hp = 0;
@@ -18502,6 +19902,11 @@ export class Sim {
             this.showBlocked(enemy);
             return 0;
         }
+        // Out of reach in the other world (EnemyDef.hurtIn: the Awakened Whisperer, in the realm)
+        if (enemy.def.hurtIn !== undefined && this.layer !== enemy.def.hurtIn) {
+            this.showBlocked(enemy);
+            return 0;
+        }
         // Balance each weapon's damage once, including venom, burns and extra
         // hits. Items, power-ups and recoil keep their own damage rules.
         const weaponScale = this.weaponDamageMultipliers[this.damageSource] ?? 1;
@@ -18621,6 +20026,7 @@ export class Sim {
                     soaked *
                     (1 + drain) *
                     prayed *
+                    (poison ? 1 : this.darkScale(enemy)) *
                     this.rng.range(0.85, 1.15),
             ),
         );
@@ -18713,6 +20119,9 @@ export class Sim {
         if (this.rule && !poison && source !== "other") {
             this.rule.onHit(enemy.x, enemy.y);
         }
+        if (!poison && source.startsWith("weapon:")) {
+            this.weaponHitLanded(enemy, source);
+        }
         const resist = enemy.def.knockbackResist ?? 0;
         if (knockback > 0 && resist < 1 && !enemy.boss && !enemy.def.stationary) {
             const dx = enemy.x - fromX;
@@ -18789,6 +20198,7 @@ export class Sim {
         if (!byEnemy && !enemy.noDrops) {
             this.kills++;
             this.countTraitKill();
+            this.countRelicKill();
             if (lastCopy) {
                 this.enemyKills[enemy.def.id] = (this.enemyKills[enemy.def.id] ?? 0) + 1;
             }
@@ -18799,6 +20209,14 @@ export class Sim {
             if (lastCopy) {
                 this.bossesKilled.push(enemy.def.id);
                 this.bossKills.push({ enemyId: enemy.def.id, seconds: this.seconds });
+                if (INVADER_BY_ID.has(enemy.def.id) && !byEnemy) {
+                    this.invaderDown(enemy);
+                } else if (INVADER_BY_ID.has(enemy.def.id)) {
+                    this.endPocket();
+                }
+                if (enemy.awakened && !byEnemy) {
+                    this.awakenedDown();
+                }
             }
             // A boss's glyph goes with it, rather than hanging about on the
             // victory screen
@@ -18807,6 +20225,18 @@ export class Sim {
             this.enragePartners(enemy);
         }
         this.rule?.onKill(enemy.uid, enemy.x, enemy.y);
+        this.gainSouls(enemy);
+        // Under the cold, a fire elite's embers where it fell, and the braziers near it lit; they
+        // burn away the roots round them (the Overgrown and Frozen remixes together)
+        if (this.cold && enemy.def.embers) {
+            this.cold.onFireKill(enemy.x, enemy.y, this.tick);
+            this.roots?.burn(enemy.x, enemy.y, EMBERS_BURN_ROOTS);
+            this.emit({ type: "notice", message: "The braziers flare up!" });
+        }
+        // Killed frozen or chilled by the Snow ranger: it shatters
+        if (cause === "player" && (enemy.frozen > 0 || this.tick < (enemy.chilled ?? -1))) {
+            this.shatter(enemy);
+        }
         this.emit({
             type: "kill",
             enemyUid: enemy.uid,
@@ -19085,7 +20515,9 @@ export class Sim {
             }
             return;
         }
-        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp);
+        // The realm's richer (RealmRuleDef.drops)
+        const realm = this.realm?.drops;
+        this.dropPickup("bones", enemy.x, enemy.y, enemy.xp * (realm?.bones ?? 1));
         if (!last) {
             return;
         }
@@ -19131,12 +20563,15 @@ export class Sim {
             );
         } else if (
             !enemy.boss &&
-            this.rng.chance(CASKET_DROP_CHANCE * luck * this.partyScale.caskets)
+            this.rng.chance(
+                CASKET_DROP_CHANCE * luck * this.partyScale.caskets * (realm?.caskets ?? 1),
+            )
         ) {
             this.dropCasket(enemy.x + 0.3, enemy.y, false);
         } else if (this.rng.chance(0.03 * luck)) {
-            this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
-        } else if (!this.invoked("on_a_diet") && this.rng.chance(FOOD_DROP_CHANCE * luck)) {
+            const coins = (1 + this.rng.int(5)) * (realm?.coins ?? 1);
+            this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, coins);
+        } else if (!this.noFood && this.rng.chance(FOOD_DROP_CHANCE * luck)) {
             this.dropPickup("food", enemy.x - 0.3, enemy.y, Math.round(FOOD_HEAL * this.healScale));
         }
         if (!enemy.boss) {
@@ -19146,13 +20581,142 @@ export class Sim {
         }
     }
 
+    // ---- Awakened invasions (content/invasions.ts) ----
+
+    // The run's, if it has one: by its seed, or one made to come (SimTesting.invasion)
+    private rollInvasion(options: SimOptions): Invasion | undefined {
+        const forced = options.testing?.invasion;
+        const invader = forced && INVADER_BY_ID.get(forced.invader);
+        if (invader) {
+            return takesInvasions(this.map)
+                ? { invader, at: forced.at, hp: getInvaderHp(this.map) }
+                : undefined;
+        }
+        return rollInvasion(this.map, options.seed, options.hard === true, this.remixes);
+    }
+
+    // The invader's come: its pocket round where it stands, the rule in it on its own Rng
+    private startPocket(boss: Enemy): void {
+        const invader = INVADER_BY_ID.get(boss.def.id)!;
+        if (!this.pocket) {
+            const place = pocketPlace(boss.x, boss.y);
+            const def = pocketRule(
+                invader.pocket,
+                place,
+                this.mapSeconds,
+                TICKS_PER_SECOND,
+                this.tick,
+            );
+            const rule =
+                def &&
+                createRunRule(def, this.grid, (this.runSeed ^ POCKET_SEED) >>> 0, TICKS_PER_SECOND);
+            this.pocket = { kind: invader.pocket, place, rule, over: false };
+            if (rule) {
+                this.setRules([...this.rules, rule]);
+            }
+            if (invader.pocket === "dark" && this.lighting) {
+                this.darkPocket = { ...place, from: this.tick, until: Number.MAX_SAFE_INTEGER };
+                this.litTargetsOnly = true;
+            }
+        }
+        boss.pocket = this.pocket.place;
+    }
+
+    // The run's rules from now on, and what's kept of them by kind
+    private setRules(rules: RunRule[]): void {
+        this.rules = rules;
+        this.rule = rules.length > 1 ? new RuleSet(rules) : rules[0];
+        this.realm = rules.find((rule): rule is RealmRule => rule instanceof RealmRule);
+        this.cold = rules.find((rule): rule is ColdRule => rule instanceof ColdRule);
+        this.roots = rules.find((rule): rule is RootRule => rule instanceof RootRule);
+    }
+
+    // An invader keeps within its pocket: pulled back to its edge if it's gone past it
+    private keepToPocket(enemy: Enemy, pocket: PocketPlace): void {
+        const dx = enemy.x - pocket.x;
+        const dy = enemy.y - pocket.y;
+        const distance = fm.hypot(dx, dy);
+        const edge = pocket.radius - enemy.radius;
+        if (distance > edge && distance > 0) {
+            const back = (distance - edge) / distance;
+            moveCircle(this.grid, enemy, -dx * back, -dy * back, enemy.radius);
+        }
+    }
+
+    // The invader's fallen: its pocket goes, and it pays a boss's coins twice over (its master
+    // casket's its own drop, EnemyDef.caskets)
+    private invaderDown(enemy: Enemy): void {
+        this.invaderKilled = true;
+        this.endPocket();
+        const [least, most] = INVASION.coins;
+        const coins = least + this.rng.int(most - least + 1);
+        this.dropPickup("coins", enemy.x - 0.4, enemy.y + 0.3, coins);
+        // "The invading Leviathan falls!", not "The invading The Leviathan"
+        const name = enemy.def.name.replace(/^The /, "");
+        this.emit({ type: "notice", message: `The invading ${name} falls!` }, true);
+    }
+
+    // Its pocket goes: the party's brought back out of its realm first, and its dark fades
+    private endPocket(): void {
+        const pocket = this.pocket;
+        if (!pocket || pocket.over) {
+            return;
+        }
+        pocket.over = true;
+        const rule = pocket.rule;
+        if (rule) {
+            if (rule instanceof RealmRule && rule.layer === 1) {
+                rule.turn(this.ruleHost, 0);
+            }
+            this.setRules(this.rules.filter((other) => other !== rule));
+        }
+        if (this.darkPocket) {
+            this.darkPocket.until = this.tick + secondsToTicks(POCKET_DARK.fade);
+            this.litTargetsOnly = false;
+        }
+    }
+
+    // Whether a spot's in the invader's pocket while it lasts
+    inPocket(x: number, y: number): boolean {
+        const pocket = this.pocket;
+        return (
+            pocket !== undefined &&
+            !pocket.over &&
+            fm.hypot(x - pocket.place.x, y - pocket.place.y) <= pocket.place.radius
+        );
+    }
+
+    // How dark it is at a spot in an invading Leviathan's pocket, 0 to 1 of the way to its dark,
+    // at a tick (fractions too), as it comes and goes; for the view
+    darkPocketAt(tick: number): number {
+        const dark = this.darkPocket;
+        if (!dark) {
+            return 0;
+        }
+        const fade = secondsToTicks(POCKET_DARK.fade);
+        return Math.max(0, Math.min(1, (tick - dark.from) / fade, (dark.until - tick) / fade));
+    }
+
+    // An orb's awakened final boss is down: it always opens a master casket, its coins the run's
+    // and its gear found for the Armoury
+    private awakenedDown(): void {
+        const [least, most] = CASKETS.master.coins;
+        const coins = Math.round(
+            (least + this.rng.int(most - least + 1)) * (1 + this.stats.greed) * this.coinScale,
+        );
+        this.gainCoins(coins);
+        this.rollChestItem("master");
+        this.awakenedCasketCoins = coins;
+        this.emit({ type: "notice", message: `A master casket! ${coins} coins` }, true);
+    }
+
     // Endless runs: the final boss is down, so the map comes round again,
     // its waves and bosses from five minutes in and everything tougher
     private nextRound(): void {
         this.round++;
         this.roundStartTick = this.tick;
         this.roundStartHeldTicks = this.heldTicks;
-        const events = this.map.events;
+        const events = this.mapEvents;
         const first = events.findIndex((e) => e.at >= LATER_ROUND_START);
         this.eventIndex = first === -1 ? events.length : first;
         this.bossSpawned = false;
@@ -19209,7 +20773,12 @@ export class Sim {
     // bonus (a set's), the two together capped like the player's alone
     private cooldownTicks(seconds: number, speed = 0): number {
         const bonus = 1 - (1 - Math.min(this.stats.cooldown, 0.6)) * (1 - speed);
-        return Math.max(5, Math.round(seconds * TICKS_PER_SECOND * (1 - Math.min(bonus, 0.6))));
+        // Numb with cold (ColdRuleDef.cold slows weapons): slower
+        const numb = this.cold ? 1 + this.coldSlow(this.cold).weapons : 1;
+        return Math.max(
+            5,
+            Math.round(seconds * TICKS_PER_SECOND * (1 - Math.min(bonus, 0.6)) * numb),
+        );
     }
 
     // A weapon's level with what else changes it folded in: its bonus damage
@@ -19374,9 +20943,175 @@ export class Sim {
         }
     }
 
+    // A hit of one of the hero's weapons landed (source, weapon:id): under the cold a fire
+    // weapon's warms them (ColdRuleDef.fire), and the Snow ranger's every so often chills
+    private weaponHitLanded(enemy: Enemy, source: string): void {
+        const cold = this.cold;
+        if (cold && cold.def.fire.weapons.includes(source.slice(7))) {
+            const index = this.hero.index;
+            cold.setCold(index, cold.coldOf(index) - cold.def.fire.perHit);
+        }
+        const trait = this.trait;
+        if (trait?.kind === "shatter" && !enemy.dead && ++this.hero.traitHits >= trait.every) {
+            this.hero.traitHits = 0;
+            enemy.chilled = this.tick + secondsToTicks(trait.chill);
+        }
+    }
+
+    // Shatter (the Snow ranger's trait): what's killed frozen or chilled bursts, its shards hitting
+    // everything near it for a share of its hitpoints. Only hers: anyone else's kill does nothing.
+    private shatter(enemy: Enemy): void {
+        const trait = this.trait;
+        if (trait?.kind !== "shatter") {
+            return;
+        }
+        const share = enemy.elite || enemy.boss ? trait.eliteShare : trait.share;
+        const damage = Math.max(1, Math.round(enemy.maxHp * share));
+        if (trait.spotAnim !== undefined) {
+            this.addEffect(trait.spotAnim, enemy.x, enemy.y, 0, 40);
+        }
+        const previous = this.damageSource;
+        this.damageSource = "other";
+        const near: Enemy[] = [];
+        this.enemyHash.query(enemy.x, enemy.y, trait.reach + 1, (other) => {
+            if (
+                other !== enemy &&
+                !other.dead &&
+                fm.hypot(other.x - enemy.x, other.y - enemy.y) <= trait.reach + other.radius
+            ) {
+                near.push(other);
+            }
+        });
+        for (const other of near) {
+            this.damageEnemy(other, damage, 0, enemy.x, enemy.y, 0);
+        }
+        this.damageSource = previous;
+    }
+
+    // What the dark does to the hero's hits: the Lantern-bearer's glow (CharacterTraitDef
+    // lantern) on what's near her, and the only light's (EnemyDef.onlyLight) on hits from inside it
+    private darkScale(enemy: Enemy): number {
+        let scale = 1;
+        const player = this.player;
+        const trait = this.trait;
+        if (trait?.kind === "lantern") {
+            const reach = trait.reach + enemy.radius;
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                scale *= 1 + trait.damage;
+            }
+        }
+        const only = this.onlyLight;
+        if (only && this.inOnlyLight(player.x, player.y)) {
+            scale *= only.def.onlyLight!.inside;
+        }
+        return scale;
+    }
+
+    // How fast an enemy goes in a Lantern-bearer's glow (CharacterTraitDef lantern): slower
+    // within her reach
+    private lanternPace(enemy: Enemy): number {
+        for (const hero of this.heroes) {
+            const trait = getCharacter(hero.characterId).trait;
+            if (trait?.kind !== "lantern" || !this.isUp(hero)) {
+                continue;
+            }
+            const reach = trait.reach + enemy.radius;
+            const dx = enemy.x - hero.player.x;
+            const dy = enemy.y - hero.player.y;
+            if (dx * dx + dy * dy <= reach * reach) {
+                return 1 - trait.slow;
+            }
+        }
+        return 1;
+    }
+
+    // Whether a spot's in this tick's only light (EnemyDef.onlyLight)
+    private inOnlyLight(x: number, y: number): boolean {
+        const only = this.onlyLight;
+        if (!only || only.dead) {
+            return false;
+        }
+        const reach = only.def.light!.radius + LIGHT_GRACE;
+        const dx = x - only.x;
+        const dy = y - only.y;
+        return dx * dx + dy * dy <= reach * reach;
+    }
+
     // The hero's adventurer's trait (CharacterDef.trait), if they have one
     private get trait(): CharacterTraitDef | undefined {
         return getCharacter(this.hero.characterId).trait;
+    }
+
+    // Step between (the Shadow walker's trait): a hit this big, with it ready, takes her into the
+    // shadows instead, out of reach for a moment and out a few tiles on the way she faces; in the
+    // city of a map of two worlds, into its realm. Whether it did.
+    private stepBetween(amount: number): boolean {
+        const trait = this.trait;
+        const player = this.player;
+        if (
+            trait?.kind !== "step" ||
+            this.tick < this.hero.traitNext ||
+            amount <= player.maxHp * trait.share
+        ) {
+            return false;
+        }
+        this.hero.traitNext = this.tick + secondsToTicks(trait.every);
+        player.invulnerable = Math.max(player.invulnerable, secondsToTicks(trait.seconds));
+        if (trait.spotAnim !== undefined) {
+            this.addEffect(trait.spotAnim, player.x, player.y, 0, 40);
+        }
+        // Out a few tiles on, as far as the ground goes
+        const length = fm.hypot(player.facingX, player.facingY) || 1;
+        const dirX = player.facingX / length;
+        const dirY = player.facingY / length;
+        for (let reach = trait.distance; reach > 0; reach -= 0.5) {
+            const x = player.x + dirX * reach;
+            const y = player.y + dirY * reach;
+            if (!this.grid.isSolid(Math.floor(x), Math.floor(y))) {
+                player.x = x;
+                player.y = y;
+                break;
+            }
+        }
+        if (trait.spotAnim !== undefined) {
+            this.addEffect(trait.spotAnim, player.x, player.y, 0, 40);
+        }
+        this.emit({ type: "notice", message: `${trait.name}!` });
+        // Into the realm at the rule's turn of the tick, not in the middle of whatever hit her
+        if (this.realm?.layer === 0) {
+            this.stepIntoRealm = true;
+        }
+        return true;
+    }
+
+    // Dig site (the Treasure hunter's trait, anyone's in the party): what a casket left on the
+    // ground is doing, by how long it's been there
+    digState(pickup: Pickup): "open" | "buried" | "dug" | "gone" {
+        const dig = this.digSite;
+        if (!dig || pickup.kind !== "casket" || pickup.disguise) {
+            return "open";
+        }
+        const age = (this.tick - pickup.spawnTick) / TICKS_PER_SECOND;
+        return age >= dig.gone
+            ? "gone"
+            : age >= dig.ready
+              ? "dug"
+              : age >= dig.buries
+                ? "buried"
+                : "open";
+    }
+
+    // The party's Treasure hunter's trait, if there's one in it
+    get digSite(): Extract<CharacterTraitDef, { kind: "dig" }> | undefined {
+        for (const hero of this.heroes) {
+            const trait = getCharacter(hero.characterId).trait;
+            if (trait?.kind === "dig") {
+                return trait;
+            }
+        }
+        return undefined;
     }
 
     private countTraitKill(): void {
@@ -19541,6 +21276,9 @@ export class Sim {
         level: WeaponDef["levels"][number],
         special?: SpecialAttackDef,
     ): void {
+        if (def.souls && this.harvest(def, level, def.souls)) {
+            return;
+        }
         if (special?.aoe) {
             this.fireAoeSpecial(def, level, special, special.aoe);
             return;
@@ -19600,6 +21338,103 @@ export class Sim {
         this.meleeHits(def, level, hit, special);
     }
 
+    // The Soulreaper axe's (WeaponDef.souls): a kill near a hero holding it gives it a soul
+    private gainSouls(enemy: Enemy): void {
+        for (const hero of this.heroes) {
+            const axe = hero.weapons.find((w) => w.def.souls);
+            const souls = axe?.def.souls;
+            if (!souls || hero.souls >= souls.max || !this.isUp(hero)) {
+                continue;
+            }
+            const { x, y } = hero.player;
+            if ((enemy.x - x) ** 2 + (enemy.y - y) ** 2 <= souls.reach * souls.reach) {
+                hero.souls++;
+            }
+        }
+    }
+
+    // At its max souls, the axe's swing is a Harvest when something's in reach: a spin all round,
+    // paid for in hitpoints (never below 1, and not while low), healing back a little a kill from
+    // its last level. False when it isn't one (the swing goes on as a sweep).
+    private harvest(
+        def: WeaponDef,
+        level: WeaponDef["levels"][number],
+        souls: NonNullable<WeaponDef["souls"]>,
+    ): boolean {
+        const hero = this.hero;
+        const player = this.player;
+        const harvest = souls.harvest;
+        if (hero.souls < souls.max || player.hp < player.maxHp * harvest.floor) {
+            return false;
+        }
+        const radius = harvest.radius * (1 + this.stats.area);
+        const hit: Enemy[] = [];
+        this.queryTouching(player.x, player.y, radius + 1, (enemy) => {
+            if (
+                !enemy.dead &&
+                fm.hypot(enemy.x - player.x, enemy.y - player.y) <= radius + enemy.radius
+            ) {
+                hit.push(enemy);
+            }
+        });
+        if (hit.length === 0) {
+            return false;
+        }
+        hero.souls = 0;
+        const index = hero.weapons.findIndex((w) => w.def === def);
+        const scale =
+            harvest.damage +
+            harvest.perLevel * Math.max(0, index >= 0 ? hero.weapons[index].level - 1 : 0);
+        this.emit({
+            type: "slash",
+            x: player.x,
+            y: player.y,
+            dirX: player.facingX,
+            dirY: player.facingY,
+            reach: radius,
+            width: 0,
+            arc: Math.PI,
+            weaponId: def.id,
+        });
+        this.addEffect(harvest.spotAnim, player.x, player.y, 0, SPECIAL_SPOTANIM_TICKS);
+        this.emit({ type: "harvest", x: player.x, y: player.y });
+        this.rule?.onSwing(player.x, player.y, 1, 0, radius + this.cutReach(), Math.PI, 0);
+        const cost = Math.max(1, Math.round(player.maxHp * harvest.cost));
+        const paid = Math.min(cost, Math.max(0, Math.ceil(player.hp) - 1));
+        if (paid > 0) {
+            player.hp -= paid;
+            this.emit({ type: "playerHit", amount: paid, enemyId: def.id, elite: false });
+        }
+        const alive = hit.filter((enemy) => !enemy.dead);
+        const harvestLevel = { ...level, damage: level.damage * scale };
+        this.meleeHits(def, harvestLevel, hit, undefined);
+        // Bosses and elites take it twice
+        for (const enemy of hit) {
+            if (!enemy.dead && (enemy.boss || enemy.elite)) {
+                this.damageEnemy(
+                    enemy,
+                    harvestLevel.damage * this.soulScale(def),
+                    0,
+                    player.x,
+                    player.y,
+                );
+            }
+        }
+        if (index >= 0 && hero.weapons[index].level >= harvest.healsAt) {
+            const kills = alive.filter((enemy) => enemy.dead).length;
+            const back = Math.min(paid, kills);
+            if (back > 0) {
+                this.heal(back);
+            }
+        }
+        return true;
+    }
+
+    // What the axe's souls add to its hits
+    private soulScale(def: WeaponDef): number {
+        return def.souls ? 1 + def.souls.damage * this.hero.souls : 1;
+    }
+
     // A special attack that hits everything all round the player (the Thunder
     // khopesh's Thunderclap): a full circle swing, lightning on what it hits
     private fireAoeSpecial(
@@ -19647,7 +21482,7 @@ export class Sim {
         special: SpecialAttackDef | undefined,
     ): void {
         const player = this.player;
-        const damage = level.damage * (special?.damage ?? 1);
+        const damage = level.damage * (special?.damage ?? 1) * this.soulScale(def);
         if (special) {
             this.addEffect(special.spotAnim, player.x, player.y, 0, SPECIAL_SPOTANIM_TICKS);
         }
@@ -19967,6 +21802,25 @@ export class Sim {
     private stepLights(): void {
         const lighting = this.lighting!;
         const lights: Light[] = [];
+        // While something's the only light (EnemyDef.onlyLight: the Leviathan's pathfinder), that's
+        // all there is
+        const only = this.onlyLightEnemy();
+        this.onlyLight = only;
+        if (only) {
+            const look = only.def.light!;
+            lights.push({
+                kind: "enemy",
+                id: only.uid,
+                x: only.x,
+                y: only.y,
+                radius: look.radius,
+                look,
+                enemy: only,
+            });
+            this.lights = lights;
+            this.markLit();
+            return;
+        }
         for (const hero of this.heroes) {
             if (hero.left) {
                 continue;
@@ -19980,9 +21834,34 @@ export class Sim {
         (lighting.lights ?? []).forEach((look, id) => {
             lights.push({ kind: "map", id, x: look.x, y: look.y, radius: look.radius, look });
         });
+        // Under the cold too (the Frozen and Dark remixes together): lit braziers and embers, in the
+        // city
+        const cold = this.realm?.layer === 1 ? undefined : this.cold;
+        if (cold) {
+            const base = lighting.lights?.length ?? 0;
+            cold.braziers.forEach((brazier, i) => {
+                if (cold.isLit(brazier, this.tick)) {
+                    const look = { ...BRAZIER_GLOW, radius: BRAZIER_LIGHT };
+                    const { midX: x, midY: y } = brazier;
+                    lights.push({ kind: "map", id: base + i, x, y, radius: BRAZIER_LIGHT, look });
+                }
+            });
+            cold.embers.forEach((ember, i) => {
+                const look = { ...BRAZIER_GLOW, radius: EMBERS_LIGHT };
+                const id = base + cold.braziers.length + i;
+                lights.push({
+                    kind: "map",
+                    id,
+                    x: ember.x,
+                    y: ember.y,
+                    radius: EMBERS_LIGHT,
+                    look,
+                });
+            });
+        }
         for (const enemy of this.enemies) {
             const look = enemy.def.light;
-            if (look && !enemy.dead) {
+            if (look && !enemy.dead && this.lightInPhase(enemy, look.phases)) {
                 const { x, y } = enemy;
                 lights.push({
                     kind: "enemy",
@@ -20012,11 +21891,53 @@ export class Sim {
             });
         }
         this.lights = lights;
-        // What weapons can aim at, worked out once a tick rather than on every search
+        this.markLit();
+    }
+
+    // What weapons can aim at, worked out once a tick rather than on every search: anything
+    // with some of it in a light (a big boss by its edge)
+    private markLit(): void {
         if (this.litTargetsOnly) {
             for (const enemy of this.enemies) {
-                enemy.lit = this.isLit(enemy.x, enemy.y);
+                enemy.lit = this.isLit(enemy.x, enemy.y, enemy.radius > 1 ? enemy.radius : 0);
             }
+        }
+    }
+
+    // A boss's light only in some of its phases (EnemyDef.light phases, counting from 1)
+    private lightInPhase(enemy: Enemy, phases: number[] | undefined): boolean {
+        return phases === undefined || phases.includes((enemy.bossState?.phase?.index ?? 0) + 1);
+    }
+
+    // The enemy that's the only light while it's up (EnemyDef.onlyLight), if there is one
+    onlyLightEnemy(): Enemy | undefined {
+        if (!this.hasOnlyLight) {
+            return undefined;
+        }
+        return this.enemies.find((e) => !e.dead && e.def.onlyLight !== undefined && e.def.light);
+    }
+
+    // What goes round the final boss (EnemyDef.circles: the Leviathan's pathfinder), a step a
+    // tick, from where it came on
+    private stepCircling(): void {
+        const middle = this.enemies.find(
+            (e) => !e.dead && e.boss && e.def.circles === undefined && e.def.stationary,
+        );
+        for (const enemy of this.enemies) {
+            const circles = enemy.def.circles;
+            if (!circles || enemy.dead || !middle) {
+                continue;
+            }
+            let angle = this.circleAngles.get(enemy.uid);
+            if (angle === undefined) {
+                angle = fm.atan2(enemy.y - middle.y, enemy.x - middle.x);
+            }
+            angle += circles.speed / circles.radius / TICKS_PER_SECOND;
+            this.circleAngles.set(enemy.uid, angle);
+            enemy.prevX = enemy.x;
+            enemy.prevY = enemy.y;
+            enemy.x = middle.x + fm.cos(angle) * circles.radius;
+            enemy.y = middle.y + fm.sin(angle) * circles.radius;
         }
     }
 
@@ -20042,18 +21963,41 @@ export class Sim {
                 look ??= effect.look ?? { radius: effect.bonus };
             }
         }
-        const radius = (lighting.player?.radius ?? 0) + bonus;
+        // The Lantern-bearer's own is bigger (CharacterTraitDef lantern)
+        const trait = getCharacter(this.heroes[heroIndex].characterId).trait;
+        const own = (lighting.player?.radius ?? 0) * (trait?.kind === "lantern" ? trait.light : 1);
+        let radius = own + bonus;
+        // Dimmed (PlayerEffectDef dim): an Abyssal leech's tiles off, a roar's cap
+        for (const debuff of this.heroes[heroIndex].debuffs) {
+            if (debuff.light) {
+                radius -= debuff.light.off;
+                if (debuff.light.to !== undefined) {
+                    radius = Math.min(radius, debuff.light.to);
+                }
+            }
+        }
+        radius = Math.max(radius, lighting.player ? MIN_PLAYER_LIGHT : 0);
+        // The realm's darker (the Shadow and Dark remixes together)
+        if (this.realm?.layer === 1 && this.remixes.length > 0) {
+            radius *= REALM_LIGHT;
+        }
         return look && radius > 0 ? { radius, look } : undefined;
     }
 
     // Whether a spot's in a sim light, or near enough to its edge (LIGHT_GRACE): always, on a map
     // without the rule (LightingDef.litTargetsOnly)
-    isLit(x: number, y: number): boolean {
+    // radius: some of something that big (an enemy's) is in it
+    isLit(x: number, y: number, radius = 0): boolean {
         if (!this.litTargetsOnly) {
             return true;
         }
+        // An invading Leviathan's pocket: out of it, everything's in the light
+        const dark = this.darkPocket;
+        if (dark && fm.hypot(x - dark.x, y - dark.y) > dark.radius + radius) {
+            return true;
+        }
         for (const light of this.lights) {
-            const reach = light.radius + Math.min(LIGHT_GRACE, light.radius);
+            const reach = light.radius + Math.min(LIGHT_GRACE, light.radius) + radius;
             const dx = x - light.x;
             const dy = y - light.y;
             if (dx * dx + dy * dy <= reach * reach) {
@@ -21055,7 +22999,7 @@ export class Sim {
         // Its copies in co-op lie in wait one each, near the players
         const points = this.bossSpawnPoints(
             def,
-            bossCopies(this.heroes.length, this.hard),
+            bossCopies(this.heroes.length, this.hardBosses),
             DISGUISE_MIN_DISTANCE,
             DISGUISE_MAX_DISTANCE,
             undefined,
@@ -21529,7 +23473,8 @@ export class Sim {
     // Collection log trophies a boss can drop on its map
     // (each of the party their own)
     private rollBossTrophies(enemy: Enemy): void {
-        if (!enemy.boss) {
+        // The gauntlet's fights drop nothing: its reward's at the end (content/gauntlet.ts)
+        if (!enemy.boss || this.gauntlet) {
             return;
         }
         this.forEachHeroInReach(() => {
@@ -21646,7 +23591,7 @@ export class Sim {
         x: number,
         y: number,
         value: number,
-        extra: Pick<Pickup, "tier" | "powerUp" | "disguise"> = {},
+        extra: Pick<Pickup, "tier" | "powerUp" | "disguise" | "lasts"> = {},
     ): void {
         const limit = MAX_PILES[kind];
         // (only counted when there could be that many)
@@ -21702,6 +23647,10 @@ export class Sim {
         // there when this started
         const pickups = this.pickups;
         const pickupCount = pickups.length;
+        // Banker's Note: coins anywhere go to whoever has it (the nearest of them)
+        const bankers = this.heroes.filter(
+            (hero) => this.isUp(hero) && this.hasRelic("bankers_note", hero),
+        );
         for (const pickup of pickups) {
             pickup.prevX = pickup.x;
             pickup.prevY = pickup.y;
@@ -21712,13 +23661,33 @@ export class Sim {
             if (
                 pickup.kind === "powerUp" &&
                 !pickup.attracted &&
-                this.tick - pickup.spawnTick >= POWER_UP_LIFETIME * TICKS_PER_SECOND
+                this.tick - pickup.spawnTick >=
+                    POWER_UP_LIFETIME * (pickup.lasts ?? 1) * TICKS_PER_SECOND
             ) {
                 pickup.value = -1;
                 continue;
             }
+            // Buried, it waits to be dug up a tier better, or it's lost (CharacterTraitDef dig)
+            const dig = this.digState(pickup);
+            if (dig === "gone") {
+                pickup.value = -1;
+                continue;
+            }
+            if (dig === "buried") {
+                continue;
+            }
+            if (dig === "dug" && !pickup.dug && pickup.tier) {
+                pickup.dug = true;
+                const at = CASKET_TIERS.indexOf(pickup.tier);
+                pickup.tier = CASKET_TIERS[Math.min(at + 1, CASKET_TIERS.length - 1)];
+            }
             // Whoever's nearest gets it
-            this.use(this.nearestUpHero(pickup.x, pickup.y));
+            const banked = pickup.kind === "coins" && bankers.length > 0;
+            this.use(
+                banked
+                    ? this.nearest(pickup.x, pickup.y, (hero) => bankers.includes(hero))
+                    : this.nearestUpHero(pickup.x, pickup.y),
+            );
             const player = this.player;
             const magnet = BASE_MAGNET * (1 + this.stats.magnet);
             const dx = player.x - pickup.x;
@@ -21726,7 +23695,7 @@ export class Sim {
             const distance = fm.hypot(dx, dy);
             // Caskets and power-ups need walking over
             const magnetic = pickup.kind !== "casket" && pickup.kind !== "powerUp";
-            if (!pickup.attracted && magnetic && distance < magnet) {
+            if (!pickup.attracted && magnetic && (distance < magnet || banked)) {
                 pickup.attracted = true;
                 pickup.speed = 0.05;
             }
@@ -21879,7 +23848,9 @@ export class Sim {
         this.lastPowerUpTick = this.tick;
         this.lastPowerUpId = id;
         const spot = this.walkableSpot(x, y);
-        this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: id });
+        // Globetrotter: it waits longer for whoever's kill dropped it
+        const lasts = this.hasRelic("globetrotter") ? GLOBETROTTER.lasts : undefined;
+        this.dropPickup("powerUp", spot.x, spot.y, 1, { powerUp: id, ...(lasts && { lasts }) });
     }
 
     // Power-ups' damage keeps up with the enemies' hitpoints
@@ -22480,6 +24451,230 @@ export class Sim {
         return killed;
     }
 
+    // ---- Relics (content/relics.ts) ----
+
+    // Grimoire: a second weapon to start with, a Common of the adventurer's class that they could
+    // be offered (picked by the run's seed)
+    private grimoire(): void {
+        if (!this.hasRelic("grimoire")) {
+            return;
+        }
+        const style = getCharacter(this.characterId).style;
+        const options = WEAPONS.filter(
+            (weapon) =>
+                weapon.rarity === "common" &&
+                getWeaponStyle(weapon) === style &&
+                !weapon.evolved &&
+                !weapon.pickOnly &&
+                !this.weapons.some(
+                    (w) =>
+                        w.def.id === weapon.id ||
+                        (weapon.family !== undefined && w.def.family === weapon.family),
+                ) &&
+                isAvailable(weapon, this.unlockedItems),
+        );
+        if (options.length > 0 && this.weapons.length < this.maxWeapons) {
+            this.addWeapon(options[this.rng.int(options.length)].id);
+        }
+    }
+
+    // Whether a hero (the current one by default) has a relic on this run
+    hasRelic(id: string, hero: Hero = this.hero): boolean {
+        return hero.relics.ids.includes(id);
+    }
+
+    // The relics that go by a clock, each hero's own: Endless Harvest's bones, Fairy's Flight's push
+    private stepRelics(): void {
+        const harvest = this.tick > 0 && this.tick % secondsToTicks(ENDLESS_HARVEST.every) === 0;
+        for (const hero of this.heroes) {
+            if (hero.relics.ids.length === 0 || !this.isUp(hero)) {
+                continue;
+            }
+            const player = hero.player;
+            if (harvest && this.hasRelic("endless_harvest", hero)) {
+                const reach = ENDLESS_HARVEST.range;
+                for (const pickup of this.pickups) {
+                    if (
+                        pickup.kind === "bones" &&
+                        !pickup.attracted &&
+                        fm.hypot(pickup.x - player.x, pickup.y - player.y) <= reach
+                    ) {
+                        pickup.attracted = true;
+                        pickup.speed = 0.05;
+                    }
+                }
+            }
+            if (
+                player.moving &&
+                this.tick >= hero.relics.pushReady &&
+                this.hasRelic("fairys_flight", hero)
+            ) {
+                this.pushThrough(hero);
+            }
+        }
+    }
+
+    // Fairy's Flight: walking into a crowd throws the enemies round you aside, as a hit's knockback
+    // does (bosses and what doesn't move stay put)
+    private pushThrough(hero: Hero): void {
+        const player = hero.player;
+        const reach = FAIRYS_FLIGHT.reach + player.radius;
+        const crowd = this.enemies.filter(
+            (enemy) =>
+                !enemy.dead &&
+                !enemy.boss &&
+                !enemy.def.stationary &&
+                !enemy.def.solid &&
+                (enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2 <= reach * reach,
+        );
+        if (crowd.length < FAIRYS_FLIGHT.crowd) {
+            return;
+        }
+        for (const enemy of crowd) {
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const length = fm.hypot(dx, dy);
+            if (length > 0.001) {
+                const push = FAIRYS_FLIGHT.push * (1 - (enemy.def.knockbackResist ?? 0));
+                enemy.vx += (dx / length) * push;
+                enemy.vy += (dy / length) * push;
+            }
+        }
+        hero.relics.pushReady = this.tick + secondsToTicks(FAIRYS_FLIGHT.every);
+    }
+
+    // Bloodthirsty: a share of their hitpoints back every so many kills (the current hero's kill)
+    private countRelicKill(): void {
+        if (!this.hasRelic("bloodthirsty")) {
+            return;
+        }
+        const relics = this.hero.relics;
+        relics.kills++;
+        if (relics.kills >= BLOODTHIRSTY.kills) {
+            relics.kills = 0;
+            this.heal(this.player.maxHp * BLOODTHIRSTY.heal);
+        }
+    }
+
+    // Trickster: the next hit misses, once its clock's round again. True when this one does.
+    private trickedHit(): boolean {
+        const relics = this.hero.relics;
+        if (!this.hasRelic("trickster") || this.tick < relics.trickReady) {
+            return false;
+        }
+        relics.trickReady = this.tick + secondsToTicks(TRICKSTER.every);
+        return true;
+    }
+
+    // Last Recall: once a run, a fall takes the hero back to the start with half their hitpoints,
+    // and what's round the start is stunned. True when it did.
+    private lastRecall(): boolean {
+        const relics = this.hero.relics;
+        if (!this.hasRelic("last_recall") || relics.recalled) {
+            return false;
+        }
+        relics.recalled = true;
+        const player = this.player;
+        const spot = findFreeSpot(this.grid, this.start.x, this.start.y, player.radius);
+        player.x = player.prevX = spot.x;
+        player.y = player.prevY = spot.y;
+        player.hp = Math.max(1, Math.round(player.maxHp * LAST_RECALL.hp));
+        player.invulnerable = Math.max(player.invulnerable, 3 * TICKS_PER_SECOND);
+        player.poisonEnd = -1;
+        player.poisonDamage = 0;
+        const stun = secondsToTicks(LAST_RECALL.stun);
+        const reach = LAST_RECALL.radius;
+        for (const enemy of this.enemies) {
+            if (
+                !enemy.dead &&
+                !enemy.boss &&
+                (enemy.x - spot.x) ** 2 + (enemy.y - spot.y) ** 2 <= reach * reach
+            ) {
+                enemy.frozen = Math.max(enemy.frozen, stun);
+            }
+        }
+        this.updateFlowField();
+        this.emit({ type: "revive" });
+        return true;
+    }
+
+    // Reloaded: the level up's offer kept for later, with this level up gone by (twice a run)
+    get canKeepOffer(): boolean {
+        return (
+            this.isChoosing() &&
+            this.hasRelic("reloaded") &&
+            this.hero.relics.keepsLeft > 0 &&
+            !this.choosingHilt
+        );
+    }
+
+    keepOffer(): boolean {
+        if (!this.canKeepOffer) {
+            return false;
+        }
+        const relics = this.hero.relics;
+        relics.kept.push(this.choices);
+        relics.keepsLeft--;
+        this.nextLevelUp();
+        return true;
+    }
+
+    // A kept offer, to take at a later level up: as an extra pick before this one's, which comes
+    // back after. Only what can still be taken of it stays on it.
+    get canTakeKept(): boolean {
+        return (
+            this.isChoosing() &&
+            this.hero.relics.kept.length > 0 &&
+            !this.choosingHilt &&
+            this.hero.relics.resume === undefined
+        );
+    }
+
+    takeKept(): boolean {
+        if (!this.canTakeKept) {
+            return false;
+        }
+        const relics = this.hero.relics;
+        const kept = relics.kept.shift()!.filter((choice) => this.stillOffered(choice));
+        if (kept.length === 0) {
+            return true;
+        }
+        relics.resume = this.choices;
+        this.pendingLevelUps++;
+        this.choices = kept;
+        return true;
+    }
+
+    // A kept offer's reward that can still be had as it was offered: a weapon or passive not carried
+    // yet with room for it, the next level of one carried, an evolution or hilt of one still carried
+    private stillOffered(choice: UpgradeChoice): boolean {
+        switch (choice.kind) {
+            case "newWeapon":
+                return (
+                    !this.weapons.some((w) => w.def.id === choice.weaponId) &&
+                    this.weapons.length < this.maxWeapons
+                );
+            case "weaponLevel":
+                return this.weapons.some(
+                    (w) => w.def.id === choice.weaponId && w.level === choice.level - 1,
+                );
+            case "evolve":
+            case "hilt":
+                return this.weapons.some((w) => w.def.id === choice.weaponId);
+            case "newPassive":
+                return (
+                    !this.passives.some((p) => p.id === choice.passiveId) &&
+                    this.passives.length < this.maxPassives
+                );
+            case "passiveLevel":
+                return this.passives.some(
+                    (p) => p.id === choice.passiveId && p.level === choice.level - 1,
+                );
+            default:
+                return true;
+        }
+    }
+
     // ---- Random events ----
 
     private stepRandomEvents(): void {
@@ -22528,6 +24723,8 @@ export class Sim {
                     return event.effect.kind === "casket" ? event.weight : 0;
                 }
                 return event.id === this.lastRandomEventId ||
+                    // Upset Stomach: no sandwiches
+                    (event.id === "sandwich_lady" && this.noFood) ||
                     this.seconds < (event.minSeconds ?? 0) ||
                     (event.effect.kind === "ambush" && bossOut) ||
                     // No items on a map of blessings (MapDef.blessings)
@@ -22869,6 +25066,9 @@ export class Sim {
         this.gainCoins(coins);
         this.casketsOpened++;
         this.hero.casketsOpened++;
+        if (this.realm?.layer === 1) {
+            this.realm.realmCaskets++;
+        }
         const picker = this.hero;
         this.offerCasketItem(tier, coins);
         for (const hero of this.heroes) {
@@ -22888,7 +25088,18 @@ export class Sim {
         }
         const { itemId, upgradedFrom } = this.rollChestItem(tier);
         const upgrades = this.offeredUpgrades(itemId);
-        this.chests.push({ uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins });
+        const chest = { uid: this.nextUid++, tier, itemId, upgradedFrom, upgrades, coins };
+        // Production Prodigy: no stop, the item worn or used if it's better, alched if not
+        if (this.hasRelic("production_prodigy")) {
+            const item = getItem(itemId);
+            const take =
+                item.kind === "gear"
+                    ? shouldAutoEquip(this.gear, this.gearUpgrades, item, upgrades)
+                    : true;
+            this.applyChest(chest, take ? "take" : "alch");
+            return;
+        }
+        this.chests.push(chest);
         this.emit({ type: "chest", tier, itemId, coins });
         if (this.state === "playing") {
             this.state = "chest";
@@ -23248,4 +25459,21 @@ function shotAttack(shot: EnemyShotDef): BossAttackDef {
         SHOT_ATTACKS.set(shot, attack);
     }
     return attack;
+}
+
+// A gauntlet fight's options as they can be played: a climb from 1 to 2, the hitpoints from a
+// twentieth to all, and a blessing there is
+function cleanGauntletFight(
+    options: GauntletFightOptions | undefined,
+): GauntletFightOptions | undefined {
+    if (!options) {
+        return undefined;
+    }
+    const climb = Number.isFinite(options.climb) ? Math.min(2, Math.max(1, options.climb)) : 1;
+    const hp = Number.isFinite(options.hp) ? Math.min(1, Math.max(0.05, options.hp)) : 1;
+    return {
+        climb,
+        hp,
+        ...(isBlessingId(options.blessing) && { blessing: options.blessing }),
+    };
 }

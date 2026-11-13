@@ -1,10 +1,18 @@
 import { Rarity } from "../content/rarity";
+import type { RemixId } from "../content/remixes";
 import { StatPair, StatText } from "../content/stats";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult, ScabarasPuzzleState } from "../core/Sim";
-import { NewerSave, SaveData, UnreadableSave, getStartingCharacter } from "../core/save";
+import type { GauntletRun } from "../core/gauntlet";
+import {
+    GauntletRewards,
+    NewerSave,
+    SaveData,
+    UnreadableSave,
+    getStartingCharacter,
+} from "../core/save";
 import type { CinematicDirector } from "./CinematicDirector";
 import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
@@ -24,6 +32,11 @@ export type Screen =
     | "collectionLog"
     // Co-op: finding or making a room, and the room before a run
     | "coop"
+    // The Forgotten Four: its order before the start, and its camp between fights
+    | "gauntlet"
+    | "camp"
+    // The weekly Vault (content/vault.ts)
+    | "vault"
     | "run";
 
 export type RunOverlay = "none" | "levelUp" | "chest" | "event" | "paused" | "dead" | "victory";
@@ -162,6 +175,8 @@ export type HudView = {
     banishes: number;
     // What skipping the level up's rewards costs, while they can be skipped
     skip?: { cost: number; affordable: boolean };
+    // Reloaded (content/relics.ts): keeps left and offers kept, and whether each can be done now
+    keep?: { left: number; kept: number; canKeep: boolean; canTake: boolean };
 };
 
 // The HUD's numbers that change as the run's played, 10 times a second. They're
@@ -213,6 +228,12 @@ export type HudNumbers = {
     devWardens?: boolean;
     hp: number;
     maxHp: number;
+    // Sanity, on a map of two worlds (RealmRuleDef.sanity), and its most: a bar under hitpoints
+    sanity?: number;
+    sanityMax?: number;
+    // Cold, on a map that's cold (ColdRuleDef.cold), and its most: a bar under hitpoints
+    cold?: number;
+    coldMax?: number;
     // How full the hitpoints bar is, from the hitpoints as they are (regeneration's a little every
     // tick), to a thousandth; hp/maxHp without it
     hpShare?: number;
@@ -302,6 +323,8 @@ export type BossView = {
         // A fight where its weapon only reaches so far (MapDef.fight.strikeReach),
         // and the player's out of it
         outOfReach?: boolean;
+        // Can't be hurt in the world the party's in (EnemyDef.hurtIn)
+        otherWorld?: boolean;
         // Its guard's down (BossDef.guard): exposed after a miss, or stunned
         guard?: "exposed" | "stunned";
         // How charged each totem is, 0 to 1
@@ -420,6 +443,14 @@ export type ReviveView = {
     revivesLeft: number;
 };
 
+export type GauntletView = {
+    order: string[];
+    hard: boolean;
+    run?: GauntletRun;
+    campEnds?: number;
+    rewards?: GauntletRewards;
+};
+
 export type Toast = { id: number; text: string; until: number };
 
 // Why nothing's being saved: the game's open in another tab, the save's from
@@ -450,6 +481,12 @@ export type UiSnapshot = {
     mapId: string;
     endless: boolean;
     hard: boolean;
+    // The remixes switched on for it (content/remixes.ts), those open on it
+    remixes: RemixId[];
+    // An Awakener's orb to be spent on its final boss (act-2-fallen-empire.md 8.6), once one's held
+    awaken: boolean;
+    // The weekly Vault's week (content/vault.ts) the room's next run is, hosting one
+    vaultRoom?: string;
     // A fight in parts: the part picked to play (one already reached, MapDef.stages), till the run
     // it's for ends; the next not beaten when unset
     fightStage?: number;
@@ -498,11 +535,21 @@ export type UiSnapshot = {
         // Co-op: who else played, and why it ended early if it did
         party?: string[];
         endedEarly?: string;
+        // The weekly Vault's run: its week, and whether it's the week's best
+        vault?: { key: string; best: boolean };
+        // An Awakener's orb won (an Awakened fight), or spent on this run's final boss
+        orbWon?: boolean;
         // Played in a room to its end, so the party goes back together: no Play again, even once
         // the room closes on the results
         coop?: boolean;
     };
     toasts: Toast[];
+    // The Forgotten Four (content/gauntlet.ts): the order and mode picked on its screen, and once
+    // it's started its run, when its camp ends (performance.now()), and its clear's rewards
+    gauntlet?: GauntletView;
+    // An act's ending being told (its id, content/acts.ts), over whatever screen's up: as the last
+    // of its Awakened fights falls, or played again from its card
+    actEnding?: string;
     // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
     toastLog: string[];
     debug: boolean;
@@ -532,6 +579,8 @@ export class GameStore {
             mapId: "lumbridge",
             endless: false,
             hard: false,
+            remixes: [],
+            awaken: false,
             expert: false,
             overlay: "none",
             coop: OFFLINE,

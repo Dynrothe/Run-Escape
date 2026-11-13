@@ -22,7 +22,13 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
-import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
+import { BLOOD_SOULREAPER_AXE_OBJ, SOULREAPER_AXE_OBJ } from "../content/gauntlet";
+import {
+    INVOCATIONS,
+    OFF_SPRITE,
+    RAID_BAND_SPRITES,
+    RUN_INVOCATIONS,
+} from "../content/invocations";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { getHeroNpcSeqs } from "../content/justiciarKit";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
@@ -31,6 +37,7 @@ import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import {
@@ -209,8 +216,11 @@ export function getGameSpriteIds(): number[] {
         ...PASSIVES.flatMap((passive) =>
             passive.iconSpriteId !== undefined ? [passive.iconSpriteId] : [],
         ),
-        // The Tombs of Amascut's invocation board: each icon lit and dark, and Amascut's faces
-        ...INVOCATIONS.flatMap((invocation) => [invocation.icon, invocation.icon + OFF_SPRITE]),
+        // The invocation boards (the Tombs and a run's): each icon lit and dark, and Amascut's faces
+        ...[...INVOCATIONS, ...RUN_INVOCATIONS].flatMap((invocation) => [
+            invocation.icon,
+            invocation.icon + OFF_SPRITE,
+        ]),
         ...Object.values(RAID_BAND_SPRITES),
     ];
     return [...new Set(ids)];
@@ -265,7 +275,12 @@ export function getSpotAnimIds(): number[] {
             weapon.lifesteal?.spotAnim,
             weapon.siphon?.projectileSpotAnim,
         );
-        add(weapon.chain?.spotAnim, weapon.breach?.spotAnim, weapon.heavy?.hit?.spotAnim);
+        add(
+            weapon.chain?.spotAnim,
+            weapon.breach?.spotAnim,
+            weapon.souls?.harvest.spotAnim,
+            weapon.heavy?.hit?.spotAnim,
+        );
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -339,9 +354,18 @@ export function getSpotAnimIds(): number[] {
         }
     }
     for (const map of ALL_MAPS) {
-        // What a cut through a map's roots throws up (MapDef.rule), and what comes down on a hero
-        // as they're blessed (MapDef.blessings)
-        add(map.rule?.look.cutSpotAnim, map.blessings?.spotAnim);
+        // What a cut through a map's roots throws up (MapDef.rule)
+        // and the ripple as a map of two worlds turns; under the cold, a vent's puff and a relight
+        const rule = map.rule;
+        if (rule?.kind === "roots") {
+            add(rule.look.cutSpotAnim);
+        } else if (rule?.kind === "realm") {
+            add(rule.look.flipSpotAnim);
+        } else if (rule?.kind === "cold") {
+            add(rule.look.relightSpotAnim, rule.look.puffSpotAnim);
+        }
+        // What comes down on a hero as they're blessed (MapDef.blessings)
+        add(map.blessings?.spotAnim);
         // Its lairs' seals going out (LairDef.seal.smoke), and their heals (LairDef.heals)
         add(...(map.lairs ?? []).map((lair) => lair.seal.smoke));
         add(...(map.lairs ?? []).map((lair) => lair.heals?.spotAnim));
@@ -436,9 +460,13 @@ export function getHeldRunPoses(
     appearance: PlayerAppearance,
     attackSeqs: number[],
 ): { seqId: number; frame: number }[] {
-    const held = appearance.equipment[EquipSlot.WEAPON];
+    let held = appearance.equipment[EquipSlot.WEAPON];
     if (held === undefined || held < 0) {
         return [];
+    }
+    // The blood-touched axe is the axe's poses
+    if (held === BLOOD_SOULREAPER_AXE_OBJ) {
+        held = SOULREAPER_AXE_OBJ;
     }
     return WEAPONS.flatMap((weapon) =>
         weapon.runPose !== undefined &&
@@ -491,14 +519,32 @@ export function getRunAppearance(
     hero = sim.focus,
     look?: WardrobeLook,
 ): PlayerAppearance {
-    return sim.as(hero, () => getCurrentAppearance(sim, look));
+    return sim.as(hero, () => getCurrentAppearance(sim, hero === sim.focus, look));
 }
 
-function getCurrentAppearance(sim: Sim, look: WardrobeLook | undefined): PlayerAppearance {
+// The Forgotten Four's first clean clear (SaveData.gauntlet): this player's Soulreaper axe and
+// fighting pets blood-touched (setGauntletLooks). Only their own hero's, in co-op.
+let gauntletLooks = false;
+
+export function hasBloodLooks(): boolean {
+    return gauntletLooks;
+}
+
+// From the save (hasGauntletLooks): a hero baked from now on, and the pets drawn
+export function setGauntletLooks(on: boolean): void {
+    gauntletLooks = on;
+}
+
+function getCurrentAppearance(
+    sim: Sim,
+    own: boolean,
+    look: WardrobeLook | undefined,
+): PlayerAppearance {
     const appearance = getCharacterAppearance(sim.characterId, look);
     const held = sim.getHeldObjId();
     if (held !== -1) {
-        appearance.equipment[EquipSlot.WEAPON] = held;
+        appearance.equipment[EquipSlot.WEAPON] =
+            held === SOULREAPER_AXE_OBJ && gauntletLooks && own ? BLOOD_SOULREAPER_AXE_OBJ : held;
     }
     for (const passive of sim.passives) {
         const def = getPassive(passive.id);
@@ -569,8 +615,13 @@ export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): strin
     return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
 }
 
-// A piece of what's under a floor (FloorDef.under)
-// An NPC posed on a map (MapDef.props)
+// A map of two worlds' puddle or portal (RealmRuleDef.look), or the cold's braziers, gas and ice
+// block (ColdRuleDef.look): a rule's locs the game draws, animated
+export function getRealmLocKey(locId: number): string {
+    return "realmloc:" + locId;
+}
+
+// An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
 export function getPropKey(npcId: number): string {
     return "prop:" + npcId;
 }
@@ -860,7 +911,12 @@ export class GameAssets {
                 });
             }
             const quarters = attack.quarters;
-            for (const locId of [quarters?.safeLocId, quarters?.hurtLocId, attack.ground?.locId]) {
+            for (const locId of [
+                quarters?.safeLocId,
+                quarters?.hurtLocId,
+                attack.ground?.locId,
+                attack.debris?.locId,
+            ]) {
                 if (locId !== undefined) {
                     requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
                 }
@@ -955,8 +1011,19 @@ export class GameAssets {
         }
         // A map's roots (MapDef.rule, client/RootsView.ts), their colours swapped
         const rootLooks = new Set<string>();
+        const realmLocs = new Set<number>();
         for (const map of ALL_MAPS) {
-            const look = map.rule?.look;
+            // A map of two worlds' puddles and portal (RealmRuleDef.look), as they move
+            if (map.rule?.kind === "realm") {
+                realmLocs.add(map.rule.look.puddleLocId).add(map.rule.look.portalLocId);
+            }
+            // The cold's braziers, lit and out, its vents' gas and the ice block (ColdRuleDef.look)
+            if (map.rule?.kind === "cold") {
+                const cold = map.rule.look;
+                realmLocs.add(cold.brazierLocId).add(cold.fireLocId).add(cold.gasLocId);
+                realmLocs.add(cold.iceBlockLocId).add(cold.embersLocId);
+            }
+            const look = map.rule?.kind === "roots" ? map.rule.look : undefined;
             for (const locId of [...(look?.runners ?? []), ...(look?.loops ?? [])]) {
                 const key = getRootLookKey(locId, look!);
                 if (!rootLooks.has(key)) {
@@ -965,17 +1032,29 @@ export class GameAssets {
                 }
             }
         }
+        // The remixes' fires in the dark and ice (content/remixes.ts)
+        realmLocs.add(REMIX_FIRE_LOC).add(REMIX_ICE_LOC);
+        for (const locId of realmLocs) {
+            requests.push({ kind: "loc", key: getRealmLocKey(locId), locId, animated: true });
+        }
         // The tree an adventurer's trait fells (CharacterDef.trait)
         const traitLocs = new Set<number>();
         for (const character of CHARACTERS) {
-            if (character.trait) {
+            if (character.trait?.kind === "timber") {
                 traitLocs.add(character.trait.locId);
             }
         }
         for (const locId of traitLocs) {
             requests.push({ kind: "loc", key: "loc:" + locId, locId });
         }
-        // What's under a floor (the Wardens', and dev maps', as their slabs are)
+        // The wreck a fight stands round its boss (ArenaFeatures.wreckage), drawn as its debris
+        const wreckLocs = new Set(
+            ALL_MAPS.flatMap((map) => map.features?.wreckage ?? []).map((wreck) => wreck.locId),
+        );
+        for (const locId of wreckLocs) {
+            requests.push({ kind: "loc", key: "loc:" + locId, locId, animated: true });
+        }
+        // What's under a floor (the Wardens', as its slabs are)
         for (const map of ALL_MAPS) {
             for (const locId of Object.values(map.floor?.under ?? {})) {
                 requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
@@ -1050,6 +1129,8 @@ export class GameAssets {
             }
         }
         const objIds = new Set(getThrownObjIds());
+        // The Soulreaper axe's souls (GameView.drawSouls): soul runes
+        objIds.add(566);
         const locIds = new Set([CANNON_LOC]);
         const poolLocIds = new Set<number>();
         for (const enemy of ENEMIES) {

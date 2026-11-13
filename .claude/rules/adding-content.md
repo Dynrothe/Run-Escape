@@ -287,9 +287,10 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 - Set `plane` for dungeons above the ground floor.
 - The game draws one plane, and hides roofs. If a map's roofs are plain scenery rather than the
   roof loc types, or something floats, see `src/mapviewer/webgl/loc/UpperLevels.ts`.
-- Campaign maps unlock in the order of `MAPS`. A `seasonal` map goes after them in `MAPS`, is open
-  from the start and has no place in the chain. Rewards come from `unlock` tasks on weapons,
-  passives, items and adventurers.
+- Campaign maps unlock in the order of `MAPS`, and are the map screen's Act I tab. A `seasonal`
+  map goes after them in `MAPS`, is open from the start, has no place in the chain and is listed
+  on the Fun tab under the fun maps. Rewards come from `unlock` tasks on weapons, passives, items
+  and adventurers.
 - A map with `fight` is one boss fight (Phosani's Nightmare): `waves: []`, one `finalBoss` event
   at 0 whose boss has an `intro` with `alone`, and it opens once `fight.requires` is beaten. There
   are no picks and no items: everyone plays `fight.character` there (`getMapCharacter` in `maps.ts`
@@ -318,13 +319,15 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 - The map screen lists maps by kind, a tab for each (`MAP_TABS` in `ui/GameUi.tsx`): a new list
   like `RAID_MAPS` needs a group there, or it won't be on the screen. Every tab's page is laid out
   at once, one over another, so the list keeps the tallest's height and the details below never
-  move. A tab taller than the Campaign's makes the list taller on every tab, and past about half
+  move. A tab taller than Act I's makes the list taller on every tab, and past about half
   the panel it scrolls.
 - An act's map (`act`, `content/acts.ts`) is outside the campaign's chain: it opens once
   `act.requires` is beaten, its act's maps in any order, and it's on the act's own tab of the map
-  screen (`ActPage`), not the Campaign list. Its toughness is the act's step (`ActDef.steps`, set
+  screen (`ActPage`, Act II's beside Act I), not Act I's list. Its toughness is the act's step (`ActDef.steps`, set
   by how many of the act's other maps were beaten, the host's in co-op): its `difficulty` is the
   first step's, and the step scales its bosses' event hitpoints too. Sim it with `STEP=0` to `3`.
+  Its slot on the act (`ActSlotDef`) names its Awakened fight (`fightId`): the act's ending
+  (`ActDef.ending`) is told once every slot's fight is beaten (`isActEnded`, `takeActEnding`).
   An act stays hidden and its maps locked until `ActDef.released` (`isActOut`), with what they
   bring in: an adventurer they unlock (`isCharacterOut`) and the Collection log's tab for their
   finds. Anywhere new that lists maps, adventurers or finds needs the same check. The dev server
@@ -340,7 +343,8 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
   spells by spot animation (`SPOT_LIGHTS` in `content/lights.ts`), a floor's tiles
   (`FLOOR_LIGHTS`), a boss's windups and marks (`light` on the attack or its ground pattern), and
-  its exposed core (`look.exposedLight`). `ambient` darkens the rest (and a boss phase's `light`
+  its exposed core (`look.exposedLight`), or a faint glow while its own light's out
+  (`look.darkGlow`, with `EnemyDef.light.phases`). `ambient` darkens the rest (and a boss phase's `light`
   for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
   has an example of each. Off a map with `lighting`, none of it does anything.
 - `blessings` (`BlessingsDef`) takes a map's items away: each level up offers three blessings to
@@ -393,11 +397,13 @@ works a puzzle two would undo between them.
 
 ## Pet
 
-A pet is a trophy that follows its finder (looks only). Add the trophy to `trophies.ts` with a drop
+A pet is a trophy that follows its finder (most are looks only). Add the trophy to `trophies.ts` with a drop
 (`from`), then an entry in `PETS` (`pets.ts`) with its id, the follower NPC and its idle and walk
 animations from `scripts/cache/find-npcs.ts`. A pet has two NPCs in the cache: use the one the
 script marks `follower`, not the other one. It's baked as it's wanted (and by `slim-cache.ts`) and
-offered once found, with nothing else to add. Pets never go in the sim: see Pets in
+offered once found, with nothing else to add. A looks-only pet never goes in the sim; a fighting
+one (`PetDef.power`, Butch's leap, the Wisp's call, Baron's gas, Lil'viathan's bubble) is played by `Sim.stepPets`, and a new kind
+of power needs its case there and its line on the Pet row (`ui.pet.power_<kind>`): see Pets in
 `docs/DEVELOPMENT.md`.
 
 A trophy (`trophies.ts`) shows in the Collection log under the map its `from` names (a pumpkin's

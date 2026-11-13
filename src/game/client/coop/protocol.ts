@@ -8,13 +8,16 @@ export type Loadout = {
     metaStats: Record<string, number>;
     unlockedItems: string[];
     armoury: Record<string, number>;
-    // Their pet (pets.ts), only for looks: the sim never sees it
+    // Their pet (pets.ts): looks only, but a fighting one's (PetDef.power) in everyone's sim
     pet?: string;
     // Their body and outfit from the Wardrobe (content/wardrobe.ts), only for looks as well
     look?: WardrobeLook;
-    // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby. Only
-    // shown: the start carries the party's (GameStart.invocations), and the relay passes it as is
+    // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby (and
+    // in a run's room, its invocation points). Only shown: the start carries the party's
+    // (GameStart.invocations), and the relay passes it as is
     invocations?: string[];
+    // Their relics (content/relics.ts), the open tiers' picks, for their own hero
+    relics?: string[];
     // The raid chests' trophies they've found (isRaidChestTrophy), so their chest only gives ones
     // they haven't got
     trophies?: string[];
@@ -91,8 +94,15 @@ export type GameStart = {
     actStep?: number;
     // A fight in parts (MapDef.stages): which, the host's next
     stage?: number;
-    // The Tombs of Amascut: the host's invocations, the party's raid level (Sim cleans the ids)
+    // The Tombs of Amascut: the host's invocations, the party's raid level; or a run's, the host's
+    // (Sim cleans the ids by the map's board)
     invocations?: string[];
+    // A run's remixes (content/remixes.ts), the host's; the Sim keeps those the map takes
+    remixes?: string[];
+    // Awakened invasions are open for the host (content/invasions.ts): the run rolls by its seed
+    invasions?: boolean;
+    // The weekly Vault's run: its week (content/vault.ts); the seed and the rest are its
+    vault?: string;
     heroes: { id: string; name: string; characterId: string; loadout: Loadout }[];
 };
 
@@ -113,6 +123,12 @@ export function isGameStart(value: unknown, maxParty: number): value is GameStar
             (Array.isArray(game.invocations) &&
                 game.invocations.length <= 100 &&
                 game.invocations.every((id) => typeof id === "string" && id.length <= 64))) &&
+        (game.remixes === undefined ||
+            (Array.isArray(game.remixes) &&
+                game.remixes.length <= 8 &&
+                game.remixes.every((id) => typeof id === "string" && id.length <= 32))) &&
+        (game.invasions === undefined || typeof game.invasions === "boolean") &&
+        (game.vault === undefined || (typeof game.vault === "string" && game.vault.length <= 16)) &&
         Array.isArray(game.heroes) &&
         game.heroes.length > 0 &&
         game.heroes.length <= maxParty &&

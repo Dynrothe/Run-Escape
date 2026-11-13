@@ -127,6 +127,37 @@ const AKKHA_FLOOR: [number, LocOverride][] = [
     ]),
 ];
 
+// Models drawn with fewer triangles (ModelData.simplify), by model id: the share of faces kept,
+// and whether the model's a piece that meets others at its tile's edges. The Scar's brain
+// (maps/scar.ts) is thousands of one-tile pieces of 340 to 520 triangles each, lumps painted in
+// face colours: a view of its rift's island was 180k triangles, for a phone's 69k all in. A
+// quarter of them, its smallest edges gone, reads the same in the dark. The walls (types 0, 1 and
+// 9 of 49223, and 49224's) and the rims' tops (49225 to 49227, 49232 to 49235); its black filler
+// (49236), unlit, to a fifth whatever its edges do. Its kit, at two fifths: nerves (49357 to 49368), brain matter (49351
+// to 49356), broken pillars (49239, 49240) and the Closed Passage (49206)
+export const MODEL_SIMPLIFY: Map<number, { keep: number; seams: boolean }> = new Map([
+    ...[48881, 48885, 48876, 48884, 48889, 48877].map(
+        (id): [number, { keep: number; seams: boolean }] => [id, { keep: 0.2, seams: true }],
+    ),
+    ...[48891, 48878, 48882, 48880].map((id): [number, { keep: number; seams: boolean }] => [
+        id,
+        { keep: 0.12, seams: true },
+    ]),
+    [48875, { keep: 0.2, seams: false }],
+    ...[
+        49177, 49176, 49170, 49180, 49181, 49173, 49171, 48469, 48466, 49172, 49182, 49178, 48879,
+        49179,
+    ].map((id): [number, { keep: number; seams: boolean }] => [id, { keep: 0.4, seams: false }]),
+    // Ghorrock Prison's room wall pieces, salt deposits and vats, along the Awakened Duke's room's walls
+    // (scaperune/maps/dukesRoom.ts): about 2,500 triangles each, eight of them in a phone's view
+    ...[47013, 48738, 48751, 49081].map((id): [number, { keep: number; seams: boolean }] => [
+        id,
+        { keep: 0.3, seams: false },
+    ]),
+    // The prison's statue, there and on Ghorrock
+    [49043, { keep: 0.5, seams: false }],
+]);
+
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
     ...AKKHA_FLOOR,
     ...WARDENS_FLOOR,

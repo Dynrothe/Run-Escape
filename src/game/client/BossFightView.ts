@@ -117,7 +117,7 @@ export const OVERHEAD_SCALE = 1.5;
 export const OVERHEAD_GAP = 0.3;
 
 // A loc's rotation as the map turns it (a quarter turn west each), as an actor's yaw
-function locYaw(rotation = 0): number {
+export function locYaw(rotation = 0): number {
     return (rotation & 3) * 512;
 }
 
@@ -184,6 +184,8 @@ export class BossFightView {
     // how strong the light was when it was last drawn and when (ms), to fade out after it lands
     private gaze?: {
         windup: BossWindup;
+        // How many pieces of cover its outlines were made from
+        cover: number;
         outlines: { x: number; y: number }[][];
         strength: number;
         at: number;
@@ -972,7 +974,19 @@ export class BossFightView {
                 lines.push({ x, y, dirX: (target.x - x) / length, dirY: (target.y - y) / length });
             }
         } else {
-            lines.push({ x: enemy.x, y: enemy.y, dirX: windup.dirX, dirY: windup.dirY });
+            // A fan of them (count, spread), each its own line, as Sim.launchProjectiles throws
+            // them: the Awakened Whisperer's volley
+            const count = attack.count ?? 1;
+            const aim = Math.atan2(windup.dirY, windup.dirX);
+            for (let i = 0; i < count; i++) {
+                const angle = aim + (i - (count - 1) / 2) * (attack.spread ?? 0);
+                lines.push({
+                    x: enemy.x,
+                    y: enemy.y,
+                    dirX: Math.cos(angle),
+                    dirY: Math.sin(angle),
+                });
+            }
         }
         const ctx = overlay.ctx;
         for (const { x, y, dirX, dirY } of lines) {
@@ -1005,13 +1019,16 @@ export class BossFightView {
         strength: number,
         now: number,
     ): void {
-        if (this.gaze?.windup !== windup) {
+        // Debris hides from it too (Sim.coverPillars), and can land or be smashed meanwhile
+        const cover = sim.coverPillars(enemy) ?? [];
+        if (this.gaze?.windup !== windup || this.gaze.cover !== cover.length) {
             const from = windup.at ?? { x: enemy.x, y: enemy.y };
             const arena = sim.bossArena;
             const far = Math.hypot(arena.maxX - arena.minX, arena.maxY - arena.minY);
             this.gaze = {
                 windup,
-                outlines: (sim.coverPillars(enemy) ?? []).map((pillar) =>
+                cover: cover.length,
+                outlines: cover.map((pillar) =>
                     clipToBox(shadowOutline(pillar, from.x, from.y, far), arena),
                 ),
                 strength,
@@ -1020,7 +1037,7 @@ export class BossFightView {
         }
         this.gaze.strength = strength;
         this.gaze.at = now;
-        this.paintGaze(overlay, sim, this.gaze.outlines, strength);
+        this.paintGaze(overlay, sim, this.gaze.outlines, strength, windup.attack.coverWash);
     }
 
     // After it lands, its light and shadows fade out rather than go at once
@@ -1034,7 +1051,13 @@ export class BossFightView {
             this.gaze = undefined;
             return;
         }
-        this.paintGaze(overlay, sim, gaze.outlines, gaze.strength * fade);
+        this.paintGaze(
+            overlay,
+            sim,
+            gaze.outlines,
+            gaze.strength * fade,
+            gaze.windup.attack.coverWash,
+        );
     }
 
     // The warm wash, and the shadows as one shape (so where two meet isn't darker), its edges
@@ -1046,9 +1069,10 @@ export class BossFightView {
         sim: Sim,
         outlines: { x: number; y: number }[][],
         strength: number,
+        wash?: { rgb: string; alpha: number },
     ): void {
         const ctx = overlay.ctx;
-        ctx.fillStyle = `rgba(${GAZE_WASH}, ${GAZE_WASH_ALPHA * strength})`;
+        ctx.fillStyle = `rgba(${wash?.rgb ?? GAZE_WASH}, ${(wash?.alpha ?? GAZE_WASH_ALPHA) * strength})`;
         ctx.fillRect(0, 0, overlay.width, overlay.height);
         const player = sim.player;
         const ground = this.ground(sim, player.x, player.y);
@@ -1104,6 +1128,10 @@ export class BossFightView {
         const boss = sim.shownBoss;
         const player = sim.player;
         if (reach === undefined || !boss || boss.dead || sim.intro) {
+            return;
+        }
+        // Out of reach in this world whatever the distance (EnemyDef.hurtIn): no ring
+        if (boss.def.hurtIn !== undefined && boss.def.hurtIn !== sim.layer) {
             return;
         }
         if (Math.hypot(boss.x - player.x, boss.y - player.y) <= reach) {
@@ -1324,6 +1352,19 @@ export class BossFightView {
         const vignette = boss?.def.boss?.look?.vignette;
         if (boss?.def.boss?.intro && !boss.dead && !sim.intro && vignette !== null) {
             this.vignette(ctx, width, height, vignette ?? "rgba(10, 0, 20, 0.5)");
+        }
+        // Low on sanity in the Shadow Realm (RealmRuleDef.sanity.low): the edges close in, darker
+        // the lower it is, and breathing
+        const realm = sim.realm;
+        if (realm?.layer === 1) {
+            const low = realm.def.sanity.low;
+            const sanity = realm.sanityOf(sim.focus);
+            if (sanity < low) {
+                const depth = 1 - sanity / low;
+                const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * 2.4);
+                const alpha = 0.3 + 0.4 * depth + 0.1 * pulse;
+                this.vignette(ctx, width, height, `rgba(20, 0, 40, ${alpha.toFixed(3)})`);
+            }
         }
         const curse = sim.curse;
         if (curse) {

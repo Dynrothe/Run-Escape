@@ -2244,7 +2244,7 @@ describe("the opening cinematic", () => {
         });
         client.retry();
         // and starts at its lair, if it has one (getRetryLair)
-        expect(startRun).toHaveBeenCalledWith("zachariah", false, true);
+        expect(startRun).toHaveBeenCalledWith("zachariah", false, undefined, undefined, true);
     });
 });
 
@@ -2360,11 +2360,23 @@ describe("the shot editor", () => {
         });
         // The Champion won: on to the Akh
         client.retry();
-        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", true, true);
+        expect(startRun).toHaveBeenLastCalledWith(
+            "beneath_cursed_sands",
+            true,
+            undefined,
+            undefined,
+            true,
+        );
         // The Champion lost: him again
         chosen.stage = 2;
         client.retry();
-        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", false, true);
+        expect(startRun).toHaveBeenLastCalledWith(
+            "beneath_cursed_sands",
+            false,
+            undefined,
+            undefined,
+            true,
+        );
     });
 });
 

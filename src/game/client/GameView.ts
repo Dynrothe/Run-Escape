@@ -20,6 +20,7 @@ import {
 } from "../content/powerups";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { VISITOR_BLINK, VISITOR_COLOR } from "../content/randomEvents";
+import { REMIX_FIRE_LOC, REMIX_ICE_LOC } from "../content/remixes";
 import { solveScabarasAddition, solveScabarasLights } from "../content/scabarasHelper";
 import {
     AKKHA,
@@ -63,9 +64,10 @@ import {
     Thrall,
     Visitor,
 } from "../core/entities";
+import type { RealmHole } from "../core/rules/RealmRule";
 import { t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
-import { BossFightView } from "./BossFightView";
+import { BossFightView, locYaw } from "./BossFightView";
 import { CinematicPlayer } from "./Cinematic";
 import { CinematicLight, CinematicView } from "./CinematicView";
 import { FloorView } from "./FloorView";
@@ -82,7 +84,9 @@ import {
     getPolymorphKey,
     getPoolKey,
     getPropKey,
+    getRealmLocKey,
     getShieldedModelKey,
+    hasBloodLooks,
 } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { PetFollower, PetFollowers } from "./PetFollowers";
@@ -90,6 +94,35 @@ import { PlayerPose, getPlayerPose } from "./PlayerPose";
 import { RootsView } from "./RootsView";
 
 const FROZEN_TINT = 0xa8d8ff;
+// How high an iron brazier's bowl is (ColdRuleDef.look), in tiles at its own size
+const BRAZIER_BOWL = 0.55;
+// A vent's puff, spread over its cloud (ColdRuleDef.vents): its middle and four round it
+// A remix's fires and ice are drawn this far round the camera's player (tiles): the play camera's
+// view, as the roots' (RootsView)
+const REMIX_VIEW = 24;
+const ICE_VIEW_X = 18;
+const ICE_VIEW_SOUTH = 12;
+const ICE_VIEW_NORTH = 16;
+// Each tile's ice drawn this much bigger, turned a quarter at a time by the tile, so neighbours
+// overlap into a sheet rather than a grid of shards
+const ICE_SCALE = 1.45;
+// The Soulreaper axe's souls: soul runes circling this far round the head, this high (tiles), and
+// how many make it glow
+const SOUL_OBJ = 566;
+const SOULS_RADIUS = 0.7;
+const SOULS_HEIGHT = 1.6;
+const SOULS_MAX = 5;
+// Drawn this big (a rune's model is about a tile across)
+const SOULS_SCALE = 0.5;
+const VENT_PUFFS = [
+    [0, 0],
+    [-0.9, -0.9],
+    [0.9, -0.9],
+    [-0.9, 0.9],
+    [0.9, 0.9],
+];
+// Cold, halfway to frozen (ColdRuleDef)
+const CHILLED_TINT = 0xd4ecff;
 // Tiles past a sheltered swing's shelter its storm's edge starts, closing in as it winds up
 // (BossAttackDef.outside)
 const STORM_EDGE = 9;
@@ -250,12 +283,48 @@ const TREE_FALL_TICKS = 20;
 const TREE_LIE_TICKS = 25;
 const TREE_FADE_TICKS = 20;
 const TREE_TICKS = TREE_FALL_TICKS + TREE_LIE_TICKS + TREE_FADE_TICKS;
+// A map of two worlds' Anima Portal, drawn this much bigger than it is (RealmRuleDef.look)
+const PORTAL_SCALE = 1.5;
 const ROCK_FALL_HEIGHT = 14;
 // The Wardens' charged shots, drawn this much bigger than their spot animations
 // The Wardens' marks that strike (WardensFight marks)
 const MARK_STRIKE_LOOK = { scale: 1.6 };
 const SHOT_LOOK = { scale: 2.5, flash: 0.3 };
 const ROCK_FADE_TICKS = TICKS_PER_SECOND;
+// Lil'viathan's bubble (PetDef.power bubble): the Leviathan's magic orb, this many tiles round
+// the player, its middle this many tiles off the ground
+const PET_BUBBLE_SPOTANIM = 2488;
+const PET_BUBBLE_RADIUS = 1;
+const PET_BUBBLE_HEIGHT = 0.5;
+// Glowing the pale blue of water, not the orb's own murk
+const PET_BUBBLE_TINT = 0xa8f0ff;
+// The Forgotten Four's blood-touched pets (hasBloodLooks)
+const BLOOD_LOOK_TINT = 0xff4040;
+// An orb's awakened final boss (Sim AWAKENED, design 8.6): its own model drawn darker with a
+// violet cast (its colours times the tint, a little of the tint over them, so its shading stays),
+// in a soft violet glow (ActorDrawOptions.glow: two see-through shells round it) breathing slowly;
+// enraged, a redder violet, the glow brighter, wider and quicker. Sim's own awakened tints stay
+// as they were (synced state); they're only told apart here.
+const AWAKENED_LOOK = {
+    body: 0x9484b8,
+    cast: -0.08,
+    glow: 0x9a5cff,
+    alpha: 0.5,
+    shells: [1.05, 1.11],
+    // Radians a tick (TICKS_PER_SECOND 50): about 2.5 s a breath
+    pulse: 0.05,
+};
+const AWAKENED_ENRAGED_LOOK = {
+    body: 0xa47498,
+    cast: -0.1,
+    glow: 0xc055ff,
+    alpha: 0.62,
+    shells: [1.06, 1.14],
+    pulse: 0.1,
+};
+const awakenedGlow = [0, 0];
+// A boss's debris (BossAttackDef.debris) sinks away over this many ticks
+const DEBRIS_SINK_TICKS = TICKS_PER_SECOND;
 // Co-op: how long a teammate stands over a downed player to revive them
 const REVIVE_TICKS = REVIVE_SECONDS * TICKS_PER_SECOND;
 // How long a fairy ring takes to open
@@ -506,6 +575,9 @@ export class GameView {
         for (const event of events) {
             this.fight.onEvent(event, now, sim.tick);
             switch (event.type) {
+                case "petLeap":
+                    this.pets.leap(event.owner, event.x, event.y, sim.tick);
+                    break;
                 case "damage": {
                     const enemy = sim.enemies.find((e) => e.uid === event.enemyUid);
                     const model =
@@ -527,7 +599,12 @@ export class GameView {
                     const hero = event.hero ?? sim.focus;
                     const player = sim.heroes[hero].player;
                     this.addHitsplat({
-                        kind: event.type === "playerHit" ? "damage" : "poison",
+                        kind:
+                            event.type === "playerHit"
+                                ? event.missed
+                                    ? "block"
+                                    : "damage"
+                                : "poison",
                         x: player.x,
                         y: player.y,
                         amount: event.amount,
@@ -804,6 +881,10 @@ export class GameView {
                 scale = pile.scale;
             } else if (pickup.kind === "food") {
                 scale = 1.1;
+            } else if (pickup.kind === "casket" && sim.digState(pickup) === "buried") {
+                // Buried (the Treasure hunter's dig site): its lid just showing
+                scale = 1.3;
+                height += 0.3;
             } else if (pickup.kind === "casket") {
                 scale = 1.3;
                 unlit = 1;
@@ -835,6 +916,10 @@ export class GameView {
 
         for (const rock of sim.rocks) {
             this.drawRock(actors, sim, rock);
+        }
+
+        for (const debris of sim.debris) {
+            this.drawDebris(actors, sim, debris);
         }
 
         this.drawEscapees(actors, sim, alpha);
@@ -899,6 +984,9 @@ export class GameView {
         this.floor.submitActors(actors, sim, alpha);
         const focus = (sim.heroes[this.viewHero] ?? sim.heroes[sim.focus]).player;
         this.roots.submitActors(actors, sim, focus.x, focus.y);
+        this.drawRealmHoles(actors, sim);
+        this.drawCold(actors, sim);
+        this.drawRemix(actors, sim, focus.x, focus.y);
         this.trees = this.trees.filter((tree) => sim.tick - tree.start < TREE_TICKS);
         for (const tree of this.trees) {
             this.drawTree(actors, sim, tree);
@@ -930,6 +1018,208 @@ export class GameView {
                     ? { scale: (fit * 128) / Math.max(1, model.radius), unlit: 1 }
                     : UNLIT,
             );
+        }
+    }
+
+    // What a remix puts on an older map (core/rules/remix.ts), round the camera: the Dark remix's
+    // fires, and the Frozen remix's ice over the map's own ground, a tile at a time (its open tiles);
+    // an invading Duke's pocket's ice the same way
+    private drawRemix(actors: ActorRenderer, sim: Sim, focusX: number, focusY: number): void {
+        const run = sim.remixRun;
+        const pocketIce = sim.pocket?.kind === "cold" && !sim.pocket.over;
+        if (!run && !pocketIce) {
+            return;
+        }
+        const clientTicks = Math.floor((sim.tick / TICKS_PER_SECOND) * 50);
+        const fire = this.assets.get(getRealmLocKey(REMIX_FIRE_LOC));
+        if (run && fire && sim.realm?.layer !== 1) {
+            const anim = fire.anims[0];
+            for (const spot of run.fires) {
+                if (
+                    Math.abs(spot.x - focusX) > REMIX_VIEW ||
+                    Math.abs(spot.y - focusY) > REMIX_VIEW
+                ) {
+                    continue;
+                }
+                const frame = anim ? anim.getFrame(clientTicks + Math.floor(spot.x * 7), true) : 0;
+                const ground = this.ground(sim, spot.x, spot.y);
+                actors.draw(fire, anim, frame, spot.x, ground, spot.y, 0, { unlit: 1 });
+            }
+        }
+        const cold = sim.cold;
+        const ice = this.assets.get(getRealmLocKey(REMIX_ICE_LOC));
+        if (!cold || !ice || !(pocketIce || run?.remixes.includes("frozen"))) {
+            return;
+        }
+        const grid = sim.grid;
+        const anim = ice.anims[0];
+        const x0 = Math.floor(focusX) - ICE_VIEW_X;
+        const y0 = Math.floor(focusY) - ICE_VIEW_SOUTH;
+        for (let y = y0; y <= Math.floor(focusY) + ICE_VIEW_NORTH; y++) {
+            for (let x = x0; x <= Math.floor(focusX) + ICE_VIEW_X; x++) {
+                if (cold.mask.at(x, y) === 0 || grid.isSolid(x, y)) {
+                    continue;
+                }
+                const frame = anim ? anim.getFrame(clientTicks + x * 13 + y * 7, true) : 0;
+                const cx = x + 0.5;
+                const cy = y + 0.5;
+                actors.draw(
+                    ice,
+                    anim,
+                    frame,
+                    cx,
+                    this.ground(sim, cx, cy),
+                    cy,
+                    ((x * 5 + y * 3) & 3) * 512,
+                    {
+                        scale: ICE_SCALE,
+                    },
+                );
+            }
+        }
+    }
+
+    // The cold's (ColdRuleDef.look): braziers burning (shrinking as they gutter) or out, the gas
+    // out of a vent (a wisp as it frosts over, then its cloud), a fire elite's embers, and the ice
+    // block round whoever's frozen solid
+    private drawCold(actors: ActorRenderer, sim: Sim): void {
+        const cold = sim.cold;
+        if (!cold) {
+            return;
+        }
+        const look = cold.def.look;
+        const tick = sim.tick;
+        const bowl = this.assets.get(getRealmLocKey(look.brazierLocId));
+        const fire = this.assets.get(getRealmLocKey(look.fireLocId));
+        const gutter = cold.def.braziers.gutter * TICKS_PER_SECOND;
+        const clientTicks = Math.floor((tick / TICKS_PER_SECOND) * 50);
+        // The realm has none (the Frozen and Shadow remixes together)
+        const braziers = sim.realm?.layer === 1 ? [] : cold.braziers;
+        for (const brazier of braziers) {
+            const { midX, midY } = brazier;
+            const ground = this.ground(sim, midX, midY);
+            if (bowl) {
+                actors.draw(bowl, bowl.anims[0], 0, midX, ground, midY, 0, {
+                    scale: look.brazierScale ?? 1,
+                });
+            }
+            if (!fire || !cold.isLit(brazier, tick)) {
+                continue;
+            }
+            const anim = fire.anims[0];
+            const frame = anim ? anim.getFrame(clientTicks, true) : 0;
+            // It dies down over its last seconds, and flares as it's lit
+            const left = brazier.litUntil - tick;
+            const flare = Math.max(0, 1 - (tick - brazier.litAt) / (TICKS_PER_SECOND * 0.6));
+            const dim = Math.min(1, 0.4 + (0.6 * left) / gutter) + flare * 0.3;
+            // Up in its bowl
+            const bowlTop = ground - BRAZIER_BOWL * (look.brazierScale ?? 1);
+            actors.draw(fire, anim, frame, midX, bowlTop, midY, 0, {
+                scale: (look.fireScale ?? 1) * dim,
+                unlit: 1,
+            });
+        }
+        // A vent frosts over (its gas, a wisp) and then puffs (the Duke's gas, filling the cloud)
+        const gas = this.assets.get(getRealmLocKey(look.gasLocId));
+        const puff = this.assets.get("spot:" + look.puffSpotAnim);
+        const cloud = cold.def.vents.size;
+        for (const vent of cold.vents) {
+            const state = cold.ventState(vent, tick);
+            const model = state === "puff" ? puff : state === "warn" ? gas : undefined;
+            if (!model) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const frame = anim ? anim.getFrame(clientTicks + vent.offset, true) : 0;
+            const ground = this.ground(sim, vent.x, vent.y);
+            if (state === "warn") {
+                actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, { tint: FROZEN_TINT });
+                continue;
+            }
+            if (look.puffOne !== undefined) {
+                actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, {
+                    alpha: 0.9,
+                    scale: look.puffOne,
+                });
+                continue;
+            }
+            for (const [dx, dy] of VENT_PUFFS) {
+                const x = vent.x + (dx * cloud) / 3;
+                const y = vent.y + (dy * cloud) / 3;
+                actors.draw(model, anim, frame, x, ground, y, 0, { alpha: 0.9 });
+            }
+        }
+        // Embers: small fires over the patch, each a little out of step
+        const embers = this.assets.get(getRealmLocKey(look.embersLocId));
+        if (embers) {
+            const anim = embers.anims[0];
+            const half = cold.def.embers.size / 2 - 0.5;
+            for (const ember of cold.embers) {
+                const fade = Math.min(1, (ember.until - tick) / TICKS_PER_SECOND);
+                for (const [dx, dy] of VENT_PUFFS) {
+                    const x = ember.x + dx * half;
+                    const y = ember.y + dy * half;
+                    const frame = anim
+                        ? anim.getFrame(clientTicks + Math.floor(x * 7 + y * 3), true)
+                        : 0;
+                    actors.draw(embers, anim, frame, x, this.ground(sim, x, y), y, 0, {
+                        scale: 0.8 * fade,
+                        unlit: 1,
+                    });
+                }
+            }
+        }
+        const block = this.assets.get(getRealmLocKey(look.iceBlockLocId));
+        if (block) {
+            for (const hero of sim.heroes) {
+                if (tick < hero.frozenSolid && sim.isUp(hero)) {
+                    const { x, y } = hero.player;
+                    actors.draw(block, block.anims[0], 0, x, this.ground(sim, x, y), y, 0, {
+                        scale: 0.8,
+                        alpha: 0.75,
+                    });
+                }
+            }
+        }
+    }
+
+    // A map of two worlds' puddle into the realm, and its portal back (RealmRuleDef.look), playing
+    // their own animations; the puddle blinks its last seconds
+    private drawRealmHoles(actors: ActorRenderer, sim: Sim): void {
+        const realm = sim.realm;
+        if (!realm) {
+            return;
+        }
+        const look = realm.def.look;
+        const tick = sim.tick;
+        const holes: [RealmHole | undefined, number][] = [
+            [realm.puddle, look.puddleLocId],
+            [realm.portal, look.portalLocId],
+        ];
+        for (const [hole, locId] of holes) {
+            if (!hole) {
+                continue;
+            }
+            const model = this.assets.get(getRealmLocKey(locId));
+            if (!model) {
+                continue;
+            }
+            const left = (hole.closeTick - tick) / TICKS_PER_SECOND;
+            const pulled = locId === look.puddleLocId && realm.pullTick >= 0;
+            if (!pulled && left < realm.def.puddles.blink && Math.floor(tick / 5) % 2 === 0) {
+                continue;
+            }
+            const anim = model.anims[0];
+            const clientTicks = Math.floor(((tick - hole.openTick) / TICKS_PER_SECOND) * 50);
+            const frame = anim ? anim.getFrame(clientTicks) : 0;
+            // Opening out of nothing over its first half second
+            const grow = Math.min(1, (tick - hole.openTick) / (TICKS_PER_SECOND * 0.5));
+            // The portal's a small flame of a thing: shown bigger, so it's seen in the crowd
+            const size = locId === look.portalLocId ? PORTAL_SCALE : pulled ? 1.2 : 1;
+            actors.draw(model, anim, frame, hole.x, this.ground(sim, hole.x, hole.y), hole.y, 0, {
+                scale: grow * size,
+                unlit: 1,
+            });
         }
     }
 
@@ -990,8 +1280,36 @@ export class GameView {
         });
     }
 
-    // Black cats are lost on the darker maps, so always with the silhouette and
-    // lit up a little
+    // A boss's debris where it fell (BossAttackDef.debris): settling as it lands, sinking into
+    // the floor over its last second
+    private drawDebris(actors: ActorRenderer, sim: Sim, debris: Sim["debris"][number]): void {
+        const model = this.assets.get("loc:" + debris.locId);
+        if (!model || sim.tick >= debris.until) {
+            return;
+        }
+        const left = debris.until - sim.tick;
+        const sink = left < DEBRIS_SINK_TICKS ? (1 - left / DEBRIS_SINK_TICKS) * 96 : 0;
+        // The wreck turned as it's set (ArenaFeatures.wreckage); fallen debris any way
+        const yaw =
+            debris.rotation !== undefined
+                ? locYaw(debris.rotation)
+                : (Math.round(debris.x * 7 + debris.y * 13) * 331) & 2047;
+        // The wreck plays its own (a fire's flames, drawn as bright as they are); fallen debris
+        // stands still
+        const anim = model.anims[0];
+        const clientTicks = Math.floor((sim.tick / TICKS_PER_SECOND) * 50);
+        actors.draw(
+            model,
+            anim,
+            debris.wreck && anim ? anim.getFrame(clientTicks, true) : 0,
+            debris.x,
+            this.ground(sim, debris.x, debris.y) + sink,
+            debris.y,
+            yaw,
+            debris.glows ? { scale: 1, unlit: 1 } : { scale: 1 },
+        );
+    }
+
     // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock
     private drawProp(actors: ActorRenderer, sim: Sim, prop: MapPropDef, alpha: number): void {
         // Its lair's boss up and fighting, or beaten: what's left without it (MapPropDef.awake), or
@@ -1085,6 +1403,8 @@ export class GameView {
         }
     }
 
+    // Black cats are lost on the darker maps, so always with the silhouette and
+    // lit up a little
     private drawRampage(actors: ActorRenderer, sim: Sim, rampage: Rampage, alpha: number): void {
         const model = this.assets.get("rampage:" + rampage.powerUpId);
         // The clock runs on when the run's over, but nothing moves
@@ -2087,6 +2407,9 @@ export class GameView {
         const anim = model.getAnim(pet.moving ? def.walkSeq : def.idleSeq);
         const x = lerp(pet.prevX, pet.x, alpha);
         const y = lerp(pet.prevY, pet.y, alpha);
+        // The Forgotten Four's blood-touched look, on this player's fighting pet: the cache has no
+        // recolour of theirs, so a red glow, beating slowly
+        const blood = def.power !== undefined && pet.hero === sim.focus && hasBloodLooks();
         actors.draw(
             model,
             anim,
@@ -2095,6 +2418,9 @@ export class GameView {
             this.ground(sim, x, y),
             y,
             pet.yaw,
+            blood
+                ? { tint: BLOOD_LOOK_TINT, flash: -0.25 - 0.1 * Math.sin(sim.tick * 0.15) }
+                : undefined,
         );
     }
 
@@ -2230,6 +2556,11 @@ export class GameView {
         if (player.flash > 0) {
             tint = PLAYER_HIT_TINT;
         }
+        // Cold (ColdRuleDef): paler and bluer the colder they are, from halfway
+        const cold = sim.cold?.coldOf(hero) ?? 0;
+        if (cold >= 50) {
+            tint = cold >= 80 ? FROZEN_TINT : CHILLED_TINT;
+        }
         if (player.frozen > 0) {
             tint = FROZEN_TINT;
         }
@@ -2266,6 +2597,70 @@ export class GameView {
         }
         if (sim.lighting) {
             this.drawLantern(actors, sim, hero, x, y, pose.yaw);
+        }
+        this.drawSouls(actors, sim, hero, x, y);
+        this.drawPetBubble(actors, sim, hero, x, y);
+    }
+
+    // Lil'viathan's bubble (PetDef.power bubble), while it's up: its orb round the player, faint and
+    // glowing pale blue, wobbling a little
+    private drawPetBubble(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        x: number,
+        y: number,
+    ): void {
+        if (!sim.heroes[hero]?.petBubble) {
+            return;
+        }
+        const model = this.assets.get("spot:" + PET_BUBBLE_SPOTANIM);
+        if (!model) {
+            return;
+        }
+        const anim = model.anims[0];
+        const wobble = 1 + 0.04 * Math.sin(sim.tick * 0.2);
+        actors.draw(
+            model,
+            anim,
+            anim.getFrame(sim.tick, true),
+            x,
+            this.ground(sim, x, y) - PET_BUBBLE_HEIGHT,
+            y,
+            0,
+            {
+                scale: ((PET_BUBBLE_RADIUS * 128) / Math.max(1, model.radius)) * wobble,
+                alpha: 0.45,
+                tint: PET_BUBBLE_TINT,
+                flash: -0.6,
+                unlit: 1,
+            },
+        );
+    }
+
+    // The Soulreaper axe's souls (WeaponDef.souls): one small soul rune a soul, circling the head,
+    // glowing at the full five
+    private drawSouls(actors: ActorRenderer, sim: Sim, hero: number, x: number, y: number): void {
+        const souls = sim.heroes[hero]?.souls ?? 0;
+        if (souls === 0) {
+            return;
+        }
+        const model = this.assets.get("obj:" + SOUL_OBJ);
+        if (!model) {
+            return;
+        }
+        const full = souls >= SOULS_MAX;
+        const head = this.ground(sim, x, y) - SOULS_HEIGHT;
+        for (let i = 0; i < souls; i++) {
+            const angle = sim.tick * 0.08 + (i / souls) * Math.PI * 2;
+            const sx = x + Math.cos(angle) * SOULS_RADIUS;
+            const sy = y + Math.sin(angle) * SOULS_RADIUS;
+            const bob = Math.sin(sim.tick * 0.15 + i) * 0.08;
+            actors.draw(model, model.anims[0], 0, sx, head + bob, sy, (sim.tick * 40) % 2048, {
+                scale: full ? SOULS_SCALE * 1.35 : SOULS_SCALE,
+                unlit: 1,
+                flash: full ? 0.35 + 0.2 * Math.sin(sim.tick * 0.3) : 0,
+            });
         }
     }
 
@@ -2522,6 +2917,22 @@ export class GameView {
             );
         }
         const options = enemyDrawOptions;
+        options.glow = undefined;
+        // An orb's awakened final boss: darker, in a breathing violet glow (AWAKENED_LOOK)
+        if (enemy.awakened && !enemy.dead && tint === enemy.tint) {
+            const look = enemy.bossState?.enraged ? AWAKENED_ENRAGED_LOOK : AWAKENED_LOOK;
+            const breath = Math.sin((tick + alpha) * look.pulse);
+            tint = look.body;
+            // A hit still flashes
+            if (flash <= 0) {
+                flash = look.cast;
+            }
+            awakenedGlow[0] = look.shells[0] + 0.01 * breath;
+            awakenedGlow[1] = look.shells[1] + 0.02 * breath;
+            options.glow = awakenedGlow;
+            options.glowColor = look.glow;
+            options.glowAlpha = look.alpha * (0.8 + 0.2 * breath);
+        }
         options.scale = scale;
         options.tint = tint;
         options.flash = flash;

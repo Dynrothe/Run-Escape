@@ -195,6 +195,10 @@ export class GameSounds {
                     // A boss attack has its own sound (played when it was used)
                     const sound = event.sound ?? getEnemy(event.enemyId).sounds.attack;
                     audio.play(sound, { volume: 0.35, minGap: 150 });
+                    // A miss (Trickster's) doesn't hurt
+                    if (event.missed) {
+                        break;
+                    }
                     const hit =
                         SOUNDS.playerHit[Math.floor(Math.random() * SOUNDS.playerHit.length)];
                     audio.play(hit, { volume: 0.55, minGap: 200 });
