@@ -41,6 +41,24 @@ const STARS = 80;
 const BLOWN_DUST = 2184;
 const STOMP_RING = 318;
 
+// His sounds, the Fractured Archive's (tfa_xarth_*, the OSRS Wiki's list of sound IDs): his ranged
+// and magic animations (14985, 14984) play the load and projectile, and the lean, cast and
+// projectile, in the cache. His death rumble lasts the three seconds of his gather. Zamorak's flames
+// sound as K'ril's do (kril.ts).
+const MAGIC_LEAN_SOUND = 12679;
+const MAGIC_CAST_SOUND = 12678;
+const MELEE_PRE_SOUND = 12682;
+const MELEE_SWIPE_SOUND = 12684;
+const RANGED_LOAD_SOUND = 12688;
+const RANGED_PROJ_SOUND = 12689;
+const RANGED_IMPACT_SOUND = 12687;
+const RUMBLE_SOUND = 12673;
+const EXPLOSION_SOUND = 12668;
+const FIRE_BURST_SOUND = 12669;
+const VOICE_SOUND = 12676;
+const CRUMBLE_SOUND = 12664;
+const ZAMORAK_FLAMES_SOUND = 1659;
+
 // The fire on the floor: the map's flames, which block nothing (FLAMES)
 const FLOOR_FIRE = FLAMES;
 // His dead: the Fractured Archive's corpse, npc 16687, getting up out of the floor as it comes
@@ -91,6 +109,8 @@ const SEARING_BOLT: BossAttackDef = {
     speed: 9,
     radius: 0.5,
     seq: CAST_SEQ,
+    windupSound: MAGIC_LEAN_SOUND,
+    sound: MAGIC_CAST_SOUND,
     castSpotAnim: HAND_FLAME,
     spotAnim: BOLT,
     impactSpotAnim: BOLT_BURST,
@@ -108,6 +128,8 @@ const FLAME_LASH: BossAttackDef = {
     weight: 6,
     seq: SWIPE_SEQ,
     strikeAt: SWIPE_AT,
+    windupSound: MELEE_PRE_SOUND,
+    sound: MELEE_SWIPE_SOUND,
     radius: LASH_REACH + RADIUS,
     cone: (Math.PI * 2) / 3,
     underRadius: RADIUS,
@@ -128,6 +150,8 @@ const CONFLAGRATION: BossAttackDef = {
     weight: 4,
     phases: [1],
     seq: GATHER_SEQ,
+    windupSound: RUMBLE_SOUND,
+    sound: EXPLOSION_SOUND,
     radius: 999,
     cover: true,
     crumbles: true,
@@ -149,6 +173,8 @@ const FLOOR_ABLAZE: BossAttackDef = {
     weight: 4,
     phases: [2],
     seq: RAISE_SEQ,
+    windupSound: MAGIC_LEAN_SOUND,
+    sound: FIRE_BURST_SOUND,
     radius: 1.2,
     count: 3,
     spread: 6,
@@ -180,6 +206,9 @@ const REANIMATE: BossAttackDef = {
     weight: 3,
     phases: [2],
     seq: RAISE_SEQ,
+    // His voice as he calls them, and the floor breaking as they get up
+    windupSound: VOICE_SOUND,
+    sound: CRUMBLE_SOUND,
     ignoreArmor: true,
     effect: BURN,
     message: "Xarth raises the dead! Don't let them reach him!",
@@ -208,6 +237,9 @@ const HELLFIRE_ARROWS: BossAttackDef = {
     spread: 0.35,
     radius: 0.45,
     seq: CAST_SEQ,
+    windupSound: RANGED_LOAD_SOUND,
+    sound: RANGED_PROJ_SOUND,
+    hitSound: RANGED_IMPACT_SOUND,
     spotAnim: ARROW,
     impactSpotAnim: ARROW_HIT,
 };
@@ -223,6 +255,7 @@ const ZAMORAKS_FLAMES: BossAttackDef = {
     weight: 3,
     empowered: true,
     seq: CAST_SEQ,
+    sound: ZAMORAK_FLAMES_SOUND,
     radius: 1.6,
     count: 3,
     spread: 2.5,

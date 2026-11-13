@@ -47,6 +47,11 @@ const CLAW_SOUND = 10247;
 const STOMP_SOUND = 10260;
 const RAISE_SOUND = 10266;
 const PORTAL_SOUND = 10271;
+// His shadow lanes and his Voidflare, by their names in the OSRS Wiki's list of sound IDs
+// (yama_shadow_wave_pre_attack_01, yama_aoe_attack_shadow_wave_01, yama_red_void_flare_spawn_01)
+const LANES_WINDUP_SOUND = 10228;
+const LANES_SOUND = 10268;
+const FLARE_SPAWN_SOUND = 10253;
 
 // The Gielinor stone pillar the floor's skins use (floorSkins.ts stonePillar)
 const STONE_PILLAR = 7016;
@@ -174,6 +179,8 @@ const SHADOW_LANES: BossAttackDef = {
     // Fire from his hands: SUMMON01, a hand to the ground, starts with him down under the floor
     // and rising out of it, so he was gone for a moment as the lanes came up
     seq: CAST_SEQ,
+    windupSound: LANES_WINDUP_SOUND,
+    sound: LANES_SOUND,
     floor: lanes("y"),
 };
 
@@ -216,6 +223,7 @@ const VOIDFLARE: BossAttackDef = {
     phases: [2, 3],
     seq: CAST_SEQ,
     strikeAt: CAST_AT,
+    sound: FLARE_SPAWN_SOUND,
     // Out of his hands, the way of whoever he's after
     summon: { enemyId: "voidflare", count: 1, distance: RADIUS + 1.5, toward: true },
 };

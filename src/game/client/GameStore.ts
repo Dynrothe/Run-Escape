@@ -175,8 +175,14 @@ export type HudNumbers = {
         portal: boolean;
         first: boolean;
     };
+    // What the map wants of the players now (MapDef.objectives), and how many of its lairs are
+    // beaten
+    objective?: { text: string; done: number; count: number };
     hp: number;
     maxHp: number;
+    // How full the hitpoints bar is, from the hitpoints as they are (regeneration's a little every
+    // tick), to a thousandth; hp/maxHp without it
+    hpShare?: number;
     // The hitpoints bar turns green, like the client's orb
     poisoned: boolean;
     // Progress to the next level, 0-1

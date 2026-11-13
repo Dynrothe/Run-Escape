@@ -26,7 +26,14 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, TICK_MS, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import {
+    GameClient,
+    TICK_MS,
+    getHpShare,
+    getObjectiveView,
+    getPhaseBarFraction,
+    loadoutStats,
+} from "./GameClient";
 import { GameStore } from "./GameStore";
 import { CoopRun, DECISION_RESEND_MS } from "./coop/CoopRun";
 import { UpMessage } from "./coop/protocol";
@@ -1581,6 +1588,45 @@ describe("a boss bar in phases", () => {
     });
 });
 
+describe("the hitpoints bar", () => {
+    test("fills with the hitpoints as they are, not a whole one at a time, within the bar", () => {
+        // A tick of 4 hitpoints a minute's regeneration shows within a few seconds
+        expect(getHpShare(37.6, 38)).toBe(0.989);
+        expect(getHpShare(19, 38)).toBe(0.5);
+        expect(getHpShare(-2, 38)).toBe(0);
+        expect(getHpShare(40, 38)).toBe(1);
+        expect(getHpShare(0, 0)).toBe(0);
+    });
+});
+
+describe("a map's objectives", () => {
+    // Just what they read: the map's objectives and its lairs' states
+    function objectiveOf(states: Record<string, string>) {
+        const map = getMap("battle_for_varrock");
+        const sim = { map, lairById: (id: string) => ({ state: states[id] ?? "asleep" }) };
+        return getObjectiveView(sim as unknown as Parameters<typeof getObjectiveView>[0]);
+    }
+
+    test("the Battle for Varrock's: his generals, then Yama, then nothing", () => {
+        expect(objectiveOf({})).toEqual({
+            text: "Find and slay Yama's two generals",
+            done: 0,
+            count: 2,
+        });
+        expect(objectiveOf({ kril: "beaten" })?.done).toBe(1);
+        const yama = objectiveOf({ xarth: "beaten", kril: "beaten" });
+        expect(yama).toEqual({ text: "Slay Yama in Varrock Palace", done: 0, count: 1 });
+        expect(objectiveOf({ xarth: "beaten", kril: "beaten", yama: "beaten" })).toBeUndefined();
+    });
+
+    test("a map without any has none", () => {
+        const sim = { map: getMap("lumbridge"), lairById: () => undefined };
+        expect(
+            getObjectiveView(sim as unknown as Parameters<typeof getObjectiveView>[0]),
+        ).toBeUndefined();
+    });
+});
+
 describe("raid modes", () => {
     test("turning hard mode off turns expert off with it, as expert is hard mode too", () => {
         const { client, store } = createClient(createSim(), false);
@@ -1780,6 +1826,34 @@ describe("the opening cinematic", () => {
         const sounds = YAMA_WAKES.cinematic.cues.flatMap((cue) => cue.sound ?? []);
         expect(play.mock.calls.map(([id]) => id)).toEqual(sounds);
         // and not again while it's still waking
+        update();
+        expect(state.cinematic).toBeUndefined();
+    });
+
+    test("a lair's unsealing plays as it's unsealed, on the sim's clock from then, and only once", () => {
+        const { client, sim, state, update } = lairClient(false);
+        const unsealing = getMap("battle_for_varrock").lairs!.find((lair) => lair.id === "yama")!
+            .requires!.unsealing!;
+        Object.assign(sim, {
+            player: { x: 4792, y: 10707.5 },
+            unsealing: { unsealTick: 400, def: { requires: { unsealing } } },
+        });
+        Object.assign(client, { cameraRig: { pitch: -400, yaw: 0, distance: 18 } });
+        sim.tick = 400 + TICKS_PER_SECOND;
+        expect(update()).toBeDefined();
+        const cinematic = state.cinematic!;
+        expect(cinematic.def).toBe(unsealing.cinematic);
+        expect(cinematic.seconds).toBeCloseTo(1 + 0.5 / TICKS_PER_SECOND, 5);
+        // What it flies over is kept loaded
+        const pinned = (
+            client as unknown as {
+                renderer: { mapManager: { setPinned: ReturnType<typeof vi.fn> } };
+            }
+        ).renderer.mapManager.setPinned;
+        expect(pinned.mock.calls[0][0].length).toBeGreaterThan(0);
+        sim.tick = 400 + Math.ceil(unsealing.cinematic.seconds + 1) * TICKS_PER_SECOND;
+        expect(update()).toBeUndefined();
+        expect(pinned).toHaveBeenLastCalledWith([]);
         update();
         expect(state.cinematic).toBeUndefined();
     });

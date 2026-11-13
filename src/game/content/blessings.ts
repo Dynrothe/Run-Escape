@@ -15,6 +15,8 @@ export const SARADOMIN_BLESSINGS: BlessingsDef = {
     name: "Blessing of Saradomin",
     spotAnim: 76,
     sound: 1659,
+    // Food twice as often as elsewhere: there are no items to heal with
+    food: 0.006,
     pool: [
         {
             id: "strength",
@@ -55,10 +57,10 @@ export const SARADOMIN_BLESSINGS: BlessingsDef = {
         {
             id: "elixir",
             name: "Holy elixir",
-            description: "+2 hitpoints a minute.",
+            description: "+4 hitpoints a minute.",
             iconObjId: 12833,
             max: 4,
-            stats: { regen: 2 },
+            stats: { regen: 4 },
         },
         {
             id: "will",

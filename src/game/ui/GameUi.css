@@ -1942,6 +1942,24 @@
     pointer-events: none;
 }
 
+/* A map's objective (MapDef.objectives): in, a few seconds up, and out (MAP_OBJECTIVE_MS) */
+.ui-map-objective {
+    animation: ui-map-objective-fade linear forwards;
+}
+
+@keyframes ui-map-objective-fade {
+    0% {
+        opacity: 0;
+    }
+    8%,
+    85% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
 .ui-raid-objective-soon {
     color: var(--ui-red);
 }

@@ -766,7 +766,8 @@
         font-size: 14px;
     }
 
-    .ui-boss-warning {
+    .ui-boss-warning,
+    .ui-map-objective {
         top: calc(var(--safe-top) + 42px);
         font-size: 16px;
     }

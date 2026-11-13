@@ -174,10 +174,44 @@ describe("one general beaten", () => {
         expect(empowered.maxHp).toBe(Math.round(second.hp * second.empowered!.hp));
         expect(empowered.damageScale).toBeCloseTo(second.empowered!.damage, 5);
         expect(empowered.bossState!.tempo).toBe(second.empowered!.tempo);
-        // Beaten too, Yama's palace opens
+        // Beaten too, Yama's palace opens, once its unsealing's played (LairUnsealingDef)
         kill(sim, empowered);
-        expect(sim.lairById("yama")!.locked).toBe(false);
+        run(sim, 0.1);
+        const palace = sim.lairById("yama")!;
+        expect(sim.unsealing).toBe(palace);
+        run(sim, palace.def.requires!.unsealing!.cinematic.seconds);
+        expect(palace.locked).toBe(false);
         expect(sim.runOver).toBe(false);
+    });
+
+    test.each([
+        ["Xarth", XARTH],
+        ["K'ril Tsutsaroth", KRIL],
+    ])("%s's death heals the hero whole, with Saradomin's bolt (LairDef.heals)", (_, def) => {
+        const sim = createSim(MAP.spawn);
+        const boss = startFight(sim, def);
+        sim.player.hp = 5;
+        kill(sim, boss);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
+        expect(sim.effects).toContainEqual(
+            expect.objectContaining({ spotAnim: def.heals!.spotAnim }),
+        );
+    });
+
+    test("the waves' clock waits through a general's fight, the HUD's too (Sim.heldTicks)", () => {
+        const sim = createSim(MAP.spawn);
+        run(sim, 10);
+        expect(sim.mapSeconds).toBeCloseTo(10, 1);
+        const boss = startFight(sim, XARTH);
+        run(sim, 30);
+        // Held from the step that woke it
+        expect(sim.mapSeconds).toBeCloseTo(10, 1);
+        expect(sim.clockSeconds).toBeCloseTo(sim.mapSeconds, 5);
+        expect(sim.seconds).toBeGreaterThan(40);
+        kill(sim, boss);
+        const held = sim.mapSeconds;
+        run(sim, 5);
+        expect(sim.mapSeconds).toBeCloseTo(held + 5, 1);
     });
 
     test("a general fought first has none of its empowered attacks", () => {

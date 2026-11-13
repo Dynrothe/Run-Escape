@@ -364,7 +364,7 @@ describe("the Saradomin sword's heavy blows", () => {
         return enemy;
     }
 
-    it("staggers what it hits, with his impact on it and the camera shaking", () => {
+    it("staggers what it hits, with the camera shaking and nothing shown on it", () => {
         const sim = createSim();
         const enemy = swingAt(sim);
         const ticks = Math.round(heavy.stagger * TICKS_PER_SECOND);
@@ -373,11 +373,7 @@ describe("the Saradomin sword's heavy blows", () => {
         expect(enemy.staggered).toBeLessThanOrEqual(ticks);
         const shakes = sim.takeEvents().filter((event) => event.type === "bossImpact");
         expect(shakes).toEqual([expect.objectContaining({ shake: heavy.shake })]);
-        expect(
-            sim.effects.some(
-                (effect) => effect.spotAnim === heavy.hit.spotAnim && effect.enemyUid === enemy.uid,
-            ),
-        ).toBe(true);
+        expect(sim.effects.some((effect) => effect.enemyUid === enemy.uid)).toBe(false);
     });
 
     it("holds a staggered enemy where the knockback leaves it, while the rest walk on", () => {

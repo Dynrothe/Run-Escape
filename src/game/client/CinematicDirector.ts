@@ -113,6 +113,14 @@ export function getDirectorChoices(map: MapDef): DirectorChoice[] {
                 fresh: false,
             });
         }
+        if (lair.requires?.unsealing) {
+            choices.push({
+                key: `${map.id}:unsealing:${lair.id}`,
+                label: `Unsealing: ${lair.id}`,
+                def: lair.requires.unsealing.cinematic,
+                fresh: false,
+            });
+        }
     }
     return choices;
 }

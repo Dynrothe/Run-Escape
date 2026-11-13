@@ -57,6 +57,9 @@ function createSim(spawn = OUTSIDE, party?: number): Sim {
     for (const id of LAIR.requires!.lairs) {
         sim.lairById(id)!.state = "beaten";
     }
+    // Its unsealing skipped, as a solo player can (LairUnsealingDef)
+    sim.step(0, 0);
+    sim.skipLairOpening();
     sim.step(0, 0);
     return sim;
 }
@@ -142,14 +145,57 @@ describe("his lair", () => {
         expect(sim.player.y).toBeLessThan(RECT.y0);
         sim.lairById(second)!.state = "beaten";
         events(sim);
-        sim.step(0, 0);
+        // Its unsealing (LairUnsealingDef), held to watch: the seal lifts partway, and it opens
+        // once it's over, with the notice
+        const unsealing = LAIR.requires!.unsealing!;
+        run(sim, unsealing.liftAt - 0.1);
+        expect(lair.locked).toBe(true);
+        expect(sim.grid.isDropped(lair.sealed[0], lair.sealed[1])).toBe(true);
+        run(sim, 0.2);
+        for (let k = 0; k < lair.sealed.length; k += 2) {
+            expect(sim.grid.isDropped(lair.sealed[k], lair.sealed[k + 1])).toBe(false);
+        }
+        expect(lair.locked).toBe(true);
+        expect(events(sim)).not.toContainEqual(expect.objectContaining({ type: "notice" }));
+        run(sim, unsealing.cinematic.seconds - unsealing.liftAt);
         expect(lair.locked).toBe(false);
         expect(events(sim)).toContainEqual(
             expect.objectContaining({ type: "notice", message: LAIR.requires!.message }),
         );
-        for (let k = 0; k < lair.sealed.length; k += 2) {
-            expect(sim.grid.isDropped(lair.sealed[k], lair.sealed[k + 1])).toBe(false);
+    });
+
+    test("its unsealing holds everyone where they stand, unhurt, with nothing about", () => {
+        const sim = new Sim({
+            grid: makeGrid(ROWS, BASE_X, BASE_Y),
+            mapId: MAP.id,
+            characterId: getMapCharacter(MAP)!,
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: OUTSIDE.x,
+            spawnY: OUTSIDE.y,
+        });
+        const demon = sim.spawnEnemy(getEnemy(sim.map.waves[0].enemies[0].id), "normal")!;
+        for (const id of LAIR.requires!.lairs) {
+            sim.lairById(id)!.state = "beaten";
         }
+        // It begins after the heroes have moved that tick
+        sim.step(1, 0);
+        const { x, y } = sim.player;
+        const hp = sim.player.hp;
+        run(sim, 1, 1, 0);
+        expect(sim.unsealing).toBe(yamaLair(sim));
+        expect(sim.introHolds).toBe(true);
+        expect(sim.player.x).toBeCloseTo(x, 5);
+        expect(sim.player.y).toBeCloseTo(y, 5);
+        expect(demon.leaving).toBeDefined();
+        expect(sim["damagePlayer"](10, demon.def.id, false)).toBe(0);
+        expect(sim.player.hp).toBe(hp);
+        // Skipped (a solo player), it's open at the next tick
+        sim.skipLairOpening();
+        sim.step(0, 0);
+        expect(sim.unsealing).toBeUndefined();
+        expect(yamaLair(sim).locked).toBe(false);
+        expect(yamaLair(sim).liftTick).toBeGreaterThanOrEqual(0);
     });
 
     test("he sleeps until someone steps onto the palace floor", () => {
@@ -234,6 +280,15 @@ describe("his lair", () => {
         const floor = sim.floor!;
         const i = floor.index(Math.floor(sim.player.x), Math.floor(sim.player.y));
         expect(floor.layout.mask[i]).toBe(1);
+    });
+
+    test("he rises as the map's final boss, so its boss music takes over (MapDef.bossMusic)", () => {
+        expect(MAP.bossMusic).toBe("Forged Through Fire");
+        const sim = createSim(LAIR.start);
+        run(sim, yama().boss!.intro!.seconds + 0.1);
+        expect(events(sim)).toContainEqual(
+            expect.objectContaining({ type: "bossSpawned", enemyId: "yama", finalBoss: true }),
+        );
     });
 
     test("once he's dead the fires go out, and he says his last", () => {

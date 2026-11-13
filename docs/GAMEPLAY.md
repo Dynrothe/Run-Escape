@@ -215,34 +215,37 @@ version and how to run it.
   system's tiles in an ashen skin, up its burnt front steps from its court, with Yama on his
   throne at its north end, and fires on it too. You start outside the south gate as
   Justiciar Zachariah, his own model, with his Saradomin sword (the 2h sword's sweep, and its
-  blows land heavy: the ground shakes, his blue impact flashes on what it hits, and it's knocked
-  back further than a 2h sword's and staggers, held still a moment, though not a boss) and the
+  blows land heavy: the ground shakes, and what it hits is knocked back further than a 2h sword's
+  and staggers, held still a moment, though not a boss) and the
   moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
   of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
   The gaze is his ultimate, back every 30 seconds; the others come back in 5 to 14. He stands
   still while he casts, from the press to the strike, and rising floor can't hurt him mid-lunge:
   a lunge is a way through Yama's slabs. The
   Owl's gaze lights everything round him blue-white, and walls, ruins and pillars cast shadows it
-  can't see into: anything in them is spared.
+  can't see into: anything in them is spared, and anything it judges is struck by Saradomin's
+  lightning.
   It opens with a cinematic: close on Yama, who says resistance is futile; the camera pulls back
   to Sir Prysin and four Varrock guards before his throne; Prysin defies him, Yama answers
   "Pathetic." and snaps his fingers, and they burn away in Leagues IV's Trailblazer Reloaded
   death; then the camera flies south over the city to Zachariah and the run begins. Any key,
   click, tap or controller button skips it, and it plays each time the map's travelled to.
-  Zachariah starts facing into the city. Its music is Sign Here, Yama's own fight track.
+  Zachariah starts facing into the city. Its music is Sign Here, from Yama's domain, and
+  Forged Through Fire takes over as Yama rises.
   Yama's demons fill its streets, the hordes of hell: imps at first as any map's first wave, then
   more and more, until from the eighth minute they're twice the crowd other maps' waves bring,
   coming twice as fast. Imps, reanimated demon spawn, hellhounds, lesser, revenant, greater and
   black demons, with an elite a minute from 100 seconds and rings of them now and then. There's no
   clock and no random events, and no items: no caskets, gear, power-ups, bag or weapons and
-  passives to pick, only bones, coins and food. Kill them for levels for as long as you like,
+  passives to pick, only bones, coins and food (twice as often as elsewhere, a kill in about 170).
+  Kill them for levels for as long as you like,
   though they get tougher by the minute. The first few levels come as anywhere, and then each
   takes more experience, up to six times as much from level 14: each level offers three blessings
   of Saradomin to choose from, and his strike comes down on you with the one you take (a reroll
   offers three more). Saradomin's strength
   (Might, which the Justiciar's buttons hit harder with too), a Saradomin brew (hitpoints, and a
   third of them back), Saradomin's ward (armour), Holy sandals (speed), a Holy elixir
-  (regeneration), Saradomin's will (buttons back sooner, and the sword faster), a Holy book
+  (4 hitpoints a minute), Saradomin's will (buttons back sooner, and the sword faster), a Holy book
   (experience), a Blessed blade (the Saradomin sword a level up), Saradomin bracers (the sword
   swings faster), a Saradomin platebody (its blows knock back further and stagger longer), a
   Saradomin staff (Saradomin Strike,
@@ -256,9 +259,11 @@ version and how to run it.
   show in a row under the sword, and on the pause menu. Yama's two
   generals wait in their ruins from the start, to be fought in either order: step into one's ruin
   and it wakes, the demons about run from it every way, every way out bursts into fire, and you
-  fight it there with nothing else coming. Neither is a fight for a fresh hero: on average the
+  fight it there with nothing else coming. The timer stops while you do, and the hordes with it:
+  they come back as they were when it woke. Neither is a fight for a fresh hero: on average the
   first wants about eight minutes of the hordes' levels, the second fifteen, and Yama no more.
-  Die there and the run's over, as it is anywhere. Beat one and the other grows stronger: 50% more
+  Die there and the run's over, as it is anywhere. Beat one and Saradomin heals you whole (and
+  everyone still up in co-op), with the hordes still to come; and the other grows stronger: 50% more
   hitpoints, 30% harder hits, attacks sooner, and an attack of the fallen one's.
   **Xarth** (13,300 hitpoints), in the middle of the Grand Exchange's pad, stands where he is and
   burns. The whole pad is his fight, its walls and booths gone, and it's ringed with fire once he
@@ -277,7 +282,12 @@ version and how to run it.
   hitpoints meanwhile, which leaves him stunned and open. At 70%, 45% and 20% his bodyguards come,
   Tstanon Karlak, Zakl'n Gritch and Balfrug Kreeyath, and while any stands he takes half. With
   Xarth dead first, his claws burn and his bloodrush leaves the ground burning.
-  Until both are dead the palace is ringed with fire, which goes out as the second falls. Step
+  For a few seconds as the run starts, and again after each general's fight, the top of the screen
+  says what's wanted: find and slay Yama's two generals (with how many are dead), then slay Yama in
+  Varrock Palace. Until both are dead the palace is ringed
+  with fire. As the second falls the camera flies to the palace's front steps and its fire goes
+  out, flame by flame from the middle in a puff of grey dust, everyone held and unhurt and the
+  demons about sent off while it plays (any key, click or tap skips it on your own). Step
   onto its floor then and Yama wakes: he speaks from his throne, is gone from it in a drift of embers
   and rises before it, every way off the floor bursts into fire, and you fight him there until he's
   dead (25,200 hitpoints, in three phases). The floor is his weapon. His stomp ripples rings of

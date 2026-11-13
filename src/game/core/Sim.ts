@@ -117,6 +117,7 @@ import {
     HeroAbilityDef,
     ImpactDef,
     ImpactSpotDef,
+    LairDef,
     LightLook,
     LightingDef,
     MapDef,
@@ -810,7 +811,6 @@ export type Hero = {
     flowField: FlowField;
     // And flying ones, on maps they're on or once there are any
     flightField?: FlowField;
-    regenAccumulator: number;
     // When a hit next gets the Amulet of blood fury's roll to heal
     bloodFuryRollTick: number;
     // While the sled lasts: how much faster they go, and until when
@@ -1058,6 +1058,11 @@ export class Sim {
     // starts the next
     round = 1;
     roundStartTick = 0;
+    // Ticks the waves' clock has been held while a lair's woken, fought or unsealed (mapSeconds,
+    // clockSeconds), so the hordes take up where they were once it's over, and how many of them
+    // came before the round started
+    heldTicks = 0;
+    private roundStartHeldTicks = 0;
 
     events: SimEvent[] = [];
 
@@ -1286,12 +1291,6 @@ export class Sim {
     }
     get flowField(): FlowField {
         return this.hero.flowField;
-    }
-    private get regenAccumulator(): number {
-        return this.hero.regenAccumulator;
-    }
-    private set regenAccumulator(amount: number) {
-        this.hero.regenAccumulator = amount;
     }
     private get bloodFuryRollTick(): number {
         return this.hero.bloodFuryRollTick;
@@ -1529,7 +1528,6 @@ export class Sim {
             appearanceVersion: 0,
             flowField,
             flightField,
-            regenAccumulator: 0,
             bloodFuryRollTick: 0,
             sledEndTick: 0,
             sledSpeed: 1,
@@ -1764,11 +1762,21 @@ export class Sim {
         return (this.endTick >= 0 ? this.endTick : this.tick) / TICKS_PER_SECOND;
     }
 
+    // The run's clock on the HUD: its time, less what's been held for its lairs (heldTicks)
+    get clockSeconds(): number {
+        return this.seconds - this.heldTicks / TICKS_PER_SECOND;
+    }
+
     // Where the run is in the map's waves and events: the whole run outside
-    // endless runs, and an endless run's later rounds start some way in
+    // endless runs, and an endless run's later rounds start some way in. It
+    // waits while a lair's on (heldTicks).
     get mapSeconds(): number {
         const start = this.round > 1 ? LATER_ROUND_START : 0;
-        return start + this.seconds - this.roundStartTick / TICKS_PER_SECOND;
+        return (
+            start +
+            this.clockSeconds -
+            (this.roundStartTick - this.roundStartHeldTicks) / TICKS_PER_SECOND
+        );
     }
 
     get xpForNextLevel(): number {
@@ -2671,6 +2679,11 @@ export class Sim {
             this.stepLair(lair);
         }
         this.stepIntro();
+        // The waves wait while a lair's on: nothing comes meanwhile (stepDirector), and nothing
+        // gets tougher, so the hordes are as they were once it's over
+        if (this.lairs.length > 0 && (this.lair !== undefined || this.unsealing !== undefined)) {
+            this.heldTicks++;
+        }
         this.stepDirector();
         this.stepChat();
         this.rebuildEnemyHash();
@@ -2793,13 +2806,8 @@ export class Sim {
             player.flash--;
         }
         if (this.stats.regen > 0 && player.hp < player.maxHp) {
-            // Regen is hitpoints a minute
-            this.regenAccumulator += this.stats.regen / (60 * TICKS_PER_SECOND);
-            if (this.regenAccumulator >= 1) {
-                const amount = Math.floor(this.regenAccumulator);
-                this.regenAccumulator -= amount;
-                this.heal(amount);
-            }
+            // Regen is hitpoints a minute, a little of it every tick
+            this.heal(this.stats.regen / (60 * TICKS_PER_SECOND));
         }
         this.stepPoison();
     }
@@ -2911,6 +2919,7 @@ export class Sim {
             this.intro ||
             this.aloneWith ||
             this.lair !== undefined ||
+            this.unsealing !== undefined ||
             (this.map.raid && this.raidStage !== "waves")
         ) {
             return;
@@ -4070,9 +4079,13 @@ export class Sim {
             return 0;
         }
         // Nothing hurts on a map to walk round (isPeaceful) but a lair's boss, and nothing while
-        // a lair's waking (its opening)
+        // a lair's waking (its opening) or being unsealed
         const lair = this.lair;
-        if (lair?.state === "waking" || (isPeaceful(this.map) && lair?.state !== "fighting")) {
+        if (
+            lair?.state === "waking" ||
+            this.unsealing ||
+            (isPeaceful(this.map) && lair?.state !== "fighting")
+        ) {
             return 0;
         }
         const armor = ignoreArmor
@@ -5210,6 +5223,9 @@ export class Sim {
                 sealed: [],
                 sealTick: -1,
                 liftTick: -1,
+                unsealTick: -1,
+                unsealLiftTick: -1,
+                unsealEndTick: -1,
             };
             this.lairs.push(lair);
             this.raisePillars(lair, -LAIR_LONG_AGO);
@@ -5239,24 +5255,12 @@ export class Sim {
     private stepLair(lair: Lair): void {
         const def = lair.def;
         if (lair.locked) {
-            const required = def.requires!.lairs;
-            if (required.every((id) => this.lairById(id)?.state === "beaten")) {
-                lair.locked = false;
-                this.liftSeal(lair);
-                this.emit({ type: "notice", message: def.requires!.message });
-                this.emit({
-                    type: "lair",
-                    woken: false,
-                    sound: def.seal.sound ?? -1,
-                    x: def.at.x,
-                    y: def.at.y,
-                });
-            }
+            this.stepLockedLair(lair);
             return;
         }
         if (lair.state === "asleep") {
-            // One at a time, and not over another boss's entrance
-            if (this.lair || this.intro) {
+            // One at a time, and not over another boss's entrance or a lair's unsealing
+            if (this.lair || this.intro || this.unsealing) {
                 return;
             }
             if (this.heroes.some((hero) => this.isUp(hero) && this.inLair(lair, hero.player))) {
@@ -5318,6 +5322,51 @@ export class Sim {
         }
     }
 
+    // Locked until what it requires is beaten, then unsealed: with its cinematic first, if it has
+    // one (LairUnsealingDef), the party held to watch its seal lift
+    private stepLockedLair(lair: Lair): void {
+        const requires = lair.def.requires!;
+        if (lair.unsealTick < 0) {
+            if (
+                !requires.lairs.every((id) => this.lairById(id)?.state === "beaten") ||
+                this.lair ||
+                this.intro
+            ) {
+                return;
+            }
+            const unsealing = requires.unsealing;
+            lair.unsealTick = this.tick;
+            lair.unsealLiftTick = this.tick + secondsToTicks(unsealing?.liftAt ?? 0);
+            lair.unsealEndTick = this.tick + secondsToTicks(unsealing?.cinematic.seconds ?? 0);
+            if (unsealing) {
+                for (const enemy of this.enemies) {
+                    if (!enemy.dead && !enemy.leaving) {
+                        this.sendOff(enemy, lair.unsealLiftTick, lair.def.at);
+                    }
+                }
+            }
+        }
+        if (lair.liftTick < 0 && this.tick >= lair.unsealLiftTick) {
+            this.liftSeal(lair);
+            this.emit({
+                type: "lair",
+                woken: false,
+                sound: lair.def.seal.sound ?? -1,
+                x: lair.def.at.x,
+                y: lair.def.at.y,
+            });
+        }
+        if (this.tick >= lair.unsealEndTick) {
+            lair.locked = false;
+            this.emit({ type: "notice", message: requires.message });
+        }
+    }
+
+    // The lair whose seal's lifting as its cinematic plays (LairUnsealingDef), if any
+    get unsealing(): Lair | undefined {
+        return this.lairs.find((lair) => lair.unsealTick >= 0 && this.tick < lair.unsealEndTick);
+    }
+
     // The pillars a boss's cover attacks are hidden from by (BossAttackDef.cover): its lair's
     // standing ones, if it has any, or the map's
     coverPillars(enemy: Enemy): { x: number; y: number; size: number }[] | undefined {
@@ -5377,6 +5426,9 @@ export class Sim {
         // Its fire on the floor goes out with it: what spreads would burn on for good
         this.pools = this.pools.filter((pool) => pool.enemyId !== boss.def.id);
         this.emit({ type: "notice", message: def.victory });
+        if (def.heals) {
+            this.healOnVictory(def.heals);
+        }
         if (def.shout) {
             this.emit({ type: "bossShout", enemyUid: boss.uid, text: def.shout });
         }
@@ -5399,6 +5451,23 @@ export class Sim {
                 this.emit({ type: "notice", message: empowered.message });
             }
         }
+    }
+
+    // Its boss beaten, everyone still up gets some of their hitpoints back (LairDef.heals)
+    private healOnVictory(heals: NonNullable<LairDef["heals"]>): void {
+        const current = this.hero;
+        for (const hero of this.heroes) {
+            if (!this.isUp(hero)) {
+                continue;
+            }
+            this.use(hero);
+            const player = this.player;
+            this.heal(Math.round(player.maxHp * heals.share));
+            if (heals.spotAnim !== undefined) {
+                this.addEffect(heals.spotAnim, player.x, player.y, 0, 40);
+            }
+        }
+        this.use(current);
     }
 
     // Whether a spot's where a lair's fought: its area (LairDef.area), or the map's floor
@@ -5438,11 +5507,17 @@ export class Sim {
         };
     }
 
-    // A solo player's skipped its opening (LairDef.opening): on to its intro at the next tick
+    // A solo player's skipped its opening (LairDef.opening): on to its intro at the next tick. Or
+    // a lair's unsealing.
     skipLairOpening(): void {
         const lair = this.lair;
         if (lair?.state === "waking") {
             lair.introTick = Math.min(lair.introTick, this.tick + 1);
+        }
+        const unsealing = this.unsealing;
+        if (unsealing) {
+            unsealing.unsealLiftTick = Math.min(unsealing.unsealLiftTick, this.tick + 1);
+            unsealing.unsealEndTick = Math.min(unsealing.unsealEndTick, this.tick + 1);
         }
     }
 
@@ -5698,10 +5773,15 @@ export class Sim {
     // Where players held to watch an entrance look (BossIntroDef.holds, faces): at the boss once
     // it's up, and where it'll rise until then
     get introFacing(): { x: number; y: number } | undefined {
-        // Turned to where it'll rise as its lair wakes (LairDef.opening)
+        // Turned to where it'll rise as its lair wakes (LairDef.opening), or to the lair being
+        // unsealed (LairUnsealingDef)
         const lair = this.lair;
         if (lair?.state === "waking") {
             return lair.def.at;
+        }
+        const unsealing = this.unsealing;
+        if (unsealing) {
+            return unsealing.def.at;
         }
         if (!this.introHolds || !this.intro?.def.boss?.intro?.faces) {
             return undefined;
@@ -5733,7 +5813,11 @@ export class Sim {
     // Whether an entrance has the players standing still to watch it
     // (BossIntroDef.holds): the movement rules take it like a hold
     get introHolds(): boolean {
-        return this.intro?.def.boss?.intro?.holds === true || this.lair?.state === "waking";
+        return (
+            this.intro?.def.boss?.intro?.holds === true ||
+            this.lair?.state === "waking" ||
+            this.unsealing !== undefined
+        );
     }
 
     // Up it comes beside the player, on the arena's side of them, so it's on the
@@ -9441,8 +9525,10 @@ export class Sim {
                     this.squareImpact(attack, x, y, half);
                     continue;
                 }
-                // Not one that's only the floor's (no reach of its own), nor a meteor's
-                if (!line && radius > 0 && !attack.meteor) {
+                // Not one that's only the floor's (no reach of its own), nor a meteor's, nor a
+                // gaze's (BossAttackDef.cover): it's everywhere it sees, and its ring would reach
+                // past the camera, a red box over half the screen
+                if (!line && radius > 0 && !attack.meteor && !attack.cover) {
                     this.emit({ type: "bossSwing", x, y, radius });
                 }
                 if (attack.kind === "blast" && attack.impactSpotAnim !== undefined) {
@@ -10900,7 +10986,7 @@ export class Sim {
         if (this.map.blessings) {
             if (this.rng.chance(0.03 * luck)) {
                 this.dropPickup("coins", enemy.x + 0.3, enemy.y + 0.2, 1 + this.rng.int(5));
-            } else if (this.rng.chance(FOOD_DROP_CHANCE * luck)) {
+            } else if (this.rng.chance((this.map.blessings.food ?? FOOD_DROP_CHANCE) * luck)) {
                 const heal = Math.round(FOOD_HEAL * this.healScale);
                 this.dropPickup("food", enemy.x - 0.3, enemy.y, heal);
             }
@@ -10950,6 +11036,7 @@ export class Sim {
     private nextRound(): void {
         this.round++;
         this.roundStartTick = this.tick;
+        this.roundStartHeldTicks = this.heldTicks;
         const events = this.map.events;
         const first = events.findIndex((e) => e.at >= LATER_ROUND_START);
         this.eventIndex = first === -1 ? events.length : first;
@@ -11471,7 +11558,8 @@ export class Sim {
             dealt += hitDealt;
             this.stealLife(def, hitDealt);
             if (heavy) {
-                if (landed++ < HEAVY_HIT_SPOTS) {
+                // Counted with or without a hit to show: the shake goes by it
+                if (landed++ < HEAVY_HIT_SPOTS && heavy.hit) {
                     this.addImpactSpot(heavy.hit, enemy.x, enemy.y, enemy.uid);
                 }
                 if (!enemy.dead && !enemy.boss && !enemy.def.stationary) {

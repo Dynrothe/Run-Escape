@@ -102,11 +102,18 @@ function sceneryTick(): number {
     return (performance.now() / 1000) * TICKS_PER_SECOND;
 }
 // A lair's seal (MapDef.lairs): each flame comes up over this many ticks, this many ticks a tile
-// further from the boss than the last (so the fire runs along the walls), and all die down over
-// SEAL_LIFT_TICKS once it's beaten
+// further from the boss than the last (so the fire runs along the walls), and each dies down over
+// SEAL_LIFT_TICKS once it's beaten, from the middle out again, more slowly (more slowly still in a
+// lair's unsealing, LairUnsealingDef, to be watched), up to SEAL_LIFT_REACH tiles out. Its smoke
+// (LairDef.seal.smoke) puffs up once it's SEAL_SMOKE_AT of the way down, a little bigger than it.
 const SEAL_RISE_TICKS = 12;
 const SEAL_RUN_TICKS = 1.2;
 const SEAL_LIFT_TICKS = 60;
+const SEAL_LIFT_RUN_TICKS = 3;
+const SEAL_UNSEAL_RUN_TICKS = 6;
+const SEAL_LIFT_REACH = 40;
+const SEAL_SMOKE_AT = 0.5;
+const SEAL_SMOKE_SCALE = 1.5;
 
 // The sealed tiles a flame's drawn on (LairDef.seal.spacing): the first, then each one no nearer
 // than spacing to any drawn before it, as indexes into sealed's pairs. Every one without spacing.
@@ -856,16 +863,25 @@ export class GameView {
     }
 
     // A lair's seal (MapDef.lairs): fire on every way out of it, running out from the boss as
-    // it's sealed, each flame a little out of step with the next, and dying down as it's lifted
+    // it's sealed, each flame a little out of step with the next, and dying down as it's lifted,
+    // in a puff of its smoke (seal.smoke). Unsealed with a cinematic (LairUnsealingDef), it dies
+    // down from where that says, more slowly, to be watched.
     private drawLairSeal(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
         const def = lair.def;
         const model = this.assets.get(getLairSealKey(def.seal.locId));
         if (!model || lair.sealed.length === 0) {
             return;
         }
+        const smoke =
+            def.seal.smoke === undefined ? undefined : this.assets.get("spot:" + def.seal.smoke);
+        const smokeAnim = smoke?.anims[0];
+        const smokeTicks = smokeAnim?.totalTicks ?? 0;
         const now = sim.tick + alpha;
-        const lifted = lair.liftTick >= 0 ? (now - lair.liftTick) / SEAL_LIFT_TICKS : 0;
-        if (lifted >= 1) {
+        const since = lair.liftTick >= 0 ? now - lair.liftTick : -1;
+        const unsealing = lair.unsealTick >= 0 ? def.requires?.unsealing : undefined;
+        const from = unsealing?.from ?? def.at;
+        const run = unsealing ? SEAL_UNSEAL_RUN_TICKS : SEAL_LIFT_RUN_TICKS;
+        if (since > SEAL_LIFT_TICKS + run * SEAL_LIFT_REACH + smokeTicks) {
             return;
         }
         const anim = model.anims[0];
@@ -876,6 +892,22 @@ export class GameView {
             const y = sealed[i * 2 + 1] + 0.5;
             const away = Math.hypot(x - def.at.x, y - def.at.y);
             const up = Math.min(1, (now - lair.sealTick - away * SEAL_RUN_TICKS) / SEAL_RISE_TICKS);
+            const out = since < 0 ? -1 : since - Math.hypot(x - from.x, y - from.y) * run;
+            const lifted = Math.max(0, out / SEAL_LIFT_TICKS);
+            // Its smoke as it goes, from halfway down, played out once
+            const puff = out - SEAL_LIFT_TICKS * SEAL_SMOKE_AT;
+            if (smoke && smokeAnim && puff >= 0 && puff < smokeTicks) {
+                actors.draw(
+                    smoke,
+                    smokeAnim,
+                    smokeAnim.getFrame(puff),
+                    x,
+                    this.ground(sim, x, y),
+                    y,
+                    (i * FLAME_TURN) & 2047,
+                    { scale: def.seal.scale * SEAL_SMOKE_SCALE },
+                );
+            }
             const size = Math.min(up, 1 - lifted);
             if (size <= 0) {
                 continue;
