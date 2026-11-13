@@ -5,6 +5,7 @@ import { DUKE_ENEMIES } from "./duke";
 import { FUN_ENEMIES } from "./fun/enemies";
 import { GHORROCK_ENEMIES } from "./ghorrock";
 import { getInvaders } from "./invaders";
+import { KRIL_ENEMIES } from "./kril";
 import { LASSAR_ENEMIES } from "./lassar";
 import { LEVIATHAN_ENEMIES } from "./leviathan";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
@@ -16,7 +17,10 @@ import { getTheatreBosses } from "./theatre";
 import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
 import { VARDORVIS_ENEMIES } from "./vardorvis";
+import { VARROCK_ENEMIES } from "./varrockHordes";
 import { WHISPERER_ENEMIES } from "./whisperer";
+import { XARTH_ENEMIES } from "./xarth";
+import { YAMA_ENEMIES } from "./yama";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -8409,6 +8413,12 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    // Yama, in burnt Varrock's palace (yama.ts), his generals (xarth.ts, kril.ts) and the city's
+    // hordes (varrockHordes.ts)
+    ...YAMA_ENEMIES,
+    ...XARTH_ENEMIES,
+    ...KRIL_ENEMIES,
+    ...VARROCK_ENEMIES,
     ...STRANGLEWOOD_ENEMIES,
     ...LASSAR_ENEMIES,
     ...GHORROCK_ENEMIES,

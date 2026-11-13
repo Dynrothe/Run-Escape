@@ -1,6 +1,6 @@
 import { Rarity } from "../content/rarity";
 import type { RemixId } from "../content/remixes";
-import { StatText } from "../content/stats";
+import { StatPair, StatText } from "../content/stats";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
@@ -13,9 +13,11 @@ import {
     UnreadableSave,
     getStartingCharacter,
 } from "../core/save";
+import type { CinematicDirector } from "./CinematicDirector";
 import type { CloudView } from "./CloudSave";
 import { DisplaySettings, getDefaultDisplaySettings } from "./DisplaySettings";
 import { AudioSettings } from "./GameAudio";
+import type { TrailerProgress } from "./TrailerRecorder";
 import { CoopView, OFFLINE } from "./coop/CoopLobby";
 
 export type Screen =
@@ -24,6 +26,8 @@ export type Screen =
     | "characters"
     | "shop"
     | "armoury"
+    // The Wardrobe: the body, the outfit, and its store of outfit pieces
+    | "wardrobe"
     | "quests"
     | "collectionLog"
     // Co-op: finding or making a room, and the room before a run
@@ -53,6 +57,9 @@ export type SlotView = {
     evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
     // The item's own rarity, for the slot's border
     rarityColor: string;
+    // A blessing (MapDef.blessings) rather than a weapon or passive: level is how many times it's
+    // been had, of maxLevel (Infinity for the fallback's)
+    blessing?: boolean;
 };
 
 export type ItemView = {
@@ -104,10 +111,9 @@ export type ChestView = {
     // Gear the Armoury has upgraded: the name of the piece it was found as
     upgradedFrom?: string;
     isGear: boolean;
-    // Gear: what it replaces (alched when the new piece goes on) and what
-    // changes
-    replaces?: { item: ItemView; alchCoins: number };
-    changes: (StatText & { good: boolean })[];
+    // Gear: what it replaces (alched when the new piece goes on), and each
+    // stat either piece has, worn against found
+    replaces?: { item: ItemView; alchCoins: number; stats: StatPair[] };
     // Utility: whether it fits in the inventory, and how many are carried
     canStash: boolean;
     carried: number;
@@ -155,6 +161,9 @@ export type HudView = {
     maxPassives: number;
     weapons: SlotView[];
     passives: SlotView[];
+    // On a map with blessings (MapDef.blessings), what level ups have granted, in place of
+    // passives and gear
+    blessings?: SlotView[];
     // The player's stats from passives, gear, potions and their adventurer,
     // the ones that aren't zero: "+18% damage", "+2 armour"
     stats: StatText[];
@@ -188,6 +197,9 @@ export type HudNumbers = {
         portal: boolean;
         first: boolean;
     };
+    // What the map wants of the players now (MapDef.objectives), and how many of its lairs are
+    // beaten
+    objective?: { text: string; done: number; count: number };
     // The Tombs' Apmeken room: the wave it's on, of how many, and whether it's still waiting for
     // the party to walk through the barrier, or beaten
     tombsWave?: { wave: number; of: number; waiting: boolean; done: boolean; label?: string };
@@ -222,6 +234,9 @@ export type HudNumbers = {
     // Cold, on a map that's cold (ColdRuleDef.cold), and its most: a bar under hitpoints
     cold?: number;
     coldMax?: number;
+    // How full the hitpoints bar is, from the hitpoints as they are (regeneration's a little every
+    // tick), to a thousandth; hp/maxHp without it
+    hpShare?: number;
     // The hitpoints bar turns green, like the client's orb
     poisoned: boolean;
     // Progress to the next level, 0-1
@@ -245,6 +260,8 @@ export type HudNumbers = {
     // A fight's own button (Sim.ability): how charged it is (0 to 1, by twentieths),
     // whether the boss is in its reach, and whether its guard's down, when it's worth most
     ability?: AbilityView;
+    // A hero's own buttons (CharacterDef.abilities), in their order, in place of a fight's one
+    abilities?: AbilityView[];
     // The quests this run can get on with: this map's, then the ones done all
     // over, leaving out the ones done before it
     quests: QuestTrackView[];
@@ -325,6 +342,9 @@ export type AbilityView = {
     charge: number;
     inReach: boolean;
     opened: boolean;
+    // A hero's own button (CharacterDef.abilities): its key, and what it does
+    keyLabel?: string;
+    description?: string;
     // It coaches (FightAbilityDef.guide): the hint, and the guard-down tag and pulse
     guide: boolean;
     // The run has items (not a one-fight map): on a touch screen it goes above their corner
@@ -374,6 +394,8 @@ export type ChoiceView = {
     isHilt: boolean;
     // A hilt pick that's the run's Ancient spell, not a godsword's hilt
     isSpell: boolean;
+    // One of the map's blessings (MapDef.blessings), offered in place of items
+    isBlessing: boolean;
     // A hilt pick that's the run's keris partisan: plain, or the jewel it takes
     isKeris: boolean;
     // The rolled rarity of this offer, if it has one
@@ -481,6 +503,10 @@ export type UiSnapshot = {
     revive?: ReviveView;
     // The map's opening cinematic is playing (MapDef.cinematic): no HUD, and a tap skips it
     cinematic?: boolean;
+    // Dev only: the shot editor's open on it (GameClient.direct), with its panel for the HUD
+    director?: CinematicDirector;
+    // Dev only: the trailer being recorded from it, how far it's got
+    trailer?: TrailerProgress;
     choices: ChoiceView[];
     // Level ups still to choose after the one showing
     levelUpsLeft: number;

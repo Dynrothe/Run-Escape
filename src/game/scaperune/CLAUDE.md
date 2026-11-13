@@ -785,7 +785,10 @@ dev maps in `maps/wardensFloor.ts` show what it can do: the Wardens' floor itsel
 
 **The room.** The floor's box is a bridge (`TILE_BRIDGE` on level 1) of the hidden overlay over a dug-out pit, so
 nothing of the map is drawn there and a fallen tile opens onto the dark. `maps/wardensFloor.ts` does this for the
-Wardens' room (`digPit`); `floorRoom` puts any `FloorDef` in that room on squares of its own.
+Wardens' room (`digPit`); `floorRoom` puts any `FloorDef` in that room on squares of its own. A floor laid a
+whisker over a map's own ground instead, with no pit (the Battle for Varrock's palace), sets `onGround`: no light
+under it, no cut edges, and its tiles drawn as their tops unless they're coming up, which is what keeps a moving
+floor of paving in a phone's budget. Nothing on it should fall.
 
 **A minimal floor** is the Wardens' numbers with a script of your own. Everything else has a default: the whole
 box is floor, of the Wardens' slab, all normal tiles:
@@ -928,6 +931,10 @@ tiles: [{ where: { kind: "ellipse", rx: 6, ry: 6 }, slab: [2, 2] }],
 **The patterns on any shape.**
 
 - `side`, `sweep` and `ripple` go by the floor's own extent and middle.
+- `lanes` raises lanes `width` tiles wide, every `spacing` tiles, one through the player (or the middle), down the
+  floor, across it or both. Between two is safe, and where they cross, the lane down wins.
+- `plus` raises the tile under the player (or the middle) and `arm` tiles out each way along its row and
+  column, a step at a time; the floor's edge cuts an arm short.
 - A sweep's gap is always on floor: the nearest place it fits in that row. A row with no room for it stays down.
 - `dropRows` falls from the floor's own back row, and `keepRows` counts from there.
 - `holes` are only ever inside the edge.
@@ -1329,6 +1336,89 @@ planks, `174` flagstones, `196` ice, `84` sandstone. Overlay `42` isn't drawn at
   are water.
 
 On land they stand on plots as buildings do (`fitsBuilding`, `pinPlot`), since a big loc on a slope shows its underside.
+
+### Ruins: a real place burnt
+
+`ruins.ts` (`ruinGrid`) burns a cut of the real world (`cutPrefab`) to ruins before it's stamped, so any town can be put
+through it; `maps/battleForVarrock.ts` is Varrock's, and its `RULES` are the settings to start from. What it does, tile
+by tile and loc by loc:
+
+- **Walls** (types 0 to 3 and 9) are charred, and by a noise over the walls (`wallScale` tiles a feature, so runs
+  fall together) some fall (`fallen`) or are broken down (`broken`): the cache's own broken walls in their place
+  (`crumbled`, by loc type and turned as the wall was), broken off near the top (`high`) or down to a stub (`low`)
+  as the noise nears `fallen`. Varrock's are the Wilderness's ruins' (14622 to 14627, 14632: the ruin west of the Dark
+  Warriors' Fortress), dark stone that sits with Varrock's grey burnt. The straight one broken off near its top (14623)
+  is whole at one end and steps down to the other, so it comes with its mirror (14625, `mirrors`), and each run of them
+  along a wall is turned as Jagex lays that ruin (`pairBroken`): the end ones whole against the wall standing beside
+  the run, the rest in pairs, whole end to whole end, and one left over a stub between pairs (the ruin's own `h s H`).
+  One with neither is a stub. So no whole end stands in the open or against a low end: all one way, they read as a
+  sawtooth. A wall resting on another (`tops`) that comes down with it doesn't count as standing. A broken corner needs
+  nothing: a loc can have a model of its own for a corner (`types`), and 14623's (14788) is its straight one mirrored,
+  so both its whole ends meet at the corner. `ruins.test.ts` holds them to all that. A fallen straight wall can leave
+  its stones on the ground (`fallenStones`, floor decorations turned as it was, blocking nothing). A tenth of the
+  fallen straight ones can be a wall of fire instead (`burning`, loc 4765). A building keeps its footprint, which is
+  what makes the place read as itself. What rested on or hung from the walls (`tops`: a gateway's deck, a lintel, a shelf) goes where a
+  wall beside it fell or broke, as it would float.
+- **Nothing floats** (`unfloat`): a shown upper tile (a walkway's deck) stays only over a wall standing whole on the
+  level under it, a city wall's solid middle (level 0 blocked) or another shown tile, and anything upstairs only on a
+  tile that's still shown; a bridge's deck holds itself up. A deck over a gate's passage goes with that rule, though
+  the walls either side stand.
+- **City walls** (level 0 under a `TILE_SHOWN` walkway) stand, charred, but for `breaches` (the same noise): the band's
+  tiles are down and open there, both faces, walkway and rails gone. Its ends are broken the way Falador's west wall
+  is at its Crumbling wall shortcut (`breachEnds`, `BROKEN_CITY_WALL` and `BREACH_BRICKS`: its jagged ends and fallen
+  bricks, its pale stone burnt with `charLight` to the dark of a burnt grey wall). A jagged end is a slab a quarter of a
+  tile thick, whole at one end and stepping down to the other, and comes in a mirrored pair (24220 and 24221, the same
+  model, each with its own bricks, 24219 and 24218), as Falador places them. Along each face that came down, each end
+  of the run is jagged, whole against the straight wall still standing beside it, or where none does (a corner came
+  down with it) two back to back, whole ends together, so a slab's flat end never stands in the open; its bricks (which
+  block nothing) lie in front. A run that wouldn't leave 2 tiles through between them loses its pairs first, then the
+  rest, to bricks alone. `ruins.test.ts` holds them to that. `wallTopsKept` is the
+  share of the walkway and its rails still up, and a walkway's paving is `walkways` (pale paving up there read as a
+  white path). A city wall is the heaviest thing in a town: Varrock's breaches and fallen rails are what took its heaviest
+  phone view from 74k to under 60k. Anything with a shown level 1 counts as one, a square's fountain too (its water's
+  plane): Varrock's crater clears its own.
+- **Roofs, wall decorations, floor decoration and upstairs** go, but for a city wall's walkway and a bridge's deck
+  (level 1 with `TILE_BRIDGE`), whose walls stay burnt and whose blocking objects go, so it's still a way across, and
+  `steps` (floor decorations the ground climbs under: a palace's front steps), which stay burnt.
+- **Objects** by name: trees become burnt trees of their size (`burntTrees`, `treesKept` of them), plants and what went
+  with the fire (doors, curtains, banners, torches: `plant`, `gone`; nameless plants by id, `plants`) go, `landmark`
+  names stay (a square's fountain, a church's altar), and of the rest `furnitureKept` stay, charred. What was cloth
+  is the map's to burn before the rules see it (a tent's walls are walls, and would break into stone): Varrock's
+  `takeFabric` and `burnFabric` make Gypsy Aris's tent a blaze (the cache's big fire, 25155), its stalls bare
+  burnt counters with a fire, its tents fires and its covered wagon burning timber. A loc that
+  changes with a var (a farming patch, a STASH's bush, a seasonal one) goes by the name of what it shows
+  (`LocInfo.shows`, as the game draws it with its vars at 0): most are null-named, and kept as furniture they were
+  bushes with scorched leaves.
+- **The ground**: `underlays` turns grass and earth to mottled ash, and `overlays` paving and wooden floors to soot.
+
+**Charred locs** are the real ones with their colours burnt (`rs/config/loctype/LocOverrides.ts`): `CHARRED_LOCS + id`
+(`getCharredLoc`) is loc `id` with every face's lightness under half and its saturation a quarter, and its opaque textures
+swapped for dark planks (5) or dark cobbled rock (119), as a textured face is lit and not coloured; see-through green
+leaves turn scorched brown (33), and other see-through ones (bars, shingles) keep theirs, as a swap would fill their
+holes. They're read from the base loc's data (`LocTypeLoader.getDataBuffer`), so nothing in the real world changes and
+the slim cache keeps the base. Ids from `DERIVED_LOCS` are for locs of our own made from another, listed in
+`LOC_OVERRIDES` with a `base` (the breach's Falador pieces, charred to `charLight`, the bricks `walkable`). Keep every id under 2^21:
+the model caches key a loc by its id << 10. `WALKABLE_LOCS + id` (`getWalkableLoc`) is a cache loc that blocks nothing,
+and `WALKABLE_CHARRED_LOCS + id` a charred one: Varrock's fires and its dead, which you walk over and through (the
+fires burn as you do: `MapDef.burns`). Varrock's fires are the cache's own flames, never a campfire (4265, 4266 in their
+rings of stones, 5249 on crossed logs, 5499 the campfire's flame: a campfire is a camp, not a city burning): `FLAMES`
+(25156, the big fire's flames alone) and `TALL_FLAMES` (32297), the big fire (`BLAZE`), burning timber and bones and
+the wall of fire, all of them in `FIRES`. A map's lights go by the placed id (`LightingDef.locs`), so a derived loc
+needs its own entry there to glow.
+
+**A loc can't play a skeletal animation** (LocModelLoader animates frame seqs only), so a posed NPC, Yama sitting on
+his throne (npc 15645, seq 12153), is a `MapDef.props` entry the game draws instead, and the recipe blocks the ground
+under it (it blocks nothing itself). As a loc he showed in his bind pose, arms out over the seat.
+
+**The floor system's tiles are flat**, each at the ground's height at its middle, so a floor (`MapDef.floor`) over
+steps or a slope comes out as strips at different heights with the ground showing between them. Varrock's palace floor
+starts at the top of its front steps; the court and the steps are the ground's.
+
+**What it can't do**: a broken wall is one of the Wilderness's few pieces, dark stone whatever the wall was; a charred
+texture is one of two, not the texture darkened; and the noise doesn't know a building's doors, so a ruin can lose the
+wall a door was in and keep the rest. check-maps.ts holds a ruin to what any cut is held to: Varrock's blocked decks
+(the bridge's east of the palace) are its `squares`. The Grand Exchange's pad is a deck too, cleared to its floor for
+Xarth by `clearExchange`, which throws if the pad's rows stop matching the cache's deck.
 
 ### City walls
 

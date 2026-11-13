@@ -23,8 +23,9 @@ export type CoopAction =
     // A random event's offer: take one of its options, or walk away
     | { kind: "event"; index: number }
     | { kind: "leaveEvent" }
-    // The fight's button (MapDef.fight.ability)
-    | { kind: "ability" };
+    // The fight's button (MapDef.fight.ability), or a hero's own by its place
+    // (CharacterDef.abilities)
+    | { kind: "ability"; index?: number };
 
 // Something that happens to a hero just before frame `frame` is stepped:
 // what they're pressing now (as whole numbers, -127 to 127), what they did,
@@ -68,8 +69,12 @@ export function cleanAction(value: unknown): CoopAction | undefined {
         case "takeKept":
         case "banishChest":
         case "leaveEvent":
-        case "ability":
             return { kind };
+        case "ability":
+            if (index === undefined) {
+                return { kind };
+            }
+            return isIndex && index < MAX_INDEX ? { kind, index } : undefined;
         case "chest":
             return CHEST_ACTIONS.includes(action as ChestAction)
                 ? { kind, action: action as ChestAction }
@@ -207,7 +212,7 @@ export function applyAction(sim: Sim, action: CoopAction): boolean {
             sim.leaveEvent();
             return true;
         case "ability":
-            return sim.useAbility();
+            return sim.useAbility(action.index ?? 0);
     }
 }
 

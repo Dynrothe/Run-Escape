@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 
 import type { GameClient } from "../client/GameClient";
 import { GameStore } from "../client/GameStore";
+import { FALLEN_EMPIRE, isActOut } from "../content/acts";
 import { getCharacter } from "../content/characters";
 import { CombatStyle } from "../content/types";
 import { buyUpgrade, createSave, refundUpgrade, refundUpgrades } from "../core/save";
@@ -396,11 +397,12 @@ test("map tabs support arrow keys and wrap", () => {
     const actOne = screen.getByRole("tab", { name: "Act I" });
     actOne.focus();
     fireEvent.keyDown(actOne, { key: "ArrowRight" });
-    // Act II is beside Act I
-    const actTwo = screen.getByRole("tab", { name: "Act II" });
-    expect(actTwo).toHaveFocus();
-    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Act II");
-    fireEvent.keyDown(actTwo, { key: "ArrowLeft" });
+    // Act II is beside Act I, once it's out (ActDef.released); Bosses until then
+    const next = isActOut(FALLEN_EMPIRE) ? "Act II" : "Bosses";
+    const beside = screen.getByRole("tab", { name: next });
+    expect(beside).toHaveFocus();
+    expect(screen.getByRole("tabpanel")).toHaveAccessibleName(next);
+    fireEvent.keyDown(beside, { key: "ArrowLeft" });
     fireEvent.keyDown(actOne, { key: "ArrowLeft" });
     expect(screen.getAllByRole("tab").at(-1)).toHaveFocus();
 });

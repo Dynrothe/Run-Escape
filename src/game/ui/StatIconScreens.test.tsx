@@ -9,10 +9,12 @@ import {
     GameStore,
     HudNumbers,
     HudView,
+    ItemView,
 } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getItem } from "../content/items";
 import { DURATION_ICON, StatIconRef, statKeyIcon } from "../content/statIcons";
+import { pairStats } from "../content/stats";
 import { createSave } from "../core/save";
 import { setLang, tp } from "../i18n";
 import { ChestModal } from "./ChestModal";
@@ -68,6 +70,7 @@ function createChoice(changes: Partial<ChoiceView> = {}): ChoiceView {
         isEvolution: false,
         isHilt: false,
         isSpell: false,
+        isBlessing: false,
         isKeris: false,
         banishable: false,
         banished: false,
@@ -159,61 +162,73 @@ describe("stat icons on the screens that show stats", () => {
         expect(choiceStats[3].textContent).toContain("Unknown bonus +10");
     });
 
-    test("ChestModal renders item lines, set progress and replacement diffs with StatLine", () => {
+    // A void top from a casket, against a worn piece or none
+    function gearChest(replaces?: ChestView["replaces"]): ChestView {
+        return {
+            uid: 1,
+            tierColor: "#ffd700",
+            rarity: "rare",
+            casketObjId: 2724,
+            casketName: "Hard casket",
+            coins: 100,
+            alchCoins: 50,
+            isGear: true,
+            item: {
+                id: "void_top",
+                name: "Void knight top",
+                objId: 8839,
+                rarity: { name: "Rare", color: "#3fe03f" },
+                kindLabel: "Body slot",
+                lines: [{ text: "+10% damage" }, { text: "+2 armour" }],
+                set: { text: "Void knight 2/4: 3 worn give +10% damage", active: false },
+            },
+            replaces,
+            carried: 0,
+            canStash: true,
+            instant: false,
+            recommended: "take",
+            queued: 0,
+        };
+    }
+
+    function renderChest(chest: ChestView) {
+        const store = new GameStore(createSave());
+        const client = createMockClient(store, { playChestSound: vi.fn() });
+        const view = render(<ChestModal chest={chest} rerolls={0} banishes={0} client={client} />);
+        // On to the card
+        act(() => {
+            vi.advanceTimersByTime(2500);
+        });
+        return view;
+    }
+
+    // A worn crystal body, its set's bonus on
+    const crystalBody: ItemView = {
+        id: "crystal_body",
+        name: "Crystal body",
+        objId: 23975,
+        rarity: { name: "Rare", color: "#ff9a3d" },
+        kindLabel: "Body slot",
+        lines: [{ text: "+5% damage" }, { text: "+1 armour" }],
+        set: { text: "Crystal armour 3/3: bonus on", active: true },
+    };
+
+    // The icon cache answers with the icon's own id, so a line's image says which it has: gives
+    // the src an icon gets
+    function iconsById(): (icon: StatIconRef | undefined) => string {
+        vi.spyOn(iconCache, "get").mockImplementation((objId) => `obj:${objId}`);
+        vi.spyOn(iconCache, "getSprite").mockImplementation((id) => `sprite:${id}`);
+        vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
+        return (icon) =>
+            icon?.spriteId !== undefined ? `sprite:${icon.spriteId}` : `obj:${icon?.objId}`;
+    }
+
+    test("ChestModal renders gear's lines and set progress with StatLine", () => {
         vi.useFakeTimers();
         try {
-            const store = new GameStore(createSave());
-            const client = createMockClient(store, { playChestSound: vi.fn() });
-            const chest: ChestView = {
-                uid: 1,
-                tierColor: "#ffd700",
-                rarity: "rare",
-                casketObjId: 2724,
-                casketName: "Hard casket",
-                coins: 100,
-                alchCoins: 50,
-                isGear: true,
-                item: {
-                    id: "void_top",
-                    name: "Void knight top",
-                    objId: 8839,
-                    rarity: { name: "Rare", color: "#3fe03f" },
-                    kindLabel: "Body slot",
-                    lines: [{ text: "+10% damage" }, { text: "+2 armour" }],
-                    set: { text: "Void knight 2/4: 3 worn give +10% damage", active: false },
-                },
-                replaces: {
-                    item: {
-                        id: "leather_body",
-                        name: "Leather body",
-                        objId: 1129,
-                        rarity: { name: "Common", color: "#ffffff" },
-                        kindLabel: "Body slot",
-                        lines: [{ text: "+1 armour" }],
-                    },
-                    alchCoins: 10,
-                },
-                changes: [
-                    { text: "+10% damage", good: true },
-                    { text: "-1 armour", good: false },
-                ],
-                carried: 0,
-                canStash: true,
-                instant: false,
-                recommended: "take",
-                queued: 0,
-            };
+            const view = renderChest(gearChest());
 
-            const view = render(
-                <ChestModal chest={chest} rerolls={0} banishes={0} client={client} />,
-            );
-
-            // Advance timers to reveal phase
-            act(() => {
-                vi.advanceTimersByTime(2500);
-            });
-
-            // Item lines use StatLine
             const lines = view.container.querySelectorAll(".ui-chest-lines .ui-stat-line");
             expect(lines.length).toBe(2);
             expect(lines[0].textContent).toBe("+10% damage");
@@ -221,36 +236,128 @@ describe("stat icons on the screens that show stats", () => {
             expect(lines[1].textContent).toBe("+2 armour");
             expect(lines[1].querySelector(".ui-icon")).not.toBeNull();
 
-            // Set line uses StatLine
             const setLine = view.container.querySelector(".ui-chest-set .ui-stat-line");
             expect(setLine).not.toBeNull();
             expect(setLine?.textContent).toContain("Void knight 2/4");
             // Set line has spacer since "Void knight..." doesn't match an icon
             expect(setLine?.querySelector(".ui-stat-spacer")).not.toBeNull();
-
-            // Gear changes use StatLine with good/bad coloring
-            const changes = view.container.querySelectorAll(".ui-chest-changes .ui-stat-line");
-            expect(changes.length).toBe(2);
-            expect(changes[0].textContent).toBe("+10% damage");
-            expect(changes[0].closest(".ui-good")).not.toBeNull();
-            expect(changes[0].querySelector(".ui-icon")).not.toBeNull();
-            expect(changes[1].textContent).toBe("-1 armour");
-            expect(changes[1].closest(".ui-bad")).not.toBeNull();
-            expect(changes[1].querySelector(".ui-icon")).not.toBeNull();
+            expect(view.container.querySelector(".ui-chest-table")).toBeNull();
+            expect(view.container.textContent).toContain("Nothing in your body slot yet.");
         } finally {
             vi.useRealTimers();
         }
     });
 
+    test("ChestModal puts gear beside the worn piece, a row for each stat", () => {
+        vi.useFakeTimers();
+        try {
+            const view = renderChest(
+                gearChest({
+                    item: crystalBody,
+                    alchCoins: 10,
+                    stats: [
+                        {
+                            key: "might",
+                            label: "Damage",
+                            worn: "+5%",
+                            found: "+10%",
+                            change: "+5%",
+                            better: true,
+                        },
+                        {
+                            key: "armor",
+                            label: "Armour",
+                            worn: "+1",
+                            found: "+2",
+                            change: "+1",
+                            better: true,
+                        },
+                        {
+                            key: "maxHp",
+                            label: "Max hitpoints",
+                            worn: "+5%",
+                            found: "+5%",
+                            better: true,
+                        },
+                        {
+                            key: "speed",
+                            label: "Projectile speed",
+                            worn: "+15%",
+                            change: "-15%",
+                            better: false,
+                        },
+                    ],
+                }),
+            );
+
+            // Its stats are in the table, not listed as well
+            expect(view.container.querySelector(".ui-chest-lines")).toBeNull();
+            const compare = view.container.querySelector(".ui-chest-compare")!;
+            expect(compare.textContent).toContain("Crystal body");
+            expect(compare.textContent).toContain("· Rare");
+            expect(compare.textContent).toContain("(alched for 10 coins)");
+            // Both pieces' sets: the found one's under its name, the worn one's in the comparison
+            const sets = [...view.container.querySelectorAll(".ui-chest-set")];
+            expect(sets.map((set) => set.textContent)).toEqual([
+                "Void knight 2/4: 3 worn give +10% damage",
+                "Crystal armour 3/3: bonus on",
+            ]);
+            expect(sets[1]).toHaveClass("ui-chest-set-on");
+
+            const rows = [...view.container.querySelectorAll(".ui-chest-table tbody tr")];
+            expect(rows.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([
+                ["Damage", "+5%", "+10%", "(+5%)"],
+                ["Armour", "+1", "+2", "(+1)"],
+                ["Max hitpoints", "+5%", "+5%", ""],
+                ["Projectile speed", "+15%", "—", "(-15%)"],
+            ]);
+            const tone = (row: Element) => [...row.children].slice(2).map((cell) => cell.className);
+            expect(tone(rows[0])).toEqual(["ui-good", "ui-good"]);
+            expect(tone(rows[2])).toEqual(["", ""]);
+            expect(tone(rows[3])).toEqual(["ui-bad", "ui-bad"]);
+            // The difference's column has a name for screen readers
+            const headings = [...view.container.querySelectorAll(".ui-chest-table thead th")];
+            expect(headings.map((th) => th.getAttribute("aria-label") ?? th.textContent)).toEqual([
+                "Wearing",
+                "New",
+                "Difference",
+            ]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    test("the gear table gives each stat its icon in any language", () => {
+        vi.useFakeTimers();
+        const iconSrc = iconsById();
+        try {
+            setLang("pt-BR");
+            const stats = pairStats(
+                { might: 0.03, speed: 0.15 },
+                { might: 0.05, maxHp: 0.13, armor: 1 },
+            );
+            // Nothing in the words to find an icon by
+            expect(stats.map((pair) => pair.label)).toEqual([
+                "Dano",
+                "Armadura",
+                "Pontos de vida máximos",
+                "Velocidade de projétil",
+            ]);
+            const view = renderChest(gearChest({ item: crystalBody, alchCoins: 10, stats }));
+            const rows = [...view.container.querySelectorAll(".ui-chest-table tbody tr")];
+            expect(rows.map((row) => row.querySelector("th img")?.getAttribute("src"))).toEqual(
+                stats.map((pair) => iconSrc(statKeyIcon(pair.key))),
+            );
+        } finally {
+            setLang("en");
+            vi.useRealTimers();
+            vi.restoreAllMocks();
+        }
+    });
+
     test("a casket's potion shows its stats with their icons in any language, and how long they last", () => {
         vi.useFakeTimers();
-        // The icon cache answers with the icon's own id, so a line's image says which it has
-        vi.spyOn(iconCache, "get").mockImplementation((objId) => `obj:${objId}`);
-        vi.spyOn(iconCache, "getSprite").mockImplementation((id) => `sprite:${id}`);
-        vi.spyOn(iconCache, "request").mockImplementation(() => {});
-        vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
-        const iconSrc = (icon: StatIconRef | undefined) =>
-            icon?.spriteId !== undefined ? `sprite:${icon.spriteId}` : `obj:${icon?.objId}`;
+        const iconSrc = iconsById();
         try {
             setLang("pt-BR");
             const store = new GameStore(createSave());
@@ -266,7 +373,6 @@ describe("stat icons on the screens that show stats", () => {
                 alchCoins: 50,
                 isGear: false,
                 item,
-                changes: [],
                 carried: 0,
                 canStash: true,
                 instant: false,

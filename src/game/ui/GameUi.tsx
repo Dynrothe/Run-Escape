@@ -15,6 +15,7 @@ import compass from "../../components/rs/minimap/compass.png";
 import minimapFrame from "../../components/rs/minimap/minimap-frame.png";
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { describeBlessed } from "../client/BlessingViews";
 import { cloudKeepsCopy } from "../client/CloudSave";
 import { FRAME_RATES, FrameRate } from "../client/DisplaySettings";
 import type { GameClient } from "../client/GameClient";
@@ -46,6 +47,7 @@ import {
     getActMapIds,
     getActStep,
     isActEnded,
+    isActOut,
 } from "../content/acts";
 import {
     CHARACTERS,
@@ -70,6 +72,8 @@ import {
     SEASONAL_MAPS,
     getMap,
     getMapCharacter,
+    isCharacterOut,
+    isPeaceful,
     mapDescription,
     mapFinalBossWarning,
     mapName,
@@ -92,7 +96,12 @@ import {
 } from "../content/remixes";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
-import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    COLLECTION_LOG_OBJ,
+    REFUND_SPRITE,
+    TITLE_TAB_SPRITES,
+    WARDROBE_ICON_OBJ,
+} from "../content/titleIcons";
 import { SCABARAS } from "../content/tombs";
 import { TROPHY_BY_ID, trophyName } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef, Stats } from "../content/types";
@@ -121,7 +130,7 @@ import {
 import { dateLocale, fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
 import { MAX_CAMERA_DISTANCE, MIN_CAMERA_DISTANCE } from "../render/CameraRig";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
-import { AbilityButton } from "./AbilityButton";
+import { AbilityButton, KitButtons } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
@@ -132,6 +141,7 @@ import { CollectionLogScreen } from "./CollectionLogScreen";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
+import { DirectorPanel } from "./DirectorPanel";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { CampScreen, GauntletBadge, GauntletResultModal, GauntletScreen } from "./Gauntlet";
@@ -158,6 +168,7 @@ import { StatLine } from "./StatLine";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { AwakenRow, VaultScreen } from "./Vault";
+import { WardrobeScreen } from "./WardrobeScreen";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
@@ -229,6 +240,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "armoury":
             screen = <ArmouryScreen ui={ui} client={client} />;
+            break;
+        case "wardrobe":
+            screen = <WardrobeScreen ui={ui} client={client} />;
             break;
         case "quests":
             screen = <QuestScreen ui={ui} client={client} />;
@@ -998,6 +1012,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             onClick={() => client.showScreen("armoury")}
                         />
                         <TitleTile
+                            name={t("ui.title.wardrobe")}
+                            objId={WARDROBE_ICON_OBJ}
+                            onClick={() => client.showScreen("wardrobe")}
+                        />
+                        <TitleTile
                             name={t("ui.title.quests")}
                             spriteId={TITLE_TAB_SPRITES.quests}
                             onClick={() => client.showScreen("quests")}
@@ -1200,6 +1219,28 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             </div>
         );
     }
+    if (isPeaceful(getMap(ui.mapId))) {
+        return (
+            <div
+                className="ui-endless"
+                title="Nothing comes here: walk round it for as long as you like."
+            >
+                <span className="ui-endless-name">Explore</span>
+                <span className="ui-endless-hint">No enemies</span>
+            </div>
+        );
+    }
+    if (getMap(ui.mapId).fun?.explore) {
+        return (
+            <div
+                className="ui-endless"
+                title="No clock here: fight on for as long as you like. The run is won when its last boss falls."
+            >
+                <span className="ui-endless-name">Explore</span>
+                <span className="ui-endless-hint">No clock</span>
+            </div>
+        );
+    }
     if (getMap(ui.mapId).fun) {
         return (
             <div className="ui-endless" title={t("ui.endless.tooltip.fun")}>
@@ -1258,6 +1299,31 @@ function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
             )}
         </div>
     );
+}
+
+// How long a map's objective is up each time it's shown (MapDef.objectives), fading in and out
+const MAP_OBJECTIVE_MS = 6000;
+
+// What the map wants of you (MapDef.objectives), for a few seconds and then gone
+function MapObjective({
+    objective,
+}: {
+    objective: NonNullable<HudNumbers["objective"]>;
+}): JSX.Element | null {
+    const [shown, setShown] = useState(true);
+    useEffect(() => {
+        const timer = setTimeout(() => setShown(false), MAP_OBJECTIVE_MS);
+        return () => clearTimeout(timer);
+    }, []);
+    return shown ? (
+        <div
+            className="ui-raid-objective ui-map-objective"
+            style={{ animationDuration: `${MAP_OBJECTIVE_MS}ms` }}
+        >
+            {objective.text}
+            {objective.count > 1 && ` (${objective.done}/${objective.count})`}
+        </div>
+    ) : null;
 }
 
 // What a raid's hall wants of you: hold out until its boss comes (or take the portal). The first
@@ -1486,8 +1552,9 @@ export function AdventurerPanel({
 }: ScreenProps & { fixed?: string }): JSX.Element {
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
-    // The roster: not an adventurer played on one map alone (CharacterDef.only)
-    const roster = CHARACTERS.filter((c) => !c.only);
+    // The roster: not an adventurer played on one map alone (CharacterDef.only), or one who
+    // isn't out yet (isCharacterOut)
+    const roster = CHARACTERS.filter((c) => !c.only && isCharacterOut(c));
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
     return (
@@ -1812,7 +1879,13 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
                 id: "fun_maps",
                 name: "Fun maps",
                 hint: "endless, open from the start",
-                maps: FUN_MAPS,
+                maps: FUN_MAPS.filter((map) => !map.fun?.explore),
+            },
+            {
+                id: "explore",
+                name: "To explore",
+                hint: "nothing to fight, open from the start",
+                maps: FUN_MAPS.filter((map) => map.fun?.explore),
             },
             { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
         ],
@@ -1823,6 +1896,8 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
         groups: [{ id: "dev_maps", name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
     },
 ]
+    // An act's tab only once it's out (isActOut)
+    .filter((tab) => !tab.act || isActOut(tab.act))
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
     .filter((tab) => tab.groups.length > 0);
 
@@ -2441,7 +2516,7 @@ function MapDetails({
                     <div className={unlocked ? "ui-card-style" : "ui-card-cost"}>
                         {map.fun
                             ? map.fun.character
-                                ? t("ui.map.fun_char", {
+                                ? t(map.fun.explore ? "ui.map.explore_char" : "ui.map.fun_char", {
                                       name: tr(
                                           `char.${map.fun.character}.name`,
                                           getCharacter(map.fun.character).name,
@@ -2863,19 +2938,24 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
-            {ui.cinematic && (
-                // The opening cinematic: no HUD, and a click or tap anywhere skips it
-                <div
-                    className="ui-cinematic"
-                    onPointerDown={(e) => {
-                        e.preventDefault();
-                        client.skipCinematic();
-                    }}
-                />
+            {import.meta.env.DEV && ui.director ? (
+                // Dev only: the shot editor, over a cinematic held where it's put
+                <DirectorPanel director={ui.director} client={client} trailer={ui.trailer} />
+            ) : (
+                ui.cinematic && (
+                    // The opening cinematic: no HUD, and a click or tap anywhere skips it
+                    <div
+                        className="ui-cinematic"
+                        onPointerDown={(e) => {
+                            e.preventDefault();
+                            client.skipCinematic();
+                        }}
+                    />
+                )
             )}
             {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
-                    inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
+                    inventory={getMap(hud.mapId).fight || hud.blessings ? [] : hud.inventory}
                     overlay={ui.overlay}
                     client={client}
                 />
@@ -3039,19 +3119,21 @@ function formatSlotLevel(slot: SlotView): string {
     return slot.level === slot.maxLevel ? t("ui.hud.slot_max") : String(slot.level);
 }
 
-// A weapon or passive in the HUD, with what it does on a card shown while
-// it's pointed at
+// A weapon, passive or blessing in the HUD, with what it does on a card shown
+// while it's pointed at
 const Slots = memo(function Slots({
     slots,
     max,
     disabled,
+    className,
 }: {
     slots: SlotView[];
     max: number;
     disabled: boolean;
+    className?: string;
 }): JSX.Element {
     return (
-        <div className="ui-slots">
+        <div className={className ? `ui-slots ${className}` : "ui-slots"}>
             {Array.from({ length: max }, (_, i) => {
                 const slot = slots[i];
                 return (
@@ -3069,12 +3151,14 @@ const Slots = memo(function Slots({
                                 <>
                                     <div style={{ color: slot.rarityColor }}>{tl(slot.name)}</div>
                                     <div className="ui-slot-tip-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? t("ui.hud.max_level")
-                                            : t("ui.hud.level_of", {
-                                                  level: slot.level,
-                                                  max: slot.maxLevel,
-                                              })}
+                                        {slot.blessing
+                                            ? describeBlessed(slot)
+                                            : slot.level >= slot.maxLevel
+                                              ? t("ui.hud.max_level")
+                                              : t("ui.hud.level_of", {
+                                                    level: slot.level,
+                                                    max: slot.maxLevel,
+                                                })}
                                     </div>
                                     {slot.stats?.map((line) => (
                                         <StatLine
@@ -3286,48 +3370,97 @@ const Hud = memo(function Hud({
     disabled: boolean;
     muted: boolean;
 }): JSX.Element {
+    // A map to walk round with nothing coming (isPeaceful) has no run to keep track of: no level,
+    // no clock, no kills, coins, rounds, damage or quests, only the minimap and the hero's own
+    // buttons
+    const explore = isPeaceful(getMap(hud.mapId));
     return (
         <>
-            <XpBar level={hud.level} client={client} />
+            {!explore && <XpBar level={hud.level} client={client} />}
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
-                    <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
-                    {!gearPanel && <GearSlots gear={hud.gear} disabled={disabled} />}
+                    {!explore &&
+                        (hud.blessings ? (
+                            // A map with blessings (MapDef.blessings) has no items: the hero's
+                            // weapon, and what Saradomin's given them
+                            <>
+                                <Slots
+                                    slots={hud.weapons}
+                                    max={hud.weapons.length}
+                                    disabled={disabled}
+                                />
+                                {hud.blessings.length > 0 && (
+                                    <Slots
+                                        slots={hud.blessings}
+                                        max={hud.blessings.length}
+                                        disabled={disabled}
+                                        className="ui-blessing-slots"
+                                    />
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <Slots
+                                    slots={hud.weapons}
+                                    max={hud.maxWeapons}
+                                    disabled={disabled}
+                                />
+                                <Slots
+                                    slots={hud.passives}
+                                    max={hud.maxPassives}
+                                    disabled={disabled}
+                                />
+                                {!gearPanel && <GearSlots gear={hud.gear} disabled={disabled} />}
+                            </>
+                        ))}
                 </div>
-                <RunTimer client={client} />
+                {!explore && <RunTimer client={client} />}
                 <TombsScabarasReading client={client} />
-                {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
                 <div className="ui-hud-right">
                     <Minimap client={client} muted={muted} />
-                    <KillsAndCoins client={client} />
-                    {hud.round !== undefined && (
-                        <div className="ui-round">{t("ui.hud.round", { round: hud.round })}</div>
+                    {!explore && (
+                        <>
+                            <KillsAndCoins client={client} />
+                            {hud.round !== undefined && (
+                                <div className="ui-round">
+                                    {t("ui.hud.round", { round: hud.round })}
+                                </div>
+                            )}
+                            <RaidRoomInfo client={client} />
+                            <TombsWaveInfo client={client} />
+                            <TombsShadowsInfo client={client} />
+                            <TombsScabarasInfo client={client} />
+                            <TombsHetInfo client={client} />
+                            <TombsCrondisInfo client={client} />
+                            <TombsRoarInfo client={client} />
+                        </>
                     )}
-                    <RaidRoomInfo client={client} />
-                    <TombsWaveInfo client={client} />
-                    <TombsShadowsInfo client={client} />
-                    <TombsScabarasInfo client={client} />
-                    <TombsHetInfo client={client} />
-                    <TombsCrondisInfo client={client} />
-                    <TombsRoarInfo client={client} />
                     {/* The dev server's testing buttons: a build drops them whole */}
                     {import.meta.env.DEV && <DevGodButton client={client} />}
                     {import.meta.env.DEV && <DevWardensButton client={client} />}
-                    <HudQuests open={questTracker} client={client} disabled={disabled} />
-                    <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
-                    {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
+                    {/* With the column's other toggles; a phone's layout puts it by the timer */}
+                    {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
+                    {!explore && (
+                        <>
+                            <HudQuests open={questTracker} client={client} disabled={disabled} />
+                            <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
+                            {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
+                        </>
+                    )}
                 </div>
             </div>
             <BossBar mapId={hud.mapId} client={client} />
             <div className="ui-hud-bottom">
                 <HudBuffs client={client} />
                 <div className="ui-hud-actions">
-                    {/* A boss fight has no items, only its own button */}
-                    {!getMap(hud.mapId).fight && (
+                    {/* A boss fight has no items, only its own button, and a map to walk round
+                        (isPeaceful) or with blessings has none either, only the hero's own
+                        buttons */}
+                    {!getMap(hud.mapId).fight && !explore && !hud.blessings && (
                         <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />
+                    <KitButtons client={client} />
                 </div>
                 <HpBar client={client} />
                 <SanityBar client={client} />
@@ -3353,7 +3486,7 @@ function RunTimer({ client }: { client: GameClient }): JSX.Element {
     return <div className="ui-timer">{formatTime(seconds)}</div>;
 }
 
-// A touch screen's zoom (a mouse has its wheel), behind a toggle beside the timer
+// A touch screen's zoom (a mouse has its wheel), behind a toggle
 function CameraZoomSlider({
     client,
     disabled,
@@ -3677,13 +3810,14 @@ function HudBuffs({ client }: { client: GameClient }): JSX.Element | null {
 function HpBar({ client }: { client: GameClient }): JSX.Element | null {
     const hp = useHudNumber(client, (n) => n.hp);
     const maxHp = useHudNumber(client, (n) => n.maxHp);
+    const share = useHudNumber(client, (n) => n.hpShare);
     const poisoned = useHudNumber(client, (n) => n.poisoned);
     if (hp === undefined || maxHp === undefined) {
         return null;
     }
     return (
         <div className={poisoned ? "ui-hp ui-hp-poisoned" : "ui-hp"}>
-            <div className="ui-hp-fill" style={{ transform: `scaleX(${hp / maxHp})` }} />
+            <div className="ui-hp-fill" style={{ transform: `scaleX(${share ?? hp / maxHp})` }} />
             <span>
                 {hp} / {maxHp}
                 {poisoned && ` · ${t("ui.hud.poisoned")}`}
@@ -3733,11 +3867,18 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
     const boss = useHudNumber(client, (n) => n.boss);
     const bossIn = useHudNumber(client, (n) => n.bossIn);
     const raidRoom = useHudNumber(client, (n) => n.raidRoom);
+    const objective = useHudNumber(client, (n) => n.objective);
     if (!boss) {
         if (raidRoom) {
             return raidRoom.waves && bossIn !== undefined ? (
                 <RaidObjective room={raidRoom} bossIn={bossIn} />
             ) : null;
+        }
+        if (objective) {
+            // Shown afresh as it changes, and each time the HUD or a fight's end brings it back
+            return (
+                <MapObjective key={`${objective.text}:${objective.done}`} objective={objective} />
+            );
         }
         return bossIn !== undefined && bossIn <= 60 ? (
             <div className="ui-boss-warning">
@@ -3885,6 +4026,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
+    const blessing = ui.choices.some((choice) => choice.isBlessing);
     const keris = ui.choices.some((choice) => choice.isKeris);
     const banishes = ui.hud?.banishes ?? 0;
     const coins = useHudNumber(client, (n) => n.coins) ?? 0;
@@ -3914,7 +4056,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                           ? t("ui.levelup.sub.keris")
                           : hilt
                             ? t("ui.levelup.sub.hilt")
-                            : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
+                            : t(blessing ? "ui.levelup.sub.blessing" : "ui.levelup.sub.regular", {
+                                  level: ui.hud?.level ?? 1,
+                              })}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (
@@ -4302,7 +4446,8 @@ function PauseModal({
                                     : "")
                             }
                         >
-                            {[...hud.weapons, ...hud.passives].map((slot) => (
+                            {/* A map with blessings has those in place of passives */}
+                            {[...hud.weapons, ...(hud.blessings ?? hud.passives)].map((slot) => (
                                 <div key={slot.id} className="ui-pause-item">
                                     <ItemIcon
                                         objId={slot.iconObjId}
@@ -4328,9 +4473,11 @@ function PauseModal({
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                     </span>
                                     <span className="ui-pause-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? t("pause.slot_max")
-                                            : t("pause.slot_level", { level: slot.level })}
+                                        {slot.blessing
+                                            ? `×${slot.level}`
+                                            : slot.level >= slot.maxLevel
+                                              ? t("pause.slot_max")
+                                              : t("pause.slot_level", { level: slot.level })}
                                     </span>
                                 </div>
                             ))}

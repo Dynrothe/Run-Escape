@@ -42,6 +42,7 @@ export function getMapEnemies(map: MapDef, remix: unknown[] = []): EnemyDef[] {
             map.fun?.bosses,
             map.raid,
             map.rule,
+            map.lairs,
             pumpkins,
             turkeys,
             randomEvents,

@@ -20,8 +20,10 @@
 //                   # makes for a closing ring's way out
 //   FLAT=1 ...      # the map's arena with nothing in it: no walls in the bot's way, no cache needed
 //   STAGE=1 ...     # a fight in parts (MapDef.stages): the second, as a run that's won the first
-//   SAFE_WAVES=1 ... # can't die before the final boss: it gets there with what the run earned
-//   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds
+//   SAFE_WAVES=1 ... # can't die outside a boss fight: it gets there with what the run earned
+//   GOD=1 ...        # can't die at all: with ENDLESS=1, how damage keeps up with the rounds;
+//                    # with LAIR=, how long its fight takes a hero who's never hurt (only Yama's
+//                    # meteor, unstopped, still kills)
 //   FUNNEL=1 ...     # always takes its best weapon's next level when it's offered
 //   SMITE=0 ...      # never presses a fight's button (MapDef.fight.ability); by default it does
 //                    # whenever the boss's guard is down (BossDef.guard) and it's in reach
@@ -40,8 +42,15 @@
 //   REACT=0.25 ...   # moves as a person reacts: each step it decides is taken this many seconds
 //                    # later (by default the tick a boss's windup starts)
 //   FROM=101 ...     # the first seed (1 by default), to split a long sweep across processes
+//   GAZE=never ...   # a hero with their own buttons (the Battle for Varrock's Justiciar) never
+//                    # casts the Owl's gaze; GAZE=waste casts it whenever it's ready, not only at
+//                    # the meteor it stops (Yama's). A map with one lair to retry at starts there
+//                    # (getRetryLair).
+//   LAIR=xarth FARM=480 ...  # a map with lairs (MapDef.lairs): the hordes for FARM seconds, kept
+//                    # out of every lair, then that lair's fight (Yama's generals beaten for him);
+//                    # EMPOWERED=1 as if its rival were beaten first (LairDef.empowered)
 import { getUpgradeLine } from "../../src/game/content/armoury";
-import { CHARACTERS } from "../../src/game/content/characters";
+import { CHARACTERS, getCharacter } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
 import {
     BLESSINGS,
@@ -52,15 +61,15 @@ import {
 } from "../../src/game/content/gauntlet";
 import { INVOCATIONS, RUN_INVOCATIONS } from "../../src/game/content/invocations";
 import { CASKET_GEAR, getGear } from "../../src/game/content/items";
-import { getMap } from "../../src/game/content/maps";
+import { getMap, getRetryLair } from "../../src/game/content/maps";
 import { RARITY_ORDER } from "../../src/game/content/rarity";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
-import { emptyStats } from "../../src/game/content/types";
+import { HeroAbilityDef, emptyStats } from "../../src/game/content/types";
 import { RUN_LENGTH } from "../../src/game/content/waves";
 import { Sim, TICKS_PER_SECOND } from "../../src/game/core/Sim";
 import { UpgradeChoice } from "../../src/game/core/Upgrades";
 import { behindPillar } from "../../src/game/core/arena";
-import { BossWindup, Enemy, SimEvent } from "../../src/game/core/entities";
+import { BossWindup, Enemy, Lair, SimEvent } from "../../src/game/core/entities";
 import {
     GauntletRun,
     chooseBlessing,
@@ -77,6 +86,7 @@ import {
 } from "../../src/game/core/gauntlet";
 import { ColdRule } from "../../src/game/core/rules/ColdRule";
 import { RealmRule } from "../../src/game/core/rules/RealmRule";
+import { CELL, RootRule } from "../../src/game/core/rules/RootRule";
 import { ArenaGrid } from "../../src/game/core/world/ArenaGrid";
 import { canWalkStraight } from "../../src/game/core/world/FlowField";
 import { makeGrid } from "../../src/game/core/world/testGrid";
@@ -182,6 +192,13 @@ const firstSeed = parseInt(process.env.FROM ?? "1");
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
+// A map with lairs (MapDef.lairs: the Battle for Varrock's generals and Yama): the lair LAIR the
+// bot goes for, after FARM seconds of the map's hordes (kept out of every lair meanwhile), and
+// with EMPOWERED=1 as if its rival were beaten first (LairDef.empowered). Yama's generals are
+// beaten for him. The run's over when it's beaten, or the party's dead.
+const lairTarget = process.env.LAIR;
+const farmSeconds = parseFloat(process.env.FARM ?? "0");
+const empoweredLair = process.env.EMPOWERED === "1";
 // An act's map's step (content/acts.ts)
 const actStep = parseInt(process.env.STEP ?? "0");
 // A map of two worlds (RealmRule): whether the bot dives into puddles (REALM=0 never), and how well
@@ -254,9 +271,40 @@ const CHOICE_PRIORITY: Record<UpgradeChoice["kind"], number> = {
     passiveLevel: 4,
     food: 5,
     coins: 6,
+    // Only ever offered on their own, ranked by BLESSING_RANK
+    blessing: 0,
 };
 
+// Blessings (MapDef.blessings), as a player might take them: the ranged weapon first (most of the
+// damage against a general alone), hitpoints and armour beside damage (with those last, the bot
+// lost to Xarth at 12 minutes), then the sword and the buttons
+const BLESSING_RANK = [
+    "crossbow",
+    "brew",
+    "strength",
+    "ward",
+    "light",
+    "blade",
+    "bracers",
+    "staff",
+    "will",
+    "elixir",
+    "platebody",
+    "zeal",
+    "halo",
+    "mjolnir",
+    "holy_water",
+    "crozier",
+    "sandals",
+    "wisdom",
+];
+
 function choiceScore(choice: UpgradeChoice): number {
+    if (choice.kind === "blessing") {
+        const rank = BLESSING_RANK.indexOf(choice.blessingId);
+        // The fallback, and one the list hasn't got, last
+        return rank < 0 ? BLESSING_RANK.length : rank;
+    }
     const quality = "quality" in choice ? RARITY_ORDER.indexOf(choice.quality) : 0;
     // A Rare or better roll beats a Common pick of a better kind
     // A keris pick: the best jewel found (kerisPickRank stays under one kind's step)
@@ -460,6 +508,15 @@ function botMove(sim: Sim): { x: number; y: number } {
             }
         }
     }
+    // Round the fires that burn (MapDef.burns), and out of one at once
+    const fire = firesToAvoid(sim);
+    ax += fire.x;
+    ay += fire.y;
+    // Out of the lairs it isn't going for yet, as a person keeps out of a fight they aren't
+    // ready for
+    const keepOut = lairsToAvoid(sim);
+    ax += keepOut.x;
+    ay += keepOut.y;
     // Drift back towards the middle of the arena so the bot doesn't pin itself
     // against its edge
     const cx = ARENA.baseX + ARENA.sizeX / 2 - player.x;
@@ -592,6 +649,69 @@ function coldGoal(sim: Sim, cold: ColdRule): { x: number; y: number; pull: numbe
         }
     }
     return best;
+}
+
+// A push away from the burning scenery round the bot (MapDef.burns), the nearer the more, and
+// hard once it's standing in one
+const FIRE_LOOK = 2;
+
+function firesToAvoid(sim: Sim): { x: number; y: number } {
+    if (!sim.map.burns) {
+        return { x: 0, y: 0 };
+    }
+    const player = sim.player;
+    const tx = Math.floor(player.x);
+    const ty = Math.floor(player.y);
+    let x = 0;
+    let y = 0;
+    for (let dy = -FIRE_LOOK; dy <= FIRE_LOOK; dy++) {
+        for (let dx = -FIRE_LOOK; dx <= FIRE_LOOK; dx++) {
+            if (!sim.grid.burnsAt(tx + dx, ty + dy)) {
+                continue;
+            }
+            const ox = player.x - (tx + dx + 0.5);
+            const oy = player.y - (ty + dy + 0.5);
+            const d2 = Math.max(0.25, ox * ox + oy * oy);
+            x += ox / d2;
+            y += oy / d2;
+        }
+    }
+    const len = Math.hypot(x, y);
+    if (len < 1e-6) {
+        return { x: 0, y: 0 };
+    }
+    const push = sim.grid.burnsAt(tx, ty) ? 3 : 0.5;
+    return { x: (x / len) * push, y: (y / len) * push };
+}
+
+// A push away from each lair that's asleep, harder the nearer its edge: from its middle, as far
+// as its box's half and three tiles more (MapDef.lairs)
+function lairsToAvoid(sim: Sim): { x: number; y: number } {
+    const player = sim.player;
+    let x = 0;
+    let y = 0;
+    for (const lair of sim.lairs) {
+        if (lair.state !== "asleep") {
+            continue;
+        }
+        const floor = sim.floor;
+        const half = lair.def.area
+            ? Math.max(lair.def.area.x1 - lair.def.area.x0, lair.def.area.y1 - lair.def.area.y0) /
+                  2 +
+              1
+            : floor
+              ? Math.max(floor.sizeX, floor.sizeY) / 2
+              : 12;
+        const dx = player.x - lair.def.at.x;
+        const dy = player.y - lair.def.at.y;
+        const away = Math.max(0.001, Math.hypot(dx, dy));
+        if (away < half + 3) {
+            const push = 3 / Math.max(0.5, away - half + 1);
+            x += (dx / away) * push;
+            y += (dy / away) * push;
+        }
+    }
+    return { x, y };
 }
 
 // How far, walking, the bot goes to fetch bones when nothing's close: inside the
@@ -921,8 +1041,8 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
         // Out of the boss's sight behind a pillar, as it gazes (BossAttackDef.cover): the nearest
         // spot within reach that's hidden from it
         // (and debris, which hides as a pillar does: Sim.coverPillars)
-        const pillars = sim.coverPillars();
-        if (state.windup?.attack.cover && pillars) {
+        const pillars = sim.coverPillars(boss);
+        if (state.windup?.attack.cover && pillars && pillars.length > 0) {
             let best: { x: number; y: number } | undefined;
             let bestDistance = Infinity;
             for (let dy = -10; dy <= 10; dy++) {
@@ -1076,6 +1196,562 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     return undefined;
 }
 
+// A hero with buttons of their own (CharacterDef.abilities: Justiciar Zachariah's) against a boss
+// whose meteor only their gaze stops (BossAttackDef.interruptedBy: Yama), as a careful person
+// plays it: off his claw, the floor's rising slabs and his fireballs, turned to him whenever a
+// button's ready and reaches him, and the gaze kept for the meteor, walked into its reach to cast
+// (GAZE says otherwise). Undefined outside such a fight; slot is the button to let go once
+// they're turned to him, or -1.
+const gazePlay = process.env.GAZE ?? "meteor";
+// Tiles from his middle it keeps: out of his claw (Yama's reaches 5.5), in its buttons' reach
+const KIT_STANDOFF = 7.5;
+// How soon a slab's coming up for it to step off it, in ticks
+const FLOOR_LOOK = Math.round(1.2 * TICKS_PER_SECOND);
+
+function kitReach(ability: HeroAbilityDef, boss: Enemy): number {
+    const length = ability.length ?? 0;
+    return ability.kind === "lunge" || ability.kind === "gaze"
+        ? length + boss.radius - 0.5
+        : length;
+}
+
+type KitPlan = { move: { x: number; y: number }; slot: number; dodge?: boolean };
+
+function kitPlan(sim: Sim): KitPlan | undefined {
+    const plan = kitChoice(sim);
+    // Never onto a slab that's about to come up, when where it stands isn't, unless it's getting
+    // out of something worse (its dodges look where they go)
+    const player = sim.player;
+    const length = Math.hypot(plan?.move.x ?? 0, plan?.move.y ?? 0);
+    if (plan && !plan.dodge && length > 0.5 && !floorDanger(sim, player.x, player.y, FLOOR_LOOK)) {
+        const aheadX = player.x + (plan.move.x / length) * 1.2;
+        const aheadY = player.y + (plan.move.y / length) * 1.2;
+        if (crossesSlab(sim, aheadX, aheadY)) {
+            return { move: { x: 0, y: 0 }, slot: -1 };
+        }
+    }
+    return plan;
+}
+
+function kitChoice(sim: Sim): KitPlan | undefined {
+    // As the map's blessings have them (MapDef.blessings): longer, wider, sooner
+    const kit = getCharacter(sim.characterId).abilities?.map(
+        (ability, slot) => sim.kitAbility(slot)?.ability ?? ability,
+    );
+    const boss = sim.shownBoss;
+    if (kit && sim.lair === undefined) {
+        return hordeKit(sim, kit);
+    }
+    if (!kit || !boss || boss.dead || sim.lair?.state !== "fighting" || sim.tick < boss.risingEnd) {
+        return undefined;
+    }
+    const player = sim.player;
+    const away = Math.max(0.001, Math.hypot(boss.x - player.x, boss.y - player.y));
+    const towards = { x: (boss.x - player.x) / away, y: (boss.y - player.y) / away };
+    const gaze = kit.findIndex((ability) => ability.kind === "gaze");
+    const ready = (slot: number) => sim.kitSecondsLeft(slot) === 0;
+    const reaches = (slot: number) => away <= kitReach(kit[slot], boss);
+    const windup = boss.bossState?.windup;
+    // Behind a pillar from a boss's flames (BossAttackDef.cover): fightMove finds the spot
+    if (windup?.attack.cover && dodges) {
+        const hide = fightMove(sim);
+        if (hide) {
+            return { move: hide, slot: -1, dodge: true };
+        }
+    }
+    // The dead walking to him (BossDef walkers): each cut down before it's there, the buttons
+    // turned on the nearest
+    const walker = nearestWalker(sim, boss);
+    if (walker) {
+        const reach = Math.max(0.001, Math.hypot(walker.x - player.x, walker.y - player.y));
+        const at = { x: (walker.x - player.x) / reach, y: (walker.y - player.y) / reach };
+        for (let slot = 0; slot < kit.length; slot++) {
+            if (slot !== gaze && ready(slot) && reach <= kitReach(kit[slot], walker)) {
+                return { move: { x: at.x * 0.01, y: at.y * 0.01 }, slot };
+            }
+        }
+        return { move: reach > 2 ? at : { x: 0, y: 0 }, slot: -1 };
+    }
+    // The meteor: into the gaze's reach, and cast it
+    if (windup?.attack.interruptedBy && gaze >= 0 && gazePlay !== "never") {
+        return { move: towards, slot: reaches(gaze) && ready(gaze) ? gaze : -1 };
+    }
+    // Away from a loose flare about to reach them (EnemyDef.bursts), its burst worse than a slab
+    const flee = flareDodge(sim, boss);
+    if (flee) {
+        return { move: flee, slot: -1, dodge: true };
+    }
+    // Out of reach of a swing he's winding up (his claw): out of its wedge the quickest way
+    if (
+        windup?.attack.kind === "swing" &&
+        (windup.attack.radius ?? 0) > 0 &&
+        away < (windup.attack.radius ?? 0) + player.radius + 0.5
+    ) {
+        return { move: swingDodge(sim, boss) ?? backOff(sim, towards), slot: -1, dodge: true };
+    }
+    const dodge = floorDodge(sim) ?? blastDodge(sim);
+    if (dodge) {
+        return { move: dodge, slot: -1, dodge: true };
+    }
+    const flare = flareChoice(sim, kit);
+    if (flare) {
+        return flare;
+    }
+    // A cast roots them, so not in reach of his claw, nor a lunge into it, unless his guard's down
+    const open = sim.isExposed(boss);
+    // nor with his fireballs coming, which a person keeps moving under
+    const volley = windup?.attack.kind === "blast" || boss.bossState?.chain !== undefined;
+    // nor on a slab that's coming up soon, nor a long cast (his lightning) unless he's open
+    const floor = sim.floor;
+    const tile = floor ? floor.index(Math.floor(player.x), Math.floor(player.y)) : -1;
+    const rising = tile >= 0 && floor!.riseAt[tile] >= 0;
+    const clear = away >= KIT_STANDOFF - 0.5 && !volley && !rising;
+    // With the lunge ready, into reach of the swing that leaves him open when it misses (his
+    // claw), to step out of it (swingDodge) and punish him
+    const attacks = boss.def.boss?.attacks ?? [];
+    const bait = attacks.findIndex((attack) => attack.opens !== undefined && attack.cone);
+    const lunge = kit.findIndex((ability) => ability.kind === "lunge");
+    if (
+        !open &&
+        bait >= 0 &&
+        lunge >= 0 &&
+        sim.kitSecondsLeft(lunge) < 0.5 &&
+        (boss.bossState?.cooldowns[bait] ?? 0) < TICKS_PER_SECOND &&
+        !volley &&
+        !rising
+    ) {
+        const near = (attacks[bait].range ?? 0) - 0.7;
+        return away > near
+            ? { move: towards, slot: -1 }
+            : { move: { x: towards.x * 0.01, y: towards.y * 0.01 }, slot: -1 };
+    }
+    for (let slot = 0; slot < kit.length; slot++) {
+        const ability = kit[slot];
+        if (
+            (slot !== gaze || gazePlay === "waste") &&
+            (open || (clear && ability.kind !== "lunge" && ability.windup < 1)) &&
+            ready(slot) &&
+            reaches(slot)
+        ) {
+            // Turned to him where they stand, a nudge of the stick, unless he's open to a lunge
+            const nudge = ability.kind === "lunge" ? 1 : 0.01;
+            return { move: { x: towards.x * nudge, y: towards.y * nudge }, slot };
+        }
+    }
+    if (away < KIT_STANDOFF - 1) {
+        return { move: backOff(sim, towards), slot: -1 };
+    }
+    if (away > KIT_STANDOFF + 0.5) {
+        return { move: towards, slot: -1 };
+    }
+    // Round him, one way and then the other
+    const side = Math.floor(sim.tick / (6 * TICKS_PER_SECOND)) % 2 === 0 ? 1 : -1;
+    return { move: { x: -towards.y * side, y: towards.x * side }, slot: -1 };
+}
+
+// Against the hordes (no lair's fight on): each button that's ready turned on the nearest enemy
+// it reaches, the gaze too, as a person farming would. Undefined with nothing in reach.
+function hordeKit(sim: Sim, kit: HeroAbilityDef[]): KitPlan | undefined {
+    const player = sim.player;
+    let nearest: Enemy | undefined;
+    let away = Infinity;
+    for (const enemy of sim.enemies) {
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (!enemy.dead && !enemy.leaving && distance < away) {
+            nearest = enemy;
+            away = distance;
+        }
+    }
+    if (!nearest) {
+        return undefined;
+    }
+    const towards = {
+        x: (nearest.x - player.x) / Math.max(0.001, away),
+        y: (nearest.y - player.y) / Math.max(0.001, away),
+    };
+    for (let slot = 0; slot < kit.length; slot++) {
+        if (sim.kitSecondsLeft(slot) === 0 && away <= kitReach(kit[slot], nearest)) {
+            return { move: { x: towards.x * 0.01, y: towards.y * 0.01 }, slot };
+        }
+    }
+    return undefined;
+}
+
+// The nearest of a boss's walkers still on its way to it (BossDef walkTo), if any
+function nearestWalker(sim: Sim, boss: Enemy): Enemy | undefined {
+    const player = sim.player;
+    let nearest: Enemy | undefined;
+    let away = Infinity;
+    for (const enemy of boss.bossState?.walkers?.enemies ?? []) {
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (!enemy.dead && distance < away) {
+            nearest = enemy;
+            away = distance;
+        }
+    }
+    return nearest;
+}
+
+// Tiles from a loose flare (EnemyDef.bursts) that it steps away from it, past touching
+const FLARE_KEEP = 1.2;
+
+// The way a step and a half takes it furthest from a loose flare that's nearly on it, minding
+// the slabs coming up and a swing he's winding up; undefined with none that near
+function flareDodge(sim: Sim, boss: Enemy): { x: number; y: number } | undefined {
+    const player = sim.player;
+    const flares = sim.enemies.filter(
+        (e) =>
+            !e.dead &&
+            e.def.bursts &&
+            e.frozen === 0 &&
+            Math.hypot(e.x - player.x, e.y - player.y) < e.radius + player.radius + FLARE_KEEP,
+    );
+    if (flares.length === 0) {
+        return undefined;
+    }
+    const windup = boss.bossState?.windup;
+    const swing = windup?.attack.kind === "swing" ? (windup.attack.radius ?? 0) : 0;
+    let best: { x: number; y: number } | undefined;
+    let bestScore = Infinity;
+    for (let i = 0; i < 8; i++) {
+        const dx = Math.cos((i * Math.PI) / 4);
+        const dy = Math.sin((i * Math.PI) / 4);
+        const x = player.x + dx * 1.5;
+        const y = player.y + dy * 1.5;
+        if (!canWalkStraight(sim.grid, player.x, player.y, x, y)) {
+            continue;
+        }
+        const near = Math.min(...flares.map((f) => Math.hypot(f.x - x, f.y - y)));
+        const slab = floorDanger(sim, x, y, FLOOR_LOOK) ? 1 : 0;
+        const clawed = swing > 0 && Math.hypot(boss.x - x, boss.y - y) < swing + player.radius;
+        const score = -near * 10 + slab * 25 + (clawed ? 40 : 0);
+        if (score < bestScore) {
+            best = { x: dx, y: dy };
+            bestScore = score;
+        }
+    }
+    return best;
+}
+
+// His flares (EnemyDef.bursts), as a careful person deals with them: the heal one leaves picked
+// up while they're hurt, a loose one held with the button that holds it (or kept away from), and
+// a held one broken with the button that breaks it, from a cell of the other colour (a checker's
+// cells, HeroAbilityDef kind "checker"). Undefined with nothing to do about them.
+function flareChoice(sim: Sim, kit: HeroAbilityDef[]): KitPlan | undefined {
+    const player = sim.player;
+    // Pressed where it stands: these don't go by where it faces
+    const press = (slot: number): KitPlan => ({
+        move: { x: player.facingX * 0.01, y: player.facingY * 0.01 },
+        slot,
+    });
+    // Food in the lair: what the hordes dropped outside it is out of reach behind its seal
+    const lair = sim.lair;
+    const heal = sim.pickups.find(
+        (pickup) => pickup.kind === "food" && (lair === undefined || sim.inLair(lair, pickup)),
+    );
+    if (heal && player.hp < player.maxHp) {
+        const dx = heal.x - player.x;
+        const dy = heal.y - player.y;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        return { move: { x: dx / length, y: dy / length }, slot: -1 };
+    }
+    let flare: Enemy | undefined;
+    let nearest = Infinity;
+    for (const enemy of sim.enemies) {
+        const away = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (!enemy.dead && enemy.def.bursts?.shatter && away < nearest) {
+            flare = enemy;
+            nearest = away;
+        }
+    }
+    if (!flare || sim.isCasting()) {
+        return undefined;
+    }
+    const shatter = flare.def.bursts!.shatter!;
+    const hold = kit.findIndex((ability) => ability.id === shatter.frozenBy);
+    const breaks = kit.findIndex((ability) => ability.id === shatter.shatteredBy);
+    const ready = (slot: number) => slot >= 0 && sim.kitSecondsLeft(slot) === 0;
+    if (flare.frozen === 0) {
+        // Rooted while it lands, so not with the flare about to get there first; and only with
+        // the heal wanted and the button that breaks it ready in time, or those buttons are
+        // better spent on him
+        const lands = (kit[hold]?.windup ?? 0) * flare.def.speed + flare.radius + player.radius;
+        const wanted = player.hp <= player.maxHp - shatter.heal;
+        const inTime =
+            breaks >= 0 &&
+            sim.kitSecondsLeft(breaks) + kit[breaks].windup + 0.5 <
+                (kit[hold]?.windup ?? 0) + shatter.frozen;
+        if (
+            wanted &&
+            inTime &&
+            ready(hold) &&
+            nearest <= kit[hold].length &&
+            nearest > lands + 0.5
+        ) {
+            return press(hold);
+        }
+        // Out of its way, or it bursts on them
+        if (nearest < 3.5) {
+            const length = Math.max(0.001, nearest);
+            return {
+                move: { x: (player.x - flare.x) / length, y: (player.y - flare.y) / length },
+                slot: -1,
+                dodge: true,
+            };
+        }
+        return undefined;
+    }
+    if (breaks < 0) {
+        return undefined;
+    }
+    const ability = kit[breaks];
+    // Too late to break it before it's loose again
+    const left = flare.frozen / TICKS_PER_SECOND;
+    if (left < ability.windup + sim.kitSecondsLeft(breaks) + 0.1) {
+        return undefined;
+    }
+    const size = ability.size ?? 3;
+    const cell = (v: number) => Math.floor(v / size);
+    const colour = (x: number, y: number) => (cell(x) + cell(y)) & 1;
+    const middleX = (cell(flare.x) + 0.5) * size;
+    const middleY = (cell(flare.y) + 0.5) * size;
+    const struck =
+        colour(player.x, player.y) !== colour(flare.x, flare.y) &&
+        Math.hypot(middleX - player.x, middleY - player.y) <= ability.length;
+    if (struck) {
+        return ready(breaks) ? press(breaks) : { move: { x: 0, y: 0 }, slot: -1 };
+    }
+    // Into the nearest cell beside its own, which is the other colour
+    let to = { x: 0, y: 0 };
+    let best = Infinity;
+    for (const [cx, cy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+    ]) {
+        const x = middleX + cx * size;
+        const y = middleY + cy * size;
+        const d = Math.hypot(x - player.x, y - player.y);
+        if (d < best) {
+            best = d;
+            to = { x: (x - player.x) / Math.max(d, 0.001), y: (y - player.y) / Math.max(d, 0.001) };
+        }
+    }
+    return { move: to, slot: -1 };
+}
+
+// The way out of a cone swing's reach (BossAttackDef.cone) that gets out soonest: walked for
+// what's left of its windup, wherever that ends up out of it, the way the floor's safe
+function swingDodge(sim: Sim, boss: Enemy): { x: number; y: number } | undefined {
+    const windup = boss.bossState!.windup!;
+    const attack = windup.attack;
+    const player = sim.player;
+    const reach = (attack.radius ?? 0) + player.radius + 0.3;
+    const under = (attack.underRadius ?? 0) + player.radius + 0.3;
+    const out = (x: number, y: number) => {
+        const dx = x - boss.x;
+        const dy = y - boss.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance >= reach) {
+            return true;
+        }
+        if (attack.cone === undefined || distance <= under) {
+            return false;
+        }
+        // The wedge's edge, with the player's width to spare
+        const along = (dx * windup.dirX + dy * windup.dirY) / distance;
+        const spare = Math.asin(Math.min(1, (player.radius + 0.3) / distance));
+        return Math.acos(Math.max(-1, Math.min(1, along))) >= attack.cone / 2 + spare;
+    };
+    const speed = (2 / 0.6) * (1 + sim.stats.moveSpeed);
+    const left = Math.max(0, windup.landTick - sim.tick) / TICKS_PER_SECOND;
+    let best: { x: number; y: number } | undefined;
+    let bestSteps = Infinity;
+    for (let i = 0; i < 16; i++) {
+        const dx = Math.cos((i * Math.PI) / 8);
+        const dy = Math.sin((i * Math.PI) / 8);
+        // The first step along it that's out, if it gets there in time
+        for (let step = 1; step <= 12; step++) {
+            const travel = (step / 12) * speed * left;
+            const x = player.x + dx * travel;
+            const y = player.y + dy * travel;
+            if (!canWalkStraight(sim.grid, player.x, player.y, x, y)) {
+                break;
+            }
+            if (out(x, y) && !floorDanger(sim, x, y, FLOOR_LOOK) && !crossesSlab(sim, x, y)) {
+                if (step < bestSteps) {
+                    best = { x: dx, y: dy };
+                    bestSteps = step;
+                }
+                break;
+            }
+        }
+    }
+    return best;
+}
+
+// Whether walking straight to a point from where the player is crosses a slab (MapDef.floor) as
+// it comes up, or one that's up and hurting
+function crossesSlab(sim: Sim, x: number, y: number): boolean {
+    const floor = sim.floor;
+    if (!floor) {
+        return false;
+    }
+    const player = sim.player;
+    const away = Math.hypot(x - player.x, y - player.y);
+    // Ticks a tile of walking takes
+    const pace = TICKS_PER_SECOND / ((2 / 0.6) * (1 + sim.stats.moveSpeed));
+    for (let s = 0.25; s <= away + 0.01; s += 0.25) {
+        const tx = Math.floor(player.x + ((x - player.x) * Math.min(s, away)) / away);
+        const ty = Math.floor(player.y + ((y - player.y) * Math.min(s, away)) / away);
+        const i = floor.index(tx, ty);
+        const rise = i >= 0 ? floor.riseAt[i] : -1;
+        if (floor.isHurting(tx, ty, sim.tick) || (rise >= 0 && rise <= sim.tick + s * pace + 15)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Whether the slab at a point (MapDef.floor) comes up within look ticks, or is up and hurting
+function floorDanger(sim: Sim, x: number, y: number, look: number): boolean {
+    const floor = sim.floor;
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    const i = floor ? floor.index(tx, ty) : -1;
+    if (i < 0) {
+        return false;
+    }
+    const rise = floor!.riseAt[i];
+    return (rise >= 0 && rise <= sim.tick + look) || floor!.isHurting(tx, ty, sim.tick);
+}
+
+// Off a tile whose slab's about to come up (MapDef.floor), to the nearest that isn't, by a way
+// that crosses no slab as it comes up
+function floorDodge(sim: Sim): { x: number; y: number } | undefined {
+    const floor = sim.floor;
+    if (!floor) {
+        return undefined;
+    }
+    const player = sim.player;
+    const danger = (tx: number, ty: number) => floorDanger(sim, tx, ty, FLOOR_LOOK);
+    const tx = Math.floor(player.x);
+    const ty = Math.floor(player.y);
+    if (!danger(tx, ty)) {
+        return undefined;
+    }
+    // Nor beside a flare that's loose (EnemyDef.bursts), which bursts on them there
+    const flares = sim.enemies.filter((e) => !e.dead && e.def.bursts && e.frozen === 0);
+    const byFlare = (x: number, y: number) =>
+        flares.some((f) => Math.hypot(f.x - x, f.y - y) < f.radius + player.radius + 0.8);
+    let best: { x: number; y: number } | undefined;
+    let bestAway = Infinity;
+    for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+            const x = tx + dx;
+            const y = ty + dy;
+            const i = floor.index(x, y);
+            const away = Math.hypot(x + 0.5 - player.x, y + 0.5 - player.y);
+            if (
+                away >= bestAway ||
+                i < 0 ||
+                !floor.layout.mask[i] ||
+                danger(x, y) ||
+                byFlare(x + 0.5, y + 0.5) ||
+                !canWalkStraight(sim.grid, player.x, player.y, x + 0.5, y + 0.5) ||
+                crossesSlab(sim, x + 0.5, y + 0.5)
+            ) {
+                continue;
+            }
+            best = { x: x + 0.5, y: y + 0.5 };
+            bestAway = away;
+        }
+    }
+    if (!best) {
+        return undefined;
+    }
+    return { x: (best.x - player.x) / bestAway, y: (best.y - player.y) / bestAway };
+}
+
+// Out of where a boss's blast is coming down, and off the fire it leaves
+function blastDodge(sim: Sim): { x: number; y: number } | undefined {
+    const player = sim.player;
+    const spots: { x: number; y: number; radius: number }[] = [...sim.pools];
+    for (const enemy of sim.enemies) {
+        const windup = enemy.bossState?.windup;
+        if (windup?.attack.kind === "blast" && !enemy.dead) {
+            const radius = windup.attack.radius ?? 2;
+            spots.push(...windup.targets.map((spot) => ({ ...spot, radius })));
+        }
+    }
+    // and the map's fires that burn (MapDef.burns)
+    const burning = (x: number, y: number) =>
+        sim.map.burns && sim.grid.burnsAt(Math.floor(x), Math.floor(y)) ? 1 : 0;
+    const inside = (x: number, y: number) =>
+        spots.filter((s) => Math.hypot(x - s.x, y - s.y) < s.radius + player.radius + 0.3).length +
+        burning(x, y);
+    if (inside(player.x, player.y) === 0) {
+        return undefined;
+    }
+    // The way a step and a half takes it out of the fewest, on open floor: the way it was
+    // already going if that does, or else the way it's going towards the middle
+    const arena = sim.bossArena;
+    const middleX = (arena.minX + arena.maxX) / 2;
+    const middleY = (arena.minY + arena.maxY) / 2;
+    let best: { x: number; y: number } | undefined;
+    let bestScore = Infinity;
+    for (let i = 0; i < 8; i++) {
+        const dx = Math.cos((i * Math.PI) / 4);
+        const dy = Math.sin((i * Math.PI) / 4);
+        const x = player.x + dx * 1.5;
+        const y = player.y + dy * 1.5;
+        if (!canWalkStraight(sim.grid, player.x, player.y, x, y)) {
+            continue;
+        }
+        const kept = lastDodge ? dx * lastDodge.x + dy * lastDodge.y : 0;
+        const slab = floorDanger(sim, x, y, FLOOR_LOOK) ? 1 : 0;
+        const score =
+            inside(x, y) * 100 + slab * 150 + Math.hypot(x - middleX, y - middleY) * 0.2 - kept * 3;
+        if (score < bestScore) {
+            best = { x: dx, y: dy };
+            bestScore = score;
+        }
+    }
+    lastDodge = best;
+    return best;
+}
+let lastDodge: { x: number; y: number } | undefined;
+
+// Backing off from the boss, or round it where there's a wall behind
+function backOff(sim: Sim, towards: { x: number; y: number }): { x: number; y: number } {
+    const player = sim.player;
+    const open = (x: number, y: number) =>
+        canWalkStraight(sim.grid, player.x, player.y, player.x + x * 1.5, player.y + y * 1.5) &&
+        !floorDanger(sim, player.x + x, player.y + y, FLOOR_LOOK);
+    if (open(-towards.x, -towards.y)) {
+        return { x: -towards.x, y: -towards.y };
+    }
+    // Round it, whichever way's open (the way it was going first)
+    const side = Math.floor(sim.tick / (6 * TICKS_PER_SECOND)) % 2 === 0 ? 1 : -1;
+    for (const s of [side, -side]) {
+        if (open(-towards.y * s, towards.x * s)) {
+            return { x: -towards.y * s, y: towards.x * s };
+        }
+    }
+    return { x: -towards.y * side, y: towards.x * side };
+}
+
+// Lets go of a kit's button once they're turned to the boss (it goes where they face)
+function useKit(sim: Sim, plan: { move: { x: number; y: number }; slot: number }): void {
+    const player = sim.player;
+    const length = Math.hypot(plan.move.x, plan.move.y) || 1;
+    const facing = (player.facingX * plan.move.x + player.facingY * plan.move.y) / length;
+    if (plan.slot >= 0 && facing >= 0.9) {
+        sim.useAbility(plan.slot);
+    }
+}
+
 // Works out what to press for a shuffled direction, as a person soon does
 function uncursed(sim: Sim, move: { x: number; y: number }): { x: number; y: number } {
     const curse = sim.curse;
@@ -1123,6 +1799,39 @@ function eventChoice(sim: Sim): number {
     return best;
 }
 
+// Where a run starts: at a map's lair, as a retry does (getRetryLair), or its spawn; at LAIR's
+// with no farming first
+const START =
+    (lairTarget !== undefined && farmSeconds === 0
+        ? map.lairs?.find((lair) => lair.id === lairTarget)?.start
+        : getRetryLair(map)?.start) ?? map.spawn;
+
+// The lair the bot goes for (LAIR), set up as it asks: Yama's generals beaten for him, and its
+// rival for an empowered one
+function prepareLair(sim: Sim): Lair | undefined {
+    if (lairTarget === undefined) {
+        return undefined;
+    }
+    const lair = sim.lairById(lairTarget);
+    if (!lair) {
+        throw new Error(`No lair ${lairTarget} on ${map.id}`);
+    }
+    for (const id of lair.def.requires?.lairs ?? []) {
+        sim.lairById(id)!.state = "beaten";
+    }
+    // and its unsealing's cinematic (LairUnsealingDef) as good as skipped: open at the first step
+    if (lair.def.requires) {
+        lair.unsealTick = lair.unsealLiftTick = lair.unsealEndTick = sim.tick;
+    }
+    if (empoweredLair) {
+        if (!lair.def.empowered) {
+            throw new Error(`Lair ${lairTarget} is never empowered`);
+        }
+        lair.empowered = true;
+    }
+    return lair;
+}
+
 function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOptions) {
     const sim = new Sim({
         grid,
@@ -1130,8 +1839,8 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
         metaStats,
         seed,
         mapId: map.id,
-        spawnX: map.spawn.x,
-        spawnY: map.spawn.y,
+        spawnX: START.x,
+        spawnY: START.y,
         unlockedItems,
         endless,
         hard,
@@ -1192,6 +1901,12 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
     dimTicks = 0;
     // A boss's finale (its last stand), counted on its own, not in its last phase
     let finaleTicks = 0;
+    // The lair it's going for
+    const lair = prepareLair(sim);
+    let lairWoken = false;
+    let wokenAt = { seconds: 0, level: 0 };
+    // Its boss's share of hitpoints left, as last seen in the fight
+    let lairHpLeft = 1;
     // A phased fight's time in each phase, and how much of it the boss was in a reach-limited
     // weapon's reach (MapDef.fight.strikeReach)
     const phaseTicks: number[] = [];
@@ -1208,8 +1923,20 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
     // Each of the shown boss's exhumes (BossDef.exhumes): how long, and how many were left
     const ordeals: { from: number; seconds?: number; left?: number }[] = [];
     let ordealLeft = 0;
-    while (sim.tick < maxTicks && !sim.runOver) {
+    while (sim.tick < maxTicks && !sim.runOver && lair?.state !== "beaten") {
         tombsLog?.step(sim);
+        // Done farming: into the lair it's going for, which wakes it
+        if (lair && !lairWoken && lair.state === "asleep" && sim.seconds >= farmSeconds) {
+            sim.player.x = lair.def.start.x;
+            sim.player.y = lair.def.start.y;
+        }
+        if (lair && !lairWoken && lair.state === "fighting") {
+            lairWoken = true;
+            wokenAt = { seconds: sim.seconds, level: sim.level };
+        }
+        if (lair?.state === "fighting" && lair.boss && !lair.boss.dead) {
+            lairHpLeft = Math.max(0, lair.boss.hp) / Math.max(1, lair.boss.maxHp);
+        }
         if (sim.state === "levelUp") {
             const ranked = sim.choices
                 .map((choice, index) => ({ choice, index }))
@@ -1261,10 +1988,15 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
         if (sim.tick % 25 === 0) {
             useItems(sim);
         }
-        // The Tombs' bot steers every tick: plates and mirrors want it exact
+        // The Tombs' bot steers every tick: plates and mirrors want it exact; so does a hero with
+        // buttons of their own (CharacterDef.abilities), turned to what each lands on
         const planned = tombsMove(sim);
+        const kit = planned ? undefined : kitPlan(sim);
         if (planned) {
             move = planned;
+        } else if (kit) {
+            move = kit.move;
+            useKit(sim, kit);
         } else if (sim.tick % 5 === 0) {
             const moved = Math.hypot(sim.player.x - lastX, sim.player.y - lastY);
             // Pressed on and got nowhere (against a wall, or held), for the summary
@@ -1285,12 +2017,14 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
             lastX = sim.player.x;
             lastY = sim.player.y;
         }
-        if (process.env.SAFE_WAVES === "1" && !sim.bossSpawned) {
+        if (process.env.SAFE_WAVES === "1" && !sim.bossSpawned && sim.lair === undefined) {
             sim.player.hp = sim.player.maxHp;
         }
         if (process.env.GOD === "1") {
-            // Untouchable, as a late endless round's hits are bigger than any health bar
+            // Untouchable, as a late endless round's hits are bigger than any health bar, and
+            // whole, as a rising floor's slabs hurt through that
             sim.player.invulnerable = 1e9;
+            sim.player.hp = sim.player.maxHp;
         }
         if (smites) {
             pressButton(sim, sloppy);
@@ -1401,7 +2135,14 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
             nextReport += REPORT_SECONDS;
             const alive = sim.enemies.filter((e) => !e.dead).length;
             const weapons = sim.weapons.map((w) => `${w.def.id}:${w.level}`).join(" ");
-            const passives = sim.passives.map((p) => `${p.id}:${p.level}`).join(" ");
+            // A map with blessings has those for passives
+            const passives = (
+                sim.map.blessings
+                    ? sim.blessings.map((b) => ({ id: b.id, level: b.count }))
+                    : sim.passives
+            )
+                .map((p) => `${p.id}:${p.level}`)
+                .join(" ");
             const gear = Object.values(sim.gear).join(" ");
             console.log(
                 `  ${formatClock(sim.seconds)}${endless ? ` r${sim.round}` : ""}  lvl ${String(sim.level).padStart(2)}  ` +
@@ -1516,6 +2257,17 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
             );
         }
     }
+    if (lair && lairWoken) {
+        console.log(
+            `  ${lair.def.id}${lair.empowered ? " (empowered)" : ""}: woken at ` +
+                `${formatClock(wokenAt.seconds)}, level ${wokenAt.level}, ` +
+                (lair.state === "beaten"
+                    ? `beaten in ${Math.round(sim.seconds - wokenAt.seconds)}s`
+                    : `${sim.state === "dead" ? "killed the bot" : "still up"} at ` +
+                      `${Math.round(100 * lairHpLeft)}% ` +
+                      `after ${Math.round(sim.seconds - wokenAt.seconds)}s`),
+        );
+    }
     const result = sim.getResult();
     tombsLog?.report(sim);
     const ms = performance.now() - startTime;
@@ -1532,7 +2284,7 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
         );
     }
     console.log(
-        `${characterId} seed ${seed}: ${result.victory ? "VICTORY" : sim.state === "dead" ? "died" : "timed out"} at ` +
+        `${characterId} seed ${seed}: ${result.victory || lair?.state === "beaten" ? "VICTORY" : sim.state === "dead" ? "died" : "timed out"} at ` +
             `${Math.floor(result.seconds / 60)}:${String(Math.floor(result.seconds % 60)).padStart(2, "0")}, ` +
             (endless ? `round ${result.round}, ` : "") +
             `level ${result.level}, ${result.kills} kills, ${result.coins} coins, ${chests} caskets, ` +
@@ -1581,8 +2333,8 @@ function runParty(characterId: string, seed: number) {
         metaStats,
         seed,
         mapId: map.id,
-        spawnX: map.spawn.x,
-        spawnY: map.spawn.y,
+        spawnX: START.x,
+        spawnY: START.y,
         endless,
         hard,
         actStep,
@@ -1635,8 +2387,12 @@ function runParty(characterId: string, seed: number) {
                     useItems(sim);
                 }
                 const planned = tombsMove(sim);
+                const kit = planned ? undefined : kitPlan(sim);
                 if (planned) {
                     moves[hero.index] = planned;
+                } else if (kit) {
+                    moves[hero.index] = kit.move;
+                    useKit(sim, kit);
                 } else if (sim.tick % 5 === 0) {
                     moves[hero.index] = fightMove(sim) ?? botMove(sim);
                 }
@@ -1659,7 +2415,12 @@ function runParty(characterId: string, seed: number) {
     }
     const result = sim.getResult();
     const gear = sim.heroes.map((hero) => Object.keys(hero.gear).length);
-    const outcome = result.victory ? "VICTORY" : sim.state === "dead" ? "died" : "timed out";
+    const outcome =
+        result.victory || sim.lair?.state === "beaten"
+            ? "VICTORY"
+            : sim.state === "dead"
+              ? "died"
+              : "timed out";
     runs++;
     console.log(
         characterId +

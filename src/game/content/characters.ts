@@ -1,6 +1,7 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
+import { JUSTICIAR_ZACHARIAH } from "./justiciarKit";
 import { CharacterDef } from "./types";
 
 // The first three are there from the start. Each map brings two more: one for
@@ -732,6 +733,8 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
         only: "zachariah",
     },
+    // Justiciar Zachariah himself, in the Battle for Varrock (justiciarKit.ts)
+    JUSTICIAR_ZACHARIAH,
     {
         id: "sands_delver",
         name: "Sands Delver",

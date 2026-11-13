@@ -16,6 +16,7 @@ import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/si
 import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
+import { isMapOut } from "./acts";
 import {
     AWAKENED_DUKE_ID,
     DUKE_BOSS_ARENA,
@@ -47,7 +48,7 @@ import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { SCAR_EVENTS, SCAR_LIGHTING, SCAR_POOL_WORLD, SCAR_WAVES } from "./scar";
 import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
-import { CinematicDef, EnemyDef, MapDef } from "./types";
+import { CharacterDef, CinematicDef, EnemyDef, LairDef, MapDef } from "./types";
 import {
     AWAKENED_VARDORVIS_ID,
     VARDORVIS_BOSS_ARENA,
@@ -969,15 +970,37 @@ export function isFightMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fight !== undefined;
 }
 
+// The lair a retry starts in (LairDef.start): the map's only one, as long as it's open from
+// the start. With more than one, a retry starts the map over: the run that ended had beaten
+// whichever came before.
+export function getRetryLair(map: MapDef): LairDef | undefined {
+    const lairs = map.lairs;
+    return lairs?.length === 1 && !lairs[0].requires ? lairs[0] : undefined;
+}
+
+// A map to walk round with nothing on it (FunMapDef.explore, and no waves): nothing hurts but a
+// lair's boss, and the HUD's only what it takes to walk it
+export function isPeaceful(map: MapDef): boolean {
+    return map.fun?.explore === true && map.waves.length === 0;
+}
+
 // Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
 export function isCoopMap(map: MapDef): boolean {
     return map.fight?.solo !== true;
 }
 
-// Every cinematic a map can play: its opening (MapDef.cinematic) and each part's of a fight in
-// parts (MapDef.stages), for what bakes and loads them
+// Every cinematic a map can play, for what bakes, loads and hears them: its opening
+// (MapDef.cinematic), each part's of a fight in parts (MapDef.stages), and its lairs'
+// (LairDef.opening, and a lair's unsealing as the ones before it fall)
 export function getMapCinematics(map: MapDef): CinematicDef[] {
-    const all = [map.cinematic, ...(map.stages ?? []).map((stage) => stage.cinematic)];
+    const all = [
+        map.cinematic,
+        ...(map.stages ?? []).map((stage) => stage.cinematic),
+        ...(map.lairs ?? []).flatMap((lair) => [
+            lair.opening?.cinematic,
+            lair.requires?.unsealing?.cinematic,
+        ]),
+    ];
     return all.filter((def): def is CinematicDef => def !== undefined);
 }
 
@@ -992,6 +1015,13 @@ export function getMapCharacter(map: MapDef): string | undefined {
     return map.fun?.character ?? map.fight?.character ?? map.seasonalCharacter;
 }
 
+// Whether an adventurer is out for players: not one brought in on a map that isn't (isMapOut,
+// the Forester of an act still to come)
+export function isCharacterOut(character: CharacterDef): boolean {
+    const map = character.unlock && MAP_BY_ID.get(character.unlock.mapId);
+    return !map || isMapOut(map);
+}
+
 export function getMap(id: string): MapDef {
     const map = MAP_BY_ID.get(id);
     if (!map) {
@@ -1001,15 +1031,17 @@ export function getMap(id: string): MapDef {
 }
 
 // The part of the world a map's collision, heights and scenery come from: its
-// arena, on its plane
+// arena, on its plane, and where what burns stands (MapDef.burns)
 export function getArenaRegion(map: MapDef): {
     baseX: number;
     baseY: number;
     sizeX: number;
     sizeY: number;
     plane: number;
+    burnLocs?: number[];
 } {
-    return { ...map.arena, plane: map.plane ?? 0 };
+    const region = { ...map.arena, plane: map.plane ?? 0 };
+    return map.burns ? { ...region, burnLocs: map.burns.locs } : region;
 }
 
 // Whether anything on the map poisons you (the King Black Dragon's breath) or

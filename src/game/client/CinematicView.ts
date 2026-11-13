@@ -12,7 +12,6 @@ import { Overlay, ScreenPoint } from "./Overlay";
 // take to come in at the start and go at the end
 const BAR_SHARE = 0.085;
 const BAR_SECONDS = 0.5;
-
 // A light in a cinematic, where it is (SceneLights): one of the cast's own (CinematicActorDef.light),
 // or a spot animation's playing on them (SPOT_LIGHTS)
 export type CinematicLight = { x: number; y: number; look: LightLook };
@@ -25,16 +24,20 @@ const HINT_UNTIL = 1.5;
 // floor's lift and all), so the cast stands where the props they stand in for do
 type Ground = (x: number, y: number) => number;
 
-// Draws a map's opening cinematic (MapDef.cinematic) as it plays: its cast, their spot animations
-// and overhead chat, and the bars across the screen. client/Cinematic.ts says what's happening.
+// Draws a cinematic (MapDef.cinematic, a fight part's, LairDef.opening) as it plays: its cast,
+// their spot animations and overhead chat, and the bars across the screen. client/Cinematic.ts
+// says what's happening.
 export class CinematicView {
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
 
     constructor(readonly assets: GameAssets) {}
 
-    // Whether the map's prop at index is stood in for by one of the cast
+    // Whether the map's prop at index is stood in for by one of the cast, until they're gone
     hidesProp(player: CinematicPlayer, index: number): boolean {
-        return player.def.cast.some((actor) => actor.prop === index);
+        return player.def.cast.some(
+            (actor) =>
+                actor.prop === index && !getActorState(player.def, actor, player.seconds).gone,
+        );
     }
 
     // The lights in it now, on a map with lighting: the cast's own while they're drawn, and the
@@ -105,7 +108,7 @@ export class CinematicView {
                 at,
                 actor.y,
                 actor.yaw ?? 0,
-                { scale: cue.scale ?? 1 },
+                { scale: cue.scale ?? 1, unlit: 1 },
             );
         }
     }
@@ -151,8 +154,10 @@ export class CinematicView {
             ctx.fillRect(0, 0, overlay.width, bar);
             ctx.fillRect(0, overlay.height - bar, overlay.width, bar);
         }
-        // How to skip, faint, in the bottom bar
-        const hint = Math.min(1, (seconds - HINT_FROM) / 0.5, (left - HINT_UNTIL) / 0.5);
+        // How to skip, faint, in the bottom bar (not on a held clock: a screenshot, the shot editor)
+        const hint = player.held
+            ? 0
+            : Math.min(1, (seconds - HINT_FROM) / 0.5, (left - HINT_UNTIL) / 0.5);
         if (hint > 0 && bar > 12 * pixel) {
             ctx.font = `${12 * pixel}px "OSRS Small", sans-serif`;
             ctx.textAlign = "right";

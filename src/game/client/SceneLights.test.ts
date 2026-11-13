@@ -154,6 +154,7 @@ describe("SceneLights", () => {
             ],
             floor,
             ambientAt: () => 1,
+            getKitGazes: () => [],
             isExposed: () => true,
         } as unknown as Sim;
         const lights = new SceneLights(new LightBudget(8));

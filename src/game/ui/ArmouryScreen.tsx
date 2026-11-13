@@ -5,7 +5,7 @@ import { UiSnapshot } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, GEAR_SLOT_BY_ID, getGear } from "../content/items";
-import { RARITIES, RARITY_ORDER } from "../content/rarity";
+import { RARITIES, RARITY_ORDER, rarityName } from "../content/rarity";
 import { describeSetProgress, getItemSet } from "../content/sets";
 import { compareStats, formatStats } from "../content/stats";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -25,9 +25,18 @@ import { useMenuKeys } from "./menuKeys";
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
+type Tab = "gear" | "weapons" | "passives";
+
+// Each tab's intro, and what a "?" in a tile's corner means there
+const TAB_TEXT: Record<Tab, { intro: string; missing: string }> = {
+    gear: { intro: "armoury.intro", missing: "armoury.legend.not_found" },
+    weapons: { intro: "armoury.catalogue.weapons_intro", missing: "armoury.legend.locked" },
+    passives: { intro: "armoury.catalogue.passives_intro", missing: "armoury.legend.locked" },
+};
+
 export function ArmouryScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
-    const [tab, setTab] = useState<"gear" | "weapons" | "passives">("gear");
+    const [tab, setTab] = useState<Tab>("gear");
     const [selected, setSelected] = useState(
         () => CASKET_GEAR.find((g) => save.foundGear.includes(g.id))?.id ?? CASKET_GEAR[0].id,
     );
@@ -50,51 +59,47 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
                         </button>
                     ))}
                 </div>
+                <p className="ui-subtle">{t(TAB_TEXT[tab].intro)}</p>
+                {/* What the tiles' borders mean, on every tab */}
+                <div className="ui-armoury-legend">
+                    {RARITY_ORDER.map((rarity) => (
+                        <span key={rarity} className="ui-armoury-legend-item">
+                            <span
+                                className="ui-armoury-legend-swatch"
+                                style={{ borderColor: RARITIES[rarity].color }}
+                            />
+                            {rarityName(rarity)}
+                        </span>
+                    ))}
+                    <span className="ui-armoury-legend-item">
+                        <span className="ui-armoury-legend-swatch ui-armoury-legend-missing">
+                            ?
+                        </span>
+                        {t(TAB_TEXT[tab].missing)}
+                    </span>
+                </div>
                 {tab === "gear" ? (
-                    <>
-                        <p className="ui-subtle">{t("armoury.intro")}</p>
-                        {/* What the tiles' borders mean */}
-                        <div className="ui-armoury-legend">
-                            {RARITY_ORDER.map((rarity) => (
-                                <span key={rarity} className="ui-armoury-legend-item">
-                                    <span
-                                        className="ui-armoury-legend-swatch"
-                                        style={{ borderColor: RARITIES[rarity].color }}
-                                    />
-                                    {tl(RARITIES[rarity].name)}
-                                </span>
-                            ))}
-                            <span className="ui-armoury-legend-item">
-                                <span className="ui-armoury-legend-swatch ui-armoury-legend-missing">
-                                    ?
-                                </span>
-                                {t("armoury.legend.not_found")}
-                            </span>
-                        </div>
-                        <div className="ui-armoury-body">
-                            <div className="ui-armoury-slots">
-                                {GEAR_SLOTS.map((slot) => (
-                                    <div key={slot.id} className="ui-armoury-slot">
-                                        <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
-                                        <div className="ui-armoury-pieces">
-                                            {CASKET_GEAR.filter((g) => g.slot === slot.id).map(
-                                                (g) => (
-                                                    <ArmouryTile
-                                                        key={g.id}
-                                                        save={save}
-                                                        itemId={g.id}
-                                                        selected={g.id === selected}
-                                                        onSelect={() => setSelected(g.id)}
-                                                    />
-                                                ),
-                                            )}
-                                        </div>
+                    <div className="ui-armoury-body">
+                        <div className="ui-armoury-slots">
+                            {GEAR_SLOTS.map((slot) => (
+                                <div key={slot.id} className="ui-armoury-slot">
+                                    <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
+                                    <div className="ui-armoury-pieces">
+                                        {CASKET_GEAR.filter((g) => g.slot === slot.id).map((g) => (
+                                            <ArmouryTile
+                                                key={g.id}
+                                                save={save}
+                                                itemId={g.id}
+                                                selected={g.id === selected}
+                                                onSelect={() => setSelected(g.id)}
+                                            />
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                            <ArmouryDetails save={save} itemId={selected} client={client} />
+                                </div>
+                            ))}
                         </div>
-                    </>
+                        <ArmouryDetails save={save} itemId={selected} client={client} />
+                    </div>
                 ) : (
                     <LoadoutCatalogue kind={tab} save={save} />
                 )}

@@ -165,6 +165,27 @@ export const TROPHIES: TrophyDef[] = [
             chance: 1,
         },
     },
+    {
+        id: "black_hween_mask",
+        name: "Black h'ween mask",
+        objId: 11847,
+        how: "Rarely found in a trick or treat pumpkin.",
+        from: { kind: "pumpkin", chance: 1 / 200 },
+    },
+    {
+        id: "jack_lantern_mask",
+        name: "Jack lantern mask",
+        objId: 9920,
+        how: "Sometimes found in a trick or treat pumpkin.",
+        from: { kind: "pumpkin", chance: 1 / 100 },
+    },
+    {
+        id: "skeleton_mask",
+        name: "Skeleton mask",
+        objId: 9925,
+        how: "Sometimes found in a trick or treat pumpkin.",
+        from: { kind: "pumpkin", chance: 1 / 100 },
+    },
 ];
 
 // The Theatre of Blood's uniques, weighted as the real raid's are, and its pet off Verzik

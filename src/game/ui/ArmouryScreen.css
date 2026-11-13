@@ -146,7 +146,8 @@
     background: var(--ui-card-hover);
 }
 
-/* Not found yet: said by a mark, as well as by the icon's grey */
+/* Gear not found yet, or a weapon or passive still locked: said by a mark, as well as by the
+   icon's grey. The key above the tiles says which, on each tab. */
 .ui-armoury-tile.ui-card-locked::after {
     content: "?";
     position: absolute;

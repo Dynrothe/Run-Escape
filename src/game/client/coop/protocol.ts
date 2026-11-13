@@ -1,5 +1,6 @@
 // What the game and the co-op relay (server/coop-relay.mjs) say to each other,
 // as JSON over a WebSocket
+import { WardrobeLook } from "../../content/wardrobe";
 import { CoopAction, FrameEvent } from "../../core/lockstep";
 
 // What a player brings to a run from their save, for everyone's copy of it
@@ -9,6 +10,8 @@ export type Loadout = {
     armoury: Record<string, number>;
     // Their pet (pets.ts): looks only, but a fighting one's (PetDef.power) in everyone's sim
     pet?: string;
+    // Their body and outfit from the Wardrobe (content/wardrobe.ts), only for looks as well
+    look?: WardrobeLook;
     // In a Tombs of Amascut room, their invocations, so a host's raid level shows in the lobby (and
     // in a run's room, its invocation points). Only shown: the start carries the party's
     // (GameStart.invocations), and the relay passes it as is

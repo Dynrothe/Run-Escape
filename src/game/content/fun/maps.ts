@@ -1,5 +1,29 @@
+import {
+    BATTLE_FOR_VARROCK,
+    BLAZE,
+    BRAZIER,
+    BURNING_BONES,
+    BURNING_TIMBER,
+    CRATER_HEART,
+    FIRES,
+    FLAMES,
+    PALACE_FLOOR_ASCII,
+    TALL_FLAMES,
+    WALL_OF_FLAME,
+    YAMA_SCALE,
+} from "../../scaperune/maps/battleForVarrock";
+import { SARADOMIN_BLESSINGS } from "../blessings";
+import { FLOOR_SKINS } from "../floorSkins";
+import { KRIL_HITPOINTS } from "../kril";
 import { MapDef, RunEventDef } from "../types";
+import { VARROCK_EVENTS, VARROCK_LEVEL_XP, VARROCK_WAVES } from "../varrockHordes";
+import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
+import { XARTH_HITPOINTS } from "../xarth";
+import { YAMA_HITPOINTS } from "../yama";
+import { PALACE_UNSEALED } from "./palaceUnsealed";
+import { VARROCK_OPENING } from "./varrockOpening";
+import { YAMA_WAKES } from "./yamaWakes";
 
 // The fun maps: open from the start, endless from the start, and full of other
 // players (Pest Control's are pests). Their rounds turn over every fifteen
@@ -61,6 +85,14 @@ export const PEST_CONTROL_PLAYER_LINES = [
     "lander full?",
     "250 pts!",
 ];
+
+// A seal's flames go out in a puff of grey dust (LairDef.seal.smoke), the dust Xarth's pillars
+// come down in
+const SEAL_SMOKE = 2184;
+
+// A general beaten, Saradomin heals the party whole, his bolt coming down on each (LairDef.heals):
+// the hordes are still to come, and there's little else to heal them
+const GENERAL_HEALS = { share: 1, spotAnim: SARADOMIN_BLESSINGS.spotAnim };
 
 export const FUN_MAPS: MapDef[] = [
     {
@@ -744,6 +776,195 @@ export const FUN_MAPS: MapDef[] = [
                 },
             },
             playerChat: { lines: PEST_CONTROL_PLAYER_LINES, every: [10, 18] },
+        },
+    },
+    {
+        id: "battle_for_varrock",
+        name: "The Battle for Varrock",
+        description:
+            "Varrock after the battle, every street and house of it burnt to ruins, fires still " +
+            "burning and Yama's demons in its streets. Fight them as Justiciar Zachariah, his " +
+            "lunge, shock wave, ice, lightning and gaze on your buttons. There are no items " +
+            "here: each level brings a blessing of Saradomin, at random. When you're ready, take " +
+            "on Yama's two generals: Xarth in the Grand Exchange and K'ril Tsutsaroth in the " +
+            "church, in either order. Beat both, and Yama waits on his throne in the palace.",
+        // Varrock teleport
+        iconObjId: 8007,
+        // Varrock and the country round it, inside its margin (scaperune/maps/battleForVarrock.ts)
+        arena: BATTLE_FOR_VARROCK.arena,
+        // Just outside the south gate
+        spawn: BATTLE_FOR_VARROCK.spawn,
+        // Facing into the city, as the opening's camera ends
+        spawnFacing: { x: 0, y: 1 },
+        difficulty: { hp: 1, damage: 1 },
+        // Yama's demons, all over the city, for as long as it takes (content/varrockHordes.ts)
+        waves: VARROCK_WAVES,
+        events: VARROCK_EVENTS,
+        // No items: a level up brings a blessing of Saradomin instead (content/blessings.ts), and
+        // past the first few each needs more experience than anywhere else (varrockHordes.ts)
+        blessings: SARADOMIN_BLESSINGS,
+        levelXp: VARROCK_LEVEL_XP,
+        // Its fires block nothing, and burn whoever walks into one
+        burns: { locs: FIRES, share: 0.05, every: 0.5 },
+        finalBossWarning: "",
+        victoryText: "Yama is beaten, and Varrock's fires die down at last.",
+        scaperune: true,
+        fun: {
+            // No clock and no bosses but its lairs' (FunMapDef.explore)
+            bosses: { pool: [], firstAt: Infinity, every: [Infinity, Infinity] },
+            character: "justiciar_zachariah",
+            explore: true,
+        },
+        // The palace's floor is gone: the game lays its own from the top of its front steps,
+        // ash-grey paving gone to soot with cinders and smouldering tiles among it. Nothing moves
+        // it but Yama, once he's woken (his attacks' patterns, content/yama.ts).
+        floor: {
+            ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor),
+            // A slab that catches the Justiciar takes 6 of his 38 hitpoints
+            slam: { ...createWardensFloor(BATTLE_FOR_VARROCK.palaceFloor).slam, damage: 0.15 },
+            ascii: PALACE_FLOOR_ASCII,
+            // A whisker over the palace's own ground: its tiles are drawn as their tops, or a
+            // phone couldn't draw his patterns on it
+            onGround: true,
+            skins: [
+                FLOOR_SKINS.ashenFlagstones,
+                FLOOR_SKINS.charredFlagstones,
+                FLOOR_SKINS.smouldering,
+            ],
+            tiles: [{ turn: "random" }, { share: 0.3, skin: 1 }, { share: 0.03, skin: 2 }],
+            seed: 3482,
+            script: [],
+            loopSeconds: 60,
+        },
+        // Yama on his throne at the north end of the palace, facing down it: npc 15645 sitting
+        // (12153), small. Once he's woken, his throne alone (14157). His generals where they wait,
+        // facing the way in: Xarth standing (14979), K'ril Tsutsaroth before the altar (6935).
+        props: [
+            {
+                npcId: 15645,
+                seq: 12153,
+                ...BATTLE_FOR_VARROCK.yama,
+                scale: YAMA_SCALE,
+                awake: { npcId: 14157, seq: 12153 },
+                lair: "yama",
+            },
+            { npcId: 16684, seq: 14979, ...BATTLE_FOR_VARROCK.xarth.at, lair: "xarth" },
+            { npcId: 3129, seq: 6935, ...BATTLE_FOR_VARROCK.kril.at, scale: 0.7, lair: "kril" },
+        ],
+        // Yama's two generals, each in a ruin of its own and either first, and then Yama. Stepping
+        // into a lair wakes its boss and every way out burns until it's dead; a death there ends
+        // the run, as any does. Whichever general's left grows stronger for the
+        // other's death.
+        lairs: [
+            {
+                id: "xarth",
+                enemyId: "xarth",
+                hp: XARTH_HITPOINTS,
+                at: BATTLE_FOR_VARROCK.xarth.at,
+                start: BATTLE_FOR_VARROCK.xarth.start,
+                area: BATTLE_FOR_VARROCK.xarth.area,
+                // Right round the pad's rim: a flame every other tile, bigger, for a phone
+                seal: { locId: FLAMES, scale: 2, sound: 10271, smoke: SEAL_SMOKE, spacing: 2 },
+                message: "Xarth wakes! The Grand Exchange is ringed with fire!",
+                victory:
+                    "Xarth is beaten. The fires round the Exchange die down, and Saradomin heals your wounds.",
+                heals: GENERAL_HEALS,
+                shout: "The flame... outlives me...",
+                empowered: {
+                    by: ["kril"],
+                    hp: 1.5,
+                    damage: 1.3,
+                    tempo: 0.85,
+                    message: "K'ril Tsutsaroth is dead. Xarth takes up his flames of Zamorak!",
+                },
+                // The Fractured Archive's pillars (62738), eight in a ring round him where the
+                // Exchange's inner ring stood
+                pillars: {
+                    locId: 62738,
+                    size: 2,
+                    at: BATTLE_FOR_VARROCK.xarth.pillars,
+                    crumbleAt: 0.5,
+                    impact: {
+                        spots: [
+                            { spotAnim: 2184, fit: 3 },
+                            { spotAnim: 318, fit: 4 },
+                        ],
+                        shake: 0.4,
+                    },
+                },
+            },
+            {
+                id: "kril",
+                enemyId: "kril_general",
+                hp: KRIL_HITPOINTS,
+                at: BATTLE_FOR_VARROCK.kril.at,
+                start: BATTLE_FOR_VARROCK.kril.start,
+                area: BATTLE_FOR_VARROCK.kril.area,
+                seal: { locId: FLAMES, scale: 1.4, sound: 10271, smoke: SEAL_SMOKE },
+                message: "K'ril Tsutsaroth wakes! The church is sealed in fire!",
+                victory:
+                    "K'ril Tsutsaroth is beaten. The fires round the church die down, and Saradomin heals your wounds.",
+                heals: GENERAL_HEALS,
+                shout: "Zamorak... curse... you...",
+                empowered: {
+                    by: ["xarth"],
+                    hp: 1.5,
+                    damage: 1.3,
+                    tempo: 0.85,
+                    message: "Xarth is dead. K'ril Tsutsaroth's claws burn with his fire!",
+                },
+            },
+            {
+                id: "yama",
+                enemyId: "yama",
+                hp: YAMA_HITPOINTS,
+                at: BATTLE_FOR_VARROCK.yamaRise,
+                start: BATTLE_FOR_VARROCK.yamaStart,
+                seal: { locId: FLAMES, scale: 1.4, sound: 10271, smoke: SEAL_SMOKE },
+                message: "Yama wakes! The palace is sealed in fire!",
+                victory: "Yama is beaten. The fires round the palace die down.",
+                shout: "This city... was already... ash...",
+                // He speaks from his throne first, and is gone from it in embers (fun/yamaWakes.ts)
+                opening: YAMA_WAKES,
+                requires: {
+                    lairs: ["xarth", "kril"],
+                    message:
+                        "Both of Yama's generals are dead. The fires round the palace die down!",
+                    // The camera to the palace as they do (fun/palaceUnsealed.ts)
+                    unsealing: PALACE_UNSEALED,
+                },
+                final: true,
+            },
+        ],
+        // On the HUD from the start, in order
+        objectives: [
+            { text: "Find and slay Yama's two generals", lairs: ["xarth", "kril"] },
+            { text: "Slay Yama in Varrock Palace", lairs: ["yama"] },
+        ],
+        // Yama's own track, from his domain: the city's his now
+        music: "Sign Here",
+        // As Yama rises (the final lair's boss): Xarth's fight track in the Fractured Archive
+        bossMusic: "Forged Through Fire",
+        // It opens on Yama and the last of the palace guard (fun/varrockOpening.ts)
+        cinematic: VARROCK_OPENING,
+        // A smoky, dimmed city lit by its fires
+        lighting: {
+            ambient: 0.92,
+            ambientColor: 0xf4e4da,
+            locs: {
+                [TALL_FLAMES]: { radius: 3.5, color: 0xff8a3a, intensity: 0.6, flicker: 0.35 },
+                [BURNING_TIMBER]: { radius: 4.5, color: 0xff7a2a, intensity: 0.7, flicker: 0.4 },
+                [BURNING_BONES]: { radius: 2.5, color: 0xff8a3a, intensity: 0.5, flicker: 0.4 },
+                [WALL_OF_FLAME]: { radius: 3.5, color: 0xff7022, intensity: 0.65, flicker: 0.45 },
+                // Either side of Yama's throne
+                [BRAZIER]: { radius: 5, color: 0xff6a20, intensity: 0.9, flicker: 0.3 },
+                // What was cloth: Gypsy Aris's tent burning down, the tents and the stalls
+                [BLAZE]: { radius: 5.5, color: 0xff6a1a, intensity: 1, flicker: 0.5 },
+                // Flames on their own, in the houses, the stalls and the palace
+                [FLAMES]: { radius: 3, color: 0xff8a3a, intensity: 0.55, flicker: 0.4 },
+                // The crater's molten heart, where the square's fountain stood
+                [CRATER_HEART]: { radius: 6, color: 0xff5a1a, intensity: 0.9, flicker: 0.25 },
+            },
         },
     },
 ];

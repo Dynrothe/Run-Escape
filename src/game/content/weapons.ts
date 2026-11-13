@@ -195,6 +195,67 @@ function evolvedLevels(
     );
 }
 
+// The two-handed sword's levels, through the metals, which Justiciar Zachariah's Saradomin sword
+// has too (its levels' names and items its own)
+const TWO_HANDED_SWORD_LEVELS = levels(
+    {
+        name: "Bronze 2h sword",
+        damage: 19,
+        cooldown: 1.6,
+        amount: 1,
+        area: 2.5,
+        arc: 0.9,
+        pierce: 0,
+        speed: 0,
+        duration: 0,
+        knockback: 0.8,
+        objId: TWO_HANDED_SWORDS[0],
+    },
+    {
+        name: "Iron 2h sword",
+        objId: TWO_HANDED_SWORDS[1],
+        amount: 2,
+        description: "Also sweeps behind you.",
+    },
+    {
+        name: "Steel 2h sword",
+        objId: TWO_HANDED_SWORDS[2],
+        damage: 23,
+        description: "+4 damage.",
+    },
+    {
+        name: "Black 2h sword",
+        objId: TWO_HANDED_SWORDS[3],
+        area: 2.75,
+        description: "+10% reach.",
+    },
+    {
+        name: "Mithril 2h sword",
+        objId: TWO_HANDED_SWORDS[4],
+        damage: 27,
+        description: "+4 damage.",
+    },
+    {
+        name: "Adamant 2h sword",
+        objId: TWO_HANDED_SWORDS[5],
+        cooldown: 1.45,
+        description: "Swings a little faster.",
+    },
+    {
+        name: "Rune 2h sword",
+        objId: TWO_HANDED_SWORDS[6],
+        arc: 1.05,
+        description: "Sweeps a wider arc.",
+    },
+    {
+        name: "Dragon 2h sword",
+        objId: TWO_HANDED_SWORDS[7],
+        damage: 32,
+        description: "+5 damage.",
+    },
+);
+// The Saradomin sword
+const SARADOMIN_SWORD = 11838;
 // The keris partisans: quick stabs that hit kalphites and scarabs (Kephri too) a third harder.
 // The plain one comes from the Kalphite Queen; each jewel from the Tombs of Amascut's chest brings
 // in its own, as the Theatre's rapier comes from its chest. One a run (family). Only the plain one
@@ -239,7 +300,8 @@ const keris = (
     // hacksword_slash stands in for its sound, as the fang's
     sound: 2500,
     hitSound: -1,
-    style: "melee",
+    // No class (style), so any adventurer can be offered it. Its hits are melee all the same, as
+    // a slash's are (getWeaponStyle).
     family: "keris",
     slayer: KERIS_KALPHITES,
     levels: kerisLevels(def.iconObjId),
@@ -984,64 +1046,33 @@ export const WEAPONS: WeaponDef[] = [
         sound: GODSWORD_SOUND,
         hitSound: -1,
         rarity: "common",
-        levels: levels(
-            {
-                name: "Bronze 2h sword",
-                damage: 19,
-                cooldown: 1.6,
-                amount: 1,
-                area: 2.5,
-                arc: 0.9,
-                pierce: 0,
-                speed: 0,
-                duration: 0,
-                knockback: 0.8,
-                objId: TWO_HANDED_SWORDS[0],
-            },
-            {
-                name: "Iron 2h sword",
-                objId: TWO_HANDED_SWORDS[1],
-                amount: 2,
-                description: "Also sweeps behind you.",
-            },
-            {
-                name: "Steel 2h sword",
-                objId: TWO_HANDED_SWORDS[2],
-                damage: 23,
-                description: "+4 damage.",
-            },
-            {
-                name: "Black 2h sword",
-                objId: TWO_HANDED_SWORDS[3],
-                area: 2.75,
-                description: "+10% reach.",
-            },
-            {
-                name: "Mithril 2h sword",
-                objId: TWO_HANDED_SWORDS[4],
-                damage: 27,
-                description: "+4 damage.",
-            },
-            {
-                name: "Adamant 2h sword",
-                objId: TWO_HANDED_SWORDS[5],
-                cooldown: 1.45,
-                description: "Swings a little faster.",
-            },
-            {
-                name: "Rune 2h sword",
-                objId: TWO_HANDED_SWORDS[6],
-                arc: 1.05,
-                description: "Sweeps a wider arc.",
-            },
-            {
-                name: "Dragon 2h sword",
-                objId: TWO_HANDED_SWORDS[7],
-                damage: 32,
-                description: "+5 damage.",
-            },
-        ),
+        levels: TWO_HANDED_SWORD_LEVELS,
         evolution: { into: "colossal_blade", requiresPassive: "dizanas_quiver" },
+    },
+    {
+        // Justiciar Zachariah's, in burnt Varrock (justiciarKit.ts): the two-handed sword's
+        // sweep, as Saradomin's sword, levelled by his blessings (blessings.ts, Blessed blade)
+        id: "saradomin_sword",
+        name: "Saradomin sword",
+        kind: "sweep",
+        description:
+            "Justiciar Zachariah's heavy sweep in front of him, which knocks back hard and staggers what it hits. Blessed blade makes it stronger.",
+        iconObjId: SARADOMIN_SWORD,
+        playerSeq: GODSWORD_SEQ,
+        sound: GODSWORD_SOUND,
+        hitSound: -1,
+        rarity: "common",
+        pickOnly: true,
+        // His blows land heavy: the camera shakes and what it hits staggers. Nothing's shown on
+        // what it hits: his blue impact read as Water Strike, and anything on every hit is too much
+        heavy: { shake: 0.2, stagger: 0.3 },
+        levels: TWO_HANDED_SWORD_LEVELS.map((level) => ({
+            ...level,
+            name: "Saradomin sword",
+            objId: SARADOMIN_SWORD,
+            // and knock back half as far again as a 2h sword's (before every other level's step)
+            knockback: level.knockback * 1.5,
+        })),
     },
     {
         id: "colossal_blade",
@@ -1791,6 +1822,8 @@ export const WEAPONS: WeaponDef[] = [
             { damage: 36, description: "+7 damage." },
         ),
     },
+    // Not melee's: any adventurer can be offered the keris. It stays here, as moving it would
+    // change the order offers are rolled in, and with it every seeded run.
     ...KERIS_PARTISANS,
     {
         id: "tzhaar_ket_om",
@@ -2161,13 +2194,22 @@ export const WEAPONS: WeaponDef[] = [
         name: "Toxic blowpipe",
         kind: "missile",
         description:
-            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads.",
+            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads. Now and then its special, Toxic Siphon, hits harder and heals you.",
         iconObjId: 12926,
         playerSeq: 5061,
         sound: 2707,
         hitSound: -1,
         rarity: "rare",
         style: "ranged",
+        // Its special attack, as in OSRS: half again the damage, and half of it back as hitpoints
+        siphon: {
+            name: "Toxic Siphon",
+            chance: 1 / 40,
+            damage: 1.5,
+            heal: 0.5,
+            max: 3,
+            projectileSpotAnim: 1043,
+        },
         levels: levels(
             {
                 damage: 5,

@@ -464,6 +464,45 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
     });
 
+    test("a map's objective shows while no boss is out, with how many of it are done", () => {
+        const { store, view } = renderHud();
+        const objective = () => view.container.querySelector(".ui-map-objective")?.textContent;
+        expect(objective()).toBeUndefined();
+        const text = "Find and slay Yama's two generals";
+        act(() => store.setNumbers(numbers({ objective: { text, done: 1, count: 2 } })));
+        expect(objective()).toBe(`${text} (1/2)`);
+        // One thing to do has no count
+        const yama = "Slay Yama in Varrock Palace";
+        act(() => store.setNumbers(numbers({ objective: { text: yama, done: 0, count: 1 } })));
+        expect(objective()).toBe(yama);
+    });
+
+    test("a map's objective is up for a few seconds, and again each time it changes", () => {
+        vi.useFakeTimers();
+        try {
+            const { store, view } = renderHud();
+            const objective = () => view.container.querySelector(".ui-map-objective")?.textContent;
+            const text = "Find and slay Yama's two generals";
+            act(() => store.setNumbers(numbers({ objective: { text, done: 0, count: 2 } })));
+            act(() => vi.advanceTimersByTime(5000));
+            expect(objective()).toBe(`${text} (0/2)`);
+            act(() => vi.advanceTimersByTime(1500));
+            expect(objective()).toBeUndefined();
+            // The same again (the HUD's numbers coming round) doesn't bring it back
+            act(() =>
+                store.setNumbers(numbers({ seconds: 70, objective: { text, done: 0, count: 2 } })),
+            );
+            expect(objective()).toBeUndefined();
+            // A general down does
+            act(() => store.setNumbers(numbers({ objective: { text, done: 1, count: 2 } })));
+            expect(objective()).toBe(`${text} (1/2)`);
+            act(() => vi.advanceTimersByTime(6500));
+            expect(objective()).toBeUndefined();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     test("shows the Thanksgiving Forester warning in the final minute", () => {
         const { store, view } = renderHud();
         act(() => store.set({ hud: { ...hud([]), mapId: "thanksgiving" } }));
@@ -591,9 +630,16 @@ describe("the run's HUD", () => {
         expect(weaponsTab).toHaveAttribute("aria-pressed", "false");
         expect(view.container.querySelectorAll(".ui-armoury-body")).toHaveLength(1);
         expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
+        // The key is on every tab, its "?" saying what it means there
+        const legend = () => view.container.querySelector(".ui-armoury-legend")!;
+        expect(legend()).toHaveTextContent("Very rare");
+        expect(legend()).toHaveTextContent("Not found yet");
         fireEvent.click(screen.getByRole("button", { name: "Weapons" }));
         expect(weaponsTab).toHaveAttribute("aria-pressed", "true");
         expect(armourTab).toHaveAttribute("aria-pressed", "false");
+        expect(legend()).toHaveTextContent("Very rare");
+        expect(legend()).toHaveTextContent("Locked");
+        expect(legend()).not.toHaveTextContent("Not found yet");
         expect(screen.queryByRole("button", { name: /Dragonfire shield/ })).not.toBeInTheDocument();
         expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
         const groups = view.container.querySelectorAll(".ui-catalogue-group");
@@ -601,7 +647,8 @@ describe("the run's HUD", () => {
             [...groups].map((group) => group.querySelector(".ui-armoury-slot-name")?.textContent),
         ).toEqual(["Melee", "Ranged", "Magic"]);
         const weapon = getWeapon("keris_partisan_of_breaching");
-        fireEvent.click(screen.getByRole("button", { name: weapon.name }));
+        // A screen reader hears that it's locked, as the "?" shows
+        fireEvent.click(screen.getByRole("button", { name: `${weapon.name} (locked)` }));
         const detail = view.container.querySelector(".ui-armoury-details")!;
         expect(detail).toHaveTextContent(describeUnlockTask(weapon.unlock!));
         expect(detail).toHaveTextContent("Locked for offers and choices:");
@@ -609,6 +656,7 @@ describe("the run's HUD", () => {
         save.unlockedItems.push(weapon.id);
         act(() => store.set({ save: { ...save } }));
         expect(detail).toHaveTextContent("Unlocked for offers and choices by:");
+        expect(screen.getByRole("button", { name: weapon.name })).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole("button", { name: "Scimitar" }));
         expect(detail).toHaveTextContent("At max level, evolve with Piety: ???");
@@ -619,8 +667,9 @@ describe("the run's HUD", () => {
         expect(screen.getByRole("button", { name: "Abyssal whip" })).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole("button", { name: "Passives" }));
+        expect(legend()).toHaveTextContent("Locked");
         const passive = getPassive("divine_rune_pouch");
-        fireEvent.click(screen.getByRole("button", { name: passive.name }));
+        fireEvent.click(screen.getByRole("button", { name: `${passive.name} (locked)` }));
         const passiveDetail = view.container.querySelector(".ui-armoury-details")!;
         expect(passiveDetail).toHaveTextContent(describeUnlockTask(passive.unlock!));
         expect(passiveDetail).toHaveTextContent("Gain per pick, regardless of rarity");
@@ -628,6 +677,8 @@ describe("the run's HUD", () => {
         expect(screen.getByText("All styles")).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Armour" }));
         expect(armourTab).toHaveAttribute("aria-pressed", "true");
+        expect(legend()).toHaveTextContent("Not found yet");
+        expect(legend()).not.toHaveTextContent("Locked");
         expect(view.container.querySelectorAll(".ui-armoury-slots")).toHaveLength(1);
         expect(view.container.querySelectorAll(".ui-armoury-details")).toHaveLength(1);
         expect(view.container.querySelector(".ui-catalogue-group")).not.toBeInTheDocument();
@@ -642,7 +693,7 @@ describe("the run's HUD", () => {
         expect(detail).toHaveTextContent("Starting weapon of Avian Assaulter");
         expect(detail).toHaveTextContent("Only on Thanksgiving Harvest");
         expect(detail).not.toHaveTextContent("Available from the start");
-        fireEvent.click(screen.getByRole("button", { name: "Smoke Burst" }));
+        fireEvent.click(screen.getByRole("button", { name: "Smoke Burst (locked)" }));
         expect(detail).toHaveTextContent("Choose from Ice Burst at level 2");
     });
 
@@ -701,7 +752,6 @@ describe("the run's HUD", () => {
             coins: 10,
             item: getItemView(CASKET_GEAR[0]),
             isGear: true,
-            changes: [],
             canStash: false,
             carried: 0,
             instant: false,

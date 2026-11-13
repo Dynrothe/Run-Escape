@@ -111,6 +111,17 @@ the version in the corner).
 - The weekly Vault, on the act's middle card once all four Awakened are beaten: one run a week,
   the same for everyone (a map, its remixes, three invocations and an adventurer, from the week),
   with your best time and kills kept for each week. A party can play it from the host's room.
+- The Wardrobe, on the title screen: pick your body, hair, beard and colours, and dress every
+  adventurer slot by slot. Its store sells nearly three thousand outfit pieces for coins, from
+  bronze helms to partyhats, and you can try each one on first. Your unlocked adventurers' own
+  pieces are free, you can save outfits to put on again in one go, and co-op shows everyone's
+  look. Drag your adventurer round to see them from every side, or press Random for a new look.
+- Hallowed Night pumpkins now hold a Black h'ween mask, a Jack lantern mask and a Skeleton mask
+  too.
+- The Battle for Varrock, on the Fun tab: Varrock burnt to ruins and overrun by Yama's demons.
+  Play as Justiciar Zachariah, with his Saradomin sword and his moves on buttons of your own, and
+  choose a blessing of Saradomin at each level instead of items. Slay Yama's two generals, Xarth
+  on the Grand Exchange and K'ril Tsutsaroth in the church, and the palace opens for Yama himself.
 
 ### Changed
 
@@ -121,10 +132,34 @@ the version in the corner).
   tents' lower walls, still light enough for a phone.
 - A run's coin bonuses (hard mode, Act II's steps, invocations) add together now, up to +300%,
   rather than multiplying.
+- Right clicking in the game no longer opens the browser's menu.
+- Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
+  a whole hitpoint at a time.
+- The Armoury's key, by Jp66600: the Weapons and Passives tabs show it too, where a "?" marks a
+  weapon or passive still locked. Screen readers say so too.
+- The keris partisans, by Okaeri: any adventurer can be offered them now, not only melee ones.
+  Their stabs still count as melee for style bonuses like Chivalry and the rings.
+- Gear from a casket, by Jp66600: a table sets each of its stats beside the piece you're wearing,
+  with the difference, and both pieces' set bonuses show.
 
 ### Fixed
 
 - Black squares in the Stranglewood's town, where cellar entries and dark floor were left behind.
+- The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
+  that heal you for half the damage they deal.
+- An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
+  lands.
+- On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
+  the pause menu.
+
+## 0.31.1 - 2026-11-12
+
+### Fixed
+
+- The camera's zoom slider works on tablets like the iPad. It's under the minimap there, with
+  the other toggles.
+- The title screen's bottom row on an iPad: the buttons in the corner were half off the bottom
+  of the screen, and held upright they covered the hint.
 
 ## 0.31.0 - 2026-11-11
 

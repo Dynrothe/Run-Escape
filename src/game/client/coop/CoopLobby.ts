@@ -1,4 +1,5 @@
 import { MAP_BY_ID } from "../../content/maps";
+import { WardrobeLook } from "../../content/wardrobe";
 import { t, tl } from "../../i18n";
 import { GameStore } from "../GameStore";
 import {
@@ -1071,6 +1072,7 @@ export function makeLoadout(
     pet?: string,
     invocations?: string[],
     trophies?: string[],
+    look?: WardrobeLook,
     relics?: string[],
 ): Loadout {
     // Only what's been bought, so it stays small
@@ -1080,6 +1082,7 @@ export function makeLoadout(
         unlockedItems,
         armoury,
         ...(pet && { pet }),
+        ...(look && { look }),
         ...(invocations && { invocations }),
         ...(trophies && trophies.length > 0 && { trophies }),
         ...(relics && relics.length > 0 && { relics }),

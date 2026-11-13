@@ -84,8 +84,18 @@ export class LightMap {
         }
     }
 
-    // A light at (x, y), world tiles: colour times strength, a channel
-    add(x: number, y: number, radius: number, r: number, g: number, b: number): void {
+    // A light at (x, y), world tiles: colour times strength, a channel. shade: how much of it
+    // reaches a spot (world tiles), 0 to 1, when something can stand in its way (a gaze's
+    // shadows, client/GazeLight.ts)
+    add(
+        x: number,
+        y: number,
+        radius: number,
+        r: number,
+        g: number,
+        b: number,
+        shade?: (x: number, y: number) => number,
+    ): void {
         if (radius <= 0 || r + g + b <= 0) {
             return;
         }
@@ -119,7 +129,10 @@ export class LightMap {
                 }
                 // 1 - smoothstep(CORE_SQ, 1, q)
                 const t = q <= CORE_SQ ? 0 : (q - CORE_SQ) / (1 - CORE_SQ);
-                const f = 1 - t * t * (3 - 2 * t);
+                let f = 1 - t * t * (3 - 2 * t);
+                if (shade) {
+                    f *= shade(this.x0 + (tx + 0.5) / scale, this.y0 + (ty + 0.5) / scale);
+                }
                 const i = (ty * LIGHT_MAP_SIZE + tx) * 3;
                 light[i] += r * f;
                 light[i + 1] += g * f;

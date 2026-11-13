@@ -48,8 +48,23 @@ go stale. Add anything that cost you time to work out.
 | Thanksgiving Harvest: its enemies, turkeys, the Avian  | `content/thanksgivingenemies.ts`, `TurkeyDay.ts`, `characters.ts`      |
 | Justiciar Zachariah, the Owl's Court (and its arena)   | `src/game/content/zachariah.ts`, `scaperune/maps/owlsCourt.ts`         |
 | His fight's design and its numbers                     | `docs/design/justiciar-zachariah.md`                                   |
+| Yama's generals in Varrock, and its demon hordes       | `content/xarth.ts`, `kril.ts`, `varrockHordes.ts`                      |
+| The generals' design and what the bot found            | `docs/design/varrock-generals.md`                                      |
+| The Battle for Varrock: burnt Varrock, to explore      | `content/fun/maps.ts`, `scaperune/maps/battleForVarrock.ts`            |
+| A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
+| A boss's cinematic as it wakes (`LairDef.opening`)     | `fun/yamaWakes.ts`, `Sim.stepLair`, `GameClient.startLairOpening`      |
+| A lair's seal going out (`requires.unsealing`)         | `fun/palaceUnsealed.ts`, `Sim.stepLockedLair`, `drawLairSeal`          |
+| A map's objective on the HUD (`MapDef.objectives`)     | `GameClient.getObjectiveView`, `GameUi.tsx` (`BossBar`)                |
+| The shot editor for cinematics (`?director=<map id>`)  | `client/CinematicDirector.ts`, `ui/DirectorPanel.tsx`                  |
+| Recording a cinematic as a trailer MP4 (ffmpeg)        | `client/TrailerRecorder.ts`, `scripts/dev/trailer-server.ts`           |
+| Yama's fight in burnt Varrock, and its design          | `content/yama.ts`, `docs/design/yama.md`                               |
+| Bosses asleep on a map to walk round (`MapDef.lairs`)  | `Sim.stepLair`, `docs/DEVELOPMENT.md` (A hero of their own)            |
+| Burning a real place to ruins (any town)               | `src/game/scaperune/ruins.ts`, `rs/config/loctype/LocOverrides.ts`     |
+| Zachariah as the player: his model and his buttons     | `src/game/content/justiciarKit.ts`, `Sim.useKitAbility`                |
+| Blessings in place of items, level by level (Varrock)  | `content/blessings.ts`, `Sim.bless`, `client/BlessingViews.ts`         |
 | A floor that rises and falls away (the Wardens')       | `core/ArenaFloor.ts`, `content/wardensFloor.ts`, `client/FloorView.ts` |
 | Act II: its maps, steps and its tab on the map screen  | `content/acts.ts`, `ui/GameUi.tsx` (`ActPage`)                         |
+| An act still to come, hidden (`ActDef.released`)       | `content/acts.ts` (`isActOut`), `content/maps.ts` (`isCharacterOut`)   |
 | A map's rule (`MapDef.rule`), roots, how they're drawn | `core/rules/`, `client/RootsView.ts`                                   |
 | The Stranglewood: its enemies, bosses, roots, arena    | `content/stranglewood.ts`, `scaperune/maps/stranglewood.ts`            |
 | The Lassar Undercity: its enemies, bosses, the realm   | `content/lassar.ts`, `scaperune/maps/lassarUndercity.ts`               |
@@ -74,11 +89,12 @@ go stale. Add anything that cost you time to work out.
 | A floor's preview page and checks (`?floorpreview`)    | `ui/FloorPreview.tsx`, `core/floorLint.ts`                             |
 | How deep or high a map can go, and backdrop recipes    | `docs/design/map-depth.md`                                             |
 | Act II, the Fallen Empire: the campaign's design       | `docs/design/act-2-fallen-empire.md`                                   |
-| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
-| A map's opening cinematic (`MapDef.cinematic`)         | `client/Cinematic.ts`, `CinematicView.ts`, `vardhelmOpening.ts`        |
 | Lights, the dark, aiming at what's lit, lanterns       | `docs/DEVELOPMENT.md`, Lights; `content/lights.ts`, `SceneLights.ts`   |
+| NPCs standing on a map as scenery (`MapDef.props`)     | `GameView.drawProp`, `GameAssets.loadProps`, `docs/DEVELOPMENT.md`     |
 | Random events: who turns up, what they do              | `src/game/content/randomEvents.ts`                                     |
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
+| The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |
+| The store's pieces and kits, from the cache            | `scripts/cache/cosmetics.ts` (writes `content/cosmeticItems.ts`)       |
 | Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
 | Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
 | Save data and migrations                               | `src/game/core/save.ts`                                                |
@@ -240,6 +256,7 @@ bun run tsx scripts/cache/check-items.ts          # casket items are the items t
 bun run tsx scripts/cache/check-fun-outfits.ts    # fun map outfits are what they're named
 bun run tsx scripts/cache/sprites.ts check        # the game's interface sprites are in the cache
 bun run tsx scripts/cache/validate-decoders.ts    # after touching a decoder or changing the cache
+bun run tsx scripts/game/check-lairs.ts           # every lair's boss has room where it rises
 ```
 
 ## Tests on the release build
@@ -295,9 +312,14 @@ desktop build.
 
 - In dev, `window.game` is the `GameClient` and `window.game.sim` is the running `Sim`. From the
   console you can call `selectMap(id)`, `startRun()`, `sim.addWeapon(id)` or `sim.spawnBoss(...)`.
+- `sim.equip(id)` wears a piece, and `sim.openCasket(tier)` opens a casket at once: set
+  `sim.chests[0].itemId` to choose its item, with `upgradedFrom = undefined` and `upgrades = 0`
+  (or the rolled item's stay), then call `game.syncOverlay()` (private, but callable there), or
+  its window never shows (nothing in a run's tick asks for it).
 - `?autostart=wizard` starts a run right away, `?stress=300` adds goblins, and F3 shows collision.
 - `?devtools` shows the Tombs of Amascut's testing buttons (god mode, skip to boss, straight to
-  any boss or the Wardens). Without it the dev server plays as players will, the tunnel included.
+  any boss or the Wardens), and an act that isn't out yet (Act II). Without it the dev server
+  plays as players will, the tunnel included.
 - `await frameProbe.sample(60)` gives a frame's triangles, draws and CPU time. Compare those rather
   than the frame rate: headless runs on a software rasterizer.
 - Enemies are baked per map when a run starts, so an enemy from another map, spawned from the

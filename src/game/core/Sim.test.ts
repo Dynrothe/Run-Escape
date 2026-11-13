@@ -1898,14 +1898,21 @@ describe("caskets and items", () => {
         expect(getBuffViews(sim)[0].secondsLeft).toBe(38);
     });
 
-    test("regen heals its hitpoints a minute", () => {
+    test("regen heals its hitpoints over the minute, a little every tick", () => {
         const sim = createSim("wizard");
         sim.metaStats.regen = 60;
         sim.updateStats();
         sim.player.hp = 5;
+        // Not a whole hitpoint at a time: a second's worth spread over its ticks
+        sim.step(0, 0);
+        expect(sim.player.hp).toBeCloseTo(5 + 1 / TICKS_PER_SECOND, 6);
         // Over before the first enemies can get there
-        runFor(sim, 5.5, "still");
-        expect(sim.player.hp).toBe(10);
+        runFor(sim, 5, "still");
+        expect(sim.player.hp).toBeCloseTo(10 + 1 / TICKS_PER_SECOND, 6);
+        // and no further than full
+        sim.player.hp = sim.player.maxHp - 0.001;
+        sim.step(0, 0);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
     });
 
     test("a Saradomin brew heals, and changes stats until it wears off", () => {
@@ -4400,6 +4407,52 @@ describe("class weapons", () => {
             sim.step(0, 0);
         }
         expect(sim.takeEvents().some((e) => e.type === "damage" && e.poison)).toBe(false);
+    });
+
+    test("now and then the Toxic blowpipe fires Toxic Siphon, which hits harder and heals", () => {
+        const sim = armed("toxic_blowpipe", "ranger");
+        const def = getWeapon("toxic_blowpipe");
+        const siphon = def.siphon!;
+        const goblin = dummy(sim, 3, 0);
+        goblin.frozen = 1e6;
+        let specials = 0;
+        // Not so many that the hits' XP brings a level up
+        for (let i = 0; i < 120; i++) {
+            // Back where it was after the last darts' knockback
+            goblin.x = sim.player.x + 3;
+            goblin.y = sim.player.y;
+            sim.player.hp = 1;
+            attack(sim);
+            const shots = sim.projectiles.filter((p) => p.weapon?.id === def.id);
+            expect(shots.length).toBeGreaterThan(0);
+            const special = shots[0].siphon === true;
+            // The whole attack is the special, or none of it
+            expect(shots.every((p) => (p.siphon === true) === special)).toBe(true);
+            if (special) {
+                specials++;
+                expect(shots[0]).toMatchObject({
+                    spotAnim: siphon.projectileSpotAnim,
+                    damage: def.levels[0].damage * siphon.damage,
+                });
+            }
+            // Let the darts land
+            sim.weapons[0].cooldown = 1e9;
+            for (let t = 0; t < 0.5 * TICKS_PER_SECOND; t++) {
+                sim.player.invulnerable = 100;
+                sim.step(0, 0);
+            }
+            sim.takeEvents();
+            const healed = sim.player.hp - 1;
+            if (special) {
+                expect(healed).toBeGreaterThan(0);
+                expect(healed).toBeLessThanOrEqual(siphon.max * shots.length);
+            } else {
+                expect(healed).toBe(0);
+            }
+        }
+        // One attack in 40
+        expect(specials).toBeGreaterThan(0);
+        expect(specials).toBeLessThan(16);
     });
 
     test("the Sanguinesti staff heals now and then, a little", () => {

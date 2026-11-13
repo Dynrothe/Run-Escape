@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { CHARACTERS, characterName } from "../content/characters";
 import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
-import { getMap, mapName } from "../content/maps";
+import { getMap, isCharacterOut, mapName } from "../content/maps";
 import {
     PASSIVES,
     formatPassiveValue,
@@ -11,7 +11,7 @@ import {
     passiveDescription,
     passiveName,
 } from "../content/passives";
-import { RARITIES } from "../content/rarity";
+import { RARITIES, rarityName } from "../content/rarity";
 import { CombatStyle, PassiveDef, WeaponDef } from "../content/types";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
@@ -24,7 +24,7 @@ import {
     weaponName,
 } from "../content/weapons";
 import { SaveData } from "../core/save";
-import { fmtNum, t, tl } from "../i18n";
+import { fmtNum, t } from "../i18n";
 import { DescriptionButton } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 import { StatLine } from "./StatLine";
@@ -62,112 +62,112 @@ export function LoadoutCatalogue({ kind, save }: { kind: Kind; save: SaveData })
               }))
             : [{ id: "all", label: t("armoury.catalogue.all_styles"), items: PASSIVES }];
 
+    // The Armoury above it says what the tab is, and what the tiles' borders mean
     return (
-        <>
-            <p className="ui-subtle">{t(`armoury.catalogue.${kind}_intro`)}</p>
-            <div className="ui-armoury-body">
-                <div className="ui-armoury-slots">
-                    {groups.map((group) => (
-                        <div className="ui-catalogue-group" key={group.id}>
-                            <div className="ui-armoury-slot-name">{group.label}</div>
-                            <div className="ui-armoury-pieces">
-                                {group.items.map((entry) => {
-                                    const available = isAvailable(entry, unlocked);
-                                    const name = itemName(entry);
-                                    return (
-                                        <DescriptionButton
-                                            key={entry.id}
-                                            itemId={entry.id}
-                                            className={
-                                                "ui-card ui-armoury-tile" +
-                                                (entry.id === item.id ? " ui-card-selected" : "") +
-                                                (available ? "" : " ui-card-locked")
-                                            }
-                                            style={
-                                                available
-                                                    ? { borderColor: RARITIES[entry.rarity].color }
+        <div className="ui-armoury-body">
+            <div className="ui-armoury-slots">
+                {groups.map((group) => (
+                    <div className="ui-catalogue-group" key={group.id}>
+                        <div className="ui-armoury-slot-name">{group.label}</div>
+                        <div className="ui-armoury-pieces">
+                            {group.items.map((entry) => {
+                                const available = isAvailable(entry, unlocked);
+                                const name = itemName(entry);
+                                return (
+                                    <DescriptionButton
+                                        key={entry.id}
+                                        itemId={entry.id}
+                                        className={
+                                            "ui-card ui-armoury-tile" +
+                                            (entry.id === item.id ? " ui-card-selected" : "") +
+                                            (available ? "" : " ui-card-locked")
+                                        }
+                                        style={
+                                            available
+                                                ? { borderColor: RARITIES[entry.rarity].color }
+                                                : undefined
+                                        }
+                                        aria-label={
+                                            available ? name : t("armoury.locked_title", { name })
+                                        }
+                                        aria-pressed={entry.id === item.id}
+                                        onUse={() =>
+                                            setSelected((previous) => ({
+                                                ...previous,
+                                                [kind]: entry.id,
+                                            }))
+                                        }
+                                        silent={false}
+                                        description={
+                                            <>
+                                                <strong>{name}</strong>
+                                                <span>{itemDescription(entry)}</span>
+                                                {entry.unlock && (
+                                                    <span>{describeUnlockTask(entry.unlock)}</span>
+                                                )}
+                                            </>
+                                        }
+                                    >
+                                        <ItemIcon
+                                            objId={entry.iconObjId}
+                                            spriteId={
+                                                "iconSpriteId" in entry
+                                                    ? entry.iconSpriteId
                                                     : undefined
                                             }
-                                            aria-label={name}
-                                            aria-pressed={entry.id === item.id}
-                                            onUse={() =>
-                                                setSelected((previous) => ({
-                                                    ...previous,
-                                                    [kind]: entry.id,
-                                                }))
-                                            }
-                                            silent={false}
-                                            description={
-                                                <>
-                                                    <strong>{name}</strong>
-                                                    <span>{itemDescription(entry)}</span>
-                                                    {entry.unlock && (
-                                                        <span>
-                                                            {describeUnlockTask(entry.unlock)}
-                                                        </span>
-                                                    )}
-                                                </>
-                                            }
-                                        >
-                                            <ItemIcon
-                                                objId={entry.iconObjId}
-                                                spriteId={
-                                                    "iconSpriteId" in entry
-                                                        ? entry.iconSpriteId
-                                                        : undefined
-                                                }
-                                                size={30}
-                                            />
-                                        </DescriptionButton>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                <div className="ui-select-details ui-armoury-details">
-                    <div className="ui-select-details-head">
-                        <ItemIcon
-                            objId={item.iconObjId}
-                            spriteId={"iconSpriteId" in item ? item.iconSpriteId : undefined}
-                            size={36}
-                        />
-                        <div>
-                            <div
-                                className="ui-card-title"
-                                style={{ color: RARITIES[item.rarity].color }}
-                            >
-                                {itemName(item)}
-                            </div>
-                            <div className="ui-card-style">{tl(RARITIES[item.rarity].name)}</div>
+                                            size={30}
+                                        />
+                                    </DescriptionButton>
+                                );
+                            })}
                         </div>
                     </div>
-                    <div>{itemDescription(item)}</div>
-                    <div className="ui-card-cost">
-                        {item.unlock
-                            ? t(
-                                  isAvailable(item, unlocked)
-                                      ? "armoury.catalogue.unlocked_by"
-                                      : "armoury.catalogue.locked_by",
-                                  { task: describeUnlockTask(item.unlock) },
-                              )
-                            : "levels" in item && (item.pickOnly || item.evolved)
-                              ? null
-                              : t("armoury.catalogue.from_start")}
-                    </div>
-                    {"levels" in item ? (
-                        <WeaponDetails weapon={item} save={save} />
-                    ) : (
-                        <PassiveDetails passive={item} save={save} />
-                    )}
-                </div>
+                ))}
             </div>
-        </>
+            <div className="ui-select-details ui-armoury-details">
+                <div className="ui-select-details-head">
+                    <ItemIcon
+                        objId={item.iconObjId}
+                        spriteId={"iconSpriteId" in item ? item.iconSpriteId : undefined}
+                        size={36}
+                    />
+                    <div>
+                        <div
+                            className="ui-card-title"
+                            style={{ color: RARITIES[item.rarity].color }}
+                        >
+                            {itemName(item)}
+                        </div>
+                        <div className="ui-card-style">{rarityName(item.rarity)}</div>
+                    </div>
+                </div>
+                <div>{itemDescription(item)}</div>
+                <div className="ui-card-cost">
+                    {item.unlock
+                        ? t(
+                              isAvailable(item, unlocked)
+                                  ? "armoury.catalogue.unlocked_by"
+                                  : "armoury.catalogue.locked_by",
+                              { task: describeUnlockTask(item.unlock) },
+                          )
+                        : "levels" in item && (item.pickOnly || item.evolved)
+                          ? null
+                          : t("armoury.catalogue.from_start")}
+                </div>
+                {"levels" in item ? (
+                    <WeaponDetails weapon={item} save={save} />
+                ) : (
+                    <PassiveDetails passive={item} save={save} />
+                )}
+            </div>
+        </div>
     );
 }
 
 function WeaponDetails({ weapon, save }: { weapon: WeaponDef; save: SaveData }): JSX.Element {
-    const sources = CHARACTERS.filter((character) => character.startingWeapon === weapon.id);
+    const sources = CHARACTERS.filter(
+        (character) => character.startingWeapon === weapon.id && isCharacterOut(character),
+    );
     const picks = BASE_WEAPONS.filter(
         (base) =>
             base.id !== weapon.id && base.hilts?.into.some((pick) => pick.weaponId === weapon.id),

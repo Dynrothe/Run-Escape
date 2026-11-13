@@ -371,7 +371,7 @@
 
 .ui-title-tiles {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
 }
 
@@ -680,8 +680,10 @@
     bottom: 8px;
 }
 
-/* A narrow window: the corner stacks, and the hint wraps to stay clear of it */
-@media (max-width: 1040px) and (pointer: fine) {
+/* A narrow window: the corner stacks, and the hint wraps to stay clear of it. A
+   tablet held upright too; a phone has a layout of its own (Mobile.css). */
+@media (max-width: 1040px) and (pointer: fine),
+    (max-width: 1040px) and (pointer: coarse) and (min-height: 521px) {
     .ui-title-utils {
         flex-wrap: wrap;
         justify-content: flex-end;
@@ -1551,9 +1553,10 @@
     overflow-y: auto;
 }
 
-/* The casket's card has its border inside its size */
+/* The casket's card has its border inside its size, and leaves the casket and its caption their
+   least (ChestModal.css) */
 .ui-choice-countdown ~ .ui-modal > .ui-chest-card {
-    max-height: calc(100% - 12px);
+    max-height: calc(100% - var(--chest-reserve));
 }
 
 /* A narrow window has room between six slots and the minimap for the time alone */
@@ -2060,6 +2063,13 @@
     gap: 2px;
 }
 
+/* A map's blessings (MapDef.blessings): a row for each seven, as they come. A slot's 40 pixels
+   with its border, and room for 42, as a phone's zoom makes the border wider than a pixel. */
+.ui-blessing-slots {
+    flex-wrap: wrap;
+    max-width: calc(7 * 42px + 6 * 2px);
+}
+
 /* A button, to hover, hold or focus for its description, sized as the box it
    was before (a button's border-box would take its border off its size) */
 .ui-slot {
@@ -2417,7 +2427,14 @@
     top: -4px;
 }
 
+/* A hero's own buttons (KitButtons), in a row with their keys */
+.ui-kit {
+    display: flex;
+    gap: 6px;
+}
+
 /* Only on a touch screen (Mobile.css) */
+.ui-touch-kit,
 .ui-touch-ability {
     display: none;
 }
@@ -2684,6 +2701,24 @@
     color: var(--ui-yellow);
     text-shadow: 2px 2px 0 #000;
     pointer-events: none;
+}
+
+/* A map's objective (MapDef.objectives): in, a few seconds up, and out (MAP_OBJECTIVE_MS) */
+.ui-map-objective {
+    animation: ui-map-objective-fade linear forwards;
+}
+
+@keyframes ui-map-objective-fade {
+    0% {
+        opacity: 0;
+    }
+    8%,
+    85% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
 }
 
 .ui-raid-objective-soon {

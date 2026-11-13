@@ -231,8 +231,16 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         this.lightMapData.begin(x, y);
     }
 
-    addLight(x: number, z: number, radius: number, r: number, g: number, b: number): void {
-        this.lightMapData.add(x, z, radius, r, g, b);
+    addLight(
+        x: number,
+        z: number,
+        radius: number,
+        r: number,
+        g: number,
+        b: number,
+        shade?: (x: number, z: number) => number,
+    ): void {
+        this.lightMapData.add(x, z, radius, r, g, b, shade);
     }
 
     endLights(): void {

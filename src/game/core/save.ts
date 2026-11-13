@@ -1,4 +1,4 @@
-import { ACTS, ACT_BY_ID, FALLEN_EMPIRE, isActEnded } from "../content/acts";
+import { ACTS, ACT_BY_ID, FALLEN_EMPIRE, isActEnded, isMapOut } from "../content/acts";
 import {
     getArmouryCost,
     getNextUpgrade,
@@ -51,6 +51,16 @@ import {
 } from "../content/types";
 import { LOCKABLE_ITEMS, LOCKABLE_ITEM_BY_ID, LockableItem, isAvailable } from "../content/unlocks";
 import { VAULT_WEEKS_KEPT, VaultRecord, isBetterVault, parseWeekKey } from "../content/vault";
+import {
+    COSMETIC_BY_ID,
+    SavedOutfit,
+    WardrobeLook,
+    cleanLook,
+    cleanSavedOutfits,
+    getCosmeticPrice,
+    getPieceTrophy,
+    ownsCosmetic,
+} from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
@@ -171,6 +181,12 @@ export type SaveData = {
     vault?: Record<string, VaultRecord>;
     // The adventurer the game starts on, picked as a favourite
     favouriteCharacter?: string;
+    // The Wardrobe (content/wardrobe.ts): the pieces bought in its store, by item id, and the body
+    // and outfit worn on every adventurer
+    cosmetics?: number[];
+    look?: WardrobeLook;
+    // Outfits kept under a name, to put on again in one go
+    outfits?: SavedOutfit[];
     // When the player last exported it (Date.now()), so an exported file says
     // when it was made, and the title screen can remind them to keep a copy
     lastExported?: number;
@@ -522,6 +538,15 @@ export function migrateSave(raw: unknown): SaveData {
     ) {
         save.favouriteCharacter = data.favouriteCharacter;
     }
+    if (Array.isArray(data.cosmetics)) {
+        // A found piece is the trophy's, never bought
+        const owned = new Set(
+            data.cosmetics.filter((id) => COSMETIC_BY_ID.has(id) && !getPieceTrophy(id)),
+        );
+        if (owned.size > 0) {
+            save.cosmetics = [...owned];
+        }
+    }
     // A time a Date can hold, or the reminder couldn't tell its day
     const exported = data.lastExported;
     if (typeof exported === "number" && exported > 0 && !isNaN(new Date(exported).getTime())) {
@@ -541,7 +566,38 @@ export function migrateSave(raw: unknown): SaveData {
     }
     // Adventurers and items for maps beaten before they could be earned
     applyUnlocks(save);
+    // After the adventurers, whose own pieces can be worn for nothing
+    const look = cleanLook(data.look, (objId) => canWearCosmetic(save, objId));
+    if (look) {
+        save.look = look;
+    }
+    const outfits = cleanSavedOutfits(data.outfits, (objId) => canWearCosmetic(save, objId));
+    if (outfits.length > 0) {
+        save.outfits = outfits;
+    }
     return save;
+}
+
+// The Wardrobe's pieces this save can wear: bought, an unlocked adventurer's, or found
+export function canWearCosmetic(save: SaveData, objId: number): boolean {
+    return ownsCosmetic(save, objId);
+}
+
+// Buys a piece in the Wardrobe's store. False when it can't be (owned already, not in the store,
+// only ever found, or too expensive).
+export function buyCosmetic(save: SaveData, objId: number): boolean {
+    const cosmetic = COSMETIC_BY_ID.get(objId);
+    if (
+        !cosmetic ||
+        getPieceTrophy(objId) ||
+        canWearCosmetic(save, objId) ||
+        save.coins < getCosmeticPrice(cosmetic)
+    ) {
+        return false;
+    }
+    save.coins -= getCosmeticPrice(cosmetic);
+    save.cosmetics = [...(save.cosmetics ?? []), objId];
+    return true;
 }
 
 // The adventurer the game starts on: the favourite, if it's open, or else the first that is
@@ -1272,10 +1328,15 @@ export function isMapUnlocked(save: SaveData, mapId: string): boolean {
     if (isFunMap(mapId) || isSeasonalMap(mapId) || isRaidMap(mapId) || isDevMap(mapId)) {
         return true;
     }
-    // An act's maps open together once the map it requires has been beaten, in any order
-    const act = MAP_BY_ID.get(mapId)?.act;
-    if (act) {
-        return (save.mapVictories[act.requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0;
+    // An act's maps open together once the map it requires has been beaten, in any order, and
+    // not at all while the act isn't out (isMapOut)
+    const map = MAP_BY_ID.get(mapId);
+    const act = map?.act;
+    if (map && act) {
+        return (
+            isMapOut(map) &&
+            ((save.mapVictories[act.requires] ?? 0) > 0 || (save.mapVictories[mapId] ?? 0) > 0)
+        );
     }
     // A boss fight opens once the map it's the hard mode of has been beaten
     const fight = MAP_BY_ID.get(mapId)?.fight;

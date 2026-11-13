@@ -1,10 +1,11 @@
 import { afterAll, beforeAll } from "vitest";
 
+import { FALLEN_EMPIRE } from "../content/acts";
 import { ARMOURY_COSTS } from "../content/armoury";
-import { CHARACTERS } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
-import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, MAP_BY_ID, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, MAP_BY_ID, getMap, isCharacterOut } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
 import { SHOP_UPGRADES } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -1522,16 +1523,45 @@ describe("the save in the browser", () => {
 });
 
 describe("Act II", () => {
-    test("opens once the Inferno's beaten, and not before, whatever else is", () => {
-        const save = createSave();
-        for (const map of CAMPAIGN_MAPS.filter((m) => m.id !== "inferno")) {
-            save.mapVictories[map.id] = 1;
+    // The act as it is with released set (ActDef.released), put back after
+    function asReleased(released: boolean, check: () => void): void {
+        const was = FALLEN_EMPIRE.released;
+        FALLEN_EMPIRE.released = released;
+        try {
+            check();
+        } finally {
+            FALLEN_EMPIRE.released = was;
         }
-        expect(isMapUnlocked(save, "stranglewood")).toBe(false);
-        save.mapVictories.inferno = 1;
-        expect(isMapUnlocked(save, "stranglewood")).toBe(true);
+    }
+
+    test("opens once the Inferno's beaten, and not before, whatever else is", () => {
+        asReleased(true, () => {
+            const save = createSave();
+            for (const map of CAMPAIGN_MAPS.filter((m) => m.id !== "inferno")) {
+                save.mapVictories[map.id] = 1;
+            }
+            expect(isMapUnlocked(save, "stranglewood")).toBe(false);
+            save.mapVictories.inferno = 1;
+            expect(isMapUnlocked(save, "stranglewood")).toBe(true);
+        });
         // Not in the campaign's chain: the maps after the Inferno open as they did
         expect(CAMPAIGN_MAPS.map((m) => m.id)).not.toContain("stranglewood");
+    });
+
+    test("stays shut until it's out, whatever's beaten, and the Forester with it", () => {
+        asReleased(false, () => {
+            const save = createSave();
+            save.mapVictories.inferno = 1;
+            save.mapVictories.stranglewood = 1;
+            expect(isMapUnlocked(save, "stranglewood")).toBe(false);
+            expect(isCharacterOut(getCharacter("forester"))).toBe(false);
+            // Everyone else is out as ever
+            expect(isCharacterOut(getCharacter("barbarian"))).toBe(true);
+            expect(isCharacterOut(getCharacter("warrior"))).toBe(true);
+        });
+        asReleased(true, () => {
+            expect(isCharacterOut(getCharacter("forester"))).toBe(true);
+        });
     });
 
     test("a win's best is kept with its step, until it's beaten at a harder one", () => {

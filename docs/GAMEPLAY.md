@@ -43,6 +43,21 @@ version and how to run it.
   Burst makes it take 20% more damage for a while and Blood Burst now and then heals you by 2.
   Level ups only offer Ice Burst. Beat the Desert and a burst's second level lets you pick which of
   the four you want, keeping its level, and it's your only burst for that run.
+- **The keris partisans** can be offered to any adventurer: quick melee stabs that hit kalphites
+  and scarabs (Kephri too) a third harder. The plain one is the Kalphite Queen's, and each jewel
+  from the Tombs of Amascut's chest brings in a keris of its own. They're picked as the Ancient
+  spells are: only the plain keris is offered on a level up, and at its level 2 you pick which
+  it becomes, the plain
+  one or a jewel's you've found, keeping its level (with no jewel found there's no pick). A jewel
+  found before the Kalphite Queen's kill still brings the plain keris in, to take it. **Of
+  breaching** now and then finds a gap in the shell for triple damage, far more often in
+  kalphites and scarabs; **of corruption**'s every sixth stab is Wrath of Amascut, after which
+  what it hit takes 25% more for 6 seconds; **of the sun** heals you on each kill, hits a quarter
+  harder below a quarter of your hitpoints, and every fortieth stab is Tumeken's Light, healing
+  you to full; and **of amascut** has all of it but Tumeken's Light. You carry one keris at most,
+  so they can't be stacked. It's the one shared weapon that's Rare, so it comes with a Rare's
+  bonus damage, and a ranged or magic adventurer who starts with a Common or Uncommon weapon holds
+  the keris once they take it (the rarest weapon you carry is the one in your hand).
 - **Evolutions** from the new maps' passives: maxed elemental runes with Vengeance become
   **Astral runes**, which never stop circling; maxed throwing knives with Obsidian armour become
   **Toktz-xil-ul**, obsidian rings that fly through everything; maxed Saradomin Strike with the
@@ -155,22 +170,9 @@ version and how to run it.
       that stuns; the **Dragon warhammer**, whose every third blow is a Smash that makes what it
       hits take 30% more damage; the **Inquisitor's mace**, crushing blows a quarter harder on the
       undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
-      sides; and
-      the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
-      everything around you; **Dinh's bulwark**, a slow bash that hits everything around
-      you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
-      hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
-      Amascut's chest brings in a keris of its own. They're picked as the Ancient spells are:
-      only the plain keris is offered on a level up, and at its level 2 you pick which it
-      becomes, the plain one or a jewel's you've found, keeping its level (with no jewel found
-      there's no pick). A jewel found before the Kalphite Queen's kill still brings the plain
-      keris in, to take it. **Of breaching** now and then finds a gap in
-      the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
-      every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
-      **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
-      hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
-      amascut** has all of it but Tumeken's Light. You carry one keris at most, so they can't
-      be stacked.
+      sides; the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
+      everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
+      you, further out than any other melee weapon.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
@@ -180,7 +182,9 @@ version and how to run it.
       arrows that fly on through what they hit. The **Toxic blowpipe** fires darts that leave
       venom in what they hit, hurting it every second; it goes for enemies without venom first
       (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
-      upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
+      upgrades its darts: bronze, steel, mithril, rune, then dragon. One attack in 40 is its
+      special, Toxic Siphon: darts that hit 50% harder and heal you for half what they deal, up
+      to 3 hitpoints each. From the new maps:
       the **Dragon hunter crossbow**, dragon bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
       crossbow**'s bolts upgrade from bronze to steel, mithril, runite, then dragon. They go
@@ -236,6 +240,109 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
+- **The Battle for Varrock** (on the Fun tab, its own row: a map to explore): Varrock as it is in
+  OSRS, every house, shop, street, church and the palace where they stand, burnt to ruins. Walls
+  charred, some fallen, some broken down (the Wilderness's ruined walls) and some still burning;
+  roofs, doors and upstairs gone; breaches in the city wall, broken like Falador's crumbling
+  wall; trees burnt, every bush and plant gone, the grass gone to ash; Gypsy Aris's tent and the
+  market's stalls burning. Where the square's fountain stood is a
+  crater, burning at its heart. Fires still burn, flames on their own and never a campfire, with
+  burnt skeletons and the dead raiders of Phosani's Sanctuary and the Theatre of Blood where they
+  fell. Nothing of them is in the way: you walk over the dead and through the fires, and a fire
+  burns you as you do, a twentieth of your hitpoints at once and every half second you stay,
+  through armour. The demons walk through them unharmed. The palace's floor is the floor
+  system's tiles in an ashen skin, up its burnt front steps from its court, with Yama on his
+  throne at its north end, and fires on it too. You start outside the south gate as
+  Justiciar Zachariah, his own model, with his Saradomin sword (the 2h sword's sweep, and its
+  blows land heavy: the ground shakes, and what it hits is knocked back further than a 2h sword's
+  and staggers, held still a moment, though not a boss) and the
+  moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
+  of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
+  The gaze is his ultimate, back every 30 seconds; the others come back in 5 to 14. He stands
+  still while he casts, from the press to the strike, and rising floor can't hurt him mid-lunge:
+  a lunge is a way through Yama's slabs. The
+  Owl's gaze lights everything round him blue-white, and walls, ruins and pillars cast shadows it
+  can't see into: anything in them is spared, and anything it judges is struck by Saradomin's
+  lightning.
+  It opens with a cinematic: close on Yama, who says resistance is futile; the camera pulls back
+  to Sir Prysin and four Varrock guards before his throne; Prysin defies him, Yama answers
+  "Pathetic." and snaps his fingers, and they burn away in Leagues IV's Trailblazer Reloaded
+  death; then the camera flies south over the city to Zachariah and the run begins. Any key,
+  click, tap or controller button skips it, and it plays each time the map's travelled to.
+  Zachariah starts facing into the city. Its music is Sign Here, from Yama's domain, and
+  Forged Through Fire takes over as Yama rises.
+  Yama's demons fill its streets, the hordes of hell: imps at first as any map's first wave, then
+  more and more, until from the eighth minute they're twice the crowd other maps' waves bring,
+  coming twice as fast. Imps, reanimated demon spawn, hellhounds, lesser, revenant, greater and
+  black demons, with an elite a minute from 100 seconds and rings of them now and then. There's no
+  clock and no random events, and no items: no caskets, gear, power-ups, bag or weapons and
+  passives to pick, only bones, coins and food (twice as often as elsewhere, a kill in about 170).
+  Kill them for levels for as long as you like,
+  though they get tougher by the minute. The first few levels come as anywhere, and then each
+  takes more experience, up to six times as much from level 14: each level offers three blessings
+  of Saradomin to choose from, and his strike comes down on you with the one you take (a reroll
+  offers three more). Saradomin's strength
+  (Might, which the Justiciar's buttons hit harder with too), a Saradomin brew (hitpoints, and a
+  third of them back), Saradomin's ward (armour), Holy sandals (speed), a Holy elixir
+  (4 hitpoints a minute), Saradomin's will (buttons back sooner, and the sword faster), a Holy book
+  (experience), a Blessed blade (the Saradomin sword a level up), Saradomin bracers (the sword
+  swings faster), a Saradomin platebody (its blows knock back further and stagger longer), a
+  Saradomin staff (Saradomin Strike,
+  then a level of it) and Zilyana's crossbow (from Saradomin's general, the Armadyl crossbow, then
+  a level of it), and blessings on the buttons: Saradomin's light (all of them harder), Zeal (a
+  longer, harder lunge), Saradomin's crozier (another shock wave either side), Holy water (a
+  bigger ice barrage that holds longer), Saradomin's mjolnir (further, harder lightning) and
+  Saradomin's halo (a wider, harder Owl's gaze). Each comes only so many times, and none is
+  offered twice at once; once fewer than three are left, Saradomin's tears are offered beside
+  them (a little Might, and half your hitpoints back), and then alone. They
+  show in a row under the sword, and on the pause menu. Yama's two
+  generals wait in their ruins from the start, to be fought in either order: step into one's ruin
+  and it wakes, the demons about run from it every way, every way out bursts into fire, and you
+  fight it there with nothing else coming. The timer stops while you do, and the hordes with it:
+  they come back as they were when it woke. Neither is a fight for a fresh hero: on average the
+  first wants about eight minutes of the hordes' levels, the second fifteen, and Yama no more.
+  Die there and the run's over, as it is anywhere. Beat one and Saradomin heals you whole (and
+  everyone still up in co-op), with the hordes still to come; and the other grows stronger: 50% more
+  hitpoints, 30% harder hits, attacks sooner, and an attack of the fallen one's.
+  **Xarth** (13,300 hitpoints), in the middle of the Grand Exchange's pad, stands where he is and
+  burns. The whole pad is his fight, its walls and booths gone, and it's ringed with fire once he
+  wakes. His bolts leave you burning, a stack a bolt up to three (a hitpoint a second each,
+  through armour). Up close he lashes in front of him, his guard down if he misses. Every so often
+  he gathers his flames and they burst over the whole pad, sparing only what's behind one of the
+  eight pillars in a ring round him, which crumbles for it. Halfway down, the pillars come down and
+  the Exchange burns: fire takes the floor and spreads (Shock wave puts it out along its way), his
+  arrows come in fans of five, and six of the dead get up out by the pad's rim and walk in to him,
+  each healing him 4% as it reaches him; when the last is there or dead, what got there goes up
+  over the pad. With K'ril dead first, he casts Zamorak's flames too.
+  **K'ril Tsutsaroth** (8,400), before the altar of the church in the north-east, comes at you
+  down its nave: poison claws, Zamorak's flames where you stand, a bloodrush onto where you were
+  (his guard down if he misses) and a "YARRRRRRR!" smash round him through armour. Every so often
+  he desecrates the church for five seconds and heals 12%, unless you hit him for 6% of his
+  hitpoints meanwhile, which leaves him stunned and open. At 70%, 45% and 20% his bodyguards come,
+  Tstanon Karlak, Zakl'n Gritch and Balfrug Kreeyath, and while any stands he takes half. With
+  Xarth dead first, his claws burn and his bloodrush leaves the ground burning.
+  For a few seconds as the run starts, and again after each general's fight, the top of the screen
+  says what's wanted: find and slay Yama's two generals (with how many are dead), then slay Yama in
+  Varrock Palace. Until both are dead the palace is ringed
+  with fire. As the second falls the camera flies to the palace's front steps and its fire goes
+  out, flame by flame from the middle in a puff of grey dust, everyone held and unhurt and the
+  demons about sent off while it plays (any key, click or tap skips it on your own). Step
+  onto its floor then and Yama wakes: he speaks from his throne, is gone from it in a drift of embers
+  and rises before it, every way off the floor bursts into fire, and you fight him there until he's
+  dead (25,200 hitpoints, in three phases). The floor is his weapon. His stomp ripples rings of
+  slabs out from him, with spokes left down to stand on, and his shadow lanes raise lanes of the
+  floor through where you stand, crossing from his second phase. Close in he claws: step out of it
+  or round him, and a claw that misses leaves his guard down. At range he throws fiery skulls that
+  leave the floor burning. From his second phase he sends void flares after you: slow orbs that
+  burst into a cross of rising floor when their time's up, or when they touch you. Nothing hurts
+  one, but Ice barrage holds it still, its time too, and Lightning breaks a held one, leaving food
+  behind: the fight's only healing. The Owl's gaze can't touch him: he raises four stone pillars
+  against it, and cast within reach of his claw he swats you out of it and well away. From 85% of
+  his hitpoints, at every phase change and every 36 seconds or so (33 and 30 in his later phases,
+  never sooner than the gaze comes back), he calls down a meteor that kills you wherever you
+  stand. The only answer is the gaze cast at him as he calls it, which breaks it in the sky and
+  leaves him open. He never starts one while your gaze is too far from ready. Killing him wins
+  the run, and dying to him ends it.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
   Sands, Awakened Vardorvis, the Awakened Whisperer, the Awakened Duke Sucellus, the Awakened Leviathan), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
@@ -358,6 +465,8 @@ version and how to run it.
   from bosses) and get better as the run goes on; a loot beam marks them, and an arrow at the
   edge of the screen points to ones out of view. Walk over one to open it: it rattles, bursts
   open and gives some coins and one item, which you equip, keep, use or high alch for coins.
+  Gear is set beside the piece it would replace: each stat's value on both, the difference, and
+  both pieces' set bonuses.
 - **Power-ups** drop now and then from anything that isn't a boss: the longer it's been since the
   last one, the likelier a kill drops one, so they turn up every couple of minutes early on and
   late. A cyan beam marks them; walk over one to use it there and then, before it blinks out
@@ -402,7 +511,10 @@ version and how to run it.
 - **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
-  mask or a Scythe inside, for the Collection log. Those do nothing in a run.
+  mask (red, blue or green), a Jack lantern mask or a Skeleton mask (1 in 100 each), or a Black
+  h'ween mask or a Scythe (1 in 200 each) inside, for the Collection log. Those do nothing in a
+  run, but a mask found is yours to wear in the Wardrobe, and finding one is the only way to get
+  it.
 - **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, Lil' Zik from
   Verzik with its looks from expert clears, and the Dark squirrel from Justiciar Zachariah) can be
   taken along, picked under the adventurers. It
@@ -565,8 +677,10 @@ version and how to run it.
       no picks, no items: you play the Lantern-bearer with Fire spells at their top level and
       **Shadow**. It rises with you south of its pool, to Colossus of the Deep. It can't be endless;
       it has a hard mode once it's beaten. Beating it finds **Lil'viathan**, its pet, every time.
-- **Act II, the Fallen Empire**: a tab of the map screen beside Act I, opened by beating the
-  Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
+- **Act II, the Fallen Empire**: not out yet. Until it is (`ActDef.released`), its tab and what
+  it brings in (its maps, the adventurers they unlock, their Collection log tab) are hidden and its
+  maps stay locked; the dev server shows them with `?devtools`. A tab of the map screen beside
+  Act I, opened by beating the Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
   played in any order, each a normal fifteen-minute run with a rule of its own. Each is
   a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno
   (enemies 4.2 times the hitpoints, 2.9 times the damage), up to step 3 (4.65 and 3.2), and each
@@ -1034,6 +1148,24 @@ version and how to run it.
   Its Weapons and Passives tabs also show their effects, levels and unlock tasks for planning a
   build. Weapons are grouped by combat style; shared weapons and all passives can be offered to
   any style. Evolution results remain hidden until made, as in the Collection log.
+- The **Wardrobe** (on the title screen) is how you look, on every adventurer. Appearance picks a
+  body (type A or B), its hair, jaw and the rest of the body's styles, and the hair, top, legs,
+  boots and skin colours, on the body alone so you can see it, or Random picks the lot. Drag the
+  adventurer (or press the arrows) to turn them round. Outfit picks what's worn in each slot (head, cape, neck, body, shield,
+  legs, hands and feet): the adventurer's own piece, nothing, or a piece you have. Up to ten
+  outfits can be saved under a name and put on again in one go (they keep the pieces, not the
+  body). The Store has
+  every item OSRS can wear outside the weapon slot, one of each look, nearly three thousand of
+  them, from 200 coins for a Common piece to 25,000 for a Very rare one (partyhats, gilded), and
+  250,000 for each piece of 3rd Age. Pick one to try it on. Every unlocked adventurer's own pieces are yours for
+  nothing. Collection log finds that are worn aren't sold, and are yours once found: the
+  Halloween masks (the h'ween masks, the Jack lantern and the Skeleton mask, from Hallowed
+  Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)
+  from the Theatre of Blood, Masori armour and Elidinis' ward (and their fortified looks) from
+  the Tombs of Amascut, and Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
+  it). They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
+  weapon is always the run's. Adventurers who are someone in particular (the Avian Assaulter's chicken,
+  Durial321) keep their own look. It's looks only, and in co-op everyone sees each other's.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
   (friends join with its eight-letter code or the invite link) or open to anyone browsing the
   rooms list, or join one. Everyone picks their own adventurer and brings their own skills,

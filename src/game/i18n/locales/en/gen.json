@@ -25,6 +25,7 @@
   "stat.thorns.label": "recoil damage",
   "stat.healChance.label": "chance to heal on hit",
   "stat.meleeKnockback.label": "melee knockback",
+  "stat.meleeSpeed.label": "melee attack speed",
   "stat.weaponSlots.label": "weapon slots",
   "stat.passiveSlots.label": "passive slots",
   "stat.powerUpRate.label": "power-up drops",

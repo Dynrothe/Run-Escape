@@ -45,7 +45,11 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   array for a tuned curve, or a number for the default progression. Recipes in `evolutions.ts`
   and the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
-  a slash or sweep, and `special.aoe` hits all round.
+  a slash or sweep, and `special.aoe` hits all round. A missile's special is `siphon` instead: a
+  chance each attack, rolled on the sim's `Rng`, of harder shots that heal (the Toxic blowpipe's).
+  `heavy` makes a slash's or sweep's blows land heavy (the Saradomin sword's): a camera shake, a
+  spot animation on what they hit if it has one, and a stagger (`WeaponDef.heavy` in
+  `docs/DEVELOPMENT.md`).
 - An attack that hits what it touches (its range plus the enemy's `radius`) finds enemies with
   `queryTouching`, not `enemyHash.query`: the hash goes by middles, so its search alone misses a
   big enemy whose edge is in range.
@@ -145,6 +149,19 @@ existing ones won't do, and a case in `Sim.meetVisitor` (`startRandomEvent` for 
 - `state === "event"` pauses the run for an offer. The sim's bot answers those in `eventChoice` in
   `simulate-run.ts`, so it needs to know a new kind of offer.
 
+## Wardrobe piece
+
+The Wardrobe's store is every wearable item in the cache, generated into `content/cosmeticItems.ts` by
+`bun run tsx scripts/cache/cosmetics.ts`: don't add pieces by hand. To change what's in it, change
+the script's filters (`JUNK`, `RARES`, the slots) and run it again, then
+`scripts/i18n/extract.ts` for their names. Prices are by rarity in `content/wardrobe.ts`, with
+3rd Age priced on its own there. An
+adventurer's own outfit pieces are free once they're unlocked, so a new adventurer needs nothing more.
+A piece that's only found, never sold (the Halloween masks, raid armour), is a trophy (`trophies.ts`)
+named in `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts`, with any pieces it makes besides its
+own item. A new trophy that's a worn item goes there too, or the store sells it.
+`slim-plan.ts` bakes every piece on both bodies. See The Wardrobe in `docs/DEVELOPMENT.md`.
+
 ## Collection log reward
 
 Add trophies to `TROPHIES` in `trophies.ts`, with a `TrophySource` that names how they're found. An
@@ -200,6 +217,23 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   (`MapDef.fight.ability`, or the Tombs' `TombsDef.ability`: `Sim.ability` is either)
   and what a blow throws up (`impact`, an `ImpactDef`). Boss fights as data in
   `docs/DEVELOPMENT.md` has the lot.
+- Bosses asleep on a map to walk round (`MapDef.lairs`: Yama's, and his generals') wake when
+  someone steps onto the map's floor or into a lair's own `area`, and every way out burns until
+  it's dead. A lair can wait on others (`requires`), throw the party out on a death (`retreat`),
+  grow stronger once another's beaten (`empowered`), heal the party as it's beaten (`heals`) and
+  win the run (`final`). Give a lair's boss
+  room for its `radius`: the flow field steers by single tiles, so a boss wider than a gap sticks
+  in it, and one whose `at` doesn't fit rises at the nearest spot that does, maybe outside its
+  lair (the church's pews had to go for K'ril). Yama's fight's fields are any boss's:
+  `BossDef.home`, `critical` (an attack on its own clock) and `gazeWard`, and an attack's
+  `meteor`, `interruptedBy` (a hero's button stops it) and `floorAt`, and his Voidflare's
+  `EnemyDef.bursts` (a summon that bursts unless a hero's buttons hold and break it, for food)
+  with `summon.toward`. A lair's `opening` is a cinematic as it wakes, on the sim's clock, with
+  the party held, and `requires.unsealing` one as what it waits on is beaten (its seal going out,
+  in a puff of `seal.smoke`). `MapDef.objectives` puts what the map wants on the HUD for a few
+  seconds, a line at a time, each done once its lairs are beaten. `MapDef.lairs` under A hero of their own in `docs/DEVELOPMENT.md` has the lot,
+  with the generals' pieces (`LairDef.pillars`, a debuff's `burn`, a pool's `spreads` and
+  `dousedBy`, `walkTo.heals`, `BossDef.pact`, `breakable`).
 - Two bosses fought together (the Scarab Mages) are both `finalBoss` events, the second later
   with `inArena` so it comes up in the square, and the first's intro without `alone` (which
   holds back every event till it's dead). `enrage.partner` enrages one when its partner dies, and
@@ -279,7 +313,9 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   (`SaveData.fightStages`), and the map's beaten once the last part is.
 - Check it in the browser: the minimap, the spawn, and that enemies can reach you. The sim's bot
   uses the real collision, so a sim also shows whether a map plays at all.
-- Fun maps don't count towards quests.
+- Fun maps don't count towards quests. A fun map with `explore` has no clock, an empty boss pool and
+  no random events. With no waves too it's one to walk round (`isPeaceful`): nothing hurts but
+  while one of its `lairs` is fought. The Battle for Varrock has waves, so it's a run as any.
 - The map screen lists maps by kind, a tab for each (`MAP_TABS` in `ui/GameUi.tsx`): a new list
   like `RAID_MAPS` needs a group there, or it won't be on the screen. Every tab's page is laid out
   at once, one over another, so the list keeps the tallest's height and the details below never
@@ -292,16 +328,16 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   first step's, and the step scales its bosses' event hitpoints too. Sim it with `STEP=0` to `3`.
   Its slot on the act (`ActSlotDef`) names its Awakened fight (`fightId`): the act's ending
   (`ActDef.ending`) is told once every slot's fight is beaten (`isActEnded`, `takeActEnding`).
+  An act stays hidden and its maps locked until `ActDef.released` (`isActOut`), with what they
+  bring in: an adventurer they unlock (`isCharacterOut`) and the Collection log's tab for their
+  finds. Anywhere new that lists maps, adventurers or finds needs the same check. The dev server
+  shows an act that isn't out with `?devtools`; sims and tests play it either way.
 - `rule` is what the map's played by (`RunRuleDef`, `core/rules/`): the sim runs it each tick on
   its own Rng, so nothing else about a run changes. A rule only reads the grid and its def, never
   a map's own data, so it can go on any map. A new kind needs a class implementing `RunRule`, a
   case in `createRunRule`, a view in `client/` and the bot taught to play it (`botMove`).
 - `hard` is what hard mode multiplies its enemies' hitpoints and damage by (`hard.ts` has the rest of
   hard mode, and the numbers for a map that doesn't set its own). Sim it against normal with `HARD=1`.
-- People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
-  `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
-  cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
-  one to copy. Check every shot's triangles at a phone's size, as it says.
 - Lights: a map opts in with `lighting` (`LightingDef`), and then anything can give off light: the
   map's own `lights`, glowing scenery by loc id (`locs`), each player's (`player`), an enemy's
   (`EnemyDef.light`, and what it leaves where it dies), a power-up's (`effect.kind: "light"`),
@@ -311,6 +347,22 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
   (`look.darkGlow`, with `EnemyDef.light.phases`). `ambient` darkens the rest (and a boss phase's `light`
   for a while); `litTargetsOnly` is the Scar's rule, on its own. "Lights" in `docs/DEVELOPMENT.md`
   has an example of each. Off a map with `lighting`, none of it does anything.
+- `blessings` (`BlessingsDef`) takes a map's items away: each level up offers three blessings to
+  choose from instead of picks, and nothing drops a casket or a power-up (the Battle for Varrock's,
+  `content/blessings.ts`). A blessing can add stats, level the starting weapon, bring a weapon
+  and level it, heal and change the hero's own buttons: see A hero of their own in
+  `docs/DEVELOPMENT.md`. A new one needs a place in the bot's `BLESSING_RANK`
+  (`simulate-run.ts`), or it takes it last. Sim it with the bot's lairs (`LAIR=`): a run that
+  never takes a ranged weapon can't beat a general. `levelXp` slows its
+  levels after the first few (`LevelXpDef`), and `burns` has scenery that hurts whoever walks
+  into it (Varrock's fires, walkable copies from `getWalkableLoc`): teach the bot to walk round a
+  new kind, as `firesToAvoid` does.
+- People standing about as scenery are `props`, and an opening cinematic is `cinematic`, with
+  `spawnFacing` to turn the player the way its camera ends looking: see Props and opening
+  cinematics in `docs/DEVELOPMENT.md`. Vardhelm's (`scaperune/maps/vardhelmOpening.ts`) is the
+  one to copy. Place its shots with the shot editor (`?director=<map id>` on the dev server) and
+  paste the code it gives (its Trailer row records it as an MP4, for the pull request). Check
+  every shot's triangles at a phone's size, as it says.
 - A map that isn't a slice of the real world is a ScapeRune recipe, and one that ships goes in
   `scaperune/maps/shippedMaps.ts` with `scaperune: true` on its `MapDef`: see
   `src/game/scaperune/CLAUDE.md`, which also has a random generator.
@@ -374,10 +426,12 @@ theirs.
 ## Adventurer
 
 Add it to `CHARACTERS` in `characters.ts`, with a `style`, `startingWeapon`, `equipment`, `bonus`
-and usually an `unlock` task. Act II's have a `trait` (`CharacterTraitDef`), a way to play rather
-than a bonus, which the sim plays out for their hero (the Forester's `timber`: `fellTree` and
-`cutReach` in `Sim.ts`); a new kind needs its case there. A `revival` bonus needs a
-`reviveLook`, the icon the HUD shows for it (a test checks). A description can use `**bold**`.
+and usually an `unlock` task. A `revival` bonus needs a `reviveLook`, the icon the HUD shows for
+it (a test checks). Act II's have a `trait` (`CharacterTraitDef`), a way to play rather than a
+bonus, which the sim plays out for their hero (the Forester's `timber`: `fellTree` and `cutReach`
+in `Sim.ts`); a new kind needs its case there. A description can use `**bold**`. One drawn as an NPC
+(`npcLook`) with buttons of its own (`abilities`, `HeroAbilityDef`) is Justiciar Zachariah's
+(`justiciarKit.ts`): see A hero of their own in `docs/DEVELOPMENT.md`.
 
 ## Quest
 

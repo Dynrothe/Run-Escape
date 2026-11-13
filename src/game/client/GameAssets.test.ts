@@ -10,7 +10,7 @@ import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
 import { CURSED_SANDS_ENEMIES, CURSED_SANDS_MAP_ID } from "../content/cursedSands";
 import { ENEMIES, getEnemy } from "../content/enemies";
-import { GEAR_SLOTS } from "../content/items";
+import { GEAR_SLOTS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
@@ -21,6 +21,7 @@ import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import { SOUND_ORB_SPRITES } from "../content/titleIcons";
 import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
+import { COSMETICS } from "../content/wardrobe";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
@@ -38,6 +39,7 @@ import {
     getLookKey,
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
+    getPoolKey,
     getPowerUpLookRequests,
     getPrayerHeadicon,
     getRunAppearance,
@@ -110,14 +112,17 @@ describe("enemy bakes", () => {
     });
 
     test("every spot animation a boss attack shows is in the base bake", () => {
-        const keys = GameAssets.getBaseRequests().map((r) => r.key);
+        const requests = GameAssets.getBaseRequests();
+        const keys = requests.map((r) => r.key);
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 for (const id of attack.impactSpotAnims ?? []) {
                     expect(keys).toContain("spot:" + id);
                 }
+                // and its pool, on its own animation (a fire flickers)
                 if (attack.pool) {
-                    expect(keys).toContain("loc:" + attack.pool.locId);
+                    const pool = requests.find((r) => r.key === getPoolKey(attack.pool!.locId));
+                    expect(pool).toMatchObject({ kind: "loc", animated: true });
                 }
             }
             for (const id of enemy.disguise?.warning?.spotAnims ?? []) {
@@ -320,6 +325,21 @@ describe("player bakes", () => {
         expect(sim.as(1, () => sim.gear.head)).toBe("berserker_helm");
     });
 
+    test("wear the Wardrobe's outfit under gear, or over it when it's kept on", () => {
+        const sim = createRun(1, "warrior");
+        const hat = COSMETICS.find((c) => c.slot === EquipSlot.HEAD)!;
+        const look = { outfit: { [EquipSlot.HEAD]: hat.objId, [EquipSlot.LEGS]: -1 } };
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        sim.gear = { head: "berserker_helm" };
+        const helm = getItem("berserker_helm").objId;
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(helm);
+        const kept = getRunAppearance(sim, 0, { ...look, overGear: true });
+        expect(kept.equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        expect(kept.equipment[EquipSlot.LEGS]).toBe(-1);
+        // The weapon stays the sim's
+        expect(kept.equipment[EquipSlot.WEAPON]).toBe(sim.getHeldObjId());
+    });
+
     test("bake the swings a level-up offers ahead, and not ones held", () => {
         const sim = createRun(1);
         const start = getWeapon(CHARACTERS[0].startingWeapon);
@@ -478,7 +498,13 @@ describe("power-ups in the cache", () => {
         const keys = new Set(GameAssets.getBaseRequests().map((r) => r.key));
         for (const weapon of WEAPONS) {
             for (const level of weapon.levels) {
-                const ids = [level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim];
+                const ids = [
+                    level.castSpotAnim,
+                    level.projectileSpotAnim,
+                    level.impactSpotAnim,
+                    // and a heavy blow's on what it hits (the Saradomin sword's)
+                    weapon.heavy?.hit?.spotAnim,
+                ];
                 for (const id of ids) {
                     if (id !== undefined) {
                         expect(keys, weapon.id).toContain("spot:" + id);

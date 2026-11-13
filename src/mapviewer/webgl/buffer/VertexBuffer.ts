@@ -39,7 +39,11 @@ export class VertexBuffer extends DataBuffer {
         const yPos = clamp(-y + 0x4000, 0, 0x8000);
         const zPos = clamp(z + 0x4000, 0, 0x8000);
 
-        priority &= 0x7;
+        // A face's priority takes 4 bits, for all of OSRS's 0-11 (after SceneBuffer's + 1 for
+        // terrain): with 3, a helm's trim and a tiara (7-9) wrapped under the helm or the hair.
+        // Alpha gives up its lowest bit for it.
+        priority &= 0xf;
+        alpha >>= 1;
 
         const uPacked = clamp(FloatUtil.packFloat11(u), 0, 0x7ff);
         const vPacked = clamp(FloatUtil.packFloat11(v), 0, 0x7ff);
@@ -50,7 +54,7 @@ export class VertexBuffer extends DataBuffer {
 
         const v2 =
             (zPos << 17) |
-            (alpha << 9) |
+            (alpha << 10) |
             (priority << 6) |
             (((textureId >> 9) & 0x1) << 5) |
             (uPacked >> 6);

@@ -34,7 +34,7 @@ import {
     WARDENS,
     ZEBAK,
 } from "../content/tombs";
-import { EnemyDef, MapPropDef, PolymorphKind } from "../content/types";
+import { EnemyDef, HeroNpcLookDef, MapPropDef, PolymorphKind } from "../content/types";
 import { PROJECTILE_ITEM_LOOKS } from "../content/weapons";
 import {
     DEATH_SINK_TICKS,
@@ -57,6 +57,7 @@ import {
     Glyph,
     GroundFire,
     GroundPool,
+    Lair,
     Pickup,
     Rampage,
     SimEvent,
@@ -76,10 +77,12 @@ import {
     HITSPLAT_SPRITES,
     PLAYER_SEQS,
     getEnemyModelKey,
+    getLairSealKey,
     getPickupModelKey,
     getPileLook,
     getPolymorphEscapeeKey,
     getPolymorphKey,
+    getPoolKey,
     getPropKey,
     getRealmLocKey,
     getShieldedModelKey,
@@ -150,6 +153,48 @@ const PLAYER_HIT_TINT = 0xff9090;
 const FLAME_SCALE = 2;
 const FLAME_STEP_TICKS = 7;
 const FLAME_TURN = 683;
+
+// Where scenery's own animation is (a flame's flicker), in ticks: on the clock rather than the
+// run's, as the map's own fires are, so it never stops while the run does (a cinematic, a pause)
+function sceneryTick(): number {
+    return (performance.now() / 1000) * TICKS_PER_SECOND;
+}
+// A lair's seal (MapDef.lairs): each flame comes up over this many ticks, this many ticks a tile
+// further from the boss than the last (so the fire runs along the walls), and each dies down over
+// SEAL_LIFT_TICKS once it's beaten, from the middle out again, more slowly (more slowly still in a
+// lair's unsealing, LairUnsealingDef, to be watched), up to SEAL_LIFT_REACH tiles out. Its smoke
+// (LairDef.seal.smoke) puffs up once it's SEAL_SMOKE_AT of the way down, a little bigger than it.
+const SEAL_RISE_TICKS = 12;
+const SEAL_RUN_TICKS = 1.2;
+const SEAL_LIFT_TICKS = 60;
+const SEAL_LIFT_RUN_TICKS = 3;
+const SEAL_UNSEAL_RUN_TICKS = 6;
+const SEAL_LIFT_REACH = 40;
+const SEAL_SMOKE_AT = 0.5;
+const SEAL_SMOKE_SCALE = 1.5;
+
+// The sealed tiles a flame's drawn on (LairDef.seal.spacing): the first, then each one no nearer
+// than spacing to any drawn before it, as indexes into sealed's pairs. Every one without spacing.
+const sealFlames = new WeakMap<number[], number[]>();
+function getSealFlames(sealed: number[], spacing: number | undefined): number[] {
+    let flames = sealFlames.get(sealed);
+    if (flames) {
+        return flames;
+    }
+    flames = [];
+    const reach = (spacing ?? 0) ** 2;
+    for (let k = 0; k < sealed.length; k += 2) {
+        const [x, y] = [sealed[k], sealed[k + 1]];
+        const near = flames.some(
+            (i) => (sealed[i * 2] - x) ** 2 + (sealed[i * 2 + 1] - y) ** 2 < reach,
+        );
+        if (!near) {
+            flames.push(k / 2);
+        }
+    }
+    sealFlames.set(sealed, flames);
+    return flames;
+}
 
 // What's running from a boss's entrance fades out this many ticks before it goes
 const LEAVING_FADE_TICKS = 20;
@@ -883,7 +928,6 @@ export class GameView {
             this.drawRampage(actors, sim, rampage, alpha);
         }
 
-        // The map's props, and the cinematic's cast (standing in for some of them) while it plays
         const cinematic = this.cinematic;
         sim.map.props?.forEach((prop, i) => {
             if (!cinematic || !this.cinematicView.hidesProp(cinematic, i)) {
@@ -892,6 +936,9 @@ export class GameView {
         });
         if (cinematic) {
             this.cinematicView.submitActors(actors, cinematic, (x, y) => this.ground(sim, x, y));
+        }
+        for (const lair of sim.lairs) {
+            this.drawLairSeal(actors, sim, lair, alpha);
         }
 
         for (const ring of sim.rings) {
@@ -1265,11 +1312,19 @@ export class GameView {
 
     // An NPC posed on the map as scenery (MapDef.props), its animation on the sim's clock
     private drawProp(actors: ActorRenderer, sim: Sim, prop: MapPropDef, alpha: number): void {
-        const model = this.assets.get(getPropKey(prop.npcId));
+        // Its lair's boss up and fighting, or beaten: what's left without it (MapPropDef.awake), or
+        // nothing
+        const lair = prop.lair === undefined ? undefined : sim.lairById(prop.lair);
+        const woken = lair !== undefined && lair.state !== "asleep";
+        if (woken && !prop.awake) {
+            return;
+        }
+        const look = woken ? prop.awake! : prop;
+        const model = this.assets.get(getPropKey(look.npcId));
         if (!model) {
             return;
         }
-        const anim = model.getAnim(prop.seq);
+        const anim = model.getAnim(look.seq);
         const { x, y } = prop;
         actors.draw(
             model,
@@ -1279,8 +1334,73 @@ export class GameView {
             this.ground(sim, x, y),
             y,
             prop.yaw ?? 0,
-            { scale: prop.scale ?? 1 },
+            {
+                scale: prop.scale ?? 1,
+            },
         );
+    }
+
+    // A lair's seal (MapDef.lairs): fire on every way out of it, running out from the boss as
+    // it's sealed, each flame a little out of step with the next, and dying down as it's lifted,
+    // in a puff of its smoke (seal.smoke). Unsealed with a cinematic (LairUnsealingDef), it dies
+    // down from where that says, more slowly, to be watched.
+    private drawLairSeal(actors: ActorRenderer, sim: Sim, lair: Lair, alpha: number): void {
+        const def = lair.def;
+        const model = this.assets.get(getLairSealKey(def.seal.locId));
+        if (!model || lair.sealed.length === 0) {
+            return;
+        }
+        const smoke =
+            def.seal.smoke === undefined ? undefined : this.assets.get("spot:" + def.seal.smoke);
+        const smokeAnim = smoke?.anims[0];
+        const smokeTicks = smokeAnim?.totalTicks ?? 0;
+        const now = sim.tick + alpha;
+        const since = lair.liftTick >= 0 ? now - lair.liftTick : -1;
+        const unsealing = lair.unsealTick >= 0 ? def.requires?.unsealing : undefined;
+        const from = unsealing?.from ?? def.at;
+        const run = unsealing ? SEAL_UNSEAL_RUN_TICKS : SEAL_LIFT_RUN_TICKS;
+        if (since > SEAL_LIFT_TICKS + run * SEAL_LIFT_REACH + smokeTicks) {
+            return;
+        }
+        const anim = model.anims[0];
+        const clock = sceneryTick();
+        const { sealed } = lair;
+        for (const i of getSealFlames(sealed, def.seal.spacing)) {
+            const x = sealed[i * 2] + 0.5;
+            const y = sealed[i * 2 + 1] + 0.5;
+            const away = Math.hypot(x - def.at.x, y - def.at.y);
+            const up = Math.min(1, (now - lair.sealTick - away * SEAL_RUN_TICKS) / SEAL_RISE_TICKS);
+            const out = since < 0 ? -1 : since - Math.hypot(x - from.x, y - from.y) * run;
+            const lifted = Math.max(0, out / SEAL_LIFT_TICKS);
+            // Its smoke as it goes, from halfway down, played out once
+            const puff = out - SEAL_LIFT_TICKS * SEAL_SMOKE_AT;
+            if (smoke && smokeAnim && puff >= 0 && puff < smokeTicks) {
+                actors.draw(
+                    smoke,
+                    smokeAnim,
+                    smokeAnim.getFrame(puff),
+                    x,
+                    this.ground(sim, x, y),
+                    y,
+                    (i * FLAME_TURN) & 2047,
+                    { scale: def.seal.scale * SEAL_SMOKE_SCALE },
+                );
+            }
+            const size = Math.min(up, 1 - lifted);
+            if (size <= 0) {
+                continue;
+            }
+            actors.draw(
+                model,
+                anim,
+                anim.getFrame(clock + i * FLAME_STEP_TICKS),
+                x,
+                this.ground(sim, x, y),
+                y,
+                (i * FLAME_TURN) & 2047,
+                { scale: def.seal.scale * size, unlit: 1 },
+            );
+        }
     }
 
     // Black cats are lost on the darker maps, so always with the silhouette and
@@ -1338,8 +1458,9 @@ export class GameView {
             return;
         }
         const anim = model.anims[0];
+        const clock = sceneryTick();
         fire.flames.forEach(({ x, y }, i) => {
-            const frame = anim.getFrame(sim.tick + i * FLAME_STEP_TICKS);
+            const frame = anim.getFrame(clock + i * FLAME_STEP_TICKS);
             actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, i * FLAME_TURN, {
                 scale: FLAME_SCALE,
                 unlit: 1,
@@ -2138,16 +2259,19 @@ export class GameView {
     }
 
     // A boss's pool: the real thing on the ground, spreading as it lands and
-    // fading as it dries up, each one turned its own way
+    // fading as it dries up, each one turned its own way and on its own animation (a fire
+    // flickers), a little out of step with the next
     private drawPool(actors: ActorRenderer, sim: Sim, pool: GroundPool): void {
-        const model = this.assets.get("loc:" + pool.locId);
+        const model = this.assets.get(getPoolKey(pool.locId));
         // The clock runs on past its end when the run's over
         if (!model || sim.tick >= pool.endTick) {
             return;
         }
         const size = Math.min(1, (sim.tick - pool.startTick) / POOL_GROW_TICKS);
         const height = this.ground(sim, pool.x, pool.y);
-        actors.draw(model, model.anims[0], 0, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
+        const anim = model.anims[0];
+        const frame = anim.getFrame(sceneryTick() + pool.uid * FLAME_STEP_TICKS);
+        actors.draw(model, anim, frame, pool.x, height, pool.y, (pool.uid * 331) & 2047, {
             scale: pool.radius * POOL_SCALE * size,
             alpha: Math.min(1, (pool.endTick - sim.tick) / POOL_DRY_TICKS),
             unlit: 1,
@@ -2371,6 +2495,12 @@ export class GameView {
 
     private drawPlayer(actors: ActorRenderer, sim: Sim, hero: number, alpha: number): void {
         const pose = getPlayerPose(sim, hero, alpha, this.localPlayerPose);
+        // A hero drawn as an NPC (CharacterDef.npcLook: Justiciar Zachariah)
+        const character = getCharacter(sim.heroes[hero].characterId);
+        if (character.npcLook) {
+            this.drawHeroNpc(actors, sim, hero, pose, character.id, character.npcLook);
+            return;
+        }
         // A power-up's look replaces the player's usual model and everything it does
         const powerUp = sim.as(hero, () => sim.wornPowerUp);
         const look = powerUp?.look;
@@ -2569,6 +2699,53 @@ export class GameView {
             yaw,
             LANTERN_OPTIONS,
         );
+    }
+
+    // A hero drawn as an NPC: its idle and walk, its abilities' animations (held on their first
+    // frame until they're due, so the blow falls as it lands, then played out on the move too),
+    // and its own swing for a weapon's
+    private drawHeroNpc(
+        actors: ActorRenderer,
+        sim: Sim,
+        hero: number,
+        pose: PlayerPose,
+        characterId: string,
+        look: HeroNpcLookDef,
+    ): void {
+        const model = this.assets.getHeroLook(characterId);
+        if (!model) {
+            return;
+        }
+        const player = sim.heroes[hero].player;
+        const tick = sim.tick;
+        const seq = player.attackSeq;
+        let anim = model.getAnim(pose.moving ? look.walkSeq : look.idleSeq);
+        let frame = anim.getFrame(pose.moveTicks);
+        if (seq !== -1) {
+            const own = model.getAnim(seq);
+            const attack = own.seqId === seq ? own : model.getAnim(look.swingSeq);
+            const ticks = tick - player.attackStart;
+            // A weapon's swing shows standing still; his own moves on the move too
+            if (ticks < attack.totalTicks && (own.seqId === seq || !pose.moving)) {
+                anim = attack;
+                frame = anim.getFrame(Math.max(0, ticks), false);
+            }
+        }
+        let tint = NO_TINT;
+        if (player.flash > 0) {
+            tint = PLAYER_HIT_TINT;
+        }
+        if (player.frozen > 0) {
+            tint = FROZEN_TINT;
+        }
+        const flash = player.invulnerable > 30 && Math.floor(tick / 5) % 2 === 0 ? 0.5 : 0;
+        const { x, y } = pose;
+        actors.draw(model, anim, frame, x, this.ground(sim, x, y), y, pose.yaw, {
+            silhouette: true,
+            tint,
+            flash,
+            scale: look.scale ?? 1,
+        });
     }
 
     // A polymorphed penguin's escapees, running off fast till they're well off the screen (pruned
@@ -3085,7 +3262,11 @@ export class GameView {
                 // It hits everywhere it can see: the shadows are what's shown
                 windup.attack.cover ||
                 // Thrown by the arena's statues, not the boss: their lines are shown
-                windup.attack.from !== undefined
+                windup.attack.from !== undefined ||
+                // It's falling out of the sky, and its shadow's shown (BossFightView)
+                windup.attack.meteor !== undefined ||
+                // It's all the floor's, whose own cue is the warning
+                (windup.attack.floor !== undefined && windup.attack.damage === 0)
             ) {
                 continue;
             }
