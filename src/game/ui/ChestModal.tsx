@@ -345,7 +345,7 @@ function ChestCard({
     onBanish: () => void;
 }): JSX.Element {
     const item = chest.item;
-    const replaces = chest.isGear ? chest.replaces : undefined;
+    const replaces = chest.replaces;
     return (
         <div
             className={
@@ -354,47 +354,53 @@ function ChestCard({
             }
             onClick={(e) => e.stopPropagation()}
         >
-            <div className="ui-chest-card-head">
-                <ItemIcon objId={item.objId} size={40} />
-                <div className="ui-card-body">
-                    <div className="ui-card-title" style={{ color: item.rarity.color }}>
-                        {tl(item.name)}
-                    </div>
-                    <div className="ui-chest-kind">
-                        {t("chest.kind", { rarity: tl(item.rarity.name), kind: item.kindLabel })}
-                    </div>
-                    {chest.upgradedFrom && (
-                        <div className="ui-chest-upgraded">
-                            {t("chest.upgraded_from", { name: tl(chest.upgradedFrom) })}
+            {/* What it is: in a short window this scrolls, and the buttons under it stay */}
+            <div className="ui-chest-card-body">
+                <div className="ui-chest-card-head">
+                    <ItemIcon objId={item.objId} size={40} />
+                    <div className="ui-card-body">
+                        <div className="ui-card-title" style={{ color: item.rarity.color }}>
+                            {tl(item.name)}
                         </div>
-                    )}
+                        <div className="ui-chest-kind">
+                            {t("chest.kind", {
+                                rarity: tl(item.rarity.name),
+                                kind: item.kindLabel,
+                            })}
+                        </div>
+                        {chest.upgradedFrom && (
+                            <div className="ui-chest-upgraded">
+                                {t("chest.upgraded_from", { name: tl(chest.upgradedFrom) })}
+                            </div>
+                        )}
+                    </div>
+                    <div className="ui-chest-found">
+                        {t("chest.found")} <Coins amount={chest.coins} />
+                    </div>
                 </div>
-                <div className="ui-chest-found">
-                    {t("chest.found")} <Coins amount={chest.coins} />
-                </div>
+                {/* Against a worn piece its stats are in the table */}
+                {!replaces && (
+                    <ul className="ui-chest-lines">
+                        <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
+                    </ul>
+                )}
+                <SetLine item={item} />
+                {replaces && <GearCompare chest={chest} replaces={replaces} />}
+                {chest.isGear && !replaces && (
+                    <div className="ui-chest-compare">
+                        {t("chest.nothing_equipped", { kind: item.kindLabel.toLowerCase() })}
+                    </div>
+                )}
+                {!chest.isGear && (
+                    <div className="ui-chest-compare">
+                        {chest.instant
+                            ? t("chest.instant")
+                            : chest.carried > 0
+                              ? t("chest.carried", { n: fmtNum(chest.carried) })
+                              : t("chest.kept_items")}
+                    </div>
+                )}
             </div>
-            {/* Against a worn piece its stats are in the table */}
-            {!replaces && (
-                <ul className="ui-chest-lines">
-                    <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
-                </ul>
-            )}
-            <SetLine item={item} />
-            {replaces && <GearCompare chest={chest} replaces={replaces} />}
-            {chest.isGear && !replaces && (
-                <div className="ui-chest-compare">
-                    {t("chest.nothing_equipped", { kind: item.kindLabel.toLowerCase() })}
-                </div>
-            )}
-            {!chest.isGear && (
-                <div className="ui-chest-compare">
-                    {chest.instant
-                        ? t("chest.instant")
-                        : chest.carried > 0
-                          ? t("chest.carried", { n: fmtNum(chest.carried) })
-                          : t("chest.kept_items")}
-                </div>
-            )}
             <div className="ui-chest-actions">
                 {actions.map((button, i) => (
                     <button
@@ -458,7 +464,7 @@ function GearCompare({
                 {t("chest.replaces")}
                 <ItemIcon objId={worn.objId} size={22} />
                 <span style={{ color: worn.rarity.color }}>{tl(worn.name)}</span>
-                <span>· {tl(worn.rarity.name)}</span>
+                <span>{t("chest.worn_rarity", { rarity: tl(worn.rarity.name) })}</span>
                 {t("chest.alched_for", { coins: fmtNum(replaces.alchCoins) })}
             </div>
             <SetLine item={worn} />
@@ -467,14 +473,15 @@ function GearCompare({
                     <tr>
                         <td />
                         <th scope="col">
-                            <ItemIcon objId={worn.objId} size={22} />
+                            <ItemIcon objId={worn.objId} size={18} />
                             {t("chest.wearing")}
                         </th>
                         <th scope="col">
-                            <ItemIcon objId={chest.item.objId} size={22} />
+                            <ItemIcon objId={chest.item.objId} size={18} />
                             {t("chest.new")}
                         </th>
-                        <td />
+                        {/* Named for screen readers; the brackets say it on screen */}
+                        <th scope="col" aria-label={t("chest.difference")} />
                     </tr>
                 </thead>
                 <tbody>

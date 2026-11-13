@@ -27,7 +27,7 @@ function offer(sim: Sim, itemId: string): void {
 }
 
 describe("getChestView", () => {
-    it("shows the worn piece whole, its set as it's worn now, and a row for each stat", () => {
+    it("shows the worn piece, its set as it's worn now, and a row for each stat", () => {
         const sim = createSim();
         sim.equip("crystal_helm");
         sim.equip("crystal_legs");
@@ -36,7 +36,6 @@ describe("getChestView", () => {
         const chest = getChestView(sim)!;
         const worn = chest.replaces!;
         expect(worn.item.id).toBe("crystal_body");
-        expect(worn.item.lines.length).toBeGreaterThan(0);
         expect(worn.item.set).toMatchObject({ active: true });
         expect(worn.item.set!.text).toContain("3/3");
         // The found piece's set, counted as it would be with it on

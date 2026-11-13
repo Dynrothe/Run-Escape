@@ -352,7 +352,8 @@
     .ui-result,
     .ui-result-columns,
     .ui-choice,
-    .ui-chest-card {
+    .ui-chest-card,
+    .ui-chest-card-body {
         overscroll-behavior: contain;
         touch-action: pan-y;
     }
@@ -1090,6 +1091,12 @@
         height: 170px;
     }
 
+    /* The card's max-height keeps it clear of the edges here (co-op's countdown has its own) */
+    .ui-chest {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
     .ui-chest[data-phase="reveal"] {
         display: grid;
         grid-template-columns: 230px minmax(0, 520px);
@@ -1118,7 +1125,6 @@
         align-self: center;
         width: 100%;
         max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
-        overflow-y: auto;
     }
 
     .ui-chest-actions {
@@ -1127,7 +1133,7 @@
 
     /* Gear against the worn piece: a tighter table, so the usual one fits
        under co-op's countdown too */
-    .ui-chest-compare {
+    .ui-chest-card-compare .ui-chest-compare {
         margin-top: 4px;
         padding-top: 4px;
     }
@@ -1140,11 +1146,6 @@
     .ui-chest-table td {
         padding-top: 0;
         padding-bottom: 0;
-    }
-
-    .ui-chest-table thead .ui-icon {
-        width: auto;
-        height: 16px;
     }
 
     /* Pause and results: their columns scroll under the buttons */

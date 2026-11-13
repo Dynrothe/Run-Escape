@@ -2,6 +2,11 @@
    --rarity the item's (the burst). Phases come from data-phase. */
 
 .ui-chest {
+    /* The least the scene and the caption give way to a tall card, and so what the card leaves
+       them with the two gaps (its max-height here, and under co-op's countdown in GameUi.css) */
+    --chest-scene-least: 150px;
+    --chest-caption-least: 62px;
+    --chest-reserve: calc(var(--chest-scene-least) + var(--chest-caption-least) + 8px);
     flex-direction: column;
     gap: 4px;
     /* Clear of the screen's edges, when the card's tall */
@@ -22,7 +27,7 @@
     height: clamp(190px, calc(36vh / var(--ui-scale)), 320px);
     /* A tall card (gear against the piece it'd replace, sets on both) takes
        room from the scene, but leaves the item room to float */
-    min-height: 150px;
+    min-height: var(--chest-scene-least);
     pointer-events: none;
 }
 
@@ -483,7 +488,7 @@
 /* Captions */
 
 .ui-chest-caption {
-    min-height: 62px;
+    min-height: var(--chest-caption-least);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -558,16 +563,25 @@
 /* The decision */
 
 .ui-chest-card {
+    display: flex;
+    flex-direction: column;
     width: min(460px, calc(94vw / var(--ui-scale)));
     box-sizing: border-box;
     /* The scene gives way first, down to its least; past that (a short
-       window) the card scrolls rather than going off the screen. 220px is
-       the scene's least, the caption and the gaps. */
+       window) the item's details scroll rather than going off the screen,
+       and the buttons under them stay in view */
     flex-shrink: 0;
-    max-height: calc(100% - 220px);
-    overflow-y: auto;
+    max-height: calc(100% - var(--chest-reserve));
     cursor: default;
     animation: chest-card-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+
+.ui-chest-card-body {
+    min-height: 0;
+    overflow-y: auto;
+    /* Its scrollbar in the card's padding, clear of the table's last column */
+    margin-right: -8px;
+    padding-right: 8px;
 }
 
 @keyframes chest-card-in {

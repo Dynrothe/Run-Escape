@@ -17,6 +17,13 @@ describe("stats", () => {
         ]);
     });
 
+    it("leaves out what a stat was when it shows the same", () => {
+        expect(compareStats({ might: 0.0498, armor: 1 }, { might: 0.05, armor: 1.26 })).toEqual([
+            { key: "might", label: "Damage", to: "+5%", better: true },
+            { key: "armor", label: "Armour", from: "+1", to: "+1.3", better: true },
+        ]);
+    });
+
     it("goes by the values as shown, so pieces that show the same don't differ", () => {
         expect(pairStats({ might: 0.05, armor: 1.04 }, { might: 0.0498, armor: 1.26 })).toEqual([
             { key: "might", label: "Damage", worn: "+5%", found: "+5%", better: true },

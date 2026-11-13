@@ -9,10 +9,12 @@ import {
     GameStore,
     HudNumbers,
     HudView,
+    ItemView,
 } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getItem } from "../content/items";
 import { DURATION_ICON, StatIconRef, statKeyIcon } from "../content/statIcons";
+import { pairStats } from "../content/stats";
 import { createSave } from "../core/save";
 import { setLang, tp } from "../i18n";
 import { ChestModal } from "./ChestModal";
@@ -200,6 +202,28 @@ describe("stat icons on the screens that show stats", () => {
         return view;
     }
 
+    // A worn crystal body, its set's bonus on
+    const crystalBody: ItemView = {
+        id: "crystal_body",
+        name: "Crystal body",
+        objId: 23975,
+        rarity: { name: "Rare", color: "#ff9a3d" },
+        kindLabel: "Body slot",
+        lines: [{ text: "+5% damage" }, { text: "+1 armour" }],
+        set: { text: "Crystal armour 3/3: bonus on", active: true },
+    };
+
+    // The icon cache answers with the icon's own id, so a line's image says which it has: gives
+    // the src an icon gets
+    function iconsById(): (icon: StatIconRef | undefined) => string {
+        vi.spyOn(iconCache, "get").mockImplementation((objId) => `obj:${objId}`);
+        vi.spyOn(iconCache, "getSprite").mockImplementation((id) => `sprite:${id}`);
+        vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
+        return (icon) =>
+            icon?.spriteId !== undefined ? `sprite:${icon.spriteId}` : `obj:${icon?.objId}`;
+    }
+
     test("ChestModal renders gear's lines and set progress with StatLine", () => {
         vi.useFakeTimers();
         try {
@@ -224,20 +248,12 @@ describe("stat icons on the screens that show stats", () => {
         }
     });
 
-    test("ChestModal puts gear beside the worn piece, a row for each stat with its icon", () => {
+    test("ChestModal puts gear beside the worn piece, a row for each stat", () => {
         vi.useFakeTimers();
         try {
             const view = renderChest(
                 gearChest({
-                    item: {
-                        id: "crystal_body",
-                        name: "Crystal body",
-                        objId: 23975,
-                        rarity: { name: "Rare", color: "#ff9a3d" },
-                        kindLabel: "Body slot",
-                        lines: [{ text: "+5% damage" }, { text: "+1 armour" }],
-                        set: { text: "Crystal armour 3/3: bonus on", active: true },
-                    },
+                    item: crystalBody,
                     alchCoins: 10,
                     stats: [
                         {
@@ -278,7 +294,7 @@ describe("stat icons on the screens that show stats", () => {
             expect(view.container.querySelector(".ui-chest-lines")).toBeNull();
             const compare = view.container.querySelector(".ui-chest-compare")!;
             expect(compare.textContent).toContain("Crystal body");
-            expect(compare.textContent).toContain("Rare");
+            expect(compare.textContent).toContain("· Rare");
             expect(compare.textContent).toContain("(alched for 10 coins)");
             // Both pieces' sets: the found one's under its name, the worn one's in the comparison
             const sets = [...view.container.querySelectorAll(".ui-chest-set")];
@@ -295,28 +311,53 @@ describe("stat icons on the screens that show stats", () => {
                 ["Max hitpoints", "+5%", "+5%", ""],
                 ["Projectile speed", "+15%", "—", "(-15%)"],
             ]);
-            // Every stat's icon, by its key
-            for (const row of rows) {
-                expect(row.querySelector("th .ui-icon")).not.toBeNull();
-            }
             const tone = (row: Element) => [...row.children].slice(2).map((cell) => cell.className);
             expect(tone(rows[0])).toEqual(["ui-good", "ui-good"]);
             expect(tone(rows[2])).toEqual(["", ""]);
             expect(tone(rows[3])).toEqual(["ui-bad", "ui-bad"]);
+            // The difference's column has a name for screen readers
+            const headings = [...view.container.querySelectorAll(".ui-chest-table thead th")];
+            expect(headings.map((th) => th.getAttribute("aria-label") ?? th.textContent)).toEqual([
+                "Wearing",
+                "New",
+                "Difference",
+            ]);
         } finally {
             vi.useRealTimers();
         }
     });
 
+    test("the gear table gives each stat its icon in any language", () => {
+        vi.useFakeTimers();
+        const iconSrc = iconsById();
+        try {
+            setLang("pt-BR");
+            const stats = pairStats(
+                { might: 0.03, speed: 0.15 },
+                { might: 0.05, maxHp: 0.13, armor: 1 },
+            );
+            // Nothing in the words to find an icon by
+            expect(stats.map((pair) => pair.label)).toEqual([
+                "Dano",
+                "Armadura",
+                "Pontos de vida máximos",
+                "Velocidade de projétil",
+            ]);
+            const view = renderChest(gearChest({ item: crystalBody, alchCoins: 10, stats }));
+            const rows = [...view.container.querySelectorAll(".ui-chest-table tbody tr")];
+            expect(rows.map((row) => row.querySelector("th img")?.getAttribute("src"))).toEqual(
+                stats.map((pair) => iconSrc(statKeyIcon(pair.key))),
+            );
+        } finally {
+            setLang("en");
+            vi.useRealTimers();
+            vi.restoreAllMocks();
+        }
+    });
+
     test("a casket's potion shows its stats with their icons in any language, and how long they last", () => {
         vi.useFakeTimers();
-        // The icon cache answers with the icon's own id, so a line's image says which it has
-        vi.spyOn(iconCache, "get").mockImplementation((objId) => `obj:${objId}`);
-        vi.spyOn(iconCache, "getSprite").mockImplementation((id) => `sprite:${id}`);
-        vi.spyOn(iconCache, "request").mockImplementation(() => {});
-        vi.spyOn(iconCache, "requestSprite").mockImplementation(() => {});
-        const iconSrc = (icon: StatIconRef | undefined) =>
-            icon?.spriteId !== undefined ? `sprite:${icon.spriteId}` : `obj:${icon?.objId}`;
+        const iconSrc = iconsById();
         try {
             setLang("pt-BR");
             const store = new GameStore(createSave());
