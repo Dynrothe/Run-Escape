@@ -1,16 +1,26 @@
 import { getCharacter } from "../content/characters";
 import { EXTRA_REVIVE_ITEM } from "../content/coop";
 import { getGearStats, upgradedName } from "../content/endless";
-import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
-import { getPowerUp } from "../content/powerups";
+import {
+    CASKETS,
+    GEAR_SLOTS,
+    GEAR_SLOT_BY_ID,
+    getItem,
+    itemName,
+    utilityDescription,
+} from "../content/items";
+import { getPowerUp, powerUpDescription, powerUpName } from "../content/powerups";
 import { getRaidSupply } from "../content/raids";
+import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
-import { diffStats } from "../content/stats";
+import { STAT_INFO, StatText, diffStats, formatStats } from "../content/stats";
+import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
 import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { t, tl, tr } from "../i18n";
 import {
     BuffView,
     ChestView,
@@ -29,12 +39,15 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
     const set = getItemSet(item);
     return {
         id: item.id,
-        name: upgradedName(item.name, upgrades),
+        name: upgradedName(tl(item.name), upgrades),
         objId: item.objId,
         rarity: { name: rarity.name, color: rarity.color },
         kindLabel:
-            item.kind === "gear" ? `${GEAR_SLOT_BY_ID.get(item.slot)!.name} slot` : "Utility",
+            item.kind === "gear"
+                ? t("canvas.gear_slot", { slot: tl(GEAR_SLOT_BY_ID.get(item.slot)!.name) })
+                : t("canvas.utility"),
         lines: describeItem(item, upgrades),
+        ...(item.kind === "utility" && item.use.kind === "buff" && { seconds: item.use.seconds }),
         ...(set && {
             set: {
                 text: describeSetProgress(set, setWorn),
@@ -46,17 +59,19 @@ export function getItemView(item: ItemDef, upgrades = 0, setWorn?: number): Item
 
 // An endless run's later rounds make heals and blasts bigger, which the item's
 // own description doesn't say
-function getRoundLines(sim: Sim, item: ItemDef): string[] {
+function getRoundLines(sim: Sim, item: ItemDef): StatText[] {
     if (item.kind !== "utility" || sim.round === 1) {
         return [];
     }
     const times = (n: number) => `${Math.round(n * 10) / 10}x`;
     const use = item.use;
     if (use.kind === "heal" || (use.kind === "cure" && use.heal)) {
-        return [`Heals ${times(sim.roundDamage)} as much in round ${sim.round}.`];
+        return [
+            { text: t("canvas.round_heal", { times: times(sim.roundDamage), round: sim.round }) },
+        ];
     }
     if (use.kind === "blast") {
-        return [`Hits ${times(sim.roundHp)} as hard in round ${sim.round}.`];
+        return [{ text: t("canvas.round_hit", { times: times(sim.roundHp), round: sim.round }) }];
     }
     return [];
 }
@@ -71,7 +86,15 @@ function getRunItemView(
 ): ItemView {
     const set = getItemSet(item);
     const view = getItemView(item, upgrades, set && countSetPieces(worn, set.id));
-    return { ...view, lines: [...view.lines, ...getRoundLines(sim, item)] };
+    return {
+        ...view,
+        lines: [...view.lines, ...getRoundLines(sim, item)],
+        // In a run a potion lasts as long as the hero's effect duration stretches it, the
+        // first second its timer shows
+        ...(view.seconds !== undefined && {
+            seconds: Math.ceil(sim.buffTicks(view.seconds) / TICKS_PER_SECOND),
+        }),
+    };
 }
 
 // The casket at the front of the queue, undefined when there's none
@@ -103,6 +126,7 @@ export function getChestView(sim: Sim): ChestView | undefined {
                 getGearStats(item, chest.upgrades),
             ).map((d) => ({
                 text: d.text,
+                english: STAT_INFO[d.key].label,
                 good: d.delta > 0,
             }));
             if (!shouldWear(sim.gear, sim.gearUpgrades, item, chest.upgrades)) {
@@ -170,20 +194,20 @@ export function getEventView(sim: Sim): EventView | undefined {
     const forPoints = offer.options.some((option) => option.kind === "supply");
     return {
         uid: offer.uid,
-        name: offer.def.name,
-        speech: offer.def.speech ?? "",
-        leaveLabel: effect.leaveLabel,
+        name: eventName(offer.def),
+        speech: tr(`event.${offer.def.id}.speech`, offer.def.speech ?? ""),
+        leaveLabel: tr(`event.${offer.def.id}.leave_label`, effect.leaveLabel),
         points: forPoints ? sim.raidPoints : undefined,
         options: offer.options.map((option) => {
             if (option.kind === "answer") {
                 const item = getItem(option.itemId);
-                return { title: item.name, iconObjId: item.objId, enabled: true };
+                return { title: itemName(item), iconObjId: item.objId, enabled: true };
             }
             if (option.kind === "revive") {
                 const item = getItem(EXTRA_REVIVE_ITEM);
                 return {
-                    title: "Extra revive",
-                    text: item.kind === "utility" ? item.description : "",
+                    title: t("canvas.extra_revive"),
+                    text: item.kind === "utility" ? utilityDescription(item) : "",
                     iconObjId: item.objId,
                     price: option.price,
                     sold: option.sold,
@@ -192,18 +216,38 @@ export function getEventView(sim: Sim): EventView | undefined {
             }
             if (option.kind === "teleport") {
                 return {
-                    title: "Teleport",
-                    text: "Uses one of this raid's teleports.",
+                    title: t("canvas.teleport"),
+                    text: t("canvas.teleport_desc"),
                     // A teleport tablet
                     iconObjId: 8013,
+                    enabled: true,
+                };
+            }
+            if (option.kind === "bundle") {
+                // One of the Helpful Spirit's, free: what's in it
+                const bundle = TOMBS_SPIRIT_BUNDLES.find((b) => b.id === option.bundleId)!;
+                const contents = option.items
+                    .map((item) => `${item.count} ${getRaidSupply(item.supplyId).name}`)
+                    .join(", ");
+                // Kinds it'd need a new slot for, against the slots free: what won't fit is used
+                const kinds = option.items.filter(
+                    (item) => !sim.inventory.some((slot) => slot?.itemId === item.supplyId),
+                ).length;
+                const room = kinds <= sim.inventory.filter((slot) => !slot).length;
+                return {
+                    title: bundle.name,
+                    text:
+                        `${bundle.description} ${contents}.` +
+                        (room ? "" : " No room for all of it: what won't fit is used at once."),
+                    iconObjId: bundle.objId,
                     enabled: true,
                 };
             }
             if (option.kind === "supply") {
                 const supply = getRaidSupply(option.supplyId);
                 return {
-                    title: supply.name,
-                    text: supply.description,
+                    title: tr(`raid.supply.${supply.id}.name`, supply.name),
+                    text: tr(`raid.supply.${supply.id}.desc`, supply.description),
                     iconObjId: supply.objId,
                     price: option.price,
                     sold: option.sold,
@@ -212,8 +256,8 @@ export function getEventView(sim: Sim): EventView | undefined {
             }
             const powerUp = getPowerUp(option.powerUpId);
             return {
-                title: powerUp.name,
-                text: powerUp.description,
+                title: powerUpName(powerUp),
+                text: powerUpDescription(powerUp),
                 iconObjId: powerUp.objId,
                 price: option.price,
                 sold: option.sold,
@@ -233,9 +277,15 @@ export function getBuffViews(sim: Sim): BuffView[] {
     };
     const buffs: BuffView[] = sim.buffs.map((buff) => {
         const { name, objId } = buff.look ?? getItem(buff.itemId);
+        // What it gives, which isn't always its item's (a turkey's feast borrows a potion)
+        const details = formatStats(buff.stats).map((line) => line.text);
+        if (buff.cures) {
+            details.push(t("ui.effect.cures"));
+        }
         return {
             id: buff.itemId,
             name,
+            description: details.join(", ") || t("ui.effect.active"),
             objId,
             ...timer(buff.startTick, buff.endTick),
             harmful: false,
@@ -246,6 +296,7 @@ export function getBuffViews(sim: Sim): BuffView[] {
         buffs.push({
             id: "powerUp:" + active.uid,
             name: powerUp.name,
+            description: powerUpDescription(powerUp),
             objId: powerUp.objId,
             ...timer(active.startTick, active.endTick),
             harmful: false,
@@ -255,6 +306,10 @@ export function getBuffViews(sim: Sim): BuffView[] {
         buffs.push({
             id: debuff.id,
             name: debuff.name,
+            description:
+                formatStats(debuff.stats)
+                    .map((line) => line.text)
+                    .join(", ") || t("ui.effect.weakens"),
             objId: debuff.iconObjId,
             ...timer(debuff.startTick, debuff.endTick),
             harmful: true,
@@ -262,9 +317,13 @@ export function getBuffViews(sim: Sim): BuffView[] {
     }
     // One for each kind of revive left, with no timer
     for (const revive of new Set(getRevivesLeft(sim.heroes[sim.focus]))) {
-        buffs.push({ ...revive, harmful: false });
+        buffs.push({
+            ...revive,
+            description: t("ui.effect.revive"),
+            harmful: false,
+        });
     }
-    return buffs;
+    return [...buffs.filter((buff) => buff.harmful), ...buffs.filter((buff) => !buff.harmful)];
 }
 
 export type ReviveLook = { id: string; name: string; objId: number };

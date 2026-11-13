@@ -220,6 +220,12 @@ export class ArenaGrid {
         return i >= 0 && this.dropped[i] === 2;
     }
 
+    private indexOf(tileX: number, tileY: number): number {
+        const x = tileX - this.baseX;
+        const y = tileY - this.baseY;
+        return this.contains(tileX, tileY) ? x + y * this.sizeX : -1;
+    }
+
     private changed(tileX: number, tileY: number): void {
         this.steps.refresh(tileX, tileY);
         this.version++;
@@ -324,12 +330,6 @@ export class ArenaGrid {
             }
         }
         return false;
-    }
-
-    private indexOf(tileX: number, tileY: number): number {
-        const x = tileX - this.baseX;
-        const y = tileY - this.baseY;
-        return this.contains(tileX, tileY) ? x + y * this.sizeX : -1;
     }
 
     // The whole tile, but for objects a little less on each side that has open

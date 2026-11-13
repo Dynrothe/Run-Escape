@@ -84,11 +84,13 @@ export type MapRecipe = {
             | "finalBossWarning"
             | "victoryText"
             | "fun"
+            | "tombs"
+            | "requires"
             | "floor"
-            | "lighting"
             | "props"
             | "cinematic"
             | "spawnFacing"
+            | "lighting"
         >
     >;
 };

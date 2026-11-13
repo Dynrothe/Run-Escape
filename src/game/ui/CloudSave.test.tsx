@@ -1,0 +1,194 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+
+import { CloudView } from "../client/CloudSave";
+import { GameClient } from "../client/GameClient";
+import { createSave } from "../core/save";
+import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
+
+afterEach(cleanup);
+
+const CODE = "K7Q2-M9XD-4TPA-W3RN-H8BE-6FZC";
+
+// Answers the game's own confirmation
+async function answer(label: string): Promise<void> {
+    const dialog = await screen.findByRole("alertdialog");
+    await act(async () => {
+        fireEvent.click(within(dialog).getByRole("button", { name: label }));
+    });
+}
+
+function mockClient() {
+    const cloud = {
+        turnOn: vi.fn(),
+        useCode: vi.fn(async () => true),
+        check: vi.fn(),
+        turnOff: vi.fn(),
+        deleteCloud: vi.fn(),
+        reopenChoice: vi.fn(),
+        useCloud: vi.fn(),
+        keepLocal: vi.fn(),
+        later: vi.fn(),
+        restore: vi.fn(),
+        newCode: vi.fn(),
+    };
+    return { cloud, client: { cloud } as unknown as GameClient };
+}
+
+function settings(view: CloudView | undefined, saving = true) {
+    const mock = mockClient();
+    render(<CloudSaveSettings cloud={view} client={mock.client} saving={saving} />);
+    return mock.cloud;
+}
+
+test("isn't there where the build has no cloud save, or its Worker didn't answer", () => {
+    const { container } = render(
+        <CloudSaveSettings cloud={undefined} client={mockClient().client} saving />,
+    );
+    expect(container).toBeEmptyDOMElement();
+});
+
+test("turns on, or links a code typed in", () => {
+    const cloud = settings({ working: false });
+    fireEvent.click(screen.getByRole("button", { name: "Turn on" }));
+    expect(cloud.turnOn).toHaveBeenCalledTimes(1);
+    const link = screen.getByRole("button", { name: "Link" });
+    expect(link).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Sync code" }), {
+        target: { value: CODE.toLowerCase() },
+    });
+    fireEvent.click(link);
+    expect(cloud.useCode).toHaveBeenCalledWith(CODE.toLowerCase());
+});
+
+test("waits while the game isn't saving here", () => {
+    settings({ working: false }, false);
+    expect(screen.getByRole("button", { name: "Turn on" })).toBeDisabled();
+});
+
+test("shows the code and what's wrong, once on", async () => {
+    const cloud = settings({ code: CODE, working: false, problem: "offline" });
+    expect(screen.getByText(CODE)).toBeInTheDocument();
+    expect(screen.getByText(/Can't reach cloud save/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+    expect(cloud.check).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await answer("Cancel");
+    expect(cloud.deleteCloud).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await answer("Delete");
+    expect(cloud.deleteCloud).toHaveBeenCalledTimes(1);
+});
+
+test("says what to do once a linked code stops working, and offers only turning off", async () => {
+    const cloud = settings({ code: CODE, working: false, problem: "unknownCode" });
+    expect(screen.getByText(/doesn't work any more/)).toHaveTextContent(/Turn off, then/);
+    expect(screen.getByRole("button", { name: "Sync now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "New code" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    await answer("Turn off");
+    expect(cloud.turnOff).toHaveBeenCalledTimes(1);
+    cleanup();
+    // A code typed in wrong is only that
+    settings({ working: false, problem: "unknownCode" });
+    expect(screen.getByText("That code isn't one cloud save knows.")).toBeInTheDocument();
+});
+
+test("asks which save to keep, and won't load a newer game's", () => {
+    const { client, cloud } = mockClient();
+    const view = (newer: boolean): CloudView => ({
+        code: CODE,
+        working: false,
+        choice: {
+            newer,
+            closed: false,
+            cloud: {
+                revision: 4,
+                updatedAt: 0,
+                summary: {
+                    gameVersion: newer ? "9.0.0" : "0.28.0",
+                    runs: 120,
+                    victories: 30,
+                    totalCoins: 50000,
+                    mapsBeaten: 9,
+                },
+            },
+        },
+    });
+    const save = { ...createSave(), runs: 5 };
+    const { rerender } = render(
+        <CloudChoicePanel cloud={view(false)} save={save} client={client} />,
+    );
+    expect(screen.getByText(/120 runs, 30 wins, 9 maps beaten/)).toBeInTheDocument();
+    expect(screen.getByText(/5 runs, 0 wins/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use the cloud's" }));
+    expect(cloud.useCloud).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Keep this device's" }));
+    expect(cloud.keepLocal).toHaveBeenCalledTimes(1);
+    rerender(<CloudChoicePanel cloud={view(true)} save={save} client={client} />);
+    expect(screen.getByRole("button", { name: "Use the cloud's" })).toBeDisabled();
+    expect(screen.getByText(/newer version of Run Escape/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Later" }));
+    expect(cloud.later).toHaveBeenCalledTimes(1);
+});
+
+test("has a button on the title that says how it's doing and opens the way in", () => {
+    const { client, cloud } = mockClient();
+    const open = vi.fn();
+    const { container, rerender } = render(
+        <CloudSaveButton cloud={undefined} client={client} onOpen={open} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    const at = (view: CloudView) =>
+        rerender(<CloudSaveButton cloud={view} client={client} onOpen={open} />);
+    at({ working: false });
+    fireEvent.click(screen.getByRole("button", { name: "Cloud save: off" }));
+    expect(open).toHaveBeenCalledTimes(1);
+    at({ code: CODE, working: false, problem: "offline" });
+    expect(screen.getByRole("button", { name: /^Cloud save: Can't reach/ })).toBeInTheDocument();
+    at({
+        code: CODE,
+        working: false,
+        choice: { newer: false, closed: true, cloud: { revision: 2 } },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cloud save: pick which save to keep" }));
+    expect(cloud.reopenChoice).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledTimes(1);
+});
+
+test("says until when a deleted code's kept, and restores it", () => {
+    const until = Date.parse("2026-11-13T12:00:00Z");
+    const cloud = settings({ working: false, problem: "deleted", deletedUntil: until });
+    expect(
+        screen.getByText(new RegExp(`kept until ${new Date(until).toLocaleDateString()}`)),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    expect(cloud.restore).toHaveBeenCalledTimes(1);
+});
+
+test("has a panel of its own, with Settings' rows, that Back closes", () => {
+    const { client } = mockClient();
+    const close = vi.fn();
+    render(
+        <CloudSavePanel
+            cloud={{ code: CODE, working: false }}
+            client={client}
+            saving
+            onClose={close}
+        />,
+    );
+    expect(screen.getByRole("heading", { name: "Cloud save" })).toBeInTheDocument();
+    expect(screen.getByText(CODE)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(close).toHaveBeenCalledTimes(1);
+});
+
+test("gets a new code only once the player's said so", async () => {
+    const cloud = settings({ code: CODE, working: false });
+    fireEvent.click(screen.getByRole("button", { name: "New code" }));
+    await answer("Cancel");
+    expect(cloud.newCode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "New code" }));
+    await answer("New code");
+    expect(cloud.newCode).toHaveBeenCalledTimes(1);
+});

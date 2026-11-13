@@ -1,6 +1,9 @@
 import { ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { isCoarsePointer } from "../../util/DeviceUtil";
-import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { SPOT_LIGHTS } from "../content/lights";
+import { LightLook } from "../content/types";
+import { TICKS_PER_SECOND } from "../core/Sim";
+import { t, tl } from "../i18n";
 import { CinematicPlayer, getActorState, getSaying } from "./Cinematic";
 import { GameAssets, getPropKey } from "./GameAssets";
 import { Overlay, ScreenPoint } from "./Overlay";
@@ -9,16 +12,21 @@ import { Overlay, ScreenPoint } from "./Overlay";
 // take to come in at the start and go at the end
 const BAR_SHARE = 0.085;
 const BAR_SECONDS = 0.5;
-// A spot animation playing in a cinematic, where it is, for its light (SceneLights)
-export type CinematicSpot = { x: number; y: number; spotAnim: number };
+// A light in a cinematic, where it is (SceneLights): one of the cast's own (CinematicActorDef.light),
+// or a spot animation's playing on them (SPOT_LIGHTS)
+export type CinematicLight = { x: number; y: number; look: LightLook };
 
 // The skip hint fades in after this long and is gone this long before the end
 const HINT_FROM = 0.6;
 const HINT_UNTIL = 1.5;
 
-// Draws a cinematic (MapDef.cinematic, LairDef.opening) as it plays: its cast, their spot
-// animations and overhead chat, and the bars across the screen. client/Cinematic.ts says what's
-// happening.
+// The ground's height at x, y (tiles, up negative), as GameView stands the map's props on it (a
+// floor's lift and all), so the cast stands where the props they stand in for do
+type Ground = (x: number, y: number) => number;
+
+// Draws a cinematic (MapDef.cinematic, a fight part's, LairDef.opening) as it plays: its cast,
+// their spot animations and overhead chat, and the bars across the screen. client/Cinematic.ts
+// says what's happening.
 export class CinematicView {
     private readonly screen: ScreenPoint = { x: 0, y: 0, visible: false };
 
@@ -32,22 +40,29 @@ export class CinematicView {
         );
     }
 
-    // The spot animations playing now, each on whoever it's on
-    getSpots(player: CinematicPlayer): CinematicSpot[] {
-        const spots: CinematicSpot[] = [];
-        for (const cue of player.def.cues) {
-            const model =
-                cue.spotAnim === undefined ? undefined : this.assets.get("spot:" + cue.spotAnim);
-            const actor = player.def.cast.find((a) => a.id === cue.actor);
-            const ticks = (player.seconds - cue.at) * TICKS_PER_SECOND;
-            if (model && actor && ticks >= 0 && ticks < model.anims[0].totalTicks) {
-                spots.push({ x: actor.x, y: actor.y, spotAnim: cue.spotAnim! });
+    // The lights in it now, on a map with lighting: the cast's own while they're drawn, and the
+    // spot animations playing on them that give off light
+    getLights(player: CinematicPlayer): CinematicLight[] {
+        const { def, seconds } = player;
+        const lights: CinematicLight[] = [];
+        for (const actor of def.cast) {
+            if (actor.light && !getActorState(def, actor, seconds).gone) {
+                lights.push({ x: actor.x, y: actor.y, look: actor.light });
             }
         }
-        return spots;
+        for (const cue of def.cues) {
+            const look = cue.spotAnim === undefined ? undefined : SPOT_LIGHTS.get(cue.spotAnim);
+            const model = look && this.assets.get("spot:" + cue.spotAnim);
+            const actor = def.cast.find((a) => a.id === cue.actor);
+            const ticks = (seconds - cue.at) * TICKS_PER_SECOND;
+            if (look && model && actor && ticks >= 0 && ticks < model.anims[0].totalTicks) {
+                lights.push({ x: actor.x, y: actor.y, look });
+            }
+        }
+        return lights;
     }
 
-    submitActors(actors: ActorRenderer, sim: Sim, player: CinematicPlayer): void {
+    submitActors(actors: ActorRenderer, player: CinematicPlayer, ground: Ground): void {
         const { def, seconds } = player;
         for (const actor of def.cast) {
             const state = getActorState(def, actor, seconds);
@@ -57,13 +72,13 @@ export class CinematicView {
             }
             const anim = model.getAnim(state.seq);
             const ticks = (seconds - state.start) * TICKS_PER_SECOND;
-            const ground = sim.grid.getHeight(actor.x, actor.y) / 128;
+            const at = ground(actor.x, actor.y);
             actors.draw(
                 model,
                 anim,
                 anim.getFrame(ticks, state.loop),
                 actor.x,
-                ground,
+                at,
                 actor.y,
                 actor.yaw ?? 0,
                 { scale: actor.scale ?? 1 },
@@ -84,13 +99,13 @@ export class CinematicView {
             if (ticks >= anim.totalTicks) {
                 continue;
             }
-            const ground = sim.grid.getHeight(actor.x, actor.y) / 128 - (cue.lift ?? 0);
+            const at = ground(actor.x, actor.y) - (cue.lift ?? 0);
             actors.draw(
                 model,
                 anim,
                 anim.getFrame(ticks, false),
                 actor.x,
-                ground,
+                at,
                 actor.y,
                 actor.yaw ?? 0,
                 { scale: cue.scale ?? 1, unlit: 1 },
@@ -98,7 +113,7 @@ export class CinematicView {
         }
     }
 
-    drawScreen(overlay: Overlay, sim: Sim, player: CinematicPlayer): void {
+    drawScreen(overlay: Overlay, player: CinematicPlayer, ground: Ground): void {
         const { def, seconds } = player;
         const ctx = overlay.ctx;
         const scale = overlay.uiScale;
@@ -108,13 +123,14 @@ export class CinematicView {
         ctx.textAlign = "center";
         ctx.textBaseline = "alphabetic";
         for (const actor of def.cast) {
-            const text = getSaying(def, actor.id, seconds);
+            const said = getSaying(def, actor.id, seconds);
+            const text = said === undefined ? undefined : tl(said);
             const model = this.assets.get(getPropKey(actor.npcId));
             if (text === undefined || getActorState(def, actor, seconds).gone) {
                 continue;
             }
             const height = actor.head ?? ((model?.height ?? 200) * (actor.scale ?? 1)) / 128;
-            const top = sim.grid.getHeight(actor.x, actor.y) / 128 - height;
+            const top = ground(actor.x, actor.y) - height;
             const p = overlay.project(actor.x, top, actor.y, this.screen);
             if (!p.visible) {
                 continue;
@@ -148,7 +164,7 @@ export class CinematicView {
             ctx.textBaseline = "middle";
             ctx.fillStyle = `rgba(200, 190, 170, ${0.6 * hint})`;
             ctx.fillText(
-                isCoarsePointer ? "Tap to skip" : "Press any key to skip",
+                isCoarsePointer ? t("cinematic.skip_tap") : t("cinematic.skip_key"),
                 overlay.width - 12 * pixel,
                 overlay.height - bar / 2,
             );

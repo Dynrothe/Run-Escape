@@ -1,0 +1,209 @@
+{
+    "about": "What both apps' readers of the website's lists must agree on: desktop/siteFiles.ts (siteFiles.test.ts) and Android's SiteFiles.java (SiteFilesTest.java). A case's change is merged into good, and a null in it takes that key out. A text is sent as it is. A size is put in place of good's first file's size.",
+    "files": {
+        "good": {
+            "build": "0.30.0-19c7e9bd",
+            "version": "0.30.0",
+            "minLauncher": "1.0.0",
+            "minAndroid": "0.0.0",
+            "coopUrl": "wss://relay.example/coop",
+            "runAnalyticsUrl": "",
+            "cloudSaveUrl": "",
+            "files": [
+                {
+                    "path": "index.html",
+                    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "size": 10
+                }
+            ]
+        },
+        "take": [
+            { "name": "anything extra", "change": { "extra": true } },
+            { "name": "a newer minAndroid", "change": { "minAndroid": "0.31.0" } },
+            {
+                "name": "two files",
+                "change": {
+                    "files": [
+                        {
+                            "path": "index.html",
+                            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "size": 10
+                        },
+                        {
+                            "path": "assets/index-CjI-souU.js",
+                            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                            "size": 0
+                        }
+                    ]
+                }
+            }
+        ],
+        "refuse": [
+            { "name": "not JSON", "text": "<html>" },
+            { "name": "null", "text": "null" },
+            { "name": "a list", "text": "[]" },
+            { "name": "a build of another version", "change": { "version": "0.29.0" } },
+            { "name": "a build that isn't one", "change": { "build": "0.30.0" } },
+            { "name": "a build in capitals", "change": { "build": "0.30.0-ABC" } },
+            { "name": "no minLauncher", "change": { "minLauncher": null } },
+            { "name": "a minLauncher that's a number", "change": { "minLauncher": 1 } },
+            { "name": "no minAndroid", "change": { "minAndroid": null } },
+            { "name": "a minAndroid that isn't a version", "change": { "minAndroid": "0.31" } },
+            { "name": "no coopUrl", "change": { "coopUrl": null } },
+            { "name": "a coopUrl that's a number", "change": { "coopUrl": 5 } },
+            { "name": "no cloudSaveUrl", "change": { "cloudSaveUrl": null } },
+            {
+                "name": "no index.html",
+                "change": {
+                    "files": [
+                        {
+                            "path": "a.js",
+                            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "size": 10
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "the same file twice",
+                "change": {
+                    "files": [
+                        {
+                            "path": "index.html",
+                            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "size": 10
+                        },
+                        {
+                            "path": "INDEX.html",
+                            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "size": 10
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "a file the app writes itself",
+                "change": {
+                    "files": [
+                        {
+                            "path": "index.html",
+                            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "size": 10
+                        },
+                        {
+                            "path": "verified.json",
+                            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "size": 10
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "a bad sha256",
+                "change": { "files": [{ "path": "index.html", "sha256": "x", "size": 10 }] }
+            },
+            {
+                "name": "an upper-case sha256",
+                "change": {
+                    "files": [
+                        {
+                            "path": "index.html",
+                            "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                            "size": 10
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "a file that isn't one",
+                "change": {
+                    "files": [
+                        {
+                            "path": "index.html",
+                            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "size": 10
+                        },
+                        5
+                    ]
+                }
+            },
+            { "name": "files that aren't a list", "change": { "files": "index.html" } }
+        ]
+    },
+    "sizes": {
+        "take": ["10", "0", "10.0", "1e3", "9007199254740991"],
+        "refuse": ["-1", "1.5", "\"10\"", "9007199254740992", "null", "true"]
+    },
+    "paths": {
+        "take": [
+            "index.html",
+            "assets/index-CjI-souU.js",
+            "static/.htaccess",
+            "icons/a b.png",
+            "café.png"
+        ],
+        "refuse": [
+            "",
+            "/index.html",
+            "a\\b.js",
+            "a/../b",
+            "a/./b",
+            "..",
+            "c:x",
+            "assets/",
+            "a//b",
+            "x.",
+            "x ",
+            "caches/caches.json",
+            "verified.json",
+            "game-files.json",
+            "a\u0000b"
+        ]
+    },
+    "caches": {
+        "build": "0.30.0-19c7e9bd",
+        "good": {
+            "slimOf": "osrs",
+            "build": "0.30.0-19c7e9bd",
+            "chunks": [{ "file": "00000000000000000000000000000000.bin", "size": 5 }]
+        },
+        "take": [
+            { "name": "anything extra", "change": { "indexSizes": [1, 2] } },
+            { "name": "no chunks", "change": { "chunks": [] } }
+        ],
+        "refuse": [
+            { "name": "not JSON", "text": "<html>" },
+            { "name": "no caches", "text": "[]" },
+            { "name": "a cache that isn't in a list", "text": "{}" },
+            { "name": "another build's", "change": { "build": "0.30.0-a6f7bcdc" } },
+            { "name": "no build", "change": { "build": null } },
+            { "name": "a full cache", "change": { "slimOf": null } },
+            { "name": "an empty slimOf", "change": { "slimOf": "" } },
+            { "name": "a slimOf that isn't a name", "change": { "slimOf": true } },
+            { "name": "chunks that aren't a list", "change": { "chunks": {} } },
+            {
+                "name": "a badly named chunk",
+                "change": { "chunks": [{ "file": "../x.bin", "size": 1 }] }
+            },
+            {
+                "name": "a chunk named in capitals",
+                "change": {
+                    "chunks": [{ "file": "0000000000000000000000000000000A.bin", "size": 1 }]
+                }
+            },
+            {
+                "name": "a chunk twice",
+                "change": {
+                    "chunks": [
+                        { "file": "00000000000000000000000000000000.bin", "size": 5 },
+                        { "file": "00000000000000000000000000000000.bin", "size": 5 }
+                    ]
+                }
+            },
+            {
+                "name": "a chunk with no size",
+                "change": { "chunks": [{ "file": "00000000000000000000000000000000.bin" }] }
+            }
+        ]
+    }
+}

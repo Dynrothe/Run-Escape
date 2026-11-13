@@ -8,14 +8,20 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
+import { CURSED_SANDS_ENEMIES, CURSED_SANDS_MAP_ID } from "../content/cursedSands";
 import { ENEMIES, getEnemy } from "../content/enemies";
-import { GEAR_SLOTS } from "../content/items";
+import { GEAR_SLOTS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
 import { PASSIVES } from "../content/passives";
-import { POWER_UPS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
+import { SOUNDS } from "../content/sounds";
+import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { SOUND_ORB_SPRITES } from "../content/titleIcons";
+import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
+import { COSMETICS } from "../content/wardrobe";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
@@ -39,6 +45,7 @@ import {
     getRunAppearance,
     getRunAttackSeqs,
     getShieldedModelKey,
+    getSpotAnimIds,
     getStatueModelKey,
     lookHas,
 } from "./GameAssets";
@@ -150,6 +157,16 @@ describe("merged enemy bakes", () => {
                 expect(keys.has(key) || keys.has(merged.aliases.get(key)!)).toBe(true);
             }
         }
+    });
+
+    test("bakes the item model used by a boss projectile", () => {
+        const requests = GameAssets.getEnemyRequests(getMapEnemies(getMap("thanksgiving")));
+        expect(requests).toContainEqual({
+            kind: "obj",
+            key: "obj:23818",
+            objId: 23818,
+            count: 1,
+        });
     });
 
     test("merge only requests that bake the same model, with all their animations", () => {
@@ -288,6 +305,41 @@ describe("player bakes", () => {
         }
     });
 
+    test("Avian Assaulter keeps the chicken outfit over gear and passives in co-op", () => {
+        const sim = createRun(2, "avian_assaulter");
+        sim.as(1, () => {
+            sim.gear = {
+                head: "berserker_helm",
+                body: "rune_platebody",
+                legs: "rune_platelegs",
+                feet: "rune_boots",
+            };
+            sim.passives.push({ id: "obsidian_armour", level: 1, value: 1 });
+        });
+        const appearance = getRunAppearance(sim, 1);
+        expect(appearance.equipment[EquipSlot.HEAD]).toBe(11021);
+        expect(appearance.equipment[EquipSlot.TORSO]).toBe(11020);
+        expect(appearance.equipment[EquipSlot.LEGS]).toBe(11022);
+        expect(appearance.equipment[EquipSlot.FEET]).toBe(11019);
+        expect(appearance.equipment[EquipSlot.WEAPON]).toBe(4566);
+        expect(sim.as(1, () => sim.gear.head)).toBe("berserker_helm");
+    });
+
+    test("wear the Wardrobe's outfit under gear, or over it when it's kept on", () => {
+        const sim = createRun(1, "warrior");
+        const hat = COSMETICS.find((c) => c.slot === EquipSlot.HEAD)!;
+        const look = { outfit: { [EquipSlot.HEAD]: hat.objId, [EquipSlot.LEGS]: -1 } };
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        sim.gear = { head: "berserker_helm" };
+        const helm = getItem("berserker_helm").objId;
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(helm);
+        const kept = getRunAppearance(sim, 0, { ...look, overGear: true });
+        expect(kept.equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        expect(kept.equipment[EquipSlot.LEGS]).toBe(-1);
+        // The weapon stays the sim's
+        expect(kept.equipment[EquipSlot.WEAPON]).toBe(sim.getHeldObjId());
+    });
+
     test("bake the swings a level-up offers ahead, and not ones held", () => {
         const sim = createRun(1);
         const start = getWeapon(CHARACTERS[0].startingWeapon);
@@ -369,6 +421,7 @@ describe("power-ups in the cache", () => {
             [EquipSlot.SHIELD]: 1171,
             [EquipSlot.HEAD]: 1153,
         });
+
         const [request] = getPowerUpLookRequests(appearance);
         const { look } = getPowerUp("sled");
         expect(request).toMatchObject({
@@ -382,6 +435,20 @@ describe("power-ups in the cache", () => {
         expect(worn[EquipSlot.HEAD]).toBe(1153);
         // The player's own look is left as it was
         expect(appearance.equipment[EquipSlot.WEAPON]).toBe(1277);
+    });
+
+    test("adventurers' overhead effects are baked and kept in the slim cache", () => {
+        const avian = CHARACTERS.find((character) => character.id === "avian_assaulter")!;
+        expect(avian.overheadSpotAnim).toBe(254);
+        expect(CHARACTERS.filter((character) => character.overheadSpotAnim !== undefined)).toEqual([
+            avian,
+        ]);
+        expect(getSpotAnimIds()).toContain(avian.overheadSpotAnim);
+        expect(GameAssets.getBaseRequests()).toContainEqual({
+            kind: "spotanim",
+            key: "spot:254",
+            spotAnimId: 254,
+        });
     });
 
     test("what their effects draw is baked, so the slim cache gets it", () => {
@@ -514,6 +581,17 @@ describe("sprites", () => {
         expect(getGameSpriteIds()).toEqual(expect.arrayContaining(asked[0].spriteIds));
     });
 
+    test("the slim cache keeps every stat icon's sprite", () => {
+        const ids = getGameSpriteIds();
+        expect(ids).toEqual(expect.arrayContaining(STAT_ICON_SPRITE_IDS));
+    });
+
+    test("the slim cache keeps the sound's orb", () => {
+        expect(getGameSpriteIds()).toEqual(
+            expect.arrayContaining(Object.values(SOUND_ORB_SPRITES)),
+        );
+    });
+
     test("the slim cache keeps every passive's icon", () => {
         const ids = getGameSpriteIds();
         for (const { iconSpriteId } of PASSIVES) {
@@ -557,5 +635,72 @@ describe("a boss's overhead prayer", () => {
         expect(getPrayerHeadicon(["ranged", "magic"])).toBe(6);
         expect(getPrayerHeadicon(["melee", "ranged"])).toBe(7);
         expect(getPrayerHeadicon(["melee", "magic"])).toBe(8);
+    });
+});
+
+// Every spot animation and sound id in a piece of content, by what its fields are called: a
+// spotAnim or *SpotAnim(s), a sound or *Sound(s) (and an enemy's sounds' attack, hit and death)
+function collectAssetIds(value: unknown): { spotAnims: Set<number>; sounds: Set<number> } {
+    const found = { spotAnims: new Set<number>(), sounds: new Set<number>() };
+    const seen = new Set<object>();
+    const visit = (value: unknown, key: string, parent: string): void => {
+        if (typeof value === "number") {
+            if (value < 0) {
+                return;
+            }
+            if (/spotanims?$/i.test(key)) {
+                found.spotAnims.add(value);
+            } else if (/sounds?$/i.test(key) || /sounds$/i.test(parent)) {
+                found.sounds.add(value);
+            }
+        } else if (value && typeof value === "object" && !seen.has(value)) {
+            seen.add(value);
+            for (const [childKey, child] of Object.entries(value)) {
+                const array = Array.isArray(value);
+                visit(child, array ? key : childKey, array ? parent : key);
+            }
+        }
+    };
+    visit(value, "", "");
+    return found;
+}
+
+// The Tombs of Amascut and Beneath Cursed Sands ship: what only their enemies use is baked and
+// synthesized with the rest (they were dev maps once, and left out of a build)
+describe("the Tombs' and its quest's enemies", () => {
+    const dev = new Set([...TOMBS_ENEMIES, ...CURSED_SANDS_ENEMIES].map((enemy) => enemy.id));
+    const own = collectAssetIds([...TOMBS_ENEMIES, ...CURSED_SANDS_ENEMIES]);
+    const shared = collectAssetIds([
+        ENEMIES.filter((enemy) => !dev.has(enemy.id)),
+        WEAPONS,
+        ALL_MAPS,
+        POWER_UPS,
+        THRALLS,
+        RANDOM_EVENTS,
+    ]);
+    const sounds = new Set(Object.values(SOUNDS).flat());
+    const onlySpotAnims = [...own.spotAnims].filter((id) => !shared.spotAnims.has(id));
+    const onlySounds = [...own.sounds].filter((id) => !shared.sounds.has(id) && !sounds.has(id));
+
+    test("are on the list, and have assets of their own", () => {
+        expect(ALL_MAPS.some((map) => map.tombs !== undefined)).toBe(true);
+        expect(ALL_MAPS.some((map) => map.id === CURSED_SANDS_MAP_ID)).toBe(true);
+        expect(onlySpotAnims.length).toBeGreaterThan(0);
+        expect(onlySounds.length).toBeGreaterThan(0);
+    });
+
+    test("have their own spot animations baked", () => {
+        const ids = new Set(getSpotAnimIds());
+        expect(onlySpotAnims.filter((id) => !ids.has(id))).toEqual([]);
+    });
+
+    test("have their own sounds synthesized", () => {
+        const ids = new Set(getGameSoundIds());
+        expect(onlySounds.filter((id) => !ids.has(id))).toEqual([]);
+    });
+
+    test("the Tombs' Helpful Spirit is baked", () => {
+        const requests = GameAssets.getBaseRequests();
+        expect(requests.some((r) => r.kind === "npc" && r.npcId === TOMBS_SPIRIT.npcId)).toBe(true);
     });
 });

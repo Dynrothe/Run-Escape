@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { getEnemy } from "../content/enemies";
 import { JUSTICIAR_ABILITIES } from "../content/justiciarKit";
-import { canRetry, getMap, getMapCharacter, getRetryLair } from "../content/maps";
+import { getMap, getMapCharacter, getRetryLair } from "../content/maps";
 import { BossAttackDef, emptyStats } from "../content/types";
 import { YAMA_HITPOINTS } from "../content/yama";
 import { METEOR_FIT, PLAYER_SPEED, Sim, TICKS_PER_SECOND } from "./Sim";
@@ -319,7 +319,6 @@ describe("his lair", () => {
 
     test("a run that starts on his floor has his fight on at once, without his opening", () => {
         // A retry starts the map over, as his generals came first (getRetryLair)
-        expect(canRetry(MAP)).toBe(true);
         expect(getRetryLair(MAP)).toBeUndefined();
         const sim = createSim(LAIR.start);
         sim.step(0, 0);

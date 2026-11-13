@@ -47,8 +47,10 @@ type Hooks = {
     bringOnBoss(def: unknown, type: string, hp?: number): boolean;
     openPumpkin(): string;
     rollPumpkin(x: number, y: number): void;
+    openTurkey(): string;
     killEnemy(enemy: Enemy): void;
     rollBossTrophies(enemy: Enemy): void;
+    rollEnemyTrophies(enemy: Enemy): void;
     stepStomp(enemy: Enemy): void;
     landBossAttack(enemy: Enemy, windup: unknown): void;
 };
@@ -236,8 +238,12 @@ describe("The Mimic", () => {
         }
         expect(hits).toEqual([1, 2, 3, 3, 3].map((n) => Math.round(n * boss.damageScale)));
 
+        // Out of it a moment (its interval, with no first of its own), and it starts over
         sim.player.x = boss.x + 6;
-        hooks(sim).stepStomp(boss);
+        for (let i = 0; i <= interval; i++) {
+            sim.tick++;
+            hooks(sim).stepStomp(boss);
+        }
         expect(boss.bossState!.stomps).toBe(0);
     });
 });
@@ -395,5 +401,59 @@ describe("Halloween rewards", () => {
         expect(migrated.version).toBe(SAVE_VERSION);
         const kept = migrateSave({ ...old, trophies: ["jar_of_dreams", "nope", "jar_of_dreams"] });
         expect(kept.trophies).toEqual(["jar_of_dreams"]);
+    });
+});
+describe("Thanksgiving rewards", () => {
+    test("Chompy bird kills drop trophies on Thanksgiving only", () => {
+        const killChompy = (mapId: string) => {
+            const sim = createSim(mapId);
+            sim.rng.chance = () => true;
+            const bird = sim.spawnEnemy(getEnemy("chompy_bird"), "normal", {
+                x: 1040,
+                y: 1040,
+            })!;
+            sim.damageEnemy(bird, 1e9, 0, sim.player.x, sim.player.y);
+            return [...sim.trophies].sort();
+        };
+        const chompyTrophies = TROPHIES.filter((trophy) => trophy.from.kind === "enemy").map(
+            ({ id }) => id,
+        );
+
+        expect(killChompy("thanksgiving")).toEqual(chompyTrophies.sort());
+        expect(killChompy("halloween")).toEqual([]);
+    });
+
+    test("a Chompy bird trophy found this run isn't announced again", () => {
+        const sim = createSim("thanksgiving");
+        sim.rng.chance = () => true;
+        const announced = () => {
+            const bird = sim.spawnEnemy(getEnemy("chompy_bird"), "normal", { x: 1040, y: 1040 })!;
+            sim.damageEnemy(bird, 1e9, 0, sim.player.x, sim.player.y);
+            return sim
+                .takeEvents()
+                .filter((e) => e.type === "notice" && e.message.startsWith("New item added"));
+        };
+
+        expect(announced()).toHaveLength(
+            TROPHIES.filter((trophy) => trophy.from.kind === "enemy").length,
+        );
+        expect(announced()).toEqual([]);
+    });
+
+    test("carving a roasted turkey can award Magic secateurs", () => {
+        const sim = createSim("thanksgiving");
+        sim.rng.chance = () => true;
+
+        hooks(sim).openTurkey();
+
+        expect(sim.trophies).toContain("magic_secateurs");
+    });
+
+    test("a turkey carved once the secateurs are found is a feast or a trick", () => {
+        const sim = createSim("thanksgiving");
+        sim.rng.chance = () => true;
+
+        expect(hooks(sim).openTurkey()).toContain("Magic secateurs");
+        expect(hooks(sim).openTurkey()).toMatch(/^(Feast|Fowl)! /);
     });
 });

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { getEnemy } from "../content/enemies";
 import { VARROCK_OPENING } from "../content/fun/varrockOpening";
-import { ALL_MAPS, createDevMap, getMap } from "../content/maps";
-import { CinematicDef } from "../content/types";
+import { ALL_MAPS, createDevMap, getMap, getMapCinematics, getRunCinematic } from "../content/maps";
+import { CinematicDef, MapDef } from "../content/types";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
+import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { VARDHELM } from "../scaperune/maps/vardhelm";
 import {
     CINEMATIC_SKIP_AFTER,
@@ -14,7 +15,6 @@ import {
     getCinematicCamera,
     getCinematicSeqs,
     getCinematicSquares,
-    getMapCinematics,
     getSaying,
     monotoneAt,
 } from "./Cinematic";
@@ -96,6 +96,28 @@ describe("a cinematic's camera", () => {
         expect(monotoneAt(times, line, [], -1)).toBe(0);
         expect(monotoneAt(times, line, [], 5)).toBe(3);
     });
+
+    it("turns the short way round from one shot to the next", () => {
+        const shot = { x: 0, y: 0, lift: 0, pitch: -300, distance: 10 };
+        const def: CinematicDef = {
+            ...DEF,
+            shots: [
+                { at: 0, ...shot, yaw: 1984 },
+                { at: 2, ...shot, yaw: 64 },
+                { at: 4, ...shot, yaw: 1024 },
+                { at: 10, player: true },
+            ],
+        };
+        // Through north (2048), 128 round, not 1920 the other way through south
+        for (let t = 0; t <= 2; t += 0.1) {
+            const yaw = getCinematicCamera(def, t, flat, PLAY).yaw;
+            expect(yaw).toBeGreaterThanOrEqual(1984 - 1e-9);
+            expect(yaw).toBeLessThanOrEqual(2112 + 1e-9);
+        }
+        expect(getCinematicCamera(def, 2, flat, PLAY).yaw).toBe(64 + 2048);
+        // and on round from there, still the short way
+        expect(getCinematicCamera(def, 4, flat, PLAY).yaw).toBe(1024 + 2048);
+    });
 });
 
 describe("a cinematic's cast", () => {
@@ -165,6 +187,13 @@ describe("a cinematic playing", () => {
         expect(player.skip()).toBe(false);
     });
 
+    it("skips from the loading screen before it, once that's been up a moment", () => {
+        const player = new CinematicPlayer(DEF);
+        expect(player.skip(CINEMATIC_SKIP_AFTER / 2)).toBe(false);
+        expect(player.skip(CINEMATIC_SKIP_AFTER)).toBe(true);
+        expect(player.done).toBe(true);
+    });
+
     it("stands still when it's held", () => {
         const player = new CinematicPlayer(DEF);
         player.held = true;
@@ -217,20 +246,35 @@ describe("Yama waking in his palace (LairDef.opening)", () => {
     });
 });
 
-// Every map's cinematic is one that can play: its opening's (MapDef.cinematic) and its lair's
-// (LairDef.opening), the dev maps' too (only on the dev server)
-const MAPS_WITH_CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)].filter(
-    (map, i, all) =>
-        getMapCinematics(map).length > 0 && all.findIndex((m) => m.id === map.id) === i,
-);
+// Yaw units (2048 a turn) a second a cinematic's camera may turn: about 11 degrees
+const MAX_CINEMATIC_TURN = 64;
 
-describe.each(
-    MAPS_WITH_CINEMATICS.flatMap((map) =>
-        getMapCinematics(map).map(
-            (def) => [map.id + (def === map.cinematic ? "" : "'s lair"), map, def] as const,
+// Every cinematic is one that can play, the dev maps' too (only on the dev server): each map's
+// opening, each part's of a fight in parts, and each lair's (LairDef.opening, and its unsealing)
+const CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)]
+    .filter((map, i, all) => all.findIndex((m) => m.id === map.id) === i)
+    .flatMap((map) => [
+        ...(map.cinematic ? [[map.id, map, map.cinematic] as const] : []),
+        ...(map.stages ?? []).flatMap((stage, i) =>
+            stage.cinematic ? [[`${map.id} part ${i + 1}`, map, stage.cinematic] as const] : [],
         ),
-    ),
-)("%s's cinematic", (_, map, def) => {
+        ...(map.lairs ?? []).flatMap((lair) => [
+            ...(lair.opening
+                ? [[`${map.id} ${lair.id}`, map, lair.opening.cinematic] as const]
+                : []),
+            ...(lair.requires?.unsealing
+                ? [
+                      [
+                          `${map.id} ${lair.id} unsealing`,
+                          map,
+                          lair.requires.unsealing.cinematic,
+                      ] as const,
+                  ]
+                : []),
+        ]),
+    ]);
+
+describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
     const ids = new Set(def.cast.map((actor) => actor.id));
 
     it("starts at 0, its shots in order, and ends on the run's camera", () => {
@@ -244,6 +288,23 @@ describe.each(
         const from = def.shots.findIndex((shot) => !("player" in shot));
         expect(from).toBeGreaterThanOrEqual(0);
         expect(def.shots.slice(from, -1).every((shot) => !("player" in shot))).toBe(true);
+    });
+
+    it("lists every one of them where what bakes and hears them looks", () => {
+        expect(getMapCinematics(map)).toContain(def);
+    });
+
+    // Comfort: a camera that swings round fast makes people dizzy. No shot turns it more than
+    // MAX_CINEMATIC_TURN a second from the one before (yaw isn't wrapped between shots, so most
+    // of a circle shows here as one)
+    it("turns the camera gently", () => {
+        def.shots.slice(1).forEach((shot, i) => {
+            const before = def.shots[i];
+            if (!("player" in shot) && !("player" in before)) {
+                const turn = Math.abs(shot.yaw - before.yaw) / (shot.at - before.at);
+                expect(turn).toBeLessThanOrEqual(MAX_CINEMATIC_TURN);
+            }
+        });
     });
 
     it("has cues for its cast alone, within its time", () => {
@@ -337,13 +398,39 @@ describe("the Battle for Varrock's opening", () => {
     });
 });
 
+describe("baking props and casts", () => {
+    it("bakes each NPC once, with what every map plays on it", async () => {
+        // NPC 1 is a prop on one map and in the other's cast (DEF), playing other seqs there
+        const posed = { id: "posed", props: [{ npcId: 1, seq: 12, x: 0, y: 0 }] } as MapDef;
+        const acted = { id: "acted", cinematic: DEF } as MapDef;
+        const maps = [posed, acted];
+        const baked: number[][][] = [];
+        const assets: GameAssets = Object.create(GameAssets.prototype);
+        Object.assign(assets, {
+            propBakes: new Map(),
+            loadBake() {},
+            async bakeInTasks(requests: { npcId: number; seqIds: number[] }[]) {
+                baked.push(requests.map((r) => [r.npcId, ...[...r.seqIds].sort((a, b) => a - b)]));
+            },
+        });
+        await assets.loadProps(posed, maps);
+        // Its prop's seq and its cast's, so the other map finds them all there
+        expect(baked).toEqual([[[1, 10, 11, 12]]]);
+        await assets.loadProps(acted, maps);
+        expect(baked[1]).toEqual([[2, 20, 21]]);
+        await assets.loadProps(posed, maps);
+        await assets.loadProps(acted, maps);
+        expect(baked.length).toBe(2);
+    });
+});
+
 describe("Vardhelm's opening", () => {
     const map = createDevMap(VARDHELM);
     const def = map.cinematic!;
     const cast = (id: string) => def.cast.find((actor) => actor.id === id)!;
 
     it("is the map's, has the player face up the mountain, and lasts 15 to 25 seconds", () => {
-        expect(MAPS_WITH_CINEMATICS.map((m) => m.id)).toContain(map.id);
+        expect(CINEMATICS.map(([, m]) => m.id)).toContain(map.id);
         expect(map.spawnFacing).toEqual({ x: 0, y: 1 });
         expect(def.seconds).toBeGreaterThanOrEqual(15);
         expect(def.seconds).toBeLessThanOrEqual(25);
@@ -443,5 +530,28 @@ describe("what a cinematic's camera sees", () => {
         const below = getCinematicSquares({ ...level, shots: [level.shots[1]] }, () => 0, play);
         expect(below).toContain(square(640, 640));
         expect(below).not.toContain(square(640, 640 + 120));
+    });
+});
+
+describe("a fight in parts' cinematics", () => {
+    const map = BENEATH_CURSED_SANDS;
+
+    it("plays each part's own, as the run for it starts", () => {
+        expect(map?.stages?.length).toBe(4);
+        map!.stages!.forEach((stage, i) => {
+            expect(stage.cinematic).toBeDefined();
+            expect(getRunCinematic(map!, i)).toBe(stage.cinematic);
+        });
+        expect(getMapCinematics(map!)).toHaveLength(4);
+    });
+
+    it("hands over to the boss's own intro: its stand-in's gone as the run starts", () => {
+        for (const stage of map!.stages!) {
+            const def = stage.cinematic!;
+            const release = def.shots[def.shots.length - 2].at;
+            for (const actor of def.cast) {
+                expect(getActorState(def, actor, release).gone).toBe(true);
+            }
+        }
     });
 });

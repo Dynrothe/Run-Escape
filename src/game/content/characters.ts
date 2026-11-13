@@ -1,4 +1,5 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
+import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
 import { JUSTICIAR_ZACHARIAH } from "./justiciarKit";
 import { CharacterDef } from "./types";
@@ -628,6 +629,53 @@ export const CHARACTERS: CharacterDef[] = [
     },
     // Justiciar Zachariah himself, in the Battle for Varrock (justiciarKit.ts)
     JUSTICIAR_ZACHARIAH,
+    {
+        id: "sands_delver",
+        name: "Sands Delver",
+        description:
+            "Made for Beneath Cursed Sands, and everyone plays them there, and nowhere else: " +
+            "starts with the Crystal bow, moves 20% faster, has 30% more hitpoints and heals 10 " +
+            "hitpoints a minute.",
+        style: "ranged",
+        startingWeapon: "crystal_bow",
+        // The desert's own robes: the shirt, robe and boots
+        equipment: {
+            [EquipSlot.TORSO]: 1833,
+            [EquipSlot.LEGS]: 1835,
+            [EquipSlot.FEET]: 1837,
+        },
+        // Four long fights in a row, each its own run: feet to dodge, and hitpoints to learn them
+        // on. The damage is the bow's alone, at the level the map says, so the fights are as
+        // long as their hitpoints.
+        bonus: { moveSpeed: 0.2, maxHp: 0.3, regen: 10 },
+        only: "beneath_cursed_sands",
+    },
+    {
+        id: "avian_assaulter",
+        name: "Avian Assaulter",
+        description:
+            "Made for Thanksgiving Harvest, and everyone plays them there, and nowhere else: " +
+            "one dangerous bird, with a Rubber chicken and no other weapons, gear or items. " +
+            "Hits birds 15% harder, moves 45% faster and has nearly three times the hitpoints.",
+        style: "melee",
+        startingWeapon: "rubber_chicken",
+        // The chicken outfit, kept on over gear (fixedOutfit)
+        equipment: {
+            [EquipSlot.HEAD]: 11021,
+            [EquipSlot.TORSO]: 11020,
+            [EquipSlot.LEGS]: 11022,
+            [EquipSlot.FEET]: 11019,
+        },
+        fixedOutfit: true,
+        noItems: true,
+        // The stun birds, circling for show
+        overheadSpotAnim: 254,
+        // The Rubber chicken and nothing else: its ten levels are the run
+        maxWeapons: 1,
+        damageAgainst: { tags: ["bird"], damage: 0.15 },
+        bonus: { growth: 0.15, magnet: 0.5, cooldown: 0.35, moveSpeed: 0.45, maxHp: 1.8 },
+        only: "thanksgiving",
+    },
 ];
 
 export const CHARACTER_BY_ID: Map<string, CharacterDef> = new Map(CHARACTERS.map((c) => [c.id, c]));
@@ -638,4 +686,12 @@ export function getCharacter(id: string): CharacterDef {
         throw new Error("Unknown character " + id);
     }
     return character;
+}
+
+export function characterName(character: CharacterDef): string {
+    return tr(`char.${character.id}.name`, character.name);
+}
+
+export function characterDescription(character: CharacterDef): string {
+    return tr(`char.${character.id}.desc`, character.description);
 }

@@ -13,6 +13,21 @@
     --ui-edge-light: #6b5e4a;
     /* Lines between rows and columns of a table */
     --ui-divider: rgba(107, 94, 74, 0.55);
+    /* Text on the stone and cards: secondary, faint, locked and disabled, each still readable */
+    --ui-text-dim: #d6cbb0;
+    --ui-text-faint: #c9bda3;
+    --ui-text-locked: #b5a98f;
+    --ui-text-disabled: #ada08a;
+    /* For what's gone wrong or isn't reached yet: light enough to read on a card, faded or not */
+    --ui-red-text: #ff786a;
+    /* Quests not started yet, which are read over the map too */
+    --ui-quest-red-text: #ff3010;
+    /* The buttons' green is too dark on the stone */
+    --ui-green-text: #5fe05f;
+    /* A whole outline, for text over the world, which can be any colour */
+    --ui-outline:
+        1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 1px 0 #000,
+        0 -1px 0 #000, 1px 0 0 #000, -1px 0 0 #000;
     /* How much bigger the UI is drawn, for the window's size (set on
        .ui-contents). Zoom scales viewport units too, so ones inside the UI
        are divided by it to stay a share of the window. */
@@ -111,7 +126,7 @@
 }
 
 .ui-subtle {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     margin: 0 0 10px;
     text-align: center;
 }
@@ -144,7 +159,7 @@
 }
 
 .ui-button:disabled {
-    color: #7d705b;
+    color: var(--ui-text-disabled);
     cursor: default;
 }
 
@@ -164,6 +179,7 @@
 .ui-contents {
     position: absolute;
     inset: 0;
+    z-index: 1;
     zoom: var(--ui-scale);
     pointer-events: none;
 }
@@ -193,12 +209,30 @@
 }
 
 .ui-card-selected {
+    background: var(--ui-card-hover);
     box-shadow: inset 0 0 0 2px var(--ui-yellow);
+}
+
+/* An adventurer's tile: a corner marked too, so it isn't only a thin line of colour */
+.ui-tile.ui-card-selected {
+    box-shadow:
+        inset 0 0 0 2px var(--ui-yellow),
+        0 0 0 1px var(--ui-yellow);
+}
+
+.ui-tile.ui-card-selected::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    border: 5px solid transparent;
+    border-top-color: var(--ui-yellow);
+    border-left-color: var(--ui-yellow);
 }
 
 /* Still there to point at, to see what it takes */
 .ui-card-locked {
-    color: #8a7f6a;
+    color: var(--ui-text-locked);
     cursor: default;
 }
 
@@ -207,7 +241,13 @@
 }
 
 .ui-card-dim {
-    opacity: 0.7;
+    opacity: 0.85;
+}
+
+/* How many coins something's short of */
+.ui-card-short {
+    color: var(--ui-red-text);
+    white-space: nowrap;
 }
 
 .ui-card:disabled {
@@ -251,7 +291,7 @@
 }
 
 .ui-card-style {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-coins {
@@ -331,7 +371,7 @@
 
 .ui-title-tiles {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
 }
 
@@ -414,10 +454,16 @@
 
 .ui-setting {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 6px 16px;
     padding: 5px 0;
+}
+
+.ui-setting-label {
+    flex: 1 1 180px;
+    min-width: 0;
 }
 
 .ui-setting-name {
@@ -426,7 +472,22 @@
 
 .ui-setting-text {
     font-size: 14px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
+}
+
+/* A line of its own under a setting's text: when the save was last copied */
+.ui-setting-note {
+    display: block;
+    color: var(--ui-text);
+}
+
+/* A kind of setting, inside a section */
+.ui-settings-group {
+    margin: 8px 0 0;
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 15px;
+    color: var(--ui-yellow);
 }
 
 .ui-setting-control {
@@ -434,11 +495,48 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* A box to type in (cloud save's code): it goes under the label when there isn't room beside it,
+   and shrinks to what's left */
+.ui-setting-wide {
+    flex-wrap: wrap;
+}
+
+.ui-setting-wide .ui-setting-control {
+    flex: 1 1 260px;
+    min-width: 0;
+    justify-content: flex-end;
+}
+
+.ui-cloud-link {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    max-width: 340px;
+}
+
+/* Grows from nothing, so its own width never counts towards the panel's and scrolls it sideways */
+.ui-cloud-code-input {
+    width: 0;
+    font-family: "OSRS Bold", sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.ui-cloud-code {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--ui-yellow);
+    user-select: all;
 }
 
 .ui-toggle {
     min-width: 52px;
-    color: #e04040;
+    color: var(--ui-red-text);
 }
 
 .ui-toggle-on {
@@ -458,6 +556,7 @@
 
 .ui-volume {
     width: 140px;
+    height: 24px;
     accent-color: var(--ui-orange);
 }
 
@@ -512,7 +611,8 @@
 }
 
 /* The client's wrench, on one of the game's own buttons */
-.ui-title-settings {
+.ui-title-settings,
+.ui-title-language {
     width: 40px;
     height: 40px;
     padding: 0;
@@ -520,8 +620,26 @@
     box-shadow: inset 0 0 0 1px var(--ui-edge-light);
 }
 
-.ui-title-settings:hover {
+.ui-title-settings:hover,
+.ui-title-language:hover {
     background: var(--ui-card-hover);
+}
+
+/* Cloud save's button: faded while it's off, with its "!" or "no" sign in the corner */
+.ui-title-cloud {
+    position: relative;
+}
+
+.ui-title-cloud-off .ui-icon {
+    opacity: 0.55;
+}
+
+.ui-title-cloud-badge {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    display: flex;
+    pointer-events: none;
 }
 
 .ui-discord {
@@ -544,7 +662,7 @@
 }
 
 .ui-title-stat {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-title-stat-value {
@@ -553,11 +671,19 @@
 
 .ui-hint {
     color: var(--ui-white);
-    opacity: 0.8;
 }
 
-/* A narrow window: the corner stacks, and the hint wraps to stay clear of it */
-@media (max-width: 1040px) and (pointer: fine) {
+/* The dev server's map generator, out of the row with the links */
+.ui-title-dev {
+    position: absolute;
+    left: 10px;
+    bottom: 8px;
+}
+
+/* A narrow window: the corner stacks, and the hint wraps to stay clear of it. A
+   tablet held upright too; a phone has a layout of its own (Mobile.css). */
+@media (max-width: 1040px) and (pointer: fine),
+    (max-width: 1040px) and (pointer: coarse) and (min-height: 521px) {
     .ui-title-utils {
         flex-wrap: wrap;
         justify-content: flex-end;
@@ -576,26 +702,23 @@
 
 /* Opens the changelog */
 .ui-version {
-    padding: 2px 4px;
+    min-height: 28px;
+    padding: 2px 6px;
     font-family: "OSRS Small", sans-serif;
     font-size: 14px;
     color: var(--ui-text);
-    text-shadow: 1px 1px 0 #000;
     background: none;
     border: none;
-    opacity: 0.8;
     cursor: pointer;
 }
 
 .ui-version:hover {
     color: var(--ui-yellow);
-    opacity: 1;
 }
 
 /* Played on without saving: opens the panel saying why again */
 .ui-version.ui-save-off {
-    color: var(--ui-red);
-    opacity: 1;
+    color: var(--ui-red-text);
 }
 
 /* Adventurer and map select: a panel down each side, so the adventurer picked
@@ -681,7 +804,7 @@
 .ui-select-count {
     font-family: "OSRS Small", sans-serif;
     font-size: 15px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-select-bar {
@@ -717,13 +840,13 @@
 }
 
 .ui-endless-locked .ui-endless-name {
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 .ui-endless-hint {
     font-family: "OSRS Small", sans-serif;
     font-size: 15px;
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 /* Under each list: the one pointed at, or the one picked */
@@ -761,7 +884,7 @@
 .ui-style-treasure {
     font-family: "OSRS Small", sans-serif;
     font-size: 14px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-tiles {
@@ -866,6 +989,43 @@
     font-size: 15px;
 }
 
+/* A Thanksgiving preview deliberately themes every map option in the selector. */
+.ui-select-maps-thanksgiving {
+    --ui-orange: #ffb34d;
+    --ui-card: rgba(78, 45, 22, 0.97);
+    --ui-card-hover: rgba(112, 59, 21, 0.98);
+    --ui-edge-light: #b87432;
+}
+
+.ui-map-tile-thanksgiving {
+    border-color: #bf7130;
+    background: rgba(97, 52, 23, 0.97);
+    box-shadow: inset 0 0 0 1px rgba(244, 174, 76, 0.52);
+}
+
+.ui-map-tile-thanksgiving:hover:not(:disabled) {
+    background: rgba(125, 64, 21, 0.98);
+}
+
+.ui-map-tile-thanksgiving.ui-card-selected {
+    border-color: #ed9b37;
+    color: #fff0c8;
+    background: rgba(126, 62, 20, 0.98);
+    box-shadow: inset 0 0 0 2px #ffd276;
+}
+
+.ui-select-details-thanksgiving {
+    border-color: #bd7834;
+    background: rgba(57, 31, 17, 0.72);
+    box-shadow:
+        inset 3px 0 0 #d18232,
+        inset 0 0 0 1px rgba(244, 181, 86, 0.36);
+}
+
+.ui-select-details-thanksgiving .ui-card-description {
+    color: #f3dec0;
+}
+
 .ui-map-name {
     flex: 1;
     min-width: 0;
@@ -938,9 +1098,22 @@
     filter: drop-shadow(1px 1px 0 #000);
 }
 
-/* Gold once it's been beaten on hard */
+/* Two ticks and gold once it's been beaten on hard, so it isn't only the colour */
 .ui-beaten-hard {
+    position: relative;
+    margin-left: 7px;
     border-color: var(--ui-orange);
+}
+
+.ui-beaten-hard::before {
+    content: "";
+    position: absolute;
+    left: -6px;
+    top: 2px;
+    width: 4px;
+    height: 9px;
+    border: solid var(--ui-orange);
+    border-width: 0 2px 2px 0;
 }
 
 /* What a map's tasks bring in, faded until it's earned */
@@ -965,7 +1138,29 @@
 }
 
 .ui-task-done .ui-task-name {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
+}
+
+/* What endless and hard do here, in the map's details */
+.ui-map-modes {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+    padding-top: 6px;
+    font-size: 14px;
+    color: var(--ui-text);
+    border-top: 1px solid rgba(107, 94, 74, 0.6);
+}
+
+.ui-map-mode-name {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-orange);
+}
+
+.ui-map-mode-locked,
+.ui-map-mode-locked .ui-map-mode-name {
+    color: var(--ui-text-faint);
 }
 
 .ui-reward {
@@ -977,7 +1172,7 @@
 }
 
 .ui-reward-locked {
-    color: #8a7f6a;
+    color: var(--ui-text-locked);
 }
 
 .ui-reward-locked .ui-icon {
@@ -1113,10 +1308,33 @@
 
 .ui-shop-card .ui-card-cost {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    column-gap: 6px;
     min-height: 28px;
     padding-right: 36px;
     margin-top: auto;
+}
+
+/* Maxed is something done: it reads as such, and isn't faded like one that's out of reach */
+.ui-shop-card-maxed .ui-card-cost {
+    color: var(--ui-green-text);
+}
+
+/* How to buy and refund, under the skills */
+.ui-shop-hint {
+    margin: 10px 0 0;
+    font-size: 14px;
+    text-align: center;
+    color: var(--ui-text-dim);
+}
+
+/* The page's own balance, which isn't the title screen's */
+.ui-shop-balance {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ui-text-dim);
 }
 
 .ui-shop-refund {
@@ -1201,6 +1419,63 @@
     touch-action: none;
 }
 
+.ui-choice-countdown {
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 5px 12px;
+    background: var(--ui-panel-dark);
+    box-shadow:
+        0 0 0 1px var(--ui-edge-light),
+        0 2px 4px #0008;
+    color: var(--ui-text);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.ui-choice-countdown-time {
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
+    font-variant-numeric: tabular-nums;
+}
+
+.ui-choice-countdown-soon .ui-choice-countdown-time {
+    color: #ff6050;
+}
+
+.ui-choice-countdown ~ .ui-hud-top .ui-timer {
+    visibility: hidden;
+}
+
+.ui-choice-countdown ~ .ui-modal {
+    padding-top: 64px;
+    box-sizing: border-box;
+}
+
+/* A panel too tall for what's left under it scrolls, rather than spilling out of its frame. Its
+   padding and border (28px and 12px) are outside its max-height, with 6px to spare each side. */
+.ui-choice-countdown ~ .ui-modal > .ui-panel {
+    max-height: calc(100% - 52px);
+    overflow-y: auto;
+}
+
+/* The casket's card has its border inside its size */
+.ui-choice-countdown ~ .ui-modal > .ui-chest-card {
+    max-height: calc(100% - 12px);
+}
+
+/* A narrow window has room between six slots and the minimap for the time alone */
+@media (max-width: 860px) {
+    .ui-choice-countdown-label {
+        display: none;
+    }
+}
+
 .ui-xp {
     position: absolute;
     left: 0;
@@ -1252,6 +1527,76 @@
     color: var(--ui-white);
 }
 
+/* The sound's orb (ui/SoundOrb.tsx), as the client's are: its frame (57x34) at its own size, an
+   orb's fill in the circle (26x26 at 27,4), the harp over it and the "no" sign over that, and its
+   key on the plate (the light face at 4,14, 23x15) in the orbs' green */
+.ui-sound-orb {
+    position: relative;
+    width: 57px;
+    height: 34px;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.ui-sound-orb > * {
+    position: absolute;
+}
+
+.ui-sound-orb-frame {
+    left: 0;
+    top: 0;
+}
+
+.ui-sound-orb-fill {
+    left: 27px;
+    top: 4px;
+}
+
+.ui-sound-orb-key {
+    left: 4px;
+    top: 14px;
+    width: 23px;
+    height: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    line-height: 1;
+    color: #00ff00;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* The Music tab's harp is 33x36: smoothed down to fit, its strings turn to mud */
+.ui-sound-orb-music {
+    left: 31px;
+    top: 7px;
+    height: 20px;
+    image-rendering: pixelated;
+}
+
+.ui-sound-orb-off {
+    left: 31px;
+    top: 8px;
+}
+
+/* In a run, against the minimap's upper left under the compass, where the client's hitpoints orb
+   is */
+.ui-minimap .ui-sound-orb {
+    position: absolute;
+    left: -31px;
+    top: 36px;
+}
+
+/* On the title screen, top right, as in a run */
+.ui-title-sound {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
 /* The client's minimap frame (181x165), its map circle 77px round about
    (99, 83) and the compass in the small circle at its top left */
 .ui-minimap {
@@ -1308,24 +1653,40 @@
 }
 
 .ui-quest-tracker-title {
+    min-height: 24px;
     font-family: "OSRS Bold", sans-serif;
     font-size: 16px;
     color: var(--ui-orange);
     background: none;
     border: none;
-    padding: 0;
-    text-shadow: 1px 1px 0 #000;
+    padding: 3px 0 3px 8px;
     cursor: pointer;
 }
 
+/* A button, for what the quest asks on a hover or hold, that looks like a line of text */
 .ui-quest-track {
     display: flex;
     gap: 6px;
     justify-content: flex-end;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    /* A button drops the outline it would inherit */
+    text-shadow: inherit;
     white-space: nowrap;
+    background: none;
+    border: none;
+    cursor: help;
+}
+
+.ui-quest-track:disabled {
+    cursor: default;
 }
 
 .ui-quest-track-name {
+    /* Room for the outline, which the overflow would cut off */
+    margin: -1px;
+    padding: 1px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -1335,7 +1696,7 @@
 }
 
 .ui-quest-new .ui-quest-track-name {
-    color: var(--ui-red);
+    color: var(--ui-quest-red-text);
 }
 
 .ui-quest-started .ui-quest-track-name {
@@ -1344,7 +1705,7 @@
 
 .ui-quest-done .ui-quest-track-name,
 .ui-quest-done .ui-quest-track-progress {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 /* The damage meter, under the quest tracker, and each weapon's under it */
@@ -1358,13 +1719,13 @@
 }
 
 .ui-dps {
+    min-height: 24px;
     font: inherit;
     font-size: 16px;
     color: var(--ui-white);
     background: none;
     border: none;
-    padding: 0;
-    text-shadow: 1px 1px 0 #000;
+    padding: 3px 0 3px 8px;
     cursor: pointer;
     pointer-events: auto;
 }
@@ -1470,6 +1831,30 @@
     text-shadow: 1px 1px 0 #000;
 }
 
+/* The Scabaras room's puzzles: what's done, what's to do now, what's waiting */
+.ui-scabaras-puzzles {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: 300px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    text-align: right;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-scabaras-puzzle-open {
+    color: var(--ui-yellow);
+}
+
+.ui-scabaras-puzzle-solved {
+    color: #5fd35f;
+}
+
+.ui-scabaras-puzzle-waiting {
+    color: #9a9080;
+}
+
 /* The chest at the end of a raid, on the result screen: purple, as the real one is */
 .ui-raid-chest {
     margin: 6px auto 10px;
@@ -1500,6 +1885,75 @@
     align-items: center;
     gap: 6px;
     color: #e0b0ff;
+}
+
+/* The Tombs of Amascut's board on the result screen: the raid level, invocations, times, points */
+.ui-tombs-board {
+    margin: 6px auto 4px;
+    padding: 8px 12px;
+    max-width: 620px;
+    border: 1px solid #6b5a3a;
+    background: rgba(0, 0, 0, 0.25);
+    text-align: center;
+}
+
+.ui-tombs-board-level {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    color: var(--ui-orange);
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-tombs-board-invocations {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+    margin: 4px 0;
+}
+
+.ui-tombs-board-columns {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 6px 18px;
+}
+
+.ui-tombs-board-table {
+    border-collapse: collapse;
+    font-size: 15px;
+}
+
+.ui-tombs-board-table th {
+    color: var(--ui-orange);
+    font-weight: normal;
+    padding: 1px 6px;
+    text-align: left;
+}
+
+.ui-tombs-board-table td {
+    color: var(--ui-yellow);
+    padding: 1px 6px;
+    text-align: left;
+}
+
+.ui-tombs-board-table td + td,
+.ui-tombs-board-table th + th {
+    text-align: right;
+}
+
+.ui-tombs-board-total td {
+    border-top: 1px solid #6b5a3a;
+    color: #fff;
+}
+
+.ui-tombs-board-you td {
+    color: #fff;
 }
 
 /* A raid's points, under its room, and what the supply chest charges */
@@ -1571,11 +2025,11 @@
 }
 
 .ui-evolve-line {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-evolve-done {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
 .ui-evolve-ready {
@@ -1601,7 +2055,7 @@
 }
 
 .ui-slot-tip-level {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-gear-slot {
@@ -1611,6 +2065,58 @@
 
 .ui-gear-slot-empty {
     background: var(--ui-card);
+}
+
+.ui-hud-gear {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.ui-gear-toggle {
+    pointer-events: auto;
+}
+
+.ui-hud-gear-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 30px);
+    justify-content: end;
+    gap: 2px;
+}
+
+@media (pointer: fine) {
+    .ui-hud-gear-grid {
+        grid-template-columns: repeat(2, 46px);
+    }
+
+    .ui-hud-gear-grid .ui-gear-slot {
+        box-sizing: border-box;
+        width: 46px;
+        height: 42px;
+    }
+}
+
+.ui-hud-gear-grid[hidden] {
+    display: none;
+}
+
+.ui-gear-ring-slot {
+    grid-column: 2;
+}
+
+/* Stat line with an OSRS icon, or spacer when there is none. Its text wraps
+   beside the icon where there's no room (a phone's level up cards) */
+.ui-stat-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ui-stat-line .ui-icon,
+.ui-stat-spacer {
+    display: inline-block;
+    flex-shrink: 0;
 }
 
 /* Buffs, inventory and hitpoints, bottom middle */
@@ -1639,8 +2145,11 @@
     padding: 1px 6px 4px 3px;
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid #000;
+    font: inherit;
     color: var(--ui-white);
     font-size: 14px;
+    text-align: left;
+    cursor: help;
 }
 
 .ui-buff-bar {
@@ -1705,6 +2214,98 @@
     box-shadow:
         inset 0 0 0 1px var(--ui-yellow),
         0 0 10px 2px rgba(255, 220, 90, 0.75);
+}
+
+/* The button's tag and hint (AbilityButton), above it */
+.ui-ability-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.ui-ability-tag,
+.ui-ability-hint {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 6px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid var(--ui-yellow);
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+    text-align: center;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.ui-ability-tag {
+    white-space: nowrap;
+}
+
+/* The touch screen's button is in the corner: its tag and hint keep to the screen */
+.ui-ability-wrap-touch .ui-ability-tag,
+.ui-ability-wrap-touch .ui-ability-hint {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
+.ui-ability-hint {
+    width: 220px;
+    color: #ffffff;
+    line-height: 1.25;
+}
+
+.ui-ability-hint .ui-pad-icon {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+/* Whenever his guard's down: lit gold, with a ring round it that pulses (steady for anyone who's
+   asked for less motion). The ring's on the wrap, as the button clips what's outside it, and it
+   only fades and grows, so the pulse doesn't repaint. */
+.ui-ability-alert {
+    opacity: 1;
+    border-color: var(--ui-yellow);
+}
+
+.ui-ability-alert:not(.ui-ability-opened) {
+    box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+.ui-ability-wrap-alert::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border: 2px solid var(--ui-yellow);
+    box-shadow: 0 0 10px 3px rgba(255, 220, 90, 0.8);
+    pointer-events: none;
+    animation: ui-ability-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.ui-ability-wrap-touch.ui-ability-wrap-alert::after {
+    border-radius: 50%;
+}
+
+@keyframes ui-ability-pulse {
+    from {
+        opacity: 0.25;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1.06);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-ability-wrap-alert::after {
+        animation: none;
+        opacity: 0.8;
+    }
 }
 
 .ui-ability-charge {
@@ -1781,7 +2382,7 @@
     top: 0;
     font-family: "OSRS Small", sans-serif;
     font-size: 13px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     text-shadow: 1px 1px 0 #000;
 }
 
@@ -1812,6 +2413,18 @@
     text-shadow: 1px 1px 0 #000;
     white-space: normal;
     pointer-events: none;
+}
+
+/* A bag item's rarity under its name, in the dim text a casket's card says it in */
+.ui-description-rarity {
+    margin-top: -3px;
+    font-size: 14px;
+    color: var(--ui-text-dim);
+}
+
+/* How long a potion's stats last, after them */
+.ui-item-lasts {
+    color: var(--ui-text-dim);
 }
 
 .ui-hp {
@@ -2061,7 +2674,7 @@
 }
 
 .ui-tag-banished {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-banishes {
@@ -2095,13 +2708,19 @@
 .ui-choice-stats {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 12px;
+    gap: 4px 12px;
     font-size: 14px;
     color: var(--ui-white);
 }
 
+.ui-choice-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .ui-choice-stat-label {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-choice-stat-up {
@@ -2109,17 +2728,17 @@
 }
 
 .ui-choice-stat-down {
-    color: #ff5a5a;
+    color: var(--ui-red-text);
 }
 
 /* A weapon whose style a raid's bosses pray against: what it loses against them */
 .ui-card-penalty {
-    color: #ff5a5a;
+    color: var(--ui-red-text);
 }
 
 /* What a card's weapon or passive evolves; bright once the other half's owned */
 .ui-card-evolves {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-card-evolves-held {
@@ -2168,10 +2787,24 @@
     margin-top: 10px;
 }
 
+/* The columns scroll, and Give up and Resume stay in view under them */
 .ui-pause {
+    display: flex;
+    flex-direction: column;
     width: min(920px, calc(94vw / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
     overflow-y: auto;
+}
+
+.ui-pause > .ui-pause-columns {
+    flex: 1 1 auto;
+    min-height: 120px;
+    padding-right: 4px;
+    overflow-y: auto;
+}
+
+.ui-pause > :not(.ui-pause-columns) {
+    flex-shrink: 0;
 }
 
 /* The run (weapons, passives and worn equipment) on the left, the quests and
@@ -2232,13 +2865,19 @@
     gap: 4px;
 }
 
+.ui-pause-loadout {
+    border-top: 1px solid var(--ui-divider);
+    margin-top: 10px;
+    padding-top: 10px;
+}
+
 .ui-pause-item {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.ui-pause-item span:nth-child(2) {
+.ui-pause-item > span:nth-child(2) {
     flex: 1;
 }
 
@@ -2246,8 +2885,15 @@
     color: var(--ui-white);
 }
 
+.ui-pause-item .ui-pause-detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 10px;
+}
+
 .ui-pause-level {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     white-space: nowrap;
 }
 
@@ -2271,26 +2917,58 @@
     color: var(--ui-white);
 }
 
+.ui-pause-effect-debuff {
+    color: #ff6b5b;
+}
+
+.ui-pause-effect-buff {
+    color: #75cf80;
+}
+
 /* A worn set piece's progress, under its stats; green once the bonus is on */
 .ui-pause-set {
     display: block;
+    width: 100%;
     color: var(--ui-cyan);
 }
 
 .ui-pause-set-on {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
 }
 
+/* What the toasts said this run */
+.ui-pause-recent {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+    color: var(--ui-text);
+}
+
+/* The stats scroll, and the buttons stay in view under them */
 .ui-result {
+    display: flex;
+    flex-direction: column;
     width: min(820px, calc(94vw / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
     overflow-y: auto;
 }
 
+.ui-result > :not(.ui-result-columns) {
+    flex-shrink: 0;
+}
+
 .ui-result-columns {
+    flex: 1 1 auto;
+    min-height: 120px;
     display: flex;
     flex-wrap: wrap;
     gap: 18px;
+    padding-right: 4px;
+    overflow-y: auto;
 }
 
 .ui-result-player-nav {
@@ -2317,7 +2995,7 @@
 }
 
 .ui-result-player-detail {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-result-arrow {
@@ -2418,7 +3096,7 @@
 }
 
 .ui-defeat {
-    color: var(--ui-red) !important;
+    color: var(--ui-red-text) !important;
 }
 
 .ui-result-table {
@@ -2504,6 +3182,14 @@
     color: var(--ui-white);
 }
 
+/* The keyboard's list of the same */
+.ui-pad-control-keys {
+    flex-shrink: 0;
+    min-width: 100px;
+    font-family: "OSRS Bold", sans-serif;
+    color: var(--ui-yellow);
+}
+
 /* The favourite adventurer, which the game starts on: at the end of the details' head */
 .ui-favourite {
     margin-left: auto;
@@ -2513,4 +3199,400 @@
 .ui-favourite-on {
     color: var(--ui-yellow);
     box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+/* The Tombs of Amascut's invocation board (and the button to it, in the setup bar), laid out as
+   OSRS's: the icons in a scrolling grid, the reward potential beside them */
+.ui-invocations-button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.ui-invocations-level {
+    color: var(--ui-yellow);
+    font-size: 13px;
+}
+
+.ui-invocations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(620px, calc(94vw / var(--ui-scale)));
+    max-height: calc(90vh / var(--ui-scale));
+    box-sizing: border-box;
+}
+
+/* Between the title and the buttons, scrolling on a short screen so they stay in view. Each part
+   keeps its own height there rather than squeezing the icons (the grid keeps its own cap and
+   scroll). */
+.ui-invocations-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ui-invocations-scroll > * {
+    flex-shrink: 0;
+}
+
+.ui-invocations-title {
+    text-align: center;
+}
+
+.ui-invocations-body {
+    display: flex;
+    gap: 8px;
+}
+
+.ui-invocations-grid {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    gap: 6px;
+    align-content: start;
+    max-height: calc(50vh / var(--ui-scale));
+    overflow-y: auto;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 52px;
+    padding: 0;
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+}
+
+.ui-invocation:focus-visible,
+.ui-invocation:hover {
+    border-color: var(--ui-edge);
+}
+
+.ui-invocation-on {
+    border-color: rgba(255, 152, 31, 0.5);
+}
+
+.ui-invocations-reward {
+    flex: 0 0 186px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocations-reward-title {
+    color: #ff981f;
+}
+
+.ui-invocations-level-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ui-invocations-number {
+    color: #ffffff;
+    font-size: 20px;
+}
+
+.ui-invocations-band {
+    color: var(--ui-yellow);
+}
+
+/* Reward potential: the raid level against the highest, in OSRS's red */
+.ui-invocations-bar {
+    width: 100%;
+    height: 10px;
+    background: #3a0d0d;
+    border: 1px solid #000;
+}
+
+.ui-invocations-bar-fill {
+    height: 100%;
+    background: #b8211f;
+}
+
+.ui-invocations-scale {
+    font-size: 13px;
+    text-align: center;
+}
+
+.ui-invocations-uniques {
+    display: grid;
+    grid-template-columns: repeat(4, 38px);
+    gap: 3px;
+}
+
+.ui-invocations-unique {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    border: 1px solid #b08a3a;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* Below its raid level, as OSRS shows it: greyed out */
+.ui-invocations-unique-out {
+    border-color: #4a4336;
+}
+
+.ui-invocations-unique-out > * {
+    filter: grayscale(1) brightness(0.45);
+}
+
+.ui-invocations-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 58px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocations-detail-name {
+    color: #ff981f;
+}
+
+.ui-invocations-detail-level {
+    color: var(--ui-yellow);
+}
+
+.ui-invocations-buttons {
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Saved setups of the board: each loads in one go */
+.ui-invocations-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--ui-edge);
+}
+
+.ui-invocations-presets-title {
+    color: var(--ui-orange);
+}
+
+.ui-invocations-preset-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.ui-invocations-preset {
+    display: flex;
+    gap: 2px;
+}
+
+.ui-invocations-preset-load {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+}
+
+/* The one the board's set to now */
+.ui-invocations-preset-on {
+    box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+.ui-invocations-preset-level {
+    color: #c8b58a;
+    font-size: 0.85em;
+}
+
+/* Asking to be pressed again before it deletes */
+.ui-invocations-preset-sure {
+    color: #ff6d5e;
+}
+
+/* The name box is co-op's (.ui-coop-input), as cloud save's is */
+.ui-invocations-preset-save {
+    display: flex;
+    gap: 4px;
+}
+
+/* A phone: the reward potential goes under the icons */
+@media (max-width: 560px) {
+    .ui-invocations-body {
+        flex-direction: column;
+    }
+
+    .ui-invocations-reward {
+        flex: none;
+    }
+}
+
+/* The Scabaras room's slates and Ancient tablet, read while you're stood by one: over the play
+   area, not in the way of touching it (on a touch screen, a thin row at the top: Mobile.css) */
+.ui-scabaras-reading {
+    position: absolute;
+    top: 14%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(360px, calc(92vw / var(--ui-scale)));
+    padding: 10px 14px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.ui-scabaras-title {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    color: var(--ui-orange);
+    margin-bottom: 6px;
+}
+
+.ui-scabaras-number {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 48px;
+    line-height: 1.1;
+    color: #ffff00;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.ui-scabaras-symbols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.ui-scabaras-symbol {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-scabaras-value {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 22px;
+    color: #ffff00;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-scabaras-name {
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+/* A fight in parts' part buttons, under its line on the map's card */
+.ui-fight-parts {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0;
+}
+
+/* An adventurer's bonuses under their description, a stat to a line */
+.ui-select-bonus {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+    color: var(--ui-white);
+}
+
+/* A key that's a word ("Enter") beside a button's text */
+.ui-choice-key.ui-word-key {
+    width: auto;
+    font-size: 13px;
+}
+
+/* How many level ups are still to come, beside the heading */
+.ui-levelup-more {
+    margin-left: 10px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    color: var(--ui-text-dim);
+}
+
+/* The game's own confirmation, over everything but the notice to turn a phone sideways */
+.ui-confirm {
+    z-index: 20;
+}
+
+/* The questions keep their line breaks */
+.ui-confirm-body {
+    white-space: pre-line;
+}
+
+/* Where the keyboard is, on every screen. Drawn inward in lists that scroll, which would cut it
+   off, and over a controller's highlight there's nothing to do: that's its own, below. */
+.ui-contents :focus-visible {
+    outline: 2px solid var(--ui-yellow);
+    outline-offset: 1px;
+}
+
+.ui-select-scroll :focus-visible,
+.ui-armoury-slots :focus-visible,
+.ui-quest-list :focus-visible,
+.ui-log-list :focus-visible,
+.ui-settings-body :focus-visible,
+.ui-pause-columns :focus-visible,
+.ui-invocations-grid :focus-visible,
+.ui-coop-rooms :focus-visible {
+    outline-offset: -2px;
+}
+
+:root[data-input="pad"] .ui-contents :focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
+
+/* A window takes the focus when it opens, to be announced, with nothing to show for it */
+.ui-contents [role="dialog"]:focus,
+:root[data-input="pad"] .ui-contents [role="dialog"]:focus {
+    outline: none;
+}
+
+/* What's written over the world, which can be any colour behind it */
+.ui-hud-right,
+.ui-xp-level,
+.ui-dps,
+.ui-quest-tracker,
+.ui-quest-tracker-title,
+.ui-round,
+.ui-raid-points,
+.ui-boss-name,
+.ui-boss-status,
+.ui-boss-warning,
+.ui-raid-objective,
+.ui-raid-objective-hint,
+.ui-hp span,
+.ui-hint,
+.ui-version,
+.ui-buff {
+    text-shadow: var(--ui-outline);
+}
+
+/* For anyone who's asked for less motion: the pulses hold still */
+@media (prefers-reduced-motion: reduce) {
+    .ui-slot-evolve::after {
+        animation: none;
+        opacity: 0.8;
+    }
+
+    .ui-boss-phase-new {
+        animation: none;
+    }
+
+    .ui-xp-fill {
+        transition: none;
+    }
 }

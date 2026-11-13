@@ -43,7 +43,7 @@ const ROOM = { x0: 3797, y0: 5142, x1: 3819, y1: 5166 };
 const FLOOR_HEIGHT = 200;
 const PIT_HEIGHT = 56;
 // The 3 by 3 hole in the middle of the room's floor
-const BROKEN_PIT = 45747;
+export const BROKEN_PIT = 45747;
 // The hidden floor (map file id): walked on, and draws nothing
 const HIDDEN_OVERLAY = 359;
 
@@ -83,12 +83,25 @@ const POINTS: MapPoint[] = [
 // thickness, going down into the dark (client/FloorView.ts). The pit's depth is room for a tile
 // to fall into, and for anything that's ever put down there to sit far below.
 function digPit(ground: Ground, inFloor: (x: number, y: number) => boolean): void {
+    digFloorPit(ground, SW, NE, FLOOR_HEIGHT, PIT_HEIGHT, inFloor);
+}
+
+// The same for any floor (the Tombs of Amascut's own map has the Wardens' room too): the floor's
+// tiles, grid tiles from sw to ne, a bridge at floorHeight over a pit down to pitHeight
+export function digFloorPit(
+    ground: Ground,
+    sw: { x: number; y: number },
+    ne: { x: number; y: number },
+    floorHeight: number,
+    pitHeight: number,
+    inFloor: (x: number, y: number) => boolean,
+): void {
     const grid = ground.grid;
     const [level0, level1, level2, level3] = grid.levels;
     // What the floor brought from upstairs goes
     grid.locs = grid.locs.filter((loc) => !inFloor(loc.x, loc.y));
-    for (let y = SW.y; y <= NE.y; y++) {
-        for (let x = SW.x; x <= NE.x; x++) {
+    for (let y = sw.y; y <= ne.y; y++) {
+        for (let x = sw.x; x <= ne.x; x++) {
             const to = ground.tile(x, y);
             level0.overlays[to] = 0;
             level0.underlays[to] = 0;
@@ -105,13 +118,13 @@ function digPit(ground: Ground, inFloor: (x: number, y: number) => boolean): voi
     }
     // The pit's bottom inside its edge, and the floor's corners over it all at the floor's height
     // (a level's heights are from the level under it)
-    const corners = SIZE + 1;
-    for (let y = SW.y; y <= NE.y + 1; y++) {
-        for (let x = SW.x; x <= NE.x + 1; x++) {
-            const edge = x === SW.x || x === NE.x + 1 || y === SW.y || y === NE.y + 1;
-            const bottom = edge ? FLOOR_HEIGHT : PIT_HEIGHT;
+    const corners = ground.sizeX + 1;
+    for (let y = sw.y; y <= ne.y + 1; y++) {
+        for (let x = sw.x; x <= ne.x + 1; x++) {
+            const edge = x === sw.x || x === ne.x + 1 || y === sw.y || y === ne.y + 1;
+            const bottom = edge ? floorHeight : pitHeight;
             ground.setHeight(x, y, bottom);
-            level1.heights[x + y * corners] = FLOOR_HEIGHT - bottom;
+            level1.heights[x + y * corners] = floorHeight - bottom;
         }
     }
 }

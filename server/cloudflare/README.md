@@ -17,7 +17,9 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
   with nothing done (`LOBBY_IDLE_MS` in `CoopLobby.ts`).
 - **Each room** (`src/room.mjs`) is its own Durable Object, at `/coop/room/<code>`. Cloudflare
   starts one near the first request for it, which is the host making it, so a run's frames and
-  inputs go through a relay close to the host rather than one fixed place.
+  inputs go through a relay close to the host rather than one fixed place. Close, but not always
+  the closest data centre, or in the host's country: see Cloudflare's
+  [placement rules](https://developers.cloudflare.com/durable-objects/reference/data-location/).
 - **Rooms hibernate too.** Their connections use Cloudflare's hibernation API, so a room is billed
   only while it's handling a message, not for every second it's open. A pending `setTimeout` or
   `setInterval` would keep it billed throughout, so everything a room waits for (the 10 seconds to
@@ -41,8 +43,28 @@ alternative to hosting the Node relay, not a replacement: the game works with ei
 - The Worker (`src/index.mjs`) only routes: `/coop` to the lobby, `/coop/room/<code>` to that room,
   and a plain GET of `/coop` answers whether co-op's there, as the game asks. It sets each player's
   address from Cloudflare's `CF-Connecting-IP`, for the limits, and their country from
-  `request.cf.country`, for their flag in the rooms list and the party (unless they've hidden it and
-  don't host an open room).
+  `request.cf.country`, for their flag in the party (unless they've hidden it and don't host an
+  open room). A player who resumes keeps the country they joined from. The request's `cf.colo` is
+  the edge that took it, not where the room runs.
+- **A room's flag in the list** is where the room runs, measured inside it: `location.mjs` fetches
+  `https://www.cloudflare.com/cdn-cgi/trace` and looks its `colo` up in `colo-countries.json`
+  (never trace's `loc`, which is where the request came from). It's the method
+  [Where Durable Objects Live](https://github.com/helloimalastair/where-durableobjects-live/blob/main/apps/worker/src/DO.ts)
+  uses: a good guide, not a guarantee. Listings say `countrySource: "server"`, and a room that
+  couldn't measure it has no flag, never its host's (the lobby drops a host's country stored by an
+  older relay). A room measures once it's open and on its menu, in the background with a short
+  deadline, and saves the first country it gets with the room, so waking, a restart or a new host
+  don't measure again. That relies on Cloudflare not moving an object once it's placed: revisit it
+  if they start to. A failed measurement is tried again with the next listing update or heartbeat
+  after `LOCATION_RETRY_MS`. Closing the room deletes its country with the rest of its storage, so
+  a new room that reuses the code measures afresh.
+- `colo-countries.json` is made from Cloudflare's status page by
+  `node scripts/update-colo-countries.mjs`, run in this directory: review its diff and commit it.
+  A data centre it hasn't got has no flag until then. The status page names a few without a
+  country, which `places` in `scripts/colo-countries.mjs` lists, and it stops at any new one.
+  It takes only current country codes: `Intl.DisplayNames` names old ones too, such as `UK` and
+  `FX`, which would replace `GB` and `FR`. The lobby lists a room that saved an old code by its
+  current one (`currentCountry` in `src/shared.mjs`).
 - A room tells the lobby it's there every 60 seconds, and when something the list shows changes
   (not players' loadouts or ready). It goes off the list when it ends, when someone tries to join it
   and it's gone, or once it's said nothing for 180 seconds while the lobby's awake. Waking from
@@ -138,8 +160,9 @@ updates, and moving objects between machines. Each one drops every connection to
 what it had in memory, often more than once an hour. So:
 
 - A room keeps itself in storage, and gives each player a token when they make or join it.
-  Someone joining or leaving, and a run starting or ending, are saved before anyone hears of
-  them, so a restart straight after doesn't bring back the room as it was.
+  Someone joining or leaving, a run starting or ending, and a player's change of pick or ready
+  that the room confirms (`meSeq`), are saved before anyone hears of them, so a restart straight
+  after doesn't bring back the room as it was.
 - A player whose connection drops keeps their place for 15 seconds. Their game reconnects to
   `coop/room/<code>?resume=<token>` for up to 10 seconds, and the run carries on. Someone who
   doesn't come back is let go, as if they'd left.

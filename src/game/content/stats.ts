@@ -1,3 +1,4 @@
+import { fmtNum, t, tr } from "../i18n";
 import { StatKey, Stats } from "./types";
 
 // How each stat reads to the player, for gear, potions and comparisons
@@ -37,23 +38,50 @@ export const STAT_INFO: Record<StatKey, { label: string; unit: "percent" | "flat
 // The order stats are listed in
 const STAT_ORDER = Object.keys(STAT_INFO) as StatKey[];
 
-// "+10% damage", "-1 armour"
-export function formatStat(key: StatKey, value: number): string {
-    const info = STAT_INFO[key];
-    const sign = value < 0 ? "-" : "+";
-    const abs = Math.abs(value);
-    if (info.unit === "percent") {
-        return `${sign}${Math.round(abs * 100)}% ${info.label}`;
-    }
-    return `${sign}${Math.round(abs * 10) / 10} ${info.label}`;
+// The sentences stats are shown in, for locales/en/gen.json (stat.<key>.label for each stat's
+// label, then statline.*): {sign} is "+" or "-", so a language can put the number after the label
+export const STAT_MESSAGES: Record<string, string> = {
+    ...Object.fromEntries(STAT_ORDER.map((key) => [`stat.${key}.label`, STAT_INFO[key].label])),
+    "statline.percent": "{sign}{value}% {label}",
+    "statline.flat": "{sign}{value} {label}",
+    "statline.value.percent": "{sign}{value}%",
+    "statline.value.flat": "{sign}{value}",
+};
+
+// What a stat is called: "damage", "armour"
+export function statLabel(key: StatKey): string {
+    return tr(`stat.${key}.label`, STAT_INFO[key].label);
 }
 
-export function formatStats(stats: Partial<Stats>): string[] {
-    const lines: string[] = [];
+// A stat's size as a number: whole percent, or flat to a tenth
+function statNumber(key: StatKey, abs: number): string {
+    const noGroups = { useGrouping: false };
+    return STAT_INFO[key].unit === "percent"
+        ? fmtNum(Math.round(abs * 100), noGroups)
+        : fmtNum(Math.round(abs * 10) / 10, noGroups);
+}
+
+// "+10% damage", "-1 armour"
+export function formatStat(key: StatKey, value: number): string {
+    return t(`statline.${STAT_INFO[key].unit}`, {
+        sign: value < 0 ? "-" : "+",
+        value: statNumber(key, Math.abs(value)),
+        label: statLabel(key),
+    });
+}
+
+// A line as a screen shows it, in the player's language. english is what the line says in
+// English, or the label it starts with ("damage", "Venom lasts"), when the game built the line
+// itself: its icon goes by the English (statLineIcon), as no language file holds the line.
+export type StatText = { text: string; english?: string };
+
+// Each stat that isn't zero, a line each: "+10% damage", "-1 armour"
+export function formatStats(stats: Partial<Stats>): StatText[] {
+    const lines: StatText[] = [];
     for (const key of STAT_ORDER) {
         const value = stats[key];
         if (value) {
-            lines.push(formatStat(key, value));
+            lines.push({ text: formatStat(key, value), english: STAT_INFO[key].label });
         }
     }
     return lines;
@@ -61,11 +89,10 @@ export function formatStats(stats: Partial<Stats>): string[] {
 
 // A stat's value on its own: "+10%", "-1"
 export function formatStatValue(key: StatKey, value: number): string {
-    const sign = value < 0 ? "-" : "+";
-    const abs = Math.abs(value);
-    return STAT_INFO[key].unit === "percent"
-        ? `${sign}${Math.round(abs * 100)}%`
-        : `${sign}${Math.round(abs * 10) / 10}`;
+    return t(`statline.value.${STAT_INFO[key].unit}`, {
+        sign: value < 0 ? "-" : "+",
+        value: statNumber(key, Math.abs(value)),
+    });
 }
 
 // Every stat a piece has after an upgrade, with what it had before: for the
@@ -82,7 +109,7 @@ export function compareStats(
         if (!was && !now) {
             continue;
         }
-        const label = STAT_INFO[key].label;
+        const label = statLabel(key);
         lines.push({
             key,
             label: label[0].toUpperCase() + label.slice(1),

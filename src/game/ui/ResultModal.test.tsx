@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
-import { GameClient } from "../client/GameClient";
+import type { GameClient } from "../client/GameClient";
 import { GameStore, PlayerResultView, UiSnapshot } from "../client/GameStore";
 import { createSave } from "../core/save";
 import { ResultModal } from "./GameUi";
+
+vi.mock("@foxglove/wasm-bz2/wasm/module.wasm?url", () => ({ default: "" }));
 
 function createUi(solo = false, hard = false, expert = false): UiSnapshot {
     const players: PlayerResultView[] = ["Alice", "Bob", "Charlie", "Dana"].map((name, i) => ({
@@ -79,6 +81,7 @@ function createUi(solo = false, hard = false, expert = false): UiSnapshot {
             newGear: ["Rune platebody"],
             newTrophies: [],
             quests: [],
+            ...(!solo && { coop: true }),
         },
     };
 }
@@ -90,11 +93,51 @@ function stat(table: string, label: string): string | null {
     return within(row).getAllByRole("cell")[1].textContent;
 }
 
-const client = { leaveRun: vi.fn() } as unknown as GameClient;
+const client = { leaveRun: vi.fn(), retry: vi.fn() } as unknown as GameClient;
 
 afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.useRealTimers();
+});
+
+test("on your own, Play again is the main button", () => {
+    render(<ResultModal ui={createUi(true)} client={client} />);
+    const again = screen.getByRole("button", { name: /Play again/ });
+    expect(again).toHaveClass("ui-button-go");
+    expect(screen.getByRole("button", { name: "Back to the title" })).not.toHaveClass(
+        "ui-button-go",
+    );
+    fireEvent.click(again);
+    expect(client.retry).toHaveBeenCalledOnce();
+});
+
+test("a party goes back together: no Play again", () => {
+    render(<ResultModal ui={createUi()} client={client} />);
+    expect(screen.queryByRole("button", { name: /Play again/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Back to the party" })).toHaveClass("ui-button-go");
+});
+
+test("a party's results keep no Play again once the room has closed", () => {
+    // Retry does nothing after a co-op run, so neither the button nor Enter offers it
+    vi.useFakeTimers();
+    const ui = createUi();
+    render(<ResultModal ui={{ ...ui, coop: { ...ui.coop, room: undefined } }} client={client} />);
+    expect(screen.queryByRole("button", { name: /Play again/ })).toBeNull();
+    vi.advanceTimersByTime(700);
+    fireEvent.keyDown(window, { key: "Enter", code: "Enter" });
+    expect(client.retry).not.toHaveBeenCalled();
+    expect(client.leaveRun).toHaveBeenCalledOnce();
+});
+
+test("Escape leaves the results, but not in the moment they come up", () => {
+    vi.useFakeTimers();
+    render(<ResultModal ui={createUi(true)} client={client} />);
+    fireEvent.keyDown(window, { code: "Escape" });
+    expect(client.leaveRun).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(700);
+    fireEvent.keyDown(window, { code: "Escape" });
+    expect(client.leaveRun).toHaveBeenCalledOnce();
 });
 
 test("starts on your own stats and cycles every player with themed buttons and arrow keys", () => {

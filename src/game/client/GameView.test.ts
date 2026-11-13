@@ -19,6 +19,72 @@ vi.hoisted(() => {
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null);
 });
 
+test("Avian's birds follow the rendered hero and loop without changing the sim", () => {
+    const sim = new Sim({
+        grid: makeGrid(Array(8).fill("........")),
+        mapId: "thanksgiving",
+        characterId: "avian_assaulter",
+        metaStats: emptyStats(),
+        seed: 3,
+        spawnX: 103.5,
+        spawnY: 203.5,
+        party: ["avian_assaulter", "warrior"].map((characterId) => ({
+            name: characterId,
+            characterId,
+            metaStats: emptyStats(),
+        })),
+    });
+    const anim = new ActorAnim(
+        -1,
+        new Int32Array(8),
+        new Uint16Array(2),
+        new Uint16Array([2, 2]),
+        true,
+    );
+    const playerModel = {
+        height: 192,
+        getAnim: () => anim,
+        runPoses: new Map(),
+    } as unknown as ActorModel;
+    const effectModel = { anims: [anim] } as ActorModel;
+    const assets = {
+        get: vi.fn((key: string) => (key === "spot:254" ? effectModel : undefined)),
+        getPlayer: () => playerModel,
+        getPlayerStance: () => ({ idle: 0, run: 1 }),
+    } as unknown as GameAssets;
+    const view = new GameView(assets);
+    view.localPlayerPose = { hero: 0, x: 104, y: 204, yaw: 512, moving: false, moveTicks: 0 };
+    const draw = vi.fn<ActorRenderer["draw"]>();
+    const actors = { draw } as unknown as ActorRenderer;
+    const before = structuredClone(sim.heroes.map((hero) => hero.player));
+    sim.tick = 3;
+    view["drawPlayer"](actors, sim, 0, 0.5);
+    expect(draw.mock.lastCall![0]).toBe(effectModel);
+    expect(draw.mock.lastCall![2]).toBe(1);
+    expect(draw.mock.lastCall![4]).toBeCloseTo(-2.025);
+    sim.tick = 5;
+    view["drawPlayer"](actors, sim, 0, 0.5);
+    expect(draw.mock.lastCall![2]).toBe(0);
+    expect(draw.mock.lastCall![4]).toBeCloseTo(-2.025);
+    expect(draw.mock.lastCall![7]).toEqual({ unlit: 1 });
+    // The Avian is drawn 35% bigger on this map; the warrior beside them isn't
+    expect(draw).toHaveBeenCalledWith(
+        playerModel,
+        anim,
+        expect.anything(),
+        104,
+        expect.anything(),
+        204,
+        512,
+        expect.objectContaining({ scale: 1.35 }),
+    );
+    draw.mockClear();
+    view["drawPlayer"](actors, sim, 1, 0.5);
+    expect(draw).toHaveBeenCalledOnce();
+    expect(draw.mock.calls[0][7]).not.toHaveProperty("scale");
+    expect(sim.heroes.map((hero) => hero.player)).toEqual(before);
+});
+
 // Bolts, knives and the atlatl's darts are items with a look, and the blowpipe's darts spot
 // animations without one
 test.each([
@@ -73,6 +139,7 @@ test.each([
                 expect.any(Number),
                 projectile.y,
                 (projectile.yaw + (look?.yawOffset ?? 0)) & 2047,
+                // Seen in the dark on a map with lighting (ActorDrawOptions.unlit)
                 { scale: look?.scale ?? 1, unlit: 1 },
             );
             expect(projectile).toEqual(before);

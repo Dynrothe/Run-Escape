@@ -1,12 +1,16 @@
 import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Server as HttpServer } from "node:http";
 import { dirname, join, normalize, relative, resolve, sep } from "node:path";
+import { pipeline } from "node:stream";
 import { normalizePath } from "vite";
 import type { Connect, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
+import { parseRange } from "./desktop/gameServer";
+import { SITE_FILES_NAME, makeSiteFiles } from "./desktop/siteFiles";
+import { LAUNCHER_VERSION, MIN_ANDROID_APP } from "./desktop/version";
 import { isTrailerFile, trailerServerPlugin } from "./scripts/dev/trailer-server";
 import { createRelay, isMetricsOn, isMultiplayerOn } from "./server/coop-relay.mjs";
 
@@ -56,6 +60,35 @@ function buildIdFilePlugin(): Plugin {
                 fileName: "build.json",
                 source: JSON.stringify({ build: BUILD_ID }),
             });
+        },
+    };
+}
+
+// Writes game-files.json beside index.html: every file the build made, with its sha256, for the
+// Windows and Android apps that follow the website (desktop/siteFiles.ts, SiteFiles.java). After
+// everything's written, public/ included. The slim cache's chunks list themselves, in caches.json.
+function siteFilesPlugin(): Plugin {
+    let outDir = "";
+    let env: Record<string, string> = {};
+    return {
+        name: "site-files",
+        apply: "build",
+        configResolved(config) {
+            outDir = resolve(config.root, config.build.outDir);
+            env = config.env;
+        },
+        closeBundle() {
+            // Also called after a failed build
+            if (!existsSync(join(outDir, "index.html"))) {
+                return;
+            }
+            const minimums = { minLauncher: LAUNCHER_VERSION, minAndroid: MIN_ANDROID_APP };
+            const files = makeSiteFiles(outDir, BUILD_ID, minimums, {
+                coopUrl: env.VITE_COOP_URL ?? "",
+                runAnalyticsUrl: env.VITE_RUN_ANALYTICS_URL ?? "",
+                cloudSaveUrl: env.VITE_CLOUD_SAVE_URL ?? "",
+            });
+            writeFileSync(join(outDir, SITE_FILES_NAME), JSON.stringify(files, null, 1) + "\n");
         },
     };
 }
@@ -112,7 +145,14 @@ function serveCachesPlugin(): Plugin {
     const serveCaches = (middlewares: Connect.Server, root: string) => {
         middlewares.use("/caches", (req, res, next) => {
             // The game asks for caches.json?build=<its build>
-            const reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
+            let reqUrl: string;
+            try {
+                reqUrl = decodeURIComponent((req.url ?? "").replace(/^\//, "").split("?")[0]);
+            } catch {
+                res.statusCode = 400;
+                res.end();
+                return;
+            }
             const filePath = normalize(join(root, reqUrl));
             const rel = relative(root, filePath);
             if (rel.startsWith("..") || rel.includes(`..${sep}`)) {
@@ -130,9 +170,41 @@ function serveCachesPlugin(): Plugin {
                     notFound();
                     return;
                 }
+                const lastModified = stat.mtime.toUTCString();
                 res.setHeader("Content-Type", mimeFor(filePath));
                 res.setHeader("Cache-Control", "no-cache");
-                createReadStream(filePath).on("error", notFound).pipe(res);
+                res.setHeader("Accept-Ranges", "bytes");
+                res.setHeader("Last-Modified", lastModified);
+                // A download that was cut off (a phone on a tunnel) resumes from where it got to:
+                // CacheFiles asks for bytes=<offset>-<MAX_SAFE_INTEGER>, and without this got the
+                // whole file again, back to 0% each time. Parsed as the desktop app's server does
+                // (parseRange). CacheFiles sends the Last-Modified its parts came with as If-Range,
+                // so a file that's changed since is sent whole.
+                const ifRange = req.headers["if-range"];
+                const range =
+                    ifRange === undefined || ifRange === lastModified
+                        ? parseRange(req.headers.range ?? null, stat.size)
+                        : undefined;
+                if (range === "unsatisfiable") {
+                    res.statusCode = 416;
+                    res.setHeader("Content-Range", `bytes */${stat.size}`);
+                    res.end();
+                    return;
+                }
+                const { start, end } = range ?? { start: 0, end: stat.size - 1 };
+                if (range) {
+                    res.statusCode = 206;
+                    res.setHeader("Content-Range", `bytes ${start}-${end}/${stat.size}`);
+                }
+                res.setHeader("Content-Length", Math.max(0, end - start + 1));
+                if (req.method === "HEAD" || end < start) {
+                    res.end();
+                    return;
+                }
+                // pipeline, not pipe: the file's closed with the reply (a phone that drops it),
+                // and a read that fails cuts the reply off rather than leaving it short. It's
+                // already destroyed by then, so there's nothing left to answer with.
+                pipeline(createReadStream(filePath, { start, end }), res, () => {});
             } catch {
                 notFound();
             }
@@ -255,6 +327,7 @@ export default defineConfig({
         leaveOutDevMapsPlugin(),
         buildIdFilePlugin(),
         trailerServerPlugin(),
+        siteFilesPlugin(),
     ],
     define: {
         __APP_VERSION__: JSON.stringify(version),

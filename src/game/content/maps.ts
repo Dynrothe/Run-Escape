@@ -1,8 +1,10 @@
+import { tr } from "../i18n";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
 import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
+import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
@@ -10,7 +12,8 @@ import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
 import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
-import { EnemyDef, LairDef, MapDef } from "./types";
+import { CinematicDef, EnemyDef, LairDef, MapDef } from "./types";
+import { THANKSGIVING_EVENTS, THANKSGIVING_WAVES } from "./waves";
 import {
     BARROWS_EVENTS,
     BARROWS_WAVES,
@@ -48,8 +51,8 @@ import {
 } from "./zachariah";
 
 // The maps, in the order they open up: beating one unlocks the next. Arenas
-// are whole map squares (64 tiles), in world tiles. Seasonal maps go last: they're
-// open from the start, and nothing waits on them.
+// are world-tile rectangles, usually aligned to 64-tile map squares. Seasonal
+// maps go last: they're open from the start, and nothing waits on them.
 export const MAPS: MapDef[] = [
     {
         id: "lumbridge",
@@ -455,6 +458,33 @@ export const MAPS: MapDef[] = [
         },
         music: "Blade of Forgotten Justice",
     },
+    // A quest in four parts after the desert, which opens the Tombs of Amascut
+    BENEATH_CURSED_SANDS,
+    {
+        id: "thanksgiving",
+        name: "Thanksgiving Harvest",
+        description:
+            "Hosidius Vinery's grape fields are overrun by restless creatures and wild Chompies. " +
+            "Professor Oddenstein and the Evil Chicken interrupt the gathering, and the Freaky Forester " +
+            "challenges you at the end.",
+        // The Rubber chicken
+        iconObjId: 4566,
+        // Hosidius and the Vinery, map squares 27-29 x 54-56
+        arena: { baseX: 27 * 64, baseY: 54 * 64, sizeX: 3 * 64, sizeY: 3 * 64 },
+        // The point marked in the requested Hosidius scene
+        spawn: { x: 1771.5, y: 3572.5 },
+        spawnFacing: { x: 0, y: 1 },
+        difficulty: { hp: 1.25, damage: 1.15 },
+        hard: { hp: 1.8, damage: 1.5 },
+        waves: THANKSGIVING_WAVES,
+        events: THANKSGIVING_EVENTS,
+        finalBossWarning: "The harvest feast is interrupted... the Freaky Forester approaches!",
+        victoryText: "The Freaky Forester is defeated! The harvest is safe!",
+        seasonal: true,
+        seasonalCharacter: "avian_assaulter",
+        noRandomEvents: ["highwayman"],
+        noLevelUpCoins: true,
+    },
 ];
 
 // The maps that open one after another
@@ -550,13 +580,6 @@ export function isFightMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fight !== undefined;
 }
 
-// Whether a death on the map can be retried straight away, on your own: one boss fight
-// (MapDef.fight), or a map with lairs (MapDef.lairs), at its lair if it has one to start at
-// (getRetryLair) and from the start without the map's cinematic if not
-export function canRetry(map: MapDef): boolean {
-    return map.fight !== undefined || map.lairs !== undefined;
-}
-
 // The lair a retry starts in (LairDef.start): the map's only one, as long as it's open from
 // the start. With more than one, a retry starts the map over: the run that ended had beaten
 // whichever came before.
@@ -571,10 +594,35 @@ export function isPeaceful(map: MapDef): boolean {
     return map.fun?.explore === true && map.waves.length === 0;
 }
 
+// Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
+export function isCoopMap(map: MapDef): boolean {
+    return map.fight?.solo !== true;
+}
+
+// Every cinematic a map can play, for what bakes, loads and hears them: its opening
+// (MapDef.cinematic), each part's of a fight in parts (MapDef.stages), and its lairs'
+// (LairDef.opening, and a lair's unsealing as the ones before it fall)
+export function getMapCinematics(map: MapDef): CinematicDef[] {
+    const all = [
+        map.cinematic,
+        ...(map.stages ?? []).map((stage) => stage.cinematic),
+        ...(map.lairs ?? []).flatMap((lair) => [
+            lair.opening?.cinematic,
+            lair.requires?.unsealing?.cinematic,
+        ]),
+    ];
+    return all.filter((def): def is CinematicDef => def !== undefined);
+}
+
+// The cinematic a run plays as it starts: its part's own (a fight in parts), or the map's
+export function getRunCinematic(map: MapDef, stage: number): CinematicDef | undefined {
+    return (map.stages && map.stages[stage]?.cinematic) ?? map.cinematic;
+}
+
 // The adventurer everyone plays on a map, if it has one (Durial321 in
 // Falador, the Inquisitor against Phosani's Nightmare)
 export function getMapCharacter(map: MapDef): string | undefined {
-    return map.fun?.character ?? map.fight?.character;
+    return map.fun?.character ?? map.fight?.character ?? map.seasonalCharacter;
 }
 
 export function getMap(id: string): MapDef {
@@ -601,11 +649,17 @@ export function getArenaRegion(map: MapDef): {
 
 // Whether anything on the map poisons you (the King Black Dragon's breath) or
 // gives you what stacks up (Slash Bash's disease). Antipoisons are only found
-// where something does.
+// where something does. The Tombs of Amascut's poisons are out of this reach
+// (Akkha's fire quarter and Zebak's acid in the raid's own data, the Spitting
+// Scarab's touch on an enemy its rooms bring), so the raid counts as poisoning.
 export function hasPoison(map: MapDef): boolean {
+    if (map.tombs) {
+        return true;
+    }
     const enemyIds = [
         ...map.waves.flatMap((wave) => wave.enemies.map((e) => e.id)),
         ...map.events.map((event) => event.enemyId),
+        ...(map.stages ?? []).flatMap((stage) => stage.events.map((event) => event.enemyId)),
     ];
     return enemyIds.some((id) =>
         getEnemy(id).boss?.attacks.some(({ effect }) =>
@@ -644,4 +698,17 @@ export function hasFliers(map: MapDef): boolean {
     visit(map);
     visit(RANDOM_EVENTS);
     return enemies.some((enemy) => enemy.flies);
+}
+
+// A map's texts in the language chosen (map.<id>.name|desc|warning|victory)
+export function mapName(map: MapDef): string {
+    return tr(`map.${map.id}.name`, map.name);
+}
+
+export function mapDescription(map: MapDef): string {
+    return tr(`map.${map.id}.desc`, map.description);
+}
+
+export function mapFinalBossWarning(map: MapDef): string {
+    return tr(`map.${map.id}.warning`, map.finalBossWarning);
 }

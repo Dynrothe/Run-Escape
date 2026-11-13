@@ -11,31 +11,35 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { getRaidBand, saveInvocationPreset, toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import {
+    ALL_MAPS,
     FUN_MAPS,
     MAPS,
     MAP_BY_ID,
     RAID_MAPS,
-    canRetry,
     getArenaRegion,
     getMap,
     getMapCharacter,
     getRetryLair,
+    getRunCinematic,
+    isCoopMap,
     isDevMap,
     isFunMap,
 } from "../content/maps";
-import { formatPassiveValue, getPassive } from "../content/passives";
+import { getPassive, passiveValueText } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
-import { RARITIES, Rarity } from "../content/rarity";
+import { RARITIES, Rarity, rarityName } from "../content/rarity";
 import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
-import { TROPHY_BY_ID } from "../content/trophies";
+import { APMEKEN_WAVES } from "../content/tombs";
+import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
 import {
     BlessingsDef,
     CinematicDef,
@@ -45,7 +49,8 @@ import {
     emptyStats,
 } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
-import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
+import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
+import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
@@ -58,13 +63,17 @@ import {
     SaveData,
     SaveStore,
     buyArmouryUpgrade,
+    buyCosmetic,
     buyUpgrade,
+    canWearCosmetic,
     exportSave,
     getEarnedUnlocks,
+    getFightStage,
     getFinishedQuests,
     getMetaStats,
     getQuestProgress,
     getRaidPortals,
+    getReachedStages,
     getStartingCharacter,
     isEndlessRecord,
     isEndlessUnlocked,
@@ -76,7 +85,13 @@ import {
     refundUpgrades,
 } from "../core/save";
 import { ArenaGrid } from "../core/world/ArenaGrid";
-import { CameraRig, MAX_CAMERA_DISTANCE, getGroundReach } from "../render/CameraRig";
+import { fmtNum, t, tl, tp } from "../i18n";
+import {
+    CameraRig,
+    MAX_CAMERA_DISTANCE,
+    MIN_CAMERA_DISTANCE,
+    getGroundReach,
+} from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
 import { BLESSING_COLOR, getBlessingViews } from "./BlessingViews";
@@ -88,6 +103,7 @@ import {
     getCinematicSquares,
 } from "./Cinematic";
 import { CinematicDirector, FlyInput, getDirectorChoices } from "./CinematicDirector";
+import { CLOUD_SAVE_URL, CloudSync } from "./CloudSave";
 import { DamageMeter } from "./DamageMeter";
 import {
     DisplaySettings,
@@ -107,6 +123,7 @@ import {
 } from "./GameAssets";
 import { GameAudio } from "./GameAudio";
 import { GameInput } from "./GameInput";
+import { padHints } from "./GamePad";
 import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
     AbilityView,
@@ -141,11 +158,16 @@ import { SceneLights } from "./SceneLights";
 import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecorder";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
+import { CoopTicker } from "./coop/CoopTicker";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
 import { saveFile } from "./saveFile";
 
 // 20ms: the OSRS client tick, also the unit of animation frame lengths
 export const TICK_MS = 1000 / TICKS_PER_SECOND;
+// Seconds into a boss's fight a fight's own button says what it's for, until it's first used: from
+// a moment after the boss is up (risen from its intro), for long enough to read (AbilityView.hint)
+const ABILITY_HINT_FROM = 3;
+const ABILITY_HINT_UNTIL = 15;
 const MAX_TICKS_PER_FRAME = 10;
 // A solo run makes up a late frame's ticks this many a frame at most, rather than
 // all in the next one, so one slow frame doesn't make the next slow too. Every
@@ -189,6 +211,27 @@ const ATTRACT_PITCH = -260;
 const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
+// The Wardrobe's camera: closer and lower, facing the adventurer, who stands this many tiles to
+// the right of the middle (beside its panel) and is looked at this much higher up
+const WARDROBE_DISTANCE = 4.5;
+const WARDROBE_PITCH = -140;
+const WARDROBE_YAW = 0;
+const WARDROBE_SIDE = 1.4;
+const WARDROBE_RISE = 0.3;
+
+// A yaw (0 to 2048 a turn) kept in its turn
+function wrapYaw(yaw: number): number {
+    return ((yaw % 2048) + 2048) % 2048;
+}
+
+// A yaw a frame nearer its target, the short way round: settle is how much of the way it's
+// still to go, and it's there once it's under a unit off
+function settleYaw(yaw: number, target: number, settle: number): number {
+    const turn = wrapYaw(yaw - target);
+    const settled = (turn > 1024 ? turn - 2048 : turn) * settle;
+    return wrapYaw(target + (Math.abs(settled) < 1 ? 0 : settled));
+}
+
 // The pet taken along stands beside the character on the menus: tiles to their side and behind
 const PREVIEW_PET_SIDE = 1.1;
 const PREVIEW_PET_BACK = 0.4;
@@ -239,16 +282,16 @@ const CAMERA_REACH: CameraReach = {
     around: getGroundReach(ATTRACT_PITCH, ATTRACT_DISTANCE),
 };
 
-// The world fades out past the arena's edge. A ScapeRune map's world carries on: it
-// has scenery there (scaperune/CLAUDE.md).
-// What to build a map's collision from: its arena, and on a lit map where its glowing scenery is
-// (LightingDef.locs)
+// What a map's region data is built from: its arena, and on a map with glowing scenery the loc
+// ids to find (LightingDef.locs)
 function getRegionInput(map: MapDef): RegionDataInput {
     const locs = map.lighting?.locs;
     const region = getArenaRegion(map);
     return locs ? { ...region, glowLocs: Object.keys(locs).map(Number) } : region;
 }
 
+// The world fades out past the arena's edge. A ScapeRune map's world carries on: it
+// has scenery there (scaperune/CLAUDE.md).
 function setPlayArea(
     renderer: GameWebGLRenderer,
     arena: { baseX: number; baseY: number; sizeX: number; sizeY: number },
@@ -269,10 +312,12 @@ function setPlayArea(
 // What a new endless round brings, for its toast
 function describeRound(sim: Sim): string {
     const times = (n: number) => `${Math.round(n * 10) / 10}x`;
-    return (
-        `Round ${sim.round} begins! Monsters have ${times(sim.roundHp)} the hitpoints and hit ` +
-        `${times(sim.roundDamage)} as hard, and caskets' gear comes +${sim.round - 1}.`
-    );
+    return t("toast.round", {
+        round: sim.round,
+        hp: times(sim.roundHp),
+        damage: times(sim.roundDamage),
+        gear: sim.round - 1,
+    });
 }
 
 function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
@@ -331,8 +376,10 @@ function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
         return undefined;
     }
     // Nylocas Vasilias takes her colour's style better, so it's most of the Theatre's bosses
-    const bosses = raidHasColours(sim.map) ? "most bosses" : "bosses";
-    return `-${Math.round((1 - share) * 100)}% damage to ${bosses}: they pray against ${style}`;
+    return t(raidHasColours(sim.map) ? "canvas.boss_penalty_most" : "canvas.boss_penalty", {
+        percent: Math.round((1 - share) * 100),
+        style: t(`canvas.style.${style}`),
+    });
 }
 
 // How many times a blessing on offer will have been had, as its card's corner says it: "2 of 8".
@@ -368,11 +415,12 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
             isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
+            isKeris: choice.kind === "hilt" && getWeapon(choice.into).family === "keris",
             isBlessing: choice.kind === "blessing",
             rarity:
                 choice.kind === "blessing"
                     ? { name: blessed ?? "Blessing", color: BLESSING_COLOR }
-                    : rarity && { name: rarity.name, color: rarity.color },
+                    : rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
             banishable: sim.canBanishChoice(index),
@@ -384,11 +432,13 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
 
 // What a co-op player brings, as far as any game could have it (another
 // player's game could send anything)
-function cleanLoadout(loadout: Loadout | undefined): {
+export function cleanLoadout(loadout: Loadout | undefined): {
     unlockedItems: Set<string>;
+    trophiesFound: Set<string>;
     armoury: Record<string, number>;
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
+    const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
     const armoury: Record<string, number> = {};
     for (const [id, times] of Object.entries(loadout?.armoury ?? {})) {
         if (Number.isInteger(times) && times > 0) {
@@ -397,6 +447,7 @@ function cleanLoadout(loadout: Loadout | undefined): {
     }
     return {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
+        trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
     };
 }
@@ -420,16 +471,6 @@ const SHOP_MAX: Partial<Stats> = Object.create(null);
 for (const upgrade of SHOP_UPGRADES) {
     SHOP_MAX[upgrade.stat] = (SHOP_MAX[upgrade.stat] ?? 0) + upgrade.perRank * upgrade.maxRank;
 }
-
-// A guest's run that's stopped matching the host's, on its results. Its game
-// can't tell why (a bug, a modified game, theirs or the host's), so it says
-// only what failed.
-const OUT_OF_STEP_TEXT =
-    "Integrity check failed: your game and the host's stopped matching, so your run ended.";
-// A co-op run that can't go on: a frame that won't step (an error in the
-// game), or a guest that missed more of the host's frames than it still has
-const STUCK_TEXT = "Something went wrong in the run, so it ended.";
-const CANT_CATCH_UP_TEXT = "Your connection dropped for too long to catch up, so your run ended.";
 
 // Why a co-op run ended early, on its results
 const ENDED_EARLY: Partial<Record<GoneReason, string>> = {
@@ -498,6 +539,15 @@ export function getPhaseBarFraction(boss: Enemy, index: number): number {
     return Math.min(1, Math.max(0, (boss.hp - bottom) / Math.max(1, top - bottom)));
 }
 
+// Boss attacks' instructions (GameClient.showInstruction): each up this long, the next no sooner
+// than this after it (so two at most are up, the older going), one that's waited longer than
+// this in play is dropped, and one's been read once it's been up this long in play
+const INSTRUCTION_MS = 4500;
+const INSTRUCTION_GAP_MS = 3000;
+const INSTRUCTION_STALE_MS = 12000;
+const INSTRUCTION_READ_MS = 3000;
+const INSTRUCTION_FRAME_MS = 250;
+
 export class GameClient implements GameFrameHandler {
     static async create(
         mapViewer: MapViewer,
@@ -522,13 +572,19 @@ export class GameClient implements GameFrameHandler {
         const actors = await renderer.getActorRenderer();
         const assets = new GameAssets(workerPool, renderer, actors);
         const spritesPromise = assets.loadSprites();
-        store.set({ loadingText: "Summoning monsters", loadingProgress: 10 });
+        store.set({ loadingText: t("canvas.loading_monsters"), loadingProgress: 10 });
         await assets.loadBase((done, total) => {
             store.set({ loadingProgress: 10 + Math.round((done / total) * 70) });
         });
-        store.set({ loadingText: "Dressing up", loadingProgress: 85 });
-        await assets.setCharacterLook(store.getSnapshot().characterId);
-        store.set({ loadingText: `Building ${TITLE_MAP.name}`, loadingProgress: 95 });
+        store.set({ loadingText: t("canvas.loading_dressing"), loadingProgress: 85 });
+        await assets.setCharacterLook(
+            store.getSnapshot().characterId,
+            store.getSnapshot().save.look,
+        );
+        store.set({
+            loadingText: t("canvas.loading_building", { name: tl(TITLE_MAP.name) }),
+            loadingProgress: 95,
+        });
         const grid = new ArenaGrid(await regionPromise);
         await soundsPromise;
         await spritesPromise;
@@ -584,9 +640,12 @@ export class GameClient implements GameFrameHandler {
     // stays as it is
     private saveNoRoom = false;
     private stopSaveLock?: () => void;
+    // Cloud save, where the build has a Worker for it
+    readonly cloud?: CloudSync;
     // Co-op: the room and its relay, and the run being played with it
     readonly coop: CoopLobby;
     private coopRun?: CoopRun;
+    private movementDiagnostics = false;
     private reportRun?: ReturnType<typeof startRunAnalytics>;
     // The hero the camera follows: this player's, or in co-op while they're
     // down, a teammate's
@@ -624,11 +683,99 @@ export class GameClient implements GameFrameHandler {
     private appearanceVersions: number[] = [];
     // Each hero's level-up choices their look was last baked for
     private lookChoices: (UpgradeChoice[] | undefined)[] = [];
+    // Each hero's body and outfit from the Wardrobe, for the run, in the party's order
+    private heroLooks: (WardrobeLook | undefined)[] = [];
+    // A look the Wardrobe's trying on, shown on the menus in place of the saved one till it's done
+    private previewedLook?: WardrobeLook;
+    // The Wardrobe's showing the body alone, with nothing on (its Appearance tab)
+    private bareMenuLook = false;
+    // Which way the adventurer's turned in the Wardrobe (an actor's yaw), and the way they face
+    // now, on their way round to it (and back to the front once it's left)
+    private wardrobeTurn = 0;
+    private menuModelYaw = 0;
+    // How far the title camera's come in for the Wardrobe, 0 to 1
+    private wardrobeZoom = 0;
     // The casket Auto alch or Auto equip answered, until that's done (co-op's
     // comes back with a frame: it shouldn't go twice, or show the casket
     // meanwhile)
     private autoChest?: { uid: number; action: ChestAction };
     private runRecorded = false;
+    // Boss attacks' instructions (BossAttackDef.message): each shown once a run, and one at a
+    // time, each held long enough to read, as a busy phase can bring several at once. Those
+    // waiting too long are dropped: the attack they were for is long gone.
+    private readonly instructionsSeen = new Set<string>();
+    private instructions: { text: string; waited: number }[] = [];
+    // Those up now and not read yet: each one's toast, and how long it's been up in play
+    private instructionsUp: { text: string; toast: number; played: number }[] = [];
+    private instructionShownAt = -Infinity;
+    private instructionPumpedAt = 0;
+
+    private queueInstruction(text: string): void {
+        if (this.instructionsSeen.has(text) || this.instructions.some((i) => i.text === text)) {
+            return;
+        }
+        this.instructions.push({ text, waited: 0 });
+        this.showInstruction(performance.now());
+    }
+
+    // The next instruction, once the last has had its time, while the run's being played. One
+    // waits only while it's played (not behind a level up or the menu), and counts as read once
+    // it's been up long enough in play, so none is lost behind a pause.
+    private showInstruction(now: number): void {
+        const playing = this.isPlaying();
+        // At most a moment's worth a frame: back from a hidden tab, the time away isn't waiting
+        const since = Math.min(INSTRUCTION_FRAME_MS, Math.max(0, now - this.instructionPumpedAt));
+        this.instructionPumpedAt = now;
+        if (playing) {
+            for (const up of this.instructionsUp) {
+                up.played += since;
+            }
+        }
+        this.instructionsUp = this.instructionsUp.filter((up) => up.played < INSTRUCTION_READ_MS);
+        // Not read yet, and gone or behind something: the level up or the menu covers it, or newer
+        // notices pushed it off (the store keeps four). Back to the front of the line, to come
+        // straight back once it's played again.
+        const toasts = this.store.getSnapshot().toasts;
+        const unread = this.instructionsUp.filter(
+            (up) => !playing || !toasts.some((t) => t.id === up.toast),
+        );
+        if (unread.length > 0) {
+            for (const up of unread) {
+                this.store.dismissToast(up.toast);
+                this.instructionsSeen.delete(up.text);
+            }
+            this.instructionsUp = this.instructionsUp.filter((up) => !unread.includes(up));
+            this.instructions.unshift(...unread.map((up) => ({ text: up.text, waited: 0 })));
+            this.instructionShownAt = -Infinity;
+        }
+        if (playing) {
+            for (const waiting of this.instructions) {
+                waiting.waited += since;
+            }
+            this.instructions = this.instructions.filter((i) => i.waited < INSTRUCTION_STALE_MS);
+        }
+        if (
+            !playing ||
+            this.instructions.length === 0 ||
+            now - this.instructionShownAt < INSTRUCTION_GAP_MS
+        ) {
+            return;
+        }
+        const next = this.instructions.shift()!;
+        this.instructionsSeen.add(next.text);
+        this.instructionShownAt = now;
+        const toast = this.store.toast(next.text, INSTRUCTION_MS);
+        this.instructionsUp.push({ text: next.text, toast, played: 0 });
+    }
+
+    // A fight's own button's been used this session (MapDef.fight.ability): its hint's no longer
+    // shown (AbilityView.hint)
+    private abilityUsed = false;
+    // The tick the boss on the bar was first up, in this sim, since there was none: the ability
+    // hint's clock. A fight's start, not the run's: the Tombs' Nexus comes before each boss.
+    private bossUp?: { sim: Sim; tick: number };
+    // The toast saying the sound's on or off, if one's up (see toggleMute)
+    private soundToast?: number;
     // Adventurers this run has done the task for, already told about
     private tasksAnnounced = new Set<string>();
     private attractTick = 0;
@@ -670,13 +817,13 @@ export class GameClient implements GameFrameHandler {
         this.input.pads.onConnect = (pad) =>
             this.store.toast(
                 pad.standard
-                    ? `${pad.name} connected.`
-                    : `${pad.name} connected. Its buttons aren't on a layout the browser knows, so only its stick works.`,
+                    ? t("toast.controller_connected", { name: pad.name })
+                    : t("toast.controller_unknown", { name: pad.name }),
                 pad.standard ? 3000 : 7000,
             );
         // A controller going flat mid-run pauses it, as leaving the window does
         this.input.pads.onDisconnect = (pad) => {
-            this.store.toast(`${pad.name} disconnected.`, 4000);
+            this.store.toast(t("toast.controller_disconnected", { name: pad.name }), 4000);
             if (this.sim && !this.coopRun && this.store.getSnapshot().overlay === "none") {
                 this.pause();
             }
@@ -704,12 +851,12 @@ export class GameClient implements GameFrameHandler {
         this.coop.onClosed = () => this.onCoopClosed();
         this.coop.onReconnecting = () => {
             if (this.coopRun) {
-                this.store.toast("Connection dropped. Reconnecting...", 4000);
+                this.store.toast(t("toast.reconnecting"), 4000);
             }
         };
         this.coop.onResumed = () => {
             if (this.coopRun) {
-                this.store.toast("Reconnected.", 2000);
+                this.store.toast(t("toast.reconnected"), 2000);
             }
             this.toCoopRun((run) => run.resumed());
         };
@@ -717,6 +864,16 @@ export class GameClient implements GameFrameHandler {
         // Co-op's offered only where there's a relay to play it through
         this.coop.checkAvailable();
         document.addEventListener("visibilitychange", this.onVisibilityChange);
+        if (CLOUD_SAVE_URL) {
+            this.cloud = new CloudSync(CLOUD_SAVE_URL, {
+                gameVersion: this.saveStore.gameVersion,
+                save: () => this.save,
+                canWrite: () => this.canPersist(),
+                apply: (save) => this.replaceSave(save),
+                onView: (cloud) => this.store.set({ cloud }),
+            });
+            this.cloud.start();
+        }
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
         // Before a run starts, so it's with the save as it is now
@@ -742,8 +899,9 @@ export class GameClient implements GameFrameHandler {
 
     dispose(): void {
         this.stopSaveLock?.();
+        this.cloud?.stop();
         document.removeEventListener("visibilitychange", this.onVisibilityChange);
-        this.stopBackgroundTicker();
+        this.stopCoopTicker();
         this.coop.close();
         this.input.dispose();
         this.audio.dispose();
@@ -755,7 +913,18 @@ export class GameClient implements GameFrameHandler {
     // ---- UI actions ----
 
     showScreen(screen: Screen): void {
+        const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
+        // Done shopping: a save point for cloud save
+        if ((was === "shop" || was === "armoury" || was === "wardrobe") && screen !== was) {
+            this.cloud?.savePoint();
+        }
+        // Out of the Wardrobe, what was tried on comes off
+        if (was === "wardrobe" && screen !== was && (this.previewedLook || this.bareMenuLook)) {
+            this.previewedLook = undefined;
+            this.bareMenuLook = false;
+            this.refreshMenuLook();
+        }
     }
 
     // The adventurer the game starts on (or none, to start on the first again)
@@ -774,9 +943,197 @@ export class GameClient implements GameFrameHandler {
         }
         this.store.set({ characterId });
         if (!this.sim) {
-            this.assets.setCharacterLook(characterId);
+            this.refreshMenuLook();
         }
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
+    }
+
+    // ---- The Wardrobe ----
+
+    // The look on the menus: one being tried on, or the saved one
+    private getMenuLook(): WardrobeLook | undefined {
+        return this.previewedLook ?? this.save.look;
+    }
+
+    private refreshMenuLook(): void {
+        if (!this.sim) {
+            this.assets.setCharacterLook(
+                this.store.getSnapshot().characterId,
+                this.getMenuLook(),
+                this.bareMenuLook,
+            );
+        }
+    }
+
+    // Wears this body and outfit from now on, on every adventurer. Pieces that can't be worn (not
+    // bought, nor an unlocked adventurer's) are left off.
+    setLook(look: WardrobeLook | undefined): void {
+        const worn = cleanLook(look, (objId) => canWearCosmetic(this.save, objId));
+        if (worn) {
+            this.save.look = worn;
+        } else {
+            delete this.save.look;
+        }
+        this.previewedLook = undefined;
+        this.persist();
+        this.refreshMenuLook();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
+    // Shows a look on the menus without keeping it (a piece in the store, tried on), or the saved
+    // one again
+    previewLook(look: WardrobeLook | undefined): void {
+        this.previewedLook = look && cleanLook(look);
+        this.refreshMenuLook();
+    }
+
+    // The body alone on the menus, with nothing worn over it, or dressed again
+    showBareBody(bare: boolean): void {
+        if (this.bareMenuLook !== bare) {
+            this.bareMenuLook = bare;
+            this.refreshMenuLook();
+        }
+    }
+
+    // The outfit worn now, kept under this name (over one of that name)
+    saveOutfit(name: string): boolean {
+        const outfits = saveOutfit(this.save.outfits ?? [], name, this.save.look);
+        if (!outfits) {
+            return false;
+        }
+        this.save.outfits = outfits;
+        this.persist();
+        return true;
+    }
+
+    // A saved outfit put on, in place of what's worn
+    wearOutfit(name: string): void {
+        const saved = this.save.outfits?.find((o) => o.name === name);
+        if (saved) {
+            this.setLook(wearOutfit(this.save.look, saved));
+        }
+    }
+
+    deleteOutfit(name: string): void {
+        const outfits = this.save.outfits ?? [];
+        const left = outfits.filter((o) => o.name !== name);
+        if (left.length === outfits.length) {
+            return;
+        }
+        // None left is none at all, as a save loads it
+        this.save.outfits = left.length > 0 ? left : undefined;
+        this.persist();
+    }
+
+    // Buys a piece in the Wardrobe's store
+    buyCosmetic(objId: number): boolean {
+        if (!buyCosmetic(this.save, objId)) {
+            this.sounds.denied();
+            return false;
+        }
+        this.sounds.buy();
+        this.persist();
+        return true;
+    }
+
+    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps. Without
+    // it the dev server plays as players will (the Tombs of Amascut, listed with the raids, has none
+    // of its testing buttons), phones on the tunnel included.
+    get devTools(): boolean {
+        return (
+            import.meta.env.DEV &&
+            typeof location !== "undefined" &&
+            new URLSearchParams(location.search).has("devtools")
+        );
+    }
+
+    // Dev only: god mode, nothing hurting the player (Sim.devGod), for watching a fight
+    toggleDevGod(): void {
+        const sim = this.sim;
+        if (this.devTools && !this.coopRun && sim) {
+            sim.devGod = !sim.devGod;
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: to the Wardens, with the best of everything or as the run is (Sim.devToWardens)
+    devToWardens(kit = true): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devToWardens(kit);
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: from the Nexus straight to a path's boss (Sim.devToTombsBoss)
+    devToTombsBoss(pathId: string): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devToTombsBoss(pathId);
+            this.updateHud(true);
+        }
+    }
+
+    // Dev only: past the Tombs room to its boss (Sim.devSkipToTombsBoss)
+    devSkipToTombsBoss(): void {
+        if (this.devTools && !this.coopRun) {
+            this.sim?.devSkipToTombsBoss();
+        }
+    }
+
+    // The Tombs of Amascut's invocation board: on if it was off (taking off any it can't be on
+    // with), off if it was on
+    toggleInvocation(id: string): void {
+        this.save.invocations = toggleInvocation(this.save.invocations ?? [], id);
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    clearInvocations(): void {
+        this.save.invocations = [];
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    // The board as it is, saved as a preset (named, or by its raid level), over one of that name.
+    // Presets go by their names, which are unique. Nothing when there's no room for another.
+    saveInvocationPreset(name: string): void {
+        const presets = saveInvocationPreset(
+            this.save.invocationPresets ?? [],
+            name,
+            this.save.invocations ?? [],
+        );
+        if (presets) {
+            this.save.invocationPresets = presets;
+            this.persist();
+        }
+    }
+
+    // A preset's invocations on the board, in place of what was on it
+    loadInvocationPreset(name: string): void {
+        const preset = this.save.invocationPresets?.find((p) => p.name === name);
+        if (!preset) {
+            return;
+        }
+        this.save.invocations = [...preset.invocations];
+        this.persist();
+        this.invocationsChanged();
+    }
+
+    deleteInvocationPreset(name: string): void {
+        const presets = this.save.invocationPresets ?? [];
+        const left = presets.filter((p) => p.name !== name);
+        if (left.length === presets.length) {
+            return;
+        }
+        // None left is none at all, as a save loads it
+        this.save.invocationPresets = left.length > 0 ? left : undefined;
+        this.persist();
+    }
+
+    // In a room, the lobby's told (its raid level goes by the host's: Loadout.invocations)
+    private invocationsChanged(): void {
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
     }
 
     // The pet to take along (one of the trophies found), or none
@@ -799,6 +1156,10 @@ export class GameClient implements GameFrameHandler {
         }
         const room = this.hostedRoom();
         if (room) {
+            if (!isCoopMap(getMap(mapId))) {
+                this.sounds.denied();
+                return;
+            }
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -910,6 +1271,11 @@ export class GameClient implements GameFrameHandler {
     // A room of this player's, for the map picked
     createRoom(open: boolean): void {
         const { mapId, endless, hard } = this.store.getSnapshot();
+        // A solo-only fight picked on your own: the room starts on the first map instead
+        if (!isCoopMap(getMap(mapId))) {
+            this.coop.create(open, MAPS[0].id, false, false);
+            return;
+        }
         this.coop.create(open, mapId, endless, hard);
     }
 
@@ -953,7 +1319,7 @@ export class GameClient implements GameFrameHandler {
     // The maps this player has, and has endless and hard mode for, which rooms
     // go by
     private getUnlocks(): Unlocks {
-        const ids = [...MAPS, ...RAID_MAPS, ...FUN_MAPS].map((m) => m.id);
+        const ids = [...MAPS, ...RAID_MAPS, ...FUN_MAPS].filter(isCoopMap).map((m) => m.id);
         return {
             maps: ids.filter((id) => isMapUnlocked(this.save, id)),
             endless: ids.filter((id) => isEndlessUnlocked(this.save, id)),
@@ -962,9 +1328,9 @@ export class GameClient implements GameFrameHandler {
     }
 
     private getLoadout(): Loadout {
+        const room = this.coop.room;
         const characterId =
-            (this.coop.room && getMap(this.coop.room.mapId).fun?.character) ??
-            this.store.getSnapshot().characterId;
+            (room && getMap(room.mapId).fun?.character) ?? this.store.getSnapshot().characterId;
         return makeLoadout(
             getMetaStats(this.save, getCharacter(characterId).style),
             [...this.save.unlockedItems],
@@ -972,6 +1338,10 @@ export class GameClient implements GameFrameHandler {
                 ...this.save.armoury,
             },
             this.save.pet,
+            // A Tombs room's lobby shows the host's raid level
+            room && getMap(room.mapId).tombs ? [...(this.save.invocations ?? [])] : undefined,
+            getRaidChestTrophiesFound(this.save.trophies),
+            this.save.look,
         );
     }
 
@@ -989,7 +1359,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         const map = getMap(room.mapId);
-        if (!isMapUnlocked(this.save, map.id)) {
+        if (!isMapUnlocked(this.save, map.id) || !isCoopMap(map)) {
             this.sounds.denied();
             return;
         }
@@ -1005,6 +1375,9 @@ export class GameClient implements GameFrameHandler {
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
             // An act's map is at the host's step (content/acts.ts)
             ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
+            stage: getFightStage(this.save, map.id),
+            // The Tombs' raid level is the host's, as the invocation board set it
+            ...(map.tombs && { invocations: this.save.invocations ?? [] }),
             heroes: room.members.map((member) => ({
                 id: member.id,
                 name: member.name,
@@ -1022,12 +1395,12 @@ export class GameClient implements GameFrameHandler {
     // Kicked or disbanded, or the host left: a run that was going ends
     private onCoopGone(reason: GoneReason): void {
         if (reason !== "left") {
-            this.store.toast(ENDED_EARLY[reason] ?? "You left the party.", 5000);
+            this.store.toast(tl(ENDED_EARLY[reason] ?? "You left the party."), 5000);
         }
         // A run that's still loading never starts
         this.coopInbox = undefined;
         if (this.coopRun && this.sim && !this.sim.runOver) {
-            this.endCoopRunEarly(ENDED_EARLY[reason] ?? "You left the party.");
+            this.endCoopRunEarly(tl(ENDED_EARLY[reason] ?? "You left the party."));
         }
     }
 
@@ -1047,21 +1420,20 @@ export class GameClient implements GameFrameHandler {
                 }
             }
             this.coopRun = undefined;
-            // Solo now: a hidden tab no longer needs stepping
-            this.stopBackgroundTicker();
-            this.store.toast(
-                "Lost the connection to the others. The run goes on without them.",
-                6000,
-            );
+            // Solo now: rendering steps it, as any solo run
+            this.stopCoopTicker();
+            this.store.toast(t("toast.coop_lost_others"), 6000);
         } else {
-            this.endCoopRunEarly("Lost the connection to the co-op server.");
+            this.endCoopRunEarly(t("toast.coop_lost_server"));
         }
     }
 
     // A co-op run that can't go on (stuck, or cantCatchUp): out of the room,
     // which for the host ends it for everyone rather than leaving them waiting
     private endBrokenCoopRun(run: CoopRun): void {
-        const why = run.stuck ? STUCK_TEXT : CANT_CATCH_UP_TEXT;
+        // A frame that won't step (an error in the game), or a guest that missed more of the
+        // host's frames than it still has
+        const why = t(run.stuck ? "coop.run_stuck" : "coop.run_cant_catch_up");
         console.error(
             `Co-op run ended: ${run.stuck ? "a frame kept failing to step" : "frames missing for good"}`,
         );
@@ -1077,7 +1449,7 @@ export class GameClient implements GameFrameHandler {
     private endCoopRunEarly(why: string): void {
         // Nothing more of it is stepped, frames still to come included
         this.coopStopped = true;
-        this.stopBackgroundTicker();
+        this.stopCoopTicker();
         this.finishRun(why);
         this.store.set({ overlay: "dead", choices: [], chest: undefined, waitingOn: [] });
         this.updateHud(true);
@@ -1116,9 +1488,27 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ audio: this.audio.settings });
     }
 
-    toggleMute(): void {
+    // M, the sound's orb or the sound setting. In a run, M and the orb say which way it went
+    // (announce): no setting's in sight, and the orb's off at the side. The setting shows it
+    // itself, and a toast from there would wait under the pause menu.
+    toggleMute(announce = false): void {
         this.audio.setSettings({ muted: !this.audio.settings.muted });
         this.store.set({ audio: this.audio.settings });
+        if (announce && this.sim) {
+            // Only the last of them: M pressed twice would say off and on at once
+            if (this.soundToast !== undefined) {
+                this.store.dismissToast(this.soundToast);
+            }
+            // A touch screen or a controller has no key for it
+            const key = !isCoarsePointer && padHints.get() === undefined;
+            this.soundToast = this.store.toast(
+                !this.audio.settings.muted
+                    ? t("canvas.sound_on")
+                    : key
+                      ? t("canvas.sound_off_key")
+                      : t("canvas.sound_off"),
+            );
+        }
     }
 
     toggleMenuSpin(): void {
@@ -1131,6 +1521,10 @@ export class GameClient implements GameFrameHandler {
 
     togglePickupTimers(): void {
         this.setDisplay({ pickupTimers: !this.display.pickupTimers });
+    }
+
+    togglePuzzleHelper(): void {
+        this.setDisplay({ puzzleHelper: !this.display.puzzleHelper });
     }
 
     toggleAutoPause(): void {
@@ -1168,9 +1562,33 @@ export class GameClient implements GameFrameHandler {
         this.setDisplay({ damagePanel: !this.display.damagePanel });
     }
 
+    toggleGearPanel(): void {
+        this.setDisplay({ gearPanel: !this.display.gearPanel });
+    }
+
     toggleMovePrediction(): void {
         this.setDisplay({ movePrediction: !this.display.movePrediction });
         this.coopRun?.setPrediction(this.display.movePrediction);
+        this.coopRun?.prediction?.setDiagnostics(this.movementDiagnostics);
+    }
+
+    // Local opt-in capture, also reachable on release builds with ?movementDiagnostics.
+    setMovementDiagnostics(on: boolean): void {
+        this.movementDiagnostics = on;
+        this.coopRun?.prediction?.setDiagnostics(on);
+    }
+
+    getMovementDiagnostics() {
+        const run = this.coopRun;
+        return {
+            build: __BUILD_ID__,
+            enabled: this.movementDiagnostics,
+            isGuest: !!run && !run.isHost,
+            prediction: !!run?.prediction,
+            frame: run?.frame,
+            queuedFrames: run?.behind,
+            capture: run?.prediction?.getDiagnostics(),
+        };
     }
 
     // The room hears at once, and the rooms list from the next update. An open
@@ -1183,6 +1601,15 @@ export class GameClient implements GameFrameHandler {
     // Takes hold from the next frame (update)
     setFrameRate(frameRate: FrameRate): void {
         this.setDisplay({ frameRate });
+    }
+
+    // The phone HUD's zoom slider: 0 is as far out as the wheel goes, 100 as close in
+    setCameraZoom(zoom: number): void {
+        if (this.sim) {
+            this.cameraRig.setDistance(
+                MAX_CAMERA_DISTANCE - ((MAX_CAMERA_DISTANCE - MIN_CAMERA_DISTANCE) * zoom) / 100,
+            );
+        }
     }
 
     private setDisplay(changes: Partial<DisplaySettings>): void {
@@ -1263,6 +1690,8 @@ export class GameClient implements GameFrameHandler {
     private onSaveLock(held: boolean): void {
         if (held) {
             this.reloadSave();
+            // With the save as it is now, to find one from another device
+            this.cloud?.check();
         } else {
             this.updateSaveBlock();
         }
@@ -1311,12 +1740,15 @@ export class GameClient implements GameFrameHandler {
     replaceSave(save: SaveData): void {
         this.useSave(save, true);
         this.persist();
+        // An import's a save point; a download from the cloud is in step already
+        this.cloud?.savePoint();
     }
 
     // Plays on with this save. toFavourite: go to its favourite, as it would
     // start on, if it has one that's open (an import; a save given back by
     // another tab leaves the pick alone)
     private useSave(save: SaveData, toFavourite = false): void {
+        const lookWas = JSON.stringify(this.save?.look);
         this.save = save;
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
@@ -1337,11 +1769,22 @@ export class GameClient implements GameFrameHandler {
         if (!isHardUnlocked(save, this.store.getSnapshot().mapId)) {
             this.store.set({ hard: false });
         }
+        // Its own body and outfit, if it's another
+        if (JSON.stringify(save.look) !== lookWas) {
+            this.previewedLook = undefined;
+            this.refreshMenuLook();
+        }
+    }
+
+    // Whether the save's written here: this tab has the lock, and the save isn't a newer game's or
+    // one there was no room to keep a copy of. Cloud save goes by it too.
+    private canPersist(): boolean {
+        return this.saveLock.held === true && !this.newerSave && !this.saveNoRoom;
     }
 
     private persist(): void {
         // Played without saving, it carries on in memory
-        if (this.saveLock.held && !this.newerSave && !this.saveNoRoom) {
+        if (this.canPersist()) {
             this.saveStore.save(this.save);
         }
         // A fresh object so React sees the change
@@ -1389,7 +1832,7 @@ export class GameClient implements GameFrameHandler {
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
-                loadingText: `Travelling to ${map.name}`,
+                loadingText: t("canvas.travelling", { name: tl(map.name) }),
                 loadingProgress: 25,
             });
         }
@@ -1412,7 +1855,7 @@ export class GameClient implements GameFrameHandler {
         } catch (e) {
             console.error("Failed to load map", mapId, e);
             this.store.set({ screen: back });
-            this.store.toast(`Couldn't get to ${map.name}.`);
+            this.store.toast(t("toast.couldnt_get_to", { name: tl(map.name) }));
             return false;
         }
     }
@@ -1450,6 +1893,7 @@ export class GameClient implements GameFrameHandler {
             spawnX: spawn.x,
             spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
+            trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
             endless,
             hard,
             expert,
@@ -1457,6 +1901,8 @@ export class GameClient implements GameFrameHandler {
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
             actStep: getActStep(map, this.save.mapVictories),
+            invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
+            stage: this.chosenStage(mapId),
             testing: this.options.raidTest
                 ? { raidRoomSeconds: 120, maxLevelUps: this.options.raidTest === "max" }
                 : undefined,
@@ -1464,7 +1910,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet], cinematic);
+        this.enterRun(sim, [this.save.pet], [this.save.look], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -1482,7 +1928,7 @@ export class GameClient implements GameFrameHandler {
     // playing their own hero
     private async beginCoopRun(game: GameStart): Promise<void> {
         if (!isGameStart(game, MAX_PARTY)) {
-            this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.store.toast(t("toast.missing_run_content"), 6000);
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1500,7 +1946,7 @@ export class GameClient implements GameFrameHandler {
             !MAP_BY_ID.has(game.mapId) ||
             !game.heroes.every((hero) => CHARACTERS.some((c) => c.id === hero.characterId))
         ) {
-            this.store.toast("That run needs a map or adventurer your game doesn't have.", 6000);
+            this.store.toast(t("toast.missing_run_content"), 6000);
             this.coopInbox = undefined;
             this.coop.leave();
             return;
@@ -1545,12 +1991,15 @@ export class GameClient implements GameFrameHandler {
             endless: game.endless,
             hard: game.hard,
             actStep: game.actStep,
+            stage: game.stage,
+            invocations: game.invocations,
             party,
             focus,
         });
         const heroes = new Map(game.heroes.map((hero, i) => [hero.id, i]));
         const run = new CoopRun(sim, this.coop.isHost, this.coop, heroes, room.hostId);
         run.setPrediction(this.display.movePrediction);
+        run.prediction?.setDiagnostics(this.movementDiagnostics);
         this.coopRun = run;
         this.coopPlayerIds = game.heroes.map((hero) => hero.id);
         const inbox = this.coopInbox ?? [];
@@ -1558,23 +2007,36 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(sim, pets, true);
-        if (!this.coop.isHost) {
+        // Each hero's look from their Wardrobe, only for show
+        const looks = game.heroes.map((hero) => cleanLook(hero.loadout?.look));
+        this.enterRun(sim, pets, looks, true);
+        // Or once the opening cinematic's squares are in, if it's loading them (cinematicLoaded)
+        if (!this.coop.isHost && this.cinematicLoading === undefined) {
             this.coop.sendUp({ loaded: true });
         }
-        // Hidden while it loaded: it keeps up from the start
-        if (document.hidden) {
-            this.onVisibilityChange();
-        }
+        // Start while the page is still active, not only after it is hidden.
+        this.startCoopTicker();
     }
 
-    // pets: each hero's pet, in the party's order
-    // cinematic: play the map's opening cinematic, if it has one
-    private enterRun(sim: Sim, pets: (string | undefined)[], cinematic: boolean): void {
+    // pets and looks: each hero's pet and Wardrobe look, in the party's order
+    // cinematic: play the map's opening cinematic (or its part's, a fight in parts), if it has one
+    private enterRun(
+        sim: Sim,
+        pets: (string | undefined)[],
+        looks: (WardrobeLook | undefined)[],
+        cinematic: boolean,
+    ): void {
+        this.previewedLook = undefined;
+        this.bareMenuLook = false;
+        this.heroLooks = looks;
         const map = sim.map;
         this.sim = sim;
-        this.cinematic =
-            cinematic && map.cinematic ? new CinematicPlayer(map.cinematic) : undefined;
+        // A new run's bosses explain themselves again
+        this.instructionsSeen.clear();
+        this.instructions = [];
+        this.instructionsUp = [];
+        const runCinematic = getRunCinematic(map, sim.stage);
+        this.cinematic = cinematic && runCinematic ? new CinematicPlayer(runCinematic) : undefined;
         this.view.cinematic = this.cinematic;
         this.lairOpeningTick = -1;
         this.lairUnsealTick = -1;
@@ -1634,6 +2096,8 @@ export class GameClient implements GameFrameHandler {
             chest: undefined,
             result: undefined,
             toasts: [],
+            // The pause menu's recent messages are this run's, not the title's or the lobby's
+            toastLog: [],
             party: [],
             waitingOn: [],
             revive: undefined,
@@ -1647,7 +2111,7 @@ export class GameClient implements GameFrameHandler {
         // the loop only steps the sim once they're made
         this.syncOverlay();
         if (this.coopRun?.isHost && this.coopRun.waitingForLoad) {
-            this.store.toast("Waiting for everyone to arrive...", 3000);
+            this.store.toast(t("toast.waiting_arrivals"), 3000);
         }
     }
 
@@ -1867,9 +2331,10 @@ export class GameClient implements GameFrameHandler {
         this.act({ kind: "item", index });
     }
 
-    // The fight's own button (MapDef.fight.ability): Space, a pad's bottom button, or the touch
-    // screen's. Out of reach, or not ready, it says no. A hero with buttons of their own
-    // (CharacterDef.abilities) has slot for which: Space is the first, and 1 to 4 the others.
+    // The fight's own button (Sim.ability: a fight map's, or the Tombs'): Space, a pad's bottom
+    // button, or the touch screen's. Out of reach, or not ready, it says no. A hero with buttons
+    // of their own (CharacterDef.abilities) has slot for which: Space is the first, and 1 to 4
+    // the others.
     useAbility(slot = 0): void {
         const sim = this.sim;
         if (!sim || (this.paused && !this.coopRun)) {
@@ -1877,9 +2342,17 @@ export class GameClient implements GameFrameHandler {
         }
         if (this.hasKit(sim)) {
             this.act({ kind: "ability", index: slot });
-        } else if (sim.map.fight?.ability) {
-            this.act({ kind: "ability" });
+            return;
         }
+        if (!sim.ability) {
+            return;
+        }
+        // Only a press that goes off counts as having learnt it: one it says no to (out of reach,
+        // not ready, no boss up) leaves the hint to come
+        if (sim.abilityPressTakes()) {
+            this.abilityUsed = true;
+        }
+        this.act({ kind: "ability" });
     }
 
     // Whether the hero this player plays has buttons of their own (CharacterDef.abilities)
@@ -1933,11 +2406,19 @@ export class GameClient implements GameFrameHandler {
         this.syncOverlay();
     }
 
-    // Ends the run where it stands (from the pause menu); coins found are kept.
-    // In co-op that's leaving the party (the host's leaving ends it for
-    // everyone).
+    // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
+    // results. In co-op that's leaving the party (the host's leaving ends it for everyone).
     quitRun(): void {
-        if (this.sim) {
+        const sim = this.sim;
+        if (sim && !this.coopRun) {
+            this.paused = false;
+            sim.giveUp();
+            // Before the overlay, or it would play as a death
+            this.finishRun(t("ui.result.gave_up"), "abandoned");
+            this.syncOverlay();
+            return;
+        }
+        if (sim) {
             this.finishRun();
         }
         if (this.coopRun) {
@@ -1948,15 +2429,20 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
-    // The same boss fight again, from its results (MapDef.fight, or a lair's), on your own
+    // The same map again, from its results, on your own: at its lair if it has one to start at
+    // (getRetryLair)
     retry(): void {
-        const mapId = this.sim?.map.id;
-        if (!mapId || this.coopRun || !canRetry(getMap(mapId))) {
+        const map = this.sim?.map;
+        const mapId = map?.id;
+        if (!mapId || this.coopRun) {
             return;
         }
+        // A retry of the same part is without its cinematic; "Next fight", on to a part not played
+        // just now, plays that part's entrance
+        const played = this.sim?.stage;
+        const onward = map.stages !== undefined && this.chosenStage(mapId) !== played;
         this.leaveRun();
-        // The fight again at once, without the map's cinematic
-        void this.startRun(mapId, false, true);
+        void this.startRun(mapId, onward, true);
     }
 
     leaveRun(show = true): void {
@@ -1966,7 +2452,7 @@ export class GameClient implements GameFrameHandler {
             this.coop.end();
         }
         this.coopRun = undefined;
-        this.stopBackgroundTicker();
+        this.stopCoopTicker();
         usePortableMath(false);
         this.assets.dropPlayers(1);
         this.sim = undefined;
@@ -1985,7 +2471,7 @@ export class GameClient implements GameFrameHandler {
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
-        this.assets.setCharacterLook(this.store.getSnapshot().characterId);
+        this.assets.setCharacterLook(this.store.getSnapshot().characterId, this.save.look);
         if (!show) {
             return;
         }
@@ -2000,10 +2486,24 @@ export class GameClient implements GameFrameHandler {
             party: [],
             waitingOn: [],
             revive: undefined,
+            toastLog: [],
         });
     }
 
     // endedEarly: why a co-op run ended before anyone won or fell
+    // A fight in parts: the part picked (one reached), or the next not beaten
+    private chosenStage(mapId: string): number {
+        const picked = this.store.getSnapshot().fightStage;
+        return picked !== undefined && picked < getReachedStages(this.save, mapId)
+            ? picked
+            : getFightStage(this.save, mapId);
+    }
+
+    // A fight in parts' part to play next, picked on the map screen
+    pickFightStage(stage: number | undefined): void {
+        this.store.set({ fightStage: stage });
+    }
+
     private finishRun(
         endedEarly?: string,
         early: "abandoned" | "disconnected" = endedEarly ? "disconnected" : "abandoned",
@@ -2016,7 +2516,18 @@ export class GameClient implements GameFrameHandler {
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
-        const locked = MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
+        // A fight in parts: Retry plays the part lost again (one replayed, too, not the furthest
+        // reached), and Next fight the one after it. chosenStage falls back to the next not
+        // beaten when that isn't reached yet.
+        this.store.set({
+            fightStage:
+                result.stage === undefined
+                    ? undefined
+                    : result.victory
+                      ? result.stage + 1
+                      : result.stage,
+        });
+        const locked = ALL_MAPS.filter((m) => !isMapUnlocked(this.save, m.id));
         const lockedCharacters = CHARACTERS.filter(
             (c) => !c.only && !this.save.unlockedCharacters.includes(c.id),
         );
@@ -2037,6 +2548,8 @@ export class GameClient implements GameFrameHandler {
         // and a NaN in a solo one's would come back from the save as 0 coins
         const quests = hasBadNumber(result) ? [] : recordRun(this.save, result);
         this.persist();
+        // A run's results: a save point for cloud save
+        this.cloud?.savePoint();
         const unlockedMap = locked.find((m) => isMapUnlocked(this.save, m.id));
         const unlockedCharacters = lockedCharacters.filter((c) =>
             this.save.unlockedCharacters.includes(c.id),
@@ -2066,6 +2579,8 @@ export class GameClient implements GameFrameHandler {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
                 endedEarly,
+                // As retry() goes by
+                ...(this.coopRun && { coop: true }),
             },
         });
         // The room sees this player's new unlocks and upgrades next run
@@ -2085,19 +2600,24 @@ export class GameClient implements GameFrameHandler {
             ...earned.characters.map((c) => ({
                 key: `character:${c.id}`,
                 task: c.unlock!,
-                text: `The ${c.name} joins you after this run.`,
+                text: t("toast.character_unlocked", { name: tl(c.name) }),
             })),
             ...earned.items.map((i) => ({
                 key: `item:${i.id}`,
                 task: i.unlock,
-                text: `${i.name} ${i.kind === "item" ? "joins the loot" : "can be found"} after this run.`,
+                text: t(i.kind === "item" ? "toast.item_loot_unlocked" : "toast.item_unlocked", {
+                    name: tl(i.name),
+                }),
             })),
         ];
         for (const { key, task, text } of news) {
             if (!this.tasksAnnounced.has(key)) {
                 this.tasksAnnounced.add(key);
                 this.sounds.taskDone();
-                this.store.toast(`Task done: ${describeUnlockTask(task)}! ${text}`, 6000);
+                this.store.toast(
+                    t("toast.task_done", { task: describeUnlockTask(task), reward: text }),
+                    6000,
+                );
             }
         }
         for (const quest of getFinishedQuests(this.save, result)) {
@@ -2106,8 +2626,10 @@ export class GameClient implements GameFrameHandler {
                 this.tasksAnnounced.add(key);
                 this.sounds.taskDone();
                 this.store.toast(
-                    `Quest complete: ${quest.name}! ${quest.coins.toLocaleString()} coins ` +
-                        "are yours after this run.",
+                    t("toast.quest_complete", {
+                        name: tl(quest.name),
+                        coins: fmtNum(quest.coins),
+                    }),
                     6000,
                 );
             }
@@ -2139,7 +2661,7 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         if (code === "KeyM") {
-            this.toggleMute();
+            this.toggleMute(true);
             return;
         }
         if (code === "KeyQ" && this.sim) {
@@ -2207,6 +2729,7 @@ export class GameClient implements GameFrameHandler {
             this.cameraRig.zoom(wheel);
         }
         this.store.expireToasts();
+        this.showInstruction(performance.now());
 
         setPlayArea(this.renderer, this.grid, this.sim?.map.scaperune === true);
 
@@ -2217,7 +2740,11 @@ export class GameClient implements GameFrameHandler {
         }
 
         if (this.coopRun) {
-            this.updateCoop(deltaTimeMs, sim, this.coopRun);
+            if (this.coopTicker) {
+                this.coopTicker.render();
+            } else {
+                this.updateCoop(deltaTimeMs, sim, this.coopRun);
+            }
         } else if (
             !this.paused &&
             // The shot editor holds the run, but for a live trailer's frames
@@ -2264,7 +2791,7 @@ export class GameClient implements GameFrameHandler {
                 this.appearanceVersions[hero.index] = hero.appearanceVersion;
                 this.lookChoices[hero.index] = choices;
                 this.assets.setPlayerAppearance(
-                    getRunAppearance(sim, hero.index),
+                    getRunAppearance(sim, hero.index, this.heroLooks[hero.index]),
                     hero.index,
                     getRunAttackSeqs(sim, hero.index),
                     getOfferedAttackSeqs(sim, hero.index),
@@ -2309,9 +2836,6 @@ export class GameClient implements GameFrameHandler {
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
         const pan = this.getIntroPan(sim, px, py, alpha);
         const shake = this.getShake(now);
-        // Where the run's camera looks, and where the lights are gathered round
-        let focusX = px;
-        let focusY = py;
         const cinematic = this.updateCinematic(deltaTimeMs, sim, alpha, {
             x: px + this.cameraLean.x + pan.x,
             y: py + this.cameraLean.y + pan.y,
@@ -2327,8 +2851,6 @@ export class GameClient implements GameFrameHandler {
             rig.distance = cinematic.distance;
             rig.apply(camera, cinematic.x, cinematic.height, cinematic.y);
             this.cameraOffsetY = cinematic.y - py;
-            focusX = cinematic.x;
-            focusY = cinematic.y;
         } else {
             this.cameraRig.apply(
                 camera,
@@ -2340,6 +2862,7 @@ export class GameClient implements GameFrameHandler {
         }
         const lighting = sim.map.lighting;
         if (lighting) {
+            // Lit round the view's middle, which a cinematic takes away from the player
             this.sceneLights.update(
                 this.renderer,
                 sim,
@@ -2347,11 +2870,11 @@ export class GameClient implements GameFrameHandler {
                 alpha,
                 this.viewHero,
                 this.view.localPlayerPose,
-                focusX,
-                focusY,
+                cinematic ? cinematic.x : px,
+                cinematic ? cinematic.y : py,
                 deltaTimeMs / 1000,
                 this.grid.data.glowLocs,
-                this.view.getCinematicSpots(),
+                this.view.getCinematicLights(),
             );
         }
         // A raid hall can be drawn darker than the map, and washed with a colour
@@ -2391,6 +2914,9 @@ export class GameClient implements GameFrameHandler {
                 charge: Math.max(0, Math.round((1 - left / ability.cooldown) * 20) / 20),
                 inReach: true,
                 opened: false,
+                guide: false,
+                withItems: false,
+                hint: false,
                 keyLabel: slot === 0 ? "Space" : String(slot),
                 description:
                     by.length > 0
@@ -2400,21 +2926,48 @@ export class GameClient implements GameFrameHandler {
         });
     }
 
-    // The fight's own button, for the HUD (MapDef.fight.ability)
+    // The fight's own button, for the HUD (Sim.ability): lit as gold while what it'd land on (or
+    // the boss on the bar, out of reach) has its guard down
     private getAbilityView(sim: Sim): AbilityView | undefined {
-        const ability = sim.map.fight?.ability;
+        const ability = sim.ability;
         if (!ability) {
             return undefined;
         }
-        const boss = sim.shownBoss;
+        const boss = sim.abilityTarget() ?? sim.shownBoss;
         const left = sim.abilitySecondsLeft();
+        const seconds = this.secondsSinceBossUp(sim);
         return {
             name: ability.name,
             iconObjId: ability.iconObjId,
             charge: Math.round((1 - left / ability.cooldown) * 20) / 20,
             inReach: sim.abilityTarget() !== undefined,
             opened: boss !== undefined && !boss.dead && sim.isExposed(boss),
+            guide: ability.guide === true,
+            withItems: !sim.map.fight,
+            hint:
+                ability.guide === true &&
+                !this.abilityUsed &&
+                seconds !== undefined &&
+                seconds >= ABILITY_HINT_FROM &&
+                seconds < ABILITY_HINT_UNTIL,
         };
+    }
+
+    // Seconds since the boss on the bar was up (bossUp), or undefined with none living. Another
+    // boss coming on while one's shown (a co-op copy, the next phase) doesn't start it again.
+    private secondsSinceBossUp(sim: Sim): number | undefined {
+        const boss = sim.shownBoss;
+        if (!boss || boss.dead) {
+            this.bossUp = undefined;
+            return undefined;
+        }
+        if (this.bossUp?.sim !== sim) {
+            if (boss.risingEnd > sim.tick) {
+                return undefined;
+            }
+            this.bossUp = { sim, tick: sim.tick };
+        }
+        return (sim.tick - this.bossUp.tick) / TICKS_PER_SECOND;
     }
 
     // A blow at (x, y) shakes the camera, less the further off the player it is, and not at
@@ -2455,7 +3008,7 @@ export class GameClient implements GameFrameHandler {
         this.cinematicLoading = performance.now();
         this.store.set({
             screen: "loading",
-            loadingText: `Travelling to ${sim.map.name}`,
+            loadingText: t("canvas.travelling", { name: tl(sim.map.name) }),
             loadingProgress: 0,
         });
     }
@@ -2495,9 +3048,24 @@ export class GameClient implements GameFrameHandler {
             }
             return true;
         }
-        this.cinematicLoading = undefined;
-        this.store.set({ screen: "run" });
+        this.cinematicLoaded();
         return false;
+    }
+
+    // What the cinematic sees is in, or it's stopped waiting (the time's up, or it was skipped):
+    // the run's screen, and a co-op guest tells the host it's ready, as the host's run waits for
+    // everyone's (CoopRun.waitingForLoad)
+    private cinematicLoaded(): void {
+        if (this.cinematicLoading === undefined) {
+            return;
+        }
+        this.cinematicLoading = undefined;
+        if (this.store.getSnapshot().screen === "loading") {
+            this.store.set({ screen: "run" });
+        }
+        if (this.coopRun && !this.coop.isHost) {
+            this.coop.sendUp({ loaded: true });
+        }
     }
 
     // The opening cinematic on by a frame (MapDef.cinematic): its sounds as their cues go by,
@@ -2758,10 +3326,13 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // Any key, click, tap or button during the opening cinematic: straight to the run
+    // Any key, click, tap or button during a cinematic: straight to the run. On the loading
+    // screen before it, that skips the wait too.
     skipCinematic(): void {
         const cinematic = this.cinematic;
-        if (!this.director && cinematic?.skip()) {
+        const loading = this.cinematicLoading;
+        const waited = loading === undefined ? 0 : (performance.now() - loading) / 1000;
+        if (!this.director && cinematic?.skip(waited)) {
             this.endCinematic();
             // Solo, a lair's boss comes straight on (in co-op, the others may be watching)
             if (cinematic.onSim && !this.coopRun) {
@@ -2782,12 +3353,7 @@ export class GameClient implements GameFrameHandler {
         this.view.cinematic = undefined;
         // What it saw goes back to loading and unloading with the camera
         this.renderer.mapManager.setPinned([]);
-        if (this.cinematicLoading !== undefined) {
-            this.cinematicLoading = undefined;
-            if (this.store.getSnapshot().screen === "loading") {
-                this.store.set({ screen: "run" });
-            }
-        }
+        this.cinematicLoaded();
         // The solo run's clock starts from here: nothing banked while it was held
         this.accumulator = Math.min(this.accumulator, TICK_MS);
         if (this.store.getSnapshot().cinematic) {
@@ -2913,10 +3479,12 @@ export class GameClient implements GameFrameHandler {
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
         const catchUp = run.isHost ? 0 : Math.max(0, run.behind - GUEST_BUFFER_FRAMES);
         const started = performance.now();
+        // The host waits for its own opening cinematic's squares, as for the guests'
+        const loading = run.isHost && this.cinematicLoading !== undefined;
         let steps = 0;
         let threw = true;
         try {
-            while (run.canStep() && steps < MAX_CATCH_UP_TICKS) {
+            while (!loading && run.canStep() && steps < MAX_CATCH_UP_TICKS) {
                 if (this.accumulator >= TICK_MS) {
                     this.accumulator -= TICK_MS;
                 } else if (steps >= catchUp || performance.now() - started > CATCH_UP_BUDGET_MS) {
@@ -2929,17 +3497,14 @@ export class GameClient implements GameFrameHandler {
                     if (event.action && event.hero === sim.focus) {
                         this.afterCoopAction(sim, event.action);
                         if (event.auto) {
-                            this.store.toast(
-                                "Everyone was waiting, so that was decided for you.",
-                                4000,
-                            );
+                            this.store.toast(t("toast.decided_for_you"), 4000);
                         }
                     }
                 }
             }
             threw = false;
         } finally {
-            if (threw || !run.canStep()) {
+            if (threw || loading || !run.canStep()) {
                 // Waiting on the host, or stopped by an error after a step: no
                 // time to make up (an error every frame would otherwise bank
                 // it, for a rush of frames once it stops)
@@ -2953,7 +3518,7 @@ export class GameClient implements GameFrameHandler {
             // Nothing brings the copies back together, so this one stops
             // rather than everyone waiting on it
             this.coop.leave();
-            this.endCoopRunEarly(OUT_OF_STEP_TEXT);
+            this.endCoopRunEarly(t("toast.out_of_step"));
             return;
         }
         // Choices and caskets come and go with the frames
@@ -2985,40 +3550,27 @@ export class GameClient implements GameFrameHandler {
     private coopPlayerIds: string[] = [];
     // A co-op run that's ended early for this player (endCoopRunEarly)
     private coopStopped = false;
-    // Ticks for a co-op player whose tab is hidden (see onVisibilityChange)
-    private backgroundTicker?: Worker;
-    private backgroundTime = 0;
+    private coopTicker?: CoopTicker;
 
-    // A hidden tab isn't drawn, and its frames stop with it, so a co-op
-    // player keeps stepping off a worker's timer (a page's own timers are
-    // slowed right down in a hidden tab, a worker's aren't): the host keeps
-    // the run going for everyone, and a guest keeps up rather than having
-    // minutes to catch up on when they're back
+    // Visibility is useful for saves, but is not a reliable indication of
+    // whether rendering is still being scheduled. Co-op owns a clock for
+    // the whole run, including while this page reports itself as visible.
     private onVisibilityChange = (): void => {
-        this.stopBackgroundTicker();
-        if (document.hidden && this.coopRun) {
-            this.backgroundTime = performance.now();
-            const source = `setInterval(() => postMessage(0), ${TICK_MS});`;
-            const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-            this.backgroundTicker = new Worker(url);
-            URL.revokeObjectURL(url);
-            this.backgroundTicker.onmessage = () => {
-                const sim = this.sim;
-                const run = this.coopRun;
-                const now = performance.now();
-                if (sim && run && document.hidden) {
-                    this.updateCoop(now - this.backgroundTime, sim, run);
-                }
-                this.backgroundTime = now;
-            };
-        } else {
-            this.stopBackgroundTicker();
-        }
+        this.cloud?.onVisibility(document.hidden);
     };
 
-    private stopBackgroundTicker(): void {
-        this.backgroundTicker?.terminate();
-        this.backgroundTicker = undefined;
+    private startCoopTicker(): void {
+        this.stopCoopTicker();
+        this.coopTicker = new CoopTicker((elapsed) => {
+            if (this.sim && this.coopRun && !this.coopStopped) {
+                this.updateCoop(elapsed, this.sim, this.coopRun);
+            }
+        }, TICK_MS);
+    }
+
+    private stopCoopTicker(): void {
+        this.coopTicker?.stop();
+        this.coopTicker = undefined;
     }
 
     // A co-op action of this player's, now it's been done in its frame
@@ -3070,22 +3622,45 @@ export class GameClient implements GameFrameHandler {
         return Math.min(1, this.accumulator / TICK_MS);
     }
 
+    // Turns the adventurer round in the Wardrobe, which holds the camera still in front of them.
+    // at once: straight there (dragged round), not turning round to it (the arrows).
+    turnWardrobeModel(by: number, atOnce = false): void {
+        this.wardrobeTurn = wrapYaw(this.wardrobeTurn + by);
+        if (atOnce) {
+            this.menuModelYaw = wrapYaw(this.menuModelYaw + by);
+        }
+    }
+
     // Title screen: the character idles in the courtyard while the camera
-    // circles them (unless that's turned off)
+    // circles them (unless that's turned off). The Wardrobe holds it in front of them, and turns
+    // them instead, so the courtyard behind stays put.
     private updateAttract(deltaTimeMs: number, camera: Camera): void {
         const ticks = deltaTimeMs / TICK_MS;
         this.attractTick += ticks;
-        if (this.display.menuSpin) {
+        const wardrobe = this.store.getSnapshot().screen === "wardrobe";
+        const settle = Math.pow(ATTRACT_SETTLE, ticks);
+        if (this.display.menuSpin && !wardrobe) {
             this.attractYaw = (this.attractYaw + ticks * ATTRACT_SPIN) % 2048;
         } else {
             // Back round to the front the short way
-            const offset = this.attractYaw > 1024 ? this.attractYaw - 2048 : this.attractYaw;
-            const settled = offset * Math.pow(ATTRACT_SETTLE, ticks);
-            this.attractYaw = Math.abs(settled) < 1 ? 0 : (settled + 2048) % 2048;
+            this.attractYaw = settleYaw(this.attractYaw, wardrobe ? WARDROBE_YAW : 0, settle);
         }
+        this.menuModelYaw = settleYaw(this.menuModelYaw, wardrobe ? this.wardrobeTurn : 0, settle);
         this.cameraRig.yaw = this.attractYaw & 2047;
+        // The Wardrobe comes in close, the adventurer off to the right of its panel
+        this.wardrobeZoom += ((wardrobe ? 1 : 0) - this.wardrobeZoom) * (1 - 0.85 ** ticks);
+        const zoom = this.wardrobeZoom < 0.001 ? 0 : this.wardrobeZoom;
+        this.cameraRig.distance = ATTRACT_DISTANCE + (WARDROBE_DISTANCE - ATTRACT_DISTANCE) * zoom;
+        this.cameraRig.pitch = Math.round(ATTRACT_PITCH + (WARDROBE_PITCH - ATTRACT_PITCH) * zoom);
+        const yaw = (this.cameraRig.yaw / 2048) * 2 * Math.PI;
+        const side = WARDROBE_SIDE * zoom;
         const { x, y } = TITLE_MAP.spawn;
-        this.cameraRig.apply(camera, x, this.grid.getHeight(x, y) / 128 - 0.8, y);
+        this.cameraRig.apply(
+            camera,
+            x - Math.cos(yaw) * side,
+            this.grid.getHeight(x, y) / 128 - 0.8 + WARDROBE_RISE * zoom,
+            y + Math.sin(yaw) * side,
+        );
     }
 
     private handleEvents(sim: Sim, events: SimEvent[]): void {
@@ -3106,7 +3681,11 @@ export class GameClient implements GameFrameHandler {
             }
             switch (event.type) {
                 case "casketDropped":
-                    this.store.toast(`A ${CASKETS[event.tier].name.toLowerCase()} drops!`);
+                    this.store.toast(
+                        t("toast.casket_drops", {
+                            name: tl(CASKETS[event.tier].name).toLowerCase(),
+                        }),
+                    );
                     break;
                 case "bossSpawned":
                     // The final boss's own track takes over (MapDef.bossMusic)
@@ -3126,69 +3705,91 @@ export class GameClient implements GameFrameHandler {
                     // Bosses that turn up together say so once (Pest Control's
                     // portals, on the first)
                     if (event.message) {
-                        this.store.toast(event.message, 6000);
+                        this.store.toast(tl(event.message), 6000);
                     }
                     break;
                 case "coinsStolen":
                     this.store.toast(
-                        `The ${getEnemy(event.enemyId).name} grabs ${event.amount} of your coins!`,
+                        t("toast.coins_stolen", {
+                            name: tl(getEnemy(event.enemyId).name),
+                            n: fmtNum(event.amount),
+                        }),
                     );
                     break;
                 case "coinsReturned":
-                    this.store.toast(`You get your ${event.amount} coins back!`);
+                    this.store.toast(t("toast.coins_returned", { n: fmtNum(event.amount) }));
                     break;
                 case "revive": {
                     const revive = getUsedRevive(sim.heroes[sim.focus]);
-                    this.store.toast(`Your ${revive.name.toLowerCase()} saves you!`);
+                    this.store.toast(
+                        t("toast.revive_saves_you", { item: tl(revive.name).toLowerCase() }),
+                    );
                     break;
                 }
                 case "roundStarted":
                     this.store.toast(describeRound(sim), 7000);
                     break;
                 case "powerUp":
+                    this.store.toast(tl(event.message));
+                    break;
                 case "notice":
-                    this.store.toast(event.message);
+                    if (event.instruction) {
+                        this.queueInstruction(tl(event.message));
+                    } else {
+                        this.store.toast(tl(event.message));
+                    }
                     break;
                 case "heroDown":
                     this.store.toast(
                         sim.canBeRevived(sim.heroes[sim.focus])
-                            ? "You're down! A teammate standing over you for a few seconds can revive you."
-                            : "You're down! Watch the rest of your party fight on.",
+                            ? t("toast.you_down_revivable")
+                            : t("toast.you_down"),
                         5000,
                     );
                     break;
                 case "heroRevived":
                     this.store.toast(
-                        `${sim.heroes[event.by].name} revives you! Nothing can hurt you for ${REVIVE_IMMUNITY_SECONDS / 60} minutes.`,
+                        t("toast.revived_you", {
+                            name: sim.heroes[event.by].name,
+                            minutes: REVIVE_IMMUNITY_SECONDS / 60,
+                        }),
                         6000,
                     );
                     break;
                 case "extraRevive":
                     this.store.toast(
-                        `A teammate can revive you once more (${describeRevives(sim.revivesLeftFor(sim.heroes[sim.focus]))}).`,
+                        t("toast.extra_revive_you", {
+                            revives: describeRevives(sim.revivesLeftFor(sim.heroes[sim.focus])),
+                        }),
                         6000,
                     );
                     break;
                 case "visitor":
                     if (event.message) {
-                        this.store.toast(event.message);
+                        this.store.toast(tl(event.message));
                     }
                     break;
                 // An automatic answer had no casket screen to show what it was
                 case "alch":
                     if (this.autoChestDone(sim)) {
                         this.store.toast(
-                            `High alched ${getItem(event.itemId).name} for ${event.coins.toLocaleString()} coins`,
+                            t("toast.alched", {
+                                name: tl(getItem(event.itemId).name),
+                                coins: fmtNum(event.coins),
+                            }),
                         );
                     }
                     break;
                 case "equip":
                     if (this.autoChestDone(sim)) {
                         this.store.toast(
-                            `Equipped ${getItem(event.itemId).name}` +
-                                (event.replacedId
-                                    ? `; high alched ${getItem(event.replacedId).name} for ${event.coins.toLocaleString()} coins`
-                                    : ""),
+                            event.replacedId
+                                ? t("toast.equipped_alched", {
+                                      name: tl(getItem(event.itemId).name),
+                                      replaced: tl(getItem(event.replacedId).name),
+                                      coins: fmtNum(event.coins),
+                                  })
+                                : t("toast.equipped", { name: tl(getItem(event.itemId).name) }),
                         );
                     }
                     break;
@@ -3201,31 +3802,38 @@ export class GameClient implements GameFrameHandler {
             case "heroDown":
                 this.store.toast(
                     sim.canBeRevived(sim.heroes[event.hero!])
-                        ? `${name} is down! Stand over them to revive them.`
-                        : `${name} is down!`,
+                        ? t("toast.teammate_down_revivable", { name })
+                        : t("toast.teammate_down", { name }),
                     5000,
                 );
                 break;
             case "heroRevived":
                 this.store.toast(
                     event.by === sim.focus
-                        ? `You revive ${name}!`
-                        : `${sim.heroes[event.by].name} revives ${name}!`,
+                        ? t("toast.you_revive", { name })
+                        : t("toast.teammate_revives", {
+                              by: sim.heroes[event.by].name,
+                              name,
+                          }),
                 );
                 break;
             case "extraRevive":
-                this.store.toast(`${name} can be revived once more.`);
+                this.store.toast(t("toast.teammate_extra_revive", { name }));
                 break;
             case "heroLeft":
-                this.store.toast(`${name} left the game.`);
+                this.store.toast(t("toast.teammate_left", { name }));
                 break;
             case "revive": {
                 const revive = getUsedRevive(sim.heroes[event.hero!]);
-                this.store.toast(`${name}'s ${revive.name.toLowerCase()} saves them!`);
+                this.store.toast(
+                    t("toast.teammate_revive", { name, item: tl(revive.name).toLowerCase() }),
+                );
                 break;
             }
             case "powerUp":
-                this.store.toast(`${name} picked up the ${getPowerUp(event.id).name}!`);
+                this.store.toast(
+                    t("toast.teammate_powerup", { name, item: tl(getPowerUp(event.id).name) }),
+                );
                 break;
         }
     }
@@ -3331,6 +3939,8 @@ export class GameClient implements GameFrameHandler {
             this.store.set({
                 overlay: "levelUp",
                 choices: getChoiceViews(sim),
+                // The ones still to come after this
+                levelUpsLeft: Math.max(0, sim.pendingLevelUps - 1),
                 chest: undefined,
                 waitingOn,
             });
@@ -3442,6 +4052,19 @@ export class GameClient implements GameFrameHandler {
                         : undefined,
                 };
             }
+            // The Wardens' three phases, Kephri's three shields and her last
+            const tombs = sim.wardensBar(shownBoss) ?? sim.kephriBar(shownBoss);
+            if (tombs) {
+                const kephri = shownBoss.def.boss?.kephri;
+                boss.fraction = tombs.fraction;
+                boss.fight = {
+                    phase: tombs.phase,
+                    phases: kephri ? kephri.shields.count + 1 : 3,
+                    stage: tombs.stage,
+                    status: tombs.status,
+                    totems: [],
+                };
+            }
         }
         if (sim.tick - this.shownDpsTick >= DPS_HOLD_TICKS) {
             this.shownDps = sim.dps;
@@ -3469,6 +4092,56 @@ export class GameClient implements GameFrameHandler {
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
             },
             objective: getObjectiveView(sim),
+            tombsWave:
+                sim.tombsRoom && !sim.tombsRoom.boss
+                    ? sim.tombsRoom.het
+                        ? {
+                              // The Het room counts what's mined of the seal, not waves
+                              label: "Seal mined",
+                              wave: sim.hetSealMined.mined,
+                              of: sim.hetSealMined.of,
+                              waiting: false,
+                              done: sim.tombsRoom.doneTick !== undefined,
+                          }
+                        : sim.tombsPathRoom?.crondis
+                          ? {
+                                // The Crondis room counts the palm's stages
+                                label: "Palm grown",
+                                wave: sim.tombsRoom.crondis?.stage ?? 0,
+                                of: 4,
+                                waiting: !sim.tombsRoom.started,
+                                done: sim.tombsRoom.doneTick !== undefined,
+                            }
+                          : sim.tombsPathRoom?.scabaras
+                            ? {
+                                  // The Scabaras room counts its puzzles
+                                  label: "Puzzles solved",
+                                  wave: sim.tombsRoom.scabaras?.solved.length ?? 0,
+                                  of: 4,
+                                  waiting: !sim.tombsRoom.started,
+                                  done: sim.tombsRoom.doneTick !== undefined,
+                              }
+                            : {
+                                  wave: Math.max(0, sim.tombsRoom.wave) + 1,
+                                  of: APMEKEN_WAVES.length,
+                                  waiting: !sim.tombsRoom.started,
+                                  done: sim.tombsRoom.doneTick !== undefined,
+                              }
+                    : undefined,
+            tombsScabaras: sim.scabarasInfo,
+            tombsHet: sim.hetInfo,
+            tombsCrondis: sim.crondisInfo,
+            tombsRoar:
+                sim.zebakRoarSeconds === undefined ? undefined : Math.ceil(sim.zebakRoarSeconds),
+            tombsShadows: sim.akkhaShadows
+                ? { left: sim.akkhaShadows.left, seconds: Math.ceil(sim.akkhaShadows.seconds) }
+                : undefined,
+            devGod: this.devTools ? sim.devGod : undefined,
+            devWardens:
+                this.devTools &&
+                sim.map.tombs?.wardens !== undefined &&
+                !sim.tombsPath &&
+                !sim.tombsWardens,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
             hpShare: getHpShare(sim.player.hp, sim.player.maxHp),
@@ -3479,6 +4152,8 @@ export class GameClient implements GameFrameHandler {
             ),
             // Held while a lair's on, as the waves are (Sim.heldTicks)
             seconds: Math.floor(sim.clockSeconds),
+            // None once a run's ended early: its sim can stop mid-choice
+            decisionSeconds: this.coopStopped ? undefined : this.coopRun?.decisionSeconds,
             kills: sim.kills,
             coins: sim.coins,
             dps: this.shownDps,
@@ -3508,12 +4183,12 @@ export class GameClient implements GameFrameHandler {
                 const level = w.def.levels[Math.min(w.level, last) - 1];
                 return {
                     id: w.def.id,
-                    name: upgradedName(level.name ?? w.def.name, w.level - last),
+                    name: upgradedName(tl(level.name ?? w.def.name), w.level - last),
                     level: w.level,
                     maxLevel: w.def.levels.length,
                     iconObjId: level.objId ?? w.def.iconObjId,
-                    detail: w.bonus > 0 ? `${formatWeaponBonus(w.bonus)} damage` : "",
-                    stats: weaponStats(w.def, level).map(formatWeaponStat),
+                    detail: w.bonus > 0 ? weaponBonusText(w.bonus) : undefined,
+                    stats: weaponStats(w.def, level).map(weaponStatText),
                     evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
@@ -3522,12 +4197,12 @@ export class GameClient implements GameFrameHandler {
                 const def = getPassive(p.id);
                 return {
                     id: p.id,
-                    name: upgradedName(def.name, p.level - def.maxLevel),
+                    name: upgradedName(tl(def.name), p.level - def.maxLevel),
                     level: p.level,
                     maxLevel: def.maxLevel,
                     iconObjId: def.iconObjId,
                     iconSpriteId: def.iconSpriteId,
-                    detail: formatPassiveValue(def, p.value),
+                    detail: passiveValueText(def, p.value),
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),
@@ -3589,7 +4264,7 @@ export class GameClient implements GameFrameHandler {
                 TITLE_MAP.spawn.x,
                 this.grid.getHeight(TITLE_MAP.spawn.x, TITLE_MAP.spawn.y) / 128,
                 TITLE_MAP.spawn.y,
-                0,
+                Math.round(this.menuModelYaw) & 2047,
             );
         }
         const pet = this.save.pet === undefined ? undefined : PET_BY_ID.get(this.save.pet);
@@ -3616,6 +4291,10 @@ export class GameClient implements GameFrameHandler {
         const sim = this.sim;
         if (sim) {
             this.view.pickupTimers = this.display.pickupTimers;
+            // While it's on, once the room's been beaten, and from the start at Entry
+            this.view.puzzleHelper =
+                this.display.puzzleHelper &&
+                (this.save.scabarasBeaten === true || getRaidBand(sim.raidLevel) === "Entry");
             this.view.drawOverlay(overlay, sim, this.getAlpha());
             if (this.minimapCanvas) {
                 this.minimap.draw(
@@ -3726,7 +4405,7 @@ export class GameClient implements GameFrameHandler {
 
 // "2 revives left"
 function describeRevives(left: number): string {
-    return `${left} ${left === 1 ? "revive" : "revives"} left`;
+    return tp("toast.revives_left", left);
 }
 
 // How far along a downed hero's revive is, 0 to 1

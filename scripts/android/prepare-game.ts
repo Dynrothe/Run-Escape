@@ -9,6 +9,7 @@ import {
     CHUNK_FILE_PATTERN,
     chunkName,
     chunkPath,
+    isShipped,
     parseManifest,
     zipEntryPath,
 } from "../../desktop/gameFiles";
@@ -16,9 +17,6 @@ import { MANIFEST_NAME, gameZipName } from "../../desktop/gameUpdate";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MAX_GAME_BYTES = 256 * 1024 * 1024;
-
-// What the release's files skip (desktop/release-files.ts)
-const isShipped = (file: string) => !file.endsWith(".map") && path.basename(file) !== ".htaccess";
 
 // The same checks as desktop/release-files.ts makes of dist/: one slim cache, made for this
 // build, with every chunk it lists

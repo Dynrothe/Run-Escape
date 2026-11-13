@@ -69,8 +69,8 @@ version and how to run it.
   Level up cards say what evolves with what, the HUD and pause menu show how close a weapon is and
   its slot glows gold once it's ready, and the **Collection log** on the title screen lists every
   recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with
-  finds of its own (the Hallowed Night, the Theatre of Blood, Justiciar Zachariah, Phosani's
-  Nightmare): the weapons it brings in, then its trophies.
+  finds of its own (the Hallowed Night, the Theatre of Blood, the Tombs of Amascut, Justiciar
+  Zachariah, Phosani's Nightmare): the weapons it brings in, then its trophies.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
@@ -80,44 +80,45 @@ version and how to run it.
   crier's bell. One can be made a favourite (`SaveData.favouriteCharacter`), and the game starts
   on them.
 
-    | Adventurer          | Fights with | Starts with            | Bonus                                             | Joins for                                            |
-    | ------------------- | ----------- | ---------------------- | ------------------------------------------------- | ---------------------------------------------------- |
-    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                               |                                                      |
-    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                 |                                                      |
-    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                  |                                                      |
-    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                                | Killing Count Draynor in Lumbridge                   |
-    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                                | Beating Lumbridge                                    |
-    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                       | Killing Ahrim in Barrows                             |
-    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                             | Beating Barrows                                      |
-    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                           | Surviving 10 minutes in the Wilderness               |
-    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                   | Beating the Wilderness                               |
-    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                  | Beating the Desert                                   |
-    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                               | Killing Damis in the Desert                          |
-    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                           | Beating the Fremennik Province                       |
-    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                    | Killing Dagannoth Rex in the Fremennik Province      |
-    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints               | Beating Karamja                                      |
-    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                 | Surviving 13 minutes on Karamja                      |
-    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                 | Beating Kourend                                      |
-    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                       | Killing Sarachnis in Kourend                         |
-    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                     | Beating Varlamore                                    |
-    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                 | Killing the Javelin Colossus in Varlamore            |
-    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                            | Beating Morytania                                    |
-    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster               | Killing the Pestilent Bloat in Morytania             |
-    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                    | Beating the God Wars Dungeon                         |
-    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                   | Killing Kree'arra in the God Wars Dungeon            |
-    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder                | Beating Prifddinas                                   |
-    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                    | Surviving 10 minutes in Prifddinas                   |
-    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                  |
-    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                    |
-    | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                             |
-    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange           |
-    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock              |
-    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                            |
-    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                 | Killing the AGS specer in Last Man Standing          |
-    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                 | Killing the Flag carrier in Castle Wars              |
-    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                   | Destroying the purple portal in Pest Control         |
-    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                    | Phosani's Nightmare only (everyone plays them there) |
-    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there) |
+    | Adventurer          | Fights with | Starts with            | Bonus                                             | Joins for                                             |
+    | ------------------- | ----------- | ---------------------- | ------------------------------------------------- | ----------------------------------------------------- |
+    | Warrior             | Melee       | Bronze scimitar        | 1 less damage taken                               |                                                       |
+    | Wizard              | Magic       | Fire Strike            | Weapons 5% faster                                 |                                                       |
+    | Ranger              | Ranged      | Bronze throwing knives | Moves 10% faster                                  |                                                       |
+    | Monk                | Magic       | Saradomin Strike       | Weapons 15% faster                                | Killing Count Draynor in Lumbridge                    |
+    | Barbarian           | Melee       | Bronze 2h sword        | 20% more hitpoints                                | Beating Lumbridge                                     |
+    | Ancient mage        | Magic       | Ice Burst              | Weapons cover 15% more area                       | Killing Ahrim in Barrows                              |
+    | Hunter              | Ranged      | Shortbow               | 50% more pickup range                             | Beating Barrows                                       |
+    | Rogue               | Ranged      | Bronze throwing knives | 25% more coins, luckier                           | Surviving 10 minutes in the Wilderness                |
+    | Dragon slayer       | Melee       | Bronze scimitar        | Hits 15% harder                                   | Beating the Wilderness                                |
+    | Nomad               | Ranged      | Bronze thrownaxes      | Moves 5% faster, hits 10% harder                  | Beating the Desert                                    |
+    | Menaphite           | Magic       | Smoke Burst            | 15% more experience                               | Killing Damis in the Desert                           |
+    | Seer                | Magic       | Elemental runes        | Effects last 25% longer                           | Beating the Fremennik Province                        |
+    | Berserker           | Melee       | Bronze 2h sword        | Armour, and hurts what hits it                    | Killing Dagannoth Rex in the Fremennik Province       |
+    | Obby mauler         | Melee       | Tzhaar-ket-om          | Hits 10% harder, 10% more hitpoints               | Beating Karamja                                       |
+    | Pirate              | Ranged      | Bronze throwing knives | A reroll, luckier                                 | Surviving 13 minutes on Karamja                       |
+    | Pyromancer          | Magic       | Fire Strike            | Gets back up once                                 | Beating Kourend                                       |
+    | Shayzien soldier    | Melee       | Bronze scimitar        | Armour, and heals over time                       | Killing Sarachnis in Kourend                          |
+    | Gladiator           | Melee       | Dual macuahuitl        | Weapons 10% faster, 5% harder                     | Beating Varlamore                                     |
+    | Javelineer          | Ranged      | Eclipse atlatl         | Faster projectiles, 10% more area                 | Killing the Javelin Colossus in Varlamore             |
+    | Vampyre hunter      | Melee       | Ivandis flail          | Hits bosses 25% harder                            | Beating Morytania                                     |
+    | Werewolf            | Melee       | Dragon claws           | Heals off its hits, moves 5% faster               | Killing the Pestilent Bloat in Morytania              |
+    | Godsword knight     | Melee       | Godsword               | 1 less damage taken, 5% slower                    | Beating the God Wars Dungeon                          |
+    | Armadyl ranger      | Ranged      | Armadyl crossbow       | Ranged 10% harder, faster shots                   | Killing Kree'arra in the God Wars Dungeon             |
+    | Elf archer          | Ranged      | Crystal bow            | Moves 10% faster, ranged 5% harder                | Beating Prifddinas                                    |
+    | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                    | Surviving 10 minutes in Prifddinas                    |
+    | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                   |
+    | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                     |
+    | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                              |
+    | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange            |
+    | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock               |
+    | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                             |
+    | LMS sweat           | Magic       | Ice Burst              | Weapons 10% faster, 10% more area                 | Killing the AGS specer in Last Man Standing           |
+    | Castle Wars veteran | Melee       | Bronze 2h sword        | Bandages heal, 10% more hitpoints                 | Killing the Flag carrier in Castle Wars               |
+    | Void knight         | Melee       | Bronze scimitar        | Hits 10% harder                                   | Destroying the purple portal in Pest Control          |
+    | Inquisitor          | Ranged      | Armadyl crossbow       | 20% faster, 20% more hitpoints                    | Phosani's Nightmare only (everyone plays them there)  |
+    | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there)  |
+    | Avian Assaulter     | Melee       | Rubber chicken         | Hits birds 15% harder, 45% faster, 180% more HP   | Thanksgiving Harvest only (everyone plays them there) |
 
 - **Traits**: Act II's adventurers have a trait, a way to play, rather than a bonus. The
   **Forester**'s is **Timber!**: every 25 kills his next swing fells a Strangled Tree along the
@@ -141,8 +142,20 @@ version and how to run it.
       undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
       sides; and
       the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
-      everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
-      you, further out than any other melee weapon.
+      everything around you; **Dinh's bulwark**, a slow bash that hits everything around
+      you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
+      hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
+      Amascut's chest brings in a keris of its own. They're picked as the Ancient spells are:
+      only the plain keris is offered on a level up, and at its level 2 you pick which it
+      becomes, the plain one or a jewel's you've found, keeping its level (with no jewel found
+      there's no pick). A jewel found before the Kalphite Queen's kill still brings the plain
+      keris in, to take it. **Of breaching** now and then finds a gap in
+      the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
+      every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
+      **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
+      hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
+      amascut** has all of it but Tumeken's Light. You carry one keris at most, so they can't
+      be stacked.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
@@ -152,7 +165,9 @@ version and how to run it.
       arrows that fly on through what they hit. The **Toxic blowpipe** fires darts that leave
       venom in what they hit, hurting it every second; it goes for enemies without venom first
       (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
-      upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
+      upgrades its darts: bronze, steel, mithril, rune, then dragon. One attack in 40 is its
+      special, Toxic Siphon: darts that hit 50% harder and heal you for half what they deal, up
+      to 3 hitpoints each. From the new maps:
       the **Dragon hunter crossbow**, dragon bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
       crossbow**'s bolts upgrade from bronze to steel, mithril, runite, then dragon. They go
@@ -179,7 +194,7 @@ version and how to run it.
 
     | Map            | For beating it                                   | For its bosses                                                                                       |
     | -------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst)                                               |
+    | Desert         | Osmumten's fang                                  | The Ancient spell pick (Smoke, Shadow and Blood Burst), Keris partisan (Kalphite Queen)              |
     | Fremennik      | Dragon hunter crossbow                           | Vengeance and Astral runes (Dagannoth Prime)                                                         |
     | Karamja        | Tzhaar-ket-om                                    | Dragonfire shield (Elvarg), Obsidian armour and Toktz-xil-ul (Ket-Zek)                               |
     | Kourend        | Kodai wand, Dinh's bulwark                       | Dragon warhammer (Lizardman shaman), Book of the dead and Undead Grasp (Skotizo)                     |
@@ -304,8 +319,8 @@ version and how to run it.
   stand. The only answer is the gaze cast at him as he calls it, which breaks it in the sky and
   leaves him open. He never starts one while your gaze is too far from ready. Killing him wins
   the run, and dying to him ends it.
-- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah), on the map
-  screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
+- **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
+  Sands), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
   final boss does: it counts as a win on the map, with its quest and its hard mode. It's never
   endless.
@@ -363,10 +378,24 @@ version and how to run it.
     - **Drill Demon**: "Run laps, maggots!" For 9 seconds everything within 12 tiles runs round you
       in a big circle, faster than usual, and can't attack, though shots already on their way still
       land. Bosses, what can't move and flag carriers carry on.
+    - **Polymorph**: for 10 seconds everything on the map turns into a sheep (shorn, red, green,
+      blue or yellow) that wanders about slowly, stopping now and then to graze, and can't hurt
+      you. Sheep say "Baa!" now and then, and die as sheep if they're killed. Elites and bosses
+      turn into golden sheep (a boss a giant one) that still come at you and attack as usual. One
+      in 1000 is the penguin dressed as a sheep from Cold War, which wanders with the rest but
+      says "Beh?", and when it's killed two KGP agents run out of it and off the screen. One in
+      3000 is an odd one that wanders off the other way. Whatever turns up while it lasts is a
+      sheep too, till the rest turn back, and picked up again it's the same flock for longer. A
+      frozen sheep stays put. What can't be hit stays as it is, and so do ordinary enemies that
+      can't move or carry a flag, and anything busy with its part in a fight (a boss's totem, a
+      rolling boulder, one walking off the map).
 - **Trick or treat**: on Hallowed Night, enemies drop a pumpkin every so often, with an orange beam.
   Walk over it: it's a treat (a slice of pie that heals, coins, or 15 seconds of a sugar rush) or a
   trick (four ghosts, or a curse that slows you for 6 seconds). Now and then there's a halloween
-  mask or a Scythe inside, for the Collection log. Those do nothing in a run.
+  mask (red, blue or green), a Jack lantern mask or a Skeleton mask (1 in 100 each), or a Black
+  h'ween mask or a Scythe (1 in 200 each) inside, for the Collection log. Those do nothing in a
+  run, but a mask found is yours to wear in the Wardrobe, and finding one is the only way to get
+  it.
 - **Pets**: a pet found as a drop (the Little Nightmare from The Nightmare, Lil' Zik from
   Verzik with its looks from expert clears, and the Dark squirrel from Justiciar Zachariah) can be
   taken along, picked under the adventurers. It
@@ -441,6 +470,20 @@ version and how to run it.
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
+    - **Thanksgiving Harvest** (seasonal, open from the start): the Hosidius Vinery and the
+      countryside round it, starting on the path beside the Vinery. Farm animals, farmers,
+      bandits, foxes, imps and Chompy birds overrun the vines, and Professor Oddenstein, the Evil
+      Chicken and the Freaky Forester come for the harvest. Everyone plays the Avian Assaulter
+      there, solo or in co-op, and nowhere else. Their Rubber chicken strikes in front and behind,
+      has ten levels, does 20% more damage to bosses and heals on hit (25% for 3 HP, growing with
+      every upgrade, more with rarer ones). They find no other weapons, gear, passives or utility
+      items: only power-ups and shop skills. Once the chicken's maxed, level ups offer only a
+      shark, never coins, in every mode. Birds circle their head all run, as a look, without
+      stunning them. Enemies now and then drop a Cooked turkey, a feast or a fowl trick. Its quests
+      are Professor Oddenstein, the Evil Chickens, the Freaky Forester and the Chompy Slayer, whose
+      10,000 kills bring the Chompy chick; the Collection log also has Chompy bird drops, the
+      turkey's Magic secateurs and victory rewards, a Golden egg for a hard-mode win among them.
+      The Turkey hat and Golden egg are the cache's Pheasant hat and Golden pheasant egg.
     - **Phosani's Nightmare** (a boss fight, open once Hallowed Night's beaten): nothing but her.
       The run's one fight in her dream, as the real one is: a square of her dark floor walled round
       in the Sanctuary's stone, a gate north and south closed by its barrier, inside the Sisterhood Sanctuary's
@@ -485,7 +528,9 @@ version and how to run it.
   cut out of the cache. Killing it gives raid points (for clearing it, killing the boss fast and
   taking little damage), coins for them, and a supply chest between rooms that sells food and
   potions for points. The last boss's chest rolls for a purple, more likely the more points you
-  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. The Ghrazi rapier
+  earned: the Theatre's uniques for the Collection log, and Lil' Zik now and then. A second of one
+  would do nothing, so no raid's chest gives one you've found already: a purple is one you haven't
+  got, and once you have all of a roll's there's nothing left for it to give. The Ghrazi rapier
   from the chest unlocks it as a weapon, and on hard or expert the chest has a roll of its own that
   can hold the Holy Scythe of Vitur (uncharged), which unlocks the Holy Scythe. The bosses pray
   against missiles and magic, so melee hits hardest (their overhead prayer shows it, Nylocas
@@ -516,7 +561,39 @@ version and how to run it.
       colour), the Maiden's Nylocas feed her more, Xarpus stares one way, and a moment before he
       turns faces where he'll stare and says which side, and hurts whoever hits him from in front,
       and Verzik's spider throws a ball that kills anyone outside its glowing circle. Twice the
-      coins, and one of Lil' Zik's looks each clear.
+      coins, and one of Lil' Zik's looks each clear (one you haven't got, till you have all five).
+- **Beneath Cursed Sands**, the Tombs of Amascut's quest: a boss fight in four parts, open once the
+  desert's beaten, played alone as the Sands Delver (desert robes and a Crystal bow). Coenus the
+  Head Menaphite Guard, the two Scarab Mages, the Champion of Scabaras and the Menaphite Akh, each
+  a run of its own in a tomb beneath the sands. A part won is kept, so the next run starts at the
+  next part; beating the Akh beats the map and opens the Tombs of Amascut.
+- **The Tombs of Amascut**, on the Raids tab once its quest is done. Start in the Nexus and take
+  the four paths in any order, each a puzzle room and then its boss: Apmeken (fix what the
+  baboons break among their waves) and Ba-Ba; Het (turn mirrors to carry the beam to the seal) and
+  Akkha; Scabaras (sequence, lights, addition and matching boards, listed on the HUD with which
+  are open) and Kephri; Crondis (carry water
+  to the palm past spears, poison and crocodiles) and Zebak. Then the Wardens, three phases, the
+  last on a floor that rises and falls. The Helpful Spirit in the Nexus gives a free bundle of
+  supplies after the second path and the fourth.
+    - **Invocations** take hard mode's place: each makes the raid harder and adds to its raid
+      level, which scales every enemy and boss and the chest's odds. Entry is for an account
+      that's bought little, Normal (150) wants the shop and better gear, Expert (300) more, and
+      past that the bosses climb quicker and quicker. In co-op the host's invocations count.
+      Up to five setups save as presets on the board, named or by their raid level, each loaded
+      in one go. Saving under a name that's there saves over it, so one left blank replaces the
+      last saved at its level.
+    - **Guards and Amascut's bane**: every boss's guard drops when one of its big attacks misses
+      everyone, and the raid's button, Amascut's bane, hits a share of the boss's hitpoints, twice
+      as much while its guard's down.
+    - **The chest** after the Wardens rolls for a purple, more likely the higher the raid level and
+      the more points you earned: Osmumten's fang and the Lightbearer from raid level 50, the rest from
+      raid level 150, and Tumeken's guardian (a pet) now and then. They're Collection log trophies.
+      The Thread of Elidinis and the jewels are rolls of their own, and each brings something in:
+      the Thread the **Divine rune pouch**, a rare passive that gives one more weapon slot, for a
+      magic weapon, and offers magic weapons whatever your style; each jewel its keris partisan.
+      Like the Theatre's, it never gives anything you've found already.
+      The end-of-raid board shows the raid level, each path's time, and every player's points,
+      deaths and purple chance.
 - **Bosses** turn up during a run, each fighting the way it does in OSRS, and always drop an
   elite casket (now and then a master one). Big hits are wound up first, with a red circle
   showing where they'll land, and projectiles fly where you stood, so keep moving.
@@ -758,6 +835,27 @@ version and how to run it.
   rarity of what it becomes, and an upgrade into a piece still locked behind a map task waits
   for it. Each piece has its own upgrades: upgrading the Amulet of strength leaves the Amulet of
   power as it was.
+  Its Weapons and Passives tabs also show their effects, levels and unlock tasks for planning a
+  build. Weapons are grouped by combat style; shared weapons and all passives can be offered to
+  any style. Evolution results remain hidden until made, as in the Collection log.
+- The **Wardrobe** (on the title screen) is how you look, on every adventurer. Appearance picks a
+  body (type A or B), its hair, jaw and the rest of the body's styles, and the hair, top, legs,
+  boots and skin colours, on the body alone so you can see it, or Random picks the lot. Drag the
+  adventurer (or press the arrows) to turn them round. Outfit picks what's worn in each slot (head, cape, neck, body, shield,
+  legs, hands and feet): the adventurer's own piece, nothing, or a piece you have. Up to ten
+  outfits can be saved under a name and put on again in one go (they keep the pieces, not the
+  body). The Store has
+  every item OSRS can wear outside the weapon slot, one of each look, nearly three thousand of
+  them, from 200 coins for a Common piece to 25,000 for a Very rare one (partyhats, gilded), and
+  250,000 for each piece of 3rd Age. Pick one to try it on. Every unlocked adventurer's own pieces are yours for
+  nothing. Collection log finds that are worn aren't sold, and are yours once found: the
+  Halloween masks (the h'ween masks, the Jack lantern and the Skeleton mask, from Hallowed
+  Night's pumpkins), Justiciar armour and the Avernic defender (and Ghommal's, with its hilt)
+  from the Theatre of Blood, Masori armour and Elidinis' ward (and their fortified looks) from
+  the Tombs of Amascut, and Thanksgiving Harvest's Turkey hat and Chompy bird hat (every look of
+  it). They can be tried on in the Store till then. Gear found in a run goes on over the outfit unless it's kept on, and the
+  weapon is always the run's. Adventurers who are someone in particular (the Avian Assaulter's chicken,
+  Durial321) keep their own look. It's looks only, and in co-op everyone sees each other's.
 - **Co-op** (Multiplayer, on the title screen) is a run with up to three friends. Make a room, invite only
   (friends join with its eight-letter code or the invite link) or open to anyone browsing the
   rooms list, or join one. Everyone picks their own adventurer and brings their own skills,
@@ -848,3 +946,6 @@ version and how to run it.
   title screen's Settings stop it (it starts off stopped if your system asks for reduced motion).
 - **Power-up timers**: the circles over power-ups on the ground; Settings and the pause screen
   turn them off.
+- **Puzzle helper**: in the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA
+  plugin does in OSRS: on at Entry, and at any raid level once you've beaten the room. Settings and
+  the pause screen turn it off.

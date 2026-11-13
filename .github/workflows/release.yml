@@ -119,11 +119,16 @@ jobs:
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+                  VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
             - run: bun run slim-cache
+            # GAME_SITE_URL is the website the app keeps to (https://example.com/game/): without it,
+            # the app only takes these releases
             - run: bun run desktop:dist
               env:
                   VITE_COOP_URL: ${{ vars.COOP_URL }}
                   VITE_RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+                  VITE_CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
+                  GAME_SITE_URL: ${{ vars.GAME_SITE_URL }}
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
@@ -150,6 +155,9 @@ jobs:
         env:
             COOP_URL: ${{ vars.COOP_URL }}
             RUN_ANALYTICS_URL: ${{ vars.RUN_ANALYTICS_URL }}
+            CLOUD_SAVE_URL: ${{ vars.CLOUD_SAVE_URL }}
+            # The website the app keeps to, as the Windows app does: without it, only these releases
+            GAME_SITE_URL: ${{ vars.GAME_SITE_URL }}
             VERSION: ${{ needs.check.outputs.version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -191,7 +199,8 @@ jobs:
               working-directory: android
               run: >-
                   gradle --no-daemon test :app:assembleRelease -PcoopUrl="$COOP_URL"
-                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL"
+                  -PrunAnalyticsUrl="$RUN_ANALYTICS_URL" -PcloudSaveUrl="$CLOUD_SAVE_URL"
+                  -PgameSiteUrl="$GAME_SITE_URL"
 
             - name: Sign and verify the APK
               env:
@@ -201,8 +210,13 @@ jobs:
                   ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
               run: python3 scripts/android/sign-apk.py --version "$VERSION"
 
-            # How to install it and update it, for the release's notes: the app never updates itself
-            - run: sed "s/<version>/$VERSION/g" android/release-notes.md > release/android-notes.md
+            # How to install it and use in-app updates, for the release's notes. The website's part
+            # only when the app keeps to it.
+            - run: |
+                  website='/^<!-- website[: ].*-->$/,/^<!-- \/website -->$/d'
+                  if [ -n "$GAME_SITE_URL" ]; then website='/^<!-- \/*website[: ].*-->$/d'; fi
+                  sed -e "s/<version>/$VERSION/g" -e "$website" android/release-notes.md | cat -s \
+                      > release/android-notes.md
 
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:

@@ -1228,8 +1228,9 @@ layouts stay put.
 On the dev server the title screen has a **Map generator** button: every setting in sections, presets, Random, Reset,
 Randomize, copying and pasting the settings as JSON, Generate with a preview from above, and Play. Randomize rolls what shapes
 the map, and leaves the size, heightmap, start, waves, `dressing`, `flatness`, `sites` and `sideStreets` as they are. It's temporary, so it's
-built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `MapGeneratorButton` line in
-`ui/GameUi.tsx` and `setGeneratedMap` in `content/maps.ts`.
+built to delete: remove `MapGeneratorScreen.tsx`, its CSS and `generatedMap.ts`, then the `ui-title-dev` corner around
+`MapGeneratorButton` in `ui/GameUi.tsx`, that corner's rules in `ui/GameUi.css` and `ui/Mobile.css`, and `setGeneratedMap`
+in `content/maps.ts`.
 
 Every Generate replaces one map, `scaperune_generated`, at map squares from x 70, y 134. `installGeneratedMap` replaces
 whatever kept the old one. A load still on its way for the old squares is dropped (`MapViewer.customMapVersion`). If you add
@@ -2042,8 +2043,8 @@ Measured in Node on this VM, on a forest-bound meadow with default settings othe
   `2` with features at least a dozen tiles across, and `smoothField` it. Bumps under about 3 tiles can't draw.
 - **Squares must be free.** Nothing in the cache uses x 70-99, y 66-199, and the map manager stops at x 100,
   y 200. Each recipe needs its own, and nothing checks that: see `devMaps.ts` and each map's `mapX`, `mapY`. The
-  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74 and the Owl's Court at
-  x 82-84, y 76-78. The
+  shipped maps have Hallowed Night at x 72-76, y 72-76, the Sisterhood Sanctuary at x 78-80, y 72-74, the Owl's Court at
+  x 82-84, y 76-78 and the Tombs of Amascut (and Beneath Cursed Sands, the same squares) at x 86-93, y 66-69. The
   map generator's screen, and scripts given settings, have x 70-99 from y 134 on.
 - **A loc on a scene's outermost tile is skipped.** It doesn't matter inside a grid, but don't stand
   anything on the outer edge of one.

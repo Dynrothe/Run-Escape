@@ -1,7 +1,7 @@
 import { Camera } from "../../mapviewer/Camera";
 import { RS_TO_RADIANS } from "../../rs/MathConstants";
 
-const MIN_DISTANCE = 10;
+export const MIN_CAMERA_DISTANCE = 10;
 export const MAX_CAMERA_DISTANCE = 44;
 
 // How far along the ground the camera is from what it looks at, in tiles
@@ -17,12 +17,12 @@ export class CameraRig {
     fov = 45;
     // Tiles from the camera to the target
     distance = 22;
+    setDistance(distance: number): void {
+        this.distance = Math.min(Math.max(distance, MIN_CAMERA_DISTANCE), MAX_CAMERA_DISTANCE);
+    }
 
     zoom(steps: number): void {
-        this.distance = Math.min(
-            Math.max(this.distance * Math.pow(1.1, steps), MIN_DISTANCE),
-            MAX_CAMERA_DISTANCE,
-        );
+        this.setDistance(this.distance * Math.pow(1.1, steps));
     }
 
     // x/z in world tiles, y in world tiles with up negative.

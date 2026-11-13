@@ -463,6 +463,25 @@ describe("co-op relay", () => {
         expect((await guests[0].next("down")).d).toEqual({ n: 3 });
     });
 
+    it("un-readies a guest who changes their pick, and holds the start until they're ready", async () => {
+        const { host, guests } = await party(1);
+        guests[0].send({ t: "me", ready: true, characterId: "wizard" });
+        await host.roomWhere((r) => r.members[1].ready);
+        // The same pick again leaves them ready; another doesn't
+        guests[0].send({ t: "me", characterId: "wizard" });
+        guests[0].send({ t: "me", characterId: "ranger" });
+        // Sent before the host's heard: the relay has the change first
+        host.send({ t: "start", game: { seed: 5 } });
+        const refused = await host.next("error");
+        expect(refused.message).toMatch(/'s pick changed, so they need to ready up again\.$/);
+        const { room } = await host.roomWhere((r) => r.members[1].characterId === "ranger");
+        expect(room.members[1].ready).toBe(false);
+        guests[0].send({ t: "me", ready: true, characterId: "ranger" });
+        await host.roomWhere((r) => r.members[1].ready);
+        host.send({ t: "start", game: { seed: 6 } });
+        expect((await guests[0].next("start")).game).toEqual({ seed: 6 });
+    });
+
     it("ends the run for everyone if the host goes mid-run", async () => {
         const { host, guests } = await party(2);
         host.send({ t: "start", game: {} });

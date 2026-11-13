@@ -35,7 +35,8 @@ built on [rs-map-viewer](https://github.com/dennisdev/rs-map-viewer), the code b
   plus raid weapons from the Scythe of Vitur to Tumeken's shadow, and a Godsword whose hilt you
   pick.
 - **Gear from reward caskets**, worn on your character, with **set bonuses** (Void, Torva, Virtus,
-  Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs.
+  Inquisitor's, Crystal) and an **Armoury** to upgrade it for good between runs and browse weapon
+  and passive effects, levels and unlocks.
 - **Co-op** for up to four players: rooms by invite code or open to all, everyone with their own
   adventurer, shared levels, and the run going on while anyone's standing.
 - **Phosani's Nightmare**, a boss fight on its own once Hallowed Night's beaten: no waves, no
@@ -89,7 +90,8 @@ loads are quick.
 pick on a level up, where **R** rerolls and **X** skips for coins), **Esc** pauses, **Q** shows or
 hides the quest tracker, **Tab** (or clicking the DPS) shows each weapon's damage, **M** mutes and
 the mouse wheel zooms. In a boss fight with its own button (Justiciar Zachariah's Smite),
-**Space** uses it; on a controller it's A (cross), and on a touch screen the round button.
+**Space** uses it; on a controller it's A (cross), and on a touch screen the round button. In the
+menus, **Esc** goes back and **Enter** starts the run, or plays again from the results.
 
 Hover over bag items, weapons, passives, worn equipment or Armoury pieces (including their
 upgrades) to read their descriptions.
@@ -97,7 +99,9 @@ upgrades) to read their descriptions.
 On a phone or tablet, hold it sideways and drag anywhere to move. The buttons on screen pause and
 use your items: tap an item to use it, or hold it to read its description without using it.
 Hold weapons, passives and Armoury pieces to inspect them too, without selecting or buying them.
-On small screens, worn equipment and its descriptions are in the pause menu.
+On small screens, tap Zoom beside the timer to show the camera zoom slider. The pause menu lists
+worn equipment and its descriptions, and with the Gear panel setting on, GEAR below DPS shows or
+hides it on the HUD too.
 Everything else is a tap. To open it full screen from its own icon, pick Add to
 Home Screen or Install app in your browser's menu.
 
@@ -145,8 +149,10 @@ off. See [multiplayer metrics](docs/DEVELOPMENT.md#optional-multiplayer-metrics)
 
 There's a Windows version too: unzip `Run-Escape-<version>-win-x64.zip` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) anywhere and run `Run Escape.exe`. It
-plays offline, and updates the game by itself when it can. Saves are kept apart from a browser's,
-and Export and Import in Settings carry one across.
+plays offline, and updates the game by itself when it can, keeping to the website's version so it
+can play co-op with the website's players between releases.
+Saves are kept apart from a browser's, and
+Export and Import in Settings carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#desktop) covers building and releasing it.
 
 ## Android
@@ -154,10 +160,15 @@ and Export and Import in Settings carry one across.
 And an Android one, only here on GitHub: open `Run-Escape-<version>-android.apk` from a
 [release](https://github.com/Dynrothe/Run-Escape/releases) on your phone, and let your browser
 install apps when Android asks. The whole game's in it, so it plays offline, even the first time,
-and co-op works when there's a connection. It doesn't update itself: for a new version, install its
-APK over the old one (uninstalling first deletes your progress). It needs a current Android System
-WebView, and says so if the phone's is too old. Its saves are apart from a browser's too, and
-Export and Import carry one across.
+and co-op works when there's a connection. On opening, it checks GitHub for a newer release and
+offers to download its APK, then asks before installing it. Android asks you to allow installs from
+Run Escape, then confirm the update. If the check fails or you're offline, the current game keeps
+working. You can also install a new APK over the old one yourself (uninstalling first deletes your
+progress). Like the Windows app, it also keeps to the website's version of the game, so it can
+play co-op with the website's players between releases: on Wi-Fi, a newer one downloads in the
+background, and plays when you restart the game from its menu (Back) or reopen the app. It needs a
+current Android System WebView, and says so if the phone's is too old. Its saves are apart from a
+browser's too, and Export and Import carry one across, as cloud save does where it's set up.
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#android) covers building it and setting up its releases.
 
 ## Contributing

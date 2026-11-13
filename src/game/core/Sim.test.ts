@@ -1,4 +1,4 @@
-import { getBuffViews } from "../client/ItemViews";
+import { getBuffViews, getInventoryViews } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CHARACTERS } from "../content/characters";
 import {
@@ -58,6 +58,7 @@ function createSim(
     mapId = "lumbridge",
     metaStats = emptyStats(),
     endless = false,
+    hard = false,
 ): Sim {
     const grid = makeGrid(openField(), 1000, 1000);
     return new Sim({
@@ -69,6 +70,7 @@ function createSim(
         spawnX: 1036.5,
         spawnY: 1036.5,
         endless,
+        hard,
     });
 }
 
@@ -95,6 +97,212 @@ function runFor(sim: Sim, seconds: number, move: "circle" | "still" = "circle"):
 }
 
 describe("Sim", () => {
+    test("summoned Enraged Dark Chickens use their surge, and the bosses fire their volleys", () => {
+        expect(getEnemy("professor_oddenstein").boss!.attacks[0].count).toBe(3);
+        const peck = getEnemy("evil_chicken").boss!.attacks[0];
+        expect(peck.count).toBe(5);
+        expect(peck.spread! * (peck.count! - 1)).toBeLessThan(0.6);
+        for (const id of ["freaky_forester", "freaky_forester_final"]) {
+            expect(getEnemy(id).boss!.attacks.find((a) => a.name === "Boot Kick")!.cone).toBe(1.2);
+        }
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        const chicken = sim.spawnEnemy(getEnemy("enraged_chicken"), "normal", {
+            x: sim.player.x + 5,
+            y: sim.player.y,
+        })!;
+        expect(chicken.boss).toBe(false);
+        expect(chicken.bossState).toBeDefined();
+        let surged = false;
+        for (let i = 0; i < 20 * 30 && !surged; i++) {
+            sim.step(0, 0);
+            sim.takeEvents();
+            surged =
+                chicken.bossState?.windup?.attack.kind === "surge" || !!chicken.bossState?.surge;
+        }
+        expect(surged).toBe(true);
+    });
+
+    test("Avian Assaulter starts with a melee Rubber chicken and can damage an enemy", () => {
+        const sim = createSim("avian_assaulter");
+        expect(sim.weapons[0].def).toMatchObject({
+            id: "rubber_chicken",
+            kind: "slash",
+            style: "melee",
+            iconObjId: 4566,
+            sound: 2257,
+            pickOnly: true,
+        });
+        const enemy = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+            x: sim.player.x + 1,
+            y: sim.player.y,
+        })!;
+        runFor(sim, 2, "still");
+        expect(enemy.hp).toBeLessThan(enemy.maxHp);
+    });
+
+    test("Avian's chicken and bonuses follow the requested progression", () => {
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        expect(sim.stats).toMatchObject({
+            growth: 0.15,
+            magnet: 0.5,
+            cooldown: 0.35,
+            moveSpeed: 0.45,
+        });
+        expect(sim.player.maxHp).toBe(70);
+        expect(
+            sim.weapons[0].def.levels.map(({ damage, area, cooldown }) => ({
+                damage,
+                area,
+                cooldown,
+            })),
+        ).toEqual([
+            { damage: 25, area: 4, cooldown: 1 },
+            { damage: 30, area: 4, cooldown: 1 },
+            { damage: 30, area: 4.5, cooldown: 1 },
+            { damage: 30, area: 4.5, cooldown: 0.9 },
+            { damage: 36, area: 4.5, cooldown: 0.9 },
+            { damage: 42, area: 4.5, cooldown: 0.9 },
+            { damage: 42, area: 5, cooldown: 0.9 },
+            { damage: 42, area: 5, cooldown: 0.8 },
+            { damage: 50, area: 5, cooldown: 0.8 },
+            { damage: 60, area: 5, cooldown: 0.8 },
+        ]);
+        expect(sim.weapons[0].def.levels[0].knockback).toBe(2.5);
+        sim.metaStats.weaponSlots = 5;
+        expect(sim.maxWeapons).toBe(1);
+        sim.addWeapon("scimitar");
+        expect(sim.weapons.map((weapon) => weapon.def.id)).toEqual(["rubber_chicken"]);
+        const choices = Array.from({ length: 100 }, () => sim["roll"]()).flat();
+        expect(
+            choices.some((choice) => choice.kind === "newWeapon" || choice.kind === "evolve"),
+        ).toBe(false);
+        expect(
+            choices.some(
+                (choice) => choice.kind === "weaponLevel" && choice.weaponId === "rubber_chicken",
+            ),
+        ).toBe(true);
+        expect(
+            choices.some(
+                (choice) => choice.kind === "newPassive" || choice.kind === "passiveLevel",
+            ),
+        ).toBe(false);
+    });
+
+    test("the Rubber chicken heals more with each upgrade, by rarity", () => {
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        const heals = (quality: "common" | "veryRare") => {
+            sim["apply"]({
+                kind: "weaponLevel",
+                weaponId: "rubber_chicken",
+                level: sim.weapons[0].level + 1,
+                quality,
+            } as never);
+            return sim.weapons[0].healGain;
+        };
+        expect(heals("common")).toEqual({ chance: 0.02, hp: 0.25 });
+        const gain = heals("veryRare")!;
+        expect(gain.chance).toBeCloseTo(0.09);
+        expect(gain.hp).toBeCloseTo(1.25);
+    });
+
+    test("the Rubber chicken hits bosses for 20% more, and other weapons don't", () => {
+        const chicken = armed("rubber_chicken", "avian_assaulter");
+        chicken.enemies = [];
+        const boss = dummy(chicken, 2, 0, "boss");
+        boss.frozen = 1e6;
+        const plain = dummy(chicken, 2.1, 0);
+        plain.frozen = 1e6;
+        expect(chicken.weapons[0].def.bossDamage).toBe(0.2);
+        expect(getWeapon("scimitar").bossDamage).toBeUndefined();
+    });
+
+    test("a maxed Rubber chicken's level ups offer the shark but no coins, in every mode", () => {
+        // Every player's offers, each with their chicken at its last level
+        const maxed = (sim: Sim) =>
+            sim.heroes.flatMap((hero) => {
+                sim["useHeroAt"](hero.index);
+                hero.weapons[0].level = hero.weapons[0].def.levels.length;
+                return Array.from({ length: 20 }, () => sim["roll"]()).flat();
+            });
+        const party = new Sim({
+            grid: makeGrid(openField(), 1000, 1000),
+            mapId: "thanksgiving",
+            characterId: "avian_assaulter",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party: [0, 1].map((i) => ({
+                name: "player " + i,
+                characterId: "avian_assaulter",
+                metaStats: emptyStats(),
+            })),
+        });
+        const runs = {
+            normal: createSim("avian_assaulter", 1, "thanksgiving"),
+            hard: createSim("avian_assaulter", 1, "thanksgiving", emptyStats(), false, true),
+            party,
+        };
+        for (const [mode, sim] of Object.entries(runs)) {
+            const kinds = new Set(maxed(sim).map((choice) => choice.kind));
+            expect([mode, [...kinds]]).toEqual([mode, ["food"]]);
+        }
+        // Endless levels the chicken on past its last level instead
+        const endless = createSim("avian_assaulter", 1, "thanksgiving", emptyStats(), true);
+        const kinds = new Set(maxed(endless).map((choice) => choice.kind));
+        expect([...kinds]).toEqual(["weaponLevel"]);
+        // Other maps keep the coins
+        const lumbridge = createSim("avian_assaulter", 1, "lumbridge");
+        expect(maxed(lumbridge)).toContainEqual({ kind: "coins", amount: 25 });
+    });
+
+    test("Avian gets coins but no item from a casket", () => {
+        const sim = createSim("avian_assaulter", 1, "thanksgiving");
+        expect(sim.maxPassives).toBe(0);
+        sim.openCasket("medium");
+        expect(sim.chests).toHaveLength(0);
+    });
+
+    test("bird damage belongs to the attacking hero, not environmental damage", () => {
+        const grid = makeGrid(openField(), 1000, 1000);
+        const sim = new Sim({
+            grid,
+            mapId: "thanksgiving",
+            characterId: "avian_assaulter",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            party: ["avian_assaulter", "warrior"].map((characterId) => ({
+                name: characterId,
+                characterId,
+                metaStats: emptyStats(),
+            })),
+        });
+        vi.spyOn(sim.rng, "range").mockReturnValue(1);
+        const bird = sim.spawnEnemy(getEnemy("chompy_bird"), "normal", {
+            x: sim.player.x + 2,
+            y: sim.player.y,
+        })!;
+        const human = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+            x: sim.player.x - 2,
+            y: sim.player.y,
+        })!;
+        bird.hp = human.hp = 10000;
+        sim["damageSource"] = "item:test";
+        sim["useHeroAt"](0);
+        expect(sim.damageEnemy(bird, 100, 0, bird.x, bird.y)).toBe(115);
+        expect(sim.damageEnemy(human, 100, 0, human.x, human.y)).toBe(100);
+        sim["useHeroAt"](1);
+        expect(sim.damageEnemy(bird, 100, 0, bird.x, bird.y)).toBe(100);
+        sim["useHeroAt"](0);
+        sim["damageSource"] = "other";
+        expect(sim.damageEnemy(bird, 100, 0, bird.x, bird.y)).toBe(100);
+        for (const id of ["chicken", "chompy_bird", "evil_chicken", "enraged_chicken"]) {
+            expect(getEnemy(id).tags).toContain("bird");
+        }
+    });
+
     test("a minute of play spawns, fights and levels", () => {
         // Standing still: enemies come to the player and their bones land close by
         const sim = createSim("wizard");
@@ -372,6 +580,26 @@ describe("melee", () => {
         goblin.frozen = 1e6;
         expect(hitsOn(attack(sim), goblin)).toHaveLength(2);
     });
+
+    test.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
+        "the Rubber chicken hits both sides at level %i",
+        (level) => {
+            const sim = armed("rubber_chicken", "avian_assaulter");
+            sim.enemies = [];
+            sim.weapons[0].level = level;
+            const front = dummy(sim, 2, 0);
+            const behind = dummy(sim, -3, 0);
+            const outside = dummy(sim, -9, 0);
+            for (const enemy of [front, behind, outside]) {
+                enemy.frozen = 1e6;
+            }
+            const events = attack(sim);
+            expect(events.filter((event) => event.type === "slash")).toHaveLength(2);
+            expect(hitsOn(events, front)).toHaveLength(1);
+            expect(hitsOn(events, behind)).toHaveLength(1);
+            expect(hitsOn(events, outside)).toHaveLength(0);
+        },
+    );
 
     test("a slash swings at a big enemy as soon as its edge is in reach", () => {
         const sim = armed("scimitar");
@@ -1087,6 +1315,401 @@ describe("power-ups", () => {
         });
     });
 
+    describe("Polymorph", () => {
+        const polymorph = () => getPowerUp("polymorph");
+
+        // The power-up with one of its rare animals always turning up
+        const always = (kind: "penguin" | "rare") => {
+            const def = polymorph();
+            if (def.effect.kind !== "polymorph") {
+                throw new Error("not a polymorph");
+            }
+            const effect = def.effect;
+            return {
+                ...def,
+                effect: {
+                    ...effect,
+                    penguin: { ...effect.penguin, chance: kind === "penguin" ? 1 : 0 },
+                    rare: { ...effect.rare, chance: kind === "rare" ? 1 : 0 },
+                },
+            };
+        };
+
+        test("the crowd turns into harmless sheep that wander about", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const enemies = [0, 1, 2, 3].map((i) =>
+                goblin(sim, player.x + (i % 2 ? 1 : -1), player.y + (i < 2 ? 1 : -1)),
+            );
+            const start = enemies.map((e) => ({ x: e.x, y: e.y }));
+            sim.usePowerUp(polymorph());
+            expect(enemies.map((e) => e.polymorph?.look)).toEqual([
+                "sheep",
+                "sheep",
+                "sheep",
+                "sheep",
+            ]);
+            expect(sim.powerUps.map((p) => p.id)).toEqual(["polymorph"]);
+            const hp = player.hp;
+            runFor(sim, 9, "still");
+            expect(player.hp).toBe(hp);
+            expect(enemies.every((e) => e.polymorph)).toBe(true);
+            expect(enemies.some((e, i) => Math.hypot(e.x - start[i].x, e.y - start[i].y) > 1)).toBe(
+                true,
+            );
+        });
+
+        test("now and then a sheep says Baa!, with a bleat", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            for (let i = 0; i < 20; i++) {
+                goblin(sim, sim.player.x + 5 + (i % 5), sim.player.y + Math.floor(i / 5));
+            }
+            sim.usePowerUp(polymorph());
+            sim.takeEvents();
+            const shouts = [];
+            for (let i = 0; i < 9 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                shouts.push(...sim.takeEvents().filter((e) => e.type === "enemyShout"));
+            }
+            expect(shouts.length).toBeGreaterThan(5);
+            for (const shout of shouts) {
+                expect(shout).toMatchObject({ text: "Baa!" });
+                expect([3263, 3264]).toContain(shout.sound);
+            }
+        });
+
+        test("the sheep come in several kinds", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            for (let i = 0; i < 40; i++) {
+                goblin(sim, sim.player.x + 5 + (i % 8), sim.player.y + Math.floor(i / 8));
+            }
+            sim.usePowerUp(polymorph());
+            const variants = new Set(sim.enemies.map((e) => e.polymorph?.variant));
+            expect(variants.size).toBeGreaterThan(3);
+        });
+
+        test("the rare one wanders off away from the player", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const odd = goblin(sim, sim.player.x + 3, sim.player.y);
+            sim.usePowerUp(always("rare"));
+            expect(odd.polymorph?.look).toBe("rare");
+            runFor(sim, 3, "still");
+            expect(Math.hypot(odd.x - sim.player.x, odd.y - sim.player.y)).toBeGreaterThan(4);
+        });
+
+        test("the penguin wanders like a sheep, but says Beh?", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const spies = [0, 1, 2, 3, 4].map((i) =>
+                goblin(sim, sim.player.x + 3 + i, sim.player.y),
+            );
+            const start = spies.map((e) => ({ x: e.x, y: e.y }));
+            sim.usePowerUp(always("penguin"));
+            sim.takeEvents();
+            expect(spies.every((e) => e.polymorph?.look === "penguin")).toBe(true);
+            const shouts = [];
+            for (let i = 0; i < 9 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                shouts.push(...sim.takeEvents().filter((e) => e.type === "enemyShout"));
+            }
+            expect(spies.some((e, i) => Math.hypot(e.x - start[i].x, e.y - start[i].y) > 1)).toBe(
+                true,
+            );
+            expect(shouts.length).toBeGreaterThan(0);
+            for (const shout of shouts) {
+                expect(shout).toMatchObject({ text: "Beh?", sound: 1855 });
+            }
+        });
+
+        test("killing the penguin lets its agents out", () => {
+            const sim = createSim();
+            const spy = goblin(sim, sim.player.x + 1, sim.player.y, 1);
+            sim.usePowerUp(always("penguin"));
+            sim.takeEvents();
+            let escape;
+            for (let i = 0; i < 6 * TICKS_PER_SECOND && !escape; i++) {
+                sim.step(0, 0);
+                escape = sim.takeEvents().find((e) => e.type === "polymorphEscape");
+            }
+            expect(spy.dead).toBe(true);
+            expect(escape).toMatchObject({ powerUpId: "polymorph", x: spy.x, y: spy.y });
+        });
+
+        test("a sheep killed lets nothing out", () => {
+            const sim = createSim();
+            goblin(sim, sim.player.x + 1, sim.player.y, 1);
+            sim.usePowerUp(polymorph());
+            sim.takeEvents();
+            const events = [];
+            for (let i = 0; i < 6 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                events.push(...sim.takeEvents());
+            }
+            expect(events.some((e) => e.type === "kill")).toBe(true);
+            expect(events.some((e) => e.type === "polymorphEscape")).toBe(false);
+        });
+
+        // The power-up with its rare animals' chances set
+        const withChances = (penguin: number, rare: number) => {
+            const def = polymorph();
+            if (def.effect.kind !== "polymorph") {
+                throw new Error("not a polymorph");
+            }
+            const effect = def.effect;
+            return {
+                ...def,
+                effect: {
+                    ...effect,
+                    penguin: { ...effect.penguin, chance: penguin },
+                    rare: { ...effect.rare, chance: rare },
+                },
+            };
+        };
+
+        // A flock of goblins on 40 spots round the player, a few to a spot
+        const flock = (sim: Sim, count: number) => {
+            const enemies: Enemy[] = [];
+            for (let i = 0; i < count; i++) {
+                const spot = i % 40;
+                enemies.push(
+                    goblin(
+                        sim,
+                        sim.player.x + 4 + (spot % 8),
+                        sim.player.y - 2 + Math.floor(spot / 8),
+                    ),
+                );
+            }
+            return enemies;
+        };
+
+        test("the rare animals turn up about as often as their chances say", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const enemies = flock(sim, 600);
+            sim.usePowerUp(withChances(0.2, 0.1));
+            const share = (look: string) =>
+                enemies.filter((e) => e.polymorph?.look === look).length / enemies.length;
+            expect(share("rare")).toBeGreaterThan(0.05);
+            expect(share("rare")).toBeLessThan(0.15);
+            expect(share("penguin")).toBeGreaterThan(0.14);
+            expect(share("penguin")).toBeLessThan(0.26);
+        });
+
+        test("whether a sheep grazes first has nothing to do with its kind", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const enemies = flock(sim, 1200);
+            sim.usePowerUp(withChances(0, 0));
+            sim.step(0, 0);
+            const kinds = new Map<number, { all: number; grazing: number }>();
+            for (const enemy of enemies) {
+                const polymorph = enemy.polymorph!;
+                const kind = kinds.get(polymorph.variant) ?? { all: 0, grazing: 0 };
+                kind.all++;
+                if (polymorph.dirX === 0 && polymorph.dirY === 0) {
+                    kind.grazing++;
+                }
+                kinds.set(polymorph.variant, kind);
+            }
+            expect(kinds.size).toBeGreaterThan(3);
+            for (const { all, grazing } of kinds.values()) {
+                expect(all).toBeGreaterThan(80);
+                expect(grazing / all).toBeGreaterThan(0.08);
+                expect(grazing / all).toBeLessThan(0.45);
+            }
+        });
+
+        test("a big flock says no more than a line every so often", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            flock(sim, 300);
+            sim.usePowerUp(polymorph());
+            sim.takeEvents();
+            let shouts = 0;
+            for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                shouts += sim.takeEvents().filter((e) => e.type === "enemyShout").length;
+            }
+            expect(shouts).toBeGreaterThan(10);
+            expect(shouts).toBeLessThanOrEqual(26);
+        });
+
+        test("a frozen sheep stays put", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const enemies = flock(sim, 8);
+            sim.usePowerUp(polymorph());
+            sim.usePowerUp(getPowerUp("stopwatch"));
+            const start = enemies.map((e) => ({ x: e.x, y: e.y }));
+            runFor(sim, 4, "still");
+            for (const [i, enemy] of enemies.entries()) {
+                expect(enemy.polymorph?.look).toBe("sheep");
+                expect(Math.hypot(enemy.x - start[i].x, enemy.y - start[i].y)).toBeLessThan(0.05);
+            }
+        });
+
+        test("picked up again, it's the same flock for longer", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const enemies = flock(sim, 20);
+            sim.usePowerUp(polymorph());
+            const looks = enemies.map((e) => `${e.polymorph?.look}:${e.polymorph?.variant}`);
+            const firstEnd = enemies[0].polymorph!.endTick;
+            runFor(sim, 5, "still");
+            sim.takeEvents();
+            sim.usePowerUp(polymorph());
+            expect(enemies.map((e) => `${e.polymorph?.look}:${e.polymorph?.variant}`)).toEqual(
+                looks,
+            );
+            expect(enemies[0].polymorph!.endTick).toBeGreaterThan(firstEnd);
+            expect(sim.powerUps.filter((p) => p.id === "polymorph")).toHaveLength(1);
+            const events = [];
+            for (let i = 0; i < 7 * TICKS_PER_SECOND; i++) {
+                sim.step(0, 0);
+                events.push(...sim.takeEvents());
+            }
+            expect(events.some((e) => e.type === "powerUpEnded")).toBe(false);
+            expect(enemies.every((e) => e.polymorph)).toBe(true);
+        });
+
+        test("what can't be hit, can't move or carries a flag stays as it is", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const base = getEnemy("goblin");
+            const kinds = [
+                { ...base, stationary: true },
+                { ...base, unhittable: true },
+                { ...base, flees: { range: 4 } },
+            ];
+            const enemies = kinds.map(
+                (def, i) =>
+                    sim.spawnEnemy(def, "normal", {
+                        x: sim.player.x + 4,
+                        y: sim.player.y - 2 + i * 2,
+                    })!,
+            );
+            const sheep = goblin(sim, sim.player.x - 4, sim.player.y);
+            sim.usePowerUp(polymorph());
+            expect(enemies.map((e) => e.polymorph)).toEqual([undefined, undefined, undefined]);
+            expect(sheep.polymorph?.look).toBe("sheep");
+        });
+
+        test("one given its part in a fight is itself again, and stays so", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            sim.usePowerUp(polymorph());
+            const walker = goblin(sim, sim.player.x + 4, sim.player.y);
+            expect(sim.polymorphOf(walker)).toBeDefined();
+            walker.walksTo = goblin(sim, sim.player.x + 8, sim.player.y);
+            expect(sim.polymorphOf(walker)).toBeUndefined();
+            walker.walksTo = undefined;
+            walker.leaving = {
+                vx: 0,
+                vy: 0,
+                startTick: sim.tick,
+                endTick: sim.tick + 60 * TICKS_PER_SECOND,
+            };
+            expect(sim.polymorphOf(walker)).toBeUndefined();
+            runFor(sim, 11, "still");
+            expect(walker.polymorph).toBeUndefined();
+        });
+
+        test("a sheep that would have blown up dies quietly", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const def = { ...getEnemy("goblin"), explodes: { damage: 50, radius: 3 } };
+            const sheep = sim.spawnEnemy(def, "normal", { x: player.x + 1, y: player.y })!;
+            sim.usePowerUp(polymorph());
+            sim.takeEvents();
+            const hp = player.hp;
+            sim.damageEnemy(sheep, 1e9, 0, 0, 0);
+            expect(sheep.dead).toBe(true);
+            expect(sim.takeEvents().some((e) => e.type === "blast")).toBe(false);
+            expect(player.hp).toBe(hp);
+        });
+
+        test("what turns up meanwhile is a sheep too, till the rest turn back", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const early = goblin(sim, sim.player.x + 2, sim.player.y);
+            sim.usePowerUp(polymorph());
+            runFor(sim, 5, "still");
+            const late = goblin(sim, sim.player.x - 2, sim.player.y);
+            expect(late.polymorph).toBeDefined();
+            expect(late.polymorph!.endTick).toBe(early.polymorph!.endTick);
+            runFor(sim, 6, "still");
+            expect(early.polymorph).toBeUndefined();
+            expect(late.polymorph).toBeUndefined();
+            const after = goblin(sim, sim.player.x + 4, sim.player.y);
+            expect(after.polymorph).toBeUndefined();
+        });
+
+        test("they can still be killed, and die as sheep", () => {
+            const sim = createSim();
+            const sheep = goblin(sim, sim.player.x + 1, sim.player.y, 1);
+            sim.usePowerUp(polymorph());
+            runFor(sim, 6, "still");
+            expect(sheep.dead).toBe(true);
+            expect(sheep.polymorph?.look).toBe("sheep");
+            runFor(sim, 6, "still");
+            expect(sheep.polymorph).toBeDefined();
+        });
+
+        test("elites become golden sheep that still come at the player and hit", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const elite = sim.spawnEnemy(getEnemy("goblin"), "elite", {
+                x: player.x + 4,
+                y: player.y,
+            })!;
+            sim.usePowerUp(polymorph());
+            expect(elite.polymorph?.look).toBe("golden");
+            const hp = player.hp;
+            runFor(sim, 9, "still");
+            expect(elite.polymorph).toBeDefined();
+            expect(player.hp < hp || sim.runOver).toBe(true);
+            runFor(sim, 2, "still");
+            expect(elite.polymorph).toBeUndefined();
+        });
+
+        test("bosses become golden sheep that go on with their attacks", () => {
+            const sim = createSim();
+            sim.weapons = [];
+            const { player } = sim;
+            const boss = sim.spawnEnemy(getEnemy("dharok"), "boss", {
+                x: player.x - 3,
+                y: player.y,
+            })!;
+            sim.usePowerUp(polymorph());
+            expect(boss.polymorph?.look).toBe("golden");
+            expect(sim.isStunned(boss)).toBe(false);
+            player.hp = player.maxHp = 1e6;
+            const hp = player.hp;
+            let attacked = false;
+            for (let i = 0; i < 9 * TICKS_PER_SECOND && !sim.runOver; i++) {
+                sim.step(0, 0);
+                attacked ||= sim.takeEvents().some((e) => e.type === "bossAttack");
+            }
+            expect(boss.polymorph).toBeDefined();
+            expect(attacked || player.hp < hp).toBe(true);
+            runFor(sim, 2, "still");
+            expect(boss.polymorph).toBeUndefined();
+        });
+
+        test("with no one about, it still lasts, for whatever turns up", () => {
+            const sim = createSim();
+            sim.enemies = [];
+            sim.usePowerUp(polymorph());
+            expect(sim.powerUps.map((p) => p.id)).toEqual(["polymorph"]);
+        });
+    });
+
     test("a cannon shoots for a while, and its cannonballs only hit what they're fired at", () => {
         const sim = createSim();
         sim.weapons = [];
@@ -1262,6 +1885,17 @@ describe("caskets and items", () => {
         runFor(sim, 31, "still");
         expect(sim.buffs.length).toBe(0);
         expect(sim.stats.might).toBeCloseTo(0);
+    });
+
+    test("the bag says how long a potion lasts, stretched by effect duration", () => {
+        const sim = createSim();
+        sim.metaStats.duration = 0.25;
+        sim.updateStats();
+        sim.stash("battlemage_potion");
+        // 30 seconds, and a quarter more is 37.5: the first second its timer shows
+        expect(getInventoryViews(sim)[0]?.item.seconds).toBe(38);
+        sim.useItem(0);
+        expect(getBuffViews(sim)[0].secondsLeft).toBe(38);
     });
 
     test("regen heals its hitpoints over the minute, a little every tick", () => {
@@ -1822,6 +2456,170 @@ describe("bosses", () => {
         boss.hp = boss.maxHp = 1e9;
         return boss;
     }
+
+    test("the Freaky Forester's final Pheasant Arrow launches a projectile", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const boss = bossWith(sim, "freaky_forester_final", "Pheasant Arrow", {
+            x: 1058,
+            y: 1036.5,
+        });
+        untilWindup(sim, boss);
+        expect(boss.bossState!.windup!.attack.kind).toBe("projectile");
+        sim.takeEvents();
+        throughWindup(sim, boss, 0, 0);
+
+        expect(sim.enemyProjectiles.some(({ enemyUid }) => enemyUid === boss.uid)).toBe(true);
+    });
+
+    test("Enraged Dark Chicken's Lane Rush covers 12 tiles through the player", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const chicken = bossWith(sim, "enraged_chicken", "Lane Rush", {
+            x: sim.player.x + 8,
+            y: sim.player.y,
+        });
+
+        untilWindup(sim, chicken);
+
+        const lane = chicken.bossState!.windup!.lane!;
+        expect(Math.hypot(lane.toX - lane.fromX, lane.toY - lane.fromY)).toBeCloseTo(12);
+        expect(lane.halfWidth * 2).toBeCloseTo(1);
+        expect(
+            lane.fromX === lane.toX
+                ? Math.abs(lane.fromX - sim.player.x)
+                : Math.abs(lane.fromY - sim.player.y),
+        ).toBeCloseTo(0);
+    });
+
+    test("Thanksgiving has one Forester event that rises in place", () => {
+        const map = getMap("thanksgiving");
+        const foresterEvents = map.events.filter((event) =>
+            event.enemyId.startsWith("freaky_forester"),
+        );
+        expect(foresterEvents).toHaveLength(1);
+        expect(foresterEvents[0]).toMatchObject({
+            at: 420,
+            kind: "finalBoss",
+            enemyId: "freaky_forester",
+        });
+
+        const sim = createSim("warrior", 1, "thanksgiving");
+        sim.tick = foresterEvents[0].at * TICKS_PER_SECOND;
+        sim.step(0, 0);
+        const boss = sim.enemies.find((enemy) => enemy.def.id === "freaky_forester")!;
+        const uid = boss.uid;
+        sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+
+        expect(boss.uid).toBe(uid);
+        expect(boss.def.id).toBe("freaky_forester_final");
+        expect(boss.dead).toBe(false);
+        expect(boss.scale).toBeCloseTo(1.75);
+        expect(sim.takeEvents()).toContainEqual(
+            expect.objectContaining({ type: "bossRose", enemyId: "freaky_forester_final" }),
+        );
+
+        sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(boss.dead).toBe(true);
+        expect(sim.getResult().bossesKilled).toEqual(["freaky_forester_final"]);
+        expect(sim.trophies).toContain("ledger_of_the_harvest");
+        expect(sim.trophies).not.toContain("chompy_hat");
+    });
+
+    test("Thanksgiving's final boss countdown starts at one minute", () => {
+        const harvest = createSim("warrior", 1, "thanksgiving");
+        const campaign = createSim("warrior", 1, "lumbridge");
+
+        expect(harvest.timeLeftForBoss).toBe(420);
+        expect(campaign.timeLeftForBoss).toBe(900);
+    });
+
+    test("the Chompy bird hat requires an Evil Chicken kill and event victory", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const chicken = sim.spawnEnemy(getEnemy("evil_chicken"), "boss", {
+            x: 1040,
+            y: 1040,
+        })!;
+        sim.damageEnemy(chicken, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.trophies).not.toContain("chompy_hat");
+        expect(sim.trophies).not.toContain("ledger_of_the_harvest");
+
+        const forester = sim.spawnEnemy(getEnemy("freaky_forester"), "finalBoss", {
+            x: 1040,
+            y: 1040,
+        })!;
+        sim.damageEnemy(forester, 1e9, 0, sim.player.x, sim.player.y);
+        sim.damageEnemy(forester, 1e9, 0, sim.player.x, sim.player.y);
+
+        expect(sim.getResult().victory).toBe(true);
+        expect(sim.trophies).toContain("chompy_hat");
+        expect(sim.trophies).toContain("ledger_of_the_harvest");
+    });
+
+    test("the Golden egg requires a hard victory over the final Forester", () => {
+        const playFinal = (hard: boolean, enemyId: string) => {
+            const sim = createSim("warrior", 1, "thanksgiving", emptyStats(), false, hard);
+            const boss = sim.spawnEnemy(getEnemy(enemyId), "finalBoss", {
+                x: 1040,
+                y: 1040,
+            })!;
+            sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+            expect(sim.trophies).not.toContain("golden_egg");
+            if (enemyId === "freaky_forester") {
+                sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+            }
+            return sim;
+        };
+        expect(playFinal(false, "freaky_forester").trophies).not.toContain("golden_egg");
+        expect(playFinal(true, "evil_chicken").trophies).not.toContain("golden_egg");
+        const hardWin = playFinal(true, "freaky_forester");
+        expect(hardWin.getResult().victory).toBe(true);
+        expect(hardWin.trophies).toContain("golden_egg");
+    });
+
+    test("Professor Oddenstein uses Dagger Slice at melee distance", () => {
+        const sim = createSim("warrior", 1, "thanksgiving");
+        const boss = sim.spawnEnemy(getEnemy("professor_oddenstein"), "boss", {
+            x: 1038,
+            y: 1036.5,
+        })!;
+        boss.bossState!.cooldowns[3] = 10000;
+
+        untilWindup(sim, boss);
+
+        expect(boss.bossState!.windup!.attack.name).toBe("Dagger Slice");
+    });
+
+    test("Professor Oddenstein's Smoke Bomb marks an armor weakness", () => {
+        const smokeBomb = getEnemy("professor_oddenstein").boss!.attacks.find(
+            ({ name }) => name === "Smoke Bomb",
+        )!;
+
+        expect(smokeBomb.effect).toMatchObject({
+            kind: "debuff",
+            name: "Weakness: Armor reduced by 30%",
+            iconObjId: 698,
+            stats: { armor: -0.3 },
+        });
+    });
+
+    test("a cone swing emits its facing and width for the client visual", () => {
+        const sim = createSim();
+        const boss = bossWith(sim, "professor_oddenstein", "Dagger Slice", {
+            x: 1038,
+            y: 1036.5,
+        });
+        untilWindup(sim, boss);
+        sim.takeEvents();
+        throughWindup(sim, boss, 0, 0);
+
+        expect(sim.takeEvents()).toContainEqual(
+            expect.objectContaining({
+                type: "bossSwing",
+                dirX: -1,
+                dirY: 0,
+                cone: 1.2,
+            }),
+        );
+    });
 
     function wiseOldManWith(sim: Sim, attackName: string, at: { x: number; y: number }): Enemy {
         return bossWith(sim, "wise_old_man", attackName, at);
@@ -2870,6 +3668,7 @@ describe("enemy mechanics", () => {
                 expect(events).toContainEqual({
                     type: "notice",
                     message: "Hide behind the glyph!",
+                    instruction: true,
                 });
                 return events.filter((e) => e.type === "playerHit" && e.enemyId === boss.def.id)
                     .length;
@@ -2891,14 +3690,44 @@ describe("enemy mechanics", () => {
 });
 
 describe("maps", () => {
+    test("the player starts facing south, or the map's spawnFacing made a unit vector", () => {
+        const sim = createSim();
+        expect(sim.player).toMatchObject({ facingX: 0, facingY: -1, yaw: 0 });
+        Object.assign(sim, { map: { ...sim.map, spawnFacing: { x: 0, y: 3 } } });
+        const hero = (
+            sim as unknown as {
+                createHero(options: object, index: number, x: number, y: number): Sim["heroes"][0];
+            }
+        ).createHero(
+            { name: "a", characterId: "warrior", metaStats: emptyStats() },
+            0,
+            1036.5,
+            1036.5,
+        );
+        // North, the way Vardhelm's opening ends looking, and as long as any other facing
+        expect(hero.player).toMatchObject({ facingX: 0, facingY: 1, yaw: 1024 });
+    });
+
     test("every map's waves, events and bosses make sense", () => {
         for (const map of MAPS) {
             if (map.fight) {
-                // One boss fight: nothing but its final boss, from the start
                 expect(map.waves).toEqual([]);
-                expect(map.events.length).toBe(1);
-                expect(map.events[0]).toMatchObject({ at: 0, kind: "finalBoss" });
-                expect(getEnemy(map.events[0].enemyId).boss?.intro?.alone).toBe(true);
+                if (map.stages) {
+                    // A fight in parts (Beneath Cursed Sands): each part its final bosses, the
+                    // first from the start (the Scarab Mages' second comes later)
+                    for (const stage of map.stages) {
+                        expect(stage.events[0]).toMatchObject({ at: 0, kind: "finalBoss" });
+                        for (const event of stage.events) {
+                            expect(event.kind).toBe("finalBoss");
+                            expect(getEnemy(event.enemyId).boss).toBeDefined();
+                        }
+                    }
+                } else {
+                    // One boss fight: nothing but its final boss, from the start
+                    expect(map.events.length).toBe(1);
+                    expect(map.events[0]).toMatchObject({ at: 0, kind: "finalBoss" });
+                    expect(getEnemy(map.events[0].enemyId).boss?.intro?.alone).toBe(true);
+                }
                 // Opened by beating another map: a campaign map, or another fight that is (the
                 // Owl's trial after the Wolf's), never round in a circle
                 let requires = getMap(map.fight.requires);
@@ -2919,7 +3748,8 @@ describe("maps", () => {
             const times = map.events.map((e) => e.at);
             expect(times).toEqual([...times].sort((a, b) => a - b));
             const last = map.events[map.events.length - 1];
-            expect(last).toMatchObject({ at: RUN_LENGTH, kind: "finalBoss" });
+            const finalBossAt = map.id === "thanksgiving" ? 420 : RUN_LENGTH;
+            expect(last).toMatchObject({ at: finalBossAt, kind: "finalBoss" });
             for (const event of map.events) {
                 const enemy = getEnemy(event.enemyId);
                 if (event.kind === "boss") {
@@ -3207,6 +4037,16 @@ describe("maps", () => {
         }
     });
 
+    test("only a closing ring stands where it formed first (BulletPatternDef.hold)", () => {
+        for (const enemy of ENEMIES) {
+            for (const attack of enemy.boss?.attacks ?? []) {
+                if (attack.pattern?.hold !== undefined) {
+                    expect(attack.pattern.shape, `${enemy.id}: ${attack.name}`).toBe("closing");
+                }
+            }
+        }
+    });
+
     test("every arena is on one of the cache's four planes, the ground floor unless set", () => {
         for (const map of [...MAPS, ...FUN_MAPS]) {
             const region = getArenaRegion(map);
@@ -3305,7 +4145,8 @@ function attackOnce(sim: Sim, seconds: number) {
 }
 
 describe("class weapons", () => {
-    // Half a minute of play for each of them takes a while
+    // Half a minute of play for each of them takes a while, and each new weapon adds to it
+    // (11.6 s on 0.30.0's release build before the keris partisans)
     test("every class weapon kills things", () => {
         const classes = { melee: "warrior", ranged: "ranger", magic: "wizard" };
         for (const weapon of WEAPONS.filter((w) => w.style)) {
@@ -3313,7 +4154,7 @@ describe("class weapons", () => {
             runFor(sim, 30);
             expect(sim.kills).toBeGreaterThan(0);
         }
-    }, 20000);
+    }, 40000);
 
     test("the scythe sweeps a wide arc in front, and hits bosses three times", () => {
         const sim = armed("scythe_of_vitur");
@@ -3566,6 +4407,52 @@ describe("class weapons", () => {
             sim.step(0, 0);
         }
         expect(sim.takeEvents().some((e) => e.type === "damage" && e.poison)).toBe(false);
+    });
+
+    test("now and then the Toxic blowpipe fires Toxic Siphon, which hits harder and heals", () => {
+        const sim = armed("toxic_blowpipe", "ranger");
+        const def = getWeapon("toxic_blowpipe");
+        const siphon = def.siphon!;
+        const goblin = dummy(sim, 3, 0);
+        goblin.frozen = 1e6;
+        let specials = 0;
+        // Not so many that the hits' XP brings a level up
+        for (let i = 0; i < 120; i++) {
+            // Back where it was after the last darts' knockback
+            goblin.x = sim.player.x + 3;
+            goblin.y = sim.player.y;
+            sim.player.hp = 1;
+            attack(sim);
+            const shots = sim.projectiles.filter((p) => p.weapon?.id === def.id);
+            expect(shots.length).toBeGreaterThan(0);
+            const special = shots[0].siphon === true;
+            // The whole attack is the special, or none of it
+            expect(shots.every((p) => (p.siphon === true) === special)).toBe(true);
+            if (special) {
+                specials++;
+                expect(shots[0]).toMatchObject({
+                    spotAnim: siphon.projectileSpotAnim,
+                    damage: def.levels[0].damage * siphon.damage,
+                });
+            }
+            // Let the darts land
+            sim.weapons[0].cooldown = 1e9;
+            for (let t = 0; t < 0.5 * TICKS_PER_SECOND; t++) {
+                sim.player.invulnerable = 100;
+                sim.step(0, 0);
+            }
+            sim.takeEvents();
+            const healed = sim.player.hp - 1;
+            if (special) {
+                expect(healed).toBeGreaterThan(0);
+                expect(healed).toBeLessThanOrEqual(siphon.max * shots.length);
+            } else {
+                expect(healed).toBe(0);
+            }
+        }
+        // One attack in 40
+        expect(specials).toBeGreaterThan(0);
+        expect(specials).toBeLessThan(16);
     });
 
     test("the Sanguinesti staff heals now and then, a little", () => {
@@ -5110,7 +5997,8 @@ describe("random events", () => {
         expect(first).toBeGreaterThanOrEqual(RANDOM_EVENT_FIRST[0]);
         expect(first).toBeLessThanOrEqual(RANDOM_EVENT_FIRST[1]);
         expect(new Set(seen).size).toBeGreaterThan(3);
-    });
+        // Up to an hour and more of ticks: past 5 seconds on the release's busy machine
+    }, 30000);
 
     test("a visitor waits, says their piece, then goes", () => {
         const sim = createSim();
@@ -5180,6 +6068,61 @@ describe("random events", () => {
         expect(sim.cured).toBe(true);
         // It's not an item, so its timer goes by what it says
         expect(getBuffViews(sim)[0]).toMatchObject({ name: "Strange fruit", objId: 464 });
+    });
+
+    test("active effects have descriptions", () => {
+        const sim = createSim();
+        // A buff's described by what it gives (a turkey's feast borrows a potion's look)
+        const potion = getItem("super_combat_potion");
+        if (potion.kind !== "utility" || potion.use.kind !== "buff") {
+            throw new Error("Expected a potion");
+        }
+        sim.buffs = [
+            {
+                itemId: potion.id,
+                stats: potion.use.stats,
+                cures: false,
+                startTick: 0,
+                endTick: 100,
+            },
+            {
+                itemId: "raid:stamina_potion",
+                stats: { moveSpeed: 0.2 },
+                cures: true,
+                startTick: 0,
+                endTick: 100,
+                look: { name: "Stamina potion", objId: 123 },
+            },
+        ];
+        sim.powerUps = [{ uid: 1, hero: 0, id: "stopwatch", startTick: 0, endTick: 100 }];
+        sim.debuffs = [
+            {
+                id: "armor-drain",
+                name: "Armour drain",
+                iconObjId: 698,
+                stats: { armor: -0.3 },
+                startTick: 0,
+                endTick: 100,
+            },
+        ];
+        sim.heroes[sim.focus].revivesLeft = 1;
+
+        const effects = getBuffViews(sim);
+        expect(effects.map((effect) => effect.name)).toEqual([
+            "Armour drain",
+            "Super combat potion",
+            "Stamina potion",
+            "Giant stopwatch",
+            "Ring of life",
+        ]);
+        expect(effects[0]).toMatchObject({
+            harmful: true,
+            description: "-0.3 armour",
+        });
+        expect(effects[1].description).toBe("+25% damage, +1 armour, +10% weapon speed");
+        expect(effects[2].description).toBe("+20% movement speed, Cures poison and boss debuffs");
+        expect(effects[3].description).toBe(getPowerUp("stopwatch").description);
+        expect(effects[4].description).toBe("Revives you once if you fall.");
     });
 
     describe("the Mysterious Old Man", () => {

@@ -7,9 +7,11 @@ import { EVOLUTIONS, EvolutionDef } from "../content/evolutions";
 import { getMap } from "../content/maps";
 import { RARITIES } from "../content/rarity";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
+import { fmtNum, t, tl } from "../i18n";
 import { Coins } from "./Coins";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
+import { useMenuKeys } from "./menuKeys";
 
 // Every evolution, after the client's Collection log. What it takes is always
 // shown; what it makes stays ??? until it's been made in a run. Then a tab for
@@ -31,16 +33,17 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
         setReward(0);
     };
     const found = rewards.filter((r) => r.found).length;
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-log">
-                <h2>Collection log</h2>
+                <h2>{t("collection.title")}</h2>
                 <div className="ui-log-tabs">
                     <button
                         className={"ui-log-tab" + (tab === "evolutions" ? " ui-log-selected" : "")}
                         onClick={() => open("evolutions")}
                     >
-                        Evolutions
+                        {t("collection.evolutions")}
                     </button>
                     {REWARD_MAPS.map((mapId) => (
                         <button
@@ -48,15 +51,13 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                             className={"ui-log-tab" + (tab === mapId ? " ui-log-selected" : "")}
                             onClick={() => open(mapId)}
                         >
-                            {getMap(mapId).name}
+                            {tl(getMap(mapId).name)}
                         </button>
                     ))}
                 </div>
                 {tab === "evolutions" ? (
                     <>
-                        <p className="ui-subtle">
-                            Max a weapon and own its passive, and the next level up can evolve it.
-                        </p>
+                        <p className="ui-subtle">{t("collection.evolution_intro")}</p>
                         <div className="ui-log-list">
                             {EVOLUTIONS.map((evolution) => (
                                 <EvolutionCard
@@ -75,7 +76,9 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                     </>
                 ) : (
                     <>
-                        <p className="ui-subtle">{getMap(tab).name}: what there is to find.</p>
+                        <p className="ui-subtle">
+                            {t("collection.map_intro", { name: tl(getMap(tab).name) })}
+                        </p>
                         <div className="ui-log-list">
                             {rewards.map((entry, i) => (
                                 <RewardCard
@@ -87,19 +90,25 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                             ))}
                         </div>
                         <div className="ui-log-detail">
-                            <div>{rewards[reward].found ? rewards[reward].name : "???"}</div>
-                            <div>{rewards[reward].how}</div>
+                            <div>{rewards[reward].found ? tl(rewards[reward].name) : "???"}</div>
+                            <div>{tl(rewards[reward].how)}</div>
                         </div>
                     </>
                 )}
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
-                        Back
+                        {t("canvas.back")}
                     </button>
                     <span className="ui-log-count">
                         {tab === "evolutions"
-                            ? `Made ${made} / ${EVOLUTIONS.length}`
-                            : `Found ${found} / ${rewards.length}`}
+                            ? t("collection.made", {
+                                  n: fmtNum(made),
+                                  total: fmtNum(EVOLUTIONS.length),
+                              })
+                            : t("collection.found", {
+                                  n: fmtNum(found),
+                                  total: fmtNum(rewards.length),
+                              })}
                     </span>
                     <Coins amount={save.coins} />
                 </div>
@@ -133,9 +142,9 @@ function RewardCard({
             </span>
             <span className="ui-log-text">
                 <span className={"ui-log-name" + (entry.found ? "" : " ui-log-hidden")}>
-                    {entry.found ? entry.name : "???"}
+                    {entry.found ? tl(entry.name) : "???"}
                 </span>
-                <span className="ui-log-parts">{entry.how}</span>
+                <span className="ui-log-parts">{tl(entry.how)}</span>
             </span>
         </button>
     );
@@ -174,13 +183,13 @@ function EvolutionCard({
             <span className="ui-log-text">
                 {made ? (
                     <span className="ui-log-name" style={{ color: RARITIES[into.rarity].color }}>
-                        {into.name}
+                        {tl(into.name)}
                     </span>
                 ) : (
                     <span className="ui-log-name ui-log-hidden">???</span>
                 )}
                 <span className="ui-log-parts">
-                    {evolution.name} + {passive.name}
+                    {tl(evolution.name)} + {tl(passive.name)}
                 </span>
             </span>
         </button>
@@ -200,8 +209,8 @@ function EvolutionDetail({
         <div className="ui-log-detail">
             {made ? (
                 <>
-                    <div style={{ color: RARITIES[into.rarity].color }}>{into.name}</div>
-                    <div>{into.description}</div>
+                    <div style={{ color: RARITIES[into.rarity].color }}>{tl(into.name)}</div>
+                    <div>{tl(into.description)}</div>
                     <div className="ui-log-stats">
                         {weaponStats(into, into.levels[0]).map(formatWeaponStat).join(", ")}
                     </div>
@@ -210,7 +219,10 @@ function EvolutionDetail({
                 <>
                     <div className="ui-log-hidden">???</div>
                     <div>
-                        Max the {evolution.name} and own {passive.name} to find out what it makes.
+                        {t("collection.locked_hint", {
+                            weapon: tl(evolution.name),
+                            passive: tl(passive.name),
+                        })}
                     </div>
                 </>
             )}

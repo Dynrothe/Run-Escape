@@ -1,4 +1,5 @@
 import { SaveData } from "../core/save";
+import { t, tr } from "../i18n";
 import { FIGHT_MAPS } from "./maps";
 import { TROPHIES, TrophyDef } from "./trophies";
 import { describeUnlockTask } from "./unlocks";
@@ -9,11 +10,20 @@ import { WEAPONS } from "./weapons";
 // in and then its trophies. A new trophy map or boss fight gets its tab by itself; a campaign
 // map's boss drops aren't listed.
 
+// The log's sentences, for locales/en/gen.json: {task} is describeUnlockTask's
+export const LOG_MESSAGES: Record<string, string> = {
+    "log.bring_in": "{task} to bring it in.",
+};
+
 export type RewardEntry = { id: string; name: string; objId: number; how: string; found: boolean };
 
-// The map a trophy's from: a pumpkin's are the Hallowed Night's
-function trophyMap(trophy: TrophyDef): string {
-    return trophy.from.kind === "pumpkin" ? "halloween" : trophy.from.mapId;
+// The map a trophy's from: a pumpkin's are the Hallowed Night's, a turkey's Thanksgiving, the
+// Tombs' chest the raid.
+export function getTrophyMap(trophy: TrophyDef): string {
+    if (trophy.from.kind === "pumpkin") return "halloween";
+    if (trophy.from.kind === "turkey") return "thanksgiving";
+    if (trophy.from.kind === "tombs") return "tombs_of_amascut";
+    return trophy.from.mapId;
 }
 
 // Whether a weapon's brought in on a map: its boss's drops, its chest's
@@ -27,7 +37,7 @@ function bringsIn(mapId: string): boolean {
 // tab
 export const REWARD_MAPS: string[] = [
     ...new Set([
-        ...TROPHIES.map(trophyMap),
+        ...TROPHIES.map(getTrophyMap),
         ...FIGHT_MAPS.filter((map) => bringsIn(map.id)).map((map) => map.id),
     ]),
 ];
@@ -45,12 +55,12 @@ export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
         );
     }).map((weapon) => ({
         id: weapon.id,
-        name: weapon.name,
+        name: tr(`weapon.${weapon.id}.name`, weapon.name),
         objId: weapon.iconObjId,
-        how: `${describeUnlockTask(weapon.unlock!)} to bring it in.`,
+        how: t("log.bring_in", { task: describeUnlockTask(weapon.unlock!) }),
         found: save.unlockedItems.includes(weapon.id),
     }));
-    const trophies = TROPHIES.filter((trophy) => trophyMap(trophy) === mapId).map(
+    const trophies = TROPHIES.filter((trophy) => getTrophyMap(trophy) === mapId).map(
         ({ id, name, objId, how }) => ({
             id,
             name,

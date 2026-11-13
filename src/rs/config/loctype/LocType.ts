@@ -611,9 +611,14 @@ export class LocType extends Type {
             }
         } else if (override) {
             this.models = override.models ? [override.models] : this.models;
-            this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size ?? 128;
+            if (!override.ownSize) {
+                this.modelSizeX = this.modelSizeHeight = this.modelSizeY = override.size ?? 128;
+            }
             if (override.solid) {
                 this.clipType = 2;
+                this.blocksProjectile = false;
+            } else if (override.solid === false) {
+                this.clipType = 0;
                 this.blocksProjectile = false;
             }
             // Model space points down, so up is negative

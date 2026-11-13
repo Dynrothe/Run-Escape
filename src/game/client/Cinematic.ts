@@ -1,4 +1,4 @@
-import { CinematicActorDef, CinematicCueDef, CinematicDef, MapDef } from "../content/types";
+import { CinematicActorDef, CinematicCueDef, CinematicDef } from "../content/types";
 
 // A map's opening cinematic (MapDef.cinematic), or a lair's as its boss wakes (LairDef.opening),
 // as it plays: its clock, and what the camera and its cast are doing at any moment, worked out
@@ -43,13 +43,17 @@ export function getCinematicCamera(
     const keys: CinematicCamera[] = [];
     const times: number[] = [];
     const holds: boolean[] = [];
+    // Each shot's yaw the way round nearest the shot before it, so 1984 then 64 turns 128, not
+    // most of the way round
+    const nearest = (yaw: number) => {
+        const before = keys[keys.length - 1]?.yaw ?? yaw;
+        return yaw + Math.round((before - yaw) / 2048) * 2048;
+    };
     for (const shot of def.shots) {
         times.push(shot.at);
         if ("player" in shot) {
-            // The run's camera's yaw, the way round nearest the shot before it
-            const before = keys[keys.length - 1]?.yaw ?? play.yaw;
-            const yaw = play.yaw + Math.round((before - play.yaw) / 2048) * 2048;
-            keys.push({ ...play, yaw });
+            // The run's camera's
+            keys.push({ ...play, yaw: nearest(play.yaw) });
             holds.push(true);
         } else {
             keys.push({
@@ -57,7 +61,7 @@ export function getCinematicCamera(
                 y: shot.y,
                 height: ground(shot.x, shot.y) - shot.lift,
                 pitch: shot.pitch,
-                yaw: shot.yaw,
+                yaw: nearest(shot.yaw),
                 distance: shot.distance,
             });
             holds.push(shot.hold === true);
@@ -116,8 +120,19 @@ export function monotoneAt(times: number[], values: number[], holds: boolean[], 
     );
 }
 
+// Each def's cues by actor, in order of at: looked up for every actor every frame it plays
+const CUES_BY_ACTOR = new WeakMap<CinematicDef, Map<string, CinematicCueDef[]>>();
+
 function cuesOf(def: CinematicDef, actor: string): CinematicCueDef[] {
-    return def.cues.filter((cue) => cue.actor === actor).sort((a, b) => a.at - b.at);
+    let byActor = CUES_BY_ACTOR.get(def);
+    if (!byActor) {
+        byActor = new Map();
+        for (const cue of [...def.cues].sort((a, b) => a.at - b.at)) {
+            byActor.set(cue.actor, [...(byActor.get(cue.actor) ?? []), cue]);
+        }
+        CUES_BY_ACTOR.set(def, byActor);
+    }
+    return byActor.get(actor) ?? [];
 }
 
 // What an actor's doing at seconds in
@@ -155,24 +170,6 @@ export function getSaying(def: CinematicDef, actor: string, seconds: number): st
         }
     }
     return saying;
-}
-
-// A map's cinematics, to bake and hear: its opening (MapDef.cinematic) and its lairs'
-// (LairDef.opening)
-export function getMapCinematics(map: MapDef): CinematicDef[] {
-    const cinematics: CinematicDef[] = [];
-    if (map.cinematic) {
-        cinematics.push(map.cinematic);
-    }
-    for (const lair of map.lairs ?? []) {
-        if (lair.opening) {
-            cinematics.push(lair.opening.cinematic);
-        }
-        if (lair.requires?.unsealing) {
-            cinematics.push(lair.requires.unsealing.cinematic);
-        }
-    }
-    return cinematics;
 }
 
 // Every seq a cinematic's actor plays, by npc: its own and its cues', to bake
@@ -231,9 +228,10 @@ export class CinematicPlayer {
         return this.def.cues.filter((cue) => cue.at >= from && cue.at < this.seconds);
     }
 
-    // Any key, click, tap or button: true when that's skipped it
-    skip(): boolean {
-        if (this.done || this.seconds < CINEMATIC_SKIP_AFTER) {
+    // Any key, click, tap or button: true when that's skipped it. waited: seconds spent on the
+    // loading screen before it (GameClient.preloadCinematic), which count as time it's been on.
+    skip(waited = 0): boolean {
+        if (this.done || this.seconds + waited < CINEMATIC_SKIP_AFTER) {
             return false;
         }
         this.skipped = true;

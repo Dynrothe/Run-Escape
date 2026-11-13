@@ -1,5 +1,5 @@
 import { getBlessing } from "../content/blessings";
-import { formatStats } from "../content/stats";
+import { StatText, formatStats } from "../content/stats";
 import { BlessingDef, BlessingsDef, StatKey, Stats } from "../content/types";
 import { SlotView } from "./GameStore";
 
@@ -21,8 +21,8 @@ export function getBlessingViews(
             level: count,
             maxLevel: blessing.max,
             iconObjId: blessing.iconObjId,
-            stats: [blessing.description],
-            detail: count > 1 ? describeTotal(blessing, count) : "",
+            stats: [{ text: blessing.description }],
+            detail: count > 1 ? describeTotal(blessing, count) : undefined,
             rarityColor: BLESSING_COLOR,
             blessing: true,
         };
@@ -30,16 +30,18 @@ export function getBlessingViews(
 }
 
 // What its stats come to, had count times: "In all: +16% damage"
-function describeTotal(blessing: BlessingDef, count: number): string {
+function describeTotal(blessing: BlessingDef, count: number): StatText | undefined {
     if (!blessing.stats) {
-        return "";
+        return undefined;
     }
     const total: Partial<Stats> = {};
     for (const [key, value] of Object.entries(blessing.stats)) {
         total[key as StatKey] = value * count;
     }
     const lines = formatStats(total);
-    return lines.length > 0 ? `In all: ${lines.join(", ")}` : "";
+    return lines.length > 0
+        ? { text: `In all: ${lines.map((line) => line.text).join(", ")}` }
+        : undefined;
 }
 
 // How many times it's been had, under its name: "Blessed 2 times of 6"

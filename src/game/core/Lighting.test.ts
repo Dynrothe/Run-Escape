@@ -1,6 +1,7 @@
 import { getEnemy } from "../content/enemies";
 import { ALL_MAPS, MAP_BY_ID, getMap } from "../content/maps";
 import { LANTERN_ID, POWER_UPS, getPowerUp } from "../content/powerups";
+import { TOMBS_LIGHTING } from "../content/tombs";
 import { EnemyDef, LightingDef, MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
 import { Enemy } from "./entities";
@@ -89,11 +90,17 @@ function run(sim: Sim, seconds: number, keep: Enemy[] = []): void {
 }
 
 describe("the dark", () => {
-    test("only dev maps and burnt Varrock have lights, and everywhere else is lit everywhere", () => {
-        // The Battle for Varrock's fires glow, its smoke dims it a little (fun/maps.ts)
+    test("only dev maps, the Tombs and burnt Varrock have lights, and everywhere else is lit everywhere", () => {
+        // The Tombs of Amascut and its quest, a tomb lit by its fires, and the Battle for
+        // Varrock's fires, its smoke dimming it a little (fun/maps.ts), are the shipped ones
         const lit = new Set(["battle_for_varrock"]);
         for (const map of ALL_MAPS) {
-            expect(map.lighting === undefined || map.dev === true || lit.has(map.id)).toBe(true);
+            expect(
+                map.lighting === undefined ||
+                    map.dev === true ||
+                    map.lighting === TOMBS_LIGHTING ||
+                    lit.has(map.id),
+            ).toBe(true);
         }
         const sim = createSim("lumbridge");
         expect(sim.lighting).toBeUndefined();
@@ -269,6 +276,25 @@ describe("the dark", () => {
         run(sim, 20, [beside]);
         expect(sim.lights.some((light) => light.kind === "left")).toBe(false);
         expect(sim.isEnemyLit(beside)).toBe(false);
+    });
+
+    test("a light going out lights nothing past its own size", () => {
+        const sim = createSim();
+        const leech: EnemyDef = {
+            ...getEnemy("goblin"),
+            light: { radius: 2.5, left: { radius: 4, seconds: 20 } },
+        };
+        const carrier = goblin(sim, SPAWN.x + 15, SPAWN.y, leech);
+        run(sim, 0.1, [carrier]);
+        carrier.hp = 1;
+        sim.damageEnemy(carrier, 10, 0, sim.player.x, sim.player.y);
+        // Its last moments: shrunk to under the half tile weapons are let past an edge
+        run(sim, 19.75);
+        const left = sim.lights.find((light) => light.kind === "left")!;
+        expect(left.radius).toBeGreaterThan(0);
+        expect(left.radius).toBeLessThan(0.5);
+        expect(sim.isLit(left.x + left.radius * 1.9, left.y)).toBe(true);
+        expect(sim.isLit(left.x + left.radius * 2.1, left.y)).toBe(false);
     });
 
     test("a lantern where players have no light: a light of its own", () => {

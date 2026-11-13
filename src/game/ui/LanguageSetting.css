@@ -1,0 +1,102 @@
+/* A language's name, with who translated it in small text underneath */
+.ui-language-name {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.ui-language-label {
+    white-space: nowrap;
+}
+
+.ui-language-credit {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 13px;
+    line-height: 1.1;
+    color: var(--ui-text-dim);
+    text-shadow: 1px 1px 0 #000;
+    white-space: nowrap;
+}
+
+/* Settings' dropdown: the language picked, and the list over what's below it */
+.ui-language-dropdown {
+    position: relative;
+}
+
+.ui-language-current {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 200px;
+    padding: 4px 10px;
+}
+
+.ui-language-open {
+    color: var(--ui-yellow);
+    background: var(--ui-card-hover);
+}
+
+/* A small triangle pointing down, up while open */
+.ui-language-caret {
+    flex-shrink: 0;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid currentColor;
+}
+
+.ui-language-open .ui-language-caret {
+    border-top: none;
+    border-bottom: 6px solid currentColor;
+}
+
+.ui-language-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    min-width: 100%;
+    box-sizing: border-box;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+}
+
+.ui-language-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 5px 8px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 16px;
+    color: var(--ui-white);
+    text-shadow: 1px 1px 0 #000;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid transparent;
+    cursor: pointer;
+}
+
+.ui-language-option:hover,
+.ui-language-option:focus-visible {
+    color: var(--ui-yellow);
+    background: var(--ui-card-hover);
+    border-color: var(--ui-edge-light);
+}
+
+.ui-language-option.ui-language-active {
+    color: var(--ui-yellow);
+    background: rgba(62, 53, 41, 0.95);
+    border-color: var(--ui-edge-light);
+}
+
+@media (pointer: coarse) {
+    .ui-language-current,
+    .ui-language-option {
+        min-height: 40px;
+    }
+}

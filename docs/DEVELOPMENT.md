@@ -21,6 +21,7 @@ in a folder (asset paths are relative, so https://example.com/game/ works):
 ```
 index.html
 build.json
+game-files.json
 assets/
 caches/caches.json
 caches/chunks/<sha256>.bin
@@ -35,6 +36,18 @@ it loads it all again from the chunks and fails if anything is missing. **Run it
 build**: `bun run build` empties `dist/`. `bun run preview` serves the build with its slim cache,
 to try it before uploading. The full cache works too, if you'd rather host that, and the map viewer
 (`?viewer=1`) needs it.
+
+Most of the full cache is one big file (`main_file_cache.dat2`), which `src/rs/cache/CacheFiles.ts`
+downloads in parts kept in the Cache API. A download that's cut off resumes with
+`Range: bytes=<offset>-<MAX_SAFE_INTEGER>`, and the `Last-Modified` its parts came with as
+`If-Range`. A server that ignores Range sends the whole file, and the download starts again from
+0%, which a phone on a slow or cut-off connection may never get past. `bun run serve`, the
+desktop app and the dev and preview server's `/caches` (`vite.config.ts`) all answer Range with
+206, with the end clamped; only the last checks `If-Range`. A part only counts if it starts where
+the one before it ended and is from the same copy of the file, and the last bytes are kept as a
+part too. Once the whole file's in hand it's kept, and only then are the parts dropped, so a page
+reloaded while a phone's still writing it (or out of room) is put together from the parts: its
+resume asks past the end, and a 416 with the parts' length means every part was there.
 
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
 bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
@@ -405,16 +418,18 @@ chunk it lists.
 
 ### Online and offline play
 
-The web build and the app each need the relay and the run collector, and they must match: the
-build as `VITE_COOP_URL` and `VITE_RUN_ANALYTICS_URL`, the app as `-PcoopUrl` and
-`-PrunAnalyticsUrl` (the `COOP_URL` and `RUN_ANALYTICS_URL` repository variables in the workflows).
-Empty means solo only, or no run stats, as on desktop. Android, desktop and the website share rooms
+The web build and the app each need the relay, the run collector and the cloud-save Worker, and
+they must match: the build as `VITE_COOP_URL`, `VITE_RUN_ANALYTICS_URL` and `VITE_CLOUD_SAVE_URL`,
+the app as `-PcoopUrl`, `-PrunAnalyticsUrl` and `-PcloudSaveUrl` (the `COOP_URL`,
+`RUN_ANALYTICS_URL` and `CLOUD_SAVE_URL` repository variables in the workflows). Empty means solo
+only, no run stats, or no cloud save, as on desktop. Android, desktop and the website share rooms
 only on the same game build.
 
 The game runs at `https://appassets.androidplatform.net/assets/game/index.html`, answered inside
 the app. **Never change that address or the application ID, `io.jere.run_escape`**: Android
 players' saves belong to them. `RelayPolicy.java` lets out what the desktop app does, and nothing
-else: the relay's https address (GET only), and the collector's one URL by POST and its preflight.
+else: the relay's https address (GET only), the collector's one URL by POST and its preflight, and
+the cloud-save Worker's `/v1/` (GET, PUT, POST, DELETE and preflights, no query).
 Its `connect-src` says the same, as WebSockets skip the app's request handling; workers get it too.
 
 Shared memory needs cross-origin isolation, which COOP and COEP headers alone don't give a WebView:
@@ -462,18 +477,123 @@ job fails, there's no draft at all, rather than one without the APK. Without the
 are as they were. To sign a local build, set `ANDROID_KEYSTORE_PATH` and the other three as
 environment variables.
 
-**Only on GitHub, and no updates.** The APK is only ever published on this repository's releases,
-never in an app store, and the app never checks for, downloads or installs a new version. That's
-by choice: keep it so. A player updates by installing the new APK over the old one, as uninstalling
-first deletes the save. The release's notes say so (`android/release-notes.md`, which the `publish`
-job adds to the draft when the APK's built, and a line beside the APK's link at the top), and so do
-the app's About and Save help, whose New versions button opens the releases page. Unlike desktop
-players, whose launcher updates the game, Android players on an older APK can't join rooms on the
-current build until they install it.
+**Updates from GitHub.** The APK is only published on this repository's releases, never in an app
+store. `AppUpdater.java` checks the public GitHub releases API once when the app opens, off the UI
+thread, without delaying the game. `UpdateRelease.java` selects the exact Android APK of a newer
+stable release; a draft, prerelease, missing APK, offline connection or failed check leaves the
+installed game running without an error dialog. There is no token or extra update menu.
+
+The player chooses Download update. Android's DownloadManager handles progress and cancellation
+in its notification and keeps downloading if the app closes. The app remembers the download ID
+and checks it on returning, validates the APK's size, package, version and minimum Android version,
+then asks whether to install it now or later: installing closes the game, and a download often
+ends mid-run, so the installer is never opened without asking. It hands the APK to Android's
+installer through a FileProvider limited to the app's download folder. Android verifies the
+signature and asks for install consent; the first update may need Allow from this source in
+settings. Declining or a failed download leaves the current version installed. These native
+requests don't change the bundled game's `RelayPolicy` or Content-Security-Policy.
+
+What it remembers between launches, and what that leads to, is `UpdatePlan.java`'s, tested
+without a device. Later on the offer, or cancelling the download, puts that version off for a
+while (`SNOOZE_MS`). A downloaded APK whose install was put off is offered again on the next
+launch, not downloaded again. A newer release replaces a download that's waiting, and one whose
+version is installed is removed. An APK that can't be installed (its minimum Android version, or
+the wrong package or version) is never offered again, so a phone doesn't download it on every
+launch, though a newer release is offered. The activity made again by Try again or Reopen is the
+same visit: it doesn't check again.
+
+The About menu still links to releases for manual downloads. Older copies need a manual install
+of an APK with the updater first. Install over the old app: uninstalling deletes its save.
+Android players need the current game build to join its co-op rooms.
+
+For releases this changes nothing, but a few things matter more now. Every release has to be
+signed with the same key, or every in-app update fails at Android's installer. The app only reads
+GitHub's latest release, so a release without the APK offers nothing, and an older patch marked as
+latest hides the newer one. The first update anyone gets in the app is from the release after the
+one that brought the updater, so try the whole flow on a phone before that: build this code signed
+with the release key, with a lower version in `package.json`, on a phone without the app, and it's
+offered the current release. A debug build can't finish: its key differs, so the installer refuses.
 
 The version name is `package.json`'s, and the version code is made from it (0.27.0 is 270000), plus
 `-PandroidRevision=1` to `9` to rebuild one game version. A version code can never go down: Android
 won't install an older APK over a newer one.
+The startup check compares game versions; an Android-only rebuild of the same game version still
+needs a manual install from releases.
+
+### Following the website on Android
+
+The APK's game is a release's, and the website is often on a later build, which co-op won't put
+together (Co-op, Versions). So, as on Windows (Following the website), an app built with
+`-PgameSiteUrl` (the `GAME_SITE_URL` repository variable in the release's `android` job; pull
+requests' and playable debug builds go without, so they play their own build) keeps to the
+website's build. Without it, nothing below happens, except that what an app built with it left in
+`filesDir/site` is cleared.
+
+1. **Each time the activity's made** (opening the app, Restart game once a build's ready, Try
+   again, Reopen), `MainActivity` picks the game to serve before the page loads: `SiteGames.pick`
+   takes the build `filesDir/site/current` names if it's whole and no older than the APK's
+   version. Whole (`readInstall`) means its marker, `verified.json`, is for that build, and every
+   file the marker lists, and every chunk its `caches/caches.json` lists that the APK hasn't, is
+   there at its size: a lost write or a full disk doesn't leave a broken game in front (their
+   sha256s were checked as they were written). Otherwise it's the APK's game. `GamePathHandler`
+   serves `/assets/game/` from that folder (AndroidX's `InternalStoragePathHandler`, which keeps
+   paths inside it), a cache chunk the folder hasn't from the APK (a chunk's named after its
+   bytes, so it's the same one), and everything else under `/assets/` from the APK, so **the
+   address is the same either way**, and saves stay where they are.
+2. **Then, off the UI thread** (`SiteUpdater`, at background priority, on one worker for the whole
+   app, so a new activity's update waits for the last one's to stop), `SiteGames.update` clears
+   every other build in `site/` and reads the website's `game-files.json` and
+   `caches/caches.json`: https only, no redirects, nothing cached, lists capped in size.
+   `SiteFiles.java` checks them as `desktop/siteFiles.ts` does: build ids, versions, sha256s,
+   sizes, paths that stay inside the game and aren't the cache or the marker, no two files
+   differing only in case, and a slim cache made for the same build. Both run the cases in
+   `desktop/siteFiles.cases.json`, so a new check's cases go there rather than in one side's tests.
+3. `whyNotFollow` refuses a build that needs a newer app than this one (`minAndroid`, below), one
+   made with other relay, run collector or cloud-save addresses than the app's (`RelayPolicy` would
+   block them), and, **unlike Windows**, one older than the APK's own version: a newer APK the
+   player installed isn't undone by a website that hasn't caught up, and its save stays writable.
+   The same version from another commit is followed, both ways. `minLauncher` is the Windows
+   launcher's, so the app doesn't look at it.
+4. If the APK's game is that build (`build.json`), `current` goes, and the next start plays the
+   APK's. If the folder in use is that build, nothing happens. Otherwise it's put together in
+   `site/.partial`: the marker first, then files the APK's game or the folder in use list with the
+   same sha256 (their `game-files.json`, or the marker) are copied, chunks by name, chunks the APK
+   has are left out (step 1 serves them), and the rest are downloaded a few at a time. Every file,
+   copied or downloaded, has to be exactly its listed size and sha256 (a chunk's name is its
+   sha256's start), and is synced to the disk; a bad copy is downloaded instead, and a bad
+   download stops it all. Then `caches.json` is written, the folder's renamed to `site/<build>`
+   and checked as step 1 would, and `current` is replaced in one rename.
+5. **Downloads wait for Wi-Fi.** On a metered network (mobile data, or a phone that can't say), the
+   copies are made and nothing's downloaded, and a phone moving onto mobile data stops after the
+   files it's on. A build bigger than an APK could be, or one that would leave the phone without
+   room to spare, isn't started (`MAX_BUILD_BYTES`, `KEEP_FREE_BYTES`).
+6. **What's done is kept.** A failure, mobile data or a cancel (a closing activity cuts its
+   connections and waits for its downloads to stop) leaves `.partial`, and the next try at the
+   same list keeps every file there that's still its size and sha256. One for another list is
+   thrown away.
+7. **It plays from the next time the game starts over**, never mid-run: once another build's
+   ready, a toast says so and the menu's Restart game becomes "Restart on the latest version",
+   which makes the activity again rather than reloading the page. Opening the app, Try again and
+   Reopen pick it up too. The old folder, still being served, stays until then.
+
+Offline, on a website without `game-files.json`, or with anything unexpected, it's logged
+(`SiteUpdater` in logcat) and the app plays what it has. As on Windows, whoever can upload to the
+website can ship code to the app's players. An installed build holds the game's scripts and the
+chunks the APK hasn't, mostly the scripts, since the cache's chunks rarely change. `AppUpdater`
+still offers new APKs as before, and a newer APK plays its own game until the website's past it.
+
+**`minAndroid`**, in `game-files.json`, is `MIN_ANDROID_APP` in `desktop/version.ts`: the oldest
+Android app that can play that build, by its version. An older app plays its APK's game instead.
+Raise it when the game needs something from the app that apps already out there don't have, such
+as an address `RelayPolicy.java` lets out or a message the page sends the app, and deploy such a
+build to the website only after its APK's released. Players on older apps then play their own
+release, and co-op only with players on it, until they install the new APK.
+
+Everything that needs no device is in `SiteFiles.java`, `SiteGames.java` and `LimitedText.java`,
+tested in `SiteFilesTest`, `SiteGamesTest` and `LimitedTextTest` (an install from a fake website,
+what's copied and downloaded, bad and missing files, resuming, mobile data, free space,
+cancelling, picking and clearing folders). `SiteUpdater` and `GamePathHandler` are only tried on
+a phone.
 
 **Google's developer verification** applies outside app stores too. Certified Android phones are
 starting to refuse new installs and updates of apps whose developer hasn't registered with Google:
@@ -488,15 +608,18 @@ first.
 **Co-op on desktop.** The app answers every https request itself, so it only reaches a relay built
 into it. Set the `COOP_URL` repository variable (Settings, Secrets and variables, Actions) to
 `wss://example.com/coop`, and the release workflow builds it into the game and the launcher. It
-has to be `wss://`. The app lets out only that relay and, if the `RUN_ANALYTICS_URL` variable is
-set, POSTs to that one collector URL: `protocol.handle` in `main.ts` answers every other https
+has to be `wss://`. The app lets out only that relay, POSTs to that one collector URL if the
+`RUN_ANALYTICS_URL` variable is set, and requests to the cloud-save Worker's `/v1/` if
+`CLOUD_SAVE_URL` is (an https origin, `isCloudSaveRequest` in `src/util/cloudSaveUrl.ts`):
+`protocol.handle` in `main.ts` answers every other https
 request itself, and WebSockets are kept to the relay by the `Content-Security-Policy` header
 `gameServer.ts` sends (`connect-src`). Without `COOP_URL` there's no Multiplayer.
 
 The launcher only gets it in a new download, so players on an older one keep playing without
 Multiplayer until they fetch the new zip. Don't raise `minLauncher` for this: the game still runs.
-Desktop and web players share rooms only on the same build, so publish a release and deploy the
-website from the same commit.
+Desktop and web players share rooms only on the same build. A launcher with `GAME_SITE_URL` keeps
+to the website's (Following the website); without it, publish a release and deploy the website
+from the same commit.
 
 The Windows app is a zip: `Run Escape.exe`, the Electron runtime and the game, so it plays offline
 the first time it's opened. There's no installer. Unzip it anywhere and run it. It lives in
@@ -519,6 +642,8 @@ keep their saves in a `Run Escape Dev` folder, so they can't touch a real one.
 | `gameUpdate.ts`        | Checks for, downloads, verifies and installs game updates         |
 | `gameFiles.ts`         | The plain logic: versions, picking a folder, zip paths, manifests |
 | `releaseSource.ts`     | The only place that says where updates come from                  |
+| `siteFiles.ts`         | The website's `game-files.json`: reading, writing, `whyNotFollow` |
+| `siteUpdate.ts`        | Gets the website's build, and chooses it or a release at launch   |
 | `version.ts`           | `LAUNCHER_VERSION`                                                |
 | `release-files.ts`     | Makes the game zips, chunks, manifest and the changelog's notes   |
 | `electron-builder.yml` | What goes in the launcher's zip                                   |
@@ -549,9 +674,8 @@ it's on purpose:
 - Every answer needs the COOP and COEP headers, workers included, and a `.wasm` or `.js` needs the
   right type.
 - `CacheFiles.ts` (a full cache, not the slim one's chunks) resumes with
-  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` and adds what comes back to what it has, so a server
-  that ignores Range corrupts the cache. `gameServer.ts` clamps the end and answers 206, with a
-  `Content-Length` of what's left.
+  `Range: bytes=<offset>-<MAX_SAFE_INTEGER>` (see Hosting). `gameServer.ts` clamps the end and
+  answers 206, with a `Content-Length` of what's left.
 
 Interception only works reliably for one session per process, so don't add a second.
 
@@ -566,7 +690,8 @@ The launcher updates the game's files by itself, not the launcher. At launch:
    renames that to `game/<version>` in the user data folder. Then it removes older ones. When it
    can, it downloads less (below).
 3. It plays the newest game folder it can run: an update, or the bundled files if those are newer,
-   as they are after unzipping a newer launcher.
+   as they are after unzipping a newer launcher. A launcher built with `GAME_SITE_URL` plays the
+   website's build when it can, and takes a release only when it can't (Following the website).
 
 Offline, rate limited (GitHub allows 60 requests an hour per address), a bad download, a skipped
 update: the game starts anyway with what it has, and `launcher.log` in the user data folder says
@@ -579,7 +704,8 @@ Downloads start only from this repository's release URLs, over https. GitHub the
 `release-assets.githubusercontent.com`, so redirects are checked one by one, which is why this uses
 Node's `fetch`: Electron's `net.fetch` fails on `redirect: "manual"`. That means it doesn't use
 Windows' proxy settings, so behind a proxy a player just gets no updates. A zip's entries are all
-checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`.
+checked before any is written, by `unsafeOriginalName`, as JSZip tidies `../` out of `name`. The
+website's build comes only from under `GAME_SITE_URL`, with no redirects (Following the website).
 
 A release also carries the game in two parts: `game-<version>-lite.zip`, the game zip without
 `caches/chunks/`, and each of the slim cache's chunks as `cache-<chunk>.bin`. The manifest lists
@@ -594,6 +720,52 @@ Either way, a game whose `caches.json` lists a chunk it hasn't got isn't install
 
 The game's Cache API copy of the chunks is under `GAME_ORIGIN`, which never changes, so after an
 update the game reads the chunks it had from there, and drops the ones it no longer needs.
+
+### Following the website
+
+A release's game and the website's can be different builds, and co-op only puts players on the
+same build together (Co-op, Versions). So a launcher built with `GAME_SITE_URL` (a repository
+variable, like `COOP_URL`: `https://example.com/game/`) plays the website's build instead of
+the latest release, whatever its version. At launch:
+
+1. It reads the website's `game-files.json` and `caches/caches.json`, with a short time limit and no
+   redirects. `game-files.json` is written by every `bun run build` (`siteFilesPlugin` in
+   `vite.config.ts`): the build id, its version and `minLauncher`, the relay, run collector and
+   cloud-save addresses it was built with, and every file but the slim cache's, with its sha256.
+   The chunks are in `caches.json`, which has to be for the same build. The release check (Game
+   updates) starts at the same time, so a website that doesn't answer costs only its own time
+   limit, and the release is only taken if the website's build can't be (`updateForLaunch`).
+2. `whyNotFollow` refuses a build needing a newer launcher, or one built with other addresses than
+   the launcher's: the app only lets out its own, so that build would lose co-op or cloud saves.
+3. If the bundled game or an installed folder is that build already (its `build.json`), it plays
+   that. Otherwise it downloads the build into `site/<build>` in the user data folder: files the
+   game it's playing has (by sha256, whatever they're called) and chunks it has are copied, the
+   rest are downloaded a few at a time, each checked. Nothing's played until all of it's there.
+   Either way it notes the build in `site-build.json`, so that offline it plays that one, not a
+   build of the same version left in `site/` (one whose removal failed, say).
+4. It's served from `GAME_ORIGIN` like any other game folder, so saves, settings and the game's
+   copy of the cache stay where they are.
+
+If the website can't be reached, or has no `game-files.json` yet, or can't be followed, it takes the
+release instead, and offline it plays the newest it has (`pickGameFolder`: on the same
+version, the website's build wins). Only the website's build in use is kept. Skip for now, or
+closing the small window, skips both: a skipped download of the website's build doesn't become a
+download of the release.
+
+It follows the website back too: a website rolled back to an older build gets the app on it. If
+that's an older version, a save the newer one wrote is only read, not written, until the website
+moves on (Saves).
+Whoever can upload to the website can ship code to the app's players, as a release can.
+
+**Upload the whole of `dist/`** after `bun run build` and `bun run slim-cache`, `build.json` and
+`game-files.json` included. A launcher that finds a file that isn't what the list says, mid-upload
+say, takes the release as it would with the website down (so a newer release is downloaded and
+played, on another build than the website's), and tries the website again next launch.
+
+Launchers from before this only take releases, so players need the new launcher's zip once. The
+Android app does the same from its next APK, from the next time the game starts over rather than
+straight away, and on Wi-Fi only (Android, Following the website on Android). It has its own
+`minAndroid`, there.
 
 ### When the launcher has to change
 
@@ -679,9 +851,12 @@ src/game/
               guest), protocol (the messages)
   render/   GameWebGLRenderer (the map viewer's renderer with the game's passes), CameraRig
   ui/       React screens and HUD, ChestModal (the casket opening), EventModal (a random event's
-            offer), ItemIcon (an item's model, or an interface sprite), DescriptionButton (hover,
-            focus and hold descriptions), CountryFlag (a co-op player's flag), CoopScreen (the
-            rooms, the lobby, the party in a run),
+            offer), ItemIcon (an item's model, an interface sprite, or a loc's model from
+            above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
+            (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
+            Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
+            off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real
+            checkbox, `CHECKBOX_SPRITES`), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -714,12 +889,38 @@ Empty worn-equipment slots use the cache's equipment silhouettes (`GEAR_SLOTS.ic
 deployment's slim cache cover them too. Equipped slots still show their item's model; small phones
 still hide the gear row.
 
+The sound has an orb like the client's, at the minimap's upper left where the client's hitpoints
+orb is (under the pause button on a touch screen, which has that place), and at the title
+screen's top right (`ui/SoundOrb.tsx`): the client's orb frame and an orb's fill, the Music tab's
+harp in its circle, and cloud save's "no" sign over that while the sound's off
+(`SOUND_ORB_SPRITES` in `content/titleIcons.ts`, in `getGameSpriteIds` too). The frame's wider
+than an item icon, so it's drawn at its own size by `ui/useSpriteFrame.ts`, as a flag is,
+rather than by `ItemIcon`. The harp (33x36) is taller than the orb, and no smaller music
+sprite turned up in the cache, so it's drawn smaller, pixelated to keep its strings. Its plate
+has M for the keyboard (`KeyHint`), and nothing on a touch screen or a controller, which have no
+key for it. On the title it comes after the menu in the page, so Tab reaches Singleplayer first.
+Pressing it turns the sound off or on. In a run, M and the orb say which way it went in a toast
+that replaces the last one; the sound setting doesn't, as it shows that itself
+(`GameClient.toggleMute`'s `announce`).
+
 Changes to the map viewer itself are small: the game subclasses its WebGL renderer, a few decoders
 learned the rev 241 and 242 opcodes, the map loader can take extra map squares as plain data
 (`src/rs/map/CustomMapFileLoader.ts`, from ScapeRune), `src/rs/config/loctype/LocOverrides.ts`
 gives a ScapeRune map a loc a different model or size, and two bugs were fixed (floor collision missing on the edge of every
 map square, and a resize during loading leaving the 3D view in a corner). `?viewer=1` still loads
 map squares its own way (see below).
+
+Karamja's blocking Jungle plants (the ids in `JUNGLE_PLANTS`) have low wooden bases, made from the
+cache's Tree stump (loc 1354, model 1635), because loc 1398's model also stands there as a "Plant"
+(loc 1390) you can walk through. `src/mapviewer/webgl/loc/PlantBarriers.ts` adds them to the static
+render list in `SdMapDataLoader`, not to the scene or cache definitions: collision, pathfinding and
+the minimap stay unchanged. It copies the model, scales it to sit under the plant's leaves, keeps
+one copy for each size in a map square, and fits each to the terrain. A plant still blocks out to
+its leaves, past the base. Plants with `clipType` 0 get none, and animated or
+transforming plants never reach the list (`getSceneLocs` keeps them as entities). Without the
+stump model it logs an error and draws no bases, rather than failing the map square. Keep this
+decoration separate from `RegionDataLoader`'s footprints and `LocOverrides`. The slim cache's map
+pass runs the same loader, so it collects the stump model by itself.
 
 The main thread and every worker decode the cache's tables for themselves, so they're kept small:
 an index's reference table is decoded the first time something reads the index, into flat arrays
@@ -808,7 +1009,9 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       none; `status` and `message` per phase, `ambients` (more timers, ground marks or cycles too),
       `confine: false` to let the player off the `bossArena` (and `Sim.confinedToArena`, which
       co-op's prediction reads).
-    - Swings: `line` (a strip the way it faced), `cover` (spares whoever's in a pillar's
+    - Swings: `line` (a strip the way it faced; `line.track` turns it after the player for the
+      start of its windup, `Sim.trackLine`, and the view draws it from `BossWindup.dirX` each
+      frame, so it follows), `cover` (spares whoever's in a pillar's
       shadow from where it's cast, `inShadow`; the view lights the arena and draws the shadows'
       soft outlines, `shadowOutline`, the same shapes). Blasts: `square`. Projectiles: `wave` (through everyone, once
       each), `boomerang` (out and back, once each way), `from: "knights"`, `onHit` (drag, bind with
@@ -829,14 +1032,14 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
       strike to its targets within that reach, and the boss bar says when it's out of it.
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
-      it misses everyone (`dropGuard`: `BossState.exposedEnd`, every hit doubled in
-      `damageEnemy`, a reach-limited strike fired at once), and stuns it (`stunEnd`: `stepBoss`
-      does nothing, the stars over it) when its arena's attack with `turns` catches it
-      (`boltsOnBosses`, `landHazard`, `stepThrough`) or a `line.dash` lunge ends in a pillar
-      (`BossState.dash`, `stepDash`), with its sounds as it drops; after a stun, `stunGrace`
-      seconds when nothing stuns it (`BossState.stunGraceEnd`). The view tints a boss whose
-      guard's down gold. A phased boss with `barPerPhase` shows each phase as a full bar
-      (`getPhaseBarFraction` in `GameClient`).
+      it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`)
+      (`dropGuard`: `BossState.exposedEnd`, every hit doubled in `damageEnemy`, a reach-limited
+      strike fired at once), and stuns it (`stunEnd`: `stepBoss` does nothing, the stars over
+      it) when its arena's attack with `turns` catches it (`boltsOnBosses`, `landHazard`,
+      `stepThrough`) or a `line.dash` lunge ends in a pillar (`BossState.dash`, `stepDash`), with
+      its sounds as it drops; after a stun, `stunGrace` seconds when nothing stuns it
+      (`BossState.stunGraceEnd`). The view tints a boss whose guard's down gold. A phased boss
+      with `barPerPhase` shows each phase as a full bar (`getPhaseBarFraction` in `GameClient`).
     - A boss attack's `strikeAt` times its animation to land with it: held on its first frame
       (the blow drawn back) until it's that far from landing (`BossWindup.seqTick`,
       `Sim.playWindup`). Players held for an entrance with `BossIntroDef.faces` face the boss
@@ -844,19 +1047,79 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
     - A checker's cells can hurt only within the circle drawn on them (`GroundPatternDef.round`),
       and a `boomerang` with `toEdge` flies to where its line leaves the `bossArena`
       (`Sim.throwReach`, `boxExit`), which the view's line uses too. A boss fight's HUD and
-      touch screen have no item bar, and its results a Retry (`GameClient.retry`).
-    - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button: `Sim.useAbility`,
+      touch screen have no item bar. Results played on your own, a boss fight's or any other's,
+      have a button to go again (`GameClient.retry`).
+    - `MapDef.fight.ability` (`FightAbilityDef`) is the fight's own button, and `TombsDef.ability`
+      the raid's (`Sim.ability` reads either; in the Tombs it lands on the path's boss, or the
+      Wardens' second- and third-phase Warden, and `damageShare` hits for a share of its
+      hitpoints with no bonuses, so it scales with the raid level and the party): `Sim.useAbility`,
       through co-op's actions (`CoopAction` `ability`), on Space, a pad's bottom face button in a
       run (`RUN_KEYS`), and `ui/AbilityButton.tsx` on the HUD and the touch screen. A press that
       can't go off yet is held a moment (`Hero.abilityHeldUntil`, `stepHeldAbilities`), and
       `openReach` is its reach while the boss's guard is down. Its damage
-      is `ability:<id>` for the run's stats; what the arena did to its boss is `court`.
+      is `ability:<id>` for the run's stats; what the arena did to its boss is `court`. It
+      lands on the boss on the bar, or with two final bosses up (the Scarab Mages) on either
+      (`abilityBosses`): one with its guard down first, then the nearer (`abilityTarget`).
+      `guide` has the button coach (the Tombs' and their quest's): a hint early in a fight, until
+      it's first used, and a pulsing ring with a tag while the guard's down.
+    - A spell a boss channels (`BossAttackDef.channel`) drops its guard from its windup's start
+      till it's cast (`dropGuard` in `startBossAttack`), and for a summon with `walkTo` while
+      its walkers walk in (`stepWalkers` holds `exposedEnd` up). The fight's button landing on
+      it meanwhile breaks it (`breakChannel`, from `fireAbility`): the windup, chain and follow
+      are dropped, or the walkers vanish with no blast, and its guard's down `stagger` seconds
+      from then, with a `bossGuard` event whose `cause` ends in ` (broken)` (the sim counts
+      those) and `broken` on screen. A swing with `outside` hits only beyond that many tiles
+      from the boss: `GameView` draws the shelter green and the storm's edge closing in red
+      (`STORM_EDGE`), and the bot heads for the shelter first (`shelter` in `bossReads.ts`).
     - `ImpactDef` (`BossAttackDef.impact`, `guard.stuck`, `leash.jump.land`, `intro.land`,
       `FightAbilityDef.impact`) puts spot animations where a blow lands, scaled to `fit` and
       each played out once (`Effect.once`; a trail's laid along its way, turned with
       `Effect.yaw`), and a `bossImpact` event that `GameClient` shakes the camera by (off with
       the Screen shake setting, `DisplaySettings.screenShake`, and by default for reduced
       motion) and `GameView` flashes the screen by, faintly.
+    - Two bosses fought together (the Scarab Mages, `content/cursedSands.ts`): both are
+      `finalBoss` events, so the run's won when both are down, and the second's event can be
+      later with `inArena` (`RunEventDef`: it turns up inside the `bossArena`, 4 to 9 tiles
+      from the player, `spawnBosses`). The first's intro mustn't have `alone`: `aloneWith`
+      stops every event till it's dead. `BossDef.enrage.partner` enrages a boss when one of its
+      partners dies (`enragePartners`, from `killEnemy`), at its own `tempo`
+      (`BossState.furyTempo`, in place of `ENRAGED_INTERVAL`); an attack with `enraged` and
+      `phases: [1]` is how a phased boss gets its later attacks early that way. A
+      `BossAttackDef.tether` (kind `tether`, used as it lands or as an ambient) is a beam from the
+      boss to the nearest living partner for `seconds`: `Sim.tethers` (`BossTether`, cleared with
+      the rest of a boss's attacks), read each tick between where the two are (`tetherEnds`), it
+      hurts each hero within `width / 2` of it once an `interval` after `warn` (`stepTethers`,
+      `segmentDistanceSq` in `core/arena.ts`, `Hero.tetherHitTick`), and `GameView.drawTether`
+      lays its `spotAnim` along it a tile apart, faint until it's armed. A pattern ambient with
+      `origin: "target"` bursts from where the nearest player stood as it began, so a ground
+      ambient on the player and that pattern on the same timer make marks that burst outwards.
+      One can echo the other's lunge (`EnemyDef.echoes` on a boss, below): the elder copies
+      the first's Crossfire, so two strips come from two ways at once.
+    - A ground attack's `trail` spots (the Champion of Scabaras) land on where the player it's
+      after stood `ago` seconds back: each hero keeps the last `TRAIL_SECONDS` of where they stood
+      (`Hero.trail`, a ring by tick written in `stepPlayer`), read in `markGround`; where
+      nothing's kept for that tick (they weren't stepped, or it's further back), it's on them.
+      It's sim state like any other, so co-op's copies agree, and nothing reads it without the
+      attack. An ordeal's `opener` (`BossOrdealDef`, `BossState.ordeal.opener`) is used once
+      as it begins, before its `attacks`: the Champion's nests, laid all at once rather than
+      coming among them as Xarpus's do. As an exhumes ends, each still up shows its
+      `healSpotAnim` going to the boss.
+    - An enemy that copies a boss's lunges (`EnemyDef.echoes`, an `EchoDef`: the Menaphite
+      Akh's shadow): as that boss starts one of the named line swings (`startBossAttack`), each
+      living enemy with `echoes` that isn't busy (nor, for a boss echoing its partner, winding
+      up, channelling, kneeling, stunned or in the air: `isBusyBoss`) starts its own copy
+      (`startEchoes`): the
+      boss's attack under the echo's `name`, `damage`, `seq` and `impact`, with no `opens`,
+      `chain` or `follow`, from where it stands at the hero nearest it, over the boss's windup
+      plus `later`, the nearest a hero first up to `most`. It's a `BossWindup` on the enemy
+      (`Enemy.echo`), stepped in place of its walking and shooting (`stepEcho`: `trackLine` as
+      the boss's, then the strip through `forEachHeroInReach` and `inStrip`, the trail, and a
+      dash down `line.dash` as `Enemy.echoDash`, with the rest of its impact where it stops).
+      The view draws it as the boss's strip (`drawBossWindups` reads `Enemy.echo` too), and the
+      echo's `seq` is baked with the enemy's model (`GameAssets.getEnemyBakes`), so it must be
+      one its rig can play. Name only a phase's attacks to keep it to that phase. The bot reads
+      every strip winding up (`lungeStrips`), and with two or more steps to the nearest spot
+      none reaches (`sharedPocket`); with one it steps across it as before.
 - A map's `music` names an OSRS track, and its recording (from the OSRS Wiki) goes in
   `src/media/music` as the name in lower case with underscores: `the_bane_of_ashihama.ogg` for
   Phosani's Nightmare. `GameClient` finds the files with a glob, so a track can be named before
@@ -890,10 +1153,13 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
   keeps the boss up for `seconds` after the last blast as a stage of its own (`stage: "finale"`,
   untouchable like the totems stage, the HUD's bar the time left): it opens with `opener`, keeps
   to `attacks` at `interval` like the flowers' `during` (`keepsTo`), doesn't wait for its
-  sleepwalkers (`stepWalkers` doesn't stop it), runs the finale's own `ambient`, and
-  `stepPhase` kills it when the time's up. `Hero.damageByAttack` is what each boss attack did to
-  that player, by name: `sim.damageByAttack` in the console, and the balance bot's `boss attacks
-that hit` line, for tuning a fight.
+  sleepwalkers (`stepWalkers` doesn't stop it), runs the finale's own `ambient` (one pattern, its
+  `delay` not read), and `stepPhase` kills it when the time's up. A boss fought by its hitpoints
+  (no totems) gets one too: at none it's held at 1 behind `shieldEnd` instead of dying
+  (`lastStand`, from `damageEnemy`; both go through `startFinale`), with `shout` over it, and its
+  guard can't drop meanwhile (the Menaphite Akh's last stand). `Hero.damageByAttack` is what each
+  boss attack did to that player, by name: `sim.damageByAttack` in the console, and the balance
+  bot's `boss attacks that hit` line, for tuning a fight.
 - The Theatre of Blood's bosses (`content/theatre.ts`) add: patterns `wall` (a row with a gap
   somewhere new each volley) and `closing` (a ring round the player, coming in), ground marks that
   `lingers` and hurt while you stand in them, and `safe` marks a projectile spares you in;
@@ -1038,9 +1304,9 @@ adventurer can have:
   counts the ticks a lair's woken, fought or unsealed, and `mapSeconds` (the waves, events and
   enemies' toughness) and `clockSeconds` (the HUD's timer) leave them out, so the hordes take up
   where they were. `seconds` is still the run's whole time. A death in one ends the run, as any death does,
-  and offers Retry (`canRetry` in `maps.ts`): on a map whose only lair is open from the start,
-  that starts the hero at its `start` (`getRetryLair`, `GameClient.startRun`'s `atLair`), so
-  it wakes on the first tick; with more than one (the Battle for Varrock's), the map over. `MapPropDef.lair` ties a prop
+  and a retry (as any solo run has) on a map whose only lair is open from the start
+  starts the hero at its `start` (`getRetryLair`, `GameClient.startRun`'s `atLair`), so
+  it wakes on the first tick; with more than one (the Battle for Varrock's), it starts the map over. `MapPropDef.lair` ties a prop
   to its lair: hidden once its boss is up, or swapped for `awake` (Yama's empty throne). `LairDef.opening` (`LairOpeningDef`, Yama's in `fun/yamaWakes.ts`) is a cinematic as it
   wakes, before its intro. Stepping onto the floor then puts the lair in `waking` (`Lair.wakeTick`),
   which holds every player where they stand, turned to `at` (`Sim.introHolds`, `introFacing`), with
@@ -1052,8 +1318,8 @@ adventurer can have:
   falls), and its last comes during the intro, whose camera pan it hands back to. A skip ends
   it for that player; solo, `Sim.skipLairOpening` brings the intro on at the next tick. A run that
   starts on the floor (a retry) has no opening (`Sim.lairOpens`). A cast member standing in for a
-  prop shows it again once they're `gone` (Yama, gone from his throne). `getMapCinematics` gives a
-  map's cinematics, this, an unsealing's and `MapDef.cinematic`, for baking their cast and collecting their spot
+  prop shows it again once they're `gone` (Yama, gone from his throne). `getMapCinematics` (`content/maps.ts`) gives a
+  map's cinematics, this, an unsealing's, a fight part's and `MapDef.cinematic`, for baking their cast and collecting their spot
   animations and sounds. His fight's own pieces are fields any boss can have:
     - `BossDef.home` keeps it within so many tiles of where it rose.
     - `BossAttackDef.meteor` is a swing drawn as something falling from `height` tiles onto where
@@ -1113,13 +1379,44 @@ adventurer can have:
       interrupted as `interruptedBy` is (`BossWindup.taken`). `heal` heals the boss that share
       as it lands.
 
+### Collection log rewards
+
+- **`TrophyDef`** (`content/trophies.ts`): its `id` is stored in `SaveData.trophies`, so never
+  rename one players may have. `TrophySource.enemy` rolls on a loot-bearing kill of that enemy on
+  `mapId` and `turkey` when a Cooked turkey is carved, each till the run has found it; `boss`
+  rolls on that boss's kill; and `map` is given only on a win, with `requiresBoss` checked against
+  the run's `bossesKilled` and `hard` keeping it to hard mode. A `quest` source is given when the
+  quest is recorded, and on loading a save that had already done it.
+- **`PetDef`** (`content/pets.ts`): a pet's `id` is its trophy's, and its follower NPC is the
+  cache's variant marked as a follower, with its own idle and walk animations. The pet can be
+  taken out once its trophy is found.
+
+### Thanksgiving's Avian Assaulter
+
+The Avian Assaulter is Thanksgiving Harvest's `seasonalCharacter` and `only` there, so everyone
+plays them on that map, solo or in co-op, and they're in no roster. `CharacterDef.fixedOutfit`
+keeps their outfit's slots showing over passive and casket gear, without changing its stats. Their
+Rubber chicken is `pickOnly`: they start with it and can upgrade it, but it isn't offered to
+others. `maxWeapons` leaves room only for it, and `noItems` gives no passive slots and no casket
+item (caskets pay only coins). The map's `noLevelUpCoins` drops the coins from the level up's
+fallback once the chicken's maxed, leaving the shark: `Sim.roll` filters them after
+`rollChoices`, so the RNG goes as before. Endless never falls back, since the chicken levels on.
+The chicken's `WeaponDef.bloodHeal` rolls its heal on every hit, and each upgrade adds to
+`WeaponState.healGain` by the offer's rarity (`BLOOD_HEAL_GAIN` in `Sim.ts`); `bossDamage` adds damage against bosses for that weapon only. `damageAgainst` is the
+adventurer's bonus against enemies with those tags, on that hero's own damage only.
+`CharacterDef.overheadSpotAnim` is a looping effect over each hero, only for show: the Avian's is
+the cache's stun birds, without a stun. It's in the base bake and slim cache with the other
+adventurers' effects. `EnemyDef.minionAttacks` lets a summoned (non-boss) enemy fight with its
+`boss` attacks, as the Enraged Dark Chickens' surge does; set its `enrage.at` to 0.
+
 ### Props and opening cinematics
 
 - **`MapDef.props`** (`MapPropDef`): NPCs posed on a map as scenery, playing their own animation
   on the sim's clock, drawn by `GameView.drawProp` and never in the sim. For what a loc can't be,
   such as a person standing guard (Vardhelm's two knights at the keep's door) or someone playing
   a skeletal animation (Yama on his throne). They're baked as the map's travelled to
-  (`GameAssets.loadProps`), and the slim cache keeps them with the pets.
+  (`GameAssets.loadProps`), each NPC once, with what every map plays on it, as the slim cache
+  keeps them (with the pets): a model has one key, whichever map baked it.
 - **`MapDef.cinematic`** (`CinematicDef`): an opening cinematic, played as a run starts on the
   map (`GameClient.enterRun`), not on a retry (`startRun(mapId, false)`). It's data: a `cast` of
   NPCs posed like props (`CinematicActorDef`; `prop` stands one in for a map prop while it plays,
@@ -1128,7 +1425,8 @@ adventurer can have:
   of which is `{ player: true }`, the run's own camera. `client/Cinematic.ts` works out
   everything from the def and a clock: the camera's a monotone cubic through the shots per
   channel (target, height, pitch, yaw, distance), so it never overshoots one, with `hold` easing
-  to a stop; `CinematicPlayer` is the clock, which `GameClient.updateCinematic` moves on (100 ms
+  to a stop, and turns the short way round from one shot's yaw to the next; `CinematicPlayer` is
+  the clock, which `GameClient.updateCinematic` moves on (100 ms
   a frame at most) and plays the cues' sounds from. `client/CinematicView.ts` draws the cast,
   their spot animations (lit through `SPOT_LIGHTS` on a lit map), overhead chat and the bars,
   and `GameView` hides the props it stands in for. The cast is baked with the props
@@ -1146,8 +1444,11 @@ adventurer can have:
       phone, to the ground or the render distance, with a margin) for the map squares it will
       see, and `GameClient.preloadCinematic` pins them (`MapManager.setPinned`: loaded wherever
       the camera is, never unloaded) and keeps the loading screen up until they're in
-      (`getPinnedProgress`, 45 s at most). They're unpinned as it ends or is skipped, and stream
-      as usual from there.
+      (`getPinnedProgress`, 45 s at most). A key, button, click or tap there skips the wait and
+      the cinematic both. In co-op a guest tells the host it's loaded only then
+      (`cinematicLoaded`), and the host doesn't step until its own are in, so the run starts with
+      everyone watching (the host waits 20 s at most for a guest, as for its map). They're
+      unpinned as it ends or is skipped, and stream as usual from there.
     - `CinematicActorDef.head` is where an actor's overhead chat sits, when the top of its model
       isn't its head (Yama's is his throne's back). `MapDef.spawnFacing` turns the player as the
       run starts (south if it's left out), to face the way the cinematic's camera ends looking.
@@ -1161,6 +1462,16 @@ adventurer can have:
       hold a frame, from the console: `game.cinematic.held = true; game.cinematic.seconds = 12`,
       then `await frameProbe.sample(5)` for its triangles. The page reloads if a source file
       changes, which ends it.
+    - **Not only openings.** A fight in parts gives each part its own (`MapDef.stages`'
+      `cinematic`), played in place of the map's as that part's run starts, and not on a retry
+      (`getRunCinematic`; `getMapCinematics` lists every one a map has, for what bakes and loads
+      them). Beneath Cursed Sands' four bosses each have an entrance
+      (`scaperune/maps/cursedSandsEntrances.ts`): the boss stands where it rises and says its
+      piece, and its stand-in goes as the run starts (the last shot's start), with the boss's own
+      intro rising there, so it's never there twice.
+    - **In the dark.** On a map with `lighting`, a cast member's `light` (`CinematicActorDef`) is
+      on them while they're drawn, and a spot animation in `SPOT_LIGHTS` lights them while it
+      plays (`CinematicView.getLights`, offered to `SceneLights` as `KIND_CINEMATIC`).
 
 #### The shot editor
 
@@ -1225,6 +1536,12 @@ end, the camera resting there), `live`, `warmup`, `sound`, `volume`, `music` and
 
 ### Raids
 
+The Tombs of Amascut (on the Raids tab, behind its quest, Beneath Cursed Sands): its plan, and how
+it was built, are in `docs/design/tombs-of-amascut.md`. Its map is `MapDef.tombs` (a Nexus with a
+door to each path), and its invocations (`content/invocations.ts`) take hard mode's place there:
+the sim's `hardScale` is their raid level's (`getRaidLevelScale`, `RAID_LEVEL_SCALE`), and `hard`
+stays off.
+
 `MapDef.raid` makes a map a raid: rooms in `content/raids.ts`, each with its waves, its boss and
 where things are. `Sim.stepRaid` runs them: a room's waves until its boss is due, then the party's
 moved into its boss room (`startRaidBoss`, `moveParty`), and once the boss is down the room's scored
@@ -1232,7 +1549,14 @@ moved into its boss room (`startRaidBoss`, `moveParty`), and once the boss is do
 raid points) and the next room starts. The last room's boss is the final boss, and its chest
 (`openRaidChest`) goes on the result. Raid wins are kept by the save like a campaign map's; hard
 opens after one, endless never does, and expert mode (`SimOptions.expert`, solo only for now) after
-a hard one. A hall's teleporter (`stepTeleporter`) asks before skipping to its boss,
+a hard one. Expert's chest gives one of Lil' Zik's looks each clear (`isEveryTimeTrophy`) till
+they're all found. Every raid chest (the Theatre's, and the Tombs' `openTombsChest`) gives only
+trophies the hero hasn't found (`Sim.hasTrophy`): found this run, or in the save
+(`SimOptions.trophiesFound`, the `isRaidChestTrophy` ones from `getRaidChestTrophiesFound`). A
+roll with nothing left isn't made, and `RaidChest.purpleLeft` says whether a purple was there to
+find. A co-op player's go in their `Loadout` as `trophies` (the relays pass them as they are, and
+`cleanLoadout` keeps only those), so every copy rolls each hero's chest the same way.
+A hall's teleporter (`stepTeleporter`) asks before skipping to its boss,
 `SimOptions.raidTeleports` times a raid, in the halls `SimOptions.raidPortals` says
 (`getRaidPortals`: rooms whose boss the save has a kill of, in any form). The game draws the portal
 (`raidTeleporter`), as it isn't in the map. A room runs on a clock of its own, from
@@ -1253,8 +1577,20 @@ and `oftener` gives those `CLOSE_WEIGHT`. Their patterns don't set `BulletPatter
 there's no safe spot on them. `CLOSE_REACH` is past the longest melee reach (the scythe's), and the
 slams are as wide, so there's no ring round a still boss to hit it from untouched. Each has
 something for a player keeping away too: a closing ring, a leap (`minRange`) or ground marks on
-them. Each boss has a mechanic of its own that makes the fight longer by making it harder, not by
-more hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
+them. A closing ring stands where it formed for `RING_HOLD` (`BulletPatternDef.hold`, a bullet's
+`wait` in `BulletPool`) before it comes in, hurting whoever walks into it meanwhile, and as long
+on hard and expert. Only a closing ring can take a `hold` (a test checks). `closingRing` in
+`theatre.ts` sets each ring's `interval` to its hold and time to close in plus `RING_REST`, so a
+ring's next volley forms only once the last is in. The boss stands only for its `channel` (as long
+as before), then attacks between the rings, but a boss with a ring that holds starts no other
+such attack until its last ring is in (`ringsUntil` on its state, in `Sim.startPattern`). That
+goes by the pattern's volleys and `interval`, so any ring with a `hold` needs an interval that
+leaves it time to close in, whoever's it is (a test checks every boss's). It's checked only where
+a boss picks its next attack, not for a chain, a follow or an opener. A nap that comes due while
+the Bloat's swarm is still coming waits for its last ring to go out, so none come while he's
+down, and meanwhile he fights on with nothing that fires more (`stepNap`). Each
+boss has a mechanic of its own that makes the fight longer by making it harder, not by more
+hitpoints: the Maiden's healers (`summonsAt` with `nylocas_matomenos_healer`), the Bloat's
 naps, Nylocas Vasilias's colours on normal (`colours.offStyle`: the other styles do that share, with
 the prayer on top for missiles and magic; its own gets through the prayer for `ownStyle`),
 Sotetseg's `shadowRealm`, Xarpus's `exhumes` and Verzik's `yellows` (all run by `stepOrdeal`, an
@@ -1277,7 +1613,8 @@ for once it's gone). On hard and expert, patterns fire `MapDef.hard.bullets` tim
 (`Sim.bulletScale`) with the space between them as wide: a ring's gap is an angle and keeps its
 width, a wall's or closing ring's gap grows with the count, a spread fans out wider, and a ring or
 spiral with no gap keeps its count. Their hitpoints (each room's `bossHp`) are tuned to players'
-clears, not the bot's: it often dies to the Maiden.
+clears, not the bot's: it often dies to the Maiden. It makes for a closing ring's way out only
+with `DODGE=1` (`cageGap`), so sim a change to the rings with that.
 
 `?raidtest` (dev server only) gives each of a raid's rooms two minutes of waves and every level
 up's pick at its max; `?raidtest=short` does only the first.
@@ -1370,6 +1707,58 @@ it beside the character). So a pet can't change a run, and co-op's copies agree 
   that's the follower (it's the one with the Metamorphosis option). The other one looks different
   for some pets.
 
+### The Wardrobe
+
+The Wardrobe (`ui/WardrobeScreen.tsx`, a tile on the title screen) is the player's look: a body
+(body type A or B, a kit for each body part and the five body colours, as character creation
+picks them) and an outfit, slot by slot, worn on every adventurer. It's looks only, like a pet:
+the sim never sees it.
+
+- **What's in it:** `content/cosmeticItems.ts` is generated from the cache by
+  `scripts/cache/cosmetics.ts`: every item worn outside the weapon slot that both bodies can wear,
+  one of each look (items with the same worn models and colours are one piece), with a rarity by
+  its value in the cache (and the discontinued holiday rares made Very rare). The same script
+  lists the kits character creation offers. Run it again after moving to a newer cache. A body
+  always has a jaw: it's the chin and mouth (the hair kits have none), so there's no "none", and
+  body type B's default is its clean-shaven one (296, the counterpart of type A's 14). Prices
+  go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, except 3rd Age's dearer
+  `THIRD_AGE_PRICE` (by name), paid from banked coins like the Armoury. An unlocked adventurer's own pieces are the player's for nothing
+  (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
+  Collection log finds are never sold: `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts` names the
+  trophies whose pieces are worn once the trophy's in the save (`getPieceTrophy`): the trophy's
+  own item if it's worn, and any others listed with it (what it makes in OSRS, as the hilt's
+  defender, or other looks of it, as Masori (f) or the Chompy bird hat's). `ownsCosmetic` goes by
+  the trophy alone for those, and `buyCosmetic` and loading a save's `cosmetics` refuse them. The
+  Store still lists them, to try on, with where they're found in place of a price. A trophy
+  that's a worn item belongs in the list, or the store sells it.
+- **Saved** as `SaveData.cosmetics` (the pieces bought) and `SaveData.look` (a `WardrobeLook`).
+  `cleanLook` drops what this game doesn't know, and for the save, pieces it can't wear.
+  `SaveData.outfits` are outfits kept by name (`SavedOutfit`: the pieces and `overGear`, not the
+  body), saved over one of the same name, cleaned by `cleanSavedOutfits`.
+- **Worn:** `getCharacterAppearance(characterId, look)` puts the body on and the outfit over the
+  adventurer's own pieces; a slot set to -1 shows the body. In a run (`getRunAppearance`) gear
+  from passives and caskets goes over the outfit, unless `look.overGear` keeps it on top. The
+  weapon slot is always the run's. Adventurers who look like someone (`wearsWardrobe`: a fixed
+  outfit, or kits of their own) keep their look.
+- **Trying on:** a piece picked in the store is shown on the menus' adventurer
+  (`GameClient.previewLook`) until the Wardrobe's left. On the Appearance tab the adventurer
+  stands in the body alone (`showBareBody`, `getBareAppearance`: nothing worn, no weapon) so
+  what's changing can be seen. The Wardrobe holds the title camera still in front of the
+  adventurer and turns them instead (`turnWardrobeModel`, the actor's yaw), with its arrows or
+  by dragging the courtyard: `useDragToTurn` takes a press that lands on the game's canvas, as
+  the screen lets everything but its panels through, so it needs no area of its own on any
+  layout. Random (`randomBody`) is any kit and colour of either body.
+- **Body colours:** `PlayerModelLoader` recolours as the client does, from its tables (not the
+  cache's). Hair and tops have a second colour too (`BODY_COLOR_SOURCE_2`, the newer hairstyles'
+  and beards' streaks, made in pink), recoloured by every choice, the first included: without
+  it they come out pink.
+- **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
+  so it needed no relay change; `beginCoopRun` cleans each hero's.
+- **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each
+  slot at once (shields one at a time, as a piece covering the shield slot would hide one), and
+  every worn item and power-up look on body type B too. That's what lets a deployed game draw a
+  body type B at all: before the Wardrobe, nothing in the game wore items' female models.
+
 ### What gets drawn
 
 A map square is 64 tiles a side and the camera sees a small part of one, so the game's squares are
@@ -1390,6 +1779,13 @@ gets from the model's origin in any frame of any animation, so bosses' big swing
 puts the actors on the same frame of the same animation together and each run of them is one
 instanced draw: a crowd of one enemy is a few draws, not hundreds. The shader finds an actor's data
 by `DRAW_ID + gl_InstanceID`.
+
+A face's priority (OSRS's 0-11, `faceRenderPriorities`) is 4 bits of each vertex
+(`VertexBuffer.addVertex`): 1-12, after terrain's 0. OSRS paints a model's faces in priority order
+(10 and 11 among the rest by depth, so over what they're in front of), and the shaders get the same
+by pulling a higher priority a little towards the camera, which only matters where faces touch. It
+was 3 bits until the Wardrobe, and 7 and up wrapped under the rest: a tiara or a helm's trim sank
+into the hair or the helm. Alpha has 7 bits to make room.
 
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
@@ -1503,7 +1899,9 @@ things are separate, each optional:
   falls.
 - **The rule**: `litTargetsOnly` (the Scar's). Weapons only pick targets within half a tile of a sim
   light's edge (`nearestEnemies`, which every weapon, thrall, cannon and power-up aims with), and
-  the minimap only shows what's lit. Shots carry on and hit whatever they meet. The balance bot
+  the minimap only shows what's lit. Shots carry on and hit whatever they meet, and a chain's
+  hops go to what's near, lit or not. Each enemy's lit or not is worked out once a tick, in
+  `stepLights` (`Enemy.lit`, read through `isEnemyLit`). The balance bot
   only walks at what's lit, and faint arrows show what's coming out of the dark. A dark map without
   it is only dark; a lit one with glowing lights is cheap.
 
@@ -1515,7 +1913,7 @@ hashes: glowing scenery, spells and effects, a floor's tiles, bosses' windups an
 flicker and pulse on any light.
 
 **Drawing them.** Every frame `SceneLights` offers every light there is to `LightBudget`, which
-keeps the `MAX_SHOWN_LIGHTS` (24) that tell most: the shown player's own, then the brightest and
+keeps the `MAX_SHOWN_LIGHTS` that tell most: the shown player's own, then the brightest and
 biggest for how near the middle of the view each is. A light coming in fades in and one leaving fades
 out (a quarter of a second), so a map can have any number and none pops. Those are added into a
 light map on the CPU (`render/LightMap.ts`: two texels a tile, 64 tiles round the view, its corner
@@ -1560,10 +1958,10 @@ usual brightness with glowing scenery, a blue light of its own and the wizard's 
 
 **Cost**: only a map with `lighting` pays, and it pays about the same however many lights it has:
 one texture read a pixel, and the light map's few thousand texels on the CPU. In the headless
-renderer, a lit map's programs took about a tenth longer a frame than the same view without them
-(Lumbridge at 844×390: 94 ms without, 101 with none or 8 lights, 108 with 24), and Lumbridge
-itself, without lighting, took as long as before there were lights. A real phone hasn't been
-measured. Nothing past the lights is culled: the dark has to read as shapes, so a dark map draws as
+renderer, a lit map's programs took about a tenth longer a frame than the same view without them,
+with no lights or the most it draws, and Lumbridge itself, without lighting, took as long as
+before there were lights. A real phone hasn't been measured.
+Nothing past the lights is culled: the dark has to read as shapes, so a dark map draws as
 many triangles as a lit one.
 
 Combat sounds are picked by the server, not the cache, so the ids in `content/` come from the OSRS
@@ -1635,6 +2033,8 @@ scripts/cache/compare-caches.ts osrs-241_2026-09-30   what changed since an olde
                                          game reads (see A newer cache)
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
+scripts/cache/sprite-sheet.ts out.png 5000 5199   a range of sprites on one sheet, each over its id
+scripts/cache/spotanims.ts 2242 2236-2240   spot animations: model, animation, length and size
 scripts/cache/slim-cache.ts [out dir]    the slim cache for hosting (bun run slim-cache;
                                          SLIM_WORKERS, SLIM_CHECK, SLIM_REUSE: see Hosting)
 scripts/scaperune/find-prefabs.ts 50 50  a map square as text, to pick prefabs and survey ground
@@ -1665,6 +2065,19 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see
                                                         how damage keeps up with the rounds)
+scripts/game/simulate-tombs.ts [character] [seeds]      the Tombs of Amascut's bot (tombsBot.ts)
+                                                        on one room, boss or the whole raid
+                                                        (ROOM=apmeken, het, scabaras,
+                                                        crondis, baba, akkha, kephri, zebak,
+                                                        wardens or raid; LEVEL=2 the path level;
+                                                        INVOCATIONS=a,b, all or level:300;
+                                                        PARTY=2; KIT=max the dev kit; PATHS=het,
+                                                        apmeken the order; LEADIN=0 straight
+                                                        there at level one; MINUTES; VERBOSE=1),
+                                                        with each puzzle room's own account
+scripts/game/sweep-tombs.sh                             simulate-tombs over rooms, raid levels and
+                                                        kits (ROOMS, LEVELS, KITS=zero shop all
+                                                        dev, CHARACTERS, SEEDS, JOBS), a line each
 scripts/dev/icon-test.ts 1321            draw an item icon as ASCII
 scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a browser: triangles,
                                          draw ranges, bytes (--cull=8 checks the culling boxes and
@@ -1683,8 +2096,12 @@ doesn't follow workers, so it would find the package mid-load and reload the pag
 
 URL flags: `?room=ABCDE` joins a co-op room (the invite link), `?autostart=wizard` starts a run right away, `?stress=300` adds 300 goblins, `?viewer=1`
 opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the game running in a
-browser tab that isn't being painted, `?notice` shows the notice even after it's been closed, `?raidtest` (dev only) speeds up a raid (see Raids), `?director=battle_for_varrock`
-(dev only) opens the shot editor on a map's cinematics (see Props and opening cinematics). F3
+browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
+`?movementDiagnostics` enables local co-op prediction measurements (see below),
+`?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
+Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens),
+`?director=battle_for_varrock` (dev only) opens the shot editor on a map's cinematics (see Props
+and opening cinematics). F3
 shows collision and stats.
 
 ### A newer cache
@@ -1692,29 +2109,38 @@ shows collision and stats.
 The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). Moving it on:
 
 1. With no `caches/slim/` (a checked slim-cache run, which step 4 reads), run
-   `bun run build && bun run slim-cache` first, on the old cache. Then point `GAME_CACHE_NAME`
-   at the new cache's folder name (`osrs-<revision>_<date>`, from the archive's timestamp) and run
-   `bun run download-caches`, which fetches just that one. Keep the old one in `caches/`.
+   `bun run build && bun run slim-cache` first, on the old cache. A build leaves the dev maps out,
+   so for theirs run this on the old cache too:
+   `DEV_MAPS=1 SLIM_CHECK=0 bun run tsx scripts/cache/slim-cache.ts caches/slim-dev/`. Then point
+   `GAME_CACHE_NAME` at the new cache's folder name (`osrs-<revision>_<date>`, from the archive's
+   timestamp) and run `bun run download-caches`, which fetches just that one. Keep the old one in
+   `caches/`.
 2. `validate-decoders.ts`. A new revision can move or add opcodes: one type failing on opcodes
    that don't make sense (255, 253, 63) means an opcode it knows now carries data. Rev 242 moved
    multilocs from 77 and 92 to 97 and 98, with 3 byte ids. `dump-config.ts` shows the bytes;
    compare an entry with the same one in the old cache. Gate the fix on the revision.
-3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`.
+3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`, and that again with
+   `DEV_MAPS=1`: rev 242 renumbered the Tombs of Amascut's invocation sprites, which only a dev
+   map used then.
 4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
-   kept, the ones the game reads: the map squares, models and so on that changed, and each npc,
-   item, animation, spot animation and loc that changed, decoded, with the fields that differ. A
-   type only written a new way doesn't count. Look up the ids that changed in the content; a map
-   square that changed in an arena can move its collision.
+   kept, the ones the game reads: the map squares, models and so on that changed or went, and each
+   npc, item, animation, spot animation and loc that changed, decoded, with the fields that differ.
+   A type only written a new way doesn't count. Look up the ids that changed in the content; a map
+   square that changed in an arena can move its collision. Then for the dev maps:
+   `compare-caches.ts <old cache> caches/slim-dev/`.
 5. The tests with the cache there. `grid-hash.ts` pins what the ScapeRune maps write, and a map
    that copies the real world's squares can change with them: re-pin it on purpose.
 6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
    play exactly as before, run for run, so any difference there is a bug; the ones that changed
    reshuffle their seeds, so give those 6.
-7. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
+7. `scripts/cache/cosmetics.ts`, for the Wardrobe's pieces and kits (The Wardrobe, above).
+8. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
    `slim-cache` makes new chunks only where the groups changed, so returning players download
    just those.
 
 The browser's copy of the old full cache goes when the game next loads (`deleteOtherGameCaches`).
+So does any other full cache the original map viewer (`?viewer=1`) loaded: the viewer downloads
+it again when it's next opened on it.
 
 ### Co-op
 
@@ -1722,8 +2148,9 @@ Co-op runs in lockstep. Every player's browser runs the same `Sim`, built from t
 everyone's loadout (`GameStart`), and only what the players do goes over the network. The host
 numbers the ticks (frames) and sends, every frame or two, what happened at each: who changed what
 they're pressing (as whole numbers, so every copy moves the same) and who chose what. Guests step
-only as far as the host has sent, sending their own input to the host to go in a frame, a move
-about 15 times a second at most. The host checks what a guest sends (`cleanMove`,
+only as far as the host has sent, sending their own input to the host to go in a frame: a change
+of move about 15 times a second, sooner for a stop or a key pressed or let go (`CoopRun.setMove`,
+below). The host checks what a guest sends (`cleanMove`,
 `cleanAction` in `core/lockstep.ts`) before it goes in, since every copy applies it. That only
 checks its shape, so whether a player can do it now is the sim's to check: a modified game can
 send anything (a downed player can't choose, reroll or skip, as `isChoosing` says). Nothing
@@ -1761,6 +2188,17 @@ frame, then replays a bounded local input history from the confirmed position. A
 returns to the last sent direction inside the throttle still sends its new sequence, so a brief
 predicted tap can't remain unacknowledged forever.
 
+`CoopRun.setMove` sends a stop immediately after a sent movement, even inside the throttle
+(`MOVE_INTERVAL_MS`). A change that starts, stops or reverses either sent axis (a key pressed,
+let go or turned back, east to northeast as much as north to east) can spend a spare send
+credit to go early: waiting for the throttle would leave the host walking the old line, and
+the picture would reconcile sideways once the echo came. A stick's smaller changes in between
+still wait for the throttle. Two credits refill at one per `MOVE_INTERVAL_MS`, and stops spend
+none, which keeps even rapid tapping well under the relays' `MAX_UPS_PER_SECOND`, with room
+left for actions. A reconnect restores the credits and forces the current input out. The
+policy applies with prediction off too, and doesn't change frame rate, protocol, simulation
+rules or hash checks.
+
 Prediction covers the character's position, facing and movement animation, camera, minimap,
 health bar, attached text, slashes and auras. `PlayerPose` is presentation state: never write it
 into `Sim`. Combat, pickups, world-space attack effects and all hashes still use confirmed
@@ -1778,7 +2216,15 @@ The camera follows the predicted pose, so the picture is kept steady:
   every refresh nudged the camera by a tick. Only a pending _change_ of move holds the clock back.
 - Standing still, an error under `DEAD_ZONE` (a stop that reached the host a tick late) is left
   alone; walking takes it out. While the host's frames haven't got the stop yet, there's no
-  correction at all: with a lead past the budget, the target falls short of where the stop lands.
+  ordinary correction: with a lead past the budget, the target falls short of where the stop lands.
+  Check the latest input sequence against the acknowledged one, not just whether the last
+  echoed direction is zero: the start of a short tap may not have been echoed yet either.
+  Errors beyond the snap limit still snap. It waits `STOP_HOLD_MS` at most: frames still coming
+  with no echo that long means the stop was lost (a relay drops what's past its rate limit).
+- Inputs sent before the first host frame stay pending until their echoes arrive. Presentation
+  falling back during that initial wait mustn't reset the timeline and acknowledge them itself,
+  but the clock keeps up meanwhile: otherwise the first frame's lead is the whole load, and the
+  picture holds at every late frame until an echo re-times it.
 - When frames stop coming (`QUIET_MS`) with the lead at its budget, the picture holds where it
   is, and from `STALE_MS` it stands still with no walk animation. Easing back to the last
   confirmed spot would walk the hero backwards, then rush forward when a reconnect's resend
@@ -1790,15 +2236,18 @@ frames retain their elapsed animation time and replay movement up to the same sa
 Held movement refreshes its sequence at `MOVE_REFRESH_MS` (still subject to the network send
 throttle), bounding accumulated timing drift when the host loses simulation time. Prediction
 never steps a second full simulation or rolls back combat. Extreme latency remains visible,
-and a hit can still arrive after the local picture appears to have moved clear.
+and a hit can still arrive after the local picture appears to have moved clear. To measure
+it, see Measuring prediction at the end of this section.
 
-- **Loading**: the host waits up to 20 seconds for everyone's map. Anything that comes for the run
+- **Loading**: the host waits up to 20 seconds for everyone's map (and an opening cinematic's
+  squares: see Props and opening cinematics). Anything that comes for the run
   while a player's map is still loading is kept and handed over once their copy's made
   (`toCoopRun` in `GameClient`), so a guest who loads first, slowly, or leaves meanwhile isn't
   lost.
 - **Versions**: each player's game says its build (`__BUILD_ID__`, the version and commit), and a
   room only takes players on the host's, as different builds fall out of step. The slim cache
-  checks the same id (Hosting).
+  checks the same id (Hosting). The Windows and Android apps keep to the website's build when
+  they're built with `GAME_SITE_URL` (Following the website, and its Android section).
 - **Out of step**: every 50 frames the host sends a hash of its run (positions, hitpoints, the
   RNG, buffs, inventory, caskets and level ups). A guest whose run differs leaves and ends its own
   run, rather than everyone waiting on a copy that can't recover. It tells the relay first
@@ -1806,8 +2255,20 @@ and a hit can still arrive after the local picture appears to have moved clear.
 - **Waiting**: anyone the run waits on for 20 seconds (`DECIDE_AFTER_MS` in `CoopRun.ts`) has
   it decided for them by the host: the first reward, taking the casket, or walking away from the
   offer. The host can kick a player from the menu mid-run.
-- **Hidden tabs**: a co-op player whose tab is hidden keeps stepping off a worker's timer, so the
-  host keeps the run going and a guest keeps up.
+  Everyone sees the time until the next automatic choice at the top center, even while choosing
+  or after answering. It replaces the run clock until the party finishes, and shows the time
+  alone on a phone or a window under 860 pixels wide, so it fits where the clock was. Panels
+  under it make room and scroll if they must: a `.ui-panel` is content-box on a desktop, so its
+  padding and border sit outside a `max-height`, but border-box on a phone.
+  `DownMessage.decisionMs` carries the host's remaining wall-clock time (also on resends);
+  `CoopRun.decisionSeconds` feeds the HUD's numbers store. It never enters the sim or its hash.
+  A guest's deadline only moves later by more than `DEADLINE_SLACK_MS` (for the next wait), so
+  frames arriving unevenly can't make it count back up. A run that ends early drops it.
+- **Background co-op**: `CoopTicker` starts its worker with the run and takes over when rendering
+  stops, including when a covered window still reports itself as visible. Rendering and worker
+  callbacks share one clock, so returning to the tab cannot count elapsed time twice. A page timer
+  backs it up if the worker is blocked. A page the browser freezes (Memory Saver, Edge's sleeping
+  tabs, a phone in the background) stops the worker too, and nothing in the page can help that.
 
 For that every copy has to agree to the bit. The sim only uses its seeded `Rng`, and its
 trigonometry goes through `fm` in `core/fmath.ts`: the browser's own `Math` on your own (so solo
@@ -1902,6 +2363,9 @@ without it is told "You need Barrows unlocked to join this room", and the open l
 as locked to them. Each player's game sends the maps it has (`unlocks`), checked by the relay on
 joining, on the host changing the map, endless or hard mode, and at the start. Whether the run's on
 hard mode goes out in `GameStart`, like endless, so every player's copy plays the same.
+The Tombs of Amascut go by the host's invocations instead: the lobby shows them as a raid level
+(the host's `Loadout.invocations`, which the relays pass as they are, so they needed no change),
+the host sets them from the lobby, and `GameStart.invocations` carries them to every copy.
 `MULTIPLAYER_ANY_MAP=on` (or `--any-map`) lets anyone into any room instead, and a win then opens
 that map for a player who hadn't got there. With no accounts, a player's maps are their game's word:
 this keeps fair players fair rather than stopping a cheat.
@@ -1948,17 +2412,20 @@ the one connection. Change the protocol in both relays.
 
 Cloudflare restarts its objects now and then, dropping their connections, so the Cloudflare relay's
 `room` message carries a `token`. `CoopLobby` reconnects to `coop/room/<code>?resume=<token>` for
-`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile, and the room
+`RESUME_WINDOW_MS` when the room's connection drops, holding what's said meanwhile. Each handshake
+is limited by `RESUME_ATTEMPT_MS`, so a hanging attempt leaves time for another (the trade: one
+that always takes longer, on a weak mobile signal, never gets through). The room
 (kept in storage) holds the player's place a little longer. A guest that misses some of the host's
-frames sees it from `from` on the next `down` and asks for them with a `resend` up message; the
-host keeps 20 seconds of what it's sent (longer than the room holds a dropped player) and answers
+frames asks for them immediately on reconnect, or from `from` on the next `down`, with a `resend`
+up message; the host keeps 20 seconds of what it's sent (longer than the room holds a dropped
+player) and answers
 once a second at most, from the earliest frame asked for, to every guest; each takes only frames
 after the ones it has, in messages of `RESEND_EVENTS` at most. That part works on either relay.
 A guest numbers its actions that aren't decisions (`actionSeq`, so using an item), and the host's
 frames echo the number; after reconnecting it sends again those not echoed yet, and the host takes
 each number once. Decisions have their own resend (`DECISION_RESEND_MS`). The room saves someone
-joining or leaving, and the run starting or ending, at once and before telling anyone; other
-changes at most once a second. The Node relay sends no token, so with it a dropped connection
+joining or leaving, and the run starting or ending, at once and before telling anyone, and a
+change of pick or ready it confirms (below); other changes at most once a second. The Node relay sends no token, so with it a dropped connection
 still ends a guest's run.
 
 A room's connection can also die without closing (a laptop asleep, a network that went away). During
@@ -1967,9 +2434,14 @@ for `RUN_QUIET_MS` and takes one that hasn't answered within `PONG_WAIT_MS` as d
 as above while the host still has the frames (about 7 seconds are left for that: past them the
 guests' runs end, as below). It doesn't judge after a gap in its own calls (a frozen page), whose
 replies may be unread. It also pings a room it's sent nothing to for `PING_INTERVAL_MS` (a guest
-standing still), since it runs off the hidden tab's worker and the regular ping doesn't. The ping
-every `PING_INTERVAL_MS` checks the connection outside a run. The Cloudflare room lets go of a
-player it's heard nothing from, not even a ping, for `SILENT_MS`, as if their connection had closed
+standing still), since `CoopTicker`'s worker keeps it going once drawing stops, and the regular
+ping is slowed in a hidden tab. The ping
+every `PING_INTERVAL_MS` checks the connection outside a run; a local timer (`ROOM_CHECK_MS`)
+checks for its reply without sending more frequent pings. After a gap in its own runs that timer
+only waits for the next one: in a hidden tab slowed to a run a minute, it would otherwise forget
+the regular ping every time, and that ping's own check (`tick`) judges it instead.
+The Cloudflare room lets go of a player it's heard nothing
+from, not even a ping, for `SILENT_MS`, as if their connection had closed
 (the Node relay finds those with its own pings). A guest whose missing frames haven't come for
 `GIVE_UP_GAP_MS` while the host's others do ends its run (the host no longer has them); a break of
 `GAP_LATE_MS` between sightings (a frozen page) starts that wait over. A frame that fails to step
@@ -1979,6 +2451,36 @@ together when every copy failed alike; the hash check finds one that didn't. The
 out even when something after a step throws, and no time is banked for the steps it stopped. Only
 the Cloudflare relay gives a room its own connection to check; the rest is the game's, so it holds
 on either relay.
+
+Cloudflare rooms advertise `memberAcks` and acknowledge a player's numbered `me` changes with
+`meSeq` in the existing room update. `CoopLobby` keeps the latest unconfirmed changes (merged, so
+a retry carries all of them) and sends them again once per connection after `MEMBER_RETRY_MS`,
+with a ping: Cloudflare answers pings without waking the room, so only the confirmation shows
+the room itself got it. An unanswered ping makes the connection again as above, and the changes
+go again on the new one. A room that answers but hasn't confirmed within `MEMBER_WAIT_MS` of the
+retry gets no more tries, and the player's told to choose again; that message stays through
+others' room updates until a confirmation or a new choice. Leaving or starting clears what's
+waiting. A new pick leaves out a Ready still waiting for its confirmation: the relays un-ready
+a player whose pick changes (below), and a Ready carried along would ready them on a pick the
+host may not have yet. The room keeps each player's sequence through sleep and ignores older
+retries. It saves a change of pick or ready before the update that confirms it, throttle or not,
+since the game won't send a confirmed pick again after a restart. Once a message is handled the
+room runs any alarm jobs that are overdue, so a late alarm can't hold back the members' update;
+after it, so the heartbeat counts its sender as just heard from.
+Relays without `memberAcks` keep the old messages; if support disappears on reconnect,
+what's waiting is sent once without waiting for a confirmation.
+
+What starts the run is the host's view of everyone's picks (`startCoopRun`), which can be behind
+the relay's. So both relays un-ready a player whose adventurer or loadout changes while they're
+ready (`setMember`, `pickOf`: sending the same pick again, as on a map change, doesn't), and
+refuse the host's start while anyone's been un-readied that way and hasn't readied again
+(`repicked`, kept through the Cloudflare room's sleep). The change reaches the relay before the
+host's start, so a start made from a view that still says ready is turned away with a message.
+A map with its own adventurer (Durial321's) sets everyone's skill page to its adventurer's, so
+switching to or from one changes their loadouts and un-readies them too: the message says their
+pick changed, not that they changed it.
+`CoopLobby.setReady(true)` sends the player's adventurer and loadout in the same message, so a
+pick that never arrived can't leave them ready with an older one.
 
 The open rooms list comes a page at a time (8 rooms, the fullest first, then the ones waiting
 longest), worked out once after each change rather than for every request. Both relays send it
@@ -1992,21 +2494,77 @@ messages and calls between objects are billed (see Cost in `server/cloudflare/RE
 the relay sends out is free.
 
 **Flags.** A relay that knows where a player is sends it as `country` (ISO 3166's two letters): in
-`welcome` for their own, on each room member, and on a room in the list for its host. The Cloudflare
-relay's Worker gets it from `request.cf.country` and hands it on as `x-country`, replacing whatever
-a player sent; the Node relay gets it only behind Cloudflare (`PROXY`, above). A player who turns
-off **Co-op flag** in Settings sends `hideCountry` with what they say about themselves, and the
-relay leaves their country out, except while they host an open room: then it shows in the room and
-the list anyway (`shownCountry` in each relay), and the game says so on Open to all. The game draws
-a flag with `CountryFlag` (`ui/CountryFlag.tsx`): the login screen's world list flags (sprite 815, a
-frame for each country it has, in `content/flags.ts`), or the country's letters where there's no
-flag, with its name from `Intl.DisplayNames` as the tooltip. Emoji flags won't do: Windows has none,
-so they show as two letters there anyway. A room's flag is its host's, which on the Cloudflare relay
-is roughly where the room runs too.
+`welcome` for their own and on each room member. The Cloudflare relay's Worker gets it from
+`request.cf.country` and hands it on as `x-country`, replacing whatever a player sent; the Node
+relay gets it only behind Cloudflare (`PROXY`, above). A member keeps the country they joined from
+when they resume. A player who turns off **Co-op flag** in Settings sends `hideCountry` with what
+they say about themselves, and the relay leaves their country out, except while they host an open
+room: then it shows in the party anyway (`shownCountry` in each relay), and the game says so on
+Open to all. The game draws a flag with `CountryFlag` (`ui/CountryFlag.tsx`): the login screen's
+world list flags (sprite 815, a frame for each country it has, in `content/flags.ts`), or the
+country's letters where there's no flag, with its name from `Intl.DisplayNames` as the tooltip.
+Emoji flags won't do: Windows has none, so they show as two letters there anyway.
+
+A room in the list has a flag too. On Cloudflare it's where the room's Durable Object runs, which
+needn't be near its host, nor where the request came in (`cf.colo`). The room measures it once and
+saves it (`server/cloudflare/src/location.mjs`, explained in that relay's README), and its listing
+says `countrySource: "server"`, which the game shows as "Server in". The lobby lists it by its
+current code (`currentCountry`), as rooms measured with an older colo table saved `UK` and `FX`
+for `GB` and `FR`. A room that couldn't measure
+it has no flag, never its host's. The Node relay lists the host's country instead, as "Host
+playing from".
 
 To try it locally, `bun run start` and open the game in two windows (one private, for a
 save of its own), make a room in one and join it from the other. A second ordinary window says the
 game's open in another tab, and Play without saving lets it play (see Saves).
+
+#### Measuring prediction
+
+Open the game with `?movementDiagnostics` (or append `&movementDiagnostics` to an existing
+query), join as a guest with movement prediction on, and reproduce the slide. In the browser
+console, `movementDiagnostics.snapshot()` returns the current capture;
+`copy(JSON.stringify(movementDiagnostics.stop()))` copies it and disables capture in browsers
+with the DevTools `copy` helper. `movementDiagnostics.start()` resets and enables it again.
+Capture before leaving the run; a new run or recreating prediction starts fresh. The flag works
+on release builds too, exposing only these three diagnostic methods, but only in a browser tab:
+the Windows and Android apps can't take the flag, and turn DevTools off in their release builds.
+In dev, the equivalent methods are `game.setMovementDiagnostics(true)` and
+`game.getMovementDiagnostics()`.
+
+The snapshot includes the build, applied frame and queued-frame count, plus these measurements:
+
+- `inputToSendMs`: Time from sampling an input to sending it; a high value points to local
+  throttling or a long local frame. Only inputs sampled during the capture count, each on its
+  first send (a reconnect sends the latest again).
+- `sendToConfirmMs`, `inputToConfirmMs`: Time until its echo is **applied**. Includes relay travel,
+  host scheduling and the guest buffer; it is not a ping measurement. Coalesced inputs without their
+  own echo don't contribute a confirmation sample.
+- `errorTiles`: Distance between the predicted pose after local movement and the replayed
+  authoritative target, before correction. Measured while prediction is active.
+- `correctionTiles`, `idleCorrectionTiles`: Total distance actually moved by reconciliation, with
+  the stationary portion separate from intended movement. Small idle errors can remain inside the
+  dead zone.
+- `fallbackCorrectionTiles`: Correction when returning to confirmed presentation, such as on a
+  freeze or death.
+- `renderGapMs`, `longRenderFrames`: Elapsed time between prediction renders and the number over
+  `LONG_RENDER_MS`; useful for spotting local hitches. These aren't CPU execution times.
+- `leadMs`, `confirmedAgeMs`: Uncapped prediction lead and time since a host frame was applied. A
+  large age can mean network or host delay, or that the guest stopped processing frames.
+- `pendingStopFrames`, `haltedFrames`, `stalledFrames`: Frames waiting for a stop echo or holding
+  the picture at the replay/staleness limits.
+- `distanceSnaps`, `wallSnaps`, `teleports`: Counts of the distinct hard-correction paths.
+
+Measures contain count, mean and maximum. Counters cover every prediction render from the run's
+first host frame while enabled (the wait before it is the run loading, not the link); `samples`
+keeps only the latest `SAMPLES` details, `SAMPLE_MS` apart at least (both in
+`client/coop/PredictionDiagnostics.ts`), so it can miss a short
+spike whose maximum still appears in the counters. Capture is off by default and stays local:
+no automatic upload, storage, timers, console logging or per-frame allocations for diagnostics.
+The sample slots and input timings are allocated once and reused; snapshot copying happens only
+when requested. Use the existing `frameProbe.sample(60)` in dev for CPU/render costs with
+capture off and on. These observations narrow the cause but cannot by themselves separate host
+CPU delay from network delay; that needs a matching host capture or external network
+measurements.
 
 ### Touch screens
 
@@ -2018,8 +2576,10 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
 - `ui/TouchControls.tsx` feeds it pointer events. The whole screen is the stick, with the buttons
   on top. Pause acts on `pointerdown`; items act on `pointerup`, because a browser won't fire
   `click` for a second finger while the thumb's down. `ui/DescriptionButton.tsx` shares hover,
-  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, worn gear and
-  Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  keyboard or controller focus and 500 ms holds across bag items, weapons, passives, HUD effects,
+  worn gear and Armoury tiles and upgrade steps, and `ItemDescription` draws an `ItemView` in one.
+  A button only describes with an `itemId`, and one showing only an icon or a countdown needs an
+  `aria-label` for its name.
   `ui/InventoryItem.tsx` uses it for both bag layouts, with the same `ItemView.lines` as the
   casket. Descriptions are portalled outside scrolling panels and the phone HUD's extra zoom,
   clamped to the viewport while keeping the UI's text scale. Whether the browser's rectangles
@@ -2028,6 +2588,8 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   The HUD renders after the touch movement zone so its slots receive holds; a run overlay
   disables those slots and dismisses their descriptions. Empty bag slots are dimmed by
   `.ui-inv-slot-empty`, not `:disabled`, so the bag doesn't dim under every overlay.
+  Being after the zone keeps the HUD above it, so nothing in the HUD needs a z-index for that,
+  and one would put it over the run's panels too.
   Releasing a hold never uses the item, and a held finger can drift. Before the hold, moving
   further than `TAP_SLOP` (shared with `SharedTaps`), cancellation or losing focus cancels the tap.
   The click a touch press makes after its `pointerup` is ignored for a moment, but keys and later
@@ -2036,15 +2598,31 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   quick tap still selects it. A scroll ends holds and hovers, but a focused tile's description
   follows it, since a controller scrolls its list to what it highlights. Escape dismisses them all.
   Buttons only listen on the window while described or pressed. Small phones keep worn gear and
-  its descriptions in the pause menu.
+  its descriptions in the pause menu, under the player's stats, weapons and passives. With a
+  mouse, the HUD's worn gear is a row under the passives (`.ui-gear-slots`), or the gear panel
+  under the damage panel when `DisplaySettings.gearPanel` is on (it's off by default); a phone's
+  HUD only shows it in the panel.
 - `ui/Mobile.css` lays the screens out again for a phone held sideways (`max-height: 520px`). The
   UI's zoom never goes below 1, as the pixel fonts don't survive it, so a new screen needs rules
-  there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS.
+  there too. Check it at 844x390 and 667x375. It's imported last, so it wins over the other CSS,
+  all but `src/index.css`, which comes after it (Prettier sorts `index.tsx`'s imports): the
+  page's height for a touch screen, `100dvh`, is there for that reason. Under `100vh` the bottom
+  of every screen was under a 12.9" iPad's edge.
   A panel whose contents can grow (an error line, a row of pages) has to fit or scroll there: the
   desktop's `90vh` cap leaves its buttons below the screen. Give it the screen's height less the
   safe area. The full-height panels (the shop, pause and the like) then hide their overflow and
   scroll a part inside, so their buttons stay in view. The co-op room browser scrolls as a whole
-  (`overflow-y: auto`), since only its worst case doesn't fit.
+  (`overflow-y: auto`), since only its worst case doesn't fit. The HUD's right column comes down
+  into the item buttons' column there, where the Tombs' fight button sits. Its lines let taps
+  through to the button, but the DPS doesn't, so with a fight button over the items it keeps left
+  of that column (`.ui-damage-beside-ability`). Anything new to tap in that column needs the same.
+- A tablet is `pointer: coarse` too, but taller than 520px, so it gets the desktop's layout with
+  the touch controls over it. The HUD lets pointers through to the stick, so whatever a finger
+  has to reach there takes them back (`pointer-events: auto`) in `Mobile.css`'s plain
+  `(pointer: coarse)` block, not the phone's. The camera's zoom slider is in the HUD's right
+  column on a tablet, with the other toggles, and by the timer on a phone. The title's corner
+  keeps clear of the home bar, and held upright it stacks as a narrow window's does. Check a
+  tablet at 760x560 and 760x1000 in the browser pane: under 768 wide it emulates touch.
 - A touch screen also gets a pixel ratio capped at 1.5 (2 elsewhere, `DeviceUtil.pixelRatio`), 2
   workers instead of 4, textures at half size (64 a side, a quarter of the memory), 60 frames a
   second at most unless the Frame rate setting says otherwise (see Keeping it light on a phone),
@@ -2106,7 +2684,8 @@ of its own.
   have.
 - **What each button does** is listed by `PadControls` (`ui/PadHint.tsx`) in the pause menu and
   Settings while a pad's in use, and the title's hint shows its buttons. Change it with `RUN_KEYS`
-  or `MENU_KEYS`.
+  or `MENU_KEYS`. With no pad, and not on a touch screen, `KeyboardControls` lists the
+  keyboard's keys there instead, which follow `GameClient.onKeyPress`.
 
 The tests fake `navigator.getGamepads`. In a browser, an init script that replaces it does the same.
 
@@ -2138,10 +2717,12 @@ from being lost:
   With no room in localStorage for the copy, it stays where it is and nothing's written over it;
   the panel says so (`noRoom`), with Export.
 
-**Exports are the only backup.** Clearing the browser's data (or uninstalling the Android app)
+**Exports are the only backup** unless cloud save has a copy. Clearing the browser's data (or
+uninstalling the Android app)
 loses the save for good, so once a run's been played (`runs > 0`) the title screen shows a slim
 reminder under its menu on any day it hasn't been exported (`ui/exportReminder.ts`,
-`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving. It comes after the
+`ExportReminder` in `ui/SavePanels.tsx`), except while the game isn't saving or cloud save has a
+copy (`cloudKeepsCopy`: on, synced, and nothing wrong or waiting). It comes after the
 menu so a controller's highlight still starts on Singleplayer. The file Export gives has
 `SaveData.lastExported` (`Date.now()`) in it, so it says when it was made; a newer game's save goes
 as it's stored, without one. The save itself takes the date, and the reminder goes until tomorrow,
@@ -2152,6 +2733,62 @@ the player's local ones, and an export dated ahead of the clock doesn't count. N
 day in localStorage (`rune-survivors-export-reminder-dismissed`), not the save: it's this browser's
 reminder, it shouldn't travel in an exported file, and it can be put off while another tab holds
 the save.
+
+**Cloud save** (`client/CloudSave.ts`, `ui/CloudSave.tsx`) keeps a copy with the cloud-save
+Worker (`server/cloud-saves/`), in a build with `VITE_CLOUD_SAVE_URL` whose Worker answers
+`/v1/health`. An app that doesn't let requests out to it (an older desktop launcher or APK)
+answers something else, so Settings doesn't offer it there. There's no account: Turn on makes a
+sync code, and typing it on another device links that one. The local save stays the main copy,
+and none of this changes `SaveData`. Its button sits beside Settings on the title screen
+(`CloudSaveButton`): the client's storage chest with an up arrow (`CLOUD_SAVE_SPRITES` in
+`content/titleIcons.ts`), faded while it's off, with a "!" in its corner while a choice is
+waiting and a "no" sign while it can't sync. It opens the choice, or cloud save's own panel
+(`CloudSavePanel`): Settings' rows, on their own.
+
+- **What's kept here.** `rune-survivors-cloud` holds the code, the cloud's revision this save came
+  from or went up as, and the save's `fingerprint` then (a hash of its progress that leaves out
+  `gameVersion`, `lastExported` and key order). A save with a different one has changed. It's
+  apart from the save, so it never goes out in an export. Never rename it.
+- **Uploads happen at save points only** (`CloudSync.savePoint`): a run's results, leaving
+  Skills or the Armoury, an import, and leaving the tab. Not on every write: buying ranks one
+  after another goes up once, on leaving Skills. A save point uploads only if the fingerprint's
+  changed, and only where the save's written at all (`GameClient.canPersist`: the lock, not a
+  newer game's, room to keep it). Uploads are `UPLOAD_COOLDOWN_MS` (2 minutes) apart at least: a
+  save point within it waits for it to pass, and whatever's changed by then goes up once. Leaving
+  the tab doesn't wait: the page may not come back (an app closed, a phone's browser put away),
+  so it sends at once, with `keepalive`. A save that didn't get up is still changed, so the next
+  save point or check sends it. Sync now in Settings sends it at once. A download is in step as
+  it goes in, so it doesn't come back up. A request with no answer after `REQUEST_TIMEOUT_MS`
+  has failed, so one that hangs can't hold up the rest.
+- **A save with no runs never goes up over the cloud's.** One that's changed since it was in
+  step is a save that couldn't be read and was made fresh, so the cloud's goes in instead, as
+  for the player who cleared their browser.
+- **Checks** happen when the tab gets the save lock, and on coming back to the tab (every
+  minute at most). They only read. The cloud's revision being this device's means only local
+  changes are news. A different one is taken silently when nothing changed here and it has at
+  least this save's runs, or when this save has none (the player who cleared their browser).
+  Otherwise, and when an upload's refused as stale, the title screen asks which to keep, over
+  Settings or cloud save's panel if one's open, showing both summaries, unless the two hold the
+  same progress (the same fingerprint). Fewer runs is asked about so that a device that lost
+  its progress can't pass it on silently. Nothing syncs until the player picks: Later puts it in
+  Settings, and it stays put off, though checks go on (one about a newer cloud save updates the
+  choice). Keeping this device's uploads with `force`.
+- **A code that stops working** (New code used elsewhere, or the Worker's `INACTIVE_DAYS` without
+  use) is a 401: Settings says so and offers only Turn off, after which the new code can be
+  typed in or cloud save turned on again.
+- **A newer game's cloud save** isn't loaded: `importSave` turns it away, as it does a file. The
+  Worker refuses an older game's upload over it, so the choice says why, and only Keep this
+  device's (losing what's new) or Later.
+- **Deleting is undoable for a week**, so a leaked code can't wipe every version. The Worker only
+  marks the code, and answers it with a 410 and `restorableUntil` until its saves are removed.
+  The game shows that as the `deleted` problem, with the date and a Restore button
+  (`CloudSync.restore`), on the device that deleted it and on any the code's typed into.
+- **New code** (`CloudSync.newCode`) is what shuts out a leaked code: the same saves get a new
+  one, and the old one stops working everywhere. Deleting can't, as whoever has a code can
+  restore it.
+- **The Worker's answers are untrusted too.** Anything can answer these requests (a captive
+  portal, a proxy), so `readMeta` checks each field before the game shows or acts on it, a 200
+  that isn't JSON is a problem, and a downloaded save goes through `importSave` like a file.
 
 Play without saving closes the panel, and a Not saving button on the title screen and in the pause
 menu opens it again. What's bought or earned meanwhile lasts until the tab gets the save back or
@@ -2194,8 +2831,8 @@ right-click shortcut or the refund button.
 Older games kept each page's purchase order (`upgradeOrder`) or the price paid for each rank
 (`upgradeRefunds`), because their prices depended on it. Loading drops both: every page can refund
 single ranks, whatever game bought them.
-Refund all clears only the selected class's ranks and spending. It's there whenever
-the page has ranks, even with no spending recorded.
+Refund all asks first, then clears only the selected class's ranks and spending. It's there
+whenever the page has ranks, even with no spending recorded.
 The Skills panel is as wide as the window allows, so every skill fits in a few rows of cards
 and the page needs no scrolling on a window at least about 1000x720 in the UI's own pixels (a
 bigger window draws the UI bigger, so it fits the same way) and on tablets. A narrower window
@@ -2206,7 +2843,92 @@ is room for a controller's highlight around the cards at its edges. On a touch s
 button's tap area reaches up beside the pips rather than making the cost's row taller. Adding a
 skill adds a card, so check the page still fits at 1024x768 and 1280x720. On a phone the
 one-line help under the title stays, though other panels drop their subtitle there: it says which
-preset an adventurer uses. Keep it to one line at 667 wide.
+preset an adventurer uses. Keep it to one line at 667 wide: its second sentence
+(`ui-shop-help-coins`) and the refund hint under the cards are left out there, as the
+balance's label says as much.
+
+### Languages
+
+The game is in English and Português (BR). Only English is checked: the other languages are
+their translators', set in `LANGS` (`i18n/types.ts`) and credited under the language's name
+wherever it's picked (`LanguageName` in `ui/LanguageSetting.tsx`: Settings' and the pause menu's
+dropdown, and the title's globe). The first time the game is in another language, picked or the
+browser's, `ui/LanguageNotice.tsx` says so,
+once (its own `rune-survivors-language-notice` key, not the save). **Agents never translate**:
+text is written in English only unless the developer asks for a translation (CLAUDE.md,
+Conventions), and a language without a key shows the English.
+
+Text lives in flat `{"key": "text"}` files at `src/game/i18n/locales/<lang>/<namespace>.json`. A
+new language is a folder of them, an entry in `LANGS` and `Lang`, and its browser-language match
+in `i18n/store.ts`.
+
+- `t(key, params)` looks the key up in the active language, then English, then gives the key.
+  `tp(key, n)` picks a plural form (`key.one`, `key.other`, `key.zero`). `tr(key, english)` ends
+  on the English in the code: content's accessors (`weaponName`, `mapName` and the rest in
+  `src/game/content/`) read names and descriptions with it, so call those rather than building
+  keys.
+- The sim works in English. It reads definitions' own names, and its events carry English text,
+  so co-op players in different languages run the same sim. The views turn that text into the
+  active language with `tl(text)`, which finds the key whose English it is. Sentences the sim
+  builds round names and numbers ("Teleported to the Maiden of Sugadinti. 2 teleports left.") are
+  patterns in `SENTENCES` (`i18n/store.ts`), each filling a `notice.*` key in `ui-misc.json`. A
+  language without that key keeps the whole sentence in English, and a new sentence of the kind
+  needs a pattern and its English key. In `core/`, only `Upgrades.ts`'s choice descriptions read
+  the accessors, for the level-up cards.
+- `items.json`, `world.json` and `gen.json` are generated from the content by
+  `scripts/i18n/extractors/`: run `bun run tsx scripts/i18n/extract.ts` after changing content, or
+  `i18n.test.ts` fails. A line in a list (an enemy's chat, a raid's rooms, a floor's script) is
+  keyed by its text, not its place, so a changed line is a new key and the test fails on the old
+  one's translations until they're removed. `ui.json`, `ui-misc.json` and `ui-ux.json` are written
+  by hand.
+- Numbers go through `fmtNum`, lists through `list` (in English as the game always wrote them, "a,
+  b and c") and dates through `dateLocale()` (in English, the browser's own format). Their `Intl`
+  formatters are kept, as numbers are formatted every frame.
+- Stat icons (`statIconFor` in `content/statIcons.ts`) need no code per language: they go by a
+  line's English, never by a language's words. A line the game builds from a stat (`formatStats`,
+  `weaponStats`, a passive's value) is a `StatText` that carries its English, and `StatLine` takes
+  it as `english`. A text the language files hold goes back to its English through the files'
+  keys (`englishOf`), so it gets exactly its English's icon, none if the English has none. A new
+  line built from a stat must carry its English, or it loses its icon in other languages. A line
+  that isn't a stat gives `StatLine` its `icon` (a potion's duration has `DURATION_ICON`).
+  `statIcons.test.ts` runs every language in `LANGS` over every such line, so a new language is
+  checked by adding it there.
+- Under tsx, where `import.meta.glob` doesn't exist, the files aren't read: `t()` and `tp()` give
+  keys there, and `tr()` and `tl()` English.
+- The choice is saved under `rune-survivors-language` in localStorage. Tests start in English
+  whatever the machine's language (`src/setupTests.ts`).
+
+### Menus' keys and windows
+
+A screen answers Escape and Enter through `useMenuKeys` (`ui/menuKeys.ts`). Enter on a button
+reached with Tab or the arrows is that button's; on one that was only clicked it's the screen's, so
+a player can click a map and press Enter. A controller's Enter is left out, as its south button
+already presses what's highlighted. Results pass `guardMs`, because Escape is also the pause key
+and a run can end just as it's pressed. After a click, buttons call `releaseFocus` rather than
+`blur()`, which leaves a press from the keyboard or a controller where it is.
+
+A window over a screen uses `useDialog` (`ui/useDialog.ts`): its role and title for screen
+readers, the focus on the window itself (a level up can open in the middle of a key press, so never
+on a button in it), and everything outside it inert. Toasts stay out of the inert part, so they're
+still announced, and so do other windows, such as the language notice over every screen, which can
+still be answered. Co-op's pause menu passes `modal: false`, as the run goes on behind it.
+
+Anything irreversible asks with `useConfirm` (`ui/ConfirmDialog.tsx`), not the browser's `confirm`:
+the button says what it does, the focus starts on the way out, and the screen behind doesn't hear
+the keys. It's portaled over every screen and window, so it makes them all inert with
+`inertOthers(..., { spareWindows: false })`, except the toasts inside them.
+
+### Text colours
+
+Text on the stone and cards takes its colour from the `--ui-text-*` and `--ui-green-text`
+variables in `ui/GameUi.css`. `--ui-text-dim`, `--ui-text-faint` and `--ui-green-text` reach 4.5:1
+on the stone, and `--ui-text-locked` and `--ui-text-disabled`, for locked cards and disabled
+buttons, on a card's darker brown. `--ui-red-text`, for what's gone wrong or isn't reached yet,
+reaches it on a card (about 3.3:1 on the stone), as a card faded for being out of reach still says
+in it how many coins it's short. `--ui-quest-red-text`, the quest tab's red for quests not
+started, was picked for its tone and is well under that, with the outline quest names have.
+`--ui-outline` is for text over the world and quest names. A button doesn't inherit it, so one
+over the world sets `text-shadow` itself.
 
 ### Notice
 

@@ -69,7 +69,8 @@ public final class MainActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final RelayPolicy relayPolicy =
-            new RelayPolicy(BuildConfig.COOP_URL, BuildConfig.RUN_ANALYTICS_URL);
+            new RelayPolicy(BuildConfig.COOP_URL, BuildConfig.RUN_ANALYTICS_URL,
+                    BuildConfig.CLOUD_SAVE_URL);
     private WebView webView;
     private FrameLayout root;
     private TextView loading;
@@ -81,6 +82,12 @@ public final class MainActivity extends Activity {
     private boolean gameReady;
     private boolean destroyed;
     private int diagnosticGeneration;
+    private AppUpdater updater;
+    private SiteUpdater siteUpdater;
+    // The website's build being played (SiteGames), or null for the APK's game
+    private File siteGame;
+    // Another build's ready (the website's, or the APK's own again): Restart game plays it
+    private boolean siteReady;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -93,6 +100,12 @@ public final class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
+        try {
+            // Saved state means it's only made again (Try again, Reopen), on the same visit
+            updater = new AppUpdater(this, savedInstanceState == null);
+        } catch (RuntimeException exception) {
+            android.util.Log.i("AppUpdater", "Updates unavailable on this device", exception);
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
@@ -118,8 +131,18 @@ public final class MainActivity extends Activity {
             root.addView(webView, new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
+            // Picked once, before the game loads: a build downloaded on this visit plays from the next
+            GamePathHandler games;
+            try {
+                siteGame = SiteUpdater.pickGame(this);
+                games = new GamePathHandler(this, siteGame);
+            } catch (RuntimeException exception) {
+                android.util.Log.w("SiteUpdater", "Playing the app's own game", exception);
+                siteGame = null;
+                games = new GamePathHandler(this, null);
+            }
             WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
-                    .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                    .addPathHandler("/assets/", games)
                     .build();
             webView.setWebViewClient(new OfflineClient(assetLoader));
             webView.setWebChromeClient(new OfflineChromeClient());
@@ -166,6 +189,12 @@ public final class MainActivity extends Activity {
             } catch (Exception exception) {
                 showMissingGameScreen();
                 return;
+            }
+            // Each time the activity's made, Try again and Reopen too: one stopped by them goes on
+            try {
+                siteUpdater = new SiteUpdater(this, siteGame, this::onSiteGameReady);
+            } catch (RuntimeException exception) {
+                android.util.Log.w("SiteUpdater", "Not keeping to the website", exception);
             }
             startDiagnostic();
         } catch (RuntimeException exception) {
@@ -278,7 +307,8 @@ public final class MainActivity extends Activity {
 
     private void showGameMenu() {
         if (!gameReady || destroyed) return;
-        String[] options = {"Close menu", "Save help", "Restart game", "About", "Exit"};
+        String restart = siteReady ? "Restart on the latest version" : "Restart game";
+        String[] options = {"Close menu", "Save help", restart, "About", "Exit"};
         new AlertDialog.Builder(this).setTitle("Run Escape")
                 .setItems(options, (dialog, which) -> {
                     switch (which) {
@@ -286,14 +316,19 @@ public final class MainActivity extends Activity {
                             new AlertDialog.Builder(this).setTitle("Your progress")
                                     .setMessage("From the title screen, open Settings, then use Export "
                                             + "to save a copy or Import to restore one.\n\n"
-                                            + "Progress is kept on this device. To update, install the "
-                                            + "new version's APK over this one: uninstalling first "
-                                            + "deletes your progress. Export a copy before uninstalling "
-                                            + "or clearing the app's data.")
+                                            + "Progress is kept on this device, and updates keep it. "
+                                            + "To update by hand, install the new version's APK over "
+                                            + "this one: uninstalling first deletes your progress. "
+                                            + "Export a copy before uninstalling or clearing the app's "
+                                            + "data.")
                                     .setPositiveButton("Close", null).show();
                             break;
-                        // The renderer can have gone while this menu was open
-                        case 2: if (webView != null) webView.reload(); break;
+                        case 2:
+                            // Made again, the activity serves the build that's ready
+                            if (siteReady) recreate();
+                            // The renderer can have gone while this menu was open
+                            else if (webView != null) webView.reload();
+                            break;
                         case 3:
                             new AlertDialog.Builder(this).setTitle("Run Escape " + BuildConfig.VERSION_NAME)
                                     .setMessage("Solo play works offline, including in airplane mode. "
@@ -301,9 +336,10 @@ public final class MainActivity extends Activity {
                                             + "Source: github.com/Dynrothe/Run-Escape\n\n"
                                             + "A fan project, not affiliated with Jagex. "
                                             + "Old School RuneScape assets belong to Jagex.\n\n"
-                                            + "New versions are on GitHub, and the app doesn't update "
-                                            + "itself: install a new version's APK over this one. Co-op "
+                                            + "The app checks GitHub for updates when opened, and asks "
+                                            + "before downloading one and before installing it. Co-op "
                                             + "needs everyone on the same version.\n\n"
+                                            + siteAbout()
                                             + "Use Android's Back action to reopen this menu.")
                                     .setNeutralButton("Licenses", (about, action) -> showLicenses())
                                     .setNegativeButton("New versions", (about, action) -> openReleases())
@@ -316,7 +352,24 @@ public final class MainActivity extends Activity {
                 }).setOnDismissListener(dialog -> hideSystemBars()).show();
     }
 
-    // The only place the APK is published. The app never checks for or downloads a new version.
+    // What About says of the website's builds, when the app keeps to them
+    private String siteAbout() {
+        if (SiteUpdater.baseUrl() == null) return "";
+        return "The app also keeps to the website's version of the game, so co-op matches it "
+                + "between releases. On Wi-Fi, a new one downloads in the background, and plays "
+                + "when you restart the game from this menu or reopen the app."
+                + (siteGame == null ? "" : " Playing the website's " + siteGame.getName() + ".")
+                + "\n\n";
+    }
+
+    // SiteUpdater's word that another build's ready. It never interrupts a run: Restart game plays it.
+    private void onSiteGameReady() {
+        if (destroyed || siteReady) return;
+        siteReady = true;
+        toast("The latest version is ready: restart the game from the menu (Back) to play it.");
+    }
+
+    // About's New versions button: the releases page, to install an APK by hand
     private void openReleases() {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL)));
@@ -615,6 +668,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (updater != null) updater.onPause();
         if (webView != null) webView.onPause();
         super.onPause();
     }
@@ -623,11 +677,14 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (webView != null) webView.onResume();
+        if (updater != null) updater.onResume();
     }
 
     @Override
     protected void onDestroy() {
         destroyed = true;
+        if (updater != null) updater.close();
+        if (siteUpdater != null) siteUpdater.close();
         diagnosticGeneration++;
         handler.removeCallbacksAndMessages(null);
         if (webFileCallback != null) {

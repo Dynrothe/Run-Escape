@@ -7,6 +7,13 @@ the version in the corner).
 
 ### Added
 
+- The Wardrobe, on the title screen: pick your body, hair, beard and colours, and dress every
+  adventurer slot by slot. Its store sells nearly three thousand outfit pieces for coins, from
+  bronze helms to partyhats, and you can try each one on first. Your unlocked adventurers' own
+  pieces are free, you can save outfits to put on again in one go, and co-op shows everyone's
+  look. Drag your adventurer round to see them from every side, or press Random for a new look.
+- Hallowed Night pumpkins now hold a Black h'ween mask, a Jack lantern mask and a Skeleton mask
+  too.
 - The Battle for Varrock, on the Fun tab: Varrock burnt to ruins, every street and building where it
   stands, broken walls and broken breaches in the city wall, Gypsy Aris's tent ablaze, a crater
   where the square's fountain was, fires still burning (walk through one and it burns you) and the
@@ -46,16 +53,264 @@ the version in the corner).
   that make them grow. With its own music, Strangled and Blood Rush.
 - The Forester, for beating the Stranglewood: a bronze 2h sword, and Timber!, a tree felled along
   the ground every 25 kills. Beating Vardorvis also finds the Executioner's axe head.
+
+### Fixed
+
+- The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
+  that heal you for half the damage they deal.
+- An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
+  lands.
+- On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
+  the pause menu.
+  
+### Changed
+
+- Right clicking in the game no longer opens the browser's menu.
+- Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
+  a whole hitpoint at a time.
+
+## 0.31.1 - 2026-11-12
+
+### Fixed
+
+- The camera's zoom slider works on tablets like the iPad. It's under the minimap there, with
+  the other toggles.
+- The title screen's bottom row on an iPad: the buttons in the corner were half off the bottom
+  of the screen, and held upright they covered the hint.
+
+## 0.31.0 - 2026-11-11
+
+### Added
+
+- Thanksgiving Harvest, by Happi: a seasonal map in the Hosidius Vinery, open from the start.
+  Seven minutes of farmers, bandits, foxes and Chompy birds, with Professor Oddenstein, two Evil
+  Chickens and, at the end, the Freaky Forester, who rises again bigger. Enemies there drop cooked
+  turkeys to carve, for a feast or a fowl trick.
+- What your effects do, by Happi: hover over or hold one in the HUD to read it, and the pause menu
+  lists them all.
+- The Armoury's weapons and passives, by Happi: two new tabs list each one's levels, how it's
+  unlocked and what it evolves into, once you've made it.
+- A camera zoom slider on phones, by Happi: tap Zoom beside the timer.
+- New power-up, by GhostavoA: Polymorph. For 10 seconds enemies turn into harmless sheep, and
+  elites and bosses into golden sheep that still fight.
+- The sound's orb, by Jp66600: by the minimap, where the client's hitpoints orb is, and on the
+  title screen, it shows whether the sound's on and turns it off or on. Pressing M in a run says
+  which way it went.
+- Play again, by Jp66600: the results of any map you play on your own can start it again, not
+  only a boss fight's.
+- Menu keys, by Jp66600: Esc goes back from the map select, Skills, the Armoury, Quests, the
+  collection log and the invocation board, and Enter starts the run or presses the results'
+  main button.
+- Confirmations, by Jp66600: giving up asks first, in the game's own window, then shows what the
+  run found. So do refunding every skill, disbanding a party, importing a save and cloud save's
+  actions.
+- Coins short, by Jp66600: Skills, the Armoury and the Skip button say how many coins you're
+  short.
+- The Armoury's key, by Jp66600: a line under its title says what each border's colour means,
+  and pieces not found yet are marked with a "?".
+- The keyboard's controls, by Jp66600: the pause menu and Settings list them, and the pause menu
+  shows the run's last messages too.
+- Quest list, by Jp66600: it can hide the finished quests, and those under way come first.
+- Map modes, by Jp66600: a map's details say what endless, hard and expert do there, or what
+  opens them.
+
+### Changed
+
+- The HUD's equipment slots, by Happi: turn on Gear panel in Settings to have them under the
+  damage panel, in two columns you can hide (as big as the bag's slots with a mouse), and on a
+  phone too (hidden to start with).
+- Debuffs show before buffs in the HUD, by Happi.
+- The pause menu, by Happi: your stats come first, above your weapons and passives.
+- The Windows app keeps to the website's version of the game, by trippy22: Windows and website
+  players can play co-op together between releases too. Download the new app once to get it.
+- The Android app keeps to the website's version of the game too, by trippy22: on Wi-Fi, a new one
+  downloads in the background, and plays when you restart the game from its menu or reopen the app.
+- The keris partisans, by Okaeri: they're picked like the Ancient spells now. Only the plain
+  Keris partisan is offered on a level up, so once you've found a jewel in the Tombs of Amascut
+  you'll see a keris more often. At the plain one's level 2 you choose which keris it becomes:
+  plain, or one of your jewels'. It keeps its level and the bonus damage it came with (Rare or
+  better, where a jewel's keris came Very rare), and it's your only keris that run.
+- Theatre of Blood's closing rings, by trippy22: the next ring waits until the last has closed
+  in, so an enraged Maiden's rings no longer come back to back.
+- Item descriptions, by Jp66600: a potion lists its stats a line each, with their icons, then how
+  long they last with your effect duration. The bag's descriptions say an item's rarity too.
+- Easier to read, by Jp66600: secondary text, locked items and disabled buttons are lighter.
+  Penalties, defeats and unreached goals share one lighter red, and what's written over the world
+  and quest names have a black outline.
+- The keyboard's focus, by Jp66600: a clearer yellow ring, and a button pressed from the keyboard
+  or a controller keeps your place.
+- Windows, by Jp66600: screen readers announce them and the run's messages, and what's behind a
+  window can't be reached until it closes.
+- Skills, by Jp66600: the preset's own balance is labelled and explained, a maxed skill no longer
+  looks out of reach, and a line under the cards says how to refund a rank.
+- Settings, by Jp66600: your progress comes first, with when you last exported it, and the game
+  section is split into groups.
+- Picking a map, by Jp66600: a map beaten on hard has a double tick, the adventurer picked is
+  marked more clearly, and a map's name that's cut off shows whole on hover.
+- The HUD, by Jp66600: being poisoned says so on the hitpoints bar, and a level up says how many
+  more are coming.
+- The co-op room, by Jp66600: the host picks Invite only or Open to all, as when making the room,
+  instead of "Open: Off". A long name shows whole on hover, and the host sees why Start waits.
+- Easier to press, by Jp66600: the collection log's tabs, the version, the quest tracker's and
+  damage meter's buttons and the volume sliders, and a phone's weapon and passive slots.
+- A failed start, by Jp66600: the game says it couldn't start, with a button to reload.
+
+### Fixed
+
+- Raid chests could give a unique you already had, which did nothing: it was in your Collection
+  log already, and anything it unlocks was unlocked. The Theatre of Blood's and the Tombs of
+  Amascut's chests now only give ones you haven't found, in co-op too. Once you have everything a
+  chest holds, it says so. Fixed by Okaeri.
+- The Theatre of Blood's expert chest could give a Lil' Zik look you already had. It now gives
+  one you haven't got until you have all five. Fixed by Okaeri.
+- At high raid levels Akkha spent most of his fight doing Memory Blast, gone from the floor, one
+  after another. After each Memory Blast he now stays on the floor at least as long as it took, at
+  every raid level, so he's quicker to beat at all of them. Memory Blast is six steps at most, and
+  once one of his shadows is dead he comes back from it in that shadow's quarter, where he can be
+  hurt, not out of reach in the middle. Fixed by Okaeri.
+- Stat icons on tooltips, cards and the pause menu now show in Português (BR), and in any language
+  added later. Fixed by Iakee.
+- Ba-Ba's Shockwave, the pound round her, hit further out than anything showed: up to five tiles
+  with Shaking Things Up, while its dust only covered the ground near her, so it seemed to come
+  from nowhere. Its whole reach is now outlined in red, filling as it comes. Fixed by Okaeri.
+- Ba-Ba stomps on anyone standing right up against her, but nothing showed it, so it looked like
+  damage from nowhere. Now a red ring fills at her feet before each stomp, the first one waits a
+  moment so you can step back, and a message says what it is the first time. The Halloween
+  Mimic's stomp gets the same ring. Fixed by Okaeri.
+- In the Tombs of Amascut's rooms, enemies could come in right on top of you, like the Crondis
+  room's crocodiles where its corridors meet the palm, and bite at once. They now come in by a way
+  in that's clear of the party, or the furthest one. Fixed by Okaeri.
+- The Crondis room's poison clouds went on hitting past the end of their corridor, where none was
+  drawn, and once you'd done a path or two they came so close together that getting in to a
+  waterfall without being caught was luck. They now stop at the corridor's end, and there's
+  always a gap to time your way in. Fixed by Okaeri.
+- The results' buttons stay in view when there's more to show than fits. Fixed by Jp66600.
+- The Armoury's Back button no longer needs scrolling to. Fixed by Jp66600.
+- The pause menu's Give up and Resume stay in view when there's more to show than fits. Fixed by
+  Jp66600.
+- The evolve pulse, a boss's new phase and the XP bar hold still with the system's "reduce
+  motion" setting. Fixed by Jp66600.
+
+## 0.30.0 - 2026-11-09
+
+### Added
+
+- The Keris partisan, by Okaeri: a new melee weapon, unlocked by killing the Kalphite Queen in
+  the Desert. Its quick stabs hit kalphites and scarabs harder, Kephri included.
+- Tombs of Amascut rewards, by Okaeri: the jewels and the Thread of Elidinis from the raid's
+  chest now unlock things. Each jewel unlocks its own keris partisan with a power of its own, and
+  the Thread unlocks the Divine rune pouch, which gives you an extra weapon slot for a magic
+  weapon, whatever your style.
+- Invocation presets, by Okaeri: save up to five sets of Tombs of Amascut invocations and load
+  one with a tap.
+- A puzzle helper for the Scabaras room, by Okaeri: like the ToA plugin, it shows the order to
+  step on the plates, which plates to press, a way to make the tablet's number, and the name of
+  each matching symbol. It's on at Entry, and at any raid level once you've beaten the room. You
+  can turn it off in Settings.
+- Languages, by Iakee: play in English or Português (BR). Pick one with the globe on the
+  title screen, in Settings or in the pause menu. Only English is checked: the others may be wrong
+  or have text missing.
+
+### Changed
+
+- Boss instructions, by Okaeri: they show once per run, one at a time, and stay up long enough
+  to read.
+- The Apmeken room's arrow, by Okaeri: the arrow to a pillar or vent that needs fixing is now on
+  the floor next to you, not at the edge of the screen.
+- The Scabaras room's puzzles, by Okaeri: the screen now lists all four, where each one is, and
+  which are done.
+- Theatre of Blood's closing rings, by trippy22: a ring of blood, flies or Verzik's blasts that
+  closes in round you waits a second where it forms, so there's time to find the way out.
+
+### Fixed
+
+- On phones, the name of your special attack button was cut off. It now sits under the button.
+  Fixed by Okaeri.
+- Beating a boss in the Tombs of Amascut now heals your whole party to full. Fixed by Okaeri.
+- Ba-Ba no longer gets stunned every time she charges into a boulder. Only her Rampage does that
+  now. Fixed by Okaeri.
+- In the Crondis room, standing under a waterfall now keeps you safe from the poison, like in
+  OSRS. Fixed by Okaeri.
+- In the Scabaras room, the matching tiles now show their symbols, like in OSRS. Fixed by Okaeri.
+- In the Crondis room, the floor now lights up where a spear statue is about to strike. Fixed by
+  Okaeri.
+- Akkha's room is no longer dark. His symbols light up brightly in their own colours, and a
+  quadrant bursts into glowing orbs when it explodes. Fixed by Okaeri.
+- Zebak's roar: you're now safe straight behind a boulder, like in OSRS. The safe spots glow
+  before he roars, and a wave of dust shows the roar. Fixed by Okaeri.
+- Akkha could get stuck repeating Simon says forever once his shadows were out. He now follows
+  you into a quarter whose shadow you've killed. Fixed by Okaeri.
+- On phones, the Scabaras slate no longer covers the middle of the screen. It's a thin bar along
+  the top. Fixed by Okaeri.
+- On phones in the Tombs of Amascut, the DPS sat over the special attack button and took some of
+  its taps. It's now beside the button.
+- A co-op run keeps going when the host's window is covered and stops drawing. Fixed by trippy22.
+- In a co-op room, an adventurer picked while the connection was dropping is sent again, and you're
+  told if the room never gets it. Fixed by trippy22.
+- A co-op player who changes adventurer after readying up is no longer started on their old one:
+  changing it un-readies them, and the host waits for them to ready again. Fixed by trippy22.
+- Co-op rooms on servers in the UK and France show their flags rather than letters, and rooms in
+  Russia, Serbia and Burkina Faso the right letters. Fixed by trippy22.
+
+## 0.29.1 - 2026-11-08
+
+### Changed
+
+- Beneath Cursed Sands, by Okaeri: the quest's bosses hit twice as hard, and armour doesn't stop
+  their hits.
+
+## 0.29.0 - 2026-11-08
+
+### Added
+
+- Beneath Cursed Sands, by Okaeri: a new quest, open once the desert's beaten. Fight Coenus, the
+  Scarab Mages, the Champion of Scabaras and the Menaphite Akh to open the Tombs of Amascut.
+- The Tombs of Amascut, by Okaeri: a new raid, solo or in co-op. Four paths, each a puzzle room
+  and a boss (Ba-Ba, Akkha, Kephri and Zebak), then the Wardens, with invocations to set how hard
+  it is.
+
+### Fixed
+
+- A casket carried into the next room of the Theatre of Blood could be set down in a wall, out of
+  reach. Fixed by Okaeri.
+
+## 0.28.1 - 2026-11-07
+
+### Changed
+
+- Room flags, by trippy22: a room's flag in the co-op list shows where its server is, not where
+  its host is.
+
+### Fixed
+
+- Cloud save is in the Windows app and the Android app: 0.28.0's downloads were built without it.
+  On Windows, download this release's zip, as updating from inside the app doesn't add it.
+- Co-op sends stops promptly and handles quick taps and direction changes with less sliding.
+  Fixed by trippy22.
+
+## 0.28.0 - 2026-11-07
+
+### Added
+
+- Android updates, by trippy22: opening the app checks GitHub and offers to download a newer APK,
+  then asks before installing it. Offline play still works when the check is unavailable.
+- Cloud save, by trippy22: keep a copy of your progress online, and bring it to another browser,
+  the Windows app or a phone with a code. No account, name or email. Its button beside Settings
+  on the title screen shows whether it's synced and opens it; it's in Settings too.
+- Co-op choice countdown, by Deivid Smarzaro: everyone can see when the next automatic reward
+  choice is due while the party is still choosing.
 - Descriptions, by Deivid Smarzaro: worn equipment and Armoury pieces, and each upgrade along a
   piece's line, show what they do when you point at them. On a touch screen, hold a weapon,
   passive, worn piece or Armoury piece to read it.
 - Revives on the HUD, by Deivid Smarzaro: a Ring of life shows beside your active effects until
   it saves you, and the Pyromancer's own revive shows as a phoenix.
+- Stat icons, by Iakee: each stat shows its icon from the game's cache wherever it's
+  listed, from descriptions and level ups to the pause menu, caskets and the Armoury.
 
 ### Changed
 
-- Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
-  a whole hitpoint at a time.
+- Blocking jungle plants, by Deivid Smarzaro: low wooden bases help distinguish them from
+  passable foliage.
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
@@ -77,10 +332,6 @@ the version in the corner).
 
 ### Fixed
 
-- An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
-  lands.
-- On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
-  the pause menu.
 - Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.
 - Co-op could freeze for half an hour when a connection died without closing (a network that
   dropped, a laptop asleep). Your game now notices within seconds and reconnects, and a player
@@ -99,6 +350,8 @@ the version in the corner).
   by Okaeri.
 - The results screen and the map screen's Enter button say Expert for a Theatre of Blood run on
   expert mode, not Hard. Fixed by Okaeri.
+- On a phone, the damage a second and its panel no longer show on top of level ups, caskets,
+  random events and the menus.
 
 ## 0.27.0 - 2026-11-05
 
@@ -126,7 +379,7 @@ the version in the corner).
 - Skill prices, by trippy22: the same skills cost the same whatever order you buy them in. Most
   pages of several skills cost less, a whole page about a quarter less, but a cheap skill costs
   more once dearer ones are bought.
-- Skills, by @braiansmarzaro: clearer preset names and an explanation of which adventurers use them.
+- Skills, by Deivid Smarzaro: clearer preset names and an explanation of which adventurers use them.
 - The Toxic blowpipe, by Deivid Smarzaro: its darts visibly upgrade from bronze to dragon as it
   levels.
 - Co-op caskets, by Okaeri: everyone who's up gets an item of their own from a casket, not just

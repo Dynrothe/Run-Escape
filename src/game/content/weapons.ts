@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { CombatStyle, ProjectileItemLook, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
 
 // Builds a weapon's level table from its first level and what each later level
@@ -255,8 +256,193 @@ const TWO_HANDED_SWORD_LEVELS = levels(
 );
 // The Saradomin sword
 const SARADOMIN_SWORD = 11838;
+// The keris partisans: quick stabs that hit kalphites and scarabs (Kephri too) a third harder.
+// The plain one comes from the Kalphite Queen; each jewel from the Tombs of Amascut's chest brings
+// in its own, as the Theatre's rapier comes from its chest. One a run (family). Only the plain one
+// is offered on a level up: at its pick level it takes a jewel found (KERIS_PICK), as a burst
+// picks the run's Ancient spell, so the jewelled ones are pickOnly.
+const KERIS_STAB = 381; // HUMAN_DSPEAR_STAB
+const KERIS_KALPHITES = { tags: ["kalphite" as const], damage: 0.33 };
+const KERIS_PICK = {
+    level: HILT_LEVEL,
+    into: [
+        { weaponId: "keris_partisan", hiltObjId: 25979 },
+        { weaponId: "keris_partisan_of_breaching", hiltObjId: 25981 },
+        { weaponId: "keris_partisan_of_corruption", hiltObjId: 27287 },
+        { weaponId: "keris_partisan_of_the_sun", hiltObjId: 27291 },
+        { weaponId: "keris_partisan_of_amascut", hiltObjId: 30891 },
+    ],
+};
+const kerisLevels = (objId: number): WeaponLevel[] =>
+    levels(
+        {
+            damage: 22,
+            cooldown: 0.8,
+            amount: 1,
+            area: 2.5,
+            pierce: 0,
+            speed: 0,
+            duration: 0,
+            knockback: 0.3,
+            objId,
+        },
+        { damage: 27, description: "+5 damage." },
+        { area: 2.8, description: "+12% reach." },
+        { cooldown: 0.72, description: "Stabs a little faster." },
+        { damage: 33, description: "+6 damage." },
+    );
+const keris = (
+    def: Pick<WeaponDef, "id" | "name" | "description" | "iconObjId" | "rarity" | "unlock"> &
+        Partial<WeaponDef>,
+): WeaponDef => ({
+    kind: "slash",
+    playerSeq: KERIS_STAB,
+    // hacksword_slash stands in for its sound, as the fang's
+    sound: 2500,
+    hitSound: -1,
+    style: "melee",
+    family: "keris",
+    slayer: KERIS_KALPHITES,
+    levels: kerisLevels(def.iconObjId),
+    ...def,
+});
+// Wrath of Amascut: what it hits takes a quarter more from everything for 6 seconds
+const WRATH_OF_AMASCUT: SpecialAttackDef = {
+    name: "Wrath of Amascut",
+    every: 6,
+    damage: 1.5,
+    playerSeq: 9544, // TOA_KERIS_PARTISAN_SPECIAL01
+    spotAnim: 2128, // KERIS_PARTISAN_SPECIAL01
+    effect: { kind: "drain", amount: 0.25, seconds: 6 },
+};
+// Breach of the Scarab: now and then a gap in the shell, far more often in a kalphite's or scarab's
+const BREACH_OF_THE_SCARAB = {
+    chance: 0.06,
+    tagChance: 0.3,
+    tags: ["kalphite" as const],
+    damage: 3,
+    // Armour Piercing's, as the diamond bolts'
+    spotAnim: 758,
+};
+const SUN_KILL_HEAL = 0.2;
+const SUN_LOW_HEALTH = { below: 0.25, damage: 0.25 };
+const KERIS_PARTISANS: WeaponDef[] = [
+    keris({
+        id: "keris_partisan",
+        name: "Keris partisan",
+        description: "Quick stabs at the closest enemy. Kalphites and scarabs take a third more.",
+        iconObjId: 25979,
+        rarity: "rare",
+        unlock: { kind: "killBoss", mapId: "desert", enemyId: "kalphite_queen_risen" },
+        hilts: KERIS_PICK,
+    }),
+    keris({
+        id: "keris_partisan_of_breaching",
+        name: "Keris partisan of breaching",
+        description:
+            "Quick stabs that now and then find a gap in the shell for triple damage, far more often in kalphites and scarabs, which take a third more.",
+        iconObjId: 25981,
+        rarity: "veryRare",
+        breach: BREACH_OF_THE_SCARAB,
+        unlock: {
+            kind: "raidChest",
+            mapId: "tombs_of_amascut",
+            trophyId: "breach_of_the_scarab",
+        },
+        pickOnly: true,
+    }),
+    keris({
+        id: "keris_partisan_of_corruption",
+        name: "Keris partisan of corruption",
+        description:
+            "Quick stabs; kalphites and scarabs take a third more. Every sixth is Wrath of Amascut: what it hits takes 25% more from everything for 6 seconds.",
+        iconObjId: 27287,
+        rarity: "veryRare",
+        special: WRATH_OF_AMASCUT,
+        unlock: {
+            kind: "raidChest",
+            mapId: "tombs_of_amascut",
+            trophyId: "eye_of_the_corruptor",
+        },
+        pickOnly: true,
+    }),
+    keris({
+        id: "keris_partisan_of_the_sun",
+        name: "Keris partisan of the sun",
+        description:
+            "Quick stabs; kalphites and scarabs take a third more. Each kill heals you, it hits a quarter harder below a quarter of your hitpoints, and every fortieth is Tumeken's Light: healed to full, and poison cured.",
+        iconObjId: 27291,
+        rarity: "veryRare",
+        killHeal: SUN_KILL_HEAL,
+        lowHealth: SUN_LOW_HEALTH,
+        special: {
+            name: "Tumeken's Light",
+            every: 40,
+            damage: 1,
+            playerSeq: 9546, // TOA_TUMEKANS_LIGHT_CAST01
+            // Heal Group's light (QUEST_LUNAR_SPELLBOOK_HEAL_GROUP_SPOT_ANIM): the keris's own
+            // special graphic is the Wrath's
+            spotAnim: 745,
+            effect: { kind: "restore" },
+        },
+        unlock: { kind: "raidChest", mapId: "tombs_of_amascut", trophyId: "jewel_of_the_sun" },
+        pickOnly: true,
+    }),
+    keris({
+        id: "keris_partisan_of_amascut",
+        name: "Keris partisan of amascut",
+        description:
+            "The jewels' powers in one, but Tumeken's Light: gaps in the shell for triple damage, Wrath of Amascut every sixth stab, a heal on each kill, and a quarter harder below a quarter of your hitpoints. Kalphites and scarabs take a third more.",
+        iconObjId: 30891,
+        rarity: "veryRare",
+        breach: BREACH_OF_THE_SCARAB,
+        special: WRATH_OF_AMASCUT,
+        killHeal: SUN_KILL_HEAL,
+        lowHealth: SUN_LOW_HEALTH,
+        unlock: { kind: "raidChest", mapId: "tombs_of_amascut", trophyId: "jewel_of_amascut" },
+        pickOnly: true,
+    }),
+];
 
 export const WEAPONS: WeaponDef[] = [
+    {
+        id: "rubber_chicken",
+        name: "Rubber chicken",
+        kind: "slash",
+        description:
+            "Whacks enemies in front and behind. 20% more damage to bosses, and hits heal you: 25% for 3 HP, growing with every upgrade (more with rarer ones).",
+        iconObjId: 4566,
+        playerSeq: 401,
+        sound: 2257,
+        hitSound: -1,
+        rarity: "common",
+        style: "melee",
+        pickOnly: true,
+        bloodHeal: { chance: 0.25, hp: 3, maxChance: 0.75, spotAnim: 1542 },
+        bossDamage: 0.2,
+        levels: levels(
+            {
+                damage: 25,
+                cooldown: 1,
+                amount: 2,
+                area: 4,
+                pierce: 0,
+                speed: 0,
+                duration: 0,
+                knockback: 2.5,
+                objId: 4566,
+            },
+            { damage: 30, description: "+5 damage. Heals more." },
+            { area: 4.5, description: "+13% reach. Heals more." },
+            { cooldown: 0.9, description: "Whacks a little faster. Heals more." },
+            { damage: 36, description: "+6 damage. Heals more." },
+            { damage: 42, description: "+6 damage. Heals more." },
+            { area: 5, description: "+11% reach. Heals more." },
+            { cooldown: 0.8, description: "Whacks faster still. Heals more." },
+            { damage: 50, description: "+8 damage. Heals more." },
+            { damage: 60, description: "+10 damage. Heals more." },
+        ),
+    },
     {
         id: "scimitar",
         name: "Scimitar",
@@ -1635,6 +1821,7 @@ export const WEAPONS: WeaponDef[] = [
             { damage: 36, description: "+7 damage." },
         ),
     },
+    ...KERIS_PARTISANS,
     {
         id: "tzhaar_ket_om",
         name: "Tzhaar-ket-om",
@@ -2004,13 +2191,22 @@ export const WEAPONS: WeaponDef[] = [
         name: "Toxic blowpipe",
         kind: "missile",
         description:
-            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads.",
+            "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads. Now and then its special, Toxic Siphon, hits harder and heals you.",
         iconObjId: 12926,
         playerSeq: 5061,
         sound: 2707,
         hitSound: -1,
         rarity: "rare",
         style: "ranged",
+        // Its special attack, as in OSRS: half again the damage, and half of it back as hitpoints
+        siphon: {
+            name: "Toxic Siphon",
+            chance: 1 / 40,
+            damage: 1.5,
+            heal: 0.5,
+            max: 3,
+            projectileSpotAnim: 1043,
+        },
         levels: levels(
             {
                 damage: 5,
@@ -2764,4 +2960,26 @@ export function getWeaponStyle(weapon: WeaponDef): CombatStyle {
         case "orbit":
             return "magic";
     }
+}
+
+export function weaponName(weapon: WeaponDef): string {
+    return tr(`weapon.${weapon.id}.name`, weapon.name);
+}
+
+export function weaponDescription(weapon: WeaponDef): string {
+    return tr(`weapon.${weapon.id}.desc`, weapon.description);
+}
+
+export function weaponLevelName(weapon: WeaponDef, levelIndex: number): string | undefined {
+    const name = weapon.levels[levelIndex]?.name;
+    return name === undefined
+        ? undefined
+        : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.name`, name);
+}
+
+export function weaponLevelDescription(weapon: WeaponDef, levelIndex: number): string {
+    const description = weapon.levels[levelIndex]?.description ?? "";
+    return description === ""
+        ? description
+        : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.desc`, description);
 }

@@ -9,11 +9,14 @@ export type LocOverride = {
     models?: number[];
     // 128 is as the model was made
     size?: number;
-    // Blocks walking, not projectiles, whatever the loc did
+    // Blocks walking, not projectiles, whatever the loc did (false: blocks nothing)
     solid?: boolean;
     // Blocks nothing, whatever the loc did (a loc of our own: rubble to walk over)
     walkable?: boolean;
+    // Keeps the model's own size, rather than 128 (or size) on every axis
+    ownSize?: boolean;
     // Lifts the model this far off the ground, in scene units (128 to a tile), for what floats
+    // (below 0, sinks it)
     height?: number;
     // Its tiles across and deep, and the animation it plays where it stands (a loc of our own)
     sizeX?: number;
@@ -94,8 +97,39 @@ export function getLocOverride(id: number): LocOverride | undefined {
     }
     return LOC_OVERRIDES.get(id);
 }
+// The Wardens' room's floor (the Tombs of Amascut): the plane under the room's, which is what
+// OSRS shows through its hidden floor, brought up to it (maps/tombsOfAmascut.ts). The room's own
+// tiles say what's walkable, so they block nothing; the tall ones stand under the room's raised
+// border, so they're sunk by its height (13 height units, 104 scene units), as they were under it.
+// The cache places them only there.
+const WARDENS_FLOOR: [number, LocOverride][] = [
+    ...[45585, 45586, 45589, 45593, 45594, 45595, 45596, 45597, 45627, 45643, 45644, 45645].map(
+        (id): [number, LocOverride] => [id, { solid: false }],
+    ),
+    ...[45590, 45591, 45592, 45599, 45601, 45603].map((id): [number, LocOverride] => [
+        id,
+        { solid: false, height: -104 },
+    ]),
+];
+
+// Akkha's arena's floor (the Tombs of Amascut): in the cache its stone pieces stand on the plane
+// under the arena's, up to its floor. With that plane brought down to the ground they're sunk to
+// it, their tops just over it, and block nothing (the floor's own tiles say what's walkable): the
+// platform's pieces (6 tiles tall) and its outer ring's (6.9)
+const AKKHA_FLOOR: [number, LocOverride][] = [
+    ...Array.from({ length: 24 }, (_, i): [number, LocOverride] => [
+        45872 + i,
+        { height: -760, ownSize: true, solid: false },
+    ]),
+    ...Array.from({ length: 142 }, (_, i): [number, LocOverride] => [
+        45896 + i,
+        { height: -876, ownSize: true, solid: false },
+    ]),
+];
 
 export const LOC_OVERRIDES: Map<number, LocOverride> = new Map([
+    ...AKKHA_FLOOR,
+    ...WARDENS_FLOOR,
     // The item's pumpkin, the only plain one in the cache: 0.33 of a tile, so from 0.8 to 1.5
     // here, for a field that didn't all ripen at once
     [46263, { models: [2591], size: 320, solid: true }],

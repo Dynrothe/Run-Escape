@@ -115,7 +115,7 @@ describe("seeded runs", () => {
     afterEach(() => usePortableMath(false));
 
     test("a wizard in Lumbridge, their spells chasing targets", () => {
-        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0xd41a8dba);
+        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0x822696f2);
     }, 60000);
 
     test("a ranger in the Inferno on hard mode", () => {
@@ -128,6 +128,6 @@ describe("seeded runs", () => {
         usePortableMath(true);
         const party = ["warrior", "wizard", "ranger", "pyromancer"].map(hero);
         // Every weapon can come up, so a new one (the Nightmare staff) changes it
-        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x0ce58d54);
+        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x5d5cb1d6);
     }, 60000);
 });

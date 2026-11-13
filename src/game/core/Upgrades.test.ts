@@ -3,6 +3,7 @@ import { PASSIVES, canLevelPassive, getPassive, getPassiveGain } from "../conten
 import { RARITIES, RARITY_ORDER, Rarity, rollRarity } from "../content/rarity";
 import { CombatStyle } from "../content/types";
 import { WEAPONS, getWeapon } from "../content/weapons";
+import { setLang, t } from "../i18n";
 import { Rng } from "./Rng";
 import {
     MAX_PASSIVES,
@@ -245,6 +246,8 @@ describe("hilts", () => {
         const choices = hiltChoices(weapon("ice_burst", 2), beaten);
         expect(choices.map((c) => c.kind === "hilt" && c.into)).toEqual(["ice_burst", ...spells]);
         expect(hiltChoices(weapon("smoke_burst", 2), beaten).length).toBe(4);
+        // The Menaphite's Smoke Burst has no pick before the Desert's beaten, not even Ice Burst
+        expect(hiltChoices(weapon("smoke_burst", 2), new Set())).toEqual([]);
         // Only at that level, so keeping Ice Burst doesn't ask again
         expect(hiltChoices(weapon("ice_burst", 1), beaten)).toEqual([]);
         expect(hiltChoices(weapon("ice_burst", 3), beaten)).toEqual([]);
@@ -259,6 +262,18 @@ describe("hilts", () => {
             text: "Every third swing is The Judgement, a huge hit.",
             iconObjId: 11810,
         });
+        // In another language too, without the sweep it shares with the blade
+        setLang("pt-BR");
+        try {
+            const whole = t("weapon.armadyl_godsword.desc");
+            const { text } = describeChoice(choices[0]);
+            expect(text.length).toBeGreaterThan(0);
+            expect(text.length).toBeLessThan(whole.length);
+            expect(whole.endsWith(text)).toBe(true);
+            expect(t("weapon.godsword.desc").startsWith(whole.slice(0, -text.length))).toBe(true);
+        } finally {
+            setLang("en");
+        }
         // A godsword that has its hilt has no more to pick
         expect(hiltChoices(weapon("armadyl_godsword", 2))).toEqual([]);
     });
@@ -343,7 +358,7 @@ describe("class weapons", () => {
     function newWeaponOffers(
         style: CombatStyle,
         owned: WeaponState[],
-        rolls = 4000,
+        rolls = 12000,
     ): Map<string, number> {
         const rng = new Rng(11);
         const offered = new Map<string, number>();
@@ -360,7 +375,8 @@ describe("class weapons", () => {
     test("are only offered to their own class", () => {
         for (const style of ["melee", "ranged", "magic"] as CombatStyle[]) {
             const offered = newWeaponOffers(style, [weapon("throwing_knives")]);
-            for (const def of WEAPONS.filter((w) => w.style && !w.evolved)) {
+            // Not those only picked (the jewelled keris partisans), which are never offered
+            for (const def of WEAPONS.filter((w) => w.style && !w.evolved && !w.pickOnly)) {
                 if (def.style === style) {
                     expect(offered.get(def.id) ?? 0).toBeGreaterThan(0);
                 } else {
@@ -368,6 +384,19 @@ describe("class weapons", () => {
                 }
             }
         }
+    });
+
+    test("the Rubber chicken is not offered to other adventurers", () => {
+        expect(newWeaponOffers("melee", [weapon("scimitar")]).has("rubber_chicken")).toBe(false);
+        const rng = new Rng(8);
+        const choices = Array.from({ length: 100 }, () =>
+            rollChoices(rng, [weapon("rubber_chicken")], [], 0, "melee"),
+        ).flat();
+        expect(
+            choices.some(
+                (choice) => choice.kind === "weaponLevel" && choice.weaponId === "rubber_chicken",
+            ),
+        ).toBe(true);
     });
 
     test("the Very rare ones are offered least", () => {
@@ -504,7 +533,13 @@ describe("endless runs", () => {
             bonus: 4.77,
         });
         expect(stacked.stats).toEqual([
-            { label: "Damage bonus", value: "+564%", from: "+477%", better: true },
+            {
+                label: "Damage bonus",
+                english: "Damage bonus",
+                value: "+564%",
+                from: "+477%",
+                better: true,
+            },
         ]);
         // An offer past the last level carries the weapon's bonus; one before it doesn't
         const rng = new Rng(1);
@@ -534,13 +569,13 @@ describe("endless runs", () => {
         });
         expect(piety.title).toBe("Piety +1");
         expect(piety.stats).toEqual([
-            { label: "Damage", value: "+30%", from: "+25%", better: true },
+            { label: "Damage", english: "damage", value: "+30%", from: "+25%", better: true },
         ]);
         const newPiety = describeChoice({
             kind: "newPassive",
             passiveId: "piety",
             quality: "common",
         });
-        expect(newPiety.stats).toEqual([{ label: "Damage", value: "+5%" }]);
+        expect(newPiety.stats).toEqual([{ label: "Damage", english: "damage", value: "+5%" }]);
     });
 });

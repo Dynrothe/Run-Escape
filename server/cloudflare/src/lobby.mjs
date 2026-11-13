@@ -31,6 +31,7 @@ import {
     cleanId,
     cleanUnlocks,
     countryCode,
+    currentCountry,
     guesserKey,
     isAnyMapOn,
     missingMap,
@@ -311,6 +312,7 @@ export class Lobby extends DurableObject {
                 "hard",
                 "host",
                 "country",
+                "countrySource",
             ].some((key) => previous[key] !== entry[key]);
         if (changed) {
             await this.putRoom({ ...entry, order: previous?.order ?? entry.order });
@@ -430,7 +432,10 @@ export class Lobby extends DurableObject {
                 code: room.code,
                 name: room.name,
                 host: room.host ?? "",
-                country: room.country,
+                // Stored entries from an older deployment contain the
+                // host's country. Don't show it as a server measurement.
+                country: room.countrySource === "server" ? currentCountry(room.country) : undefined,
+                countrySource: "server",
                 players: room.players,
                 max: MAX_PARTY,
                 mapId: room.mapId,

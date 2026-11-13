@@ -1,13 +1,102 @@
 /* Armoury: the gear slot by slot on the left, the piece picked on the right */
 
+/* Only the lists scroll: the way out stays in view. One height for every tab, so the tabs and
+   the way out stay put when another tab is picked. */
 .ui-armoury {
     width: min(900px, calc(94vw / var(--ui-scale)));
-    max-height: calc(92vh / var(--ui-scale));
+    height: calc(92vh / var(--ui-scale));
     box-sizing: border-box;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-armoury > h2,
+.ui-armoury > .ui-armoury-tabs,
+.ui-armoury > .ui-subtle,
+.ui-armoury > .ui-armoury-legend,
+.ui-armoury > .ui-row {
+    flex-shrink: 0;
+}
+
+/* What the tiles' borders mean, a tile's look in small beside each */
+.ui-armoury-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px 14px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--ui-text-dim);
+}
+
+.ui-armoury-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ui-armoury-legend-swatch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 15px;
+    height: 15px;
+    background: var(--ui-card);
+    border: 2px solid var(--ui-edge);
+}
+
+.ui-armoury-legend-missing {
+    font-size: 12px;
+    line-height: 1;
+    color: var(--ui-text-locked);
+}
+
+.ui-armoury-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.ui-armoury-tab {
+    padding: 2px 10px;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    background: rgba(40, 33, 24, 0.45);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-armoury-tab-selected {
+    color: var(--ui-orange);
+    border-color: var(--ui-orange);
+}
+
+.ui-catalogue-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 6px;
+}
+
+.ui-catalogue-section {
+    border-top: 1px solid var(--ui-divider);
+    padding-top: 6px;
+}
+
+.ui-catalogue-level {
+    margin-top: 4px;
+}
+
+.ui-catalogue-level > span {
+    color: var(--ui-yellow);
 }
 
 .ui-armoury-body {
+    flex: 1 1 auto;
+    min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 260px;
     align-items: start;
@@ -15,6 +104,10 @@
 }
 
 .ui-armoury-slots {
+    max-height: 100%;
+    min-height: 0;
+    padding-right: 4px;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 3px;
@@ -28,7 +121,7 @@
 
 .ui-armoury-slot-name {
     flex-shrink: 0;
-    width: 48px;
+    min-width: 48px;
     font-family: "OSRS Bold", sans-serif;
     font-size: 15px;
     color: var(--ui-white);
@@ -53,6 +146,16 @@
     background: var(--ui-card-hover);
 }
 
+/* Not found yet: said by a mark, as well as by the icon's grey */
+.ui-armoury-tile.ui-card-locked::after {
+    content: "?";
+    position: absolute;
+    right: 3px;
+    bottom: 0;
+    font-size: 13px;
+    color: var(--ui-text-locked);
+}
+
 /* One for each upgrade along the piece's line, lit once it's done */
 .ui-armoury-pips {
     position: absolute;
@@ -73,7 +176,8 @@
 
 .ui-armoury-details {
     gap: 6px;
-    min-height: 250px;
+    max-height: 100%;
+    overflow-y: auto;
     box-sizing: border-box;
 }
 
@@ -118,7 +222,7 @@
 }
 
 .ui-armoury-arrow {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-armoury-next {
@@ -156,7 +260,7 @@
 }
 
 .ui-armoury-stat-label {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-armoury-buy {
@@ -167,11 +271,23 @@
 }
 
 .ui-armoury-count {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
+/* One column on a narrow window, the two scrolling as one */
 @media (max-width: 759px) {
     .ui-armoury-body {
         grid-template-columns: minmax(0, 1fr);
+        overflow-y: auto;
     }
+
+    .ui-armoury-slots,
+    .ui-armoury-details {
+        max-height: none;
+        overflow-y: visible;
+    }
+}
+
+.ui-armoury-stats li {
+    padding: 1px 0;
 }

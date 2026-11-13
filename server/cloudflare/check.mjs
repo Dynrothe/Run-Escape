@@ -83,6 +83,7 @@ async function rtt(ws, client, n = 20) {
     times.sort((a, b) => a - b);
     return {
         median: times[n >> 1].toFixed(1),
+        p95: times[Math.ceil(n * 0.95) - 1].toFixed(1),
         min: times[0].toFixed(1),
         max: times[n - 1].toFixed(1),
     };
@@ -139,6 +140,23 @@ host.room.send(JSON.stringify({ t: "me", hideCountry: true }));
 await guest.next("room", (m) => where(m, host.id) === undefined);
 ok(true, "a host who hides their flag isn't shown anywhere");
 
+if (joined.room.memberAcks) {
+    const selectedAt = performance.now();
+    guest.room.send(JSON.stringify({ t: "me", characterId: "ranger", meSeq: 1 }));
+    const selected = await guest.next("room", (m) => m.meSeq === 1);
+    ok(
+        selected.room.members.find((m) => m.id === guest.id)?.characterId === "ranger",
+        "the room acknowledges the guest's selection",
+    );
+    await host.next(
+        "room",
+        (m) => m.room.members.find((p) => p.id === guest.id)?.characterId === "ranger",
+    );
+    console.log(
+        `selection acknowledged and visible to host: ${(performance.now() - selectedAt).toFixed(1)} ms`,
+    );
+}
+
 host.room.send(JSON.stringify({ t: "start", game: { seed: 1 } }));
 await guest.next("start");
 ok(true, "start reaches the guest");
@@ -155,8 +173,10 @@ ok(down.d.upTo === 5, "host's frames reach the guest");
 ok(typeof joined.room.token === "string", "the room gives a token to come back with");
 guest.room.close();
 await new Promise((resolve) => setTimeout(resolve, 500));
+const resumeAt = performance.now();
 guest.room = await guest.open(`${base}/room/${goto.code}?resume=${joined.room.token}`);
 const back = await guest.next("room");
+console.log(`resume handshake: ${(performance.now() - resumeAt).toFixed(1)} ms`);
 ok(back.room.started && back.room.members.length === 2, "the guest comes back, still in the run");
 host.room.send(JSON.stringify({ t: "down", d: { upTo: 6, events: [] } }));
 ok((await guest.next("down")).d.upTo === 6, "and the host's frames reach it again");

@@ -113,4 +113,30 @@ public final class RelayPolicyTest {
             assertFalse(url, policy.allowsNetworkRequest("POST", "https://collector.example/v1/runs"));
         }
     }
+    @Test
+    public void letsTheGameReachTheCloudSaveWorkersV1Alone() {
+        RelayPolicy policy = new RelayPolicy("wss://relay.example/coop", COLLECTOR, "https://Saves.Example");
+        for (String method : new String[]{"GET", "PUT", "POST", "DELETE", "OPTIONS"}) {
+            assertTrue(method, policy.allowsNetworkRequest(method, "https://saves.example/v1/save"));
+        }
+        assertFalse(policy.allowsNetworkRequest("PATCH", "https://saves.example/v1/save"));
+        assertFalse(policy.allowsNetworkRequest("GET", "https://saves.example/"));
+        assertFalse(policy.allowsNetworkRequest("GET", "https://saves.example/v1/save?x=1"));
+        assertFalse(policy.allowsNetworkRequest("GET", "https://saves.example:8443/v1/save"));
+        assertFalse(policy.allowsNetworkRequest("GET", "https://saves.example.evil.test/v1/save"));
+        assertFalse(policy.allowsNetworkRequest("GET", "http://saves.example/v1/save"));
+        assertFalse(policy.allowsNetworkRequest("PUT", "https://relay.example/v1/save"));
+        assertEquals("connect-src 'self' https://relay.example wss://relay.example " + COLLECTOR
+                + " https://saves.example/v1/", policy.contentSecurityPolicy());
+    }
+
+    @Test
+    public void ignoresACloudSaveUrlThatIsntAnHttpsOrigin() {
+        for (String url : new String[]{"http://saves.example", "https://saves.example/v1/save",
+                "https://name@saves.example", "https://saves.example?x=1", "not a URL", "", null}) {
+            RelayPolicy policy = new RelayPolicy("", "", url);
+            assertEquals(String.valueOf(url), "connect-src 'self'", policy.contentSecurityPolicy());
+            assertFalse(policy.allowsNetworkRequest("GET", "https://saves.example/v1/save"));
+        }
+    }
 }

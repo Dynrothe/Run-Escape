@@ -1,4 +1,7 @@
+import { roomLocation } from "./src/location.mjs";
 import { Room } from "./src/room.mjs";
+
+vi.mock("./src/location.mjs", () => ({ roomLocation: vi.fn() }));
 
 // What the room says and saves, in order, as Cloudflare would see it
 let log: string[];
@@ -64,6 +67,7 @@ const env: Record<string, any> = {
 async function loadRoom(): Promise<any> {
     let ready: Promise<unknown> = Promise.resolve();
     const ctx = {
+        waitUntil: (_promise: Promise<unknown>) => {},
         storage: {
             get: async () => structuredClone(saved),
             put: async (_key: string, value: unknown) => {
@@ -177,6 +181,8 @@ describe("Cloudflare co-op room", () => {
         writes = 0;
         listings = [];
         gone = [];
+        vi.mocked(roomLocation).mockReset();
+        vi.mocked(roomLocation).mockResolvedValue({ colo: "EWR", country: "US" });
     });
     afterEach(() => {
         vi.useRealTimers();
@@ -189,6 +195,111 @@ describe("Cloudflare co-op room", () => {
         // After a restart, the guest's token still brings them back
         const restarted = await loadRoom();
         expect(restarted.room.members[1].token).toBe(room.room.members[1].token);
+    });
+
+    it("acknowledges numbered selections, rejects stale retries, and keeps the acknowledgement through sleep", async () => {
+        const { room, guest } = await party();
+        say(room, guest, { t: "me", characterId: "wizard", meSeq: 1 });
+        say(room, guest, { t: "me", characterId: "ranger", ready: true, meSeq: 2 });
+        await wait(room, 1000);
+        const again = await loadRoom();
+        const restored = again.room.members.find((m: any) => m.id === "guest");
+        say(again, restored, { t: "me", characterId: "wizard", ready: false, meSeq: 1 });
+        await wait(again, 250);
+        const ack = guest.socket.sent.at(-1);
+        expect(ack).toMatchObject({ t: "room", memberAcks: true, meSeq: 2 });
+        expect(ack.room.members.find((m: any) => m.id === "guest")).toMatchObject({
+            characterId: "ranger",
+            ready: true,
+        });
+    });
+
+    it("flushes lobby changes for everyone on incoming traffic when the alarm is late", async () => {
+        const { room, host, guest } = await party();
+        say(room, guest, { t: "me", characterId: "wizard", meSeq: 1 });
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 2 });
+        expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("wizard");
+        // No alarm delivery: the retry must make progress by itself.
+        vi.setSystemTime(Date.now() + 1000);
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 2 });
+        expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("ranger");
+    });
+
+    it("saves a confirmed pick before anyone hears of it, inside the save throttle too", async () => {
+        const { room, host, guest } = await party();
+        // The join's just been saved, so another save would wait SAVE_MS
+        log = [];
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 1 });
+        expect(saved.members[1]).toMatchObject({ characterId: "ranger", meSeq: 1 });
+        expect(log.indexOf("save")).toBeLessThan(log.indexOf("guest room"));
+        // The same pick again (a map change's loadout) waits for the throttle
+        const writesBefore = writes;
+        say(room, guest, { t: "me", characterId: "ranger", meSeq: 2 });
+        expect(writes).toBe(writesBefore);
+        // Another inside MEMBER_UPDATE_MS: saved now, told everyone with the next update
+        say(room, guest, { t: "me", characterId: "wizard", meSeq: 3 });
+        expect(saved.members[1]).toMatchObject({ characterId: "wizard", meSeq: 3 });
+        expect(host.socket.sent.at(-1).room.members[1].characterId).toBe("ranger");
+    });
+
+    it("hears a message before a late alarm's heartbeat judges who sent it", async () => {
+        const { room, host, guest } = await party();
+        // Over SILENT_MS with nothing from the guest, and the heartbeat's alarm late
+        vi.setSystemTime(Date.now() + 6 * 60_000);
+        host.socket.pingedAt = new Date();
+        const socket = guest.socket;
+        say(room, guest, { t: "me", characterId: "ranger" });
+        // Not let go as silent, and what it said counts
+        expect(socket.closes).toEqual([]);
+        expect(room.room.members[1]).toMatchObject({ socket, characterId: "ranger" });
+    });
+
+    it("un-readies a player who changes their pick, and holds the host's start until they're ready", async () => {
+        const { room, host, guest } = await party();
+        const loadout = { metaStats: {}, unlockedItems: [], armoury: {} };
+        say(room, host, { t: "me", ready: true });
+        say(room, guest, { t: "me", ready: true, characterId: "warrior", loadout });
+        // The same pick sent again (as on a map change) leaves them ready
+        say(room, guest, { t: "me", characterId: "warrior", loadout });
+        expect(room.room.members[1].ready).toBe(true);
+        // Another, which the host may not have heard of yet when it starts
+        say(room, guest, { t: "me", characterId: "ranger" });
+        expect(room.room.members[1]).toMatchObject({ ready: false, repicked: true });
+        say(room, host, { t: "start", game: {} });
+        expect(room.room.started).toBeFalsy();
+        expect(host.socket.sent.at(-1)).toEqual({
+            t: "error",
+            message: "guest's pick changed, so they need to ready up again.",
+        });
+        // Through a restart too
+        await wait(room, 1000);
+        const again = await loadRoom();
+        expect(again.room.members[1].repicked).toBe(true);
+        // Ready again, with it: the start goes ahead
+        say(room, guest, { t: "me", ready: true, characterId: "ranger" });
+        say(room, host, { t: "start", game: {} });
+        expect(room.room.started).toBe(true);
+        expect(room.room.members.every((m: any) => !m.ready && !m.repicked)).toBe(true);
+    });
+
+    it("keeps the host ready through a change of invocations, which only shows in the lobby", async () => {
+        const { room, host } = await party();
+        const loadout = { metaStats: {}, unlockedItems: [], armoury: {} };
+        say(room, host, { t: "me", ready: true, loadout: { ...loadout, invocations: ["a"] } });
+        say(room, host, { t: "me", loadout: { ...loadout, invocations: ["a", "b"] } });
+        expect(room.room.members[0]).toMatchObject({ ready: true, repicked: false });
+    });
+
+    it("holds the start for the host's own change of pick", async () => {
+        const { room, host } = await party();
+        say(room, host, { t: "me", ready: true });
+        say(room, host, { t: "me", characterId: "wizard" });
+        say(room, host, { t: "start", game: {} });
+        expect(room.room.started).toBeFalsy();
+        expect(host.socket.sent.at(-1)).toEqual({
+            t: "error",
+            message: "Your pick changed, so you need to ready up again.",
+        });
     });
 
     it("saves the run starting before anyone's told", async () => {
@@ -273,13 +384,196 @@ describe("Cloudflare co-op room", () => {
         say(room, host, { t: "settings", open: true });
         await wait(room, 2000);
         expect(shown()).toEqual(["FI", undefined]);
-        expect(listings.at(-1).country).toBe("FI");
+        expect(listings.at(-1).country).toBe("US");
         // Kept after a restart
         expect(saved.members[0].hideCountry).toBe(true);
 
         say(room, host, { t: "settings", open: false });
         await wait(room, 2000);
         expect(shown()).toEqual([undefined, undefined]);
+    });
+
+    it("keeps the server flag on host handoff while player flags follow the players", async () => {
+        const { room, host, guest } = await party();
+        host.country = "FI";
+        guest.country = "SE";
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        expect(listings.at(-1)).toMatchObject({ country: "US", countrySource: "server" });
+        const original = room.room;
+
+        say(room, host, { t: "leave" });
+        await wait(room, 2000);
+        expect(room.room).toBe(original);
+        expect(room.room.hostId).toBe(guest.id);
+        expect(listings.at(-1)).toMatchObject({ code: "ABCDEFGH", country: "US" });
+        expect(gone).toEqual([]);
+        const awake = await loadRoom();
+        expect(awake.room.hostId).toBe(guest.id);
+        expect(awake.roomView().members[0].country).toBe("SE");
+    });
+
+    it("keeps the initial country when a player resumes from a different country", async () => {
+        const { room, host } = await party();
+        host.country = "FI";
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        const request = new Request(`https://relay/coop/room/ABCDEFGH?resume=${host.token}`, {
+            headers: { "x-country": "SE" },
+        });
+        const back = new Socket("back");
+        vi.stubGlobal(
+            "WebSocketPair",
+            class {
+                0 = new Socket("game");
+                1 = back;
+            },
+        );
+        vi.stubGlobal("Response", class {});
+
+        await room.fetch(request);
+        expect(host.country).toBe("FI");
+        expect(back.sent.at(-1).room.members[0].country).toBe("FI");
+        expect(listings.at(-1).country).toBe("US");
+    });
+
+    it("can create another game room inside the same object before it shuts down", async () => {
+        const { room, host } = await party();
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        expect(saved.serverCountry).toBe("US");
+        const oldGameRoom = room.room;
+        room.disband("closed");
+        vi.mocked(roomLocation).mockResolvedValue({ colo: "ARN", country: "SE" });
+        const nextHost = enter(room, "nextHost", "create");
+        nextHost.country = "SE";
+        say(room, nextHost, { t: "create", open: true, me });
+        await room.locationLookup;
+
+        // Routing a reused code reaches this same object ID. If the object
+        // is still alive, create accepts a new game room inside it.
+        expect(room.room).not.toBe(oldGameRoom);
+        expect(room.room.code).toBe("ABCDEFGH");
+        expect(room.room.hostId).toBe("nextHost");
+        expect(listings.at(-1)).toMatchObject({ code: "ABCDEFGH", country: "SE" });
+        expect(saved.hostId).toBe("nextHost");
+        expect(saved.serverCountry).toBe("SE");
+        expect(roomLocation).toHaveBeenCalledTimes(2);
+    });
+
+    it("leaves the server flag unknown until measured and discards late results after closing", async () => {
+        let finish!: (location: { colo: string; country: string }) => void;
+        vi.mocked(roomLocation).mockReturnValue(
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+        );
+        const { room, host } = await party();
+        host.country = "FI";
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        expect(listings.at(-1)).toMatchObject({ countrySource: "server" });
+        expect(listings.at(-1).country).toBeUndefined();
+        room.tellLobby(true);
+        room.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledOnce();
+        const pending = room.locationLookup;
+        room.disband("closed");
+        const count = listings.length;
+        finish({ colo: "EWR", country: "US" });
+        await pending;
+        expect(listings).toHaveLength(count);
+        expect(saved).toBeUndefined();
+    });
+
+    it("keeps the first country through later heartbeats, hibernation and restarts", async () => {
+        const { room, host } = await party();
+        host.country = "FI";
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        await room.locationLookup;
+        expect(listings.at(-1).country).toBe("US");
+        expect(saved.serverCountry).toBe("US");
+        expect(saved.locationRetryAt).toBeUndefined();
+
+        vi.mocked(roomLocation).mockClear();
+        await wait(room, 65_000);
+        const awake = await loadRoom();
+        awake.tellLobby(true);
+        expect(listings.at(-1).country).toBe("US");
+        expect(awake.roomView().members[0].country).toBe("FI");
+        const restarted = await restart();
+        vi.setSystemTime(Date.now() + 2 * 60 * 60_000);
+        restarted.tellLobby(true);
+        expect(listings.at(-1).country).toBe("US");
+        expect(roomLocation).not.toHaveBeenCalled();
+    });
+
+    it("doesn't save an old room's late measurement into a replacement room", async () => {
+        let finish!: (location: { colo: string; country: string }) => void;
+        vi.mocked(roomLocation).mockReturnValueOnce(
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+        );
+        const { room, host } = await party();
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        const pending = room.locationLookup;
+        room.disband("closed");
+        vi.mocked(roomLocation).mockResolvedValue({ colo: "ARN", country: "SE" });
+        const nextHost = enter(room, "nextHost", "create");
+        say(room, nextHost, { t: "create", open: true, me });
+        await room.locationLookup;
+        expect(saved.serverCountry).toBe("SE");
+
+        finish({ colo: "EWR", country: "US" });
+        await pending;
+        expect(saved.hostId).toBe("nextHost");
+        expect(saved.serverCountry).toBe("SE");
+        expect(listings.at(-1).country).toBe("SE");
+        expect(roomLocation).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps a failed lookup's cooldown through waking, then saves the first success", async () => {
+        vi.mocked(roomLocation).mockResolvedValueOnce(undefined);
+        const { room, host } = await party();
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        expect(roomLocation).toHaveBeenCalledOnce();
+        expect(saved.serverCountry).toBeUndefined();
+        expect(saved.locationRetryAt).toBeGreaterThan(Date.now());
+        const retryAt = saved.locationRetryAt;
+
+        const awake = await loadRoom();
+        awake.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledOnce();
+        const restarted = await restart();
+        restarted.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledOnce();
+        vi.setSystemTime(retryAt);
+        restarted.tellLobby(true);
+        await restarted.locationLookup;
+        expect(roomLocation).toHaveBeenCalledTimes(2);
+        expect(listings.at(-1).country).toBe("US");
+        expect(saved.serverCountry).toBe("US");
+        expect(saved.locationRetryAt).toBeUndefined();
+
+        restarted.tellLobby(true);
+        expect(roomLocation).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't measure private rooms or started runs", async () => {
+        const { room, host } = await party();
+        expect(roomLocation).not.toHaveBeenCalled();
+        say(room, host, { t: "settings", open: true });
+        await wait(room, 2000);
+        await room.locationLookup;
+        expect(roomLocation).toHaveBeenCalled();
+        vi.mocked(roomLocation).mockClear();
+        room.room.started = true;
+        room.tellLobby(true);
+        expect(roomLocation).not.toHaveBeenCalled();
     });
 
     it("answers a player's game closing its connection", async () => {

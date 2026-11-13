@@ -36,6 +36,29 @@ export const SPOT_LIGHTS: ReadonlyMap<number, LightLook> = new Map<number, Light
     // opening, fun/varrockOpening.ts), and Yama's click before it
     [2610, { radius: 3, color: 0xffb040, intensity: 1, flicker: 0.45 }],
     [3287, { radius: 4, color: 0xff5a20, intensity: 1, flicker: 0.2 }],
+    // The Tombs of Amascut: Het's beam and where it lands, the glowing circles to stand in (Verzik's
+    // safe circle), Akkha's elements and his sands, Kephri's fireballs, the Wardens' pyramids and
+    // shots, and their red lightning
+    [2114, { radius: 1.6, color: 0xfff0b0, intensity: 0.7 }],
+    [2064, { radius: 1.6, color: 0xfff0b0, intensity: 0.7 }],
+    [2120, { radius: 3, color: 0xfff4c0, intensity: 1, flicker: 0.2 }],
+    [
+        1581,
+        { radius: 1.4, color: 0x7fffd8, intensity: 0.45, pulse: { amount: 0.25, seconds: 1.5 } },
+    ],
+    [2257, { radius: 3, color: 0xa070ff, intensity: 0.8 }],
+    [2256, { radius: 3, color: 0xa8dcff, intensity: 0.9, flicker: 0.35 }],
+    [2259, { radius: 3, color: 0xc8f4ff, intensity: 0.7 }],
+    [2258, { radius: 3, color: 0xff7a2a, intensity: 0.9, flicker: 0.3 }],
+    [2260, { radius: 2, color: 0xff5a3a, intensity: 0.7 }],
+    [2167, FIRE],
+    [2157, FIRE_HIT],
+    [2214, { radius: 2, color: 0xffd060, intensity: 0.6 }],
+    [2237, { radius: 2.5, color: 0xffb040, intensity: 0.8 }],
+    [2238, { radius: 2.5, color: 0x8fd8ff, intensity: 0.8 }],
+    [2199, { radius: 1.6, color: 0xff3a2a, intensity: 0.5 }],
+    [2200, { radius: 1.6, color: 0xff3a2a, intensity: 0.5 }],
+    [2236, { radius: 3, color: 0xff3a2a, intensity: 1, flicker: 0.4 }],
 ]);
 
 // A floor's tiles (FloorDef), by their effect: lava glows, ice faintly

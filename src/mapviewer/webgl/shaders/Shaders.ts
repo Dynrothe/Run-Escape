@@ -21,7 +21,7 @@ export function createProgram(
     if (discardAlpha) {
         defines.push("DISCARD_ALPHA");
     }
-    // A dark map's (lights.glsl); every other map's programs go without
+    // A lit map's (MapDef.lighting, lights.glsl); every other map's programs go without
     if (lights) {
         defines.push("LIGHTS");
     }

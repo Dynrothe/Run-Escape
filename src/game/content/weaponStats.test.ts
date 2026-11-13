@@ -106,8 +106,8 @@ describe("weapon stats", () => {
                 quality: "common",
             }).stats,
         ).toEqual([
-            { label: "Damage", value: "21", from: "16", better: true },
-            { label: "Knockback", value: "0.7", from: "0.5", better: true },
+            { label: "Damage", english: "Damage", value: "21", from: "16", better: true },
+            { label: "Knockback", english: "Knockback", value: "0.7", from: "0.5", better: true },
         ]);
         const fresh = describeChoice({
             kind: "newWeapon",
@@ -135,7 +135,13 @@ describe("weapon stats", () => {
             bonus: 0.2,
         });
         expect(over.stats).toEqual([
-            { label: "Damage bonus", value: "+38%", from: "+20%", better: true },
+            {
+                label: "Damage bonus",
+                english: "Damage bonus",
+                value: "+38%",
+                from: "+20%",
+                better: true,
+            },
         ]);
     });
 });

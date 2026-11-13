@@ -1,6 +1,8 @@
+import { t } from "../i18n";
 import "./NoticePanel.css";
 import { Notice } from "./notice";
 import { renderBold } from "./renderBold";
+import { useDialog } from "./useDialog";
 
 type Props = {
     notice: Notice;
@@ -9,10 +11,11 @@ type Props = {
 
 // Over the title screen until it's closed
 export function NoticePanel({ notice, onClose }: Props): JSX.Element {
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-notice">
-                {notice.title && <h2>{notice.title}</h2>}
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-notice">
+                {notice.title && <h2 id={titleId}>{notice.title}</h2>}
                 <div className="ui-notice-body">
                     {notice.blocks.map((block, i) =>
                         block.kind === "paragraph" ? (
@@ -28,7 +31,7 @@ export function NoticePanel({ notice, onClose }: Props): JSX.Element {
                 </div>
                 <div className="ui-notice-close">
                     <button className="ui-button" onClick={onClose}>
-                        Got it
+                        {t("save.got_it")}
                     </button>
                 </div>
             </div>

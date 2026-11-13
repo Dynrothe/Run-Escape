@@ -29,7 +29,8 @@
 }
 
 .ui-coop-label {
-    flex: 0 0 92px;
+    flex: 0 0 auto;
+    min-width: 92px;
     font-family: "OSRS Bold", sans-serif;
     color: var(--ui-orange);
 }
@@ -49,11 +50,11 @@
 }
 
 .ui-coop-input:focus {
-    box-shadow: inset 0 0 0 1px var(--ui-yellow);
+    box-shadow: inset 0 0 0 2px var(--ui-yellow);
 }
 
 .ui-coop-input::placeholder {
-    color: #7d705b;
+    color: var(--ui-text-disabled);
 }
 
 /* The name the relay gave this player */
@@ -93,7 +94,7 @@
     letter-spacing: 0;
     text-align: center;
     vertical-align: 1px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     text-shadow: 1px 1px 0 #000;
 }
 
@@ -172,7 +173,7 @@
 
 .ui-coop-room-map,
 .ui-coop-room-count {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 /* The room's code, to read out to a friend */
@@ -180,13 +181,13 @@
     font-family: "OSRS Bold", sans-serif;
     font-size: 13px;
     letter-spacing: 1px;
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 .ui-coop-hint {
     margin-top: 8px;
     text-align: center;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 /* Under the list when there's more than a page of rooms */
@@ -196,31 +197,33 @@
     justify-content: center;
     gap: 10px;
     margin-top: 6px;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-coop-empty {
     margin: auto;
     text-align: center;
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 .ui-coop-error {
     margin-top: 8px;
     text-align: center;
-    color: #ff6050;
+    color: var(--ui-red-text);
 }
 
 /* The room: its code and who can get in, then the party */
 
 .ui-coop-code {
     display: flex;
+    /* The host's pair goes under the code when the panel's too narrow for both */
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 6px 8px;
 }
 
 .ui-coop-code-label {
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-coop-code-value {
@@ -236,7 +239,13 @@
     align-items: center;
     gap: 6px;
     margin-left: auto;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
+}
+
+/* The host's pair: the rest of the room's row, or a line of its own under the code */
+.ui-coop-choice.ui-coop-open {
+    flex: 1 0 auto;
+    gap: 4px;
 }
 
 .ui-coop-members {
@@ -259,7 +268,7 @@
 
 .ui-coop-member-empty {
     justify-content: center;
-    color: #7d705b;
+    color: var(--ui-text-disabled);
     background: rgba(0, 0, 0, 0.2);
     box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.3);
 }
@@ -280,15 +289,22 @@
 
 .ui-coop-you {
     font-family: "OSRS Small", sans-serif;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
 }
 
 .ui-coop-status {
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 .ui-coop-status-ready {
-    color: var(--ui-green);
+    color: var(--ui-green-text);
+}
+
+/* Why Start can't be pressed yet */
+.ui-coop-start-hint {
+    margin-top: 8px;
+    text-align: center;
+    color: var(--ui-text-dim);
 }
 
 .ui-coop-kick:hover:not(:disabled) {
@@ -341,7 +357,7 @@
 
 .ui-party-note {
     font-size: 14px;
-    color: #8a7e66;
+    color: var(--ui-text-faint);
 }
 
 /* Like the HUD's hitpoints bar, smaller */

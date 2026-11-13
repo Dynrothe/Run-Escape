@@ -1,7 +1,7 @@
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
-import { ALL_MAPS, MAPS } from "../content/maps";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
+import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
 import { SOUNDS } from "../content/sounds";
@@ -9,7 +9,6 @@ import { ItemUse } from "../content/types";
 import { WEAPONS } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { SimEvent } from "../core/entities";
-import { getMapCinematics } from "./Cinematic";
 import { GameAudio } from "./GameAudio";
 
 // Moments in the casket opening animation: it lands, rattles, bursts open
@@ -31,6 +30,7 @@ const USE_SOUNDS: Record<ItemUse["kind"], number> = {
     blast: SOUNDS.chinchompa,
     xp: SOUNDS.lamp,
     revive: SOUNDS.revive,
+    supply: SOUNDS.potion,
 };
 
 // Every sound effect a run can play, to synthesize up front
@@ -58,6 +58,12 @@ export function getGameSoundIds(): number[] {
     }
     for (const powerUp of POWER_UPS) {
         ids.push(powerUp.sound, powerUp.endSound ?? -1, powerUp.hitSound ?? -1);
+        if (powerUp.effect.kind === "polymorph") {
+            ids.push(...powerUp.effect.shoutSounds);
+            for (const { def } of getPolymorphLooks(powerUp.effect)) {
+                ids.push(...(def.shoutSounds ?? []));
+            }
+        }
     }
     for (const thrall of THRALLS) {
         ids.push(thrall.sound);
@@ -66,10 +72,13 @@ export function getGameSoundIds(): number[] {
         ids.push(map.fight?.ability?.sound ?? -1);
     }
     for (const map of ALL_MAPS) {
+        ids.push(map.tombs?.ability?.sound ?? -1);
+    }
+    for (const map of ALL_MAPS) {
         ids.push(map.blessings?.sound ?? -1);
         ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
-        for (const cinematic of getMapCinematics(map)) {
-            ids.push(...cinematic.cues.map((cue) => cue.sound ?? -1));
+        for (const def of getMapCinematics(map)) {
+            ids.push(...def.cues.map((cue) => cue.sound ?? -1));
         }
         for (const skin of map.floor?.skins ?? []) {
             const { rise, fall, crack } = skin.material ?? {};
@@ -171,6 +180,13 @@ export class GameSounds {
                 }
                 case "bossAttack":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.8 });
+                    break;
+                case "enemyShout":
+                    // A flock baas all the time, so not over and over at once
+                    audio.playAt(event.sound, event.x, event.y, px, py, {
+                        volume: 0.5,
+                        minGap: 150,
+                    });
                     break;
                 case "ability":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.9 });

@@ -31,10 +31,9 @@
 }
 
 @media (pointer: coarse) {
-    /* The browser's bars come and go, which 100vh doesn't follow */
+    /* The page's height is in index.css, which comes after this */
     html,
     body {
-        height: 100dvh;
         overscroll-behavior: none;
     }
 
@@ -50,18 +49,52 @@
         display: block;
     }
 
-    /* The stick and buttons do what the HUD's would */
+    /* The stick and buttons do what the HUD's would (the HUD's fight button with its tag, hint
+       and ring) */
     .ui-inventory,
-    .ui-hud-actions .ui-ability {
+    .ui-hud-actions .ui-ability-wrap {
         display: none;
     }
 
-    /* A fight's own button, big, above the items' corner (a fight has no items) */
-    .ui-touch-ability {
+    /* A fight's own button, big, in the items' corner (a one-fight map has no items). Its wrap's
+       placed, so the tag, the hint and the ring go by the button. The hint's above it, clear of the
+       stick (bottom left), the pause button (top) and the HP bar (bottom middle). */
+    .ui-ability-wrap-touch {
         position: absolute;
-        display: flex;
         right: calc(var(--safe-right) + 16px);
-        bottom: calc(var(--safe-bottom) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px + var(--touch-ability-name, 14px));
+    }
+
+    /* Its name, under the circle and as wide as it needs ("Point-blank volley") */
+    .ui-ability-name-under {
+        top: 100%;
+        bottom: auto;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        margin-top: 1px;
+        padding: 0 4px;
+        white-space: nowrap;
+        pointer-events: none;
+        /* Straight on the floor now, not the button's face: a dark backing to read on any */
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
+    }
+
+    /* A run with items (the Tombs): above their two rows, in their column */
+    .ui-ability-wrap-touch.ui-ability-wrap-items {
+        right: calc(
+            var(--safe-right) + var(--touch-items-inset, 12px) +
+                (var(--touch-items-width, 122px) - 76px) / 2
+        );
+        bottom: calc(
+            var(--safe-bottom) + var(--touch-items-inset, 12px) + var(--touch-item-size, 58px) * 2 +
+                var(--touch-items-gap, 6px) + 10px + var(--touch-ability-name, 14px)
+        );
+    }
+
+    .ui-touch-ability {
+        display: flex;
         width: 76px;
         height: 76px;
         border-radius: 50%;
@@ -144,11 +177,12 @@
         touch-action: none;
     }
 
-    /* Still shown once the quest tracker's title is under the zone */
+    /* No z-index: the HUD comes after the zone, so it's above it already, and
+       a z-index would put these over the run's panels too. The damage panel
+       is placed by .ui-damage. */
     .ui-quest-tracker,
     .ui-damage {
         position: relative;
-        z-index: 1;
     }
 
     /* and under a level up, a casket and the pause menu */
@@ -159,6 +193,36 @@
     /* Big enough to tap */
     .ui-dps {
         padding: 6px 0 6px 10px;
+    }
+
+    /* The camera's zoom, in the right-hand column with its other toggles, the
+       slider under its own. A phone's layout puts it by the timer (below). */
+    .ui-mobile-zoom-control {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    /* The HUD lets touches through to the stick, so it takes them back */
+    .ui-mobile-zoom {
+        width: 120px;
+        accent-color: var(--ui-orange);
+        pointer-events: auto;
+    }
+
+    .ui-mobile-zoom[hidden] {
+        display: none;
+    }
+
+    /* The title's corner and hint clear of a tablet's home bar (a phone's
+       layout places them below) */
+    .ui-title {
+        padding-bottom: calc(var(--safe-bottom) + 4vh / var(--ui-scale));
+    }
+
+    .ui-title-utils {
+        right: calc(var(--safe-right) + 10px);
+        bottom: calc(var(--safe-bottom) + 8px);
     }
 
     /* Rests in the corner, faint, to say what's there; it jumps to the thumb */
@@ -230,6 +294,12 @@
         border: solid var(--ui-orange);
         border-width: 0 6px;
         filter: drop-shadow(1px 1px 0 #000);
+    }
+
+    /* The sound's orb under the pause button, which has its place by the minimap */
+    .ui-minimap .ui-sound-orb {
+        left: -62px;
+        top: 56px;
     }
 
     .ui-touch-items {
@@ -318,6 +388,47 @@
 
     .ui-volume {
         height: 32px;
+    }
+
+    /* The Scabaras slate: one thin row along the top, under the clock, not over the floor round
+       the hero. With no zoom, the middle of the screen is the plates you're about to step on.
+       (The tablet's panel, with only its number, stays as it is.) */
+    .ui-scabaras-slate {
+        top: calc(var(--safe-top) + 34px);
+        width: auto;
+        max-width: calc((100vw - var(--safe-left) - var(--safe-right) - 16px) / var(--ui-scale));
+        padding: 3px 8px;
+        opacity: 0.92;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-title,
+    .ui-scabaras-slate .ui-scabaras-name {
+        display: none;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbols {
+        grid-template-columns: repeat(9, auto);
+        gap: 2px 5px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-symbol {
+        gap: 2px;
+    }
+
+    .ui-scabaras-slate .ui-icon {
+        width: auto;
+        height: 18px;
+    }
+
+    .ui-scabaras-slate .ui-scabaras-value {
+        font-size: 15px;
+    }
+
+    /* The Scabaras room's puzzles: only those to do now (two at most), as the line above counts
+       those done, so the column stays short beside the fight button */
+    .ui-scabaras-puzzle-solved,
+    .ui-scabaras-puzzle-waiting {
+        display: none;
     }
 }
 
@@ -495,11 +606,18 @@
         bottom: calc(var(--safe-bottom) + 4px);
     }
 
+    .ui-title-dev {
+        left: auto;
+        right: calc(var(--safe-right) + 10px);
+        bottom: calc(var(--safe-bottom) + 4px);
+    }
+
     .ui-title-link {
         padding: 8px;
     }
 
-    .ui-title-settings {
+    .ui-title-settings,
+    .ui-title-language {
         width: 44px;
         height: 44px;
         padding: 0;
@@ -613,6 +731,12 @@
         font-size: 14px;
     }
 
+    /* The footer's label says as much, in less of the cards' room */
+    .ui-shop-help-coins,
+    .ui-shop-hint {
+        display: none;
+    }
+
     .ui-shop-grid {
         flex: 1 1 auto;
         grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
@@ -620,7 +744,8 @@
 
     /* Armoury: the slots and the piece picked scroll apart */
 
-    .ui-armoury > .ui-subtle {
+    .ui-armoury > .ui-subtle,
+    .ui-armoury-legend {
         display: none;
     }
 
@@ -650,6 +775,10 @@
         justify-content: center;
     }
 
+    .ui-armoury-tab {
+        min-height: 44px;
+    }
+
     /* Quests and the collection log */
 
     .ui-quests > .ui-subtle,
@@ -662,8 +791,8 @@
         min-height: 44px;
     }
 
-    /* Run HUD: everything at the edges, the middle left to the fight. What's
-       only a look at the run (gear, quests) is in the pause menu. */
+    /* Run HUD: everything at the edges, the middle left to the fight. Gear has
+       its own panel on the right, behind a toggle; quests are in the pause menu. */
 
     .ui-xp {
         height: calc(var(--safe-top) + 12px);
@@ -686,6 +815,19 @@
         zoom: 0.72;
     }
 
+    /* Taller to press than they're drawn, as there's no room to draw them bigger. Weapons
+       grow up and passives down, each only half the gap toward the other, so neither row
+       covers the other's slots. */
+    .ui-slot::before {
+        content: "";
+        position: absolute;
+        inset: -6px 0 -2px;
+    }
+
+    .ui-hud-left > .ui-slots + .ui-slots .ui-slot::before {
+        inset: -2px 0 -6px;
+    }
+
     .ui-gear-slots,
     .ui-quest-tracker {
         display: none;
@@ -697,6 +839,56 @@
         top: 0;
         transform: translateX(-50%);
         font-size: 24px;
+    }
+
+    /* Placed by .ui-hud-top, as the column it's in isn't */
+    .ui-mobile-zoom-control {
+        position: absolute;
+        left: calc(50% + 25vw - 130px);
+        top: 1px;
+        width: clamp(76px, 16vw, 120px);
+        align-items: center;
+    }
+
+    .ui-mobile-zoom-toggle {
+        width: 100%;
+        padding: 0;
+        line-height: 18px;
+    }
+
+    .ui-mobile-zoom {
+        width: 100%;
+        height: 12px;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Co-op's countdown: one line where the clock was, so the boss bar, the
+       waiting note and the toasts keep their places under it */
+    .ui-choice-countdown {
+        top: calc(var(--safe-top) + 16px);
+        padding: 3px 8px;
+        font-size: 14px;
+        line-height: 18px;
+    }
+
+    .ui-choice-countdown-label {
+        display: none;
+    }
+
+    /* The panels under it, and clear of the home bar. Here they have their
+       padding and border inside their size. */
+    .ui-choice-countdown ~ .ui-modal {
+        padding-top: calc(var(--safe-top) + 46px);
+        padding-bottom: var(--safe-bottom);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-panel {
+        max-height: calc(100% - 12px);
+    }
+
+    .ui-choice-countdown ~ .ui-modal > .ui-chest-card {
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 58px);
     }
 
     .ui-hud-right {
@@ -720,6 +912,21 @@
         margin-top: 0;
     }
 
+    /* The Tombs' fight button is in the item buttons' column, just where this column's lines
+       come down to, and a room's lines can take the DPS on to the items: it keeps left of that
+       column there. Its panel goes under it, not beside it: from there, beside it would reach
+       the middle of the screen, where the player is. */
+    .ui-damage-beside-ability {
+        margin-right: calc(
+            var(--touch-items-inset) + var(--touch-items-width) + 8px - var(--hud-inset)
+        );
+    }
+
+    .ui-damage-beside-ability .ui-damage-panel {
+        position: static;
+        margin-top: 4px;
+    }
+
     .ui-damage-head,
     .ui-damage-total,
     .ui-damage-other > :last-child {
@@ -728,6 +935,19 @@
 
     .ui-minimap {
         zoom: 0.56;
+    }
+
+    /* The sound's orb near its own size beside the smaller minimap, under the pause button, which
+       has its place by the minimap (its zoom scales its own offsets too) */
+    .ui-minimap .ui-sound-orb {
+        zoom: 1.6;
+        left: -39px;
+        top: 67px;
+    }
+
+    .ui-title-sound {
+        top: calc(var(--safe-top) + 8px);
+        right: calc(var(--safe-right) + 8px);
     }
 
     .ui-touch-pause {
@@ -955,7 +1175,8 @@
     }
 
     .ui-setting {
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 4px 10px;
         padding: 2px 0;
     }
 }
@@ -1025,5 +1246,82 @@
     .ui-coop-bar .ui-endless {
         min-width: 0;
         gap: 4px;
+    }
+}
+
+/* The Tombs' invocation board as tall as the screen at most, kept clear of the notch: its middle
+   scrolls, so Reset All and Done stay in view */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-invocations {
+        width: min(620px, calc(100vw - var(--safe-left) - var(--safe-right) - 12px));
+        max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+}
+
+/* The Wardrobe on a phone held sideways: its panel as tall as the screen, clear of the notch,
+   and its store scrolling as one (the filters go up out of the way), with the adventurer's
+   controls on one line under them. Under the screen's class, as WardrobeScreen.css loads later. */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-wardrobe-screen {
+        padding-left: calc(var(--safe-left) + 6px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe {
+        width: min(560px, 58vw);
+        height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe > h2,
+    .ui-wardrobe-screen .ui-wardrobe-list > .ui-subtle {
+        display: none;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store {
+        overflow-y: auto;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store-body {
+        flex: none;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-grid-wrap,
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        max-height: none;
+        overflow: visible;
+    }
+
+    /* The piece picked over the pieces, so its Buy is in view */
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        order: -1;
+    }
+
+    .ui-wardrobe-screen .ui-card.ui-wardrobe-tile {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-swatch {
+        width: 28px;
+        height: 28px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview {
+        left: auto;
+        right: calc(var(--safe-right) + 6px);
+        bottom: calc(var(--safe-bottom) + 6px);
+        margin: 0;
+        flex-direction: row;
+        padding: 4px 6px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview .ui-wardrobe-stepper-value {
+        min-width: 0;
+        max-width: 90px;
+    }
+
+    /* The arrows say it */
+    .ui-wardrobe-screen .ui-wardrobe-turn-label {
+        display: none;
     }
 }
