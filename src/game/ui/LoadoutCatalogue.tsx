@@ -11,7 +11,7 @@ import {
     passiveDescription,
     passiveName,
 } from "../content/passives";
-import { RARITIES } from "../content/rarity";
+import { RARITIES, rarityName } from "../content/rarity";
 import { CombatStyle, PassiveDef, WeaponDef } from "../content/types";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
@@ -24,7 +24,7 @@ import {
     weaponName,
 } from "../content/weapons";
 import { SaveData } from "../core/save";
-import { fmtNum, t, tl } from "../i18n";
+import { fmtNum, t } from "../i18n";
 import { DescriptionButton } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
 import { StatLine } from "./StatLine";
@@ -87,7 +87,9 @@ export function LoadoutCatalogue({ kind, save }: { kind: Kind; save: SaveData })
                                                 ? { borderColor: RARITIES[entry.rarity].color }
                                                 : undefined
                                         }
-                                        aria-label={name}
+                                        aria-label={
+                                            available ? name : t("armoury.locked_title", { name })
+                                        }
                                         aria-pressed={entry.id === item.id}
                                         onUse={() =>
                                             setSelected((previous) => ({
@@ -136,7 +138,7 @@ export function LoadoutCatalogue({ kind, save }: { kind: Kind; save: SaveData })
                         >
                             {itemName(item)}
                         </div>
-                        <div className="ui-card-style">{tl(RARITIES[item.rarity].name)}</div>
+                        <div className="ui-card-style">{rarityName(item.rarity)}</div>
                     </div>
                 </div>
                 <div>{itemDescription(item)}</div>

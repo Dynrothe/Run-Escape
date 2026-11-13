@@ -5,7 +5,7 @@ import { UiSnapshot } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, GEAR_SLOT_BY_ID, getGear } from "../content/items";
-import { RARITIES, RARITY_ORDER } from "../content/rarity";
+import { RARITIES, RARITY_ORDER, rarityName } from "../content/rarity";
 import { describeSetProgress, getItemSet } from "../content/sets";
 import { compareStats, formatStats } from "../content/stats";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -25,9 +25,18 @@ import { useMenuKeys } from "./menuKeys";
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
+type Tab = "gear" | "weapons" | "passives";
+
+// Each tab's intro, and what a "?" in a tile's corner means there
+const TAB_TEXT: Record<Tab, { intro: string; missing: string }> = {
+    gear: { intro: "armoury.intro", missing: "armoury.legend.not_found" },
+    weapons: { intro: "armoury.catalogue.weapons_intro", missing: "armoury.legend.locked" },
+    passives: { intro: "armoury.catalogue.passives_intro", missing: "armoury.legend.locked" },
+};
+
 export function ArmouryScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
-    const [tab, setTab] = useState<"gear" | "weapons" | "passives">("gear");
+    const [tab, setTab] = useState<Tab>("gear");
     const [selected, setSelected] = useState(
         () => CASKET_GEAR.find((g) => save.foundGear.includes(g.id))?.id ?? CASKET_GEAR[0].id,
     );
@@ -50,11 +59,8 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
                         </button>
                     ))}
                 </div>
-                <p className="ui-subtle">
-                    {t(tab === "gear" ? "armoury.intro" : `armoury.catalogue.${tab}_intro`)}
-                </p>
-                {/* What the tiles' borders mean, on every tab. A "?" is gear not found yet, or a
-                    weapon or passive still locked. */}
+                <p className="ui-subtle">{t(TAB_TEXT[tab].intro)}</p>
+                {/* What the tiles' borders mean, on every tab */}
                 <div className="ui-armoury-legend">
                     {RARITY_ORDER.map((rarity) => (
                         <span key={rarity} className="ui-armoury-legend-item">
@@ -62,14 +68,14 @@ export function ArmouryScreen({ ui, client }: Props): JSX.Element {
                                 className="ui-armoury-legend-swatch"
                                 style={{ borderColor: RARITIES[rarity].color }}
                             />
-                            {tl(RARITIES[rarity].name)}
+                            {rarityName(rarity)}
                         </span>
                     ))}
                     <span className="ui-armoury-legend-item">
                         <span className="ui-armoury-legend-swatch ui-armoury-legend-missing">
                             ?
                         </span>
-                        {t(tab === "gear" ? "armoury.legend.not_found" : "armoury.legend.locked")}
+                        {t(TAB_TEXT[tab].missing)}
                     </span>
                 </div>
                 {tab === "gear" ? (
