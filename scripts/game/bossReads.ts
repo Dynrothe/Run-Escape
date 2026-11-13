@@ -704,12 +704,17 @@ export function realmMove(sim: Sim): Point | undefined {
         return towards(best.x, best.y);
     }
     const away = Math.hypot(boss.x - player.x, boss.y - player.y);
-    return away > 2 ? towards(boss.x, boss.y) : undefined;
+    return away > besideFor(sim) ? towards(boss.x, boss.y) : undefined;
 }
 
-// Off where her blast and tentacles are to land, to the nearest open spot clear of them all that
-// isn't into her (she's solid, and close: away from the mark alone is often into her), kept near
-// her for the burst
+// How near her to come out for the shock: within Blackstone's reach, outside her lash
+function besideFor(sim: Sim): number {
+    return (sim.ability?.reach ?? 2.5) - 0.5;
+}
+
+// Off where her blast and tentacles are to land, and out of her lash as it winds up, to the nearest
+// open spot clear of them all that isn't into her (she's solid, and close: away from the mark alone
+// is often into her), kept near her for the burst
 function realmDodge(sim: Sim, boss: Enemy): Point | undefined {
     const player = sim.player;
     const circles: { x: number; y: number; r: number }[] = [];
@@ -728,12 +733,24 @@ function realmDodge(sim: Sim, boss: Enemy): Point | undefined {
             circles.push({ x: hazard.x, y: hazard.y, r: hazard.radius + player.radius + 0.35 });
         }
     }
+    // A swing all round her (no lunge, wedge or cover to it): her lash
+    const swing = windup?.attack;
+    if (
+        swing?.kind === "swing" &&
+        !swing.line &&
+        swing.cone === undefined &&
+        !swing.cover &&
+        swing.world === undefined
+    ) {
+        circles.push({ x: boss.x, y: boss.y, r: (swing.radius ?? 2) + player.radius + 0.4 });
+    }
     const danger = (x: number, y: number) =>
         circles.some((c) => Math.hypot(x - c.x, y - c.y) < c.r);
     if (!danger(player.x, player.y)) {
         return undefined;
     }
     const room = inSquare(sim);
+    const beside = besideFor(sim);
     let best: Point | undefined;
     let bestScore = Infinity;
     for (const reach of [0.8, 1.6, 2.4]) {
@@ -751,7 +768,7 @@ function realmDodge(sim: Sim, boss: Enemy): Point | undefined {
             ) {
                 continue;
             }
-            const score = (danger(x, y) ? 100 : 0) + reach + Math.abs(fromBoss - 2.2) * 0.5;
+            const score = (danger(x, y) ? 100 : 0) + reach + Math.abs(fromBoss - beside) * 0.5;
             if (score < bestScore) {
                 best = { x: dx, y: dy };
                 bestScore = score;

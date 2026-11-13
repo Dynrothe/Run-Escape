@@ -2,9 +2,13 @@ import { getEnemy } from "../content/enemies";
 import { getMap } from "../content/maps";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { emptyStats } from "../content/types";
+import { getWeapon } from "../content/weapons";
 import {
     AWAKENED_WHISPERER_ID,
     WHISPERER_BLACKSTONE,
+    WHISPERER_BURST_AREA,
+    WHISPERER_BURST_LEVEL,
+    WHISPERER_BURST_REACH,
     WHISPERER_REALM,
     WHISPERER_SOUL_ID,
 } from "../content/whisperer";
@@ -114,6 +118,41 @@ describe("The Awakened Whisperer", () => {
         expect(realm.layer).toBe(0);
         expect(boss.hp).toBeLessThan(hp);
         expect(sim.damageBySource["ability:blackstone"]).toBeGreaterThan(0);
+    });
+
+    test("close to her she lashes all round her, and the burst and Blackstone reach her from outside it", () => {
+        const { sim, boss } = ready();
+        const lash = boss.def.boss!.attacks.find((attack) => attack.name === "Lash")!;
+        // Her fight widens the burst (MapDef.fight.stats), and the reach ring is its radius
+        expect(sim.stats.auraArea).toBe(WHISPERER_BURST_AREA);
+        const top = getWeapon("shadow_burst").levels[WHISPERER_BURST_LEVEL - 1];
+        expect(WHISPERER_BURST_REACH).toBeCloseTo(top.area * (1 + WHISPERER_BURST_AREA));
+        const lashed = lash.radius! + sim.player.radius;
+        expect(lashed).toBeLessThan(WHISPERER_BURST_REACH);
+        expect(lashed).toBeLessThan(WHISPERER_BLACKSTONE.reach);
+        // and she stops short of it herself
+        expect(boss.def.boss!.keepDistance!).toBeGreaterThan(lashed);
+        // What she winds up over 20 s, with the player kept that far east of her
+        const windups = (away: number): string[] => {
+            const names: string[] = [];
+            let last: unknown;
+            for (let i = 0; i < 20 * TICKS_PER_SECOND; i++) {
+                sim.player.hp = sim.player.maxHp;
+                sim.player.x = boss.x + away;
+                sim.player.y = boss.y;
+                const windup = boss.bossState?.windup;
+                if (windup && windup !== last) {
+                    names.push(windup.attack.name);
+                }
+                last = windup;
+                sim.step(0, 0);
+            }
+            return names;
+        };
+        expect(windups(lashed + 0.3)).not.toContain("Lash");
+        // Beside her it's most of what she does
+        const beside = windups(2);
+        expect(beside.filter((name) => name === "Lash").length).toBeGreaterThan(beside.length / 2);
     });
 
     test("her sanity runs out in the realm, and throws you back hurt", () => {

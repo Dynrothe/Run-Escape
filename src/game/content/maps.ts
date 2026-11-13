@@ -91,6 +91,7 @@ import {
     AWAKENED_WHISPERER_ID,
     WHISPERER_BLACKSTONE,
     WHISPERER_BOSS_ARENA,
+    WHISPERER_BURST_AREA,
     WHISPERER_BURST_LEVEL,
     WHISPERER_BURST_REACH,
     WHISPERER_HITPOINTS,
@@ -107,6 +108,10 @@ import {
 
 // The Leviathan's fight's square, in world tiles
 const SCAR_ARENA_WORLD = scarWorld(SCAR_BOSS_ARENA);
+
+// The Awakened fights' hits: through armour, which would stop most of each of them with the
+// shop's every upgrade, and a fifth harder than the bots' tuning (awakened-vardorvis.md 10)
+export const AWAKENED_HITS = { scale: 1.2, throughArmor: true };
 
 // The maps, in the order they open up: beating one unlocks the next. Arenas
 // are world-tile rectangles, usually aligned to 64-tile map squares. Seasonal
@@ -658,9 +663,9 @@ export const MAPS: MapDef[] = [
             y: STRANGLEWOOD_CLEARING.y - VARDORVIS_START_DISTANCE,
         },
         // His hitpoints come from the event, his hits are tuned to the Forester's hitpoints with
-        // the shop's every upgrade: through armour, which would stop most of each of his hits
+        // the shop's every upgrade (AWAKENED_HITS)
         difficulty: { hp: 1, damage: 1 },
-        hits: { scale: 1, throughArmor: true },
+        hits: AWAKENED_HITS,
         hard: { hp: 1.3, damage: 1.3 },
         waves: [],
         events: [
@@ -704,9 +709,9 @@ export const MAPS: MapDef[] = [
             y: LASSAR_CATHEDRAL.y - WHISPERER_START_DISTANCE,
         },
         // Her hitpoints come from the event, her hits are tuned to the Shadow walker's hitpoints with
-        // the shop's every upgrade: through armour, which would stop most of each of her hits
+        // the shop's every upgrade (AWAKENED_HITS)
         difficulty: { hp: 1, damage: 1 },
-        hits: { scale: 1, throughArmor: true },
+        hits: AWAKENED_HITS,
         hard: { hp: 1.3, damage: 1.3 },
         waves: [],
         events: [
@@ -731,6 +736,8 @@ export const MAPS: MapDef[] = [
             character: "shadow_walker",
             weaponLevel: WHISPERER_BURST_LEVEL,
             strikeReach: WHISPERER_BURST_REACH,
+            // Shadow Burst wider, to reach her from outside her lash
+            stats: { auraArea: WHISPERER_BURST_AREA },
             ability: WHISPERER_BLACKSTONE,
         },
         music: "Song of the Silent Choir",
@@ -750,9 +757,9 @@ export const MAPS: MapDef[] = [
         // South of him, as the other fights start you
         spawn: { x: DUKE_SPOT_WORLD.x, y: DUKE_SPOT_WORLD.y - DUKE_START_DISTANCE },
         // His hitpoints come from the event, his hits are tuned to the Snow ranger's hitpoints with
-        // the shop's every upgrade: through armour, which would stop most of each of his hits
+        // the shop's every upgrade (AWAKENED_HITS)
         difficulty: { hp: 1, damage: 1 },
-        hits: { scale: 1, throughArmor: true },
+        hits: AWAKENED_HITS,
         hard: { hp: 1.3, damage: 1.3 },
         waves: [],
         events: [{ at: 0, kind: "finalBoss", enemyId: AWAKENED_DUKE_ID, hp: DUKE_HITPOINTS }],
@@ -789,9 +796,9 @@ export const MAPS: MapDef[] = [
             y: LEVIATHAN_SPOT_WORLD.y - LEVIATHAN_START_DISTANCE,
         },
         // Its hitpoints come from the event, its hits are tuned to the Lantern-bearer's hitpoints
-        // with the shop's every upgrade: through armour, which would stop most of each of its hits
+        // with the shop's every upgrade (AWAKENED_HITS)
         difficulty: { hp: 1, damage: 1 },
-        hits: { scale: 1, throughArmor: true },
+        hits: AWAKENED_HITS,
         hard: { hp: 1.3, damage: 1.3 },
         waves: [],
         events: [

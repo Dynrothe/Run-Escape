@@ -80,9 +80,10 @@ untouchable.
 | 2     | 65-30%    | The dark       | Its glow out, the scene darker; the torrent; leeches; debris on its own |
 | 3     | 30-0%     | The pathfinder | The pathfinder's circle the only light; the torrent quicker; lightning  |
 
-It has 17,500 hitpoints, set by the bot with the shop's every upgrade (section 10): Fire Wave does
-about 110 a second to it when it's lit. Its hits go through armour (`MapDef.hits`). It starts an
-attack every 1 s, times the phase's tempo (1, 0.85, 0.75), and never moves.
+It has 11,000 hitpoints, set by the bot with the shop's every upgrade (section 10): Fire Wave does
+about 110 a second to it when it's lit. Its hits go through armour, a fifth harder than the
+bots' tuning (`MapDef.hits`, `AWAKENED_HITS`: section 10). It starts an
+attack every 1.2 s, times the phase's tempo (1, 0.9, 0.8), and never moves.
 
 ### Its attacks, and the dodge arithmetic
 
@@ -91,23 +92,23 @@ second. A big hit takes about a sixth of a full save's, its torrent a quarter.
 
 | Attack                                                                       | Damage                        | Warning            | To be clear                  |
 | ---------------------------------------------------------------------------- | ----------------------------- | ------------------ | ---------------------------- |
-| Ranged orbs: four along lines fanned at where you stood as it began          | 4 each, 12 t/s                | 0.75 s, the lines  | off the fan's lines          |
-| Magic orbs: two, slow, turning after you                                     | 5 each, 6.5 t/s               | 0.75 s             | across them, or behind cover |
-| Melee orbs: one heavy one, quick, straight at you                            | 10, 15 t/s                    | 0.75 s             | sideways as it's fired       |
-| Debris: after each volley, four pieces round you, standing 14 s (10 at most) | 7                             | 1 s, its shadow    | off the shadow               |
-| Tail: round its pool, for anyone close                                       | 8                             | 0.8 s              | 7 tiles from its middle      |
-| Torrent (phase 2 on): everything it can see                                  | 13                            | 2 s (1.7 in 3)     | behind debris or the wreck   |
+| Ranged orbs: four along lines fanned at where you stood as it began          | 3 each, 11 t/s                | 0.85 s, the lines  | off the fan's lines          |
+| Magic orbs: two, slow, turning after you                                     | 4 each, 6 t/s                 | 0.85 s             | across them, or behind cover |
+| Melee orbs: one heavy one, quick, straight at you                            | 10, 13 t/s                    | 0.85 s             | sideways as it's fired       |
+| Debris: after each volley, four pieces round you, standing 14 s (10 at most) | 5                             | 1.15 s, its shadow | off the shadow               |
+| Tail: round its pool, for anyone close                                       | 8                             | 0.85 s             | 7 tiles from its middle      |
+| Torrent (phase 2 on): everything it can see                                  | 13                            | 2.2 s (1.85 in 3)  | behind debris or the wreck   |
 | Leeches (phase 2): three Abyssal leeches beside you                          | 1 each, a tile off your light | they crawl         | kill them                    |
-| Falling debris (phase 2 on, on its own every 3 s): two pieces round you      | 7                             | 1 s, its shadow    | off the shadow               |
-| Lightning (phase 3, on its own every 1.3 s): where you stand                 | 8                             | 0.75 s, its shadow | a step                       |
+| Falling debris (phase 2 on, on its own every 4 s): two pieces round you      | 5                             | 1.15 s, its shadow | off the shadow               |
+| Lightning (phase 3, on its own every 1.7 s): where you stand                 | 6                             | 0.85 s, its shadow | a step                       |
 
 **The torrent** is the fight's question: it can't be stepped out of in the open, only hidden from.
 Behind a piece of debris (or the wreck) it finds no one, and its guard's down for 3 s. The debris
 that hid someone is smashed. The orbs and the debris they bring are what to hide behind next time.
 
 **Out of the circle**, in phase 3, its hits do twice (the plain fight's rule); in it, yours do 1.5
-times. The abyss's lightning strikes where you stand every 1.3 s, so you keep moving with the
-circle, and the torrent comes every 7 s with a 1.7 s windup.
+times. The abyss's lightning strikes where you stand every 1.7 s, so you keep moving with the
+circle, and the torrent comes every 7.5 s with a 1.85 s windup.
 
 ## 4. Fighting back
 
@@ -245,6 +246,45 @@ Wins in 2:34-4:27; it dies in phase 3 (568 of 573), to lightning, then debris: i
 first two phases almost always, its reads there are exact. Hard: 1 of 300. Nothing bought: 0 of 200. The bot that can't die (`GOD=1`, 20 seeds) takes phase 1 (6,125 hp) in 52-58 s, about 110 a
 second, phase 2 (the dark) in a median 107 s, phase 3 in 42 (the circle's 1.5 times). The dark
 phase is the bot's slowest, as before: a player who keeps their light on it does better.
+
+**Eased, 2026-11-13**, with Awakened Vardorvis (Dynny: "way too hard to beat"; how it was
+measured, with a person's reaction as `REACT=0.25`, is in awakened-vardorvis.md 10). As
+hardened, the careful bot won 9 of 200 and the reacting bot 0 of 200, nearly all in the dark
+phase; the numbers before the hardening won 100 of 100 and 200 of 200. Kit as it was, hits still
+through armour:
+
+| What                | Hardened                         | Eased                        |
+| ------------------- | -------------------------------- | ---------------------------- |
+| Hitpoints           | 17,500                           | 11,000                       |
+| An attack every     | 1 s, tempo 1 / 0.85 / 0.75       | 1.2 s, tempo 1 / 0.9 / 0.8   |
+| Ranged orbs         | 4, 0.75 s, 12 t/s                | 3, 0.85 s, 11 t/s            |
+| Magic orbs          | 5, 0.75 s, 6.5 t/s, turning 0.08 | 4, 0.85 s, 6 t/s, 0.065      |
+| Melee orb           | 0.75 s, 15 t/s                   | 0.85 s, 13 t/s               |
+| Debris, and falling | 7, 1 s, falling every 3 s        | 5, 1.15 s, every 4 s         |
+| Lightning           | 8, 0.75 s, every 1.3 s           | 6, 0.85 s, every 1.7 s       |
+| Tail                | 0.8 s                            | 0.85 s                       |
+| Torrent             | 2 s, every 8 s (1.7 s, 7 deep)   | 2.2 s, every 9 s (1.85, 7.5) |
+
+`META=max DODGE=1`, seeds 1-200:
+
+| Round | Numbers                                       | Careful   | `REACT=0.25` |
+| ----- | --------------------------------------------- | --------- | ------------ |
+| 0     | As hardened                                   | 9 (4.5%)  | 0            |
+| 1     | 12,000 hp, the table's timing and pacing      | 123 (62%) | 11 (5.5%)    |
+| 2     | Ranged orbs 3, magic 4, debris 5, lightning 6 | 162 (81%) | 36 (18%)     |
+| 3     | 11,000 hp (as built)                          | 171 (86%) | 48 (24%)     |
+
+As built the careful bot wins in 1:31-3:27, phases a median 35 / 67 / 24 s, dying in phase 3 to
+lightning; the reacting bot wins in 1:39-2:48 and dies in phases 2 and 3, to its orbs and
+debris. Hard mode: 90 of 200 careful (45%), 1 of 200 reacting. In the gauntlet, last at x1.15:
+1.4 tries a win careful, 10.6 reacting, the climb's hardest step.
+
+**A fifth harder, 2026-11-13**, with the other three (Dynny: "about 20% harder";
+awakened-vardorvis.md 10 has all four). Every hit x1.2 (`AWAKENED_HITS`), nothing else: a ranged
+orb's 3 is 4 and a magic orb's 4 is 5. The careful bot won 146 of 200 (73%, from 86%), dying in
+phase 3 to lightning; the reacting one 17 (8.5%, from 24%), dying in phases 2 and 3. Hard mode:
+38 careful (19%), 0 reacting. In the gauntlet at x1.15: 1.5 tries a win careful, 43.6 reacting,
+and 7 of the reacting bot's 13 failed climbs stop here.
 
 ## 11. As built, and what differs from the act's design
 

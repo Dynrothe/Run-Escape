@@ -833,6 +833,17 @@ Build order step 15. Where it differs from 7.3, and why:
   at x1.05 (wounded), the Duke 1 in 43 and the Leviathan 1 in 161. With the Whisperer first (6 runs)
   she's 1 in 26 at x1, the Duke 1 in 21 at x1.05, the Leviathan 1 in 63 at x1.1, Vardorvis 0 in 82
   at x1.15. The climb is the knob if the gauntlet's to stay clearable for most players.
+  All four eased, 2026-11-13 (Dynny: "way too hard to beat"; each now about 1 in 4 for the bot
+  with a person's reaction, `REACT=0.25`, and nearly always for the careful one: the
+  awakened-\*.md 10s). Climb unchanged, 24 seeds with up to 40 retries a fight: the careful bot
+  clears all 24 in 8:05-10:06 of fighting, at 1, 1, 2.5 and 1.4 tries a win; the reacting bot
+  all 24 in 8:39-11:50, at 4.6, 5.7, 5.9 and 10.6. The last fight at x1.15 is still the steep
+  step, and the climb's still the knob.
+  A fifth harder, the same day (Dynny: "about 20% harder"; every hit x1.2, `AWAKENED_HITS`, and the
+  Whisperer's lash): the careful bot clears 23 of 24 in 8:24-10:41, at 1.1, 1.1, 6.1 and 1.5
+  tries a win (one climb ran out of retries at the Duke); the reacting bot 11 of 24 in
+  8:38-10:16, at 19.3, 10.8, 25.8 and 43.6, the rest out of retries at the Leviathan (7), the
+  Duke (4) and Vardorvis (2).
 - **Not kept**: a run in progress isn't saved; reloading the page mid-gauntlet loses it.
 - **Phones**: the camp and the order screen fit 844x390; the heaviest fight start measured is
   Vardorvis's, 61.5k (54.1k of it the world).

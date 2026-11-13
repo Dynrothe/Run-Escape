@@ -2903,6 +2903,8 @@ export class Sim {
         const stats = emptyStats();
         addStats(stats, getCharacter(this.characterId).bonus);
         addStats(stats, this.metaStats);
+        // A boss fight's own (MapDef.fight.stats)
+        addStats(stats, this.map.fight?.stats ?? {});
         for (const passive of this.passives) {
             const def = getPassive(passive.id);
             for (const stat of [def.stat, ...(def.alsoAdds ?? [])]) {

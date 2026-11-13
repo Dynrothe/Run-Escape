@@ -1113,6 +1113,7 @@
   "enemy.vardorvis_captor.spawn": "A blood captor pushes up through the roots!",
   "enemy.awakened_whisperer.name": "The Awakened Whisperer",
   "enemy.awakened_whisperer.spawn": "The Awakened Whisperer rises before her cathedral!",
+  "enemy.awakened_whisperer.attack.message.dkyt43": "Her tentacles lash all round her: keep your distance!",
   "enemy.awakened_whisperer.attack.message.11nhsfe": "Tentacles stir under the ground...",
   "enemy.awakened_whisperer.attack.message.3mfk6z": "The Whisperer draws breath... Blackstone, into the realm!",
   "boss.awakened_whisperer.summonsAt.message.nrmek5": "Soul Siphon! Her souls drift to her through the realm.",

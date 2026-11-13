@@ -1029,7 +1029,11 @@ A boss's fight is in its `BossDef` and `BossAttackDef`, with no boss named in `S
       that way: the camera moves north only as far as keeps the boss and its overhead prayer below
       the boss bar, and not at all for a boss more than `RAID_LEAN_MAX` tiles' lean off
       (`GameClient.getRaidRoomLean`). `MapDef.fight.strikeReach` keeps a
-      strike to its targets within that reach, and the boss bar says when it's out of it.
+      strike to its targets within that reach, and the boss bar says when it's out of it. An aura
+      ignores it: there it's only the ring, the boss bar's "Out of reach!" and the bot's spacing,
+      so keep it the aura's radius. `MapDef.fight.stats` adds to the fight's adventurer's stats
+      (the Awakened Whisperer's: `auraArea`, Shadow Burst wider, to reach her from outside her
+      lash).
     - Fighting back: `BossDef.guard` drops the boss's guard for an attack's `opens` seconds when
       it misses everyone (a swing, a wave or boomerang, a surge that crossed, `stepSurge`)
       (`dropGuard`: `BossState.exposedEnd`, every hit doubled in `damageEnemy`, a reach-limited
@@ -1800,6 +1804,8 @@ scripts/game/simulate-run.ts [character] [seeds]        a bot plays full runs, f
                                                         map, FRESH=1 straight at it, SAFE_WAVES=1
                                                         with what a run earned, FLAT=1 with no
                                                         walls, DODGE=1 dodging a boss's attacks,
+                                                        REACT=0.25 each step that late, as a
+                                                        person reacts, FROM=101 from that seed,
                                                         PARTY=4 a co-op party of that adventurer;
                                                         GOD=1 untouchable and FUNNEL=1 all into
                                                         its best weapon, with ENDLESS=1, to see

@@ -2248,6 +2248,9 @@ export type MapDef = {
         ability?: FightAbilityDef;
         // Gear (items.ts, by id) everyone starts the fight wearing: the kit it's tuned to
         gear?: string[];
+        // What the fight adds to its adventurer's stats (the Awakened Whisperer's: Shadow Burst
+        // wider, to reach her from outside her lash)
+        stats?: Partial<Stats>;
         // Played on your own only (a quest's fights): never a co-op room's map
         solo?: boolean;
     };

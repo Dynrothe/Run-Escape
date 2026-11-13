@@ -37,6 +37,9 @@
 //   SLOPPY=1 ...     # plays a phased fight as a less careful person: backs off from the boss 3 s
 //                    # in every 10 (out of a reach-limited weapon's reach), and misses about
 //                    # half the chances to use the fight's button
+//   REACT=0.25 ...   # moves as a person reacts: each step it decides is taken this many seconds
+//                    # later (by default the tick a boss's windup starts)
+//   FROM=101 ...     # the first seed (1 by default), to split a long sweep across processes
 import { getUpgradeLine } from "../../src/game/content/armoury";
 import { CHARACTERS } from "../../src/game/content/characters";
 import { getEnemy } from "../../src/game/content/enemies";
@@ -172,6 +175,10 @@ const sloppy = process.env.SLOPPY === "1";
 // A sloppy bot's lapses: these seconds in every SLOPPY_EVERY it backs off from the boss
 const SLOPPY_EVERY = 10;
 const SLOPPY_LAPSE = 3;
+// A person's reaction time (REACT, in seconds): the bot otherwise steps out of a windup on the tick
+// it starts, so a shorter warning costs it far less than it costs a person
+const reactTicks = Math.round(parseFloat(process.env.REACT ?? "0") * TICKS_PER_SECOND);
+const firstSeed = parseInt(process.env.FROM ?? "1");
 // A co-op party of this many of the adventurer, each played by the bot on its
 // own (it doesn't play as a team: no regrouping, no waiting for the others)
 const partySize = parseInt(process.env.PARTY ?? "1");
@@ -665,6 +672,28 @@ function slide(sim: Sim, move: { x: number; y: number }, look: number): { x: num
     return move;
 }
 
+// How far round itself a boss swings at whoever's close (a round swing it uses only within its
+// own reach, as the Whisperer's lash), if a weapon reaching this far can hit it from outside that
+function closeSwing(boss: Enemy, phaseIndex: number, reach: number): number | undefined {
+    let close: number | undefined;
+    for (const attack of boss.def.boss?.attacks ?? []) {
+        const radius = attack.radius ?? 0;
+        if (
+            attack.kind === "swing" &&
+            attack.weight > 0 &&
+            !attack.line &&
+            attack.cone === undefined &&
+            !attack.cover &&
+            attack.range <= radius &&
+            radius + 1 < reach &&
+            (!attack.phases || attack.phases.includes(phaseIndex + 1))
+        ) {
+            close = Math.max(close ?? 0, radius);
+        }
+    }
+    return close;
+}
+
 // A phased boss's fight, as a careful person plays it, or undefined outside one. With DODGE it
 // also keeps out of any boss's ground marks that hurt and makes for a closing ring's way out,
 // phased or not.
@@ -987,10 +1016,20 @@ function fightMove(sim: Sim): { x: number; y: number } | undefined {
     if (punish) {
         return punish;
     }
-    // A weapon that reaches only so far (MapDef.fight.strikeReach): back in reach of him
+    // A weapon that reaches only so far (MapDef.fight.strikeReach): back in reach of him, and out
+    // of what he swings all round him if it reaches past that (the Whisperer's lash), as a person
+    // who's learned it keeps to the ring between
     const reach = sim.map.fight?.strikeReach;
-    if (reach !== undefined && Math.hypot(boss.x - player.x, boss.y - player.y) > reach - 1.5) {
-        return towards(boss.x, boss.y);
+    if (reach !== undefined) {
+        const away = Math.hypot(boss.x - player.x, boss.y - player.y);
+        const close = closeSwing(boss, phase.index, reach);
+        if (close !== undefined && away < close + player.radius + 0.5) {
+            const to = towards(boss.x, boss.y);
+            return { x: -to.x, y: -to.y };
+        }
+        if (away > reach - (close !== undefined ? 0.75 : 1.5)) {
+            return towards(boss.x, boss.y);
+        }
     }
     // A fight in parts: back from the square's edges before they're a corner to be caught in,
     // away from the boss as it goes, as a person keeps room to step either way
@@ -1126,6 +1165,9 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
     let lastX = sim.player.x;
     let lastY = sim.player.y;
     let move = { x: 0, y: 0 };
+    // The moves decided and not yet taken (REACT), and the one being taken
+    const reacting: { tick: number; move: { x: number; y: number } }[] = [];
+    let taken = move;
     let chests = 0;
     let powerUps = 0;
     const started = new Set<string>();
@@ -1253,7 +1295,13 @@ function runOnce(characterId: string, seed: number, gauntlet?: GauntletFightOpti
         if (smites) {
             pressButton(sim, sloppy);
         }
-        const pressed = uncursed(sim, move);
+        if (reacting[reacting.length - 1]?.move !== move) {
+            reacting.push({ tick: sim.tick + reactTicks, move });
+        }
+        while (reacting.length > 0 && reacting[0].tick <= sim.tick) {
+            taken = reacting.shift()!.move;
+        }
+        const pressed = uncursed(sim, taken);
         sim.step(pressed.x, pressed.y);
         if (sim.rule?.hurtsAt(sim.player.x, sim.player.y)) {
             rootTicks++;
@@ -1716,12 +1764,12 @@ function gauntletBlessing(run: GauntletRun): BlessingId | undefined {
 }
 
 if (process.env.GAUNTLET === "1") {
-    for (let seed = 1; seed <= seeds; seed++) {
+    for (let seed = firstSeed; seed < firstSeed + seeds; seed++) {
         runGauntlet(seed);
     }
 } else {
     for (const characterId of characters) {
-        for (let seed = 1; seed <= seeds; seed++) {
+        for (let seed = firstSeed; seed < firstSeed + seeds; seed++) {
             if (partySize > 1) {
                 runParty(characterId, seed);
                 continue;

@@ -72,12 +72,13 @@ untouchable, and opens the next with his gaze: every brazier he can see goes out
 | Phase | Hitpoints | Status        | Adds                                                                    |
 | ----- | --------- | ------------- | ----------------------------------------------------------------------- |
 | 1     | 100-60%   | The prisoner  | Slam, Icicles, Spit, Gas                                                |
-| 2     | 60-25%    | Freezing gaze | The freezing gaze, every 8 s or so                                      |
-| 3     | 25-0%     | Awakened      | The gaze every 6 s or so, icicles twice, five spits; everything quicker |
+| 2     | 60-25%    | Freezing gaze | The freezing gaze, every 9 s or so                                      |
+| 3     | 25-0%     | Awakened      | The gaze every 7 s or so, icicles twice, five spits; everything quicker |
 
-He has 13,600 hitpoints, set by the shortbow's damage against him with the shop's every upgrade
-(about 75 a second in the first phase: section 10), and his hits go through armour (`MapDef.hits`).
-He starts an attack every 1.15 s, times the phase's tempo (1, 0.85, 0.75), and never moves.
+He has 13,000 hitpoints, set by the shortbow's damage against him with the shop's every upgrade
+(about 75 a second in the first phase: section 10), and his hits go through armour, a fifth
+harder than the bots' tuning (`MapDef.hits`, `AWAKENED_HITS`: section 10).
+He starts an attack every 1.3 s, times the phase's tempo (1, 0.9, 0.8), and never moves.
 
 ### His attacks, and the dodge arithmetic
 
@@ -86,11 +87,11 @@ A big hit takes about a sixth of a full save's, his gaze a quarter.
 
 | Attack                                                                                     | Damage                          | Warning          | To be clear               |
 | ------------------------------------------------------------------------------------------ | ------------------------------- | ---------------- | ------------------------- |
-| Slam: round him, his arms                                                                  | 8                               | 0.85 s           | 6 tiles from him          |
-| Icicles: a ring of five round where you stood, one on it                                   | 5                               | 1 s (0.75 again) | a step out of the ring    |
-| Spit: three ice breaths along lines fanned at where you stood as he began (five, awakened) | 3 each, 11 t/s                  | 0.7 s, the lines | off the fan's lines       |
-| Gas: spat at you, and the vent nearest puffs as it lands                                   | 6, and the vent's gas           | 0.95 s           | 2 tiles, and off the vent |
-| Freezing gaze: the whole room he can see                                                   | 13, frozen 2 s, and 25 cold     | 2 s              | behind a statue           |
+| Slam: round him, his arms                                                                  | 8                               | 0.9 s            | 6 tiles from him          |
+| Icicles: a ring of five round where you stood, one on it                                   | 5                               | 1.15 s (0.85)    | a step out of the ring    |
+| Spit: three ice breaths along lines fanned at where you stood as he began (five, awakened) | 3 each, 10 t/s, every 3 s       | 0.8 s, the lines | off the fan's lines       |
+| Gas: spat at you, and the vent nearest puffs as it lands                                   | 6, and the vent's gas           | 1.05 s           | 2 tiles, and off the vent |
+| Freezing gaze: the whole room he can see                                                   | 13, frozen 2 s, and 25 cold     | 2.2 s            | behind a statue           |
 | The vents: each puffs a 3 by 3 every 6 s, out of step                                      | 2% a 0.6 s, the cold 6 a second | 1 s, its frost   | off it                    |
 | The cold: rising 3 a second (the Snow ranger's 1.8)                                        | 10% at 100, frozen 1.5 s        | the bar          | a lit brazier, 3 tiles    |
 
@@ -232,6 +233,42 @@ seeds) takes phase 1 (5,440 hp) in 55-87 s, median 71, about 75 a second; phases
 median 46 and 43 s, quicker for their share, from the gaze's guard drops and Kindle's flares. The
 later phases stay shorter than a minute for a good player: their share's the design's (35% and
 25%), and his burst windows are the reward for hiding and kindling.
+
+**Eased, 2026-11-13**, with Awakened Vardorvis (Dynny: "way too hard to beat"; how it was
+measured, with a person's reaction as `REACT=0.25`, is in awakened-vardorvis.md 10). As
+hardened, the careful bot won 7 of 200 and the reacting bot 3 of 200; the numbers before the
+hardening won 100 of 100 and 200 of 200. Kit as it was, hits still through armour:
+
+| What            | Hardened                      | Eased                         |
+| --------------- | ----------------------------- | ----------------------------- |
+| Hitpoints       | 13,600                        | 13,000                        |
+| An attack every | 1.15 s, tempo 1 / 0.85 / 0.75 | 1.3 s, tempo 1 / 0.9 / 0.8    |
+| Slam            | 0.85 s                        | 0.9 s                         |
+| Icicles         | 1 s (0.75 the second)         | 1.15 s (0.85 the second)      |
+| Spit            | 0.7 s, 11 t/s, every 2.5 s    | 0.8 s, 10 t/s, every 3 s      |
+| Gas             | 0.95 s                        | 1.05 s                        |
+| Freezing gaze   | 2 s, every 8 s (6 awakened)   | 2.2 s, every 9 s (7 awakened) |
+
+`META=max DODGE=1`, seeds 1-200:
+
+| Round | Numbers                       | Careful   | `REACT=0.25` |
+| ----- | ----------------------------- | --------- | ------------ |
+| 0     | As hardened                   | 7 (3.5%)  | 3 (1.5%)     |
+| 1     | 11,000 hp, the table's timing | 172 (86%) | 143 (71.5%)  |
+| 2     | 13,000 hp (as built)          | 135 (68%) | 85 (42.5%)   |
+
+He's the one the reacting bot finds easiest and the careful bot hardest: his blows are slow or
+fanned shots, so a quarter of a second late costs less, and it's his spit and gas that end runs
+either way. As built the careful bot wins in 1:49-3:02, phases a median 61 / 38 / 33 s; the
+reacting one in 1:48-3:46. Hard mode: 7 of 200 careful (3.5%), 1 of 200 reacting. In the
+gauntlet, third at x1.1: 2.5 tries a win careful, 5.9 reacting.
+
+**A fifth harder, 2026-11-13**, with the other three (Dynny: "about 20% harder";
+awakened-vardorvis.md 10 has all four). Every hit x1.2 (`AWAKENED_HITS`), nothing else: the
+careful bot won 72 of 200 (36%, from 68%), the reacting one 26 (13%, from 42.5%), both dying in
+phases 2 and 3 to his spit and gas. He's now the hardest of the four for both bots. Hard mode: 2
+careful (1%), 0 reacting. In the gauntlet at x1.1: 6.1 tries a win careful (one climb of 24 ran
+out of its 40 retries here), 25.8 reacting.
 
 ## 11. As built, and what differs from the act's design
 

@@ -1,5 +1,5 @@
 import { getEnemy } from "../content/enemies";
-import { getMap } from "../content/maps";
+import { AWAKENED_HITS, getMap } from "../content/maps";
 import { TROPHY_BY_ID } from "../content/trophies";
 import { emptyStats } from "../content/types";
 import {
@@ -79,7 +79,10 @@ describe("Awakened Vardorvis", () => {
         metaStats.armor = 3;
         const sim = createSim({ metaStats });
         expect(sim.stats.armor).toBe(3);
-        expect(sim["damagePlayer"](6, AWAKENED_VARDORVIS_ID, false)).toBe(6);
+        // None of it taken off, and a fifth harder (AWAKENED_HITS)
+        expect(sim["damagePlayer"](6, AWAKENED_VARDORVIS_ID, false)).toBe(
+            Math.round(6 * AWAKENED_HITS.scale),
+        );
     });
 
     test("his roots creep in from his clearing's edge and stay inside it", () => {

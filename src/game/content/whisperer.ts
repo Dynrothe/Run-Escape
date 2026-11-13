@@ -4,7 +4,7 @@ import { BossAttackDef, EnemyDef, FightAbilityDef, ImpactDef, RealmRuleDef } fro
 
 // The Awakened Whisperer, Act II's second Awakened fight (MapDef.fight, maps.ts), fought on her own
 // on her island in the Lassar Undercity, as the Shadow walker. Zachariah's way of a fight: an
-// attack about every 0.95 s, quicker by phase, her guard down when her screech finds no one, and a
+// attack about every 1.15 s, quicker by phase, her guard down when her screech finds no one, and a
 // button that rewards stepping in. Lassar's two worlds are the thread through it: she can only be
 // hurt in the city, her Soul Siphon can only be stopped in the realm (her souls go with the party,
 // but can be caught only there), and sanity's the clock in there. Blackstone, the button, turns the
@@ -39,21 +39,24 @@ const HALF = 10;
 const SPOT = { x: Math.floor(LASSAR_CATHEDRAL.x), y: Math.floor(LASSAR_CATHEDRAL.y) };
 export const WHISPERER_BOSS_ARENA = { baseX: SPOT.x - HALF, baseY: SPOT.y - HALF, size: 2 * HALF };
 
-// What the fight's tuned to (maps.ts): her hitpoints, Shadow Burst's level (its top), its reach
-// there, and tiles south of her the player starts
-export const WHISPERER_HITPOINTS = 1650;
+// What the fight's tuned to (maps.ts): her hitpoints, Shadow Burst's level (its top), how much
+// wider it bursts in her fight (MapDef.fight.stats), to reach her from outside her lash, and so
+// its reach there (its top level's 2.9 tiles, wider), and tiles south of her the player starts
+export const WHISPERER_HITPOINTS = 1050;
 export const WHISPERER_BURST_LEVEL = 8;
-export const WHISPERER_BURST_REACH = 2.9;
+export const WHISPERER_BURST_AREA = 0.3;
+export const WHISPERER_BURST_REACH = 2.9 * (1 + WHISPERER_BURST_AREA);
 export const WHISPERER_START_DISTANCE = 6;
 
 // Blackstone, the fight's button: the fragment turns the party between the city and the realm, and
-// coming out into the city beside her its shock hits her (she can't be hurt in the realm)
+// coming out into the city near her its shock hits her (she can't be hurt in the realm), from
+// outside her lash
 export const WHISPERER_BLACKSTONE: FightAbilityDef = {
     id: "blackstone",
     name: "Blackstone",
     damage: 30,
-    reach: 3,
-    openReach: 4,
+    reach: 4,
+    openReach: 5,
     cooldown: 3,
     turn: true,
     // The blackstone fragment
@@ -75,12 +78,12 @@ export const WHISPERER_BLACKSTONE: FightAbilityDef = {
 const VOLLEY: BossAttackDef = {
     name: "Volley",
     kind: "projectile",
-    damage: 6,
-    windup: 0.65,
+    damage: 3,
+    windup: 0.8,
     cooldown: 0,
     range: 16,
     radius: 0.5,
-    speed: 14,
+    speed: 10,
     count: 3,
     spread: 0.3,
     wave: { reach: 12 },
@@ -99,7 +102,7 @@ const TENTACLES: BossAttackDef = {
     name: "Tentacles",
     kind: "ground",
     damage: 6,
-    windup: 0.85,
+    windup: 1.05,
     cooldown: 5,
     range: 20,
     weight: 3,
@@ -120,7 +123,7 @@ const BURST: BossAttackDef = {
     name: "Shadow burst",
     kind: "blast",
     damage: 8,
-    windup: 0.95,
+    windup: 1.05,
     cooldown: 6,
     range: 14,
     radius: 2,
@@ -137,8 +140,8 @@ const SCREECH: BossAttackDef = {
     name: "Screech",
     kind: "swing",
     damage: 11,
-    windup: 1.8,
-    cooldown: 9,
+    windup: 2,
+    cooldown: 10,
     range: 999,
     radius: 40,
     weight: 3,
@@ -155,7 +158,34 @@ const SCREECH: BossAttackDef = {
     },
 };
 
+// Too close to her, her tentacles lash all round her, hard: Shadow Burst (WHISPERER_BURST_AREA)
+// and Blackstone's shock reach further than this in her fight, so there's no need to stand in her
+// face, and she stops short of it herself (keepDistance). From beside her it's a tile and a half out.
+const LASH_REACH = 2.5;
+const LASH: BossAttackDef = {
+    name: "Lash",
+    kind: "swing",
+    damage: 10,
+    windup: 0.9,
+    cooldown: 0,
+    range: LASH_REACH,
+    radius: LASH_REACH,
+    // Whenever you're in it, nearly always this
+    weight: 20,
+    seq: TENTACLES_SEQ,
+    sound: 7101,
+    message: "Her tentacles lash all round her: keep your distance!",
+    impact: {
+        spots: [
+            { spotAnim: SHADOW_RIPPLE, fit: 2 * LASH_REACH },
+            { spotAnim: TENTACLE_LASH, fit: 3 },
+        ],
+        shake: 0.35,
+    },
+};
+
 const ATTACKS: BossAttackDef[] = [
+    LASH,
     VOLLEY,
     // Drowned, five shots, fanned wider
     { ...VOLLEY, name: "Drowning volley", count: 5, spread: 0.26, phases: [3] },
@@ -166,12 +196,12 @@ const ATTACKS: BossAttackDef[] = [
         name: "Tentacles twice",
         weight: 2,
         phases: [3],
-        chain: { times: 1, windup: 0.75 },
+        chain: { times: 1, windup: 0.85 },
     },
     BURST,
     SCREECH,
     // Quicker drowned
-    { ...SCREECH, name: "Drowning screech", cooldown: 7, phases: [3] },
+    { ...SCREECH, name: "Drowning screech", cooldown: 8, phases: [3] },
 ];
 
 const RISING: ImpactDef = {
@@ -214,8 +244,9 @@ export const WHISPERER_ENEMIES: EnemyDef[] = [
         hurtIn: 0,
         spawnMessage: "The Awakened Whisperer rises before her cathedral!",
         boss: {
-            attackInterval: 0.95,
-            keepDistance: 2,
+            attackInterval: 1.15,
+            // Short of her lash
+            keepDistance: 3.5,
             enrage: { message: "" },
             bulletGrace: 0.6,
             attacks: ATTACKS,
@@ -273,14 +304,14 @@ export const WHISPERER_ENEMIES: EnemyDef[] = [
                         status: "The realm bleeds",
                         message: "The realm bleeds into the city!",
                         opener: "Tentacles",
-                        tempo: 0.85,
+                        tempo: 0.9,
                         speed: 1.1,
                     },
                     {
                         status: "Drowned",
                         message: "Drowned!",
                         opener: "Drowning volley",
-                        tempo: 0.75,
+                        tempo: 0.8,
                         speed: 1.2,
                     },
                 ],

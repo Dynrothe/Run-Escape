@@ -45,7 +45,7 @@ What carries over from Zachariah and Vardorvis, because it worked:
 | ----------- | -------------------------------------------- | -------------------------------------------------------- |
 | Look        | His pale clearing, the red-black wood        | Her island before the drowned cathedral, and its realm   |
 | Danger from | Him, up close and fast; the roots closing in | Her shots and tentacles; the realm's tentacles; sanity   |
-| Offence     | A 2h sword's sweep (2.75 tiles), Chop        | Shadow Burst round you (2.9 tiles), Blackstone's shock   |
+| Offence     | A 2h sword's sweep (2.75 tiles), Chop        | Shadow Burst round you (3.77 tiles), Blackstone's shock  |
 | Structure   | Hitpoints, three phases, a kneel between     | The same, a siphon in each phase                         |
 | Rest        | Ground you've cut, behind a pillar           | None in the city; the realm, for as long as sanity lasts |
 
@@ -73,24 +73,31 @@ Three phases by her hitpoints, each a full bar of its own, and at each threshold
 | 2     | 65-30%    | The realm bleeds | Screech; a siphon of 7 at 48%                                              |
 | 3     | 30-0%     | Drowned          | Double volleys, double tentacles, everything quicker; a siphon of 8 at 14% |
 
-She has 1,650 hitpoints (the Shadow walker's burst does about 6 a second to her with the shop's
-every upgrade, so hitpoints are set by that: section 10), and her hits go through armour
-(`MapDef.hits`). She starts an attack every 0.95 s, times the phase's tempo (1, 0.85, 0.75), and
-drifts after the player at 1.6 tiles a second, keeping 2 tiles off, quicker by the phase.
+She has 1,050 hitpoints (the Shadow walker's burst does about 6 a second to her with the shop's
+every upgrade, so hitpoints are set by that: section 10), and her hits go through armour, a
+fifth harder than the bots' tuning (`MapDef.hits`, `AWAKENED_HITS`: section 10). She starts an
+attack every 1.15 s, times the phase's tempo (1, 0.9, 0.8), and drifts after the player at 1.6
+tiles a second, keeping 3.5 tiles off (outside her lash), quicker by the phase.
 
 ### Her attacks, and the dodge arithmetic
 
 The Shadow walker has 25 hitpoints (50 with the shop's every upgrade) and moves 3.33 tiles a
-second. A big hit takes about a sixth of a full save's.
+second. A big hit takes about a fifth of a full save's. The damage below is each attack's own:
+every hit lands a fifth harder, rounded (a volley's shot 4, the lash 12).
 
 | Attack                                                                                            | Damage                        | Warning                      | To be clear                       |
 | ------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------- | --------------------------------- |
-| Volley: three shots fanned along where you stood as she began (five, drowned)                     | 6 each                        | 0.65 s, the flight (14 t/s)  | a step across the lines           |
-| Tentacles: a cross of bursts round where you stood, 6 tiles each way                              | 6                             | 0.85 s (0.75 the second)     | off the cross's arms (diagonally) |
-| Shadow burst: a blast where you stood                                                             | 8                             | 0.95 s                       | 2.4 tiles out                     |
-| Screech: the whole city, wherever you are in it                                                   | 11                            | 1.8 s (she draws breath)     | the realm                         |
+| Lash: her tentacles all round her, 2.5 tiles, nearly always what she does with you that close     | 10                            | 0.9 s                        | 3 tiles off her                   |
+| Volley: three shots fanned along where you stood as she began (five, drowned)                     | 3 each                        | 0.8 s, the flight (10 t/s)   | a step across the lines           |
+| Tentacles: a cross of bursts round where you stood, 6 tiles each way                              | 6                             | 1.05 s (0.85 the second)     | off the cross's arms (diagonally) |
+| Shadow burst: a blast where you stood                                                             | 8                             | 1.05 s                       | 2.4 tiles out                     |
+| Screech: the whole city, wherever you are in it                                                   | 11                            | 2 s (she draws breath)       | the realm                         |
 | The realm's tentacles: one rises near you every 6 s there (two at most) and lashes within 5 tiles | 3                             | its shot                     | out of reach, or a step           |
 | The realm itself: sanity                                                                          | 20% of your hitpoints at none | the bar, the edges darkening | out in time                       |
+
+**Lash** keeps you off her: Shadow Burst and Blackstone both reach past it in her fight, and she
+stops short of it herself, so the ring between is where to fight her. Walk into her and she
+lashes, again and again.
 
 **Screech** is the fight's question: it can't be stepped out of in the city, only gone from. Into
 the realm before it lands, and it finds no one: her guard's down for 3 s (double damage), and
@@ -107,17 +114,18 @@ reels, stunned for 3.5 s with her guard down.
 
 ## 4. Fighting back
 
-Shadow Burst is an aura: it bursts round you, 2.9 tiles at its top level, so the player has to be
-close to her to hurt her at all, and only in the city. What puts the player in the fight:
+Shadow Burst is an aura: it bursts round you, 2.9 tiles at its top level and 30% wider in her
+fight (`MapDef.fight.stats`: 3.77 tiles), so the player has to be near her to hurt her at all, and
+only in the city, but not in her lash. What puts the player in the fight:
 
 1. **Her guard drops when her screech finds no one** (3 s, double damage, her model glowing).
 2. **A siphon caught whole breaks her**: stunned 3.5 s, double damage. The realm's where it's
    done, so the stun's spent there unless you're quick out.
 3. **Blackstone (the button).** Space, a pad's bottom face button, the big round button on a
    touch screen. It turns the whole party between the city and the realm, every 3 s (everyone's
-   button waits, in co-op). Coming out into the city within 3 tiles of her (4 while her guard's
-   down), its **shock** hits her for 30 (doubled with her guard down): about six seconds of the
-   burst. Going in does nothing to her: she can't be hurt there.
+   button waits, in co-op). Coming out into the city within 4 tiles of her (5 while her guard's
+   down), so from outside her lash, its **shock** hits her for 30 (doubled with her guard down):
+   about six seconds of the burst. Going in does nothing to her: she can't be hurt there.
    Everything in the air and on the ground is gone as the world turns, so it's also a way out of a
    blow about to land, if it's ready and the sanity's there.
 
@@ -149,6 +157,7 @@ the Wisp in this step.
 
 | What               | Spot animations (fit, tiles)                                 | Shake   | Flash       |
 | ------------------ | ------------------------------------------------------------ | ------- | ----------- |
+| Lash               | the shadow ripple (2450, 5) round her, the lash (2460, 3)    | 0.35    |             |
 | Volley             | her shot (2451), its burst (2452)                            |         |             |
 | Tentacles          | the ripple (2450) on each spot, the lash (2460) as it bursts | 0.2     |             |
 | Shadow burst       | her burst (2452, 1.5)                                        | 0.3     |             |
@@ -183,11 +192,13 @@ heaviest is 47.1k, under 69k.
 
 `MAP=awakened_whisperer DODGE=1 bun run tsx scripts/game/simulate-run.ts shadow_walker 6`, with
 `HARD=1` for hard mode, on the Lassar Undercity's real collision. The careful bot stays by her (in
-the burst's reach), steps off her volleys' lines and out of her marks to the nearest clear spot
-that isn't into her (`realmDodge` in `bossReads.ts`: away from a mark alone is often into her, and
-she's solid), and plays Blackstone (`realmPress`, `realmMove`): into the realm when her screech
-begins or her siphon's souls are out, after the soul soonest at her there, and out again beside
-her once they're caught, or at once below 22 sanity. Seeds 1 to 6, 2026-11-11:
+the burst's reach, and out of her lash: `closeSwing` in `simulate-run.ts`), steps off her volleys'
+lines and out of her marks and her lash's windup to the nearest clear spot that isn't into her
+(`realmDodge` in `bossReads.ts`: away from a mark alone is often into her, and she's solid), and
+plays Blackstone (`realmPress`, `realmMove`): into the realm when her screech begins or her
+siphon's souls are out, after the soul soonest at her there, and out again near her (within
+Blackstone's reach, outside her lash) once they're caught, or at once below 22 sanity. Seeds 1 to
+6, 2026-11-11:
 
 | Round | What changed                                                    | Normal                                            | Hard           |
 | ----- | --------------------------------------------------------------- | ------------------------------------------------- | -------------- |
@@ -241,6 +252,68 @@ takes phase 1 (578 hp) in 73-107 s, median 93, about 6 a second, phases 2 and 3 
 and 50 s: her siphons' stuns and her screech's guard drops speed them up. A person who takes the
 shocks' chances should be near a minute and a half in the first, under a minute after.
 
+**Eased, 2026-11-13**, with Awakened Vardorvis (Dynny: "way too hard to beat"; how it was
+measured, with a person's reaction as `REACT=0.25`, is in awakened-vardorvis.md 10). As
+hardened, the careful bot won 7 of 200 and the reacting bot 0 of 200, 199 of them dead in the
+first phase, 69% of it her volleys; the numbers before the hardening won every fight with both
+bots. Kit as it was, hits still through armour:
+
+| What            | Hardened                      | Eased                              |
+| --------------- | ----------------------------- | ---------------------------------- |
+| Hitpoints       | 1,650                         | 1,050                              |
+| An attack every | 0.95 s, tempo 1 / 0.85 / 0.75 | 1.15 s, tempo 1 / 0.9 / 0.8        |
+| Volley          | 6, 0.65 s, 14 t/s             | 3, 0.8 s, 10 t/s (the old warning) |
+| Tentacles       | 0.85 s (0.75 the second)      | 1.05 s (0.85 the second)           |
+| Shadow burst    | 0.95 s                        | 1.05 s                             |
+| Screech         | 1.8 s, every 9 s (7 drowned)  | 2 s, every 10 s (8 drowned)        |
+
+`META=max DODGE=1`, seeds 1-200:
+
+| Round | Numbers                                                 | Careful    | `REACT=0.25` |
+| ----- | ------------------------------------------------------- | ---------- | ------------ |
+| 0     | As hardened                                             | 7 (3.5%)   | 0            |
+| 1     | 1,250 hp, the pacing, volley 0.75 s at 12 t/s, the rest | 162 (81%)  | 0            |
+| 2     | Volley 0.8 s at 10 t/s                                  | 173 (87%)  | 0            |
+| 3     | Volley 4                                                | 197 (99%)  | 2 (1%)       |
+| 4     | 1,050 hp, volley 3 (as built)                           | 200 (100%) | 42 (21%)     |
+
+Her volley is what a reacting player can't step off in time: its three lines come too often to
+read each, so it's the one that came down most. As built the careful bot wins in 1:49-2:41,
+phases a median 64 / 37 / 33 s, taking a median 53 of 50; the reacting bot wins in 2:03-2:48 and
+dies mostly in phase 3. Hard mode: 58 of 200 careful (29%), 0 of 200 reacting. In the gauntlet,
+second at x1.05: 1 try a win careful, 5.7 reacting.
+
+**Harder, and her lash, 2026-11-13** (Dynny: "about 20% harder", and of her, "hit you hard if you
+stand too close to her but also increase your attack range"). Every hit a fifth harder
+(`AWAKENED_HITS`, all four fights: awakened-vardorvis.md 10), and:
+
+| What               | Eased                              | Now                                           |
+| ------------------ | ---------------------------------- | --------------------------------------------- |
+| Lash               | none                               | 10 all round her, 2.5 tiles, 0.9 s, weight 20 |
+| Shadow Burst       | 2.9 tiles                          | 3.77 (`auraArea` 0.3 in her fight)            |
+| Blackstone's shock | within 3 tiles (4, her guard down) | within 4 (5)                                  |
+| She keeps off      | 2 tiles                            | 3.5                                           |
+
+Seeds 1-200:
+
+| Round | Numbers                                                    | Careful     | `REACT=0.25` |
+| ----- | ---------------------------------------------------------- | ----------- | ------------ |
+| 0     | As eased                                                   | 200 (100%)  | 42 (21%)     |
+| 1     | Hits x1.2, the lash, the reach ring at 5 tiles             | 128 (64%)   | 0            |
+| 2     | Blackstone 4 (5); the bot out of her lash in the realm too | 185 (92.5%) | 0            |
+| 3     | The burst 30% wider, the ring its radius again (as built)  | 192 (96%)   | 24 (12%)     |
+
+Round 1 widened only the ring: `strikeReach` finds a strike's targets, and for an aura it's only
+the ring and the "Out of reach!" (and the bot's spacing), so the bot stood out of the burst's
+reach and her first phase took twice as long. Blackstone's 3 tiles left a tenth of a tile outside
+the lash, and the careful bot took 41% of its damage from the lash, coming out of the realm beside
+her. As built neither bot is lashed (the careful one never in 200 fights, the reacting one twice):
+they keep to the ring between, as a player who's learned it would. The careful bot wins in
+2:01-2:51, phases a median 67 / 39 / 35 s, taking a median 61; the reacting one in 2:13-2:48,
+dying in phases 2 and 3. Hard mode: 5 of 200 careful (2.5%, from 29%), 1 reacting; it falls
+furthest of the four there, her volleys 85% of what the careful bot takes. In the gauntlet, at
+x1.05: 1.1 tries a win careful, 10.8 reacting.
+
 ## 11. As built, and what differs from the act's design
 
 - **The fight's realm** is Lassar's (`WHISPERER_REALM`) with no puddles, no lost souls or portal
@@ -259,6 +332,9 @@ shocks' chances should be near a minute and a half in the first, under a minute 
 - **Fights on another map's ground** load its recipe (`MapRecipe.fights`): before, a fight map
   looked its recipe up by its own id, so Awakened Vardorvis's clearing (never seen in a browser
   till now) would have been drawn as nothing; it's fixed for both.
+- **Her fight widens Shadow Burst** (`MapDef.fight.stats`, `auraArea` 0.3), to reach her from
+  outside her lash. The pause screen lists it under Your stats; the burst's own line shows its
+  level's 2.9 tiles, as every weapon's line shows its level's numbers.
 - **The death**: the cache has no death animation for her (`classify-npc-seqs.ts` finds none), so
   she goes as the map's Whisperer does, at once, 2.4 s before the victory screen.
 

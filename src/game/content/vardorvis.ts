@@ -11,7 +11,7 @@ import {
 
 // Awakened Vardorvis, Act II's first Awakened fight (MapDef.fight, maps.ts), fought on his own in
 // his clearing in the Stranglewood, as the Forester. Zachariah's way of a fight: an attack about
-// every 1.15 s, quicker by phase, his guard down when a dart or a strangle of his misses, a dart
+// every 1.3 s, quicker by phase, his guard down when a dart or a strangle of his misses, a dart
 // into one of his pillars sticking him there, and a button that rewards stepping in. The
 // Stranglewood's roots are the thread through it: they creep in from the clearing's edge, his dart
 // roots the ground it crosses, his tendrils erupt from them, his captors (root hearts) stand in
@@ -69,7 +69,7 @@ export const VARDORVIS_FEATURES: ArenaFeatures = {
 
 // What the fight's tuned to (maps.ts): his hitpoints, the Forester's 2h sword's level, and tiles
 // south of him the player starts
-export const VARDORVIS_HITPOINTS = 12800;
+export const VARDORVIS_HITPOINTS = 6000;
 export const VARDORVIS_SWORD_LEVEL = 8;
 export const VARDORVIS_START_DISTANCE = 6;
 
@@ -100,7 +100,7 @@ export const VARDORVIS_CHOP: FightAbilityDef = {
 };
 
 // Tuned to a Forester with the shop's every upgrade (50 hitpoints, his hits through its armour,
-// MapDef.hits): a big hit takes about a fifth
+// MapDef.hits): a dart takes about a tenth
 const OPENS = 2;
 const RADIUS = 1;
 const DART_LENGTH = 8;
@@ -110,8 +110,8 @@ const DART_LENGTH = 8;
 const STRIKE: BossAttackDef = {
     name: "Strike",
     kind: "swing",
-    damage: 6,
-    windup: 0.6,
+    damage: 4,
+    windup: 0.75,
     cooldown: 0,
     range: 2.5,
     radius: 2.5,
@@ -129,8 +129,8 @@ const STRIKE: BossAttackDef = {
 const DART: BossAttackDef = {
     name: "Dart",
     kind: "swing",
-    damage: 9,
-    windup: 0.7,
+    damage: 5,
+    windup: 0.9,
     cooldown: 3,
     range: 7,
     weight: 4,
@@ -151,7 +151,7 @@ const VINES: BossAttackDef = {
     name: "Bleeding vines",
     kind: "ground",
     damage: 3,
-    windup: 0.9,
+    windup: 1,
     cooldown: 999,
     range: 0,
     weight: 0,
@@ -166,20 +166,20 @@ const VINES: BossAttackDef = {
 };
 
 // His axes (npc 12227, spinning) thrown in from a corner of the square at where you stood, right
-// across and back; from the second phase, from two corners at once
+// across and back; severed, from two corners at once
 const AXES: BossAttackDef = {
     name: "Swinging axes",
     kind: "projectile",
     damage: 4,
-    windup: 0.9,
-    cooldown: 5,
+    windup: 1,
+    cooldown: 6,
     range: 999,
     weight: 2,
     count: 1,
-    phases: [1],
+    phases: [1, 2],
     seq: DEATH_SEQ,
     sound: 7065,
-    speed: 9,
+    speed: 8,
     // The spinning axe's width
     radius: 1,
     from: "knights",
@@ -194,7 +194,7 @@ const STRANGLE: BossAttackDef = {
     name: "Strangle",
     kind: "projectile",
     damage: 3,
-    windup: 0.8,
+    windup: 0.9,
     cooldown: 6,
     range: 10,
     minRange: 2.5,
@@ -202,7 +202,7 @@ const STRANGLE: BossAttackDef = {
     phases: [2, 3],
     seq: ROOTS_SEQ,
     spotAnim: VINE_BURST,
-    speed: 9,
+    speed: 8,
     radius: 0.6,
     impactSpotAnim: TENDRIL_BURST,
     wave: { reach: 11 },
@@ -227,12 +227,12 @@ const BLOWS: BossAttackDef = {
     impact: { spots: [{ spotAnim: DUST, fit: 1.5 }], shake: 0.15 },
 };
 
-// The roots round you erupt: up to eight of the rooted cells within eight tiles
+// The roots round you erupt: up to ten of the rooted cells within eight tiles
 const ROOTS_RISE: BossAttackDef = {
     name: "The roots rise",
     kind: "ground",
     damage: 5,
-    windup: 0.9,
+    windup: 1.1,
     cooldown: 6,
     range: 999,
     weight: 3,
@@ -240,7 +240,7 @@ const ROOTS_RISE: BossAttackDef = {
     seq: ROOTS_SEQ,
     sound: 7101,
     ground: {
-        spots: [{ shape: "rule", count: 12, within: 8 }],
+        spots: [{ shape: "rule", count: 10, within: 8 }],
         radius: 1.1,
         spotAnim: TENDRIL_BURST,
         alpha: 0.35,
@@ -252,10 +252,10 @@ const ATTACKS: BossAttackDef[] = [
     STRIKE,
     DART,
     // Severed, he darts twice, the second aimed afresh and quicker
-    { ...DART, name: "Darts", weight: 3, phases: [3], chain: { times: 1, windup: 0.6 } },
+    { ...DART, name: "Darts", weight: 3, phases: [3], chain: { times: 1, windup: 0.7 } },
     VINES,
     AXES,
-    { ...AXES, name: "Both axes", count: 2, phases: [2, 3] },
+    { ...AXES, name: "Both axes", count: 2, phases: [3] },
     STRANGLE,
     BLOWS,
     ROOTS_RISE,
@@ -288,7 +288,7 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
         sounds: SOUNDS,
         spawnMessage: "Awakened Vardorvis rises in his clearing!",
         boss: {
-            attackInterval: 1.15,
+            attackInterval: 1.3,
             keepDistance: 1.5,
             enrage: { message: "" },
             bulletGrace: 0.6,
@@ -351,14 +351,14 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
                         status: "The wood wakes",
                         message: "The wood wakes!",
                         opener: "The roots rise",
-                        tempo: 0.85,
+                        tempo: 0.9,
                         speed: 1.15,
                     },
                     {
                         status: "Severed",
                         message: "Severed!",
                         opener: "Darts",
-                        tempo: 0.75,
+                        tempo: 0.8,
                         speed: 1.25,
                     },
                 ],
@@ -406,7 +406,7 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
         sounds: SOUNDS,
         stationary: true,
         healthBar: true,
-        shot: { range: 16, interval: 3, speed: 11, spotAnim: HEAD_SHOT },
+        shot: { range: 16, interval: 3.5, speed: 10, spotAnim: HEAD_SHOT },
     },
     // His blood captors: drawn as the wood's root hearts (the Large Tendril), which heal him while
     // they stand
@@ -430,7 +430,7 @@ export const VARDORVIS_ENEMIES: EnemyDef[] = [
         healthBar: true,
         spawnMessage: "A blood captor pushes up through the roots!",
         heals: {
-            fraction: 0.002,
+            fraction: 0.0035,
             interval: 2,
             // Across most of the clearing: it stands where it came up (stationary), so its seek
             // is only how far it looks

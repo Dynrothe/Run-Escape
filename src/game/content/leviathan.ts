@@ -12,7 +12,7 @@ import type {
 
 // The Awakened Leviathan, Act II's fourth Awakened fight (MapDef.fight, maps.ts), fought on its own
 // in its pool in the Scar, as the Lantern-bearer. Zachariah's way of a fight: an attack about every
-// 1 s, quicker by phase, its guard down when its torrent finds no one, and a button that rewards
+// 1.2 s, quicker by phase, its guard down when its torrent finds no one, and a button that rewards
 // stepping in. The Scar's dark is the thread through it, turned on the player: from the second
 // phase its glow's out and your weapon only aims at what your light reaches, so the dark pulls you
 // in to its tail; its torrent can only be hidden from behind debris, and the piece that hid you is
@@ -48,7 +48,7 @@ export const AWAKENED_LEVIATHAN_ID = "awakened_leviathan";
 
 // What the fight's tuned to (maps.ts): its hitpoints, Fire spells' level (their top), and tiles
 // south of its pool's middle the player starts
-export const LEVIATHAN_HITPOINTS = 17500;
+export const LEVIATHAN_HITPOINTS = 11000;
 export const LEVIATHAN_FIRE_LEVEL = 8;
 export const LEVIATHAN_START_DISTANCE = 10;
 
@@ -143,12 +143,12 @@ export const LEVIATHAN_SHADOW: FightAbilityDef = {
 const RANGED: BossAttackDef = {
     name: "Ranged orbs",
     kind: "projectile",
-    damage: 4,
-    windup: 0.75,
+    damage: 3,
+    windup: 0.85,
     cooldown: 0,
     range: 30,
     radius: 0.8,
-    speed: 12,
+    speed: 11,
     count: 4,
     spread: 0.3,
     wave: { reach: 22 },
@@ -163,15 +163,15 @@ const RANGED: BossAttackDef = {
 const MAGIC: BossAttackDef = {
     name: "Magic orbs",
     kind: "projectile",
-    damage: 5,
-    windup: 0.75,
+    damage: 4,
+    windup: 0.85,
     cooldown: 2,
     range: 30,
     radius: 0.8,
-    speed: 6.5,
+    speed: 6,
     count: 2,
     spread: 0.6,
-    homing: 0.08,
+    homing: 0.065,
     weight: 3,
     seq: MAGIC_SEQ,
     sound: 4000,
@@ -184,11 +184,11 @@ const MELEE: BossAttackDef = {
     name: "Melee orbs",
     kind: "projectile",
     damage: 10,
-    windup: 0.75,
+    windup: 0.85,
     cooldown: 3,
     range: 30,
     radius: 1,
-    speed: 15,
+    speed: 13,
     count: 1,
     weight: 3,
     seq: MELEE_SEQ,
@@ -203,8 +203,8 @@ const MELEE: BossAttackDef = {
 const DEBRIS: BossAttackDef = {
     name: "Debris",
     kind: "ground",
-    damage: 7,
-    windup: 1,
+    damage: 5,
+    windup: 1.15,
     cooldown: 999,
     range: 99,
     weight: 0,
@@ -236,8 +236,8 @@ const FALLING: BossAttackDef = {
 const LIGHTNING: BossAttackDef = {
     name: "Lightning",
     kind: "ground",
-    damage: 8,
-    windup: 0.75,
+    damage: 6,
+    windup: 0.85,
     cooldown: 999,
     range: 99,
     weight: 0,
@@ -258,7 +258,7 @@ const TAIL: BossAttackDef = {
     name: "Tail",
     kind: "swing",
     damage: 8,
-    windup: 0.8,
+    windup: 0.85,
     cooldown: 0,
     range: 7,
     radius: 7,
@@ -274,8 +274,8 @@ const TORRENT: BossAttackDef = {
     name: "Torrent",
     kind: "swing",
     damage: 13,
-    windup: 2,
-    cooldown: 8,
+    windup: 2.2,
+    cooldown: 9,
     range: 999,
     radius: 40,
     weight: 12,
@@ -317,7 +317,7 @@ const ATTACKS: BossAttackDef[] = [
     TAIL,
     TORRENT,
     // In the pathfinder's circle, quicker and oftener
-    { ...TORRENT, name: "Deep torrent", windup: 1.7, cooldown: 7, phases: [3] },
+    { ...TORRENT, name: "Deep torrent", windup: 1.85, cooldown: 7.5, phases: [3] },
     LEECHES,
 ];
 
@@ -355,7 +355,7 @@ export const LEVIATHAN_ENEMIES: EnemyDef[] = [
         },
         spawnMessage: "The Leviathan rises from its pool, awakened!",
         boss: {
-            attackInterval: 1,
+            attackInterval: 1.2,
             enrage: { message: "" },
             attacks: ATTACKS,
             fallSeconds: 2.4,
@@ -418,19 +418,19 @@ export const LEVIATHAN_ENEMIES: EnemyDef[] = [
                         status: "The dark",
                         message: "Its glow goes out... bring your light to it!",
                         opener: "Torrent",
-                        tempo: 0.85,
+                        tempo: 0.9,
                         light: 0.12,
-                        ambients: [{ attack: "Falling debris", interval: 3, delay: 3 }],
+                        ambients: [{ attack: "Falling debris", interval: 4, delay: 3 }],
                     },
                     {
                         status: "The pathfinder",
                         message: "Only the pathfinder's light is left!",
                         opener: "Ranged orbs",
-                        tempo: 0.75,
+                        tempo: 0.8,
                         light: 0.1,
                         ambients: [
-                            { attack: "Falling debris", interval: 3, delay: 2 },
-                            { attack: "Lightning", interval: 1.3, delay: 1 },
+                            { attack: "Falling debris", interval: 4, delay: 2 },
+                            { attack: "Lightning", interval: 1.7, delay: 1 },
                         ],
                     },
                 ],

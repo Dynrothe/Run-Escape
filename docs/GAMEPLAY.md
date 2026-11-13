@@ -548,8 +548,10 @@ version and how to run it.
     - **The Awakened Whisperer** (a boss fight, open once the Lassar Undercity's beaten: Act II's
       second Awakened fight): nothing but her, on her island before the drowned cathedral, the
       fight kept to the square round her spot, in both the city and its Shadow Realm. No waves, no
-      picks, no items: you play the Shadow walker with Shadow Burst at its top level and
-      **Blackstone**. She rises on the island with you south of her, to Song of the Silent Choir.
+      picks, no items: you play the Shadow walker with Shadow Burst at its top level (30% wider
+      there) and **Blackstone**. Too close to her and her tentacles lash all round her; the burst
+      and Blackstone reach past that. She rises on the island with you south of her, to Song of
+      the Silent Choir.
       It can't be endless; it has a hard mode once it's beaten. Beating her finds **the Wisp**, her
       pet, every time.
     - **The Awakened Duke Sucellus** (a boss fight, open once Ghorrock's beaten: Act II's third

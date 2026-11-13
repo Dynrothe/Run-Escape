@@ -14,7 +14,7 @@ import {
     WOUND_SHARE,
     getFightPoints,
 } from "../content/gauntlet";
-import { getMap } from "../content/maps";
+import { AWAKENED_HITS, getMap } from "../content/maps";
 import { emptyStats } from "../content/types";
 import { Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import type { Enemy } from "./entities";
@@ -81,8 +81,9 @@ describe("the gauntlet's run", () => {
 
     test("each fight's hits go through armour: they're tuned to a fully upgraded save", () => {
         for (const id of GAUNTLET_FIGHTS) {
-            expect(getMap(id).hits).toEqual({ scale: 1, throughArmor: true });
+            expect(getMap(id).hits).toBe(AWAKENED_HITS);
         }
+        expect(AWAKENED_HITS.throughArmor).toBe(true);
     });
 
     test("pays a raid room's points for a win, and carries a fifth of the hitpoints lost", () => {

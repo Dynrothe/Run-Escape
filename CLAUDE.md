@@ -211,6 +211,10 @@ PARTY=4 MAP=barrows META=max ARMOURY=max bun run tsx scripts/game/simulate-run.t
   or held by a boss. A lot of it means the bot can't get round that map, not that the map is hard.
 - Without `DODGE=1` the bot ignores the bullets, rings and marks of a boss without phases (the
   Theatre's): sim a change to those with it.
+- With `DODGE=1` the bot steps out of a windup the tick it starts, so a shorter warning costs it
+  next to nothing. Sim a boss fight's warnings with `REACT=0.25` too, each step taken a quarter of
+  a second late, as a person reacts: the Awakened fights' hardening left the bot 1 win in 25, and
+  none at all with it. A boss fight's hundreds of seeds can be split across processes with `FROM=`.
 - Runs are CPU heavy, and full sweeps can take a while. Run them in the background, and don't edit
   `src/` in the same checkout meanwhile, since each run reads the source when it starts.
 - **Run sweeps as one process per map.** The script already loops over adventurers and seeds, so
