@@ -565,7 +565,7 @@ version and how to run it.
       no picks, no items: you play the Lantern-bearer with Fire spells at their top level and
       **Shadow**. It rises with you south of its pool, to Colossus of the Deep. It can't be endless;
       it has a hard mode once it's beaten. Beating it finds **Lil'viathan**, its pet, every time.
-- **Act II, the Fallen Empire**: a tab of the map screen beside Bosses, opened by beating the
+- **Act II, the Fallen Empire**: a tab of the map screen beside Act I, opened by beating the
   Inferno. Its four maps (the Stranglewood, the Lassar Undercity, Ghorrock and the Scar) are
   played in any order, each a normal fifteen-minute run with a rule of its own. Each is
   a step harder for every other Act II map you've beaten: step 0 is harder than the Inferno

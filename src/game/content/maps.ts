@@ -884,7 +884,7 @@ function isPlainRun(map: MapDef): boolean {
     return !map.fight && !map.raid && !map.tombs && !map.stages && !map.fun && !map.dev;
 }
 
-// Open from the start, between the campaign and the fun maps
+// Open from the start, listed under the fun maps on the map screen
 export const SEASONAL_MAPS: MapDef[] = MAPS.filter((map) => map.seasonal);
 
 // Boss fights on their own, each open once its map has been beaten

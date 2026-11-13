@@ -51,7 +51,7 @@ playtest.
 
 ## 1. The shape of the act
 
-**Opening.** The act needs the first campaign completed. Beating the Inferno opens the Fallen Empire screen, a tab beside the map list's Bosses tab. The four
+**Opening.** The act needs the first campaign completed. Beating the Inferno opens the Fallen Empire screen, a tab beside the map list's Act I tab (the campaign's). The four
 maps are cards round a fifth in the middle. The middle card fills in as the Awakened are beaten and plays the act's
 ending at the fourth. Each card shows its boss (drawn as the boss bar draws it), its rule in a line, its records, and
 its rewards faded until earned, as map cards do now.

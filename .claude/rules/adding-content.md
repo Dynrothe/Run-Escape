@@ -253,9 +253,10 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 - Set `plane` for dungeons above the ground floor.
 - The game draws one plane, and hides roofs. If a map's roofs are plain scenery rather than the
   roof loc types, or something floats, see `src/mapviewer/webgl/loc/UpperLevels.ts`.
-- Campaign maps unlock in the order of `MAPS`. A `seasonal` map goes after them in `MAPS`, is open
-  from the start and has no place in the chain. Rewards come from `unlock` tasks on weapons,
-  passives, items and adventurers.
+- Campaign maps unlock in the order of `MAPS`, and are the map screen's Act I tab. A `seasonal`
+  map goes after them in `MAPS`, is open from the start, has no place in the chain and is listed
+  on the Fun tab under the fun maps. Rewards come from `unlock` tasks on weapons, passives, items
+  and adventurers.
 - A map with `fight` is one boss fight (Phosani's Nightmare): `waves: []`, one `finalBoss` event
   at 0 whose boss has an `intro` with `alone`, and it opens once `fight.requires` is beaten. There
   are no picks and no items: everyone plays `fight.character` there (`getMapCharacter` in `maps.ts`
@@ -282,11 +283,11 @@ Add it to `MAPS` in `maps.ts` (fun maps go in `fun/maps.ts`), with its waves in 
 - The map screen lists maps by kind, a tab for each (`MAP_TABS` in `ui/GameUi.tsx`): a new list
   like `RAID_MAPS` needs a group there, or it won't be on the screen. Every tab's page is laid out
   at once, one over another, so the list keeps the tallest's height and the details below never
-  move. A tab taller than the Campaign's makes the list taller on every tab, and past about half
+  move. A tab taller than Act I's makes the list taller on every tab, and past about half
   the panel it scrolls.
 - An act's map (`act`, `content/acts.ts`) is outside the campaign's chain: it opens once
   `act.requires` is beaten, its act's maps in any order, and it's on the act's own tab of the map
-  screen (`ActPage`), not the Campaign list. Its toughness is the act's step (`ActDef.steps`, set
+  screen (`ActPage`, Act II's beside Act I), not Act I's list. Its toughness is the act's step (`ActDef.steps`, set
   by how many of the act's other maps were beaten, the host's in co-op): its `difficulty` is the
   first step's, and the step scales its bosses' event hitpoints too. Sim it with `STEP=0` to `3`.
   Its slot on the act (`ActSlotDef`) names its Awakened fight (`fightId`): the act's ending

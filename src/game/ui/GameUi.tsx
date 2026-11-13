@@ -1771,15 +1771,25 @@ function getMapGroupHint(group: MapGroup): string | undefined {
 }
 
 // The map screen's tabs, each a list or two of maps in the order they open; an act's is its own
-// page (ActPage) rather than lists
+// page (ActPage) rather than lists. The campaign is Act I (its id stays "campaign").
 const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[] = [
     {
         id: "campaign",
-        name: "Campaign",
+        name: "Act I",
+        groups: [{ id: "campaign", name: "Act I", maps: CAMPAIGN_MAPS }],
+    },
+    // Beside Act I, open once the Inferno's beaten
+    {
+        id: "fallen_empire",
+        name: "Act II",
         groups: [
-            { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
-            { id: "campaign", name: "Campaign", maps: CAMPAIGN_MAPS },
+            {
+                id: "fallen_empire",
+                name: FALLEN_EMPIRE.name,
+                maps: getActMapIds(FALLEN_EMPIRE).map((id) => getMap(id)),
+            },
         ],
+        act: FALLEN_EMPIRE,
     },
     {
         id: "bosses",
@@ -1794,19 +1804,6 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
             { id: "raids", name: "Raids", hint: "room by room", maps: RAID_MAPS },
         ],
     },
-    // Beside Bosses, open once the Inferno's beaten
-    {
-        id: "fallen_empire",
-        name: "Act II",
-        groups: [
-            {
-                id: "fallen_empire",
-                name: FALLEN_EMPIRE.name,
-                maps: getActMapIds(FALLEN_EMPIRE).map((id) => getMap(id)),
-            },
-        ],
-        act: FALLEN_EMPIRE,
-    },
     {
         id: "fun",
         name: "Fun",
@@ -1817,6 +1814,7 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[]
                 hint: "endless, open from the start",
                 maps: FUN_MAPS,
             },
+            { id: "seasonal", name: "Seasonal", hint: "open from the start", maps: SEASONAL_MAPS },
         ],
     },
     {

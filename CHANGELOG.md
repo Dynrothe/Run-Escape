@@ -14,7 +14,7 @@ the version in the corner).
   the map's card, each worth points that add to the run's coins, with badges for wins at 100, 200
   and 300 points. Hard mode there is a preset of four of them, and plays as it always has.
 - Relics: once Act II is open, four slots on the adventurer screen, a tier opened for each Act II
-  map beaten. One relic a tier stays picked from run to run, on campaign and Act II maps.
+  map beaten. One relic a tier stays picked from run to run, on Act I and Act II maps.
 - The Stranglewood: the Strangled, their boars, lynxes and bears in the real wood round
   Vardorvis's arena, with Kasonde, a great Strangled Bear and Vardorvis himself. Roots creep in
   from the wood, slowing and hurting you: cut them back with your hits, and kill the root hearts
@@ -114,6 +114,8 @@ the version in the corner).
 
 ### Changed
 
+- The map screen's Campaign tab is now Act I, with Act II beside it, and the seasonal maps are on
+  the Fun tab, under the fun maps.
 - Act II is harder: its first map is now tougher than the Inferno, and each step after it too.
 - The Stranglewood's ruined town has its walls back: low walls round its huts' yards and its
   tents' lower walls, still light enough for a phone.
