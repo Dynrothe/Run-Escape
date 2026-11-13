@@ -60,14 +60,18 @@ export class VertexBuffer extends DataBuffer {
             (uPacked >> 6);
 
         if (reuseVertex) {
+            // The product rounds, so two different vertices can share it: reuse the one it
+            // names only if it's this vertex, or a corner takes another's place and colour.
             const hash = v0 * v1 * v2;
-            // const hash = BigInt(v0) << 64n | BigInt(v1) << 32n | BigInt(v2);
-            // const hash = Hasher.hash(this.byteArray.subarray(vertexBufIndex, vertexBufIndex + VertexBuffer.VERTEX_STRIDE));
             const cachedIndex = this.vertexIndices.get(hash);
-            if (cachedIndex !== undefined) {
-                return cachedIndex;
-            } else {
+            if (cachedIndex === undefined) {
                 this.vertexIndices.set(hash, this.offset);
+            } else if (
+                this.view.getInt32(cachedIndex * VertexBuffer.STRIDE, true) === v0 &&
+                this.view.getInt32(cachedIndex * VertexBuffer.STRIDE + 4, true) === v1 &&
+                this.view.getInt32(cachedIndex * VertexBuffer.STRIDE + 8, true) === v2
+            ) {
+                return cachedIndex;
             }
         }
         this.ensureSize(1);

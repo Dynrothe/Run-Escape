@@ -15,6 +15,7 @@ import { RenderDataLoader, RenderDataResult } from "../../worker/RenderDataLoade
 import { WorkerState } from "../../worker/RenderDataWorker";
 import { SceneBuffer } from "../buffer/SceneBuffer";
 import { createTextureIdIndexMap, getSdTextureIds } from "../loader/TextureIndex";
+import { FrameAdder, Frames } from "./ActorBakeFrames";
 import { Segments } from "./ActorBakeSegments";
 import {
     ActorBakeInput,
@@ -119,7 +120,7 @@ function getModelReach(model: Model): number {
 
 function bakeAnim(
     state: WorkerState,
-    segments: Segments,
+    frames: FrameAdder,
     getModel: ModelSource,
     seqId: number,
 ): { anim: BakedAnim; firstFrame: Model | undefined; reach: number } {
@@ -141,6 +142,7 @@ function bakeAnim(
     const ranges = new Int32Array(frameCount * 4);
     const frameSegments = new Uint16Array(frameCount);
     const frameLengths = new Uint16Array(frameCount);
+    const positionStarts = new Int32Array(frameCount).fill(-1);
     let firstFrame: Model | undefined;
     let reach = 0;
 
@@ -152,8 +154,10 @@ function bakeAnim(
                 firstFrame = model;
             }
             reach = Math.max(reach, getModelReach(model));
-            ranges.set(segments.addFrame(model, frameCount - i), i * 4);
-            frameSegments[i] = segments.current;
+            const added = frames.add(model, frameCount - i);
+            ranges.set(added.ranges, i * 4);
+            frameSegments[i] = added.segment;
+            positionStarts[i] = added.positionStart;
         }
         let length = 1;
         if (skeletalTicks > 0) {
@@ -170,6 +174,7 @@ function bakeAnim(
             ranges,
             segments: frameSegments,
             frameLengths,
+            positionStarts,
             looping: seqType ? seqType.looping || seqType.frameStep !== -1 : true,
         },
         firstFrame,
@@ -190,7 +195,7 @@ export function getMovementGroups(masks: number[] | undefined): number[] {
 // nothing, so the run shows instead.
 export function bakeRunPose(
     state: Pick<WorkerState, "seqTypeLoader">,
-    segments: Segments,
+    frames: FrameAdder,
     getModel: (runFrame: number) => Model | undefined,
     seqId: number,
     runSeqId: number,
@@ -211,11 +216,14 @@ export function bakeRunPose(
     const ranges = new Int32Array(count * 4);
     const frameSegments = new Uint16Array(count);
     const frameLengths = new Uint16Array(count);
+    const positionStarts = new Int32Array(count);
     let reach = 0;
     models.forEach((model, i) => {
         reach = Math.max(reach, getModelReach(model));
-        ranges.set(segments.addFrame(model, count - i), i * 4);
-        frameSegments[i] = segments.current;
+        const added = frames.add(model, count - i);
+        ranges.set(added.ranges, i * 4);
+        frameSegments[i] = added.segment;
+        positionStarts[i] = added.positionStart;
         frameLengths[i] = runType.frameLengths?.[i] || 1;
     });
     return {
@@ -224,6 +232,7 @@ export function bakeRunPose(
             ranges,
             segments: frameSegments,
             frameLengths,
+            positionStarts,
             looping: true,
             runPose: true,
         },
@@ -233,16 +242,17 @@ export function bakeRunPose(
 
 function bakeSet(
     state: WorkerState,
-    segments: Segments,
+    frames: Frames,
     key: string,
     getModel: ModelSource,
     seqIds: number[],
 ): BakedSet {
+    frames.beginSet();
     const anims: BakedAnim[] = [];
     let bounds = { height: 0, radius: 0 };
     let setReach = 0;
     for (const seqId of seqIds.length > 0 ? seqIds : [-1]) {
-        const { anim, firstFrame, reach } = bakeAnim(state, segments, getModel, seqId);
+        const { anim, firstFrame, reach } = bakeAnim(state, frames, getModel, seqId);
         if (anims.length === 0 && firstFrame) {
             bounds = getModelBounds(firstFrame);
         }
@@ -375,6 +385,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
 
         const sceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, 50000);
         const segments = new Segments(sceneBuf);
+        const frames = new Frames(segments, input.wholeFrames ? 0 : undefined);
 
         const extra = this.getExtraLoaders(state);
 
@@ -391,7 +402,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                               ? npcType.walkSeqId
                               : id,
                     );
-                    const set = bakeSet(state, segments, request.key, getModel, seqIds);
+                    const set = bakeSet(state, frames, request.key, getModel, seqIds);
                     // Found under the ids they were asked for
                     set.anims.forEach((anim, i) => (anim.seqId = request.seqIds[i] ?? anim.seqId));
                     sets.push(set);
@@ -401,7 +412,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const appearance = request.appearance;
                     const getModel: ModelSource = (seqId, frame) =>
                         extra.playerModelLoader.getModel(appearance, seqId, frame);
-                    const set = bakeSet(state, segments, request.key, getModel, request.seqIds);
+                    const set = bakeSet(state, frames, request.key, getModel, request.seqIds);
                     const runPoses = request.runPoses;
                     // The groups the run keeps, without the order's end
                     // marker. With none, the swing would take the legs too,
@@ -413,7 +424,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                         for (const { seqId, frame } of runPoses.poses) {
                             const baked = bakeRunPose(
                                 state,
-                                segments,
+                                frames,
                                 (runFrame) =>
                                     extra.playerModelLoader.getInterleavedModel(
                                         appearance,
@@ -439,9 +450,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     const spotAnim = extra.spotAnimTypeLoader.load(request.spotAnimId);
                     const getModel: ModelSource = (_seqId, frame) =>
                         extra.spotAnimModelLoader.getModel(spotAnim, frame);
-                    sets.push(
-                        bakeSet(state, segments, request.key, getModel, [spotAnim.sequenceId]),
-                    );
+                    sets.push(bakeSet(state, frames, request.key, getModel, [spotAnim.sequenceId]));
                     break;
                 }
                 case "model": {
@@ -458,13 +467,13 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                           }
                         : getFull;
                     const seqIds = spotAnim.sequenceId !== -1 ? [spotAnim.sequenceId] : [];
-                    sets.push(bakeSet(state, segments, request.key, getModel, seqIds));
+                    sets.push(bakeSet(state, frames, request.key, getModel, seqIds));
                     break;
                 }
                 case "obj": {
                     const { objId, count } = request;
                     const getModel: ModelSource = () => state.objModelLoader.getModel(objId, count);
-                    sets.push(bakeSet(state, segments, request.key, getModel, []));
+                    sets.push(bakeSet(state, frames, request.key, getModel, []));
                     break;
                 }
                 case "loc": {
@@ -499,7 +508,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                         return model;
                     };
                     const seqIds = request.seqs ?? (request.animated ? [locType.seqId] : []);
-                    sets.push(bakeSet(state, segments, request.key, getModel, seqIds));
+                    sets.push(bakeSet(state, frames, request.key, getModel, seqIds));
                     break;
                 }
             }
@@ -510,6 +519,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
         const vertexBuf = sceneBuf.vertexBuf;
         const vertices = exactBytes(vertexBuf.bytes, vertexBuf.byteOffset());
         const { indices, segmentStarts } = segments.finish(sets);
+        const positions = frames.finish();
 
         const loadedTextures = new Map<number, Int32Array>();
         for (const textureId of sceneBuf.usedTextureIds) {
@@ -527,6 +537,7 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
             vertices.buffer,
             indices.buffer,
             segmentStarts.buffer,
+            positions.buffer,
             ...Array.from(loadedTextures.values()).map((pixels) => pixels.buffer),
         ];
         for (const set of sets) {
@@ -535,12 +546,13 @@ export class ActorBakeLoader implements RenderDataLoader<ActorBakeInput, ActorBa
                     anim.ranges.buffer,
                     anim.segments.buffer,
                     anim.frameLengths.buffer,
+                    anim.positionStarts.buffer,
                 );
             }
         }
 
         return {
-            data: { vertices, indices, segmentStarts, sets, loadedTextures },
+            data: { vertices, indices, segmentStarts, positions, sets, loadedTextures },
             transferables,
         };
     }
