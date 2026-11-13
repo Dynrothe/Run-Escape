@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
+import { VARROCK_OPENING } from "../content/fun/varrockOpening";
+import { YAMA_WAKES } from "../content/fun/yamaWakes";
 import { MAX_INVOCATION_PRESETS } from "../content/invocations";
+import { getMap } from "../content/maps";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
@@ -14,7 +17,6 @@ import {
     getMetaStats,
 } from "../core/save";
 import { makeGrid } from "../core/world/testGrid";
-import { VARDHELM } from "../scaperune/maps/vardhelm";
 import { CinematicCamera, CinematicPlayer } from "./Cinematic";
 import { DamageMeter } from "./DamageMeter";
 import {
@@ -25,7 +27,15 @@ import {
     loadDisplaySettings,
     saveDisplaySettings,
 } from "./DisplaySettings";
-import { GameClient, TICK_MS, cleanLoadout, getPhaseBarFraction, loadoutStats } from "./GameClient";
+import {
+    GameClient,
+    TICK_MS,
+    cleanLoadout,
+    getHpShare,
+    getObjectiveView,
+    getPhaseBarFraction,
+    loadoutStats,
+} from "./GameClient";
 import { padHints } from "./GamePad";
 import { GameStore } from "./GameStore";
 import { makeLoadout } from "./coop/CoopLobby";
@@ -1873,6 +1883,45 @@ describe("a boss bar in phases", () => {
     });
 });
 
+describe("the hitpoints bar", () => {
+    test("fills with the hitpoints as they are, not a whole one at a time, within the bar", () => {
+        // A tick of 4 hitpoints a minute's regeneration shows within a few seconds
+        expect(getHpShare(37.6, 38)).toBe(0.989);
+        expect(getHpShare(19, 38)).toBe(0.5);
+        expect(getHpShare(-2, 38)).toBe(0);
+        expect(getHpShare(40, 38)).toBe(1);
+        expect(getHpShare(0, 0)).toBe(0);
+    });
+});
+
+describe("a map's objectives", () => {
+    // Just what they read: the map's objectives and its lairs' states
+    function objectiveOf(states: Record<string, string>) {
+        const map = getMap("battle_for_varrock");
+        const sim = { map, lairById: (id: string) => ({ state: states[id] ?? "asleep" }) };
+        return getObjectiveView(sim as unknown as Parameters<typeof getObjectiveView>[0]);
+    }
+
+    test("the Battle for Varrock's: his generals, then Yama, then nothing", () => {
+        expect(objectiveOf({})).toEqual({
+            text: "Find and slay Yama's two generals",
+            done: 0,
+            count: 2,
+        });
+        expect(objectiveOf({ kril: "beaten" })?.done).toBe(1);
+        const yama = objectiveOf({ xarth: "beaten", kril: "beaten" });
+        expect(yama).toEqual({ text: "Slay Yama in Varrock Palace", done: 0, count: 1 });
+        expect(objectiveOf({ xarth: "beaten", kril: "beaten", yama: "beaten" })).toBeUndefined();
+    });
+
+    test("a map without any has none", () => {
+        const sim = { map: getMap("lumbridge"), lairById: () => undefined };
+        expect(
+            getObjectiveView(sim as unknown as Parameters<typeof getObjectiveView>[0]),
+        ).toBeUndefined();
+    });
+});
+
 describe("raid modes", () => {
     test("turning hard mode off turns expert off with it, as expert is hard mode too", () => {
         const { client, store } = createClient(createSim(), false);
@@ -1885,10 +1934,10 @@ describe("raid modes", () => {
 });
 
 describe("the opening cinematic", () => {
-    // The client mid-run with Vardhelm's opening playing, a second in
+    // The client mid-run with the Battle for Varrock's opening playing, a second in
     function cinematicClient() {
         const { client, store } = createClient(createSim(), false);
-        const cinematic = new CinematicPlayer(VARDHELM.mapDef!.cinematic!);
+        const cinematic = new CinematicPlayer(VARROCK_OPENING);
         cinematic.advance(1);
         const view = { cinematic: cinematic as CinematicPlayer | undefined, onEvents() {} };
         const useAbility = vi.fn();
@@ -1936,12 +1985,17 @@ describe("the opening cinematic", () => {
         const update = (ms: number, camera: CinematicCamera) =>
             (
                 client as unknown as {
-                    updateCinematic(ms: number, sim: Sim, play: CinematicCamera): unknown;
+                    updateCinematic(
+                        ms: number,
+                        sim: Sim,
+                        alpha: number,
+                        play: CinematicCamera,
+                    ): unknown;
                 }
-            ).updateCinematic(ms, client.sim!, camera);
+            ).updateCinematic(ms, client.sim!, 0, camera);
         const run: CinematicCamera = {
-            x: 5488.5,
-            y: 5220.5,
+            x: 4747.5,
+            y: 10609.5,
             height: -0.6,
             pitch: -400,
             yaw: 0,
@@ -1956,8 +2010,8 @@ describe("the opening cinematic", () => {
         }
         expect(state.cinematic).toBeUndefined();
         expect(store.getSnapshot().cinematic).toBe(false);
-        // Merlin's teleport, heard once
-        expect(play.mock.calls.map(([id]) => id)).toEqual([200]);
+        // Yama's click, heard once
+        expect(play.mock.calls.map(([id]) => id)).toEqual([10235]);
         const end = last as CinematicCamera;
         expect(end.x).toBeCloseTo(run.x, 1);
         expect(end.y).toBeCloseTo(run.y, 1);
@@ -2001,6 +2055,121 @@ describe("the opening cinematic", () => {
             [1, 0],
         ]);
     });
+
+    // A lair's (LairDef.opening): the client mid-run, with Yama's lair asleep, on its own or in
+    // co-op
+    function lairClient(coop: boolean) {
+        const { client, store } = createClient(createSim(), false);
+        const skipLairOpening = vi.fn();
+        const sim = {
+            tick: 500,
+            lair: { state: "asleep", wakeTick: -1, def: { opening: YAMA_WAKES } },
+            skipLairOpening,
+        };
+        const view = { cinematic: undefined as CinematicPlayer | undefined, onEvents() {} };
+        const play = vi.fn();
+        Object.assign(client, {
+            sim,
+            view,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned: vi.fn() } },
+            coopRun: coop ? {} : undefined,
+        });
+        const state = client as unknown as { cinematic?: CinematicPlayer };
+        const run: CinematicCamera = {
+            x: 4749.5,
+            y: 10699.5,
+            height: -0.6,
+            pitch: -400,
+            yaw: 0,
+            distance: 18,
+        };
+        const update = () =>
+            (
+                client as unknown as {
+                    updateCinematic(
+                        ms: number,
+                        sim: unknown,
+                        alpha: number,
+                        play: CinematicCamera,
+                    ): CinematicCamera | undefined;
+                }
+            ).updateCinematic(20, sim, 0.5, run);
+        return { client, store, sim, view, play, state, update, skipLairOpening };
+    }
+
+    test("a lair's plays as its boss wakes, on the sim's clock, and only once", () => {
+        const { store, sim, view, play, state, update } = lairClient(false);
+        expect(update()).toBeUndefined();
+        expect(state.cinematic).toBeUndefined();
+        sim.lair = { ...sim.lair, state: "waking", wakeTick: 500 };
+        sim.tick = 500 + 2 * TICKS_PER_SECOND;
+        expect(update()).toBeDefined();
+        const cinematic = state.cinematic!;
+        expect(cinematic.def).toBe(YAMA_WAKES.cinematic);
+        expect(cinematic.seconds).toBeCloseTo(2 + 0.5 / TICKS_PER_SECOND, 5);
+        expect(cinematic.holdsRun).toBe(false);
+        expect(view.cinematic).toBe(cinematic);
+        expect(store.getSnapshot().cinematic).toBe(true);
+        // Its sounds as the sim's clock passes them, and over once it's had its time
+        sim.tick = 500 + Math.ceil(YAMA_WAKES.cinematic.seconds + 1) * TICKS_PER_SECOND;
+        expect(update()).toBeUndefined();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().cinematic).toBe(false);
+        const sounds = YAMA_WAKES.cinematic.cues.flatMap((cue) => cue.sound ?? []);
+        expect(play.mock.calls.map(([id]) => id)).toEqual(sounds);
+        // and not again while it's still waking
+        update();
+        expect(state.cinematic).toBeUndefined();
+    });
+
+    test("a lair's unsealing plays as it's unsealed, on the sim's clock from then, and only once", () => {
+        const { client, sim, state, update } = lairClient(false);
+        const unsealing = getMap("battle_for_varrock").lairs!.find((lair) => lair.id === "yama")!
+            .requires!.unsealing!;
+        Object.assign(sim, {
+            player: { x: 4792, y: 10707.5 },
+            unsealing: { unsealTick: 400, def: { requires: { unsealing } } },
+        });
+        Object.assign(client, { cameraRig: { pitch: -400, yaw: 0, distance: 18 } });
+        sim.tick = 400 + TICKS_PER_SECOND;
+        expect(update()).toBeDefined();
+        const cinematic = state.cinematic!;
+        expect(cinematic.def).toBe(unsealing.cinematic);
+        expect(cinematic.seconds).toBeCloseTo(1 + 0.5 / TICKS_PER_SECOND, 5);
+        // What it flies over is kept loaded
+        const pinned = (
+            client as unknown as {
+                renderer: { mapManager: { setPinned: ReturnType<typeof vi.fn> } };
+            }
+        ).renderer.mapManager.setPinned;
+        expect(pinned.mock.calls[0][0].length).toBeGreaterThan(0);
+        sim.tick = 400 + Math.ceil(unsealing.cinematic.seconds + 1) * TICKS_PER_SECOND;
+        expect(update()).toBeUndefined();
+        expect(pinned).toHaveBeenLastCalledWith([]);
+        update();
+        expect(state.cinematic).toBeUndefined();
+    });
+
+    test.each([
+        [false, 1],
+        [true, 0],
+    ])(
+        "a lair's skipped in co-op (%s) has its boss come straight on only on your own",
+        (coop, calls) => {
+            const { client, sim, state, update, skipLairOpening } = lairClient(coop);
+            sim.lair = { ...sim.lair, state: "waking", wakeTick: 500 };
+            sim.tick = 500 + TICKS_PER_SECOND;
+            update();
+            client.skipCinematic();
+            expect(state.cinematic).toBeUndefined();
+            expect(skipLairOpening).toHaveBeenCalledTimes(calls);
+            update();
+            expect(state.cinematic).toBeUndefined();
+        },
+    );
 
     test("is skipped from the loading screen before it, once that's been up a moment", () => {
         const { client, store, state } = cinematicClient();
@@ -2074,7 +2243,106 @@ describe("the opening cinematic", () => {
             startRun,
         });
         client.retry();
-        expect(startRun).toHaveBeenCalledWith("zachariah", false);
+        // and starts at its lair, if it has one (getRetryLair)
+        expect(startRun).toHaveBeenCalledWith("zachariah", false, true);
+    });
+});
+
+describe("the shot editor", () => {
+    // The client mid-run in burnt Varrock, with the editor open on its opening
+    async function directorClient() {
+        const { client, store } = createClient(createSim(), false);
+        const view = { cinematic: undefined as CinematicPlayer | undefined, onEvents() {} };
+        const play = vi.fn();
+        const setPinned = vi.fn();
+        Object.assign(client, {
+            sim: { map: getMap("battle_for_varrock"), player: { x: 3212.5, y: 3400.5 } },
+            view,
+            accumulator: 0,
+            audio: { play },
+            grid: { getHeight: () => 0 },
+            renderer: { mapManager: { setPinned } },
+            cameraRig: { pitch: -400, yaw: 0, distance: 18 },
+            input: { isDown: () => false },
+        });
+        await client.direct();
+        const state = client as unknown as {
+            cinematic?: CinematicPlayer;
+            pressKey(code: string): void;
+            endCinematic(): void;
+            updateCinematic(
+                ms: number,
+                sim: unknown,
+                alpha: number,
+                play: CinematicCamera,
+            ): CinematicCamera | undefined;
+        };
+        return { client, store, view, play, setPinned, state };
+    }
+
+    test("opens on the map's opening, held, with what its camera sees loaded", async () => {
+        const { client, store, view, setPinned, state } = await directorClient();
+        const director = client.director!;
+        expect(director.def.cast).toBe(VARROCK_OPENING.cast);
+        expect(state.cinematic).toBe(director.player);
+        expect(view.cinematic).toBe(director.player);
+        expect(store.getSnapshot()).toMatchObject({ cinematic: true, director });
+        expect(setPinned.mock.calls[0][0].length).toBeGreaterThan(0);
+    });
+
+    test("has its own keys, which do nothing else, and F3 and M as ever", async () => {
+        const { client, state } = await directorClient();
+        const onKeyPress = vi.fn();
+        Object.assign(client, { onKeyPress });
+        for (const code of ["Space", "KeyQ", "Digit1", "Escape", "F3", "KeyM"]) {
+            state.pressKey(code);
+        }
+        expect(client.director!.getSnapshot().playing).toBe(true);
+        expect(state.cinematic).toBeDefined();
+        expect(onKeyPress.mock.calls.map(([code]) => code)).toEqual(["F3", "KeyM"]);
+    });
+
+    test("isn't paused or skipped, and goes with the run", async () => {
+        const { client, store, state } = await directorClient();
+        client.pause();
+        expect(client.paused).toBe(false);
+        client.director!.seek(5);
+        client.skipCinematic();
+        expect(client.director).toBeDefined();
+        state.endCinematic();
+        expect(client.director).toBeUndefined();
+        expect(state.cinematic).toBeUndefined();
+        expect(store.getSnapshot().director).toBeUndefined();
+    });
+
+    test("takes no keys while a trailer's recorded, but Escape, which stops it", async () => {
+        const { client, state } = await directorClient();
+        const cancel = vi.fn();
+        Object.assign(client, { trailer: { recorder: { cancel }, live: false, rolling: true } });
+        state.pressKey("Space");
+        state.pressKey("Enter");
+        expect(client.director!.getSnapshot()).toMatchObject({ playing: false, edited: false });
+        expect(cancel).not.toHaveBeenCalled();
+        state.pressKey("Escape");
+        expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    test("plays on from its playhead, its sounds heard, its camera the run's", async () => {
+        const { client, play, state } = await directorClient();
+        const director = client.director!;
+        director.seek(15);
+        director.togglePlay();
+        const run: CinematicCamera = { x: 1, y: 2, height: 0, pitch: -400, yaw: 0, distance: 18 };
+        let camera: CinematicCamera | undefined;
+        for (let i = 0; i < 20; i++) {
+            // A long frame moves it on by a frame's worth, as a cinematic does
+            camera = state.updateCinematic(1000, client.sim, 0, run);
+        }
+        expect(director.seconds).toBeCloseTo(17);
+        // Yama's click, once
+        expect(play.mock.calls.map(([id]) => id)).toEqual([10235]);
+        expect(camera).toEqual(director.getCamera());
+        expect(state.cinematic).toBe(director.player);
     });
 
     test("plays the next part's entrance on a fight in parts' Next fight, not on its retry", () => {
@@ -2092,11 +2360,11 @@ describe("the opening cinematic", () => {
         });
         // The Champion won: on to the Akh
         client.retry();
-        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", true);
+        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", true, true);
         // The Champion lost: him again
         chosen.stage = 2;
         client.retry();
-        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", false);
+        expect(startRun).toHaveBeenLastCalledWith("beneath_cursed_sands", false, true);
     });
 });
 
@@ -2110,6 +2378,8 @@ describe("the fight button's hint", () => {
                 cooldown: number;
                 guide?: boolean;
             },
+            heroes: [{ characterId: "warrior" }],
+            focus: 0,
             map: {},
             tick: 0,
             shownBoss: undefined as { dead: boolean; risingEnd: number } | undefined,

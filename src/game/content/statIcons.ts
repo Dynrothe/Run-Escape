@@ -64,6 +64,7 @@ const ICONS: Record<string, StatIconRef> = {
     "recoil damage": obj(2550), // Ring of recoil
     "chance to heal on hit": obj(11090), // Phoenix necklace
     "melee knockback": obj(1347), // Rune warhammer
+    "melee attack speed": STOPWATCH,
     "weapon slots": SCIMITAR,
     "magic weapon slot": obj(27281), // Divine rune pouch
     "passive slots": obj(8850), // Rune defender

@@ -20,10 +20,11 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
-import { ENEMIES } from "../content/enemies";
+import { ENEMIES, getEnemy } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { getHeroNpcSeqs } from "../content/justiciarKit";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
@@ -59,6 +60,7 @@ import {
     getTombsFightSeqs,
 } from "../content/tombs";
 import {
+    CharacterDef,
     EnemyDef,
     EnemyOutfit,
     FloorSkinDef,
@@ -66,6 +68,7 @@ import {
     ImpactDef,
     MapDef,
     PolymorphKind,
+    RootsRuleDef,
     WeaponDef,
 } from "../content/types";
 import { WardrobeLook, applyBody, applyOutfit, wearsWardrobe } from "../content/wardrobe";
@@ -262,7 +265,7 @@ export function getSpotAnimIds(): number[] {
             weapon.lifesteal?.spotAnim,
             weapon.siphon?.projectileSpotAnim,
         );
-        add(weapon.chain?.spotAnim, weapon.breach?.spotAnim);
+        add(weapon.chain?.spotAnim, weapon.breach?.spotAnim, weapon.heavy?.hit?.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -328,10 +331,23 @@ export function getSpotAnimIds(): number[] {
     for (const map of ALL_MAPS) {
         addImpact(map.tombs?.ability?.impact);
     }
+    // A hero's own buttons (CharacterDef.abilities): what they land as, and mark first
+    for (const character of CHARACTERS) {
+        for (const ability of character.abilities ?? []) {
+            addImpact(ability.impact);
+            add(ability.spotAnim, ability.markSpotAnim, ability.cellImpact?.spotAnim);
+        }
+    }
     for (const map of ALL_MAPS) {
-        // What plays in its cinematics (MapDef.cinematic, and a fight's parts')
+        // What a cut through a map's roots throws up (MapDef.rule), and what comes down on a hero
+        // as they're blessed (MapDef.blessings)
+        add(map.rule?.look.cutSpotAnim, map.blessings?.spotAnim);
+        // Its lairs' seals going out (LairDef.seal.smoke), and their heals (LairDef.heals)
+        add(...(map.lairs ?? []).map((lair) => lair.seal.smoke));
+        add(...(map.lairs ?? []).map((lair) => lair.heals?.spotAnim));
+        // What plays in its cinematics (MapDef.cinematic, a fight's parts', and its lairs')
         add(...getMapCinematics(map).flatMap((def) => def.cues.map((cue) => cue.spotAnim)));
-        // A floor's slabs (the Wardens')
+        // A floor's slabs (the Wardens', and dev maps')
         add(map.floor?.slam.spotAnim, map.floor?.drop.spotAnim);
         const effects = map.floor?.effects;
         add(effects?.dust, effects?.fallDust, effects?.rock);
@@ -358,6 +374,13 @@ export function getSpotAnimIds(): number[] {
             add(...(attack.impactSpotAnims ?? []));
             addImpact(attack.impact);
         }
+        // A meteor falling and its shadow, and what's left of it when it's stopped; what a boss
+        // raises against a gaze throws up (BossDef.gazeWard)
+        for (const attack of enemy.boss?.attacks ?? []) {
+            add(attack.meteor?.spotAnim, attack.meteor?.shadowSpotAnim);
+            addImpact(attack.interruptedBy?.broken);
+        }
+        addImpact(enemy.boss?.gazeWard?.impact);
         const guard = enemy.boss?.guard;
         add(guard?.stunSpotAnim);
         addImpact(guard?.stuck);
@@ -532,7 +555,8 @@ export function getPowerUpLookRequests(appearance: PlayerAppearance): BakeReques
 // The baked model for an enemy: its NPC, or the outfit it wears (the fun
 // maps' players, one model per outfit)
 export function getEnemyModelKey(def: EnemyDef, variant: number): string {
-    return def.outfits ? `npc:${def.id}:${variant}` : "npc:" + def.id;
+    // A look of its (EnemyDef.looks) past the first is its own model; the first is npcId's
+    return def.outfits || (def.looks && variant > 0) ? `npc:${def.id}:${variant}` : "npc:" + def.id;
 }
 
 // A floor with no skins of its own draws the slam's slab (FloorView); this is it, for its top
@@ -540,9 +564,31 @@ export function DEFAULT_FLOOR_SKIN(floor: { slam: { spotAnim: number } }): Floor
     return { spotAnim: floor.slam.spotAnim };
 }
 
-// An NPC posed on a map (MapDef.props), or one in its opening cinematic (MapDef.cinematic)
+// A map's roots' scenery (RootsRuleDef.look, client/RootsView.ts), with the look's colours swapped
+export function getRootLookKey(locId: number, look: RootsRuleDef["look"]): string {
+    return "rootlook:" + JSON.stringify([locId, look.recolor ?? []]);
+}
+
+// A piece of what's under a floor (FloorDef.under)
+// An NPC posed on a map (MapDef.props)
 export function getPropKey(npcId: number): string {
     return "prop:" + npcId;
+}
+
+// A lair's seal (MapDef.lair), burning: its own key, as the same loc may be baked still elsewhere
+export function getLairSealKey(locId: number): string {
+    return "lairSeal:" + locId;
+}
+
+// A boss's pool (BossAttackDef.pool), on its own animation (a fire flickers): its own key, as the
+// same loc may be baked still elsewhere
+export function getPoolKey(locId: number): string {
+    return "pool:" + locId;
+}
+
+// A hero drawn as an NPC (CharacterDef.npcLook)
+export function getHeroLookKey(characterId: string): string {
+    return "heroLook:" + characterId;
 }
 
 // What a polymorph power-up turns enemies into (EnemyPolymorph's look and variant)
@@ -733,7 +779,10 @@ export class GameAssets {
     private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
-    // Maps' props and cinematic casts baked or being baked, by model key (getPropKey)
+    // Heroes drawn as NPCs (CharacterDef.npcLook) baked or being baked, by id
+    private readonly heroLookBakes = new Map<string, Promise<void>>();
+    // Maps' props, cinematic casts and lairs' locs baked or being baked, by model key (getPropKey,
+    // getLairSealKey)
     private readonly propBakes = new Map<string, Promise<void>>();
 
     constructor(
@@ -780,6 +829,17 @@ export class GameAssets {
                 ? { kind: "obj", key: "npc:" + enemy.id, objId: enemy.objId, count: 1 }
                 : { kind: "npc", key: "npc:" + enemy.id, npcId: enemy.npcId, seqIds },
         ];
+        // Its other looks, with the same animations
+        enemy.looks?.forEach((npcId, variant) => {
+            if (variant > 0) {
+                requests.push({
+                    kind: "npc",
+                    key: getEnemyModelKey(enemy, variant),
+                    npcId,
+                    seqIds,
+                });
+            }
+        });
         const shielded = enemy.shield?.look;
         if (shielded) {
             requests.push({
@@ -821,6 +881,23 @@ export class GameAssets {
 
     static getEnemyRequests(enemies: EnemyDef[]): BakeRequest[] {
         return enemies.flatMap((enemy) => GameAssets.getEnemyBakes(enemy));
+    }
+
+    // A hero drawn as an NPC (CharacterDef.npcLook, Justiciar Zachariah's): baked with the map
+    // that has everyone play them (travelTo), not with every run
+    static getHeroLookRequests(characters: readonly CharacterDef[]): BakeRequest[] {
+        return characters.flatMap((character): BakeRequest[] =>
+            character.npcLook
+                ? [
+                      {
+                          kind: "npc",
+                          key: getHeroLookKey(character.id),
+                          npcId: character.npcLook.npcId,
+                          seqIds: getHeroNpcSeqs(character),
+                      },
+                  ]
+                : [],
+        );
     }
 
     // Pets aren't in every run's bake, as most players haven't found one: they're baked as
@@ -876,7 +953,29 @@ export class GameAssets {
         for (const id of getSpotAnimIds()) {
             requests.push({ kind: "spotanim", key: "spot:" + id, spotAnimId: id });
         }
-        // What's under a floor (the Wardens', as its slabs are)
+        // A map's roots (MapDef.rule, client/RootsView.ts), their colours swapped
+        const rootLooks = new Set<string>();
+        for (const map of ALL_MAPS) {
+            const look = map.rule?.look;
+            for (const locId of [...(look?.runners ?? []), ...(look?.loops ?? [])]) {
+                const key = getRootLookKey(locId, look!);
+                if (!rootLooks.has(key)) {
+                    rootLooks.add(key);
+                    requests.push({ kind: "model", key, locId, recolor: look!.recolor });
+                }
+            }
+        }
+        // The tree an adventurer's trait fells (CharacterDef.trait)
+        const traitLocs = new Set<number>();
+        for (const character of CHARACTERS) {
+            if (character.trait) {
+                traitLocs.add(character.trait.locId);
+            }
+        }
+        for (const locId of traitLocs) {
+            requests.push({ kind: "loc", key: "loc:" + locId, locId });
+        }
+        // What's under a floor (the Wardens', and dev maps', as their slabs are)
         for (const map of ALL_MAPS) {
             for (const locId of Object.values(map.floor?.under ?? {})) {
                 requests.push({ kind: "loc", key: getFloorPieceKey(locId), locId });
@@ -952,12 +1051,16 @@ export class GameAssets {
         }
         const objIds = new Set(getThrownObjIds());
         const locIds = new Set([CANNON_LOC]);
+        const poolLocIds = new Set<number>();
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 if (attack.pool) {
-                    locIds.add(attack.pool.locId);
+                    poolLocIds.add(attack.pool.locId);
                 }
             }
+        }
+        for (const locId of poolLocIds) {
+            requests.push({ kind: "loc", key: getPoolKey(locId), locId, animated: true });
         }
         for (const powerUp of POWER_UPS) {
             if (powerUp.locId !== undefined) {
@@ -1120,9 +1223,15 @@ export class GameAssets {
         return Promise.all(waits).then(() => undefined);
     }
 
-    // A map's NPCs posed as scenery (MapDef.props), and the cast of its opening cinematic
-    // (MapDef.cinematic) with everything they play: baked as the map's travelled to
-    static getPropRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
+    // A map's NPCs posed as scenery (MapDef.props), the cast of its cinematics (its opening's, each
+    // part's and its lairs') with everything they play, and its lairs' locs (getLairRequests):
+    // baked as the map's travelled to
+    static getPropRequests(maps: readonly MapDef[]): BakeRequest[] {
+        return [...GameAssets.getPropNpcRequests(maps), ...GameAssets.getLairRequests(maps)];
+    }
+
+    // The NPCs of getPropRequests, each once, with what every one of maps plays on it
+    private static getPropNpcRequests(maps: readonly MapDef[]): NpcBakeRequest[] {
         const seqs = new Map<number, number[]>();
         const add = (npcId: number, seqIds: number[]) => {
             const list = seqs.get(npcId) ?? [];
@@ -1135,6 +1244,10 @@ export class GameAssets {
         };
         for (const prop of maps.flatMap((map) => map.props ?? [])) {
             add(prop.npcId, [prop.seq]);
+            // and what it's drawn as once its lair's woken (MapPropDef.awake)
+            if (prop.awake) {
+                add(prop.awake.npcId, [prop.awake.seq]);
+            }
         }
         for (const def of maps.flatMap(getMapCinematics)) {
             for (const [npcId, seqIds] of getCinematicSeqs(def)) {
@@ -1149,25 +1262,59 @@ export class GameAssets {
         }));
     }
 
-    // Bakes a map's props and cinematics' casts (its opening's and each part's), unless they're
-    // baked already or on their way. Each NPC's baked once, under one key, so it's baked with what
-    // every map plays on it (maps), as the slim cache has it: one map's alone would leave another's
-    // animations out.
+    // A lair's seal, burning (MapDef.lairs), its pillars (LairDef.pillars), and the pillars its
+    // boss raises against a gaze (BossDef.gazeWard)
+    private static getLairRequests(maps: readonly MapDef[]): BakeRequest[] {
+        const requests: BakeRequest[] = [];
+        const keys = new Set<string>();
+        const addLoc = (request: BakeRequest) => {
+            if (!keys.has(request.key)) {
+                keys.add(request.key);
+                requests.push(request);
+            }
+        };
+        for (const map of maps) {
+            for (const lair of map.lairs ?? []) {
+                const locId = lair.seal.locId;
+                addLoc({ kind: "loc", key: getLairSealKey(locId), locId, animated: true });
+                if (lair.pillars) {
+                    const pillar = lair.pillars.locId;
+                    addLoc({ kind: "loc", key: "loc:" + pillar, locId: pillar });
+                }
+                const ward = getEnemy(lair.enemyId).boss?.gazeWard;
+                if (ward) {
+                    addLoc({ kind: "loc", key: "loc:" + ward.locId, locId: ward.locId });
+                }
+            }
+        }
+        return requests;
+    }
+
+    // Bakes a map's props, cinematics' casts (its opening's, each part's and its lairs') and its
+    // lairs' locs, unless they're baked already or on their way. Each NPC's baked once, under one
+    // key, so it's baked with what every map plays on it (maps), as the slim cache has it: one
+    // map's alone would leave another's animations out.
     loadProps(map: MapDef, maps: readonly MapDef[] = ALL_MAPS): Promise<void> {
         const npcIds = new Set([
-            ...(map.props ?? []).map((prop) => prop.npcId),
+            // and what a prop's drawn as once its lair's woken (MapPropDef.awake)
+            ...(map.props ?? []).flatMap((prop) =>
+                prop.awake ? [prop.npcId, prop.awake.npcId] : [prop.npcId],
+            ),
             ...getMapCinematics(map).flatMap((cinematic) =>
                 cinematic.cast.map((actor) => actor.npcId),
             ),
         ]);
-        if (npcIds.size === 0) {
+        if (npcIds.size === 0 && !map.lairs) {
             return Promise.resolve();
         }
         // This map's own def first: a dev map's is made again for each run
-        const requests = GameAssets.getPropRequests([
-            map,
-            ...maps.filter((other) => other.id !== map.id),
-        ]).filter((request) => npcIds.has(request.npcId));
+        const requests = [
+            ...GameAssets.getPropNpcRequests([
+                map,
+                ...maps.filter((other) => other.id !== map.id),
+            ]).filter((request) => npcIds.has(request.npcId)),
+            ...GameAssets.getLairRequests([map]),
+        ];
         const missing = requests.filter((request) => !this.propBakes.has(request.key));
         if (missing.length > 0) {
             const baking = this.bakeInTasks(missing, this.loadBake).catch((e) =>
@@ -1180,6 +1327,32 @@ export class GameAssets {
         return Promise.all(requests.map((request) => this.propBakes.get(request.key))).then(
             () => undefined,
         );
+    }
+
+    // Bakes a hero's NPC look (CharacterDef.npcLook), unless it's baked or on its way
+    loadHeroLook(characterId: string): Promise<void> {
+        const character = getCharacter(characterId);
+        if (!character.npcLook) {
+            return Promise.resolve();
+        }
+        let baking = this.heroLookBakes.get(characterId);
+        if (!baking) {
+            baking = this.bakeInTasks(
+                GameAssets.getHeroLookRequests([character]),
+                this.loadBake,
+            ).catch((e) => console.error("Couldn't bake", characterId, e));
+            this.heroLookBakes.set(characterId, baking);
+        }
+        return baking;
+    }
+
+    // A hero's NPC look, or nothing yet: it's baked now, and shows up when it's ready
+    getHeroLook(characterId: string): ActorModel | undefined {
+        const model = this.models.get(getHeroLookKey(characterId));
+        if (!model && !this.heroLookBakes.has(characterId)) {
+            void this.loadHeroLook(characterId);
+        }
+        return model;
     }
 
     // A pet's model, or nothing yet: it's baked now, and shows up when it's ready

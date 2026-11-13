@@ -1898,14 +1898,21 @@ describe("caskets and items", () => {
         expect(getBuffViews(sim)[0].secondsLeft).toBe(38);
     });
 
-    test("regen heals its hitpoints a minute", () => {
+    test("regen heals its hitpoints over the minute, a little every tick", () => {
         const sim = createSim("wizard");
         sim.metaStats.regen = 60;
         sim.updateStats();
         sim.player.hp = 5;
+        // Not a whole hitpoint at a time: a second's worth spread over its ticks
+        sim.step(0, 0);
+        expect(sim.player.hp).toBeCloseTo(5 + 1 / TICKS_PER_SECOND, 6);
         // Over before the first enemies can get there
-        runFor(sim, 5.5, "still");
-        expect(sim.player.hp).toBe(10);
+        runFor(sim, 5, "still");
+        expect(sim.player.hp).toBeCloseTo(10 + 1 / TICKS_PER_SECOND, 6);
+        // and no further than full
+        sim.player.hp = sim.player.maxHp - 0.001;
+        sim.step(0, 0);
+        expect(sim.player.hp).toBe(sim.player.maxHp);
     });
 
     test("a Saradomin brew heals, and changes stats until it wears off", () => {

@@ -3,14 +3,17 @@ import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { HALLOWED_BOSS_ARENA, HALLOWED_NIGHT } from "../scaperune/maps/hallowedNight";
 import { OWLS_COURT, OWLS_COURT_BOSS_ARENA, OWLS_COURT_RECIPE } from "../scaperune/maps/owlsCourt";
 import { SANCTUARY_BOSS_ARENA, SISTERHOOD_SANCTUARY } from "../scaperune/maps/sisterhoodSanctuary";
+import { STRANGLEWOOD_CLEARING, STRANGLEWOOD_RECIPE } from "../scaperune/maps/stranglewood";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
 import { MapRecipe, getRecipeArena, getRecipeWorldTile } from "../scaperune/recipe";
+import { isMapOut } from "./acts";
 import { ENEMY_BY_ID, getEnemy } from "./enemies";
 import { FUN_MAPS } from "./fun/maps";
 import { PHOSANI_START_DISTANCE } from "./phosani";
 import { RAID_MAPS } from "./raids";
 import { RANDOM_EVENTS } from "./randomEvents";
-import { CinematicDef, EnemyDef, MapDef } from "./types";
+import { STRANGLEWOOD_EVENTS, STRANGLEWOOD_ROOTS, STRANGLEWOOD_WAVES } from "./stranglewood";
+import { CharacterDef, CinematicDef, EnemyDef, LairDef, MapDef } from "./types";
 import { THANKSGIVING_EVENTS, THANKSGIVING_WAVES } from "./waves";
 import {
     BARROWS_EVENTS,
@@ -317,6 +320,47 @@ export const MAPS: MapDef[] = [
         finalBossWarning: "The lava churns... three JalTok-Jads are rising!",
         victoryText: "The JalTok-Jads are slain! You are the champion of the Inferno!",
     },
+    // Act II's (content/acts.ts): open once the Inferno's beaten, outside the campaign's chain
+    {
+        id: "stranglewood",
+        name: "The Stranglewood",
+        description:
+            "The Strangled, their boars and lynxes, and the Strangled Bear. Roots creep in " +
+            "from the wood: they slow and hurt you, and quicken the Strangled. Your hits cut " +
+            "them back, and killing a root heart clears a patch. Kasonde and a great Strangled " +
+            "Bear come one by one, and Vardorvis rises in his clearing at the end.",
+        // The Executioner's axe head, Vardorvis's
+        iconObjId: 28319,
+        // The real wood round Vardorvis's arena, its undergrowth opened up for a crowd
+        // (scaperune/maps/stranglewood.ts)
+        arena: getRecipeArena(STRANGLEWOOD_RECIPE),
+        // Six tiles south of the clearing's middle, where he rises
+        spawn: getRecipeWorldTile(
+            STRANGLEWOOD_RECIPE,
+            STRANGLEWOOD_RECIPE.spawn.x,
+            STRANGLEWOOD_RECIPE.spawn.y,
+        ),
+        // Act II's first step (its others are in acts.ts)
+        difficulty: { hp: 3.9, damage: 2.8 },
+        hard: { hp: 1.4, damage: 1.2 },
+        waves: STRANGLEWOOD_WAVES,
+        events: STRANGLEWOOD_EVENTS,
+        finalBossWarning: "The roots shudder... Vardorvis is waking!",
+        victoryText: "Vardorvis is slain! The Stranglewood is quiet.",
+        // His clearing: he rises in its middle
+        bossArena: {
+            baseX: Math.floor(STRANGLEWOOD_CLEARING.x) - 10,
+            baseY: Math.floor(STRANGLEWOOD_CLEARING.y) - 10,
+            size: 20,
+        },
+        scaperune: true,
+        act: { id: "fallen_empire", requires: "inferno" },
+        rule: STRANGLEWOOD_ROOTS,
+        // The wood's own track; the recording goes in src/media/music (see GameClient)
+        music: "Strangled",
+        // Vardorvis's, from 15:00
+        bossMusic: "Blood Rush",
+    },
     {
         id: "halloween",
         name: "Hallowed Night",
@@ -445,7 +489,12 @@ export const MAPS: MapDef[] = [
 ];
 
 // The maps that open one after another
-export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter((map) => !map.seasonal && !map.fight);
+export const CAMPAIGN_MAPS: MapDef[] = MAPS.filter(
+    (map) => !map.seasonal && !map.fight && !map.act,
+);
+
+// The acts' maps (MapDef.act, content/acts.ts): each act's open once its map's beaten, in any order
+export const ACT_MAPS: MapDef[] = MAPS.filter((map) => map.act);
 
 // Open from the start, between the campaign and the fun maps
 export const SEASONAL_MAPS: MapDef[] = MAPS.filter((map) => map.seasonal);
@@ -524,8 +573,26 @@ export function isSeasonalMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.seasonal === true;
 }
 
+export function isActMap(mapId: string): boolean {
+    return MAP_BY_ID.get(mapId)?.act !== undefined;
+}
+
 export function isFightMap(mapId: string): boolean {
     return MAP_BY_ID.get(mapId)?.fight !== undefined;
+}
+
+// The lair a retry starts in (LairDef.start): the map's only one, as long as it's open from
+// the start. With more than one, a retry starts the map over: the run that ended had beaten
+// whichever came before.
+export function getRetryLair(map: MapDef): LairDef | undefined {
+    const lairs = map.lairs;
+    return lairs?.length === 1 && !lairs[0].requires ? lairs[0] : undefined;
+}
+
+// A map to walk round with nothing on it (FunMapDef.explore, and no waves): nothing hurts but a
+// lair's boss, and the HUD's only what it takes to walk it
+export function isPeaceful(map: MapDef): boolean {
+    return map.fun?.explore === true && map.waves.length === 0;
 }
 
 // Whether a co-op room can play it: not a fight kept to one player (MapDef.fight.solo)
@@ -533,10 +600,18 @@ export function isCoopMap(map: MapDef): boolean {
     return map.fight?.solo !== true;
 }
 
-// Every cinematic a map can play: its opening (MapDef.cinematic) and each part's of a fight in
-// parts (MapDef.stages), for what bakes and loads them
+// Every cinematic a map can play, for what bakes, loads and hears them: its opening
+// (MapDef.cinematic), each part's of a fight in parts (MapDef.stages), and its lairs'
+// (LairDef.opening, and a lair's unsealing as the ones before it fall)
 export function getMapCinematics(map: MapDef): CinematicDef[] {
-    const all = [map.cinematic, ...(map.stages ?? []).map((stage) => stage.cinematic)];
+    const all = [
+        map.cinematic,
+        ...(map.stages ?? []).map((stage) => stage.cinematic),
+        ...(map.lairs ?? []).flatMap((lair) => [
+            lair.opening?.cinematic,
+            lair.requires?.unsealing?.cinematic,
+        ]),
+    ];
     return all.filter((def): def is CinematicDef => def !== undefined);
 }
 
@@ -551,6 +626,13 @@ export function getMapCharacter(map: MapDef): string | undefined {
     return map.fun?.character ?? map.fight?.character ?? map.seasonalCharacter;
 }
 
+// Whether an adventurer is out for players: not one brought in on a map that isn't (isMapOut,
+// the Forester of an act still to come)
+export function isCharacterOut(character: CharacterDef): boolean {
+    const map = character.unlock && MAP_BY_ID.get(character.unlock.mapId);
+    return !map || isMapOut(map);
+}
+
 export function getMap(id: string): MapDef {
     const map = MAP_BY_ID.get(id);
     if (!map) {
@@ -560,15 +642,17 @@ export function getMap(id: string): MapDef {
 }
 
 // The part of the world a map's collision, heights and scenery come from: its
-// arena, on its plane
+// arena, on its plane, and where what burns stands (MapDef.burns)
 export function getArenaRegion(map: MapDef): {
     baseX: number;
     baseY: number;
     sizeX: number;
     sizeY: number;
     plane: number;
+    burnLocs?: number[];
 } {
-    return { ...map.arena, plane: map.plane ?? 0 };
+    const region = { ...map.arena, plane: map.plane ?? 0 };
+    return map.burns ? { ...region, burnLocs: map.burns.locs } : region;
 }
 
 // Whether anything on the map poisons you (the King Black Dragon's breath) or

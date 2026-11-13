@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { CHARACTERS, characterName } from "../content/characters";
 import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
-import { getMap, mapName } from "../content/maps";
+import { getMap, isCharacterOut, mapName } from "../content/maps";
 import {
     PASSIVES,
     formatPassiveValue,
@@ -167,7 +167,9 @@ export function LoadoutCatalogue({ kind, save }: { kind: Kind; save: SaveData })
 }
 
 function WeaponDetails({ weapon, save }: { weapon: WeaponDef; save: SaveData }): JSX.Element {
-    const sources = CHARACTERS.filter((character) => character.startingWeapon === weapon.id);
+    const sources = CHARACTERS.filter(
+        (character) => character.startingWeapon === weapon.id && isCharacterOut(character),
+    );
     const picks = BASE_WEAPONS.filter(
         (base) =>
             base.id !== weapon.id && base.hilts?.into.some((pick) => pick.weaponId === weapon.id),

@@ -22,8 +22,8 @@ function collectEnemyIds(value: unknown, found: Set<string>, seen: Set<object>):
 }
 
 // The enemies a run on the map can bring on screen: its waves, events and
-// bosses, random events' too, and whatever they summon, split into, rise as or
-// spawn in turn.
+// bosses, what its rule brings in (a root heart), random events' too, and whatever they summon,
+// split into, rise as or spawn in turn.
 export function getMapEnemies(map: MapDef): EnemyDef[] {
     const ids = new Set<string>();
     const seen = new Set<object>();
@@ -40,6 +40,8 @@ export function getMapEnemies(map: MapDef): EnemyDef[] {
             map.stages,
             map.fun?.bosses,
             map.raid,
+            map.rule,
+            map.lairs,
             pumpkins,
             turkeys,
             randomEvents,

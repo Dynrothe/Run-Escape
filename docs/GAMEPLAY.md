@@ -109,6 +109,7 @@ version and how to run it.
     | Gauntlet runner     | Magic       | Crystal staff          | 30% weaker, +2% damage a level                    | Surviving 10 minutes in Prifddinas                    |
     | Infernal champion   | Ranged      | Toxic blowpipe         | 20% more hitpoints                                | Beating the Inferno                                   |
     | TzHaar-Hur          | Magic       | Toktz-mej-tal          | Weapons cover 15% more area                       | Killing JalTok-Jad in the Inferno                     |
+    | Forester            | Melee       | Bronze 2h sword        | Timber! (a trait, below)                          | Beating the Stranglewood                              |
     | Scammer             | Ranged      | Bronze throwing knives | 50% more coins, luckier                           | Surviving 10 minutes on the Grand Exchange            |
     | F2P pker            | Melee       | Bronze 2h sword        | Hits 10% harder, moves 5% faster                  | Killing the Clan leader in East Varrock               |
     | Durial321           | Melee       | Abyssal whip           | 30% less hitpoints                                | Surviving 6:06 in Falador                             |
@@ -119,6 +120,10 @@ version and how to run it.
     | Saradominist        | Magic       | Saradomin Strike       | 20% faster, 20% more hitpoints, heals 10 a minute | Justiciar Zachariah only (everyone plays them there)  |
     | Avian Assaulter     | Melee       | Rubber chicken         | Hits birds 15% harder, 45% faster, 180% more HP   | Thanksgiving Harvest only (everyone plays them there) |
 
+- **Traits**: Act II's adventurers have a trait, a way to play, rather than a bonus. The
+  **Forester**'s is **Timber!**: every 25 kills his next swing fells a Strangled Tree along the
+  ground ahead of him, 8 tiles long, for four times the swing's damage, and his swings cut roots 2
+  tiles further out than they reach.
 - **Class weapons**: every adventurer fights with Melee, Ranged or Magic, and only they can be
   offered their class's weapons. Each class has
   a Very rare one, offered in about one run in twenty, and Rare ones. A new weapon is always
@@ -200,6 +205,7 @@ version and how to run it.
     | Inferno        |                                                  | Toktz-mej-tal (JalTok-Jad)                                                                           |
     | Hallowed Night |                                                  | Inquisitor's mace and Volatile Nightmare staff (The Nightmare)                                       |
     | Phosani's      |                                                  | The Nightmare staff (Phosani's Nightmare)                                                            |
+    | Stranglewood   | The Forester, the Executioner's axe head         |                                                                                                      |
 
 - **Fun maps**: the Grand Exchange, East Varrock, Falador, Last Man Standing, Castle Wars and Pest
   Control are open from the start and always endless. They have no final boss: a new round starts
@@ -210,6 +216,109 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
+- **The Battle for Varrock** (on the Fun tab, its own row: a map to explore): Varrock as it is in
+  OSRS, every house, shop, street, church and the palace where they stand, burnt to ruins. Walls
+  charred, some fallen, some broken down (the Wilderness's ruined walls) and some still burning;
+  roofs, doors and upstairs gone; breaches in the city wall, broken like Falador's crumbling
+  wall; trees burnt, every bush and plant gone, the grass gone to ash; Gypsy Aris's tent and the
+  market's stalls burning. Where the square's fountain stood is a
+  crater, burning at its heart. Fires still burn, flames on their own and never a campfire, with
+  burnt skeletons and the dead raiders of Phosani's Sanctuary and the Theatre of Blood where they
+  fell. Nothing of them is in the way: you walk over the dead and through the fires, and a fire
+  burns you as you do, a twentieth of your hitpoints at once and every half second you stay,
+  through armour. The demons walk through them unharmed. The palace's floor is the floor
+  system's tiles in an ashen skin, up its burnt front steps from its court, with Yama on his
+  throne at its north end, and fires on it too. You start outside the south gate as
+  Justiciar Zachariah, his own model, with his Saradomin sword (the 2h sword's sweep, and its
+  blows land heavy: the ground shakes, and what it hits is knocked back further than a 2h sword's
+  and staggers, held still a moment, though not a boss) and the
+  moves of his fight on buttons (Space and 1 to 4, a pad's bottom button and shoulders, a cluster
+  of buttons on a touch screen): Lunge, Shock wave, Ice barrage, Lightning and the Owl's gaze.
+  The gaze is his ultimate, back every 30 seconds; the others come back in 5 to 14. He stands
+  still while he casts, from the press to the strike, and rising floor can't hurt him mid-lunge:
+  a lunge is a way through Yama's slabs. The
+  Owl's gaze lights everything round him blue-white, and walls, ruins and pillars cast shadows it
+  can't see into: anything in them is spared, and anything it judges is struck by Saradomin's
+  lightning.
+  It opens with a cinematic: close on Yama, who says resistance is futile; the camera pulls back
+  to Sir Prysin and four Varrock guards before his throne; Prysin defies him, Yama answers
+  "Pathetic." and snaps his fingers, and they burn away in Leagues IV's Trailblazer Reloaded
+  death; then the camera flies south over the city to Zachariah and the run begins. Any key,
+  click, tap or controller button skips it, and it plays each time the map's travelled to.
+  Zachariah starts facing into the city. Its music is Sign Here, from Yama's domain, and
+  Forged Through Fire takes over as Yama rises.
+  Yama's demons fill its streets, the hordes of hell: imps at first as any map's first wave, then
+  more and more, until from the eighth minute they're twice the crowd other maps' waves bring,
+  coming twice as fast. Imps, reanimated demon spawn, hellhounds, lesser, revenant, greater and
+  black demons, with an elite a minute from 100 seconds and rings of them now and then. There's no
+  clock and no random events, and no items: no caskets, gear, power-ups, bag or weapons and
+  passives to pick, only bones, coins and food (twice as often as elsewhere, a kill in about 170).
+  Kill them for levels for as long as you like,
+  though they get tougher by the minute. The first few levels come as anywhere, and then each
+  takes more experience, up to six times as much from level 14: each level offers three blessings
+  of Saradomin to choose from, and his strike comes down on you with the one you take (a reroll
+  offers three more). Saradomin's strength
+  (Might, which the Justiciar's buttons hit harder with too), a Saradomin brew (hitpoints, and a
+  third of them back), Saradomin's ward (armour), Holy sandals (speed), a Holy elixir
+  (4 hitpoints a minute), Saradomin's will (buttons back sooner, and the sword faster), a Holy book
+  (experience), a Blessed blade (the Saradomin sword a level up), Saradomin bracers (the sword
+  swings faster), a Saradomin platebody (its blows knock back further and stagger longer), a
+  Saradomin staff (Saradomin Strike,
+  then a level of it) and Zilyana's crossbow (from Saradomin's general, the Armadyl crossbow, then
+  a level of it), and blessings on the buttons: Saradomin's light (all of them harder), Zeal (a
+  longer, harder lunge), Saradomin's crozier (another shock wave either side), Holy water (a
+  bigger ice barrage that holds longer), Saradomin's mjolnir (further, harder lightning) and
+  Saradomin's halo (a wider, harder Owl's gaze). Each comes only so many times, and none is
+  offered twice at once; once fewer than three are left, Saradomin's tears are offered beside
+  them (a little Might, and half your hitpoints back), and then alone. They
+  show in a row under the sword, and on the pause menu. Yama's two
+  generals wait in their ruins from the start, to be fought in either order: step into one's ruin
+  and it wakes, the demons about run from it every way, every way out bursts into fire, and you
+  fight it there with nothing else coming. The timer stops while you do, and the hordes with it:
+  they come back as they were when it woke. Neither is a fight for a fresh hero: on average the
+  first wants about eight minutes of the hordes' levels, the second fifteen, and Yama no more.
+  Die there and the run's over, as it is anywhere. Beat one and Saradomin heals you whole (and
+  everyone still up in co-op), with the hordes still to come; and the other grows stronger: 50% more
+  hitpoints, 30% harder hits, attacks sooner, and an attack of the fallen one's.
+  **Xarth** (13,300 hitpoints), in the middle of the Grand Exchange's pad, stands where he is and
+  burns. The whole pad is his fight, its walls and booths gone, and it's ringed with fire once he
+  wakes. His bolts leave you burning, a stack a bolt up to three (a hitpoint a second each,
+  through armour). Up close he lashes in front of him, his guard down if he misses. Every so often
+  he gathers his flames and they burst over the whole pad, sparing only what's behind one of the
+  eight pillars in a ring round him, which crumbles for it. Halfway down, the pillars come down and
+  the Exchange burns: fire takes the floor and spreads (Shock wave puts it out along its way), his
+  arrows come in fans of five, and six of the dead get up out by the pad's rim and walk in to him,
+  each healing him 4% as it reaches him; when the last is there or dead, what got there goes up
+  over the pad. With K'ril dead first, he casts Zamorak's flames too.
+  **K'ril Tsutsaroth** (8,400), before the altar of the church in the north-east, comes at you
+  down its nave: poison claws, Zamorak's flames where you stand, a bloodrush onto where you were
+  (his guard down if he misses) and a "YARRRRRRR!" smash round him through armour. Every so often
+  he desecrates the church for five seconds and heals 12%, unless you hit him for 6% of his
+  hitpoints meanwhile, which leaves him stunned and open. At 70%, 45% and 20% his bodyguards come,
+  Tstanon Karlak, Zakl'n Gritch and Balfrug Kreeyath, and while any stands he takes half. With
+  Xarth dead first, his claws burn and his bloodrush leaves the ground burning.
+  For a few seconds as the run starts, and again after each general's fight, the top of the screen
+  says what's wanted: find and slay Yama's two generals (with how many are dead), then slay Yama in
+  Varrock Palace. Until both are dead the palace is ringed
+  with fire. As the second falls the camera flies to the palace's front steps and its fire goes
+  out, flame by flame from the middle in a puff of grey dust, everyone held and unhurt and the
+  demons about sent off while it plays (any key, click or tap skips it on your own). Step
+  onto its floor then and Yama wakes: he speaks from his throne, is gone from it in a drift of embers
+  and rises before it, every way off the floor bursts into fire, and you fight him there until he's
+  dead (25,200 hitpoints, in three phases). The floor is his weapon. His stomp ripples rings of
+  slabs out from him, with spokes left down to stand on, and his shadow lanes raise lanes of the
+  floor through where you stand, crossing from his second phase. Close in he claws: step out of it
+  or round him, and a claw that misses leaves his guard down. At range he throws fiery skulls that
+  leave the floor burning. From his second phase he sends void flares after you: slow orbs that
+  burst into a cross of rising floor when their time's up, or when they touch you. Nothing hurts
+  one, but Ice barrage holds it still, its time too, and Lightning breaks a held one, leaving food
+  behind: the fight's only healing. The Owl's gaze can't touch him: he raises four stone pillars
+  against it, and cast within reach of his claw he swats you out of it and well away. From 85% of
+  his hitpoints, at every phase change and every 36 seconds or so (33 and 30 in his later phases,
+  never sooner than the gaze comes back), he calls down a meteor that kills you wherever you
+  stand. The only answer is the gaze cast at him as he calls it, which breaks it in the sky and
+  leaves him open. He never starts one while your gaze is too far from ready. Killing him wins
+  the run, and dying to him ends it.
 - **Boss fights**: a map that's one fight (Phosani's Nightmare, Justiciar Zachariah, Beneath Cursed
   Sands), on the map screen's Bosses tab, open once the map before it has been beaten. Its boss rises as the run begins, there are
   no picks and no items (its adventurer's kit is the whole run), and killing it wins the run as any
@@ -353,6 +462,11 @@ version and how to run it.
     - **The Inferno**: Mor Ul Rek's TzHaar, nibblers, Jal-MejRah bats, Jal-Ak blobs that split
       into three, Jal-ImKot that dig in when left behind and come up near you (slowly, and one
       after another, so you can get away), Jal-Xil, and Jal-Zek that raise the dead.
+    - **The Stranglewood** (Act II, open once the Inferno's beaten): the real wood round
+      Vardorvis's arena, its undergrowth opened up so there's room to fight, with the wood itself
+      round its edge and in thickets. The Strangled, Strangled Boars from 2:00, Strangled Lynxes
+      from 4:00 that rush the last few tiles, and the Strangled Bear, an elite that leaves roots
+      behind it. Played by its **roots** (below).
     - **Hallowed Night** (seasonal, open from the start): crypt rats and ghasts, revenants, the
       afflicted, zombies, skeletons and ghouls, shades and ghosts, the Ankou, mummies and feral
       vampyres.
@@ -389,6 +503,26 @@ version and how to run it.
       and a half tiles. He comes down at the head of the bridge to Blade of Forgotten Justice. It
       can't be endless; it has a hard mode once it's beaten. Beating him finds the Dark squirrel, a
       pet, 1 time in 10, and every time on hard mode.
+- **Act II, the Fallen Empire**: not out yet. Until it is (`ActDef.released`), its tab, the
+  Stranglewood, the Forester and the Executioner's axe head are hidden and the map stays locked;
+  the dev server shows them with `?devtools`. A tab of the map screen beside Bosses, opened by
+  beating the Inferno. Its four maps (the Stranglewood now; the Lassar Undercity, Ghorrock and the Scar shown as
+  coming) are played in any order, each a normal fifteen-minute run with a rule of its own. Each is
+  a step harder for every other Act II map you've beaten: step 0 is a little past the Inferno
+  (enemies 3.9 times the hitpoints, 2.8 times the damage), up to step 3 (4.35 and 3.1), and each
+  step pays 10% more coins. In co-op the host's step counts. A map's best win is kept with the
+  step it was won at, and an easier one shows its step until it's beaten at a harder one.
+- **Roots** (the Stranglewood's rule): from 0:30, roots creep in from the wood, a few fronts at a
+  time, quicker as the run goes on (every 3 seconds at first, every 1.8 by 12:00). A patch about to
+  take root has roots creeping in towards it for a second and a half first; then they take it. On
+  roots you're 25% slower and, after half a second, lose 1% of your hitpoints every half second,
+  and the Strangled are 15% faster. Your hits cut them back: a hit on an enemy standing on roots clears them a tile
+  round it, a kill there a tile and a half, and a sweep or slash clears everything in its arc. Cut
+  ground can take root again from the roots beside it after 15 seconds. From 2:00 a **root heart**
+  (a Large Tendril) comes up at a root front every 75 seconds, three at most: roots near it grow
+  twice as fast, and killing it clears 7 tiles round it, where nothing grows for 40 seconds, and
+  drops an elite casket. The clearing where the run starts is never taken. Left alone the roots
+  close in on it; roots don't block, so you're never stuck, only slowed and hurt.
 - **Raids**: the Theatre of Blood, open from the start. Six rooms one after another: each has five
   waves in a hall on the way through Morytania (the woods outside Canifis, Burgh de Rott,
   Meiyerditch, Darkmeyer, Slepe and Vampyrium, the vampyres' own), and five minutes into the room
@@ -521,6 +655,13 @@ version and how to run it.
     - **The Inferno**: **JalTok-Jad** with his healers, a **Jal-Zek champion** and a
       **TzHaar-Ket champion**; at 15:00 **three JalTok-Jads at once**, each with healers of its
       own, and the run's won when the last of them falls.
+    - **The Stranglewood**: **Kasonde the Craven** at 5:00, who slashes, darts in at you and falls
+      back, and plants a root heart where he first lands; a **great Strangled Bear** at 10:00,
+      charging down lines and rooting the strip it runs, and calling in boars; at 15:00
+      **Vardorvis** rises in his clearing: his strikes, his axes swinging across the ground, his
+      dart and the vines that burst round where it lands, and the roots you left uncut within 8
+      tiles of you erupting. At a third of his hitpoints his head tears free and shoots at you.
+      He drops the Executioner's axe head the first time.
     - **Hallowed Night**: **Slash Bash**, whose disease stacks up to four times and whose bile leaves
       pools for 7 seconds, and **The Mimic**, which lies on the map as a master casket until you walk
       onto it or 25 seconds pass, then bites, flings candy that brings its Third Age minions, and

@@ -27,6 +27,8 @@ const SHIPPED_HASHES: Record<string, string> = {
     tombs_of_amascut: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
     // The raid's squares under the quest's id: the same build
     beneath_cursed_sands: "5c8af37f8d7dd69e1ba682d4b3910d780a2f5a5be76e62e556eba8cd3700d722",
+    stranglewood: "581d3b3b950694fc7397adcddc354532df95a50f6b9919dfaaebbb410d99ce89",
+    battle_for_varrock: "437af27aa0cd7ad401d4f91f7aea4e726064c7fa436bccc50c2b49357b165d66",
 };
 
 const check = !!process.env.CHECK;

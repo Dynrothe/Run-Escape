@@ -68,6 +68,7 @@ function createChoice(changes: Partial<ChoiceView> = {}): ChoiceView {
         isEvolution: false,
         isHilt: false,
         isSpell: false,
+        isBlessing: false,
         isKeris: false,
         banishable: false,
         banished: false,

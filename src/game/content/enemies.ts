@@ -2,12 +2,17 @@ import { NPC_IDLE_SEQ, NPC_WALK_SEQ } from "../../mapviewer/webgl/actor/ActorBak
 import { tr } from "../i18n";
 import { CURSED_SANDS_ENEMIES } from "./cursedSands";
 import { FUN_ENEMIES } from "./fun/enemies";
+import { KRIL_ENEMIES } from "./kril";
 import { NIGHTMARE_ENEMIES } from "./nightmare";
 import { PHOSANI_ENEMIES } from "./phosani";
+import { STRANGLEWOOD_ENEMIES } from "./stranglewood";
 import { THANKSGIVING_ENEMIES } from "./thanksgivingenemies";
 import { getTheatreBosses } from "./theatre";
 import { TOMBS_ENEMIES } from "./tombs";
 import { BossAttackDef, EnemyDef, PlayerEffectDef } from "./types";
+import { VARROCK_ENEMIES } from "./varrockHordes";
+import { XARTH_ENEMIES } from "./xarth";
+import { YAMA_ENEMIES } from "./yama";
 import { ZACHARIAH_ENEMIES } from "./zachariah";
 
 // Animation ids come from scripts/cache/find-npc-seqs.ts and
@@ -8400,6 +8405,13 @@ export const ENEMIES: EnemyDef[] = [
     ...NIGHTMARE_ENEMIES,
     ...PHOSANI_ENEMIES,
     ...ZACHARIAH_ENEMIES,
+    // Yama, in burnt Varrock's palace (yama.ts), his generals (xarth.ts, kril.ts) and the city's
+    // hordes (varrockHordes.ts)
+    ...YAMA_ENEMIES,
+    ...XARTH_ENEMIES,
+    ...KRIL_ENEMIES,
+    ...VARROCK_ENEMIES,
+    ...STRANGLEWOOD_ENEMIES,
     ...THANKSGIVING_ENEMIES,
 ];
 

@@ -1,0 +1,978 @@
+import {
+    BREACH_BRICKS,
+    BROKEN_CITY_WALL,
+    getCharredLoc,
+    getWalkableLoc,
+} from "../../../rs/config/loctype/LocOverrides";
+import { Ground } from "../Ground";
+import { assertReachable, sealFrom } from "../collision";
+import {
+    MAP_SQUARE_SIZE,
+    type PlacedLoc,
+    TILE_BLOCKED,
+    TILE_BRIDGE,
+    type TileGrid,
+} from "../format";
+import type { GeneratedMap } from "../generator";
+import { createNoise } from "../noise";
+import { cutPrefab } from "../prefab";
+import type { BuildContext, LocInfo, MapPoint, MapRecipe } from "../recipe";
+import { type RuinReport, ruinGrid, tileHash } from "../ruins";
+
+// The Battle for Varrock (content/explore.ts): Varrock as it is in OSRS, tile for tile, burnt to
+// ruins. The whole city is cut from the cache with the country round it (map squares 48 to 52 by
+// 51 to 55, the middle three by three the arena), and put through ruins.ts: its houses, shops,
+// churches and palace stand where they stood with their walls charred, some fallen and some
+// broken down (the Wilderness's ruined walls), roofs, doors and upstairs gone; its trees burnt,
+// its gardens burnt off, its streets and squares gone to soot and its grass to ash. The city wall
+// stands, burnt, breached and its stone piled in the gaps. Where the square's fountain stood
+// there's a crater, still burning at its heart. Over that: fires, which burn whoever walks into
+// them, burnt skeletons, rubble, and the dead adventurers of Phosani's Sanctuary and the Theatre
+// of Blood (the Theatre's raiders), the fires and the dead blocking nothing. The
+// palace's floor is gone, and the game lays its own in its place (MapDef.floor, the floor system's
+// tiles in an ashen skin) from the top of its front steps, with Yama on his throne at its north
+// end. The run starts just outside the south gate.
+
+const MAP_X = 72;
+const MAP_Y = 164;
+const SQUARES = 5;
+const MARGIN = 1;
+const SIZE = SQUARES * MAP_SQUARE_SIZE;
+
+// The real world under the grid's south-west corner: map square 48, 51
+const REAL_X = 48 * MAP_SQUARE_SIZE;
+const REAL_Y = 51 * MAP_SQUARE_SIZE;
+
+const toGrid = (realX: number, realY: number) => ({ x: realX - REAL_X, y: realY - REAL_Y });
+
+// Just outside the south gate, on the road in (the gate's the gap in the wall at 3210 to 3212,
+// 3381)
+const START = toGrid(3211, 3377);
+// Varrock Square, south of its crater, and the palace's front court
+const SQUARE = toGrid(3212, 3422);
+const PALACE_COURT = toGrid(3212, 3460);
+
+// The palace's floor, which the game draws (MapDef.floor): a row a string, the north row
+// first, from PALACE_FLOOR_RECT's south-west corner. "#" is floor, "." isn't (the outside
+// round the palace's corners, which the floor's box blocks). Its stone in the cache (overlay
+// 171), its east stair hall and its middle garden, from the top of its front steps (3467) to
+// 3226, 3497. The floor's tiles are flat, each at the ground's height at its middle, so it stops
+// at the steps: across them its rows stood at three heights with the slope showing between.
+// The court and the steps up from it are the ground's, burnt like the rest.
+export const PALACE_FLOOR_RECT_REAL = { x0: 3200, y0: 3467, x1: 3226, y1: 3497 };
+export const PALACE_FLOOR_ASCII: string[] = [
+    "#########################..",
+    "#########################..",
+    "#########################..",
+    ".########################..",
+    ".########################..",
+    ".########################..",
+    ".########################..",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    ".##########################",
+    "###########################",
+    "##########################.",
+    "###########################",
+    "##########################.",
+    "##########################.",
+    ".########################..",
+    ".########################..",
+    ".########################..",
+];
+
+// Yama on his throne, at the north end of the palace's floor, facing south down it: the cache's
+// npc 15645 (his throne 9832 and him 9434, sitting with 12153), made small. The game draws him
+// (MapDef.props: his sitting is skeletal, which a loc can't play); the map blocks where he sits,
+// YAMA_SIZE tiles from YAMA.
+const YAMA = toGrid(3211, 3494);
+const YAMA_SIZE = { x: 5, y: 3 };
+// His npc is 7 tiles across; at 0.6 he's about 4
+export const YAMA_SCALE = 0.6;
+// Woken, he rises before his throne (content/yama.ts, MapDef.lair), and the fight starts the
+// player this far south of him, by the floor's middle
+const YAMA_RISE = { x: YAMA.x + 2, y: YAMA.y - 4 };
+
+// Yama's generals (content/xarth.ts, content/kril.ts), each asleep in a ruin of its own (real
+// tiles). Xarth in the middle of the Grand Exchange's pad, where its counter stood, and the whole
+// pad his: the raised deck the Exchange stands on (a bridge's level in the cache), thirty-four
+// tiles across. Everything that stood on it is gone (clearExchange): its inner ring's walls, its
+// booths and the storey over them. Eight of the Fractured Archive's pillars stand where the ring's
+// walls stood.
+export const EXCHANGE_PAD_REAL = { x0: 3148, y0: 3473, x1: 3181, y1: 3506 };
+// The pad's rows, the north row first: how many tiles each is cut in from either side (the
+// deck's tiles in the cache, which buildVarrockDetail holds it to)
+const EXCHANGE_PAD_CUTS = [
+    11, 9, 7, 5, 4, 3, 3, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 5, 7,
+    9, 11,
+];
+export const EXCHANGE_PAD_ROWS = EXCHANGE_PAD_CUTS.map((cut) => {
+    const across = EXCHANGE_PAD_REAL.x1 - EXCHANGE_PAD_REAL.x0 + 1;
+    return ".".repeat(cut) + "#".repeat(across - cut * 2) + ".".repeat(cut);
+});
+const XARTH_REAL = { x: 3165, y: 3490 };
+// South-west tiles, 2 by 2: a ring ten tiles out, each on what was a run of the ring's wall, so
+// a pillar's shadow from him is a short run from anywhere on the pad and reaches its rim
+const EXCHANGE_PILLARS_REAL = [
+    { x: 3160, y: 3480 },
+    { x: 3168, y: 3480 },
+    { x: 3173, y: 3485 },
+    { x: 3173, y: 3493 },
+    { x: 3168, y: 3498 },
+    { x: 3160, y: 3498 },
+    { x: 3155, y: 3493 },
+    { x: 3155, y: 3485 },
+];
+// K'ril Tsutsaroth before the altar of the church in the north-east of the city, its nave his:
+// eight tiles across from its south door to its altar, eighteen long.
+export const CHURCH_NAVE_REAL = { x0: 3252, y0: 3471, x1: 3259, y1: 3488 };
+const KRIL_REAL = { x: 3256, y: 3483 };
+const YAMA_START = { x: YAMA_RISE.x, y: YAMA_RISE.y - 9 };
+
+// What the conversion leaves standing, by name: the square's fountain, the churches' altars and
+// the like are what make it Varrock (the market's stalls burnt: burnFabric)
+const LANDMARK = /fountain|statue|anvil|altar|well|bank booth|staircase|ladder|sign/i;
+
+// Fires: the cache's flames on their own (25156, the big fire's, and 32297); its big fire (25155,
+// 2 by 2); burning timber (Burning driftwood, 2 by 2); burning bones; and a wall of flame (a wall
+// loc) where a wall burnt down. Each blocks nothing (32297 and the bones as the cache has them, the
+// rest walkable copies: LocOverrides.ts), and burns whoever walks into it (MapDef.burns). Nothing
+// on crossed logs or in a ring of stones (5249, 5499's flame, 4265, 4266): those are campfires,
+// someone's camp rather than a city burning.
+export const FLAMES = getWalkableLoc(25156);
+export const TALL_FLAMES = 32297;
+export const BLAZE = getWalkableLoc(25155);
+const FIRE = [FLAMES, TALL_FLAMES];
+export const BURNING_TIMBER = getWalkableLoc(31722);
+export const BURNING_BONES = 3862;
+export const WALL_OF_FLAME = getWalkableLoc(4765);
+// Every fire the map places, for what burns and what's lit
+export const FIRES = [FLAMES, TALL_FLAMES, BLAZE, BURNING_TIMBER, BURNING_BONES, WALL_OF_FLAME];
+// Beside Yama's throne
+export const BRAZIER = 28818;
+
+// Loc types
+const LOC_NORMAL = 10;
+const LOC_FLOOR_DECORATION = 22;
+const WALL_TYPES = new Set([0, 1, 2, 3, 9]);
+// The cache's "inside" tile flag (a roof over it)
+const TILE_INSIDE = 0x4;
+
+// Broken walls: the Wilderness's ruins' own (the ruin west of the Dark Warriors' Fortress is
+// 14622 to 14627), dark stone broken off at its top (14623, a corner too), a stub (14624, a
+// corner post and a diagonal too) and a stub with a corner (14632's, which the Wilderness also
+// places). Varrock's walls are its grey stone, which burnt comes out as dark as these.
+const CRUMBLED = {
+    high: { 0: 14623, 1: 14632, 2: 14623, 3: 14624, 9: 14624 },
+    low: { 0: 14624, 1: 14632, 2: 14632, 3: 14624, 9: 14624 },
+    // The straight one broken off near its top is whole at its north end at rotation 0 and steps
+    // down to its south; the ruin lays it with 14625, its model mirrored, so each whole end meets
+    // a wall standing or another's whole end (ruins.ts pairBroken)
+    mirrors: { 14623: 14625 },
+};
+// The same ruins' stones on the ground along a wall's foot (blocking nothing), and their pile of
+// stone
+const FALLEN_STONES = [14628, 14629];
+const STONE_PILE = 14631;
+
+// Plants with no name, which the plant rule can't find: blue flowers (2732, 2781), potted
+// plants (4496, 4498, 4499) and the palace's roses (23617 to 23620)
+const NAMELESS_PLANTS = [2732, 2781, 4496, 4498, 4499, 23617, 23618, 23619, 23620];
+// The palace's front steps, which the ground under them climbs
+const PALACE_STEPS = 23884;
+// What rests on or hangs from the walls round it, off the ground: the decks over the city's and
+// the palace's gateways (23784 to 23793), lintels over doors, a beam (11540), shelves (3030,
+// 3031) and a mounted dragon's head (17485). Found by their models' lowest points: every loc
+// that's off the ground is in this list or beside walls standing whole.
+const WALL_TOPS = [
+    23784, 23785, 23786, 23787, 23788, 23789, 23790, 23791, 23792, 23793, 3189, 9585, 23752, 23909,
+    11540, 3030, 3031, 17485,
+];
+
+const RULES = {
+    seed: 3482,
+    wallScale: 7,
+    fallen: 0.62,
+    broken: 0.47,
+    crumbled: CRUMBLED,
+    fallenStones: { ids: FALLEN_STONES, share: 0.5 },
+    breaches: 0.5,
+    // Falador's broken west wall, burnt (LocOverrides.ts BROKEN_CITY_WALL)
+    breachEnds: { walls: BROKEN_CITY_WALL, bricks: BREACH_BRICKS },
+    steps: [PALACE_STEPS],
+    tops: WALL_TOPS,
+    wallTopsKept: 0.5,
+    furnitureKept: 0.3,
+    // Grass, earth and the rest to ash and scorched ground, mottled
+    underlays: (() => {
+        const ash = createNoise(77, 3);
+        // Pale ash, grey ash and scorched brown earth
+        const ASH = [130, 175, 94, 197, 55, 197];
+        return (underlay: number, x: number, y: number) => {
+            const n = Math.min(0.999, Math.max(0, ash(x / 9, y / 9)));
+            return ASH[Math.floor(n * ASH.length)];
+        };
+    })(),
+    // Varrock's paving (171) and paths (173) to soot, wooden floors (81) charred, and nothing
+    // left hidden
+    overlays: {
+        171: 82,
+        173: 83,
+        172: 83,
+        81: 90,
+        89: 90,
+        22: 90,
+        80: 90,
+        60: 90,
+        14: 90,
+        108: 90,
+        163: 50,
+        56: 2,
+        4: 10,
+        3: 2,
+        8: 2,
+        // The hidden floor (it draws nothing), under walls that may have fallen
+        42: 0,
+        61: 0,
+    } as Record<number, number>,
+    // The walls' walkways and the bridges' decks charred, as dark as the walls
+    walkways: 90,
+    // A burnt tree for each: the cache's Burnt trees (Morytania's), a third of them burnt to
+    // nothing (each is hundreds of triangles, and the country round the city's thick with them)
+    burntTrees: { 1: [30854], 2: [30852, 30853] },
+    treesKept: 0.65,
+    // Trees but their stumps, and every plant (a farming patch is its weeds)
+    tree: /tree(?! stump)|^oak$|^willow$|^yew$|^maple$|^magic tree$/i,
+    plant: /bush|plant|flower|fern|hedge|shrub|daisies|roses|tulip|weeds|cabbage|potato|wheat|grass|thistle|nettle|bullrush|onion|cactus|heather|lily|ivy|vine|patch|hops|barley|snowdrop|delphinium|belladonna|carrot/i,
+    plants: NAMELESS_PLANTS,
+    gone: /door|gate|curtain|banner|torch|candle|lamp|lantern|window|washing|cloth|rug/i,
+    // Walls of flame where a tenth of the fallen straight walls stood
+    burning: { wall: WALL_OF_FLAME, share: 0.12 },
+};
+
+// The dressing. Fires that burn on (the cache's, animated), burnt skeletons (the cache's
+// skeletons, charred), Phosani's Sanctuary's and the Theatre's dead raiders (a skeleton in
+// armour, the mercenaries' bodies), rubble and burnt rock underfoot. The dead lie on the ground,
+// so they're walked over (walkable copies).
+const BURNT_SKELETONS = [5358, 5359, 5360].map((id) => getWalkableLoc(getCharredLoc(id)));
+const CHARRED_BONES = 659;
+// [id, tiles across, tiles deep]
+const DEAD_ADVENTURERS: [number, number, number][] = [
+    [getWalkableLoc(32735), 2, 1],
+    [getWalkableLoc(32742), 2, 1],
+    [getWalkableLoc(32741), 2, 1],
+    [getWalkableLoc(32754), 1, 1],
+];
+const EXHUMED = 32743;
+const RUBBLE = [12812, 12813, 12814, 12815].map(getCharredLoc);
+const ASH_UNDERFOOT = [26844, 26850, 26856];
+
+// The crater where the square's fountain stood (3210 to 3215, 3426 to 3431): a bowl in the
+// ground round the fountain's middle (a corner), CRATER_RADIUS tiles across to its lip,
+// CRATER_DEPTH height units deep (8 to a byte, 128 to a tile) under a raised lip, ash and soot
+// in it, burning at its heart (the cache's crater, 26838, molten in its middle: lit, MapDef
+// lighting), with the square's dead and the fountain's stone round it. All of it walkable but
+// its heart.
+const CRATER = toGrid(3213, 3429);
+const CRATER_RADIUS = 5.5;
+const CRATER_DEPTH = 24;
+const CRATER_LIP = 4;
+export const CRATER_HEART = 26838;
+// Its ground, underlays so they blend into each other: embers at its heart, scorched dark red
+// round it, charcoal in the bowl
+const CRATER_EMBERS = 238;
+const CRATER_SCORCH = 167;
+const CRATER_SOOT = [35, 212];
+// Round it, from its middle in tiles: [id, dx, dy, type]. Its heart is 2 by 2, on the middle.
+const CRATER_DRESSING: [number, number, number, number][] = [
+    [CRATER_HEART, -1, -1, 10],
+    // The fountain's stone, on the lip
+    [STONE_PILE, -5, 1, 10],
+    [STONE_PILE, 4, -4, 10],
+    [getCharredLoc(12812), 1, 4, 10],
+    [getCharredLoc(12813), -4, -4, 10],
+    [getCharredLoc(12814), 4, 2, 10],
+    [STONE_PILE, -1, 5, 10],
+    [getCharredLoc(12815), 5, -1, 10],
+    // Those caught in it, in the bowl
+    [BURNT_SKELETONS[0], -3, -1, 10],
+    [BURNT_SKELETONS[1], 2, 2, 10],
+    [BURNT_SKELETONS[2], -2, 3, 10],
+    [getCharredLoc(CHARRED_BONES), 2, -3, 10],
+    [getCharredLoc(CHARRED_BONES), -3, 2, 10],
+    [BURNING_BONES, 0, -3, 10],
+    // Fires on its lip
+    [FIRE[1], -5, -2, 10],
+    [FIRE[1], 5, 0, 10],
+];
+
+// Whether a tile's middle is within the crater's lip, or this much past it
+function inCrater(x: number, y: number, past = 0): boolean {
+    return Math.hypot(x + 0.5 - CRATER.x, y + 0.5 - CRATER.y) < CRATER_RADIUS + past;
+}
+
+// The crater: the fountain and all that stood there gone (the water's plane, upstairs, too),
+// the ground dug out and scorched, and its own dressing
+function makeCrater(grid: TileGrid, locs: (id: number) => LocInfo, report: VarrockDressing): void {
+    const reach = CRATER_RADIUS + 1.5;
+    grid.locs = grid.locs.filter((loc) => {
+        const info = locs(loc.id);
+        const turned = (loc.rotation & 1) === 1;
+        const sx = WALL_TYPES.has(loc.type) ? 1 : turned ? info.sizeY : info.sizeX;
+        const sy = WALL_TYPES.has(loc.type) ? 1 : turned ? info.sizeX : info.sizeY;
+        for (let y = loc.y; y < loc.y + sy; y++) {
+            for (let x = loc.x; x < loc.x + sx; x++) {
+                if (inCrater(x, y, reach - CRATER_RADIUS)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    });
+    const level0 = grid.levels[0];
+    const corners = SIZE + 1;
+    const r0 = Math.ceil(CRATER_RADIUS + 4);
+    for (let y = CRATER.y - r0; y <= CRATER.y + r0; y++) {
+        for (let x = CRATER.x - r0; x <= CRATER.x + r0; x++) {
+            // The ground, at the corners: a bowl, and a lip round it that falls back to the square
+            const d = Math.hypot(x - CRATER.x, y - CRATER.y) / CRATER_RADIUS;
+            const bowl = d < 1 ? CRATER_DEPTH * (1 - d * d) : 0;
+            const out = ((d - 1) * CRATER_RADIUS) / 1.4;
+            const lip = CRATER_LIP * Math.exp(-out * out);
+            const c = x + y * corners;
+            level0.heights[c] = Math.max(0, Math.round(level0.heights[c] - bowl + lip));
+            // The square's paving blown off round it, raggedly, out to 3 tiles past the lip
+            const i = x + y * SIZE;
+            if (!inCrater(x, y, 1)) {
+                if (inCrater(x, y, 3) && !inCrater(x, y, 0.5 + tileHash(x, y, 54) * 2.5)) {
+                    continue;
+                }
+                if (inCrater(x, y, 3) && level0.overlays[i] !== 0) {
+                    level0.overlays[i] = level0.shapes[i] = 0;
+                    level0.underlays[i] = RULES.underlays(1, x, y);
+                }
+                continue;
+            }
+            // The tiles: open, nothing over them, soot in the bowl and scorched round its heart
+            level0.flags[i] &= ~TILE_BLOCKED;
+            for (let level = 1; level < grid.levels.length; level++) {
+                const tiles = grid.levels[level];
+                tiles.flags[i] = 0;
+                tiles.overlays[i] = tiles.underlays[i] = 0;
+            }
+            // Ragged, not in rings: each tile's a little nearer or further from the middle
+            const middle =
+                Math.hypot(x + 0.5 - CRATER.x, y + 0.5 - CRATER.y) + tileHash(x, y, 52) * 1.4 - 0.7;
+            level0.overlays[i] = level0.shapes[i] = 0;
+            level0.underlays[i] =
+                middle < 1.8
+                    ? CRATER_EMBERS
+                    : middle < 3
+                      ? CRATER_SCORCH
+                      : middle < CRATER_RADIUS - 0.3
+                        ? CRATER_SOOT[Math.floor(tileHash(x, y, 53) * CRATER_SOOT.length)]
+                        : RULES.underlays(1, x, y);
+        }
+    }
+    for (const [id, dx, dy, type] of CRATER_DRESSING) {
+        const rotation = type === LOC_NORMAL ? Math.floor(tileHash(dx, dy, 51) * 4) : 0;
+        grid.locs.push({ id, type, rotation, level: 0, x: CRATER.x + dx, y: CRATER.y + dy });
+        report.crater++;
+    }
+}
+
+const POINTS: MapPoint[] = [
+    { name: "the south gate", ...START },
+    { name: "Varrock Square", ...SQUARE },
+    { name: "the palace's court", ...PALACE_COURT },
+    { name: "before Yama's throne", x: YAMA.x + 1, y: YAMA.y - 3 },
+    { name: "where Yama rises", ...YAMA_RISE },
+    { name: "where his fight starts", ...YAMA_START },
+    { name: "Xarth in the Grand Exchange", ...toGrid(XARTH_REAL.x, XARTH_REAL.y - 3) },
+    { name: "K'ril Tsutsaroth in the church", ...toGrid(KRIL_REAL.x, KRIL_REAL.y - 3) },
+];
+
+const DECKS_BLOCKED = [{ ...toGrid(3285, 3468), x1: 3285 - REAL_X, y1: 3469 - REAL_Y }].map(
+    ({ x, y, x1, y1 }) => ({ x0: x, y0: y, x1, y1 }),
+);
+
+const ARENA = {
+    x0: MARGIN * MAP_SQUARE_SIZE,
+    y0: MARGIN * MAP_SQUARE_SIZE,
+    x1: (SQUARES - MARGIN) * MAP_SQUARE_SIZE - 1,
+    y1: (SQUARES - MARGIN) * MAP_SQUARE_SIZE - 1,
+};
+
+const PALACE = {
+    x0: PALACE_FLOOR_RECT_REAL.x0 - REAL_X,
+    y0: PALACE_FLOOR_RECT_REAL.y0 - REAL_Y,
+    x1: PALACE_FLOOR_RECT_REAL.x1 - REAL_X,
+    y1: PALACE_FLOOR_RECT_REAL.y1 - REAL_Y,
+};
+
+// Whether a grid tile is the palace's floor (PALACE_FLOOR_ASCII)
+export function isPalaceFloor(x: number, y: number): boolean {
+    if (x < PALACE.x0 || x > PALACE.x1 || y < PALACE.y0 || y > PALACE.y1) {
+        return false;
+    }
+    const row = PALACE_FLOOR_ASCII[PALACE.y1 - y];
+    return row !== undefined && row[x - PALACE.x0] === "#";
+}
+
+// Whether a wall stands between two of the palace's floor tiles (one of its rooms' walls,
+// which fell with the floor) rather than round its edge
+function isPalaceInside(loc: PlacedLoc): boolean {
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            if (!isPalaceFloor(loc.x + dx, loc.y + dy)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// The palace before the conversion: everything on its floor goes (its rooms' walls, furniture
+// and floor decoration), the floor's laid by the game. Its outer walls stay for the ruin rules.
+function clearPalace(grid: TileGrid): void {
+    grid.locs = grid.locs.filter((loc) => {
+        if (loc.level !== 0) {
+            return true;
+        }
+        if (WALL_TYPES.has(loc.type)) {
+            return !isPalaceInside(loc);
+        }
+        return !isPalaceFloor(loc.x, loc.y);
+    });
+}
+
+// Whether a grid tile is on the Grand Exchange's pad (EXCHANGE_PAD_ROWS), where Xarth's fought
+function isPad(x: number, y: number): boolean {
+    const { x0, y0, x1, y1 } = EXCHANGE_PAD_REAL;
+    const [rx, ry] = [x + REAL_X, y + REAL_Y];
+    if (rx < x0 || rx > x1 || ry < y0 || ry > y1) {
+        return false;
+    }
+    return EXCHANGE_PAD_ROWS[y1 - ry][rx - x0] === "#";
+}
+
+// The Grand Exchange's pad, Xarth's arena: open, nothing on it but its floor, before the ruin
+// rules see it. It's a deck (a bridge's level over the ground): what stood on it is on the deck's
+// level and over it (its inner ring's walls and pillars, the booths round its counter, the
+// storey over them), and all of that goes; its paving is the ground level's locs under the deck,
+// which stay. Nothing's blocked on either level. Throws unless EXCHANGE_PAD_ROWS are the deck's
+// tiles.
+function clearExchange(grid: TileGrid, locs: (id: number) => LocInfo): void {
+    const { x0, y0, x1, y1 } = EXCHANGE_PAD_REAL;
+    for (let y = y0 - REAL_Y; y <= y1 - REAL_Y; y++) {
+        for (let x = x0 - REAL_X; x <= x1 - REAL_X; x++) {
+            const i = x + y * SIZE;
+            const deck = (grid.levels[1].flags[i] & TILE_BRIDGE) !== 0;
+            if (deck !== isPad(x, y)) {
+                throw new Error(
+                    `The Grand Exchange's pad isn't its deck at ${x + REAL_X}, ${y + REAL_Y}`,
+                );
+            }
+            if (deck) {
+                grid.levels[0].flags[i] &= ~TILE_BLOCKED;
+                grid.levels[1].flags[i] &= ~TILE_BLOCKED;
+            }
+        }
+    }
+    grid.locs = grid.locs.filter(
+        (loc) =>
+            !isPad(loc.x, loc.y) ||
+            (loc.level === 0 && !WALL_TYPES.has(loc.type) && locs(loc.id).clipType === 0),
+    );
+}
+
+// Whether a grid tile is in the church's nave, south of K'ril's spot before the altar
+function isNave(x: number, y: number): boolean {
+    const { x0, y0, x1 } = CHURCH_NAVE_REAL;
+    return x >= x0 - REAL_X && x <= x1 - REAL_X && y >= y0 - REAL_Y && y <= KRIL_REAL.y - REAL_Y;
+}
+
+// The church's pews, burnt away down to the altar: K'ril comes down its nave, and he's three
+// tiles across, wider than the aisle they leave. Its walls stay. A tile of it is blocked in
+// OSRS with nothing on it, which goes too.
+function clearNave(grid: TileGrid): void {
+    const { x0, y0, x1 } = CHURCH_NAVE_REAL;
+    for (let y = y0 - REAL_Y; y <= KRIL_REAL.y - REAL_Y; y++) {
+        for (let x = x0 - REAL_X; x <= x1 - REAL_X; x++) {
+            grid.levels[0].flags[x + y * SIZE] &= ~TILE_BLOCKED;
+        }
+    }
+    grid.locs = grid.locs.filter(
+        (loc) => loc.level !== 0 || loc.type !== LOC_NORMAL || !isNave(loc.x, loc.y),
+    );
+}
+
+// Tiles taken by a loc that blocks, or by a wall, for the dressing to keep off
+function getTaken(
+    grid: TileGrid,
+    locs: (id: number) => LocInfo,
+): {
+    taken: Uint8Array;
+    walled: Uint8Array;
+} {
+    const taken = new Uint8Array(SIZE * SIZE);
+    const walled = new Uint8Array(SIZE * SIZE);
+    for (const loc of grid.locs) {
+        if (loc.level !== 0) {
+            continue;
+        }
+        if (WALL_TYPES.has(loc.type)) {
+            walled[loc.x + loc.y * SIZE] = 1;
+            continue;
+        }
+        const info = locs(loc.id);
+        const turned = (loc.rotation & 1) === 1;
+        const sx = turned ? info.sizeY : info.sizeX;
+        const sy = turned ? info.sizeX : info.sizeY;
+        for (let y = loc.y; y < loc.y + sy && y < SIZE; y++) {
+            for (let x = loc.x; x < loc.x + sx && x < SIZE; x++) {
+                taken[x + y * SIZE] = 1;
+            }
+        }
+    }
+    return { taken, walled };
+}
+
+export type VarrockDressing = {
+    fires: number;
+    skeletons: number;
+    adventurers: number;
+    rubble: number;
+    crater: number;
+    ruins: RuinReport;
+};
+
+function dress(grid: TileGrid, locs: (id: number) => LocInfo, report: VarrockDressing): void {
+    const { taken, walled } = getTaken(grid, locs);
+    const level0 = grid.levels[0];
+    const open = (x: number, y: number) => {
+        if (x < ARENA.x0 || y < ARENA.y0 || x > ARENA.x1 || y > ARENA.y1) {
+            return false;
+        }
+        const i = x + y * SIZE;
+        return !taken[i] && (level0.flags[i] & TILE_BLOCKED) === 0 && level0.overlays[i] !== 6;
+    };
+    // Clear of walls and anything solid all round, so nothing solid closes a way through
+    const clearAround = (x: number, y: number, sx: number, sy: number) => {
+        for (let ty = y - 1; ty <= y + sy; ty++) {
+            for (let tx = x - 1; tx <= x + sx; tx++) {
+                const i = tx + ty * SIZE;
+                if (!open(tx, ty) || walled[i]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+    // The streets' own paving stays clear of anything solid
+    const street = (x: number, y: number) => {
+        const o = level0.overlays[x + y * SIZE];
+        return o === 82 || o === 83;
+    };
+    const put = (id: number, x: number, y: number, sx: number, sy: number, type = LOC_NORMAL) => {
+        grid.locs.push({ id, type, rotation: Math.floor(tileHash(x, y, 9) * 4), level: 0, x, y });
+        if (type !== LOC_FLOOR_DECORATION) {
+            for (let ty = y; ty < y + sy; ty++) {
+                for (let tx = x; tx < x + sx; tx++) {
+                    taken[tx + ty * SIZE] = 1;
+                }
+            }
+        }
+    };
+    const pick = <T>(list: T[], x: number, y: number, salt: number): T =>
+        list[Math.floor(tileHash(x, y, salt) * list.length)];
+    for (let y = ARENA.y0; y <= ARENA.y1; y++) {
+        for (let x = ARENA.x0; x <= ARENA.x1; x++) {
+            // The gate's clear for the start, the palace is dressed on its own, and the nave
+            // and the Exchange's pad are kept clear for K'ril and Xarth (his fire on the pad is
+            // his own, which Shock wave puts out)
+            const nearStart = Math.abs(x - START.x) < 5 && Math.abs(y - START.y) < 5;
+            if (!open(x, y) || isPalaceFloor(x, y) || isNave(x, y) || isPad(x, y) || nearStart) {
+                continue;
+            }
+            const inside = (level0.flags[x + y * SIZE] & TILE_INSIDE) !== 0;
+            const roll = tileHash(x, y, 21);
+            // Fires burn on in what's left of the houses, and now and then in the street
+            if (roll < (inside ? 0.03 : 0.004)) {
+                const timber = tileHash(x, y, 6) < 0.5;
+                if (timber && clearAround(x, y, 2, 2)) {
+                    put(BURNING_TIMBER, x, y, 2, 2);
+                    report.fires++;
+                } else if (clearAround(x, y, 1, 1)) {
+                    put(pick(FIRE, x, y, 1), x, y, 1, 1);
+                    report.fires++;
+                }
+                continue;
+            }
+            // Bones still burning, here and there
+            if (roll > 0.3 && roll < 0.3 + (inside ? 0.006 : 0.0015)) {
+                put(BURNING_BONES, x, y, 1, 1);
+                report.skeletons++;
+                continue;
+            }
+            if (street(x, y)) {
+                // The fallen, where they fell in the street
+                if (roll > 0.9965 && clearAround(x, y, 1, 1)) {
+                    put(pick(BURNT_SKELETONS, x, y, 2), x, y, 1, 1);
+                    report.skeletons++;
+                } else if (roll > 0.993 && roll <= 0.9965) {
+                    put(CHARRED_BONES, x, y, 1, 1);
+                    report.skeletons++;
+                } else if (roll > 0.9915 && roll <= 0.993) {
+                    put(EXHUMED, x, y, 1, 1, LOC_FLOOR_DECORATION);
+                    report.adventurers++;
+                }
+                continue;
+            }
+            if (inside) {
+                if (roll > 0.955 && clearAround(x, y, 1, 1)) {
+                    put(pick(RUBBLE, x, y, 3), x, y, 1, 1);
+                    report.rubble++;
+                } else if (roll > 0.94 && roll <= 0.955 && clearAround(x, y, 1, 1)) {
+                    put(pick(BURNT_SKELETONS, x, y, 2), x, y, 1, 1);
+                    report.skeletons++;
+                }
+                continue;
+            }
+            // Out on the ash: the raiders' dead, burnt skeletons, burnt rock underfoot
+            if (roll > 0.9965) {
+                const [id, sx, sy] = pick(DEAD_ADVENTURERS, x, y, 4);
+                if (clearAround(x, y, sx, sy)) {
+                    grid.locs.push({ id, type: LOC_NORMAL, rotation: 0, level: 0, x, y });
+                    for (let ty = y; ty < y + sy; ty++) {
+                        for (let tx = x; tx < x + sx; tx++) {
+                            taken[tx + ty * SIZE] = 1;
+                        }
+                    }
+                    report.adventurers++;
+                }
+            } else if (roll > 0.993 && clearAround(x, y, 1, 1)) {
+                put(pick(BURNT_SKELETONS, x, y, 2), x, y, 1, 1);
+                report.skeletons++;
+            } else if (roll > 0.95) {
+                put(pick(ASH_UNDERFOOT, x, y, 5), x, y, 1, 1, LOC_FLOOR_DECORATION);
+            }
+        }
+    }
+}
+
+// The palace's floor: its own fires and dead along the walls, rubble where its rooms stood, and
+// Yama on his throne at the north end
+function dressPalace(grid: TileGrid, report: VarrockDressing): void {
+    // Where he sits is blocked ground, as he blocks nothing himself
+    for (let y = YAMA.y; y < YAMA.y + YAMA_SIZE.y; y++) {
+        for (let x = YAMA.x; x < YAMA.x + YAMA_SIZE.x; x++) {
+            grid.levels[0].flags[x + y * SIZE] |= TILE_BLOCKED;
+        }
+    }
+    // A burning brazier either side of him, so he's lit
+    for (const dx of [-2, 6]) {
+        grid.locs.push({
+            id: BRAZIER,
+            type: LOC_NORMAL,
+            rotation: 0,
+            level: 0,
+            x: YAMA.x + dx,
+            y: YAMA.y,
+        });
+    }
+    for (let y = PALACE.y0; y <= PALACE.y1; y++) {
+        for (let x = PALACE.x0; x <= PALACE.x1; x++) {
+            // Kept off his throne, and off the way up to it
+            // Out in the floor, clear of its edges and doorways
+            const inFloor = isPalaceInside({ id: 0, type: 0, rotation: 0, level: 0, x, y });
+            if (!inFloor || (Math.abs(x - YAMA.x - 2) < 5 && y > YAMA.y - 6)) {
+                continue;
+            }
+            const roll = tileHash(x, y, 31);
+            if (roll < 0.012) {
+                // Flames on their own, small: his fight's on this floor
+                grid.locs.push({
+                    id: FLAMES,
+                    type: LOC_NORMAL,
+                    rotation: 0,
+                    level: 0,
+                    x,
+                    y,
+                });
+                report.fires++;
+            } else if (roll > 0.988) {
+                const id = BURNT_SKELETONS[Math.floor(tileHash(x, y, 2) * 2)];
+                grid.locs.push({
+                    id,
+                    type: LOC_NORMAL,
+                    rotation: Math.floor(roll * 400) & 3,
+                    level: 0,
+                    x,
+                    y,
+                });
+                report.skeletons++;
+            } else if (roll > 0.982) {
+                grid.locs.push({
+                    id: EXHUMED,
+                    type: LOC_FLOOR_DECORATION,
+                    rotation: 0,
+                    level: 0,
+                    x,
+                    y,
+                });
+                report.adventurers++;
+            }
+        }
+    }
+}
+
+// What was made of cloth burnt: Gypsy Aris's tent in the square (its striped walls, 2460 to
+// 2463, its roof and all in it) is a fire as big as it was; the market's stalls are their bare
+// counters (Empty Stall, 6944), burnt, with a fire on what's left of their awnings' tiles; a tent
+// is the cache's big fire (BLAZE) and a covered wagon (23615) burning timber. Banners, curtains
+// and cloth are the ruin rules' `gone`.
+const ARIS_TENT = { ...toGrid(3201, 3421), x1: 3206 - REAL_X, y1: 3427 - REAL_Y };
+const FABRIC = /stall|tent/i;
+const COVERED_WAGON = 23615;
+const EMPTY_STALL = 6944;
+// Aris's tent burning down, from its south-west corner: [id, dx, dy, type, rotation]
+const ARIS_FIRE: [number, number, number, number, number][] = [
+    [BLAZE, 1, 2, 10, 0],
+    [BLAZE, 3, 4, 10, 0],
+    [BURNING_TIMBER, 3, 0, 10, 1],
+    [FLAMES, 0, 5, 10, 0],
+    [FLAMES, 5, 2, 10, 0],
+    [FLAMES, 1, 0, 10, 0],
+    [BURNING_BONES, 0, 3, 10, 2],
+    // Its walls going up on two sides
+    [WALL_OF_FLAME, 2, 0, 0, 1],
+    [WALL_OF_FLAME, 5, 5, 0, 3],
+    [WALL_OF_FLAME, 2, 6, 0, 3],
+];
+
+type Fabric = { loc: PlacedLoc; sizeX: number; sizeY: number; wagon: boolean; stall: boolean };
+
+// Takes the cloth out before the ruin rules see it (a tent's walls would break into stone)
+function takeFabric(grid: TileGrid, locs: (id: number) => LocInfo): Fabric[] {
+    const taken: Fabric[] = [];
+    const inTent = (x: number, y: number) =>
+        x >= ARIS_TENT.x && x <= ARIS_TENT.x1 && y >= ARIS_TENT.y && y <= ARIS_TENT.y1;
+    grid.locs = grid.locs.filter((loc) => {
+        if (inTent(loc.x, loc.y)) {
+            return false;
+        }
+        if (loc.level !== 0 || (loc.type !== LOC_NORMAL && loc.type !== 11)) {
+            return true;
+        }
+        const info = locs(loc.id);
+        const shown = info.shows !== undefined && info.shows !== -1 ? locs(info.shows) : info;
+        const wagon = loc.id === COVERED_WAGON;
+        if (!wagon && !FABRIC.test(shown.name ?? "")) {
+            return true;
+        }
+        const turned = (loc.rotation & 1) === 1;
+        taken.push({
+            loc,
+            sizeX: turned ? shown.sizeY : shown.sizeX,
+            sizeY: turned ? shown.sizeX : shown.sizeY,
+            wagon,
+            stall: /stall/i.test(shown.name ?? ""),
+        });
+        return false;
+    });
+    return taken;
+}
+
+// The fires where the cloth was, and its ground burnt black
+function burnFabric(grid: TileGrid, taken: Fabric[], report: VarrockDressing): void {
+    const level0 = grid.levels[0];
+    const scorch = (x0: number, y0: number, x1: number, y1: number) => {
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+                const i = x + y * SIZE;
+                level0.overlays[i] = level0.shapes[i] = 0;
+                level0.underlays[i] = tileHash(x, y, 61) < 0.4 ? CRATER_SCORCH : CRATER_SOOT[0];
+            }
+        }
+    };
+    const put = (id: number, x: number, y: number, type = LOC_NORMAL, rotation = 0) => {
+        grid.locs.push({ id, type, rotation, level: 0, x, y });
+        report.fires++;
+    };
+    scorch(ARIS_TENT.x, ARIS_TENT.y, ARIS_TENT.x1, ARIS_TENT.y1);
+    for (const [id, dx, dy, type, rotation] of ARIS_FIRE) {
+        put(id, ARIS_TENT.x + dx, ARIS_TENT.y + dy, type, rotation);
+    }
+    for (const { loc, sizeX, sizeY, wagon, stall } of taken) {
+        const { x, y } = loc;
+        scorch(x, y, x + sizeX - 1, y + sizeY - 1);
+        if (stall) {
+            // Its counter along its longer side, and a fire on the rest
+            put(getCharredLoc(EMPTY_STALL), x, y, LOC_NORMAL, loc.rotation);
+            put(FLAMES, (loc.rotation & 1) === 1 ? x + 1 : x, (loc.rotation & 1) === 1 ? y : y + 1);
+        } else {
+            put(wagon ? BURNING_TIMBER : BLAZE, x, y);
+            // What's past a 2 by 2 fire of a longer one
+            for (let ty = y; ty < y + sizeY; ty++) {
+                for (let tx = x; tx < x + sizeX; tx++) {
+                    if (tx >= x + 2 || ty >= y + 2) {
+                        put(FLAMES, tx, ty);
+                    }
+                }
+            }
+        }
+    }
+}
+
+export function buildVarrockDetail(context: BuildContext): GeneratedMap & {
+    dressing: VarrockDressing;
+} {
+    const ground = new Ground(SIZE, SIZE);
+    const city = cutPrefab(context.maps, REAL_X, REAL_Y, SIZE, SIZE);
+    clearPalace(city);
+    clearNave(city);
+    clearExchange(city, context.locs);
+    const fabric = takeFabric(city, context.locs);
+    const ruins = ruinGrid(city, context.locs, {
+        ...RULES,
+        landmark: LANDMARK,
+    });
+    const dressing: VarrockDressing = {
+        fires: 0,
+        skeletons: 0,
+        adventurers: 0,
+        rubble: 0,
+        crater: 0,
+        ruins,
+    };
+    burnFabric(city, fabric, dressing);
+    dress(city, context.locs, dressing);
+    dressPalace(city, dressing);
+    makeCrater(city, context.locs, dressing);
+    ground.stamp(city, 0, 0, { floor: "all", feather: 0, flatten: false, height: 0, anchor: 0 });
+    // What can't be walked to from the gate is blocked, so nothing turns up stranded
+    const sealed = sealFrom(ground.grid, context.locs, [
+        { name: "Varrock", rect: ARENA, from: START },
+    ]);
+    assertReachable(sealed, POINTS, "Battle for Varrock");
+    return {
+        grid: ground.grid,
+        footprint: ground.footprint,
+        roadTiles: new Uint8Array(SIZE * SIZE),
+        lines: [],
+        buildings: [],
+        landmarks: [],
+        passes: [],
+        walkSlope: 48,
+        caves: [],
+        falls: [],
+        waterfalls: [],
+        // All of it is the real world's
+        designed: [{ x0: 0, y0: 0, x1: SIZE - 1, y1: SIZE - 1 }],
+        // A deck blocked in OSRS too, which check-maps.ts would hold to being walked like a
+        // bridge's: the bridge's east of the palace (the Grand Exchange's are open, for Xarth)
+        squares: DECKS_BLOCKED,
+        dressing,
+    };
+}
+
+export const BATTLE_FOR_VARROCK_RECIPE: MapRecipe = {
+    id: "battle_for_varrock",
+    mapX: MAP_X,
+    mapY: MAP_Y,
+    squaresX: SQUARES,
+    squaresY: SQUARES,
+    margin: MARGIN,
+    spawn: START,
+    build: (context) => buildVarrockDetail(context).grid,
+    detail: buildVarrockDetail,
+    points: POINTS,
+    // The Theatre of Blood's dead raiders, as Phosani's Sanctuary has them
+    allowLocs: [
+        [32735, 32735],
+        [32741, 32743],
+        [32754, 32754],
+    ],
+};
+
+// In world tiles: where the run starts, the palace's floor's box and Yama's throne
+const WORLD_X = MAP_X * MAP_SQUARE_SIZE - REAL_X;
+const WORLD_Y = MAP_Y * MAP_SQUARE_SIZE - REAL_Y;
+export const BATTLE_FOR_VARROCK = {
+    arena: {
+        baseX: (MAP_X + MARGIN) * MAP_SQUARE_SIZE,
+        baseY: (MAP_Y + MARGIN) * MAP_SQUARE_SIZE,
+        sizeX: (SQUARES - MARGIN * 2) * MAP_SQUARE_SIZE,
+        sizeY: (SQUARES - MARGIN * 2) * MAP_SQUARE_SIZE,
+    },
+    spawn: {
+        x: MAP_X * MAP_SQUARE_SIZE + START.x + 0.5,
+        y: MAP_Y * MAP_SQUARE_SIZE + START.y + 0.5,
+    },
+    palaceFloor: {
+        x0: PALACE_FLOOR_RECT_REAL.x0 + WORLD_X,
+        y0: PALACE_FLOOR_RECT_REAL.y0 + WORLD_Y,
+        x1: PALACE_FLOOR_RECT_REAL.x1 + WORLD_X,
+        y1: PALACE_FLOOR_RECT_REAL.y1 + WORLD_Y,
+    },
+    // Yama's middle, where the game draws him
+    yama: {
+        x: MAP_X * MAP_SQUARE_SIZE + YAMA.x + YAMA_SIZE.x / 2,
+        y: MAP_Y * MAP_SQUARE_SIZE + YAMA.y + YAMA_SIZE.y / 2,
+    },
+    // Where he rises once he's woken, and where the player starts his fight (a tile's middle)
+    yamaRise: {
+        x: MAP_X * MAP_SQUARE_SIZE + YAMA_RISE.x + 0.5,
+        y: MAP_Y * MAP_SQUARE_SIZE + YAMA_RISE.y + 0.5,
+    },
+    yamaStart: {
+        x: MAP_X * MAP_SQUARE_SIZE + YAMA_START.x + 0.5,
+        y: MAP_Y * MAP_SQUARE_SIZE + YAMA_START.y + 0.5,
+    },
+    // Xarth's pad: its box and rows, where he stands, his pillars' south-west tiles
+    xarth: {
+        area: { ...toWorldBox(EXCHANGE_PAD_REAL), rows: EXCHANGE_PAD_ROWS },
+        at: toWorld(XARTH_REAL),
+        start: toWorld({ x: XARTH_REAL.x, y: XARTH_REAL.y - 6.5 }),
+        pillars: EXCHANGE_PILLARS_REAL.map(toWorld),
+    },
+    // K'ril's nave
+    kril: {
+        area: toWorldBox(CHURCH_NAVE_REAL),
+        at: toWorld(KRIL_REAL),
+        start: toWorld({ x: KRIL_REAL.x, y: KRIL_REAL.y - 7.5 }),
+    },
+};
+
+// Real tiles to world tiles: a spot, and a box
+function toWorld({ x, y }: { x: number; y: number }): { x: number; y: number } {
+    return { x: x + WORLD_X, y: y + WORLD_Y };
+}
+
+function toWorldBox(box: { x0: number; y0: number; x1: number; y1: number }): {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+} {
+    return {
+        x0: box.x0 + WORLD_X,
+        y0: box.y0 + WORLD_Y,
+        x1: box.x1 + WORLD_X,
+        y1: box.y1 + WORLD_Y,
+    };
+}

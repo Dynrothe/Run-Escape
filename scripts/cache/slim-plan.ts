@@ -299,6 +299,8 @@ function getBakeRequests(group: BakeGroup): BakeRequest[] {
                     group === "pets"
                     ? [
                           ...GameAssets.getPetRequests(PETS),
+                          // Heroes drawn as NPCs, which are baked as their map's played
+                          ...GameAssets.getHeroLookRequests(CHARACTERS),
                           // and maps' NPCs posed as scenery, and their cinematics' casts, which
                           // are baked as their map's played
                           ...GameAssets.getPropRequests(ALL_MAPS),

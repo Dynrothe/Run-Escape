@@ -5,6 +5,8 @@ import { RegionData, RegionDataInput } from "../../mapviewer/worker/RegionData";
 import { RegionDataLoader } from "../../mapviewer/worker/RegionDataLoader";
 import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { getAct, getActStep } from "../content/acts";
+import { getBlessing } from "../content/blessings";
 import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -21,6 +23,7 @@ import {
     getArenaRegion,
     getMap,
     getMapCharacter,
+    getRetryLair,
     getRunCinematic,
     isCoopMap,
     isDevMap,
@@ -37,7 +40,14 @@ import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
-import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
+import {
+    BlessingsDef,
+    CinematicDef,
+    CombatStyle,
+    MapDef,
+    Stats,
+    emptyStats,
+} from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
 import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
 import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
@@ -84,6 +94,7 @@ import {
 } from "../render/CameraRig";
 import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/GameWebGLRenderer";
 import { installRecipe } from "../scaperune/squares";
+import { BLESSING_COLOR, getBlessingViews } from "./BlessingViews";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
     CinematicCamera,
@@ -91,6 +102,7 @@ import {
     getCinematicCamera,
     getCinematicSquares,
 } from "./Cinematic";
+import { CinematicDirector, FlyInput, getDirectorChoices } from "./CinematicDirector";
 import { CLOUD_SAVE_URL, CloudSync } from "./CloudSave";
 import { DamageMeter } from "./DamageMeter";
 import {
@@ -143,6 +155,7 @@ import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
 import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
+import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecorder";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
@@ -259,6 +272,8 @@ const PHONE_MAX_HEIGHT = 520;
 const CINEMATIC_MAX_FRAME_MS = 100;
 // The longest it waits for what it sees to load before it plays anyway (ms)
 const CINEMATIC_LOAD_MS = 45000;
+// How long the shot editor's shots stand still before what they'll see is loaded (ms)
+const DIRECTOR_PIN_MS = 250;
 
 // How far past the arena the camera can get: a run's is behind the player, zoomed
 // all the way out, and the title screen's circles them
@@ -367,22 +382,45 @@ function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
     });
 }
 
+// How many times a blessing on offer will have been had, as its card's corner says it: "2 of 8".
+// Nothing for one that's had only once or as often as it comes (the fallback).
+function blessingCount(
+    blessings: BlessingsDef,
+    choice: { blessingId: string; count: number },
+): string | undefined {
+    const { max } = getBlessing(blessings, choice.blessingId);
+    return Number.isFinite(max) && max > 1 ? `${choice.count} of ${max}` : undefined;
+}
+
 function getChoiceViews(sim: Sim): ChoiceView[] {
     const style = getCharacter(sim.characterId).style;
+    const blessings = sim.map.blessings;
     return sim.choices.map((choice, index) => {
-        const { title, text, iconObjId, iconSpriteId, quality, stats } = describeChoice(choice);
+        const { title, text, iconObjId, iconSpriteId, quality, stats } = describeChoice(
+            choice,
+            blessings,
+        );
         const rarity = quality ? RARITIES[quality] : undefined;
+        const blessed =
+            blessings && choice.kind === "blessing" ? blessingCount(blessings, choice) : undefined;
         return {
             title,
             text,
             iconObjId,
             iconSpriteId,
-            isNew: choice.kind === "newWeapon" || choice.kind === "newPassive",
+            isNew:
+                choice.kind === "newWeapon" ||
+                choice.kind === "newPassive" ||
+                (choice.kind === "blessing" && choice.count === 1 && blessed !== undefined),
             isEvolution: choice.kind === "evolve",
             isHilt: choice.kind === "hilt",
             isSpell: choice.kind === "hilt" && getWeapon(choice.into).family === "ancient_burst",
             isKeris: choice.kind === "hilt" && getWeapon(choice.into).family === "keris",
-            rarity: rarity && quality && { name: rarityName(quality), color: rarity.color },
+            isBlessing: choice.kind === "blessing",
+            rarity:
+                choice.kind === "blessing"
+                    ? { name: blessed ?? "Blessing", color: BLESSING_COLOR }
+                    : rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
             evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
             banishable: sim.canBanishChoice(index),
@@ -450,6 +488,8 @@ export type GameClientOptions = {
     // ?raidtest on the dev server: solo runs with a raid's rooms two minutes apart and every
     // level up at its max (SimTesting); "short" for the rooms alone
     raidTest?: "max" | "short";
+    // ?director=<map id> on the dev server: a run there with the shot editor open (direct)
+    director?: string;
 };
 
 // A boss winding up a gaze (BossAttackDef.cover) lights the arena, more as it comes: how much
@@ -463,6 +503,24 @@ export function getGazeLight(sim: Sim): number {
     const raw = (sim.tick - windup.startTick) / Math.max(1, windup.landTick - windup.startTick);
     const t = Math.min(1, Math.max(0, raw));
     return 1 + GAZE_LIGHT * t * t * (3 - 2 * t);
+}
+
+// How full a hitpoints bar is, to a thousandth: regeneration heals a little every tick, so the bar
+// fills as it does rather than a whole hitpoint at a time (HudNumbers.hpShare)
+export function getHpShare(hp: number, maxHp: number): number {
+    return maxHp > 0 ? Math.round(Math.min(1, Math.max(0, hp / maxHp)) * 1000) / 1000 : 0;
+}
+
+// The first of the map's objectives that isn't done (MapDef.objectives), with how many of its
+// lairs are beaten
+export function getObjectiveView(sim: Sim): HudNumbers["objective"] {
+    for (const { text, lairs } of sim.map.objectives ?? []) {
+        const done = lairs.filter((id) => sim.lairById(id)?.state === "beaten").length;
+        if (done < lairs.length) {
+            return { text, done, count: lairs.length };
+        }
+    }
+    return undefined;
 }
 
 // What a fight on its hitpoints shows on its bar: all of them, or with BossPhasesDef.barPerPhase
@@ -551,12 +609,26 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
-    // The map's opening cinematic while it plays (MapDef.cinematic), and its own camera, so the
-    // run's (and the player's zoom) is left as it was
+    // The map's opening cinematic while it plays (MapDef.cinematic), or its lair's (LairDef.opening,
+    // LairUnsealingDef), and its own camera, so the run's (and the player's zoom) is left as it was
     cinematic?: CinematicPlayer;
     private readonly cinematicRig = new CameraRig();
     // While what it sees loads, behind the loading screen: since when (performance.now)
     private cinematicLoading?: number;
+    // The tick the lair woke whose opening's been played (Lair.wakeTick), and the tick the lair was
+    // unsealed whose cinematic has (Lair.unsealTick), so each plays once; and the tick the one
+    // playing is from, whose clock is the sim's
+    private lairOpeningTick = -1;
+    private lairUnsealTick = -1;
+    private lairCinematicTick = 0;
+    // Dev only: the shot editor, while it's open (direct), with the cinematic it holds as
+    // this.cinematic; and its shots' versions (shotsVersion) last loaded along the way and last
+    // seen, and when they were seen to change (ms)
+    director?: CinematicDirector;
+    private directorPins = { pinned: -1, seen: -1, changed: 0 };
+    // Dev only: a trailer being recorded from the shot editor (recordTrailer). rolling: its frames
+    // are being drawn; live: the run steps meanwhile.
+    private trailer?: { recorder: TrailerRecorder; live: boolean; rolling: boolean };
 
     sim?: Sim;
     paused = false;
@@ -812,6 +884,8 @@ export class GameClient implements GameFrameHandler {
         if (options.autostart) {
             this.store.set({ characterId: options.autostart });
             this.startRun();
+        } else if (options.director) {
+            void this.direct(options.director);
         } else if (invite) {
             this.openCoop().then(() => this.joinRoom(invite));
         } else {
@@ -962,7 +1036,8 @@ export class GameClient implements GameFrameHandler {
         return true;
     }
 
-    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps. Without
+    // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps (and an
+    // act that isn't out yet, isActOut). Without
     // it the dev server plays as players will (the Tombs of Amascut, listed with the raids, has none
     // of its testing buttons), phones on the tunnel included.
     get devTools(): boolean {
@@ -1299,6 +1374,8 @@ export class GameClient implements GameFrameHandler {
                 map.fun !== undefined ||
                 (room.endless && (anyMap || isEndlessUnlocked(this.save, map.id))),
             hard: room.hard === true && (anyMap || isHardUnlocked(this.save, map.id)),
+            // An act's map is at the host's step (content/acts.ts)
+            ...(map.act && { actStep: getActStep(map, this.save.mapVictories) }),
             stage: getFightStage(this.save, map.id),
             // The Tombs' raid level is the host's, as the invocation board set it
             ...(map.tombs && { invocations: this.save.invocations ?? [] }),
@@ -1762,7 +1839,10 @@ export class GameClient implements GameFrameHandler {
         }
         // A pet that won't bake isn't a reason to stay: loadPets doesn't fail
         const petsBaked = this.assets.loadPets(pets);
-        // And its NPCs posed as scenery (MapDef.props), and its cinematic's cast
+        // A hero the map has everyone play, drawn as an NPC (Justiciar Zachariah)
+        const mapCharacter = getMapCharacter(map);
+        const heroBaked = mapCharacter ? this.assets.loadHeroLook(mapCharacter) : undefined;
+        // And its NPCs posed as scenery (MapDef.props)
         const propsBaked = this.assets.loadProps(map);
         try {
             this.grid = await this.loadGrid(mapId);
@@ -1770,6 +1850,7 @@ export class GameClient implements GameFrameHandler {
                 this.store.set({ loadingProgress: 25 + Math.round((done / total) * 75) });
             });
             await petsBaked;
+            await heroBaked;
             await propsBaked;
             return true;
         } catch (e) {
@@ -1780,10 +1861,12 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // cinematic: false to start without the map's opening cinematic (a retry)
+    // cinematic: false to start without the map's opening cinematic (a retry). atLair: start at
+    // its lair's start (getRetryLair), in it, so its fight's on again at once (a retry)
     async startRun(
         mapId: string = this.store.getSnapshot().mapId,
         cinematic = true,
+        atLair = false,
     ): Promise<void> {
         if (!isMapUnlocked(this.save, mapId)) {
             return;
@@ -1801,14 +1884,15 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         usePortableMath(false);
+        const spawn = (atLair && getRetryLair(map)?.start) || map.spawn;
         const sim = new Sim({
             grid: this.grid,
             mapId,
             characterId,
             metaStats: getMetaStats(this.save, getCharacter(characterId).style),
             seed: (Math.random() * 0x7fffffff) | 0,
-            spawnX: map.spawn.x,
-            spawnY: map.spawn.y,
+            spawnX: spawn.x,
+            spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
             trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
             endless,
@@ -1817,6 +1901,7 @@ export class GameClient implements GameFrameHandler {
             raidTeleports: RAID_TELEPORTS,
             raidPortals: getRaidPortals(this.save, mapId),
             armoury: { ...this.save.armoury },
+            actStep: getActStep(map, this.save.mapVictories),
             invocations: map.tombs ? (this.save.invocations ?? []) : undefined,
             stage: this.chosenStage(mapId),
             testing: this.options.raidTest
@@ -1906,6 +1991,7 @@ export class GameClient implements GameFrameHandler {
             spawnY: map.spawn.y,
             endless: game.endless,
             hard: game.hard,
+            actStep: game.actStep,
             stage: game.stage,
             invocations: game.invocations,
             party,
@@ -1953,6 +2039,8 @@ export class GameClient implements GameFrameHandler {
         const runCinematic = getRunCinematic(map, sim.stage);
         this.cinematic = cinematic && runCinematic ? new CinematicPlayer(runCinematic) : undefined;
         this.view.cinematic = this.cinematic;
+        this.lairOpeningTick = -1;
+        this.lairUnsealTick = -1;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.scaperune === true);
         this.grid.exactGround = map.scaperune === true;
@@ -2245,10 +2333,19 @@ export class GameClient implements GameFrameHandler {
     }
 
     // The fight's own button (Sim.ability: a fight map's, or the Tombs'): Space, a pad's bottom
-    // button, or the touch screen's. Out of reach, or not ready, it says no.
-    useAbility(): void {
+    // button, or the touch screen's. Out of reach, or not ready, it says no. A hero with buttons
+    // of their own (CharacterDef.abilities) has slot for which: Space is the first, and 1 to 4
+    // the others.
+    useAbility(slot = 0): void {
         const sim = this.sim;
-        if (!sim?.ability || (this.paused && !this.coopRun)) {
+        if (!sim || (this.paused && !this.coopRun)) {
+            return;
+        }
+        if (this.hasKit(sim)) {
+            this.act({ kind: "ability", index: slot });
+            return;
+        }
+        if (!sim.ability) {
             return;
         }
         // Only a press that goes off counts as having learnt it: one it says no to (out of reach,
@@ -2259,14 +2356,21 @@ export class GameClient implements GameFrameHandler {
         this.act({ kind: "ability" });
     }
 
+    // Whether the hero this player plays has buttons of their own (CharacterDef.abilities)
+    private hasKit(sim: Sim): boolean {
+        const hero = sim.heroes[sim.focus] ?? sim.heroes[0];
+        return getCharacter(hero.characterId).abilities !== undefined;
+    }
+
     // The opening animation's sounds, timed by the UI
     playChestSound(cue: ChestCue, rarity: Rarity): void {
         this.sounds.chest(cue, rarity);
     }
 
-    // Co-op's menu doesn't stop the run: the others play on
+    // Co-op's menu doesn't stop the run: the others play on. The shot editor's run never steps,
+    // so there's nothing to pause (and its window loses focus to the console often)
     pause(): void {
-        if (this.sim && !this.sim.runOver) {
+        if (this.sim && !this.sim.runOver && !this.director) {
             this.paused = true;
             this.syncOverlay();
         }
@@ -2326,7 +2430,8 @@ export class GameClient implements GameFrameHandler {
 
     // Back to the title screen after the results, or after a co-op run, back
     // to the room. show: false when the next run's starting straight away.
-    // The same map again, from its results, on your own
+    // The same map again, from its results, on your own: at its lair if it has one to start at
+    // (getRetryLair)
     retry(): void {
         const map = this.sim?.map;
         const mapId = map?.id;
@@ -2338,7 +2443,7 @@ export class GameClient implements GameFrameHandler {
         const played = this.sim?.stage;
         const onward = map.stages !== undefined && this.chosenStage(mapId) !== played;
         this.leaveRun();
-        void this.startRun(mapId, onward);
+        void this.startRun(mapId, onward, true);
     }
 
     leaveRun(show = true): void {
@@ -2464,7 +2569,8 @@ export class GameClient implements GameFrameHandler {
                 bossKills: getBossKillViews(result.stats),
                 endlessRecord,
                 firstHardWin,
-                unlockedMap: unlockedMap?.name,
+                // An act opens all its maps at once: it's the act that's said to open
+                unlockedMap: unlockedMap?.act ? getAct(unlockedMap.act.id).name : unlockedMap?.name,
                 unlockedCharacters: unlockedCharacters.map((c) => c.name),
                 unlockedItems: unlockedItems.map((i) => i.name),
                 newGear: newGear.map((id) => getItem(id).name),
@@ -2531,9 +2637,19 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    // Any key or controller button skips the opening cinematic, and does nothing else
+    // Any key or controller button skips the opening cinematic, and does nothing else. The shot
+    // editor has its own keys, and F3 and M as ever.
     private pressKey(code: string): void {
-        if (this.cinematic) {
+        if (this.trailer) {
+            // Nothing moves the camera while a trailer's recorded; Escape stops it
+            if (code === "Escape") {
+                this.cancelTrailer();
+            }
+        } else if (this.director) {
+            if (!this.director.press(code) && (code === "F3" || code === "KeyM")) {
+                this.onKeyPress(code);
+            }
+        } else if (this.cinematic) {
             this.skipCinematic();
         } else {
             this.onKeyPress(code);
@@ -2589,6 +2705,9 @@ export class GameClient implements GameFrameHandler {
             this.reroll();
         } else if (overlay === "levelUp" && code === "KeyX") {
             this.skip();
+        } else if (overlay === "none" && code.startsWith("Digit") && this.hasKit(sim)) {
+            // A hero's own buttons: 1 to 4 after Space's (CharacterDef.abilities)
+            this.useAbility(parseInt(code.slice(5)));
         } else if (overlay === "none" && code.startsWith("Digit")) {
             // The casket screen has its own keys (it knows when its animation
             // is done)
@@ -2629,7 +2748,10 @@ export class GameClient implements GameFrameHandler {
             }
         } else if (
             !this.paused &&
-            !this.cinematic?.holdsRun &&
+            // The shot editor holds the run, but for a live trailer's frames
+            (this.director
+                ? this.trailer?.rolling && this.trailer.live
+                : !this.cinematic?.holdsRun) &&
             (sim.state === "playing" || sim.runOver)
         ) {
             const wasOver = sim.runOver;
@@ -2715,7 +2837,7 @@ export class GameClient implements GameFrameHandler {
         this.cameraLean.y += (lean.y - this.cameraLean.y) * ease;
         const pan = this.getIntroPan(sim, px, py, alpha);
         const shake = this.getShake(now);
-        const cinematic = this.updateCinematic(deltaTimeMs, sim, {
+        const cinematic = this.updateCinematic(deltaTimeMs, sim, alpha, {
             x: px + this.cameraLean.x + pan.x,
             y: py + this.cameraLean.y + pan.y,
             height: ground - 0.6,
@@ -2776,6 +2898,33 @@ export class GameClient implements GameFrameHandler {
             this.shownBrightness = brightness;
             this.renderer.setBrightness(brightness);
         }
+    }
+
+    // A hero's own buttons, for the HUD (CharacterDef.abilities): always in reach, as they go
+    // off with or without anything to hit, as the map's blessings have made them
+    private getKitViews(sim: Sim): AbilityView[] | undefined {
+        const hero = sim.heroes[sim.focus] ?? sim.heroes[0];
+        const kit = getCharacter(hero.characterId).abilities;
+        return kit?.map((written, slot) => {
+            const { ability, by } = sim.kitAbility(slot, hero) ?? { ability: written, by: [] };
+            const left = sim.kitSecondsLeft(slot, hero);
+            return {
+                name: ability.name,
+                iconObjId: ability.iconObjId,
+                // A blessing that shortened it mid-wait can leave more to wait than it now takes
+                charge: Math.max(0, Math.round((1 - left / ability.cooldown) * 20) / 20),
+                inReach: true,
+                opened: false,
+                guide: false,
+                withItems: false,
+                hint: false,
+                keyLabel: slot === 0 ? "Space" : String(slot),
+                description:
+                    by.length > 0
+                        ? `${ability.description} Blessed by ${by.map((b) => b.name).join(", ")}.`
+                        : ability.description,
+            };
+        });
     }
 
     // The fight's own button, for the HUD (Sim.ability): lit as gold while what it'd land on (or
@@ -2856,23 +3005,34 @@ export class GameClient implements GameFrameHandler {
     // loading screen, and kept until it's over (MapManager.setPinned), so nothing pops in as it
     // flies over the map
     private preloadCinematic(sim: Sim, cinematic: CinematicPlayer): void {
-        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
-        const { x, y } = sim.player;
-        const squares = getCinematicSquares(cinematic.def, ground, {
-            x,
-            y,
-            height: ground(x, y) - 0.6,
-            pitch: this.cameraRig.pitch,
-            yaw: this.cameraRig.yaw,
-            distance: this.cameraRig.distance,
-        });
-        this.renderer.mapManager.setPinned(squares);
+        this.pinCinematic(sim, cinematic.def);
         this.cinematicLoading = performance.now();
         this.store.set({
             screen: "loading",
             loadingText: t("canvas.travelling", { name: tl(sim.map.name) }),
             loadingProgress: 0,
         });
+    }
+
+    // The squares a cinematic's camera will see, loaded wherever the camera is and kept
+    // (getCinematicSquares, MapManager.setPinned)
+    private pinCinematic(sim: Sim, def: CinematicDef): void {
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        const squares = getCinematicSquares(def, ground, this.getStandingCamera(sim));
+        this.renderer.mapManager.setPinned(squares);
+    }
+
+    // The run's camera on the player where they stand, before anything leans or pans it
+    private getStandingCamera(sim: Sim): CinematicCamera {
+        const { x, y } = sim.player;
+        return {
+            x,
+            y,
+            height: this.grid.getHeight(x, y) / 128 - 0.6,
+            pitch: this.cameraRig.pitch,
+            yaw: this.cameraRig.yaw,
+            distance: this.cameraRig.distance,
+        };
     }
 
     // Whether the cinematic's still waiting on what it sees to load, showing how far it's got
@@ -2915,8 +3075,10 @@ export class GameClient implements GameFrameHandler {
     private updateCinematic(
         deltaTimeMs: number,
         sim: Sim,
+        alpha: number,
         play: CinematicCamera,
     ): CinematicCamera | undefined {
+        this.startLairOpening(sim);
         const cinematic = this.cinematic;
         if (!cinematic) {
             return undefined;
@@ -2925,9 +3087,16 @@ export class GameClient implements GameFrameHandler {
         if (this.isCinematicLoading()) {
             return getCinematicCamera(cinematic.def, 0, ground, play);
         }
-        // It plays on behind a menu (a co-op run's pause doesn't stop it either)
-        // (a frame at most: the first after the map loads can be long)
-        for (const cue of cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000)) {
+        if (this.director) {
+            return this.updateDirector(deltaTimeMs, sim, this.director, play);
+        }
+        // A lair's is on the sim's clock, from when it woke or was unsealed. The map's own plays on
+        // behind a menu (a co-op run's pause doesn't stop it either), a frame at most at a time
+        // (the first after the map loads can be long).
+        const cues = cinematic.onSim
+            ? cinematic.advanceTo((sim.tick + alpha - this.lairCinematicTick) / TICKS_PER_SECOND)
+            : cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000);
+        for (const cue of cues) {
             if (cue.sound !== undefined) {
                 this.audio.play(cue.sound, { volume: 1, minGap: 0 });
             }
@@ -2939,17 +3108,245 @@ export class GameClient implements GameFrameHandler {
         return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
     }
 
-    // Any key, click, tap or button during the opening cinematic: straight to the run. On the
-    // loading screen before it, that skips the wait too.
+    // A lair's opening as it wakes (LairDef.opening), once for each time it does, and a locked
+    // one's as it's unsealed (LairUnsealingDef)
+    private startLairOpening(sim: Sim): void {
+        if (this.cinematic) {
+            return;
+        }
+        const lair = sim.lair;
+        const opening = lair?.def.opening;
+        if (opening && lair?.state === "waking" && this.lairOpeningTick !== lair.wakeTick) {
+            this.lairOpeningTick = lair.wakeTick;
+            this.playLairCinematic(opening.cinematic, lair.wakeTick);
+            return;
+        }
+        const unsealed = sim.unsealing;
+        const unsealing = unsealed?.def.requires?.unsealing;
+        if (unsealed && unsealing && this.lairUnsealTick !== unsealed.unsealTick) {
+            this.lairUnsealTick = unsealed.unsealTick;
+            // It goes off to the lair: what it sees is kept loaded until it's over
+            this.pinCinematic(sim, unsealing.cinematic);
+            this.playLairCinematic(unsealing.cinematic, unsealed.unsealTick);
+        }
+    }
+
+    private playLairCinematic(def: CinematicDef, fromTick: number): void {
+        this.lairCinematicTick = fromTick;
+        this.cinematic = new CinematicPlayer(def, true);
+        this.view.cinematic = this.cinematic;
+        this.store.set({ cinematic: true });
+    }
+
+    // Dev only: the shot editor (CinematicDirector) on mapId's cinematic at index
+    // (getDirectorChoices), after starting a run there if this isn't one: ?director=<map id>, or
+    // game.direct() from the console. It holds the run where it stands, never to step, until it's
+    // left with the run (leaveRun).
+    async direct(
+        mapId: string = this.sim?.map.id ?? this.store.getSnapshot().mapId,
+        index = 0,
+    ): Promise<void> {
+        if (!import.meta.env.DEV) {
+            return;
+        }
+        if (this.coopRun) {
+            this.store.toast("The shot editor is for solo runs.");
+            return;
+        }
+        if (this.sim?.map.id !== mapId) {
+            if (this.sim) {
+                this.leaveRun(false);
+            }
+            await this.startRun(mapId);
+        }
+        const sim = this.sim;
+        if (!sim || sim.map.id !== mapId) {
+            this.store.toast(`No run started on ${mapId}: is it open in this save?`, 6000);
+            return;
+        }
+        const choices = getDirectorChoices(sim.map);
+        const ground = (x: number, y: number) => this.grid.getHeight(x, y) / 128;
+        let drafts: Storage | undefined;
+        try {
+            drafts = window.localStorage;
+        } catch {
+            // Blocked: drafts aren't kept
+        }
+        this.director = new CinematicDirector(
+            choices,
+            Math.min(Math.max(0, index), choices.length - 1),
+            ground,
+            this.getStandingCamera(sim),
+            drafts,
+        );
+        this.cinematic = this.director.player;
+        this.view.cinematic = this.cinematic;
+        this.paused = false;
+        this.pinCinematic(sim, this.director.def);
+        const version = this.director.shotsVersion;
+        this.directorPins = { pinned: version, seen: version, changed: 0 };
+        this.store.set({ cinematic: true, director: this.director, overlay: "none" });
+    }
+
+    // The shot editor on by a frame: flown by the keys held, its cues heard as it plays, and what
+    // its camera will see loaded once its shots have stood still a moment
+    private updateDirector(
+        deltaTimeMs: number,
+        sim: Sim,
+        director: CinematicDirector,
+        play: CinematicCamera,
+    ): CinematicCamera {
+        const held = (...codes: string[]) =>
+            codes.some((code) => this.input.isDown(code)) ? 1 : 0;
+        const fly: FlyInput = {
+            forward: held("KeyW") - held("KeyS"),
+            right: held("KeyD") - held("KeyA"),
+            up: held("KeyE") - held("KeyQ"),
+            turn: held("ArrowRight") - held("ArrowLeft"),
+            tilt: held("ArrowUp") - held("ArrowDown"),
+            fast: held("ShiftLeft", "ShiftRight") === 1,
+        };
+        const seconds = Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000;
+        const { camera, cues } = director.frame(seconds, play, this.trailer ? undefined : fly);
+        for (const cue of cues) {
+            if (cue.sound !== undefined) {
+                this.audio.play(cue.sound, { volume: 1, minGap: 0 });
+            }
+        }
+        const pins = this.directorPins;
+        const now = performance.now();
+        if (director.shotsVersion !== pins.seen) {
+            pins.seen = director.shotsVersion;
+            pins.changed = now;
+        }
+        if (pins.seen !== pins.pinned && now - pins.changed > DIRECTOR_PIN_MS) {
+            this.pinCinematic(sim, director.def);
+            pins.pinned = pins.seen;
+        }
+        return camera;
+    }
+
+    // Dev only: the shot editor's cinematic recorded as a trailer (TrailerRecorder), an MP4 that
+    // the dev server makes in trailers/ with ffmpeg. Where it is, or undefined if it wasn't made
+    // (a toast says why). From the console: game.recordTrailer({ from: 2, to: 8, live: true }).
+    async recordTrailer(options: TrailerOptions = {}): Promise<string | undefined> {
+        const director = this.director;
+        const sim = this.sim;
+        if (!import.meta.env.DEV || !director || !sim || this.trailer) {
+            return undefined;
+        }
+        const spec = getTrailerSpec(options, director.def.seconds, sim.map.id);
+        director.pause();
+        director.seek(spec.from);
+        this.pinCinematic(sim, director.def);
+        const trailer = { live: spec.live, rolling: false };
+        const recorder = new TrailerRecorder(spec, {
+            renderer: this.renderer,
+            overlay: this.overlay.canvas,
+            audio: this.audio,
+            getLoading: () => this.renderer.mapManager.getPinnedProgress(),
+            roll: () => {
+                trailer.rolling = true;
+                this.accumulator = 0;
+                director.playFrom(spec.from);
+            },
+            cut: () => {
+                trailer.rolling = false;
+                director.pause();
+            },
+            beforeFrame: () => {
+                if (spec.live) {
+                    this.keepTrailerRunGoing(sim);
+                }
+            },
+            onProgress: (trailer) => this.store.set({ trailer }),
+        });
+        this.trailer = Object.assign(trailer, { recorder });
+        this.store.set({ trailer: { stage: "loading", done: 0, total: 1 } });
+        try {
+            if (spec.live && spec.warmup > 0) {
+                this.warmUpTrailer(sim, spec.warmup);
+            }
+            const file = await recorder.record();
+            this.store.toast(`Trailer saved to ${file}`, 10000);
+            return file;
+        } catch (error) {
+            if (recorder.cancelled) {
+                this.store.toast("Trailer cancelled.");
+            } else {
+                console.error("No trailer", error);
+                const why = error instanceof Error ? error.message : String(error);
+                this.store.toast(`No trailer: ${why}`, 10000);
+            }
+            return undefined;
+        } finally {
+            this.trailer = undefined;
+            this.store.set({ trailer: undefined });
+        }
+    }
+
+    cancelTrailer(): void {
+        this.trailer?.recorder.cancel();
+    }
+
+    // A live trailer's run: no one dies, and anything it'd stop to ask is answered straight away
+    private keepTrailerRunGoing(sim: Sim): void {
+        for (const hero of sim.heroes) {
+            hero.player.hp = hero.player.maxHp;
+        }
+        if (sim.isChoosing()) {
+            const index = sim.choices.findIndex((_, i) => !sim.isBanishedChoice(i));
+            this.choose(Math.max(0, index));
+        } else if (sim.state === "chest") {
+            this.resolveChest("take");
+            if (sim.state === "chest") {
+                this.resolveChest("alch");
+            }
+        } else if (sim.state === "event") {
+            this.leaveEvent();
+        }
+    }
+
+    // A live trailer's run played on for seconds before it's recorded, unseen and unheard, so
+    // there's a fight on when it starts
+    private warmUpTrailer(sim: Sim, seconds: number): void {
+        this.audio.startRecording(performance.now());
+        try {
+            const ticks = Math.round(seconds * TICKS_PER_SECOND);
+            for (let tick = 0; tick < ticks && !sim.runOver; tick++) {
+                this.keepTrailerRunGoing(sim);
+                if (sim.state !== "playing") {
+                    break;
+                }
+                sim.step(0, 0);
+                this.handleEvents(sim, sim.takeEvents());
+            }
+            this.keepTrailerRunGoing(sim);
+        } finally {
+            this.audio.stopRecording();
+        }
+    }
+
+    // Any key, click, tap or button during a cinematic: straight to the run. On the loading
+    // screen before it, that skips the wait too.
     skipCinematic(): void {
+        const cinematic = this.cinematic;
         const loading = this.cinematicLoading;
         const waited = loading === undefined ? 0 : (performance.now() - loading) / 1000;
-        if (this.cinematic?.skip(waited)) {
+        if (!this.director && cinematic?.skip(waited)) {
             this.endCinematic();
+            // Solo, a lair's boss comes straight on (in co-op, the others may be watching)
+            if (cinematic.onSim && !this.coopRun) {
+                this.sim?.skipLairOpening();
+            }
         }
     }
 
     private endCinematic(): void {
+        if (this.director) {
+            this.director = undefined;
+            this.store.set({ director: undefined });
+        }
         if (!this.cinematic) {
             return;
         }
@@ -2970,7 +3367,7 @@ export class GameClient implements GameFrameHandler {
     private getIntroPan(sim: Sim, px: number, py: number, alpha: number): { x: number; y: number } {
         const intro = sim.intro;
         const pan = intro?.def.boss?.intro?.pan;
-        const rise = sim.map.features?.rise;
+        const rise = sim.riseSpot;
         if (!intro || !pan) {
             return { x: 0, y: 0 };
         }
@@ -3074,7 +3471,8 @@ export class GameClient implements GameFrameHandler {
         }
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
-        // moving goes on behind it), and through the opening cinematic
+        // moving goes on behind it)
+        // and through the opening cinematic
         const deciding =
             (this.store.getSnapshot().overlay !== "none" && !this.paused) ||
             this.cinematic !== undefined;
@@ -3291,6 +3689,17 @@ export class GameClient implements GameFrameHandler {
                     );
                     break;
                 case "bossSpawned":
+                    // The final boss's own track takes over (MapDef.bossMusic)
+                    if (event.finalBoss && sim.map.bossMusic) {
+                        const music = musicFor(sim.map.bossMusic);
+                        if (music) {
+                            this.audio.playMusic(music);
+                        }
+                    }
+                    if (event.message) {
+                        this.store.toast(event.message, 6000);
+                    }
+                    break;
                 case "bossRose":
                 case "bossEnraged":
                 case "bossStage":
@@ -3683,6 +4092,7 @@ export class GameClient implements GameFrameHandler {
                 portal: sim.raidTeleporter !== undefined && sim.raidTeleportsLeft > 0,
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
             },
+            objective: getObjectiveView(sim),
             tombsWave:
                 sim.tombsRoom && !sim.tombsRoom.boss
                     ? sim.tombsRoom.het
@@ -3735,12 +4145,14 @@ export class GameClient implements GameFrameHandler {
                 !sim.tombsWardens,
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
+            hpShare: getHpShare(sim.player.hp, sim.player.maxHp),
             poisoned: sim.player.poisonEnd !== -1,
             xpFraction: Math.min(
                 1,
                 Math.max(0, (sim.xp - thisLevel) / Math.max(1, nextLevel - thisLevel)),
             ),
-            seconds: Math.floor(sim.seconds),
+            // Held while a lair's on, as the waves are (Sim.heldTicks)
+            seconds: Math.floor(sim.clockSeconds),
             // None once a run's ended early: its sim can stop mid-choice
             decisionSeconds: this.coopStopped ? undefined : this.coopRun?.decisionSeconds,
             kills: sim.kills,
@@ -3751,6 +4163,7 @@ export class GameClient implements GameFrameHandler {
             buffs: getBuffViews(sim),
             boss,
             ability: this.getAbilityView(sim),
+            abilities: this.getKitViews(sim),
             quests: getQuestTrackViews(this.save, sim),
         };
         // What hasn't changed stays the same object, so a part of the HUD that shows
@@ -3794,6 +4207,7 @@ export class GameClient implements GameFrameHandler {
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),
+            blessings: sim.map.blessings && getBlessingViews(sim.map.blessings, sim.blessings),
             stats: formatStats(sim.stats),
             gear: getGearViews(sim),
             inventory: getInventoryViews(sim),

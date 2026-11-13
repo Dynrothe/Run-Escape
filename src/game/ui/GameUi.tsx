@@ -15,6 +15,7 @@ import compass from "../../components/rs/minimap/compass.png";
 import minimapFrame from "../../components/rs/minimap/minimap-frame.png";
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { isCoarsePointer } from "../../util/DeviceUtil";
+import { describeBlessed } from "../client/BlessingViews";
 import { cloudKeepsCopy } from "../client/CloudSave";
 import { FRAME_RATES, FrameRate } from "../client/DisplaySettings";
 import type { GameClient } from "../client/GameClient";
@@ -32,6 +33,7 @@ import {
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
 import { RUN_ANALYTICS_URL } from "../client/RunAnalytics";
+import { ActDef, FALLEN_EMPIRE, getAct, getActMapIds, getActStep, isActOut } from "../content/acts";
 import {
     CHARACTERS,
     characterDescription,
@@ -46,10 +48,13 @@ import {
     FIGHT_MAPS,
     FUN_MAPS,
     MAPS,
+    MAP_BY_ID,
     RAID_MAPS,
     SEASONAL_MAPS,
     getMap,
     getMapCharacter,
+    isCharacterOut,
+    isPeaceful,
     mapDescription,
     mapFinalBossWarning,
     mapName,
@@ -87,7 +92,7 @@ import {
 import { dateLocale, fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
 import { MAX_CAMERA_DISTANCE, MIN_CAMERA_DISTANCE } from "../render/CameraRig";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
-import { AbilityButton } from "./AbilityButton";
+import { AbilityButton, KitButtons } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
 import { ChangelogPanel } from "./ChangelogPanel";
@@ -98,6 +103,7 @@ import { CollectionLogScreen } from "./CollectionLogScreen";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
+import { DirectorPanel } from "./DirectorPanel";
 import { EventModal } from "./EventModal";
 import "./GameUi.css";
 import { InventoryItem } from "./InventoryItem";
@@ -1148,6 +1154,28 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
             </div>
         );
     }
+    if (isPeaceful(getMap(ui.mapId))) {
+        return (
+            <div
+                className="ui-endless"
+                title="Nothing comes here: walk round it for as long as you like."
+            >
+                <span className="ui-endless-name">Explore</span>
+                <span className="ui-endless-hint">No enemies</span>
+            </div>
+        );
+    }
+    if (getMap(ui.mapId).fun?.explore) {
+        return (
+            <div
+                className="ui-endless"
+                title="No clock here: fight on for as long as you like. The run is won when its last boss falls."
+            >
+                <span className="ui-endless-name">Explore</span>
+                <span className="ui-endless-hint">No clock</span>
+            </div>
+        );
+    }
     if (getMap(ui.mapId).fun) {
         return (
             <div className="ui-endless" title={t("ui.endless.tooltip.fun")}>
@@ -1206,6 +1234,31 @@ function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
             )}
         </div>
     );
+}
+
+// How long a map's objective is up each time it's shown (MapDef.objectives), fading in and out
+const MAP_OBJECTIVE_MS = 6000;
+
+// What the map wants of you (MapDef.objectives), for a few seconds and then gone
+function MapObjective({
+    objective,
+}: {
+    objective: NonNullable<HudNumbers["objective"]>;
+}): JSX.Element | null {
+    const [shown, setShown] = useState(true);
+    useEffect(() => {
+        const timer = setTimeout(() => setShown(false), MAP_OBJECTIVE_MS);
+        return () => clearTimeout(timer);
+    }, []);
+    return shown ? (
+        <div
+            className="ui-raid-objective ui-map-objective"
+            style={{ animationDuration: `${MAP_OBJECTIVE_MS}ms` }}
+        >
+            {objective.text}
+            {objective.count > 1 && ` (${objective.done}/${objective.count})`}
+        </div>
+    ) : null;
 }
 
 // What a raid's hall wants of you: hold out until its boss comes (or take the portal). The first
@@ -1434,8 +1487,9 @@ export function AdventurerPanel({
 }: ScreenProps & { fixed?: string }): JSX.Element {
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
-    // The roster: not an adventurer played on one map alone (CharacterDef.only)
-    const roster = CHARACTERS.filter((c) => !c.only);
+    // The roster: not an adventurer played on one map alone (CharacterDef.only), or one who
+    // isn't out yet (isCharacterOut)
+    const roster = CHARACTERS.filter((c) => !c.only && isCharacterOut(c));
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
     return (
@@ -1636,7 +1690,9 @@ function AdventurerDetails({
                     </button>
                 )}
             </div>
-            <div className="ui-card-text">{characterDescription(character)}</div>
+            <div className="ui-card-text">
+                <RichText text={characterDescription(character)} />
+            </div>
             {/* What they bring, a stat to a line */}
             {(bonus.length > 0 || character.damageAgainst) && (
                 <div className="ui-select-bonus">
@@ -1685,8 +1741,9 @@ function getMapGroupHint(group: MapGroup): string | undefined {
     return group.hint && tr(`ui.map.group.${group.id}_hint`, group.hint);
 }
 
-// The map screen's tabs, each a list or two of maps in the order they open
-const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
+// The map screen's tabs, each a list or two of maps in the order they open; an act's is its own
+// page (ActPage) rather than lists
+const MAP_TABS: { id: string; name: string; groups: MapGroup[]; act?: ActDef }[] = [
     {
         id: "campaign",
         name: "Campaign",
@@ -1708,6 +1765,19 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
             { id: "raids", name: "Raids", hint: "room by room", maps: RAID_MAPS },
         ],
     },
+    // Beside Bosses, open once the Inferno's beaten
+    {
+        id: "fallen_empire",
+        name: "Act II",
+        groups: [
+            {
+                id: FALLEN_EMPIRE.id,
+                name: FALLEN_EMPIRE.name,
+                maps: getActMapIds(FALLEN_EMPIRE).map((id) => getMap(id)),
+            },
+        ],
+        act: FALLEN_EMPIRE,
+    },
     {
         id: "fun",
         name: "Fun",
@@ -1716,7 +1786,13 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
                 id: "fun_maps",
                 name: "Fun maps",
                 hint: "endless, open from the start",
-                maps: FUN_MAPS,
+                maps: FUN_MAPS.filter((map) => !map.fun?.explore),
+            },
+            {
+                id: "explore",
+                name: "To explore",
+                hint: "nothing to fight, open from the start",
+                maps: FUN_MAPS.filter((map) => map.fun?.explore),
             },
         ],
     },
@@ -1726,6 +1802,8 @@ const MAP_TABS: { id: string; name: string; groups: MapGroup[] }[] = [
         groups: [{ id: "dev_maps", name: "Dev maps", hint: "dev server only", maps: DEV_MAPS }],
     },
 ]
+    // An act's tab only once it's out (isActOut)
+    .filter((tab) => !tab.act || isActOut(tab.act))
     .map((tab) => ({ ...tab, groups: tab.groups.filter((group) => group.maps.length > 0) }))
     .filter((tab) => tab.groups.length > 0);
 
@@ -1854,19 +1932,32 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                         aria-labelledby={`map-tab-${tab.id}`}
                         aria-hidden={open !== tab.id}
                     >
-                        {tab.groups.map((group) => (
-                            <div key={group.name} className="ui-style-group">
-                                <div className="ui-style-name">
-                                    {getMapGroupName(group)}
-                                    {group.hint && (
-                                        <span className="ui-style-treasure">
-                                            {getMapGroupHint(group)}
-                                        </span>
-                                    )}
+                        {tab.act && (
+                            <ActPage
+                                act={tab.act}
+                                save={save}
+                                selected={ui.mapId}
+                                onPeek={setPeek}
+                                onPick={(mapId) => {
+                                    setPeek(mapId);
+                                    client.selectMap(mapId);
+                                }}
+                            />
+                        )}
+                        {!tab.act &&
+                            tab.groups.map((group) => (
+                                <div key={group.name} className="ui-style-group">
+                                    <div className="ui-style-name">
+                                        {getMapGroupName(group)}
+                                        {group.hint && (
+                                            <span className="ui-style-treasure">
+                                                {getMapGroupHint(group)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="ui-map-list">{group.maps.map(tile)}</div>
                                 </div>
-                                <div className="ui-map-list">{group.maps.map(tile)}</div>
-                            </div>
-                        ))}
+                            ))}
                     </div>
                 ))}
             </div>
@@ -1882,6 +1973,104 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
                 }
             />
         </div>
+    );
+}
+
+// An act's page (MapDef.act, content/acts.ts): its maps round the act's own card, the ones in the
+// game to pick and the rest shown as still to come, all of it faded until the act's opened
+function ActPage({
+    act,
+    save,
+    selected,
+    onPeek,
+    onPick,
+}: {
+    act: ActDef;
+    save: SaveData;
+    selected: string;
+    onPeek: (mapId: string | undefined) => void;
+    onPick: (mapId: string) => void;
+}): JSX.Element {
+    const open = (save.mapVictories[act.requires] ?? 0) > 0;
+    const ids = getActMapIds(act);
+    const beaten = ids.filter((id) => (save.mapVictories[id] ?? 0) > 0).length;
+    const areas = ["a", "b", "c", "d"];
+    return (
+        <div className={"ui-act" + (open ? "" : " ui-act-closed")}>
+            {act.slots.map((slot, i) => {
+                const map = slot.mapId ? MAP_BY_ID.get(slot.mapId) : undefined;
+                const playable = !!map && isMapUnlocked(save, map.id);
+                const wins = map ? (save.mapVictories[map.id] ?? 0) : 0;
+                return (
+                    <button
+                        key={slot.name}
+                        className={
+                            "ui-card ui-act-card" +
+                            (map && map.id === selected ? " ui-card-selected" : "") +
+                            (playable ? "" : " ui-card-locked")
+                        }
+                        style={{ gridArea: areas[i] }}
+                        aria-pressed={!!map && map.id === selected}
+                        aria-disabled={!playable}
+                        onMouseMove={() => map && onPeek(map.id)}
+                        onFocus={() => map && onPeek(map.id)}
+                        onBlur={() => onPeek(undefined)}
+                        onClick={() => map && playable && onPick(map.id)}
+                    >
+                        <ItemIcon objId={slot.iconObjId} size={20} />
+                        <span className="ui-act-card-text">
+                            <span className="ui-map-name">{slot.name}</span>
+                            <span className="ui-act-line">
+                                {map ? slot.boss : `${slot.boss}: coming soon`}
+                            </span>
+                        </span>
+                        {(save.hardVictories[slot.mapId ?? ""] ?? 0) > 0 ? (
+                            <span
+                                className="ui-beaten ui-beaten-hard"
+                                aria-label="Beaten on hard"
+                            />
+                        ) : (
+                            wins > 0 && <span className="ui-beaten" aria-label="Beaten" />
+                        )}
+                    </button>
+                );
+            })}
+            <div className="ui-card ui-act-middle" style={{ gridArea: "m" }}>
+                <span className="ui-map-name">{act.name}</span>
+                <span className="ui-act-line">
+                    {open
+                        ? `${beaten} / ${act.slots.length} beaten, in any order. Each is harder ` +
+                          "the more of the others you've beaten."
+                        : `Beat ${getMap(act.requires).name} to open it.`}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+// An act's map's line on its details: the step a run starts at, and its best win
+function ActDetails({ save, map }: { save: SaveData; map: MapDef }): JSX.Element | null {
+    if (!map.act) {
+        return null;
+    }
+    const act = getAct(map.act.id);
+    const step = getActStep(map, save.mapVictories);
+    const last = act.steps.length - 1;
+    const coins = act.steps[step].coins;
+    const best = save.actBest?.[map.id];
+    return (
+        <>
+            <div className="ui-card-style">
+                {`${act.name}, step ${step} of ${last}` +
+                    (coins > 0 ? `: coins +${Math.round(coins * 100)}%` : "")}
+            </div>
+            {best && (
+                <div className="ui-card-style">
+                    Best: {formatTime(best.seconds)}
+                    {best.step < last ? ` (at step ${best.step})` : ""}
+                </div>
+            )}
+        </>
     );
 }
 
@@ -1938,7 +2127,7 @@ function MapDetails({
                     <div className={unlocked ? "ui-card-style" : "ui-card-cost"}>
                         {map.fun
                             ? map.fun.character
-                                ? t("ui.map.fun_char", {
+                                ? t(map.fun.explore ? "ui.map.explore_char" : "ui.map.fun_char", {
                                       name: tr(
                                           `char.${map.fun.character}.name`,
                                           getCharacter(map.fun.character).name,
@@ -1948,6 +2137,7 @@ function MapDetails({
                             : !unlocked
                               ? (() => {
                                     const reqId =
+                                        map.act?.requires ??
                                         map.requires ??
                                         map.fight?.requires ??
                                         MAPS[MAPS.indexOf(map) - 1].id;
@@ -1980,6 +2170,7 @@ function MapDetails({
                                       })
                                     : t("ui.map.not_beaten")}
                     </div>
+                    {unlocked && <ActDetails save={save} map={map} />}
                     {map.stages && unlocked && onPick && reached > 1 && (
                         <div className="ui-row ui-fight-parts">
                             {map.stages.slice(0, reached).map((part, i) => (
@@ -2349,19 +2540,24 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.revive && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <ReviveNote revive={ui.revive} />
             )}
-            {ui.cinematic && (
-                // The opening cinematic: no HUD, and a click or tap anywhere skips it
-                <div
-                    className="ui-cinematic"
-                    onPointerDown={(e) => {
-                        e.preventDefault();
-                        client.skipCinematic();
-                    }}
-                />
+            {import.meta.env.DEV && ui.director ? (
+                // Dev only: the shot editor, over a cinematic held where it's put
+                <DirectorPanel director={ui.director} client={client} trailer={ui.trailer} />
+            ) : (
+                ui.cinematic && (
+                    // The opening cinematic: no HUD, and a click or tap anywhere skips it
+                    <div
+                        className="ui-cinematic"
+                        onPointerDown={(e) => {
+                            e.preventDefault();
+                            client.skipCinematic();
+                        }}
+                    />
+                )
             )}
             {isCoarsePointer && hud && !ui.cinematic && (
                 <TouchControls
-                    inventory={getMap(hud.mapId).fight ? [] : hud.inventory}
+                    inventory={getMap(hud.mapId).fight || hud.blessings ? [] : hud.inventory}
                     overlay={ui.overlay}
                     client={client}
                 />
@@ -2456,19 +2652,21 @@ function formatSlotLevel(slot: SlotView): string {
     return slot.level === slot.maxLevel ? t("ui.hud.slot_max") : String(slot.level);
 }
 
-// A weapon or passive in the HUD, with what it does on a card shown while
-// it's pointed at
+// A weapon, passive or blessing in the HUD, with what it does on a card shown
+// while it's pointed at
 const Slots = memo(function Slots({
     slots,
     max,
     disabled,
+    className,
 }: {
     slots: SlotView[];
     max: number;
     disabled: boolean;
+    className?: string;
 }): JSX.Element {
     return (
-        <div className="ui-slots">
+        <div className={className ? `ui-slots ${className}` : "ui-slots"}>
             {Array.from({ length: max }, (_, i) => {
                 const slot = slots[i];
                 return (
@@ -2486,12 +2684,14 @@ const Slots = memo(function Slots({
                                 <>
                                     <div style={{ color: slot.rarityColor }}>{tl(slot.name)}</div>
                                     <div className="ui-slot-tip-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? t("ui.hud.max_level")
-                                            : t("ui.hud.level_of", {
-                                                  level: slot.level,
-                                                  max: slot.maxLevel,
-                                              })}
+                                        {slot.blessing
+                                            ? describeBlessed(slot)
+                                            : slot.level >= slot.maxLevel
+                                              ? t("ui.hud.max_level")
+                                              : t("ui.hud.level_of", {
+                                                    level: slot.level,
+                                                    max: slot.maxLevel,
+                                                })}
                                     </div>
                                     {slot.stats?.map((line) => (
                                         <StatLine
@@ -2703,49 +2903,97 @@ const Hud = memo(function Hud({
     disabled: boolean;
     muted: boolean;
 }): JSX.Element {
+    // A map to walk round with nothing coming (isPeaceful) has no run to keep track of: no level,
+    // no clock, no kills, coins, rounds, damage or quests, only the minimap and the hero's own
+    // buttons
+    const explore = isPeaceful(getMap(hud.mapId));
     return (
         <>
-            <XpBar level={hud.level} client={client} />
+            {!explore && <XpBar level={hud.level} client={client} />}
             <div className="ui-hud-top">
                 <div className="ui-hud-left">
-                    <Slots slots={hud.weapons} max={hud.maxWeapons} disabled={disabled} />
-                    <Slots slots={hud.passives} max={hud.maxPassives} disabled={disabled} />
-                    {!gearPanel && <GearSlots gear={hud.gear} disabled={disabled} />}
+                    {!explore &&
+                        (hud.blessings ? (
+                            // A map with blessings (MapDef.blessings) has no items: the hero's
+                            // weapon, and what Saradomin's given them
+                            <>
+                                <Slots
+                                    slots={hud.weapons}
+                                    max={hud.weapons.length}
+                                    disabled={disabled}
+                                />
+                                {hud.blessings.length > 0 && (
+                                    <Slots
+                                        slots={hud.blessings}
+                                        max={hud.blessings.length}
+                                        disabled={disabled}
+                                        className="ui-blessing-slots"
+                                    />
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <Slots
+                                    slots={hud.weapons}
+                                    max={hud.maxWeapons}
+                                    disabled={disabled}
+                                />
+                                <Slots
+                                    slots={hud.passives}
+                                    max={hud.maxPassives}
+                                    disabled={disabled}
+                                />
+                                {!gearPanel && <GearSlots gear={hud.gear} disabled={disabled} />}
+                            </>
+                        ))}
                 </div>
-                <RunTimer client={client} />
+                {!explore && <RunTimer client={client} />}
                 <TombsScabarasReading client={client} />
                 <div className="ui-hud-right">
                     <Minimap client={client} muted={muted} />
-                    <KillsAndCoins client={client} />
-                    {hud.round !== undefined && (
-                        <div className="ui-round">{t("ui.hud.round", { round: hud.round })}</div>
+                    {!explore && (
+                        <>
+                            <KillsAndCoins client={client} />
+                            {hud.round !== undefined && (
+                                <div className="ui-round">
+                                    {t("ui.hud.round", { round: hud.round })}
+                                </div>
+                            )}
+                            <RaidRoomInfo client={client} />
+                            <TombsWaveInfo client={client} />
+                            <TombsShadowsInfo client={client} />
+                            <TombsScabarasInfo client={client} />
+                            <TombsHetInfo client={client} />
+                            <TombsCrondisInfo client={client} />
+                            <TombsRoarInfo client={client} />
+                        </>
                     )}
-                    <RaidRoomInfo client={client} />
-                    <TombsWaveInfo client={client} />
-                    <TombsShadowsInfo client={client} />
-                    <TombsScabarasInfo client={client} />
-                    <TombsHetInfo client={client} />
-                    <TombsCrondisInfo client={client} />
-                    <TombsRoarInfo client={client} />
                     {/* The dev server's testing buttons: a build drops them whole */}
                     {import.meta.env.DEV && <DevGodButton client={client} />}
                     {import.meta.env.DEV && <DevWardensButton client={client} />}
                     {/* With the column's other toggles; a phone's layout puts it by the timer */}
                     {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
-                    <HudQuests open={questTracker} client={client} disabled={disabled} />
-                    <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
-                    {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
+                    {!explore && (
+                        <>
+                            <HudQuests open={questTracker} client={client} disabled={disabled} />
+                            <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
+                            {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
+                        </>
+                    )}
                 </div>
             </div>
             <BossBar mapId={hud.mapId} client={client} />
             <div className="ui-hud-bottom">
                 <HudBuffs client={client} />
                 <div className="ui-hud-actions">
-                    {/* A boss fight has no items, only its own button */}
-                    {!getMap(hud.mapId).fight && (
+                    {/* A boss fight has no items, only its own button, and a map to walk round
+                        (isPeaceful) or with blessings has none either, only the hero's own
+                        buttons */}
+                    {!getMap(hud.mapId).fight && !explore && !hud.blessings && (
                         <Inventory inventory={hud.inventory} client={client} disabled={disabled} />
                     )}
                     <AbilityButton client={client} />
+                    <KitButtons client={client} />
                 </div>
                 <HpBar client={client} />
             </div>
@@ -3093,13 +3341,14 @@ function HudBuffs({ client }: { client: GameClient }): JSX.Element | null {
 function HpBar({ client }: { client: GameClient }): JSX.Element | null {
     const hp = useHudNumber(client, (n) => n.hp);
     const maxHp = useHudNumber(client, (n) => n.maxHp);
+    const share = useHudNumber(client, (n) => n.hpShare);
     const poisoned = useHudNumber(client, (n) => n.poisoned);
     if (hp === undefined || maxHp === undefined) {
         return null;
     }
     return (
         <div className={poisoned ? "ui-hp ui-hp-poisoned" : "ui-hp"}>
-            <div className="ui-hp-fill" style={{ transform: `scaleX(${hp / maxHp})` }} />
+            <div className="ui-hp-fill" style={{ transform: `scaleX(${share ?? hp / maxHp})` }} />
             <span>
                 {hp} / {maxHp}
                 {poisoned && ` · ${t("ui.hud.poisoned")}`}
@@ -3114,11 +3363,18 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
     const boss = useHudNumber(client, (n) => n.boss);
     const bossIn = useHudNumber(client, (n) => n.bossIn);
     const raidRoom = useHudNumber(client, (n) => n.raidRoom);
+    const objective = useHudNumber(client, (n) => n.objective);
     if (!boss) {
         if (raidRoom) {
             return raidRoom.waves && bossIn !== undefined ? (
                 <RaidObjective room={raidRoom} bossIn={bossIn} />
             ) : null;
+        }
+        if (objective) {
+            // Shown afresh as it changes, and each time the HUD or a fight's end brings it back
+            return (
+                <MapObjective key={`${objective.text}:${objective.done}`} objective={objective} />
+            );
         }
         return bossIn !== undefined && bossIn <= 60 ? (
             <div className="ui-boss-warning">
@@ -3264,6 +3520,7 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
     // to its hilt level
     const hilt = ui.choices.some((choice) => choice.isHilt);
     const spell = ui.choices.some((choice) => choice.isSpell);
+    const blessing = ui.choices.some((choice) => choice.isBlessing);
     const keris = ui.choices.some((choice) => choice.isKeris);
     const banishes = ui.hud?.banishes ?? 0;
     const coins = useHudNumber(client, (n) => n.coins) ?? 0;
@@ -3293,7 +3550,9 @@ function LevelUpModal({ ui, client }: ScreenProps): JSX.Element {
                           ? t("ui.levelup.sub.keris")
                           : hilt
                             ? t("ui.levelup.sub.hilt")
-                            : t("ui.levelup.sub.regular", { level: ui.hud?.level ?? 1 })}
+                            : t(blessing ? "ui.levelup.sub.blessing" : "ui.levelup.sub.regular", {
+                                  level: ui.hud?.level ?? 1,
+                              })}
                 </p>
                 <div className="ui-choices">
                     {ui.choices.map((choice, i) => (
@@ -3660,7 +3919,8 @@ function PauseModal({
                                     : "")
                             }
                         >
-                            {[...hud.weapons, ...hud.passives].map((slot) => (
+                            {/* A map with blessings has those in place of passives */}
+                            {[...hud.weapons, ...(hud.blessings ?? hud.passives)].map((slot) => (
                                 <div key={slot.id} className="ui-pause-item">
                                     <ItemIcon
                                         objId={slot.iconObjId}
@@ -3686,9 +3946,11 @@ function PauseModal({
                                         {slot.evolution && <EvolutionLine {...slot.evolution} />}
                                     </span>
                                     <span className="ui-pause-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? t("pause.slot_max")
-                                            : t("pause.slot_level", { level: slot.level })}
+                                        {slot.blessing
+                                            ? `×${slot.level}`
+                                            : slot.level >= slot.maxLevel
+                                              ? t("pause.slot_max")
+                                              : t("pause.slot_level", { level: slot.level })}
                                     </span>
                                 </div>
                             ))}

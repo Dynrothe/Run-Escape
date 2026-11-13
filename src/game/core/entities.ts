@@ -4,6 +4,7 @@ import {
     CasketTier,
     EnemyDef,
     ImpactDef,
+    LairDef,
     LightLook,
     PlayerEffectDef,
     PolymorphKind,
@@ -66,6 +67,8 @@ export type BossWindup = {
     // Where it's cast from, where that isn't where the boss is as it begins (toMiddle's leap):
     // a gaze's shadows are from here from the start (BossAttackDef.cover)
     at?: { x: number; y: number };
+    // What the boss has taken while winding it up, towards breaking it (BossAttackDef.breakable)
+    taken?: number;
 };
 
 // Across the arena, from where a surge starts to where it stops; what's within
@@ -139,6 +142,10 @@ export type BossState = {
     furyTempo?: number;
     // How many of BossDef.summonsAt have been called in
     summonsDone: number;
+    // Its time between attacks times this, its lair's boss empowered (LairDef.empowered)
+    tempo?: number;
+    // Its root heart's been planted (BossAttackDef.rule heart): one a boss
+    ruleHeart?: boolean;
     phase?: BossPhase;
     surge?: BossSurge;
     walkers?: BossWalkers;
@@ -152,6 +159,12 @@ export type BossState = {
     leap?: { toX: number; toY: number; switchTick: number; endTick: number };
     // It stands still until this tick, as its volleys go out
     channelEnd: number;
+    // Where it first stood, which it keeps near (BossDef.home)
+    home?: { x: number; y: number };
+    // BossDef.critical: the tick it's next due (unset until its hitpoints first come down to it),
+    // and the phase that was in, so the next phase brings it on at once
+    criticalAt?: number;
+    criticalPhase?: number;
     // Its rings that hold (BulletPatternDef.hold) are in by this tick, and no new one starts sooner
     ringsUntil?: number;
     // BossDef.naps: down until this tick (-1 when it's up), and when it next goes down
@@ -225,6 +238,59 @@ export type BossIntro = {
     endTick: number;
     // Up once it's risen
     boss?: Enemy;
+};
+
+// Pillars up out of the floor between a boss and a hero's gaze (BossDef.gazeWard): its tiles (world
+// tiles, x then y), risen from startTick and sinking at endTick, when they're open again
+export type WardPillars = {
+    enemyUid: number;
+    tiles: number[];
+    locId: number;
+    startTick: number;
+    endTick: number;
+    // Ticks they take to come up (and to sink), and whether they've sunk (the ground's open)
+    riseTicks: number;
+    sunk: boolean;
+};
+
+// One of a map's lairs (MapDef.lairs): asleep until a player steps into it, then its fight, with
+// every way out sealed, then beaten (and the map free to walk round again)
+export type Lair = {
+    // Its def, and where it is in MapDef.lairs
+    def: LairDef;
+    index: number;
+    // waking: its opening cinematic (LairDef.opening) from wakeTick, until introTick
+    state: "asleep" | "waking" | "fighting" | "beaten";
+    // Sealed off from the start until the lairs it requires are beaten (LairDef.requires)
+    locked: boolean;
+    // Its boss fights empowered, another lair having been beaten first (LairDef.empowered)
+    empowered: boolean;
+    // Its pillars (LairDef.pillars), by index
+    pillars: LairPillar[];
+    wakeTick: number;
+    introTick: number;
+    // Up once it's risen (BossIntro.boss)
+    boss?: Enemy;
+    // The tiles sealed while it's fought or locked (world tiles, x then y), from sealTick, and
+    // lifted at liftTick (-1 until then)
+    sealed: number[];
+    sealTick: number;
+    liftTick: number;
+    // A locked one's unsealing (LairDef.requires): from unsealTick (-1 until what it requires is
+    // beaten), its seal lifting at unsealLiftTick, and the party held until unsealEndTick
+    unsealTick: number;
+    unsealLiftTick: number;
+    unsealEndTick: number;
+};
+
+// A lair's pillar (LairDef.pillars): its south-west tile, its tiles (x then y), solid while it
+// stands, and the tick it last crumbled or came back up
+export type LairPillar = {
+    x: number;
+    y: number;
+    tiles: number[];
+    standing: boolean;
+    changeTick: number;
 };
 
 // Off to the edge of the map, as a boss rises (BossDef.intro): it can't be
@@ -415,6 +481,8 @@ export type Enemy = {
     attackCooldown: number;
     // Ticks left frozen (Ice spells)
     frozen: number;
+    // Ticks left staggered by a heavy blow (WeaponDef.heavy): standing, and not striking
+    staggered?: number;
     // Under LightingDef.litTargetsOnly, whether it stood in a sim light as this tick's lights were
     // made, or as it came (Sim.isEnemyLit)
     lit?: boolean;
@@ -492,6 +560,8 @@ export type Enemy = {
     bonesOnly: boolean;
     // Hatches at this tick if it's still alive (EnemyDef.hatches); 0 for never
     hatchTick: number;
+    // Bursts at this tick (EnemyDef.bursts), put back a tick for each it's held; 0 for never
+    burstTick: number;
     // Thrown out by a boss (BossAttackDef.summon.thrown): in the air from one
     // spot to the other between these ticks, and nothing to the fight until
     // it lands
@@ -713,6 +783,9 @@ export type BossTether = {
 export type GroundPool = {
     uid: number;
     enemyId: string;
+    // What it is, and when it next lights another beside it (pool.spreads, -1 for never)
+    def: NonNullable<BossAttackDef["pool"]>;
+    nextSpread: number;
     x: number;
     y: number;
     radius: number;
@@ -975,6 +1048,8 @@ export type Debuff = {
     id: string;
     // Doses of a debuff that stacks; its stats are all of them added up
     stacks?: number;
+    // Damage a dose every second (a burn)
+    burn?: number;
     name: string;
     iconObjId: number;
     stats: Partial<Stats>;
@@ -1061,6 +1136,9 @@ type SimEventBody =
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }
+    // A map's lair (MapDef.lair): its fight's begun, the floor sealed (woken), or it's beaten and
+    // the seal's lifted
+    | { type: "lair"; woken: boolean; sound: number; x: number; y: number }
     // A boss fought in phases has moved on; message: what to do now
     | {
           type: "bossStage";
@@ -1092,9 +1170,24 @@ type SimEventBody =
           arc: number;
           weaponId: string;
       }
+    // A tree felled along a strip (CharacterTraitDef timber): from x, y the way dir goes, length
+    // tiles, drawn as locId falling over
+    | {
+          type: "treeFall";
+          x: number;
+          y: number;
+          dirX: number;
+          dirY: number;
+          length: number;
+          locId: number;
+          sound?: number;
+      }
     | { type: "aura"; x: number; y: number; radius: number }
     | { type: "pickup"; kind: PickupKind; value: number }
     | { type: "levelUp"; level: number }
+    // A level up's blessing on a map with them (MapDef.blessings): which, and how many of it the
+    // hero has now
+    | { type: "blessing"; blessingId: string; count: number }
     // byEnemy: killed by another faction's enemy, not the player
     | {
           type: "kill";

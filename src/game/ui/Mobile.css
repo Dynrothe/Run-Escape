@@ -101,6 +101,56 @@
         touch-action: none;
     }
 
+    /* A hero's own buttons (KitButtons): the first big in the items' corner, the others in
+       an arc round it, up and to its left */
+    .ui-hud-actions .ui-kit {
+        display: none;
+    }
+
+    .ui-touch-kit {
+        position: absolute;
+        display: block;
+        right: calc(var(--safe-right) + 16px);
+        bottom: calc(var(--safe-bottom) + 16px);
+        width: 76px;
+        height: 76px;
+    }
+
+    .ui-touch-kit .ui-ability {
+        position: absolute;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        touch-action: none;
+    }
+
+    .ui-touch-kit .ui-touch-kit-0 {
+        right: 0;
+        bottom: 0;
+        width: 76px;
+        height: 76px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-1 {
+        right: 84px;
+        bottom: 0;
+    }
+
+    .ui-touch-kit .ui-touch-kit-2 {
+        right: 74px;
+        bottom: 58px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-3 {
+        right: 26px;
+        bottom: 88px;
+    }
+
+    .ui-touch-kit .ui-touch-kit-4 {
+        right: 140px;
+        bottom: 0;
+    }
+
     /* Keys don't mean anything here */
     .ui-choice-key,
     .ui-inv-key,
@@ -133,6 +183,11 @@
     .ui-quest-tracker,
     .ui-damage {
         position: relative;
+    }
+
+    /* and under a level up, a casket and the pause menu */
+    .ui-modal {
+        z-index: 2;
     }
 
     /* Big enough to tap */
@@ -931,7 +986,8 @@
         font-size: 14px;
     }
 
-    .ui-boss-warning {
+    .ui-boss-warning,
+    .ui-map-objective {
         top: calc(var(--safe-top) + 42px);
         font-size: 16px;
     }

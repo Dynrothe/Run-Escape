@@ -204,7 +204,7 @@ describe("the keris partisans", () => {
         ]);
         expect(sim.reroll()).toBe(false);
         // Each card is the keris it becomes, the plain one's whole description too
-        const cards = sim.choices.map(describeChoice);
+        const cards = sim.choices.map((choice) => describeChoice(choice));
         expect(cards[0].text).toBe(getWeapon("keris_partisan").description);
         expect(cards[1]).toMatchObject({ title: "Keris partisan of corruption", iconObjId: 27287 });
         sim.choose(2);

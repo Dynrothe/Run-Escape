@@ -39,6 +39,7 @@ import {
     getLookKey,
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
+    getPoolKey,
     getPowerUpLookRequests,
     getPrayerHeadicon,
     getRunAppearance,
@@ -111,14 +112,17 @@ describe("enemy bakes", () => {
     });
 
     test("every spot animation a boss attack shows is in the base bake", () => {
-        const keys = GameAssets.getBaseRequests().map((r) => r.key);
+        const requests = GameAssets.getBaseRequests();
+        const keys = requests.map((r) => r.key);
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 for (const id of attack.impactSpotAnims ?? []) {
                     expect(keys).toContain("spot:" + id);
                 }
+                // and its pool, on its own animation (a fire flickers)
                 if (attack.pool) {
-                    expect(keys).toContain("loc:" + attack.pool.locId);
+                    const pool = requests.find((r) => r.key === getPoolKey(attack.pool!.locId));
+                    expect(pool).toMatchObject({ kind: "loc", animated: true });
                 }
             }
             for (const id of enemy.disguise?.warning?.spotAnims ?? []) {
@@ -494,7 +498,13 @@ describe("power-ups in the cache", () => {
         const keys = new Set(GameAssets.getBaseRequests().map((r) => r.key));
         for (const weapon of WEAPONS) {
             for (const level of weapon.levels) {
-                const ids = [level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim];
+                const ids = [
+                    level.castSpotAnim,
+                    level.projectileSpotAnim,
+                    level.impactSpotAnim,
+                    // and a heavy blow's on what it hits (the Saradomin sword's)
+                    weapon.heavy?.hit?.spotAnim,
+                ];
                 for (const id of ids) {
                     if (id !== undefined) {
                         expect(keys, weapon.id).toContain("spot:" + id);

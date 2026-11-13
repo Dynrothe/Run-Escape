@@ -1,6 +1,7 @@
 import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { tr } from "../i18n";
 import { DURIAL_COLORS, DURIAL_EQUIPMENT, DURIAL_KITS, FUN_ITEMS } from "./fun/enemies";
+import { JUSTICIAR_ZACHARIAH } from "./justiciarKit";
 import { CharacterDef } from "./types";
 
 // The first three are there from the start. Each map brings two more: one for
@@ -440,6 +441,43 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { area: 0.15 },
         unlock: { kind: "killBoss", mapId: "inferno", enemyId: "jaltok_jad" },
     },
+    // Act II's (content/acts.ts): adventurers with a trait, a way to play, rather than a bonus
+    {
+        id: "forester",
+        name: "Forester",
+        description:
+            "Starts with a bronze 2h sword. **Timber!** Every 25 kills, his next swing fells a " +
+            "Strangled Tree along the ground ahead, for four times its damage. His swings cut " +
+            "roots 2 tiles further out.",
+        style: "melee",
+        startingWeapon: "two_handed_sword",
+        // The lumberjack outfit
+        equipment: {
+            [EquipSlot.HEAD]: 10941,
+            [EquipSlot.TORSO]: 10939,
+            [EquipSlot.LEGS]: 10940,
+            [EquipSlot.FEET]: 10933,
+        },
+        bonus: {},
+        trait: {
+            kind: "timber",
+            name: "Timber!",
+            every: 25,
+            length: 8,
+            width: 2.2,
+            damage: 4,
+            cutReach: 2,
+            // A Strangled Tree, the wood's commonest
+            locId: 48358,
+            // The Sepulchre's dust thrown up where it lands, and along it
+            impact: {
+                spots: [{ spotAnim: 2699, fit: 1.5 }],
+                trail: { spotAnim: 2184 },
+                shake: 0.3,
+            },
+        },
+        unlock: { kind: "beatMap", mapId: "stranglewood" },
+    },
     // The fun maps' adventurers, one for a task on each
     {
         id: "scammer",
@@ -589,6 +627,8 @@ export const CHARACTERS: CharacterDef[] = [
         bonus: { moveSpeed: 0.2, maxHp: 0.2, regen: 10 },
         only: "zachariah",
     },
+    // Justiciar Zachariah himself, in the Battle for Varrock (justiciarKit.ts)
+    JUSTICIAR_ZACHARIAH,
     {
         id: "sands_delver",
         name: "Sands Delver",

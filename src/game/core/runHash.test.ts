@@ -128,6 +128,6 @@ describe("seeded runs", () => {
         usePortableMath(true);
         const party = ["warrior", "wizard", "ranger", "pyromancer"].map(hero);
         // Every weapon can come up, so a new one (the Nightmare staff) changes it
-        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x54b90ad3);
+        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x5d5cb1d6);
     }, 60000);
 });

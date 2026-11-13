@@ -14,15 +14,25 @@ the version in the corner).
   look. Drag your adventurer round to see them from every side, or press Random for a new look.
 - Hallowed Night pumpkins now hold a Black h'ween mask, a Jack lantern mask and a Skeleton mask
   too.
+- The Battle for Varrock, on the Fun tab: Varrock burnt to ruins and overrun by Yama's demons.
+  Play as Justiciar Zachariah, with his Saradomin sword and his moves on buttons of your own, and
+  choose a blessing of Saradomin at each level instead of items. Slay Yama's two generals, Xarth
+  on the Grand Exchange and K'ril Tsutsaroth in the church, and the palace opens for Yama himself.
 
 ### Fixed
 
 - The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
   that heal you for half the damage they deal.
+- An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
+  lands.
+- On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
+  the pause menu.
   
 ### Changed
 
 - Right clicking in the game no longer opens the browser's menu.
+- Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
+  a whole hitpoint at a time.
 
 ## 0.31.1 - 2026-11-12
 

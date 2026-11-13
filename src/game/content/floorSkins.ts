@@ -119,4 +119,20 @@ export const FLOOR_SKINS = {
     healGlyph: { loc: 56393, light: 0x6dff8e, effect: "heal" },
     // A speed plate: the Tombs' glyph plate, lit a cold blue
     speedPlate: { loc: 45349, light: 0x7fd4ff, effect: "haste" },
+    // Burnt (the Battle for Varrock's palace): the grooved paving gone to soot, its stone a warm
+    // ash grey and its joints charcoal, and some of it charred near black; and the lava rock's
+    // crust still smouldering, its cracks glowing faintly, embers drifting off it, burning
+    // nothing. A whisker over the ground, which shows dark through the joints rather than
+    // z-fighting.
+    ashenFlagstones: { loc: 20624, recolor: paving(5272, 8, 5262), height: 0.04 },
+    charredFlagstones: { loc: 20624, recolor: paving(5260, 4, 5254), height: 0.04 },
+    smouldering: {
+        ...texturedTile(59),
+        height: -0.09,
+        tint: 0x6a4a3a,
+        glow: 0.004,
+        pulse: 0.1,
+        light: 0xff6a1a,
+        idle: { spotAnim: 2246, every: 3.2, share: 3, scale: 0.6 },
+    },
 } satisfies Record<string, FloorSkinDef>;

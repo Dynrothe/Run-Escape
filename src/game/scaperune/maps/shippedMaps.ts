@@ -1,7 +1,9 @@
 import { MapRecipe } from "../recipe";
+import { BATTLE_FOR_VARROCK_RECIPE } from "./battleForVarrock";
 import { HALLOWED_NIGHT } from "./hallowedNight";
 import { OWLS_COURT_RECIPE } from "./owlsCourt";
 import { SISTERHOOD_SANCTUARY } from "./sisterhoodSanctuary";
+import { STRANGLEWOOD_RECIPE } from "./stranglewood";
 import { THEATRE_OF_BLOOD } from "./theatreOfBlood";
 import { BENEATH_CURSED_SANDS_RECIPE, TOMBS_OF_AMASCUT } from "./tombsOfAmascut";
 
@@ -13,4 +15,6 @@ export const SCAPERUNE_MAPS: MapRecipe[] = [
     OWLS_COURT_RECIPE,
     TOMBS_OF_AMASCUT,
     BENEATH_CURSED_SANDS_RECIPE,
+    STRANGLEWOOD_RECIPE,
+    BATTLE_FOR_VARROCK_RECIPE,
 ];
