@@ -239,8 +239,11 @@ describe.each(
         expect([...times].sort((a, b) => a - b)).toEqual(times);
         const last = def.shots[def.shots.length - 1];
         expect("player" in last && last.at).toBe(def.seconds);
-        // It can begin from the run's camera, too (a lair's, as someone steps onto its floor)
-        expect(def.shots.slice(1, -1).every((shot) => !("player" in shot))).toBe(true);
+        // It can begin from the run's camera, too (a lair's, as someone steps onto its floor), held
+        // there a moment (as a general falls, before the palace is unsealed), but not in between
+        const from = def.shots.findIndex((shot) => !("player" in shot));
+        expect(from).toBeGreaterThanOrEqual(0);
+        expect(def.shots.slice(from, -1).every((shot) => !("player" in shot))).toBe(true);
     });
 
     it("has cues for its cast alone, within its time", () => {

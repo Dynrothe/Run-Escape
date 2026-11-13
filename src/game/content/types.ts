@@ -1364,10 +1364,10 @@ export type WeaponDef = {
     // Only comes from a pick (hilts) or an adventurer's start, never a level up's offer
     pickOnly?: boolean;
     // Blows that land heavy (the Saradomin sword's; a sweep's or a slash's): a swing that hits
-    // shakes the camera (ImpactDef.shake, once a swing) and shows hit on each of the first few it
-    // hits, and they stagger for stagger seconds (longer with meleeKnockback): they don't walk or
-    // strike, though the knockback still carries them. Bosses don't stagger.
-    heavy?: { shake: number; hit: ImpactSpotDef; stagger: number };
+    // shakes the camera (ImpactDef.shake, once a swing) and shows hit, if any, on each of the
+    // first few it hits, and they stagger for stagger seconds (longer with meleeKnockback): they
+    // don't walk or strike, though the knockback still carries them. Bosses don't stagger.
+    heavy?: { shake: number; hit?: ImpactSpotDef; stagger: number };
     // Used in place of every so many attacks (sweeps and slashes)
     special?: SpecialAttackDef;
     // Bosses and elites are hit again for these fractions of the damage (the
@@ -1786,6 +1786,8 @@ export type MapDef = {
     lighting?: LightingDef;
     // Bosses asleep in their lairs, each woken by stepping into it (LairDef): one fought at a time
     lairs?: LairDef[];
+    // What the map wants of the players, a line at a time (MapObjectiveDef)
+    objectives?: MapObjectiveDef[];
     // Level ups here grant a blessing at random, at once, instead of a pick of weapons and
     // passives, and nothing gives an item: no caskets, gear, utility items or power-ups (bones,
     // coins and food still drop). The Battle for Varrock's blessings of Saradomin.
@@ -1811,6 +1813,9 @@ export type BlessingsDef = {
     // Played on the hero as one's granted
     spotAnim?: number;
     sound?: number;
+    // The chance a kill drops food here, over FOOD_DROP_CHANCE in Sim.ts: with no items, it's
+    // most of the healing there is
+    food?: number;
 };
 
 // One blessing (BlessingsDef.pool), each time it's had adding all of this again: stats, a level
@@ -1983,17 +1988,22 @@ export type LairDef = {
     // What seals each way out: a loc playing its own animation (fire), on every tile it seals,
     // drawn this much bigger; sound as it's sealed and lifted. spacing: drawn on tiles at least
     // this far apart instead, every tile still sealed, for a long seal on a phone (bigger, so
-    // they meet: the Grand Exchange's pad is ringed by a hundred tiles of it)
-    seal: { locId: number; scale: number; sound?: number; spacing?: number };
+    // they meet: the Grand Exchange's pad is ringed by a hundred tiles of it). smoke: a spot
+    // animation played on each flame as it goes out.
+    seal: { locId: number; scale: number; sound?: number; spacing?: number; smoke?: number };
     // On screen as it's sealed, and once the boss is beaten; and what it says as it falls
     message: string;
     victory: string;
     shout?: string;
+    // As it's beaten, each hero still up gets this share of their hitpoints back, with spotAnim
+    // on them (a general's: the hordes are still to come)
+    heals?: { share: number; spotAnim?: number };
     // Played as it wakes (LairOpeningDef), but not on a retry, which starts on its floor
     opening?: LairOpeningDef;
     // Sealed from the run's start until these of the map's lairs are beaten (by id), with message on
-    // screen as it opens (Yama's palace, until his generals are dead)
-    requires?: { lairs: string[]; message: string };
+    // screen as it opens (Yama's palace, until his generals are dead), and a cinematic of its
+    // seal lifting first (LairUnsealingDef)
+    requires?: { lairs: string[]; message: string; unsealing?: LairUnsealingDef };
     // Fought after any of these lairs is beaten (by id), its boss is empowered: hp and damage times
     // its own, tempo times its time between attacks, and its attacks marked empowered too
     // (BossAttackDef.empowered). message: on screen as the other's beaten.
@@ -2015,6 +2025,11 @@ export type LairDef = {
     };
 };
 
+// A line of what the map wants of the players (MapDef.objectives), done once these of its lairs are
+// beaten (LairDef.id). The HUD shows the first that isn't, with how many of its lairs are, where a
+// boss's bar goes while none is out.
+export type MapObjectiveDef = { text: string; lairs: string[] };
+
 // A lair's cinematic as its boss wakes (Yama on his throne, before he rises). It's on the sim's
 // clock, from the tick a player steps onto the floor: the party's held where they stand, turned to
 // where it'll rise, until introAt seconds in, when the floor's sealed and the boss's intro begins
@@ -2024,6 +2039,18 @@ export type LairDef = {
 export type LairOpeningDef = {
     cinematic: CinematicDef;
     introAt: number;
+};
+
+// A locked lair's cinematic as what it requires is beaten (LairDef.requires): the camera to its
+// seal, which dies down liftAt seconds in, flame by flame out from from (world tiles; its boss's
+// spot, LairDef.at, unless set), slowly enough to be watched. It's on the sim's
+// clock as a lair's opening is, from the tick it's unlocked: the party's held and unhurt, and what's
+// about is sent off, nothing more coming until it's over (and its message on screen then). Skipped
+// in a solo run, the seal's lifted at once.
+export type LairUnsealingDef = {
+    cinematic: CinematicDef;
+    liftAt: number;
+    from?: { x: number; y: number };
 };
 
 // A map's opening cinematic (MapDef.cinematic), played as a run starts on the map (not on a

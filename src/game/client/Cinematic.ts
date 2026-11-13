@@ -168,6 +168,9 @@ export function getMapCinematics(map: MapDef): CinematicDef[] {
         if (lair.opening) {
             cinematics.push(lair.opening.cinematic);
         }
+        if (lair.requires?.unsealing) {
+            cinematics.push(lair.requires.unsealing.cinematic);
+        }
     }
     return cinematics;
 }

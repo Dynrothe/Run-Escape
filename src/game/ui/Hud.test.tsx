@@ -181,6 +181,45 @@ describe("the run's HUD", () => {
         expect(view.container.querySelector(".ui-boss-warning")!.textContent).toMatch(/42s$/);
     });
 
+    test("a map's objective shows while no boss is out, with how many of it are done", () => {
+        const { store, view } = renderHud();
+        const objective = () => view.container.querySelector(".ui-map-objective")?.textContent;
+        expect(objective()).toBeUndefined();
+        const text = "Find and slay Yama's two generals";
+        act(() => store.setNumbers(numbers({ objective: { text, done: 1, count: 2 } })));
+        expect(objective()).toBe(`${text} (1/2)`);
+        // One thing to do has no count
+        const yama = "Slay Yama in Varrock Palace";
+        act(() => store.setNumbers(numbers({ objective: { text: yama, done: 0, count: 1 } })));
+        expect(objective()).toBe(yama);
+    });
+
+    test("a map's objective is up for a few seconds, and again each time it changes", () => {
+        vi.useFakeTimers();
+        try {
+            const { store, view } = renderHud();
+            const objective = () => view.container.querySelector(".ui-map-objective")?.textContent;
+            const text = "Find and slay Yama's two generals";
+            act(() => store.setNumbers(numbers({ objective: { text, done: 0, count: 2 } })));
+            act(() => vi.advanceTimersByTime(5000));
+            expect(objective()).toBe(`${text} (0/2)`);
+            act(() => vi.advanceTimersByTime(1500));
+            expect(objective()).toBeUndefined();
+            // The same again (the HUD's numbers coming round) doesn't bring it back
+            act(() =>
+                store.setNumbers(numbers({ seconds: 70, objective: { text, done: 0, count: 2 } })),
+            );
+            expect(objective()).toBeUndefined();
+            // A general down does
+            act(() => store.setNumbers(numbers({ objective: { text, done: 1, count: 2 } })));
+            expect(objective()).toBe(`${text} (1/2)`);
+            act(() => vi.advanceTimersByTime(6500));
+            expect(objective()).toBeUndefined();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     test("weapons and passives describe their current stats and evolution on focus", () => {
         const { store } = renderHud();
         const weapon: SlotView = {

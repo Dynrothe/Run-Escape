@@ -28,6 +28,15 @@ the version in the corner).
   desecration you must break. Beat one and the other grows stronger. Die to either and the run's
   over. A fresh hero is no match for them: farm the hordes first, about
   eight minutes for the first and fifteen for the second, and Yama comes straight after.
+- The Battle for Varrock's objective, at the top of the screen for a few seconds as the run starts
+  and as each general falls: find and slay Yama's two generals, then Yama himself.
+- Beating the second of Yama's generals shows the fires round Varrock palace going out.
+- Yama's fight in the Battle for Varrock has its own music, Forged Through Fire.
+- In the Battle for Varrock, beating one of Yama's generals heals you to full, food drops twice as
+  often, and a Holy elixir heals twice as much.
+- In the Battle for Varrock, the timer stops while you fight a general or Yama, and the hordes
+  wait with it: they come back as they were, not a few waves on.
+- Xarth's attacks have his own sounds, and so do Yama's shadow lanes and Void Flares.
 - Act II, the Fallen Empire: beat the Inferno to open a new tab on the map screen, with four
   maps to play in any order, each harder the more of the others you've beaten. The first is the
   Stranglewood; the Lassar Undercity, Ghorrock and the Scar are coming.
@@ -45,6 +54,8 @@ the version in the corner).
 
 ### Changed
 
+- Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
+  a whole hitpoint at a time.
 - Empty worn-equipment slots show OSRS's equipment silhouettes instead of letters, by Deivid
   Smarzaro.
 - The Armadyl crossbow, by Deivid Smarzaro: clearer bolts that upgrade from bronze to dragon as it
@@ -66,6 +77,8 @@ the version in the corner).
 
 ### Fixed
 
+- An attack you hide from behind a pillar no longer flashes a red box over half the screen as it
+  lands.
 - On a phone, the quest tracker and the damage panel no longer show through a level up, a casket or
   the pause menu.
 - Thrown knives and the Eclipse atlatl's darts fly point-first, not tail-first.

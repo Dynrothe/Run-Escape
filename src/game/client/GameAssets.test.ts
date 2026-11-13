@@ -436,7 +436,7 @@ describe("power-ups in the cache", () => {
                     level.projectileSpotAnim,
                     level.impactSpotAnim,
                     // and a heavy blow's on what it hits (the Saradomin sword's)
-                    weapon.heavy?.hit.spotAnim,
+                    weapon.heavy?.hit?.spotAnim,
                 ];
                 for (const id of ids) {
                     if (id !== undefined) {

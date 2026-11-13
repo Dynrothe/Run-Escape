@@ -258,6 +258,11 @@ export type Lair = {
     sealed: number[];
     sealTick: number;
     liftTick: number;
+    // A locked one's unsealing (LairDef.requires): from unsealTick (-1 until what it requires is
+    // beaten), its seal lifting at unsealLiftTick, and the party held until unsealEndTick
+    unsealTick: number;
+    unsealLiftTick: number;
+    unsealEndTick: number;
 };
 
 // A lair's pillar (LairDef.pillars): its south-west tile, its tiles (x then y), solid while it

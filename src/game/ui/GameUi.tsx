@@ -1004,6 +1004,31 @@ function HardSwitch({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
+// How long a map's objective is up each time it's shown (MapDef.objectives), fading in and out
+const MAP_OBJECTIVE_MS = 6000;
+
+// What the map wants of you (MapDef.objectives), for a few seconds and then gone
+function MapObjective({
+    objective,
+}: {
+    objective: NonNullable<HudNumbers["objective"]>;
+}): JSX.Element | null {
+    const [shown, setShown] = useState(true);
+    useEffect(() => {
+        const timer = setTimeout(() => setShown(false), MAP_OBJECTIVE_MS);
+        return () => clearTimeout(timer);
+    }, []);
+    return shown ? (
+        <div
+            className="ui-raid-objective ui-map-objective"
+            style={{ animationDuration: `${MAP_OBJECTIVE_MS}ms` }}
+        >
+            {objective.text}
+            {objective.count > 1 && ` (${objective.done}/${objective.count})`}
+        </div>
+    ) : null;
+}
+
 // What a raid's hall wants of you: hold out until its boss comes (or take the portal). The first
 // time through, a line on how the raid goes, as it's not like a campaign map.
 function RaidObjective({
@@ -2292,13 +2317,14 @@ function HudBuffs({ client }: { client: GameClient }): JSX.Element | null {
 function HpBar({ client }: { client: GameClient }): JSX.Element | null {
     const hp = useHudNumber(client, (n) => n.hp);
     const maxHp = useHudNumber(client, (n) => n.maxHp);
+    const share = useHudNumber(client, (n) => n.hpShare);
     const poisoned = useHudNumber(client, (n) => n.poisoned);
     if (hp === undefined || maxHp === undefined) {
         return null;
     }
     return (
         <div className={poisoned ? "ui-hp ui-hp-poisoned" : "ui-hp"}>
-            <div className="ui-hp-fill" style={{ transform: `scaleX(${hp / maxHp})` }} />
+            <div className="ui-hp-fill" style={{ transform: `scaleX(${share ?? hp / maxHp})` }} />
             <span>
                 {hp} / {maxHp}
             </span>
@@ -2312,11 +2338,18 @@ function BossBar({ mapId, client }: { mapId: string; client: GameClient }): JSX.
     const boss = useHudNumber(client, (n) => n.boss);
     const bossIn = useHudNumber(client, (n) => n.bossIn);
     const raidRoom = useHudNumber(client, (n) => n.raidRoom);
+    const objective = useHudNumber(client, (n) => n.objective);
     if (!boss) {
         if (raidRoom) {
             return raidRoom.waves && bossIn !== undefined ? (
                 <RaidObjective room={raidRoom} bossIn={bossIn} />
             ) : null;
+        }
+        if (objective) {
+            // Shown afresh as it changes, and each time the HUD or a fight's end brings it back
+            return (
+                <MapObjective key={`${objective.text}:${objective.done}`} objective={objective} />
+            );
         }
         return bossIn !== undefined && bossIn <= 60 ? (
             <div className="ui-boss-warning">

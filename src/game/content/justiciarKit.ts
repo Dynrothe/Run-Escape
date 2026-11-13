@@ -23,6 +23,9 @@ const STOMP = 318;
 const BLOWN_DUST = 2184;
 const BLUE_IMPACT = 1458;
 const BLUE_WAVE = 1515;
+// Saradomin Strike's bolt, on each thing the Owl's gaze judges. His blue impact there read as
+// Water Strike, and Lightning's own bolt (1796) barely shows from the play camera.
+const SARADOMIN_STRIKE = 76;
 
 // The Owl's gaze is his ultimate, on a long cooldown: the only answer to Yama's meteor, whose
 // clock is never shorter than this (yama.ts), so it's always back in time for the next. His other
@@ -121,9 +124,6 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         size: 3,
         markSpotAnim: 1800,
         spotAnim: 1796,
-        // His blue light bursting on each cell as it's struck: the bolt alone barely shows from
-        // the play camera over the ash
-        cellImpact: { spotAnim: BLUE_IMPACT, fit: 1.2 },
         seq: RAISE_SEQ,
         strikeAt: RAISE_AT,
         windupSound: 4364,
@@ -143,7 +143,8 @@ export const JUSTICIAR_ABILITIES: HeroAbilityDef[] = [
         cooldown: OWLS_GAZE_COOLDOWN,
         windup: 1.6,
         length: 8,
-        spotAnim: BLUE_IMPACT,
+        // Struck by lightning, each thing it judges
+        spotAnim: SARADOMIN_STRIKE,
         seq: RAISE_SEQ,
         strikeAt: RAISE_AT,
         windupSound: 3883,

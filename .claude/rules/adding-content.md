@@ -46,7 +46,7 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   and the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
   a slash or sweep, and `special.aoe` hits all round. `heavy` makes their blows land heavy (the
-  Saradomin sword's): a camera shake, a spot animation on what they hit, and a stagger
+  Saradomin sword's): a camera shake, a spot animation on what they hit if it has one, and a stagger
   (`WeaponDef.heavy` in `docs/DEVELOPMENT.md`).
 - An attack that hits what it touches (its range plus the enemy's `radius`) finds enemies with
   `queryTouching`, not `enemyHash.query`: the hash goes by middles, so its search alone misses a
@@ -188,7 +188,8 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
 - Bosses asleep on a map to walk round (`MapDef.lairs`: Yama's, and his generals') wake when
   someone steps onto the map's floor or into a lair's own `area`, and every way out burns until
   it's dead. A lair can wait on others (`requires`), throw the party out on a death (`retreat`),
-  grow stronger once another's beaten (`empowered`) and win the run (`final`). Give a lair's boss
+  grow stronger once another's beaten (`empowered`), heal the party as it's beaten (`heals`) and
+  win the run (`final`). Give a lair's boss
   room for its `radius`: the flow field steers by single tiles, so a boss wider than a gap sticks
   in it, and one whose `at` doesn't fit rises at the nearest spot that does, maybe outside its
   lair (the church's pews had to go for K'ril). Yama's fight's fields are any boss's:
@@ -196,7 +197,9 @@ a map, or an enemy on that map, mentions it), so that needs nothing added.
   `meteor`, `interruptedBy` (a hero's button stops it) and `floorAt`, and his Voidflare's
   `EnemyDef.bursts` (a summon that bursts unless a hero's buttons hold and break it, for food)
   with `summon.toward`. A lair's `opening` is a cinematic as it wakes, on the sim's clock, with
-  the party held. `MapDef.lairs` under A hero of their own in `docs/DEVELOPMENT.md` has the lot,
+  the party held, and `requires.unsealing` one as what it waits on is beaten (its seal going out,
+  in a puff of `seal.smoke`). `MapDef.objectives` puts what the map wants on the HUD for a few
+  seconds, a line at a time, each done once its lairs are beaten. `MapDef.lairs` under A hero of their own in `docs/DEVELOPMENT.md` has the lot,
   with the generals' pieces (`LairDef.pillars`, a debuff's `burn`, a pool's `spreads` and
   `dousedBy`, `walkTo.heals`, `BossDef.pact`, `breakable`).
 - In co-op a boss event spawns copies (`bossCopies` in `content/coop.ts`) that share one boss's

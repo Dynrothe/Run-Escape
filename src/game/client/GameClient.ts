@@ -464,6 +464,24 @@ export function getGazeLight(sim: Sim): number {
     return 1 + GAZE_LIGHT * t * t * (3 - 2 * t);
 }
 
+// How full a hitpoints bar is, to a thousandth: regeneration heals a little every tick, so the bar
+// fills as it does rather than a whole hitpoint at a time (HudNumbers.hpShare)
+export function getHpShare(hp: number, maxHp: number): number {
+    return maxHp > 0 ? Math.round(Math.min(1, Math.max(0, hp / maxHp)) * 1000) / 1000 : 0;
+}
+
+// The first of the map's objectives that isn't done (MapDef.objectives), with how many of its
+// lairs are beaten
+export function getObjectiveView(sim: Sim): HudNumbers["objective"] {
+    for (const { text, lairs } of sim.map.objectives ?? []) {
+        const done = lairs.filter((id) => sim.lairById(id)?.state === "beaten").length;
+        if (done < lairs.length) {
+            return { text, done, count: lairs.length };
+        }
+    }
+    return undefined;
+}
+
 // What a fight on its hitpoints shows on its bar: all of them, or with BossPhasesDef.barPerPhase
 // the phase's own share, full as it begins and empty at the next threshold (each phase's until,
 // or an even split, as Sim.passThreshold has them)
@@ -535,14 +553,18 @@ export class GameClient implements GameFrameHandler {
     readonly minimap: Minimap;
     readonly sounds: GameSounds;
     readonly cameraRig = new CameraRig();
-    // The map's opening cinematic while it plays (MapDef.cinematic), or its lair's (LairDef.opening),
-    // and its own camera, so the run's (and the player's zoom) is left as it was
+    // The map's opening cinematic while it plays (MapDef.cinematic), or its lair's (LairDef.opening,
+    // LairUnsealingDef), and its own camera, so the run's (and the player's zoom) is left as it was
     cinematic?: CinematicPlayer;
     private readonly cinematicRig = new CameraRig();
     // While what it sees loads, behind the loading screen: since when (performance.now)
     private cinematicLoading?: number;
-    // The tick the lair woke whose opening's been played (Lair.wakeTick), so it plays once
+    // The tick the lair woke whose opening's been played (Lair.wakeTick), and the tick the lair was
+    // unsealed whose cinematic has (Lair.unsealTick), so each plays once; and the tick the one
+    // playing is from, whose clock is the sim's
     private lairOpeningTick = -1;
+    private lairUnsealTick = -1;
+    private lairCinematicTick = 0;
     // Dev only: the shot editor, while it's open (direct), with the cinematic it holds as
     // this.cinematic; and its shots' versions (shotsVersion) last loaded along the way and last
     // seen, and when they were seen to change (ms)
@@ -1555,6 +1577,7 @@ export class GameClient implements GameFrameHandler {
             cinematic && map.cinematic ? new CinematicPlayer(map.cinematic) : undefined;
         this.view.cinematic = this.cinematic;
         this.lairOpeningTick = -1;
+        this.lairUnsealTick = -1;
         this.renderer.setPlane(this.grid.plane);
         this.renderer.setSmoothTerrain(map.scaperune === true);
         this.grid.exactGround = map.scaperune === true;
@@ -2498,12 +2521,11 @@ export class GameClient implements GameFrameHandler {
         if (this.director) {
             return this.updateDirector(deltaTimeMs, sim, this.director, play);
         }
-        // A lair's opening is on the sim's clock, from when it woke. The map's own plays on behind
-        // a menu (a co-op run's pause doesn't stop it either), a frame at most at a time (the
-        // first after the map loads can be long).
-        const wakeTick = sim.lair?.wakeTick ?? 0;
+        // A lair's is on the sim's clock, from when it woke or was unsealed. The map's own plays on
+        // behind a menu (a co-op run's pause doesn't stop it either), a frame at most at a time
+        // (the first after the map loads can be long).
         const cues = cinematic.onSim
-            ? cinematic.advanceTo((sim.tick + alpha - wakeTick) / TICKS_PER_SECOND)
+            ? cinematic.advanceTo((sim.tick + alpha - this.lairCinematicTick) / TICKS_PER_SECOND)
             : cinematic.advance(Math.min(deltaTimeMs, CINEMATIC_MAX_FRAME_MS) / 1000);
         for (const cue of cues) {
             if (cue.sound !== undefined) {
@@ -2517,20 +2539,32 @@ export class GameClient implements GameFrameHandler {
         return getCinematicCamera(cinematic.def, cinematic.seconds, ground, play);
     }
 
-    // A lair's opening as it wakes (LairDef.opening), once for each time it does
+    // A lair's opening as it wakes (LairDef.opening), once for each time it does, and a locked
+    // one's as it's unsealed (LairUnsealingDef)
     private startLairOpening(sim: Sim): void {
-        const lair = sim.lair;
-        const opening = lair?.def.opening;
-        if (
-            this.cinematic ||
-            !opening ||
-            lair?.state !== "waking" ||
-            this.lairOpeningTick === lair.wakeTick
-        ) {
+        if (this.cinematic) {
             return;
         }
-        this.lairOpeningTick = lair.wakeTick;
-        this.cinematic = new CinematicPlayer(opening.cinematic, true);
+        const lair = sim.lair;
+        const opening = lair?.def.opening;
+        if (opening && lair?.state === "waking" && this.lairOpeningTick !== lair.wakeTick) {
+            this.lairOpeningTick = lair.wakeTick;
+            this.playLairCinematic(opening.cinematic, lair.wakeTick);
+            return;
+        }
+        const unsealed = sim.unsealing;
+        const unsealing = unsealed?.def.requires?.unsealing;
+        if (unsealed && unsealing && this.lairUnsealTick !== unsealed.unsealTick) {
+            this.lairUnsealTick = unsealed.unsealTick;
+            // It goes off to the lair: what it sees is kept loaded until it's over
+            this.pinCinematic(sim, unsealing.cinematic);
+            this.playLairCinematic(unsealing.cinematic, unsealed.unsealTick);
+        }
+    }
+
+    private playLairCinematic(def: CinematicDef, fromTick: number): void {
+        this.lairCinematicTick = fromTick;
+        this.cinematic = new CinematicPlayer(def, true);
         this.view.cinematic = this.cinematic;
         this.store.set({ cinematic: true });
     }
@@ -3434,14 +3468,17 @@ export class GameClient implements GameFrameHandler {
                 portal: sim.raidTeleporter !== undefined && sim.raidTeleportsLeft > 0,
                 first: (this.save.mapVictories[sim.map.id] ?? 0) === 0,
             },
+            objective: getObjectiveView(sim),
             hp: Math.max(0, Math.round(sim.player.hp)),
             maxHp: sim.player.maxHp,
+            hpShare: getHpShare(sim.player.hp, sim.player.maxHp),
             poisoned: sim.player.poisonEnd !== -1,
             xpFraction: Math.min(
                 1,
                 Math.max(0, (sim.xp - thisLevel) / Math.max(1, nextLevel - thisLevel)),
             ),
-            seconds: Math.floor(sim.seconds),
+            // Held while a lair's on, as the waves are (Sim.heldTicks)
+            seconds: Math.floor(sim.clockSeconds),
             kills: sim.kills,
             coins: sim.coins,
             dps: this.shownDps,

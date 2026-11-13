@@ -962,8 +962,8 @@ adventurer can have:
   `Sim.kitAbility(slot)` is a button as blessed (`blessAbility`), and `useKitAbility`, the HUD's
   buttons and the bot all go
   by it; a wave's `fan` throws more waves either side (`BLESSED_FAN_ANGLE`, `KitCast.fanned`,
-  silent). Nothing gives an item there: `dropLoot` drops bones, coins and food, never a casket or
-  a power-up, `dropCasketOfTier` drops nothing, and visitors who'd give one stay away
+  silent). Nothing gives an item there: `dropLoot` drops bones, coins and food (its chance the
+  map's `BlessingsDef.food`, over `FOOD_DROP_CHANCE`), never a casket or a power-up, `dropCasketOfTier` drops nothing, and visitors who'd give one stay away
   (`givesItems`, for a blessed map with random events). The HUD has the weapon and a row of
   blessings for passives, gear and the bag (`client/BlessingViews.ts`), the pause menu lists
   them, and taking one plays the `blessing` event, with the map's `spotAnim` and `sound`, which
@@ -972,8 +972,8 @@ adventurer can have:
   `BLESSING_RANK` in `simulate-run.ts`.
 - **`WeaponDef.heavy`**: blows that land heavy, the Saradomin sword's (a sweep's or a slash's,
   in `meleeHits`). A swing that hits shakes the camera once (a `bossImpact` event, so the
-  Screen shake setting turns it off), plays `hit` (an `ImpactSpotDef`) on the first
-  `HEAVY_HIT_SPOTS` it hits, and staggers the rest of what it hits for `stagger` seconds,
+  Screen shake setting turns it off), plays `hit` if there is one (an `ImpactSpotDef`) on the
+  first `HEAVY_HIT_SPOTS` it hits, and staggers the rest of what it hits for `stagger` seconds,
   longer with `meleeKnockback`: `Enemy.staggered` holds an enemy from walking and striking, as
   `frozen` does, but its knockback still carries it. Bosses and stationary enemies don't
   stagger. `getSpotAnimIds` collects `hit`. The `meleeSpeed` stat speeds melee weapons only,
@@ -1015,13 +1015,29 @@ adventurer can have:
   about runs straight away from `at` (`sendOff` with `from`, to `SCATTER_REACH` tiles off), not
   to the map's nearest edge as off a lair, which on a city that goes on round its arena sent
   everything north. Beaten, the seal lifts
-  (`liftSeal`) with the `victory` notice and the `shout`, its pools go out (a pool that
+  (`liftSeal`) with the `victory` notice and the `shout`, each hero still up gets `heals.share`
+  of their hitpoints back with its `spotAnim` (`healOnVictory`: a general's, all of them, with
+  the blessings' bolt), its pools go out (a pool that
   `spreads` would burn on for good), and any lair `empowered` by it is from
   then on (`Lair.empowered`: its hitpoints, damage and tempo times its own, and its
   `BossAttackDef.empowered` attacks usable). A `final` lair's boss wins the run, endless or not.
-  One that `requires` others is sealed from the start (`Lair.locked`) until they're beaten. On a
+  One that `requires` others is sealed from the start (`Lair.locked`) until they're beaten, and
+  with `requires.unsealing` (`LairUnsealingDef`, the palace's in `fun/palaceUnsealed.ts`) a
+  cinematic plays first, on the sim's clock from `Lair.unsealTick` as an opening is: everyone's
+  held and unhurt (`Sim.unsealing`, `introHolds`), what's about is sent off and nothing spawns,
+  the seal lifts `liftAt` seconds in (`unsealLiftTick`), its flames going out one by one from
+  `from` in a puff of `seal.smoke`, and it opens with the `requires.message` once it's over
+  (`unsealEndTick`). `GameClient.startLairOpening` plays it and pins the squares it flies over; a
+  solo skip lifts it at once (`skipLairOpening`). `MapDef.objectives` (`MapObjectiveDef`) puts a
+  line of what the map wants at the top of the HUD, the first whose lairs aren't all beaten, with
+  how many are (`getObjectiveView`). It's up for six seconds (`MapObjective` in `GameUi.tsx`,
+  fading in and out): as the HUD comes up after a cinematic, as a boss's bar goes, and as it
+  changes (keyed by its text and count). On a
   map with nothing coming (`isPeaceful`), hits land only while one's fought (`damagePlayer`), and
-  no wave comes while one's on (`stepDirector`). A death in one ends the run, as any death does,
+  no wave comes while one's on (`stepDirector`). Nor does the waves' clock run: `Sim.heldTicks`
+  counts the ticks a lair's woken, fought or unsealed, and `mapSeconds` (the waves, events and
+  enemies' toughness) and `clockSeconds` (the HUD's timer) leave them out, so the hordes take up
+  where they were. `seconds` is still the run's whole time. A death in one ends the run, as any death does,
   and offers Retry (`canRetry` in `maps.ts`): on a map whose only lair is open from the start,
   that starts the hero at its `start` (`getRetryLair`, `GameClient.startRun`'s `atLair`), so
   it wakes on the first tick; with more than one (the Battle for Varrock's), the map over. `MapPropDef.lair` ties a prop
@@ -1032,11 +1048,12 @@ adventurer can have:
   and the intro starts. `GameClient.startLairOpening` plays the cinematic as it sees `waking`, once
   per wake, on the sim's clock (`CinematicPlayer.onSim`, `advanceTo`: it never holds the run), so
   every co-op player sees it in step. Its first shot can be `{ player: true }`, setting off from the
-  run's camera, and its last comes during the intro, whose camera pan it hands back to. A skip ends
+  run's camera (or its first few, to hold there a moment, as the unsealing does while a general
+  falls), and its last comes during the intro, whose camera pan it hands back to. A skip ends
   it for that player; solo, `Sim.skipLairOpening` brings the intro on at the next tick. A run that
   starts on the floor (a retry) has no opening (`Sim.lairOpens`). A cast member standing in for a
   prop shows it again once they're `gone` (Yama, gone from his throne). `getMapCinematics` gives a
-  map's cinematics, this and `MapDef.cinematic`, for baking their cast and collecting their spot
+  map's cinematics, this, an unsealing's and `MapDef.cinematic`, for baking their cast and collecting their spot
   animations and sounds. His fight's own pieces are fields any boss can have:
     - `BossDef.home` keeps it within so many tiles of where it rose.
     - `BossAttackDef.meteor` is a swing drawn as something falling from `height` tiles onto where
@@ -1581,6 +1598,9 @@ A sound's samples are let go once it's first played and its `AudioBuffer` holds 
   hasn't changed the same object, so the `memo`'d parts skip drawing, and nothing is told at all
   when nothing's changed. Something new that changes often goes in `HudNumbers`, and its numbers
   are rounded as they're shown (whole seconds), so they don't change when nothing on screen does.
+  Hitpoints aren't whole: regeneration (`regen`, hitpoints a minute) heals a sliver every tick in
+  `stepPlayer`, so `hp` is rounded for the number and `hpShare` (`getHpShare`, to a thousandth)
+  fills the bar.
   The bars fill with `transform: scaleX`, not `width`, which would lay the page out again.
   `BuffView` leaves out both timer fields for an effect with no timer: the focused hero's revives
   left. The sim counts revives as one number (`revivesLeft`), so `getRevivesLeft` in

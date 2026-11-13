@@ -1320,6 +1320,10 @@ function prepareLair(sim: Sim): Lair | undefined {
     for (const id of lair.def.requires?.lairs ?? []) {
         sim.lairById(id)!.state = "beaten";
     }
+    // and its unsealing's cinematic (LairUnsealingDef) as good as skipped: open at the first step
+    if (lair.def.requires) {
+        lair.unsealTick = lair.unsealLiftTick = lair.unsealEndTick = sim.tick;
+    }
     if (empoweredLair) {
         if (!lair.def.empowered) {
             throw new Error(`Lair ${lairTarget} is never empowered`);

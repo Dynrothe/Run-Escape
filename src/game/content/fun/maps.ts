@@ -21,6 +21,7 @@ import { createWardensFloor } from "../wardensFloor";
 import { paced } from "../waves";
 import { XARTH_HITPOINTS } from "../xarth";
 import { YAMA_HITPOINTS } from "../yama";
+import { PALACE_UNSEALED } from "./palaceUnsealed";
 import { VARROCK_OPENING } from "./varrockOpening";
 import { YAMA_WAKES } from "./yamaWakes";
 
@@ -84,6 +85,14 @@ export const PEST_CONTROL_PLAYER_LINES = [
     "lander full?",
     "250 pts!",
 ];
+
+// A seal's flames go out in a puff of grey dust (LairDef.seal.smoke), the dust Xarth's pillars
+// come down in
+const SEAL_SMOKE = 2184;
+
+// A general beaten, Saradomin heals the party whole, his bolt coming down on each (LairDef.heals):
+// the hordes are still to come, and there's little else to heal them
+const GENERAL_HEALS = { share: 1, spotAnim: SARADOMIN_BLESSINGS.spotAnim };
 
 export const FUN_MAPS: MapDef[] = [
     {
@@ -855,9 +864,11 @@ export const FUN_MAPS: MapDef[] = [
                 start: BATTLE_FOR_VARROCK.xarth.start,
                 area: BATTLE_FOR_VARROCK.xarth.area,
                 // Right round the pad's rim: a flame every other tile, bigger, for a phone
-                seal: { locId: FLAMES, scale: 2, sound: 10271, spacing: 2 },
+                seal: { locId: FLAMES, scale: 2, sound: 10271, smoke: SEAL_SMOKE, spacing: 2 },
                 message: "Xarth wakes! The Grand Exchange is ringed with fire!",
-                victory: "Xarth is beaten. The fires round the Exchange die down.",
+                victory:
+                    "Xarth is beaten. The fires round the Exchange die down, and Saradomin heals your wounds.",
+                heals: GENERAL_HEALS,
                 shout: "The flame... outlives me...",
                 empowered: {
                     by: ["kril"],
@@ -889,9 +900,11 @@ export const FUN_MAPS: MapDef[] = [
                 at: BATTLE_FOR_VARROCK.kril.at,
                 start: BATTLE_FOR_VARROCK.kril.start,
                 area: BATTLE_FOR_VARROCK.kril.area,
-                seal: { locId: FLAMES, scale: 1.4, sound: 10271 },
+                seal: { locId: FLAMES, scale: 1.4, sound: 10271, smoke: SEAL_SMOKE },
                 message: "K'ril Tsutsaroth wakes! The church is sealed in fire!",
-                victory: "K'ril Tsutsaroth is beaten. The fires round the church die down.",
+                victory:
+                    "K'ril Tsutsaroth is beaten. The fires round the church die down, and Saradomin heals your wounds.",
+                heals: GENERAL_HEALS,
                 shout: "Zamorak... curse... you...",
                 empowered: {
                     by: ["xarth"],
@@ -907,7 +920,7 @@ export const FUN_MAPS: MapDef[] = [
                 hp: YAMA_HITPOINTS,
                 at: BATTLE_FOR_VARROCK.yamaRise,
                 start: BATTLE_FOR_VARROCK.yamaStart,
-                seal: { locId: FLAMES, scale: 1.4, sound: 10271 },
+                seal: { locId: FLAMES, scale: 1.4, sound: 10271, smoke: SEAL_SMOKE },
                 message: "Yama wakes! The palace is sealed in fire!",
                 victory: "Yama is beaten. The fires round the palace die down.",
                 shout: "This city... was already... ash...",
@@ -917,12 +930,21 @@ export const FUN_MAPS: MapDef[] = [
                     lairs: ["xarth", "kril"],
                     message:
                         "Both of Yama's generals are dead. The fires round the palace die down!",
+                    // The camera to the palace as they do (fun/palaceUnsealed.ts)
+                    unsealing: PALACE_UNSEALED,
                 },
                 final: true,
             },
         ],
-        // Yama's own track, from his fight: the city's his now
+        // On the HUD from the start, in order
+        objectives: [
+            { text: "Find and slay Yama's two generals", lairs: ["xarth", "kril"] },
+            { text: "Slay Yama in Varrock Palace", lairs: ["yama"] },
+        ],
+        // Yama's own track, from his domain: the city's his now
         music: "Sign Here",
+        // As Yama rises (the final lair's boss): Xarth's fight track in the Fractured Archive
+        bossMusic: "Forged Through Fire",
         // It opens on Yama and the last of the palace guard (fun/varrockOpening.ts)
         cinematic: VARROCK_OPENING,
         // A smoky, dimmed city lit by its fires

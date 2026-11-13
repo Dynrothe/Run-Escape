@@ -363,14 +363,16 @@ describe("the shot editor on one that starts on the run's camera", () => {
 });
 
 describe("a map's cinematics to edit", () => {
-    it("are its opening and each of its lairs' wakings", () => {
+    it("are its opening and each of its lairs' wakings and unsealings", () => {
         const varrock = getMap("battle_for_varrock");
         const choices = getDirectorChoices(varrock);
         expect(choices[0]).toMatchObject({ label: "Opening", def: VARROCK_OPENING, fresh: false });
-        const lairs = (varrock.lairs ?? []).filter((lair) => lair.opening);
-        expect(choices.slice(1).map((choice) => choice.def)).toEqual(
-            lairs.map((lair) => lair.opening!.cinematic),
-        );
+        const lairs = (varrock.lairs ?? []).flatMap((lair) => [
+            ...(lair.opening ? [lair.opening.cinematic] : []),
+            ...(lair.requires?.unsealing ? [lair.requires.unsealing.cinematic] : []),
+        ]);
+        expect(lairs.length).toBe(2);
+        expect(choices.slice(1).map((choice) => choice.def)).toEqual(lairs);
         expect(new Set(choices.map((choice) => choice.key)).size).toBe(choices.length);
     });
 

@@ -221,7 +221,7 @@ export function getSpotAnimIds(): number[] {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
         add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
-        add(weapon.chain?.spotAnim, weapon.heavy?.hit.spotAnim);
+        add(weapon.chain?.spotAnim, weapon.heavy?.hit?.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }
     for (const thrall of THRALLS) {
@@ -248,6 +248,9 @@ export function getSpotAnimIds(): number[] {
         // What a cut through a map's roots throws up (MapDef.rule), and what comes down on a hero
         // as they're blessed (MapDef.blessings)
         add(map.rule?.look.cutSpotAnim, map.blessings?.spotAnim);
+        // Its lairs' seals going out (LairDef.seal.smoke), and their heals (LairDef.heals)
+        add(...(map.lairs ?? []).map((lair) => lair.seal.smoke));
+        add(...(map.lairs ?? []).map((lair) => lair.heals?.spotAnim));
         // What plays in its cinematics (MapDef.cinematic, LairDef.opening)
         for (const cinematic of getMapCinematics(map)) {
             add(...cinematic.cues.map((cue) => cue.spotAnim));

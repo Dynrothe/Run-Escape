@@ -47,6 +47,9 @@ was the minimap, hitpoints and the hero's buttons. Farming needs a run:
   (`fun.explore`): the run ends when Yama dies, or when the hero dies to the hordes.
 - **Nothing comes during a general's or Yama's fight**: the hordes run off every way from the
   lair as its intro starts (`sendOff`), and the director waits while a lair's on (`Sim.lair`).
+  So does its clock (`Sim.heldTicks`), the HUD's timer too: a fight of two or three minutes had
+  the hordes back a few waves on, refilled at once to the new wave's crowd and with every elite
+  and ring that fell due meanwhile, which a playtest found too much (2026-11-13).
 
 ## 3. Lairs, plural
 
@@ -59,7 +62,10 @@ beaten on its own, one fought at a time.
 - **Standing there from the start**: each general's a map prop (`MapPropDef.lair`), hidden once
   its lair wakes. Its intro then plays where it stood.
 - **Yama waits** (`LairDef.requires`): until both generals are dead, his palace is sealed from the
-  start with the same fires, which go out with a notice as the second falls.
+  start with the same fires, which go out as the second falls, in a cinematic of their own
+  (`requires.unsealing`, `fun/palaceUnsealed.ts`): the camera to the palace's front steps, the
+  fire going out along them, and the notice once it's back. The HUD's objective
+  (`MapDef.objectives`) says to find and slay both, then Yama.
 - **A death is a death**: dying in a lair ends the run, as dying to the hordes does, and Retry
   starts at the gate (`getRetryLair` has no lair to start at). It was first a beat back
   (`LairDef.retreat`: thrown out whole, the boss asleep again), taken out at Dynny's
