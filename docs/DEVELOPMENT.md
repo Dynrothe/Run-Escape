@@ -1940,10 +1940,29 @@ keeps: the legs and the body's root. A skeletal swing or stance, or any run fram
 together that way, means no pose is baked and the run shows, and so does an interleave order gone
 from the cache (the swing would take the legs too).
 
-A baked animation is a posed copy of the model per frame, so what an enemy costs is its triangles
-times its frames. A skeletal animation (the Colosseum's bosses, the gryphon, the naguas) has a pose
-for every client tick, and baking each one made Varlamore's enemies several times any other map's,
-too much for a phone. `ActorBakeLoader` samples those every `SKELETAL_TICK_STEP` ticks instead.
+What an enemy costs is its vertices times its frames. A skeletal animation (the Colosseum's
+bosses, the gryphon, the naguas) has a pose for every client tick, and baking each one made
+Varlamore's enemies several times any other map's, too much for a phone. `ActorBakeLoader` samples
+those every `SKELETAL_TICK_STEP` ticks instead.
+
+Most frames only move the model's vertices, so they're baked as their positions alone
+(`ActorBakeFrames.ts`). A set (a model and its animations) bakes one mesh of the model's faces,
+each corner holding its vertex's number where its position would be, and each frame adds its
+positions (6 bytes a vertex) to the page's positions texture. `actor.vert.glsl` reads a corner's
+position from there by that number, starting where the instance's fifth texel says (-1 for a frame
+baked whole). A posed copy of the frame was 12 bytes a vertex and its indices besides, so the
+bakes are under a third of what they were. A frame whose faces aren't the mesh's (a fade changes
+their colours or alpha) gets a mesh of its own, up to `MESHES_PER_SET` in a set, and past that
+it's baked whole. So is a frame that would need a new mesh for itself alone (an animation's last),
+and every frame once the page's texture is full (2048 by 2048 texels). Instances of different
+frames with the same mesh are one instanced draw. `?wholeFrames` bakes every frame whole, as
+before, to compare against or to rule this out if a GPU draws actors wrong.
+`scripts/cache/check-actor-frames.ts` bakes every actor the game bakes and checks that each frame
+draws exactly the corners its model would baked whole; a test runs it on the heroes and a few
+enemies when there's a cache. It found `VertexBuffer`'s de-duplication reusing the wrong vertex in
+a shared mesh (the cow's): its key is the product of the vertex's three words, which rounds (or
+is 0), so it now checks that the vertex it finds is the same one. No frame baked whole, nor any
+map square of the few checked, had come across it.
 
 Indices are 16-bit, which halves the index buffer, about a quarter of a bake. WebGL2 has no base
 vertex for a draw, so `ActorBakeSegments` cuts a bake's vertices into segments of up to 65,536,
@@ -2127,6 +2146,8 @@ scripts/cache/find-npcs.ts goblin        NPC ids, levels and idle/walk animation
 scripts/cache/find-objs.ts "rune .*"     item ids, wear slots and worn models
 scripts/cache/check-items.ts             every casket item's id is the item it's named after
 scripts/cache/check-fun-outfits.ts       every item the fun maps' players wear is the one named, in its slot
+scripts/cache/check-actor-frames.ts      every actor's frames draw just as their model would baked whole
+                                         (a regex for some of them; see What gets drawn)
 scripts/cache/find-locs.ts multicannon   scenery ids
 scripts/cache/find-npc-seqs.ts 655 1173  animations built on an NPC's skeleton
 scripts/cache/classify-npc-seqs.ts 655 6182 6183 6184   tell attack and death animations apart
@@ -2209,7 +2230,8 @@ browser tab that isn't being painted, `?notice` shows the notice even after it's
 Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens) and an
 act that isn't out yet (`ActDef.released`, Act II's),
 `?director=battle_for_varrock` (dev only) opens the shot editor on a map's cinematics (see Props
-and opening cinematics). F3
+and opening cinematics), `?wholeFrames` bakes actors' frames as posed copies of their models, not
+as positions (see What gets drawn). F3
 shows collision and stats.
 
 ### A newer cache

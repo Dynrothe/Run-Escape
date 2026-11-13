@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 
 import type { SeqType } from "../../../rs/config/seqtype/SeqType";
 import type { Model } from "../../../rs/model/Model";
+import type { FrameAdder } from "./ActorBakeFrames";
 import { bakeRunPose, getMovementGroups } from "./ActorBakeLoader";
-import type { Segments } from "./ActorBakeSegments";
 
 describe("a weapon's run pose", () => {
     // A run of three frames, the last with no length of its own
@@ -17,12 +17,11 @@ describe("a weapon's run pose", () => {
         return {
             added,
             segments: {
-                current: 0,
-                addFrame(_model: Model, framesAhead: number) {
+                add(_model: Model, framesAhead: number) {
                     added.push(framesAhead);
-                    return [0, 3, 0, 0];
+                    return { ranges: [0, 3, 0, 0], segment: 0, positionStart: -1 };
                 },
-            } as unknown as Segments,
+            } as FrameAdder,
         };
     };
     const model = { verticesCount: 0 } as Model;

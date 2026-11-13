@@ -10,10 +10,11 @@ import PicoGL, {
 
 import { Frustum } from "../../Frustum";
 import { readsLightMap } from "../shaders/ShaderUtil";
+import { POSITIONS_WIDTH } from "./ActorBakeFrames";
 import { ActorBakeResult, BakedAnim } from "./ActorBakeTypes";
 
 const DATA_WIDTH = 512;
-const TEXELS_PER_INSTANCE = 4;
+const TEXELS_PER_INSTANCE = 5;
 const FLOATS_PER_INSTANCE = TEXELS_PER_INSTANCE * 4;
 
 // Tiles added to an actor's reach before it's culled, for the depth nudge in its
@@ -37,6 +38,8 @@ export class ActorAnim {
         readonly looping: boolean,
         // A frame of seqId over the run (BakedAnim.runPose), not seqId
         readonly runPose: boolean = false,
+        // Where each frame's positions start in its page's (BakedAnim.positionStarts)
+        readonly positionStarts: Int32Array = new Int32Array(frameLengths.length).fill(-1),
     ) {
         this.frameCount = frameLengths.length;
         this.frameStarts = new Uint32Array(this.frameCount);
@@ -153,6 +156,7 @@ class InstanceList {
 
     push(
         ranges: Int32Array,
+        positionStart: number,
         frame: number,
         x: number,
         y: number,
@@ -200,6 +204,7 @@ class InstanceList {
         data[o + 13] = stretchZ;
         data[o + 14] = pitch;
         data[o + 15] = roll;
+        data[o + 16] = positionStart;
     }
 
     grow(capacity: number): void {
@@ -316,6 +321,8 @@ export class ActorPage {
     constructor(
         readonly vertexBuffer: VertexBuffer,
         readonly indexBuffer: VertexBuffer,
+        // Its frames' positions (ActorBakeResult.positions), if any frame keeps only those
+        readonly positions: Texture | undefined,
         readonly segments: ActorSegment[],
     ) {}
 
@@ -334,6 +341,7 @@ export class ActorPage {
         }
         this.vertexBuffer.delete();
         this.indexBuffer.delete();
+        this.positions?.delete();
     }
 }
 
@@ -357,6 +365,8 @@ export class ActorRenderer {
 
     dataTexture: Texture;
     dataArray: Float32Array;
+    // What a page with no positions texture has bound in its place: a sampler needs one there
+    private readonly noPositions: Texture;
 
     private frustum?: Frustum;
 
@@ -380,6 +390,18 @@ export class ActorRenderer {
     ) {
         this.dataArray = new Float32Array(DATA_WIDTH * 4 * 4);
         this.dataTexture = this.createDataTexture(this.dataArray);
+        this.noPositions = this.createPositionsTexture(new Int16Array(3), 1, 1);
+    }
+
+    // An integer texture of a page's positions, read texel by texel
+    private createPositionsTexture(data: Int16Array, width: number, height: number): Texture {
+        return this.app.createTexture2D(data, width, height, {
+            internalFormat: PicoGL.RGB16I,
+            minFilter: PicoGL.NEAREST,
+            magFilter: PicoGL.NEAREST,
+            wrapS: PicoGL.CLAMP_TO_EDGE,
+            wrapT: PicoGL.CLAMP_TO_EDGE,
+        });
     }
 
     createDataTexture(data: Float32Array): Texture {
@@ -402,8 +424,16 @@ export class ActorRenderer {
             bake.indices,
         );
 
+        const positions =
+            bake.positions.length > 0
+                ? this.createPositionsTexture(
+                      bake.positions,
+                      POSITIONS_WIDTH,
+                      bake.positions.length / 3 / POSITIONS_WIDTH,
+                  )
+                : undefined;
         const createDrawCall = (program: Program, vertexArray: VertexArray) =>
-            this.createDrawCall(program, vertexArray);
+            this.createDrawCall(program, vertexArray, positions);
 
         const segments = Array.from(bake.segmentStarts, (start) => {
             const vertexArray = app
@@ -433,7 +463,7 @@ export class ActorRenderer {
                 ),
             );
         });
-        const page = new ActorPage(vertexBuffer, indexBuffer, segments);
+        const page = new ActorPage(vertexBuffer, indexBuffer, positions, segments);
         this.pages.push(page);
 
         const models = new Map<string, ActorModel>();
@@ -447,6 +477,7 @@ export class ActorRenderer {
                         anim.frameLengths,
                         anim.looping,
                         anim.runPose,
+                        anim.positionStarts,
                     ),
             );
             models.set(
@@ -457,13 +488,18 @@ export class ActorRenderer {
         return models;
     }
 
-    private createDrawCall(program: Program, vertexArray: VertexArray): DrawCall {
+    private createDrawCall(
+        program: Program,
+        vertexArray: VertexArray,
+        positions: Texture | undefined,
+    ): DrawCall {
         const drawCall = this.app
             .createDrawCall(program, vertexArray)
             .uniformBlock("SceneUniforms", this.sceneUniformBuffer)
             .texture("u_textures", this.textureArray)
             .texture("u_textureMaterials", this.textureMaterials)
-            .texture("u_actorData", this.dataTexture);
+            .texture("u_actorData", this.dataTexture)
+            .texture("u_positions", positions ?? this.noPositions);
         if (this.lightMap && readsLightMap(program)) {
             drawCall.texture("u_lightMap", this.lightMap);
         }
@@ -482,7 +518,11 @@ export class ActorRenderer {
         this.program = program;
         for (const page of this.pages) {
             for (const segment of page.segments) {
-                segment.drawCall = this.createDrawCall(program, segment.vertexArray);
+                segment.drawCall = this.createDrawCall(
+                    program,
+                    segment.vertexArray,
+                    page.positions,
+                );
             }
         }
     }
@@ -549,8 +589,10 @@ export class ActorRenderer {
         const edgeWidth = options?.edgeWidth ?? 0;
         const edgeColor = options?.edgeColor ?? NO_TINT;
         const segment = model.page.segments[anim.segments[frame]];
+        const positionStart = anim.positionStarts[frame];
         (options?.early ? segment.early : segment.instances).push(
             anim.ranges,
+            positionStart,
             frame,
             x,
             y,
@@ -572,6 +614,7 @@ export class ActorRenderer {
         if (options?.silhouette) {
             segment.silhouettes.push(
                 anim.ranges,
+                positionStart,
                 frame,
                 x,
                 y,
@@ -595,6 +638,7 @@ export class ActorRenderer {
             const outlineScale = scale * options.outline;
             segment.outlines.push(
                 anim.ranges,
+                positionStart,
                 frame,
                 x,
                 y,
@@ -621,6 +665,7 @@ export class ActorRenderer {
             for (const glowScale of options.glow) {
                 segment.glows.push(
                     anim.ranges,
+                    positionStart,
                     frame,
                     x,
                     y,
@@ -844,5 +889,6 @@ export class ActorRenderer {
         }
         this.pages = [];
         this.dataTexture.delete();
+        this.noPositions.delete();
     }
 }

@@ -4,6 +4,7 @@ import {
     ActorBakeResult,
     BakeRequest,
     NpcBakeRequest,
+    PlayerBakeRequest,
 } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import { ActorModel, ActorPage, ActorRenderer } from "../../mapviewer/webgl/actor/ActorRenderer";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
@@ -1263,10 +1264,19 @@ export class GameAssets {
         return requests;
     }
 
+    // Bakes every frame whole, sharing no meshes (?wholeFrames): to compare with, or to rule
+    // shared meshes out if a GPU draws actors wrong
+    wholeFrames =
+        typeof location !== "undefined" && new URLSearchParams(location.search).has("wholeFrames");
+
     private async bake(requests: BakeRequest[]): Promise<ActorBakeResult> {
         return await this.workerPool.queueLoad<ActorBakeInput, ActorBakeResult, ActorBakeLoader>(
             new ActorBakeLoader(),
-            { requests, loadedTextureIds: this.renderer.loadedTextureIds },
+            {
+                requests,
+                loadedTextureIds: this.renderer.loadedTextureIds,
+                wholeFrames: this.wholeFrames || undefined,
+            },
         );
     }
 
@@ -1589,7 +1599,8 @@ export class GameAssets {
         await Promise.all(
             tasks.map(async (task) => {
                 const bake = await this.bake(task);
-                bytes += bake.vertices.byteLength + bake.indices.byteLength;
+                bytes +=
+                    bake.vertices.byteLength + bake.indices.byteLength + bake.positions.byteLength;
                 onBake(bake);
                 onProgress?.(++done, tasks.length);
             }),
@@ -1750,6 +1761,37 @@ export class GameAssets {
         this.releasePlayerModel(previous);
     }
 
+    // A player's look as baked: the walk, their weapon's stance, the death and these swings
+    // (scripts/cache/check-actor-frames.ts bakes heroes with it too)
+    static getLookRequest(
+        appearance: PlayerAppearance,
+        attackSeqs: number[],
+    ): { request: PlayerBakeRequest; stance: PlayerStance } {
+        const stance = getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
+        // Walk goes first: a model's height comes from its first seq, and a stance that raises
+        // the weapon shouldn't lift the health bar with it
+        const seqIds = [
+            PLAYER_SEQS.walk,
+            stance.idle,
+            stance.run,
+            PLAYER_SEQS.death,
+            ...attackSeqs,
+        ].filter((id, i, all) => all.indexOf(id) === i);
+        // The held weapon's aim over the run, for a moment after each shot on the move
+        const poses = getHeldRunPoses(appearance, attackSeqs);
+        const request: PlayerBakeRequest = {
+            kind: "player",
+            key: "player",
+            appearance,
+            seqIds,
+            runPoses:
+                poses.length > 0
+                    ? { poses, runSeqId: stance.run, maskSeqId: PLAYER_INTERLEAVE_SEQ }
+                    : undefined,
+        };
+        return { request, stance };
+    }
+
     // A look's models, baked once however many players ask for it at a time
     private bakeLook(
         key: string,
@@ -1759,38 +1801,8 @@ export class GameAssets {
         let baking = this.bakingLooks.get(key);
         if (!baking) {
             baking = (async () => {
-                const stance =
-                    getPlayerStance(appearance.equipment[EquipSlot.WEAPON]) ?? PLAYER_SEQS;
-                // Walk goes first: a model's height comes from its first seq,
-                // and a stance that raises the weapon shouldn't lift the health
-                // bar with it
-                const seqIds = [
-                    PLAYER_SEQS.walk,
-                    stance.idle,
-                    stance.run,
-                    PLAYER_SEQS.death,
-                    ...attackSeqs,
-                ].filter((id, i, all) => all.indexOf(id) === i);
-                // The held weapon's aim over the run, for a moment after each
-                // shot on the move
-                const poses = getHeldRunPoses(appearance, attackSeqs);
-                const bake = await this.bake([
-                    {
-                        kind: "player",
-                        key: "player",
-                        appearance,
-                        seqIds,
-                        runPoses:
-                            poses.length > 0
-                                ? {
-                                      poses,
-                                      runSeqId: stance.run,
-                                      maskSeqId: PLAYER_INTERLEAVE_SEQ,
-                                  }
-                                : undefined,
-                    },
-                    ...getPowerUpLookRequests(appearance),
-                ]);
+                const { request, stance } = GameAssets.getLookRequest(appearance, attackSeqs);
+                const bake = await this.bake([request, ...getPowerUpLookRequests(appearance)]);
                 this.renderer.updateTextureArray(bake.loadedTextures);
                 return { models: this.actors.addBake(bake), stance };
             })().finally(() => this.bakingLooks.delete(key));

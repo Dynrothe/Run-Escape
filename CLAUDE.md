@@ -104,6 +104,7 @@ go stale. Add anything that cost you time to work out.
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
+| Actors' frames, baked as positions on a shared mesh    | `actor/ActorBakeFrames.ts`, `actor.vert.glsl`, `check-actor-frames.ts` |
 | Touch screens: the stick, its buttons, phone layouts   | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |

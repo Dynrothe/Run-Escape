@@ -275,6 +275,7 @@ describe("a run's enemies, baked and freed", () => {
                             vertices: new Uint8Array(0),
                             indices: new Uint16Array(0),
                             segmentStarts: new Int32Array(0),
+                            positions: new Int16Array(0),
                             sets: input.requests.map((r) => ({ key: r.key })),
                             loadedTextures: new Map(),
                         });

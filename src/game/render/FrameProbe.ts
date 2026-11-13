@@ -279,6 +279,9 @@ export class FrameProbe {
         for (const page of renderer.actorRenderer?.pages ?? []) {
             memory.actorPages++;
             memory.actorBytes += page.vertexBuffer.byteLength + page.indexBuffer.byteLength;
+            // Frames kept as positions: RGB16I, 6 bytes a texel
+            const positions = page.positions;
+            memory.actorBytes += positions ? positions.width * positions.height * 6 : 0;
         }
         return memory;
     }
