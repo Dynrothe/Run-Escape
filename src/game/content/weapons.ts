@@ -300,7 +300,8 @@ const keris = (
     // hacksword_slash stands in for its sound, as the fang's
     sound: 2500,
     hitSound: -1,
-    // Not a class weapon: any adventurer can be offered it (a stab, so its hits are melee)
+    // No class (style), so any adventurer can be offered it. Its hits are melee all the same, as
+    // a slash's are (getWeaponStyle).
     family: "keris",
     slayer: KERIS_KALPHITES,
     levels: kerisLevels(def.iconObjId),
@@ -1821,6 +1822,8 @@ export const WEAPONS: WeaponDef[] = [
             { damage: 36, description: "+7 damage." },
         ),
     },
+    // Not melee's: any adventurer can be offered the keris. It stays here, as moving it would
+    // change the order offers are rolled in, and with it every seeded run.
     ...KERIS_PARTISANS,
     {
         id: "tzhaar_ket_om",

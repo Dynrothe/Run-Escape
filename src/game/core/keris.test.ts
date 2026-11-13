@@ -422,6 +422,18 @@ describe("the Divine rune pouch", () => {
         expect(offers.some((w) => w.style === "melee")).toBe(false);
     });
 
+    test("fits the keris in a ranged or magic adventurer's own slots, not its magic one", () => {
+        const keris = getWeapon("keris_partisan");
+        const max = MAX_WEAPONS + 1;
+        const ranged = ["throwing_knives", "shortbow", "toxic_blowpipe"].map(weapon);
+        expect(fitsWithPouch(keris, ranged, "ranged", max)).toBe(true);
+        // Four held, none of them magic: the slot left is the pouch's
+        expect(fitsWithPouch(keris, [...ranged, weapon("twisted_bow")], "ranged", max)).toBe(false);
+        // A wizard's spells fill the pouch's slot, so the keris can have one of theirs
+        const magic = ["fire_spells", "ice_burst", "saradomin_strike", "elemental_runes"];
+        expect(fitsWithPouch(keris, magic.map(weapon), "magic", max)).toBe(true);
+    });
+
     test("is one level, in endless too", () => {
         const rng = new Rng(4);
         for (let i = 0; i < 500; i++) {
@@ -438,20 +450,5 @@ describe("the Divine rune pouch", () => {
         sim.passives.push({ ...pouch });
         sim.updateStats();
         expect(sim.maxWeapons).toBe(max + 1);
-    });
-});
-
-describe("who's offered it", () => {
-    test("any adventurer, not only melee ones", () => {
-        for (const style of ["melee", "ranged", "magic"] as CombatStyle[]) {
-            const rng = new Rng(5);
-            let seen = false;
-            for (let i = 0; i < 2000 && !seen; i++) {
-                seen = rollChoices(rng, [], [], 0, style).some(
-                    (choice) => choice.kind === "newWeapon" && choice.weaponId === "keris_partisan",
-                );
-            }
-            expect(seen, style).toBe(true);
-        }
     });
 });

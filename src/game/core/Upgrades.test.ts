@@ -372,15 +372,18 @@ describe("class weapons", () => {
         return offered;
     }
 
-    test("are only offered to their own class", () => {
+    test("are only offered to their own class, and the shared ones to every class", () => {
         for (const style of ["melee", "ranged", "magic"] as CombatStyle[]) {
             const offered = newWeaponOffers(style, [weapon("throwing_knives")]);
-            // Not those only picked, which are never offered
-            for (const def of WEAPONS.filter((w) => w.style && !w.evolved && !w.pickOnly)) {
-                if (def.style === style) {
-                    expect(offered.get(def.id) ?? 0).toBeGreaterThan(0);
+            // Not those only picked, which are never offered, nor the knives already held
+            for (const def of WEAPONS.filter(
+                (w) => !w.evolved && !w.pickOnly && w.id !== "throwing_knives",
+            )) {
+                // The shared ones: the keris partisans too, for any adventurer
+                if (!def.style || def.style === style) {
+                    expect(offered.get(def.id) ?? 0, `${def.id} for ${style}`).toBeGreaterThan(0);
                 } else {
-                    expect(offered.has(def.id)).toBe(false);
+                    expect(offered.has(def.id), `${def.id} for ${style}`).toBe(false);
                 }
             }
         }
