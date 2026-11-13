@@ -16,6 +16,8 @@ export type Screen =
     | "characters"
     | "shop"
     | "armoury"
+    // The Wardrobe: the body, the outfit, and its store of outfit pieces
+    | "wardrobe"
     | "quests"
     | "collectionLog"
     // Co-op: finding or making a room, and the room before a run

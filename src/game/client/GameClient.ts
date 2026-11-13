@@ -39,6 +39,7 @@ import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
 import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
+import { WardrobeLook, cleanLook, saveOutfit, wearOutfit } from "../content/wardrobe";
 import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponStats";
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
@@ -52,7 +53,9 @@ import {
     SaveData,
     SaveStore,
     buyArmouryUpgrade,
+    buyCosmetic,
     buyUpgrade,
+    canWearCosmetic,
     exportSave,
     getEarnedUnlocks,
     getFightStage,
@@ -195,6 +198,27 @@ const ATTRACT_PITCH = -260;
 const ATTRACT_DISTANCE = 9;
 const ATTRACT_SPIN = 1.2;
 const ATTRACT_SETTLE = 0.96;
+// The Wardrobe's camera: closer and lower, facing the adventurer, who stands this many tiles to
+// the right of the middle (beside its panel) and is looked at this much higher up
+const WARDROBE_DISTANCE = 4.5;
+const WARDROBE_PITCH = -140;
+const WARDROBE_YAW = 0;
+const WARDROBE_SIDE = 1.4;
+const WARDROBE_RISE = 0.3;
+
+// A yaw (0 to 2048 a turn) kept in its turn
+function wrapYaw(yaw: number): number {
+    return ((yaw % 2048) + 2048) % 2048;
+}
+
+// A yaw a frame nearer its target, the short way round: settle is how much of the way it's
+// still to go, and it's there once it's under a unit off
+function settleYaw(yaw: number, target: number, settle: number): number {
+    const turn = wrapYaw(yaw - target);
+    const settled = (turn > 1024 ? turn - 2048 : turn) * settle;
+    return wrapYaw(target + (Math.abs(settled) < 1 ? 0 : settled));
+}
+
 // The pet taken along stands beside the character on the menus: tiles to their side and behind
 const PREVIEW_PET_SIDE = 1.1;
 const PREVIEW_PET_BACK = 0.4;
@@ -495,7 +519,10 @@ export class GameClient implements GameFrameHandler {
             store.set({ loadingProgress: 10 + Math.round((done / total) * 70) });
         });
         store.set({ loadingText: t("canvas.loading_dressing"), loadingProgress: 85 });
-        await assets.setCharacterLook(store.getSnapshot().characterId);
+        await assets.setCharacterLook(
+            store.getSnapshot().characterId,
+            store.getSnapshot().save.look,
+        );
         store.set({
             loadingText: t("canvas.loading_building", { name: tl(TITLE_MAP.name) }),
             loadingProgress: 95,
@@ -584,6 +611,18 @@ export class GameClient implements GameFrameHandler {
     private appearanceVersions: number[] = [];
     // Each hero's level-up choices their look was last baked for
     private lookChoices: (UpgradeChoice[] | undefined)[] = [];
+    // Each hero's body and outfit from the Wardrobe, for the run, in the party's order
+    private heroLooks: (WardrobeLook | undefined)[] = [];
+    // A look the Wardrobe's trying on, shown on the menus in place of the saved one till it's done
+    private previewedLook?: WardrobeLook;
+    // The Wardrobe's showing the body alone, with nothing on (its Appearance tab)
+    private bareMenuLook = false;
+    // Which way the adventurer's turned in the Wardrobe (an actor's yaw), and the way they face
+    // now, on their way round to it (and back to the front once it's left)
+    private wardrobeTurn = 0;
+    private menuModelYaw = 0;
+    // How far the title camera's come in for the Wardrobe, 0 to 1
+    private wardrobeZoom = 0;
     // The casket Auto alch or Auto equip answered, until that's done (co-op's
     // comes back with a frame: it shouldn't go twice, or show the casket
     // meanwhile)
@@ -803,8 +842,14 @@ export class GameClient implements GameFrameHandler {
         const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
         // Done shopping: a save point for cloud save
-        if ((was === "shop" || was === "armoury") && screen !== was) {
+        if ((was === "shop" || was === "armoury" || was === "wardrobe") && screen !== was) {
             this.cloud?.savePoint();
+        }
+        // Out of the Wardrobe, what was tried on comes off
+        if (was === "wardrobe" && screen !== was && (this.previewedLook || this.bareMenuLook)) {
+            this.previewedLook = undefined;
+            this.bareMenuLook = false;
+            this.refreshMenuLook();
         }
     }
 
@@ -824,9 +869,97 @@ export class GameClient implements GameFrameHandler {
         }
         this.store.set({ characterId });
         if (!this.sim) {
-            this.assets.setCharacterLook(characterId);
+            this.refreshMenuLook();
         }
         this.coop.setMe({ characterId, loadout: this.getLoadout() });
+    }
+
+    // ---- The Wardrobe ----
+
+    // The look on the menus: one being tried on, or the saved one
+    private getMenuLook(): WardrobeLook | undefined {
+        return this.previewedLook ?? this.save.look;
+    }
+
+    private refreshMenuLook(): void {
+        if (!this.sim) {
+            this.assets.setCharacterLook(
+                this.store.getSnapshot().characterId,
+                this.getMenuLook(),
+                this.bareMenuLook,
+            );
+        }
+    }
+
+    // Wears this body and outfit from now on, on every adventurer. Pieces that can't be worn (not
+    // bought, nor an unlocked adventurer's) are left off.
+    setLook(look: WardrobeLook | undefined): void {
+        const worn = cleanLook(look, (objId) => canWearCosmetic(this.save, objId));
+        if (worn) {
+            this.save.look = worn;
+        } else {
+            delete this.save.look;
+        }
+        this.previewedLook = undefined;
+        this.persist();
+        this.refreshMenuLook();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
+    // Shows a look on the menus without keeping it (a piece in the store, tried on), or the saved
+    // one again
+    previewLook(look: WardrobeLook | undefined): void {
+        this.previewedLook = look && cleanLook(look);
+        this.refreshMenuLook();
+    }
+
+    // The body alone on the menus, with nothing worn over it, or dressed again
+    showBareBody(bare: boolean): void {
+        if (this.bareMenuLook !== bare) {
+            this.bareMenuLook = bare;
+            this.refreshMenuLook();
+        }
+    }
+
+    // The outfit worn now, kept under this name (over one of that name)
+    saveOutfit(name: string): boolean {
+        const outfits = saveOutfit(this.save.outfits ?? [], name, this.save.look);
+        if (!outfits) {
+            return false;
+        }
+        this.save.outfits = outfits;
+        this.persist();
+        return true;
+    }
+
+    // A saved outfit put on, in place of what's worn
+    wearOutfit(name: string): void {
+        const saved = this.save.outfits?.find((o) => o.name === name);
+        if (saved) {
+            this.setLook(wearOutfit(this.save.look, saved));
+        }
+    }
+
+    deleteOutfit(name: string): void {
+        const outfits = this.save.outfits ?? [];
+        const left = outfits.filter((o) => o.name !== name);
+        if (left.length === outfits.length) {
+            return;
+        }
+        // None left is none at all, as a save loads it
+        this.save.outfits = left.length > 0 ? left : undefined;
+        this.persist();
+    }
+
+    // Buys a piece in the Wardrobe's store
+    buyCosmetic(objId: number): boolean {
+        if (!buyCosmetic(this.save, objId)) {
+            this.sounds.denied();
+            return false;
+        }
+        this.sounds.buy();
+        this.persist();
+        return true;
     }
 
     // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps. Without
@@ -1134,6 +1267,7 @@ export class GameClient implements GameFrameHandler {
             // A Tombs room's lobby shows the host's raid level
             room && getMap(room.mapId).tombs ? [...(this.save.invocations ?? [])] : undefined,
             getRaidChestTrophiesFound(this.save.trophies),
+            this.save.look,
         );
     }
 
@@ -1538,6 +1672,7 @@ export class GameClient implements GameFrameHandler {
     // start on, if it has one that's open (an import; a save given back by
     // another tab leaves the pick alone)
     private useSave(save: SaveData, toFavourite = false): void {
+        const lookWas = JSON.stringify(this.save?.look);
         this.save = save;
         // The adventurer and map picked might not be open in it
         const { characterId, mapId } = this.store.getSnapshot();
@@ -1557,6 +1692,11 @@ export class GameClient implements GameFrameHandler {
         }
         if (!isHardUnlocked(save, this.store.getSnapshot().mapId)) {
             this.store.set({ hard: false });
+        }
+        // Its own body and outfit, if it's another
+        if (JSON.stringify(save.look) !== lookWas) {
+            this.previewedLook = undefined;
+            this.refreshMenuLook();
         }
     }
 
@@ -1686,7 +1826,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet], cinematic);
+        this.enterRun(sim, [this.save.pet], [this.save.look], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -1782,7 +1922,9 @@ export class GameClient implements GameFrameHandler {
         for (const deliver of inbox) {
             deliver(run);
         }
-        this.enterRun(sim, pets, true);
+        // Each hero's look from their Wardrobe, only for show
+        const looks = game.heroes.map((hero) => cleanLook(hero.loadout?.look));
+        this.enterRun(sim, pets, looks, true);
         // Or once the opening cinematic's squares are in, if it's loading them (cinematicLoaded)
         if (!this.coop.isHost && this.cinematicLoading === undefined) {
             this.coop.sendUp({ loaded: true });
@@ -1791,9 +1933,17 @@ export class GameClient implements GameFrameHandler {
         this.startCoopTicker();
     }
 
-    // pets: each hero's pet, in the party's order
+    // pets and looks: each hero's pet and Wardrobe look, in the party's order
     // cinematic: play the map's opening cinematic (or its part's, a fight in parts), if it has one
-    private enterRun(sim: Sim, pets: (string | undefined)[], cinematic: boolean): void {
+    private enterRun(
+        sim: Sim,
+        pets: (string | undefined)[],
+        looks: (WardrobeLook | undefined)[],
+        cinematic: boolean,
+    ): void {
+        this.previewedLook = undefined;
+        this.bareMenuLook = false;
+        this.heroLooks = looks;
         const map = sim.map;
         this.sim = sim;
         // A new run's bosses explain themselves again
@@ -2217,7 +2367,7 @@ export class GameClient implements GameFrameHandler {
         this.view.reset();
         this.cameraRig.pitch = ATTRACT_PITCH;
         this.cameraRig.distance = ATTRACT_DISTANCE;
-        this.assets.setCharacterLook(this.store.getSnapshot().characterId);
+        this.assets.setCharacterLook(this.store.getSnapshot().characterId, this.save.look);
         if (!show) {
             return;
         }
@@ -2520,7 +2670,7 @@ export class GameClient implements GameFrameHandler {
                 this.appearanceVersions[hero.index] = hero.appearanceVersion;
                 this.lookChoices[hero.index] = choices;
                 this.assets.setPlayerAppearance(
-                    getRunAppearance(sim, hero.index),
+                    getRunAppearance(sim, hero.index, this.heroLooks[hero.index]),
                     hero.index,
                     getRunAttackSeqs(sim, hero.index),
                     getOfferedAttackSeqs(sim, hero.index),
@@ -3075,22 +3225,45 @@ export class GameClient implements GameFrameHandler {
         return Math.min(1, this.accumulator / TICK_MS);
     }
 
+    // Turns the adventurer round in the Wardrobe, which holds the camera still in front of them.
+    // at once: straight there (dragged round), not turning round to it (the arrows).
+    turnWardrobeModel(by: number, atOnce = false): void {
+        this.wardrobeTurn = wrapYaw(this.wardrobeTurn + by);
+        if (atOnce) {
+            this.menuModelYaw = wrapYaw(this.menuModelYaw + by);
+        }
+    }
+
     // Title screen: the character idles in the courtyard while the camera
-    // circles them (unless that's turned off)
+    // circles them (unless that's turned off). The Wardrobe holds it in front of them, and turns
+    // them instead, so the courtyard behind stays put.
     private updateAttract(deltaTimeMs: number, camera: Camera): void {
         const ticks = deltaTimeMs / TICK_MS;
         this.attractTick += ticks;
-        if (this.display.menuSpin) {
+        const wardrobe = this.store.getSnapshot().screen === "wardrobe";
+        const settle = Math.pow(ATTRACT_SETTLE, ticks);
+        if (this.display.menuSpin && !wardrobe) {
             this.attractYaw = (this.attractYaw + ticks * ATTRACT_SPIN) % 2048;
         } else {
             // Back round to the front the short way
-            const offset = this.attractYaw > 1024 ? this.attractYaw - 2048 : this.attractYaw;
-            const settled = offset * Math.pow(ATTRACT_SETTLE, ticks);
-            this.attractYaw = Math.abs(settled) < 1 ? 0 : (settled + 2048) % 2048;
+            this.attractYaw = settleYaw(this.attractYaw, wardrobe ? WARDROBE_YAW : 0, settle);
         }
+        this.menuModelYaw = settleYaw(this.menuModelYaw, wardrobe ? this.wardrobeTurn : 0, settle);
         this.cameraRig.yaw = this.attractYaw & 2047;
+        // The Wardrobe comes in close, the adventurer off to the right of its panel
+        this.wardrobeZoom += ((wardrobe ? 1 : 0) - this.wardrobeZoom) * (1 - 0.85 ** ticks);
+        const zoom = this.wardrobeZoom < 0.001 ? 0 : this.wardrobeZoom;
+        this.cameraRig.distance = ATTRACT_DISTANCE + (WARDROBE_DISTANCE - ATTRACT_DISTANCE) * zoom;
+        this.cameraRig.pitch = Math.round(ATTRACT_PITCH + (WARDROBE_PITCH - ATTRACT_PITCH) * zoom);
+        const yaw = (this.cameraRig.yaw / 2048) * 2 * Math.PI;
+        const side = WARDROBE_SIDE * zoom;
         const { x, y } = TITLE_MAP.spawn;
-        this.cameraRig.apply(camera, x, this.grid.getHeight(x, y) / 128 - 0.8, y);
+        this.cameraRig.apply(
+            camera,
+            x - Math.cos(yaw) * side,
+            this.grid.getHeight(x, y) / 128 - 0.8 + WARDROBE_RISE * zoom,
+            y + Math.sin(yaw) * side,
+        );
     }
 
     private handleEvents(sim: Sim, events: SimEvent[]): void {
@@ -3678,7 +3851,7 @@ export class GameClient implements GameFrameHandler {
                 TITLE_MAP.spawn.x,
                 this.grid.getHeight(TITLE_MAP.spawn.x, TITLE_MAP.spawn.y) / 128,
                 TITLE_MAP.spawn.y,
-                0,
+                Math.round(this.menuModelYaw) & 2047,
             );
         }
         const pet = this.save.pet === undefined ? undefined : PET_BY_ID.get(this.save.pet);

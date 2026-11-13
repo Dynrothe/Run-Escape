@@ -29,6 +29,13 @@ import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import { STAT_ICON_OBJ_IDS } from "../../src/game/content/statIcons";
 import { COLLECTION_LOG_OBJ } from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
+import {
+    BODY_PARTS,
+    COSMETICS,
+    WARDROBE_SLOTS,
+    getBodyKits,
+    getDefaultBody,
+} from "../../src/game/content/wardrobe";
 import { WEAPONS } from "../../src/game/content/weapons";
 import { getRecipe } from "../../src/game/scaperune/squares";
 import { BakeRequest } from "../../src/mapviewer/webgl/actor/ActorBakeTypes";
@@ -156,6 +163,8 @@ function getContentObjIds(): number[] {
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
         ...STAT_ICON_OBJ_IDS,
+        // The Wardrobe's store
+        ...COSMETICS.map((cosmetic) => cosmetic.objId),
     ]);
     for (const [, objId] of getWornObjs()) {
         ids.add(objId);
@@ -197,11 +206,66 @@ function playerRequest(key: string, appearance: PlayerAppearance, seqIds: number
     return { kind: "player", key, appearance, seqIds };
 }
 
+// A body of type B (the cache's female), which wears items' female models
+function bodyB(appearance: PlayerAppearance): PlayerAppearance {
+    const body = getDefaultBody(1);
+    return { ...appearance, female: true, kits: body.kits, colors: body.colors };
+}
+
+// Every kit the Wardrobe offers, on both bodies: the nth of each body part's kits at once
+function getKitRequests(): BakeRequest[] {
+    return ([0, 1] as const).flatMap((bodyType) => {
+        const lists = BODY_PARTS.map((_, part) => getBodyKits(bodyType, part));
+        const most = Math.max(...lists.map((list) => list.length));
+        return Array.from({ length: most }, (_, i) => {
+            const body = getDefaultBody(bodyType);
+            const appearance = createAppearance();
+            appearance.female = bodyType === 1;
+            appearance.kits = lists.map((list, part) => list[i] ?? body.kits[part]);
+            return playerRequest(`kits:${bodyType}:${i}`, appearance, []);
+        });
+    });
+}
+
+// Every piece in the Wardrobe's store, on both bodies: the nth of each slot's at once, but for
+// shields, which go one at a time (a piece that covers the shield slot would hide one)
+function getCosmeticRequests(): BakeRequest[] {
+    const bySlot = WARDROBE_SLOTS.map(({ equipSlot }) =>
+        COSMETICS.filter((cosmetic) => cosmetic.slot === equipSlot),
+    );
+    const most = Math.max(...bySlot.map((list) => list.length));
+    const looks: [string, PlayerAppearance][] = [];
+    for (let i = 0; i < most; i++) {
+        const worn: Partial<Record<EquipSlot, number>> = {};
+        for (const list of bySlot) {
+            const piece = list[i];
+            if (piece && piece.slot !== EquipSlot.SHIELD) {
+                worn[piece.slot] = piece.objId;
+            }
+        }
+        looks.push([`cosmetics:${i}`, createAppearance(worn)]);
+    }
+    for (const shield of COSMETICS.filter((cosmetic) => cosmetic.slot === EquipSlot.SHIELD)) {
+        looks.push([
+            `cosmetics:shield:${shield.objId}`,
+            createAppearance({ [EquipSlot.SHIELD]: shield.objId }),
+        ]);
+    }
+    return looks.flatMap(([key, appearance]) => [
+        playerRequest(key, appearance, []),
+        playerRequest(key + ":b", bodyB(appearance), []),
+    ]);
+}
+
 function getPlayerRequests(): BakeRequest[] {
     const playerSeqs = [...Object.values(PLAYER_SEQS), ...getPlayerAttackSeqs()];
     return [
         // Every body kit
         playerRequest("bare", createAppearance(), playerSeqs),
+        // and body type B's, which the Wardrobe can pick
+        playerRequest("bare:b", bodyB(createAppearance()), playerSeqs),
+        ...getKitRequests(),
+        ...getCosmeticRequests(),
         // Only the look holding the weapon plays these, so one bake reads them
         playerRequest("stances", createAppearance(), getPlayerStanceSeqs()),
         ...CHARACTERS.map((character) =>
@@ -209,9 +273,15 @@ function getPlayerRequests(): BakeRequest[] {
         ),
         // Power-ups' worn items and their animations
         ...getPowerUpLookRequests(createAppearance()),
-        ...getWornObjs().map(([slot, objId]) =>
+        ...getPowerUpLookRequests(bodyB(createAppearance())).map((request) => ({
+            ...request,
+            key: request.key + ":b",
+        })),
+        // On both bodies
+        ...getWornObjs().flatMap(([slot, objId]) => [
             playerRequest(`${slot}:${objId}`, createAppearance({ [slot]: objId }), []),
-        ),
+            playerRequest(`${slot}:${objId}:b`, bodyB(createAppearance({ [slot]: objId })), []),
+        ]),
     ];
 }
 

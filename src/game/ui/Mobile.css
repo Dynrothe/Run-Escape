@@ -1201,3 +1201,71 @@
         max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
     }
 }
+
+/* The Wardrobe on a phone held sideways: its panel as tall as the screen, clear of the notch,
+   and its store scrolling as one (the filters go up out of the way), with the adventurer's
+   controls on one line under them. Under the screen's class, as WardrobeScreen.css loads later. */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-wardrobe-screen {
+        padding-left: calc(var(--safe-left) + 6px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe {
+        width: min(560px, 58vw);
+        height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 10px);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe > h2,
+    .ui-wardrobe-screen .ui-wardrobe-list > .ui-subtle {
+        display: none;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store {
+        overflow-y: auto;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-store-body {
+        flex: none;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-grid-wrap,
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        max-height: none;
+        overflow: visible;
+    }
+
+    /* The piece picked over the pieces, so its Buy is in view */
+    .ui-wardrobe-screen .ui-wardrobe-details {
+        order: -1;
+    }
+
+    .ui-wardrobe-screen .ui-card.ui-wardrobe-tile {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-swatch {
+        width: 28px;
+        height: 28px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview {
+        left: auto;
+        right: calc(var(--safe-right) + 6px);
+        bottom: calc(var(--safe-bottom) + 6px);
+        margin: 0;
+        flex-direction: row;
+        padding: 4px 6px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-preview .ui-wardrobe-stepper-value {
+        min-width: 0;
+        max-width: 90px;
+    }
+
+    /* The arrows say it */
+    .ui-wardrobe-screen .ui-wardrobe-turn-label {
+        display: none;
+    }
+}

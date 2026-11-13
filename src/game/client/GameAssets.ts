@@ -33,6 +33,7 @@ import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
 import {
+    CHECKBOX_SPRITES,
     CLOUD_SAVE_SPRITES,
     REFUND_SPRITE,
     SOUND_ORB_SPRITES,
@@ -67,6 +68,7 @@ import {
     PolymorphKind,
     WeaponDef,
 } from "../content/types";
+import { WardrobeLook, applyBody, applyOutfit, wearsWardrobe } from "../content/wardrobe";
 import { WEAPONS, getProjectileObjId, getWeapon } from "../content/weapons";
 import { BLOOD_FURY_SPOTANIM, FREEZE_SPOTANIM, NUKE_SPOTANIM, Sim } from "../core/Sim";
 import { Pickup } from "../core/entities";
@@ -185,10 +187,10 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
 ];
 
 // Every interface sprite the game shows: the game view's, the title screen's tabs and cloud
-// save's button, the sound's orb, empty equipment slots, the skills' refund button, co-op's
-// flags and the overhead prayers (every frame comes with the first) and the passives with a
-// sprite for an icon. The slim cache keeps these and no others, so a sprite the game shows
-// has to be in here.
+// save's button, the sound's orb, the checkboxes, empty equipment slots, the skills' refund
+// button, co-op's flags and the overhead prayers (every frame comes with the first) and the
+// passives with a sprite for an icon. The slim cache keeps these and no others, so a sprite the
+// game shows has to be in here.
 export function getGameSpriteIds(): number[] {
     const ids = [
         ...GAME_VIEW_SPRITES,
@@ -196,6 +198,7 @@ export function getGameSpriteIds(): number[] {
         ...Object.values(TITLE_TAB_SPRITES),
         ...Object.values(CLOUD_SAVE_SPRITES),
         ...Object.values(SOUND_ORB_SPRITES),
+        ...Object.values(CHECKBOX_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         FLAG_SPRITE,
@@ -459,12 +462,17 @@ export function getCharacterAttackSeqs(characterId: string): number[] {
 // The player's look in a run: the character's outfit, the held weapon tier,
 // any gear their passives add, and what they've equipped from caskets. A
 // character's fixed outfit slots stay visible over that gear.
-export function getRunAppearance(sim: Sim, hero = sim.focus): PlayerAppearance {
-    return sim.as(hero, () => getCurrentAppearance(sim));
+// look: the hero's own from the Wardrobe, only for show.
+export function getRunAppearance(
+    sim: Sim,
+    hero = sim.focus,
+    look?: WardrobeLook,
+): PlayerAppearance {
+    return sim.as(hero, () => getCurrentAppearance(sim, look));
 }
 
-function getCurrentAppearance(sim: Sim): PlayerAppearance {
-    const appearance = getCharacterAppearance(sim.characterId);
+function getCurrentAppearance(sim: Sim, look: WardrobeLook | undefined): PlayerAppearance {
+    const appearance = getCharacterAppearance(sim.characterId, look);
     const held = sim.getHeldObjId();
     if (held !== -1) {
         appearance.equipment[EquipSlot.WEAPON] = held;
@@ -487,6 +495,9 @@ function getCurrentAppearance(sim: Sim): PlayerAppearance {
         }
     }
     const character = getCharacter(sim.characterId);
+    if (look?.overGear && wearsWardrobe(character)) {
+        applyOutfit(appearance, look.outfit);
+    }
     if (character.fixedOutfit) {
         for (const [slot, objId] of Object.entries(character.equipment)) {
             if (objId !== undefined) {
@@ -621,9 +632,22 @@ export function getOutfitAppearance(outfit: EnemyOutfit): PlayerAppearance {
     return appearance;
 }
 
-export function getCharacterAppearance(characterId: string): PlayerAppearance {
+// The Wardrobe's body with nothing on, not even a weapon
+export function getBareAppearance(look?: WardrobeLook): PlayerAppearance {
+    const appearance = createAppearance();
+    applyBody(appearance, look?.body);
+    return appearance;
+}
+
+// An adventurer's look, in the player's own body and outfit from the Wardrobe (look) unless
+// they're someone in particular (wearsWardrobe)
+export function getCharacterAppearance(characterId: string, look?: WardrobeLook): PlayerAppearance {
     const character = getCharacter(characterId);
     const appearance = createAppearance(character.equipment);
+    if (look && wearsWardrobe(character)) {
+        applyBody(appearance, look.body);
+        applyOutfit(appearance, look.outfit);
+    }
     if (character.kits) {
         appearance.kits = character.kits.slice();
     }
@@ -1356,10 +1380,14 @@ export class GameAssets {
     }
 
     // The character's look on the menus, with their starting weapon's swing:
-    // the look a run starts with, so it needn't bake again then
-    setCharacterLook(characterId: string): Promise<void> {
+    // the look a run starts with, so it needn't bake again then. bare: the body alone, with nothing
+    // worn (the Wardrobe's Appearance tab, so what's changing can be seen).
+    setCharacterLook(characterId: string, look?: WardrobeLook, bare = false): Promise<void> {
+        if (bare && wearsWardrobe(getCharacter(characterId))) {
+            return this.setPlayerAppearance(getBareAppearance(look));
+        }
         return this.setPlayerAppearance(
-            getCharacterAppearance(characterId),
+            getCharacterAppearance(characterId, look),
             0,
             getCharacterAttackSeqs(characterId),
         );

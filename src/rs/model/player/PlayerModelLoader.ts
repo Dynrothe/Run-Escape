@@ -40,6 +40,9 @@ const BODY_PART_SLOTS = [
 
 // The default male look from character creation
 export const DEFAULT_MALE_KITS = [0, 10, 18, 26, 33, 36, 42];
+// and the female one (body type B), clean-shaven. A jaw is the chin and mouth (the hair kits have
+// none), so without one the face has a hole.
+export const DEFAULT_FEMALE_KITS = [45, 296, 56, 61, 67, 70, 79];
 
 // Body colours: hair, torso, legs, feet, skin. Each player colour index picks a
 // replacement for the first colour in its row (index 0 keeps the original).
@@ -48,7 +51,8 @@ const BODY_COLOR_SOURCE = [6798, 8741, 25238, 4626, 4550];
 const BODY_COLORS: number[][] = [
     [
         6798, 107, 10283, 16, 4797, 7744, 5799, 4634, -31839, 22433, 2983, -11343, 8, 5281, 10438,
-        3650, -27322, -21845, 200, 571, 908, 21830, 28946, -15701, -14010,
+        3650, -27322, -21845, 200, 571, 908, 21830, 28946, -15701, -14010, -22122, 937, 8130,
+        -13422, 30385,
     ],
     [
         8741, 12, -1506, -22374, 7735, 8404, 1701, -27106, 24094, 10153, -8915, 4783, 1341, 16578,
@@ -63,6 +67,35 @@ const BODY_COLORS: number[][] = [
     [4626, 11146, 6439, 12, 4758, 10270],
     [4550, 4537, 5681, 5673, 5790, 6806, 8076, 4574, 17050, 0, 127, -31821, -17991],
 ];
+
+// Hair and tops have a second colour (a newer hairstyle's or beard's streaks, a shirt's trim),
+// made in a pink or a brown and painted with the first by the same choice: index 0 too, as no
+// choice keeps it. Without it they're left that colour. From the same tables.
+const BODY_COLOR_SOURCE_2 = [-10304, 9104, -1, -1, -1];
+const BODY_COLORS_2: number[][] = [
+    [
+        6554, 115, 10304, 28, 5702, 7756, 5681, 4510, -31835, 22437, 2859, -11339, 16, 5157, 10446,
+        3658, -27314, -21965, 472, 580, 784, 21966, 28950, -15697, -14002, -22116, 945, 8144,
+        -13414, 30389,
+    ],
+    [
+        9104, 10275, 7595, 3610, 7975, 8526, 918, -26734, 24466, 10145, -6882, 5027, 1457, 16565,
+        -30545, 25486, 24, 5392, 10429, 3673, -27335, -21957, 192, 687, 412, 21821, 28835, -15460,
+        -14019,
+    ],
+    [],
+    [],
+    [],
+];
+
+// How many choices each body colour has
+export const BODY_COLOR_COUNTS: readonly number[] = BODY_COLORS.map((row) => row.length);
+
+// The colour a body colour's choice paints (HSL, as the cache packs it), for a swatch
+export function getBodyColorHsl(part: number, choice: number): number {
+    const choices = BODY_COLORS[part] ?? [];
+    return (choices[choice] ?? choices[0] ?? 0) & 0xffff;
+}
 
 export type PlayerAppearance = {
     female: boolean;
@@ -242,6 +275,10 @@ export class PlayerModelLoader {
             const color = appearance.colors[i] ?? 0;
             if (color > 0 && color < choices.length) {
                 merged.recolor(BODY_COLOR_SOURCE[i], choices[color] & 0xffff);
+            }
+            const second = BODY_COLORS_2[i];
+            if (color < second.length) {
+                merged.recolor(BODY_COLOR_SOURCE_2[i] & 0xffff, second[color] & 0xffff);
             }
         }
 

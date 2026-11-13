@@ -146,6 +146,19 @@ existing ones won't do, and a case in `Sim.meetVisitor` (`startRandomEvent` for 
 - `state === "event"` pauses the run for an offer. The sim's bot answers those in `eventChoice` in
   `simulate-run.ts`, so it needs to know a new kind of offer.
 
+## Wardrobe piece
+
+The Wardrobe's store is every wearable item in the cache, generated into `content/cosmeticItems.ts` by
+`bun run tsx scripts/cache/cosmetics.ts`: don't add pieces by hand. To change what's in it, change
+the script's filters (`JUNK`, `RARES`, the slots) and run it again, then
+`scripts/i18n/extract.ts` for their names. Prices are by rarity in `content/wardrobe.ts`, with
+3rd Age priced on its own there. An
+adventurer's own outfit pieces are free once they're unlocked, so a new adventurer needs nothing more.
+A piece that's only found, never sold (the Halloween masks, raid armour), is a trophy (`trophies.ts`)
+named in `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts`, with any pieces it makes besides its
+own item. A new trophy that's a worn item goes there too, or the store sells it.
+`slim-plan.ts` bakes every piece on both bodies. See The Wardrobe in `docs/DEVELOPMENT.md`.
+
 ## Collection log reward
 
 Add trophies to `TROPHIES` in `trophies.ts`, with a `TrophySource` that names how they're found. An

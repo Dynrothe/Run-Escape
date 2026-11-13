@@ -1781,7 +1781,7 @@ describe("saving", () => {
             const { client, store, saved, setCharacterLook, setMe } = createPicking();
             client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
             expect(store.getSnapshot().characterId).toBe("ranger");
-            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setCharacterLook.mock.calls).toEqual([["ranger", undefined, undefined]]);
             expect(setMe).toHaveBeenCalledTimes(1);
             expect(saved.map((s) => s.favouriteCharacter)).toEqual(["ranger"]);
         });
@@ -1800,7 +1800,7 @@ describe("saving", () => {
             store.set({ characterId: locked });
             client.replaceSave({ ...createSave(), favouriteCharacter: "ranger" });
             expect(store.getSnapshot().characterId).toBe("ranger");
-            expect(setCharacterLook.mock.calls).toEqual([["ranger"]]);
+            expect(setCharacterLook.mock.calls).toEqual([["ranger", undefined, undefined]]);
             expect(setMe).toHaveBeenCalledTimes(1);
         });
 

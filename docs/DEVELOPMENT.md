@@ -855,7 +855,8 @@ src/game/
             above), useSpriteFrame (a sprite's frame at its own size), DescriptionButton
             (hover, focus and hold descriptions), LoadoutCatalogue (the Armoury's Weapons and
             Passives tabs), CountryFlag (a co-op player's flag), SoundOrb (the sound's on or
-            off), CoopScreen (the rooms, the lobby, the party in a run),
+            off), RsCheckbox (a checkbox drawn as the client's: its sprites on a real
+            checkbox, `CHECKBOX_SPRITES`), CoopScreen (the rooms, the lobby, the party in a run),
             formatCompact (short numbers like 9.5K and 1.2B, for the damage panel)
   client/GameTouch.ts, ui/TouchControls.tsx, ui/Mobile.css   touch screens (see Touch screens)
   client/GamePad.ts, ui/PadHint.tsx                          controllers (see Controllers)
@@ -1428,6 +1429,58 @@ it beside the character). So a pet can't change a run, and co-op's copies agree 
   that's the follower (it's the one with the Metamorphosis option). The other one looks different
   for some pets.
 
+### The Wardrobe
+
+The Wardrobe (`ui/WardrobeScreen.tsx`, a tile on the title screen) is the player's look: a body
+(body type A or B, a kit for each body part and the five body colours, as character creation
+picks them) and an outfit, slot by slot, worn on every adventurer. It's looks only, like a pet:
+the sim never sees it.
+
+- **What's in it:** `content/cosmeticItems.ts` is generated from the cache by
+  `scripts/cache/cosmetics.ts`: every item worn outside the weapon slot that both bodies can wear,
+  one of each look (items with the same worn models and colours are one piece), with a rarity by
+  its value in the cache (and the discontinued holiday rares made Very rare). The same script
+  lists the kits character creation offers. Run it again after moving to a newer cache. A body
+  always has a jaw: it's the chin and mouth (the hair kits have none), so there's no "none", and
+  body type B's default is its clean-shaven one (296, the counterpart of type A's 14). Prices
+  go by rarity, `COSMETIC_PRICES` in `content/wardrobe.ts`, except 3rd Age's dearer
+  `THIRD_AGE_PRICE` (by name), paid from banked coins like the Armoury. An unlocked adventurer's own pieces are the player's for nothing
+  (`getPieceAdventurer`): the script keeps an adventurer's id where an item shares its look.
+  Collection log finds are never sold: `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts` names the
+  trophies whose pieces are worn once the trophy's in the save (`getPieceTrophy`): the trophy's
+  own item if it's worn, and any others listed with it (what it makes in OSRS, as the hilt's
+  defender, or other looks of it, as Masori (f) or the Chompy bird hat's). `ownsCosmetic` goes by
+  the trophy alone for those, and `buyCosmetic` and loading a save's `cosmetics` refuse them. The
+  Store still lists them, to try on, with where they're found in place of a price. A trophy
+  that's a worn item belongs in the list, or the store sells it.
+- **Saved** as `SaveData.cosmetics` (the pieces bought) and `SaveData.look` (a `WardrobeLook`).
+  `cleanLook` drops what this game doesn't know, and for the save, pieces it can't wear.
+  `SaveData.outfits` are outfits kept by name (`SavedOutfit`: the pieces and `overGear`, not the
+  body), saved over one of the same name, cleaned by `cleanSavedOutfits`.
+- **Worn:** `getCharacterAppearance(characterId, look)` puts the body on and the outfit over the
+  adventurer's own pieces; a slot set to -1 shows the body. In a run (`getRunAppearance`) gear
+  from passives and caskets goes over the outfit, unless `look.overGear` keeps it on top. The
+  weapon slot is always the run's. Adventurers who look like someone (`wearsWardrobe`: a fixed
+  outfit, or kits of their own) keep their look.
+- **Trying on:** a piece picked in the store is shown on the menus' adventurer
+  (`GameClient.previewLook`) until the Wardrobe's left. On the Appearance tab the adventurer
+  stands in the body alone (`showBareBody`, `getBareAppearance`: nothing worn, no weapon) so
+  what's changing can be seen. The Wardrobe holds the title camera still in front of the
+  adventurer and turns them instead (`turnWardrobeModel`, the actor's yaw), with its arrows or
+  by dragging the courtyard: `useDragToTurn` takes a press that lands on the game's canvas, as
+  the screen lets everything but its panels through, so it needs no area of its own on any
+  layout. Random (`randomBody`) is any kit and colour of either body.
+- **Body colours:** `PlayerModelLoader` recolours as the client does, from its tables (not the
+  cache's). Hair and tops have a second colour too (`BODY_COLOR_SOURCE_2`, the newer hairstyles'
+  and beards' streaks, made in pink), recoloured by every choice, the first included: without
+  it they come out pink.
+- **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
+  so it needed no relay change; `beginCoopRun` cleans each hero's.
+- **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each
+  slot at once (shields one at a time, as a piece covering the shield slot would hide one), and
+  every worn item and power-up look on body type B too. That's what lets a deployed game draw a
+  body type B at all: before the Wardrobe, nothing in the game wore items' female models.
+
 ### What gets drawn
 
 A map square is 64 tiles a side and the camera sees a small part of one, so the game's squares are
@@ -1448,6 +1501,13 @@ gets from the model's origin in any frame of any animation, so bosses' big swing
 puts the actors on the same frame of the same animation together and each run of them is one
 instanced draw: a crowd of one enemy is a few draws, not hundreds. The shader finds an actor's data
 by `DRAW_ID + gl_InstanceID`.
+
+A face's priority (OSRS's 0-11, `faceRenderPriorities`) is 4 bits of each vertex
+(`VertexBuffer.addVertex`): 1-12, after terrain's 0. OSRS paints a model's faces in priority order
+(10 and 11 among the rest by depth, so over what they're in front of), and the shaders get the same
+by pulling a higher priority a little towards the camera, which only matters where faces touch. It
+was 3 bits until the Wardrobe, and 7 and up wrapped under the rest: a tiara or a helm's trim sank
+into the hair or the helm. Alpha has 7 bits to make room.
 
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
@@ -1788,7 +1848,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
 6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
    play exactly as before, run for run, so any difference there is a bug; the ones that changed
    reshuffle their seeds, so give those 6.
-7. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
+7. `scripts/cache/cosmetics.ts`, for the Wardrobe's pieces and kits (The Wardrobe, above).
+8. Update the README's table, the changelog, and say in the pull request what changed. A deploy's
    `slim-cache` makes new chunks only where the groups changed, so returning players download
    just those.
 

@@ -7,6 +7,16 @@ the version in the corner).
 
 ### Added
 
+- The Wardrobe, on the title screen: pick your body, hair, beard and colours, and dress every
+  adventurer slot by slot. Its store sells nearly three thousand outfit pieces for coins, from
+  bronze helms to partyhats, and you can try each one on first. Your unlocked adventurers' own
+  pieces are free, you can save outfits to put on again in one go, and co-op shows everyone's
+  look. Drag your adventurer round to see them from every side, or press Random for a new look.
+- Hallowed Night pumpkins now hold a Black h'ween mask, a Jack lantern mask and a Skeleton mask
+  too.
+
+### Fixed
+
 - The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
   that heal you for half the damage they deal.
   
