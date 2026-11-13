@@ -101,7 +101,9 @@ describe("the keris partisans", () => {
             ].sort(),
         );
         for (const weapon of keris) {
-            expect(weapon.style).toBe("melee");
+            // Offered to any adventurer, and its hits count as melee
+            expect(weapon.style).toBeUndefined();
+            expect(getWeaponStyle(weapon)).toBe("melee");
             const unlock = weapon.unlock!;
             if (unlock.kind === "raidChest") {
                 const trophy = TROPHY_BY_ID.get(unlock.trophyId)!;
@@ -413,7 +415,7 @@ describe("the Divine rune pouch", () => {
         expect(fitsWithPouch(whip, [...melee, weapon("fire_spells")], "melee", max)).toBe(true);
     });
 
-    test("offers a ranged adventurer magic weapons too, and no melee ones", () => {
+    test("offers a ranged adventurer magic weapons too, and no melee class weapons", () => {
         const ranged = ["throwing_knives", "shortbow", "toxic_blowpipe"].map(weapon);
         const offers = offered("ranged", ranged, [pouch], MAX_WEAPONS + 1);
         expect(offers.some((w) => w.style === "magic")).toBe(true);
@@ -436,5 +438,20 @@ describe("the Divine rune pouch", () => {
         sim.passives.push({ ...pouch });
         sim.updateStats();
         expect(sim.maxWeapons).toBe(max + 1);
+    });
+});
+
+describe("who's offered it", () => {
+    test("any adventurer, not only melee ones", () => {
+        for (const style of ["melee", "ranged", "magic"] as CombatStyle[]) {
+            const rng = new Rng(5);
+            let seen = false;
+            for (let i = 0; i < 2000 && !seen; i++) {
+                seen = rollChoices(rng, [], [], 0, style).some(
+                    (choice) => choice.kind === "newWeapon" && choice.weaponId === "keris_partisan",
+                );
+            }
+            expect(seen, style).toBe(true);
+        }
     });
 });

@@ -35,6 +35,8 @@ the version in the corner).
   a whole hitpoint at a time.
 - The Armoury's key, by Jp66600: the Weapons and Passives tabs show it too, where a "?" marks a
   weapon or passive still locked. Screen readers say so too.
+- The keris partisans, by Okaeri: any adventurer can be offered them now, not only melee ones.
+  Their stabs still count as melee for style bonuses like Chivalry and the rings.
 
 ## 0.31.1 - 2026-11-12
 

@@ -43,6 +43,18 @@ version and how to run it.
   Burst makes it take 20% more damage for a while and Blood Burst now and then heals you by 2.
   Level ups only offer Ice Burst. Beat the Desert and a burst's second level lets you pick which of
   the four you want, keeping its level, and it's your only burst for that run.
+- **The keris partisans**, from the Tombs of Amascut, can be offered to any adventurer: quick
+  melee stabs that hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the
+  Tombs' chest brings in a keris of its own. They're picked as the Ancient spells are: only the
+  plain keris is offered on a level up, and at its level 2 you pick which it becomes, the plain
+  one or a jewel's you've found, keeping its level (with no jewel found there's no pick). A jewel
+  found before the Kalphite Queen's kill still brings the plain keris in, to take it. **Of
+  breaching** now and then finds a gap in the shell for triple damage, far more often in
+  kalphites and scarabs; **of corruption**'s every sixth stab is Wrath of Amascut, after which
+  what it hit takes 25% more for 6 seconds; **of the sun** heals you on each kill, hits a quarter
+  harder below a quarter of your hitpoints, and every fortieth stab is Tumeken's Light, healing
+  you to full; and **of amascut** has all of it but Tumeken's Light. You carry one keris at most,
+  so they can't be stacked.
 - **Evolutions** from the new maps' passives: maxed elemental runes with Vengeance become
   **Astral runes**, which never stop circling; maxed throwing knives with Obsidian armour become
   **Toktz-xil-ul**, obsidian rings that fly through everything; maxed Saradomin Strike with the
@@ -140,22 +152,9 @@ version and how to run it.
       that stuns; the **Dragon warhammer**, whose every third blow is a Smash that makes what it
       hits take 30% more damage; the **Inquisitor's mace**, crushing blows a quarter harder on the
       undead that hit bosses and elites again; the **Dual macuahuitl**, very fast slashes on both
-      sides; and
-      the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
-      everything around you; **Dinh's bulwark**, a slow bash that hits everything around
-      you, further out than any other melee weapon; and the **Keris partisan**, quick stabs that
-      hit kalphites and scarabs (Kephri too) a third harder. Each jewel from the Tombs of
-      Amascut's chest brings in a keris of its own. They're picked as the Ancient spells are:
-      only the plain keris is offered on a level up, and at its level 2 you pick which it
-      becomes, the plain one or a jewel's you've found, keeping its level (with no jewel found
-      there's no pick). A jewel found before the Kalphite Queen's kill still brings the plain
-      keris in, to take it. **Of breaching** now and then finds a gap in
-      the shell for triple damage, far more often in kalphites and scarabs; **of corruption**'s
-      every sixth stab is Wrath of Amascut, after which what it hit takes 25% more for 6 seconds;
-      **of the sun** heals you on each kill, hits a quarter harder below a quarter of your
-      hitpoints, and every fortieth stab is Tumeken's Light, healing you to full; and **of
-      amascut** has all of it but Tumeken's Light. You carry one keris at most, so they can't
-      be stacked.
+      sides; the **Thunder khopesh**, quick slashes whose every third is a Thunderclap that hits
+      everything around you; and **Dinh's bulwark**, a slow bash that hits everything around
+      you, further out than any other melee weapon.
       The Godsword knight's **Godsword** is a bare blade until level 2, when you pick its hilt
       (Armadyl, Bandos, Saradomin or Zamorak) and with it its special attack. **Dragon claws**
       slash four times at once, the last the hardest, and the **Ivandis flail** hits vampyres and
