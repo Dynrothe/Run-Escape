@@ -45,7 +45,8 @@ levels or secondary attacks as well. Keep the originating weapon's damage source
   array for a tuned curve, or a number for the default progression. Recipes in `evolutions.ts`
   and the Collection log come from these fields, so they need no extra entry.
 - A `sweep` with `arc: Math.PI` hits all the way round. `special` replaces every so many swings of
-  a slash or sweep, and `special.aoe` hits all round.
+  a slash or sweep, and `special.aoe` hits all round. A missile's special is `siphon` instead: a
+  chance each attack, rolled on the sim's `Rng`, of harder shots that heal (the Toxic blowpipe's).
 - An attack that hits what it touches (its range plus the enemy's `radius`) finds enemies with
   `queryTouching`, not `enemyHash.query`: the hash goes by middles, so its search alone misses a
   big enemy whose edge is in range.

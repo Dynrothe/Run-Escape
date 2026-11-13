@@ -257,7 +257,11 @@ export function getSpotAnimIds(): number[] {
         for (const level of weapon.levels) {
             add(level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim);
         }
-        add(weapon.special?.spotAnim, weapon.lifesteal?.spotAnim);
+        add(
+            weapon.special?.spotAnim,
+            weapon.lifesteal?.spotAnim,
+            weapon.siphon?.projectileSpotAnim,
+        );
         add(weapon.chain?.spotAnim, weapon.breach?.spotAnim);
         add(...(weapon.boltProcs?.procs.map((p) => p.spotAnim) ?? []));
     }

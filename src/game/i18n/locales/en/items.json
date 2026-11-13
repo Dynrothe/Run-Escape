@@ -469,7 +469,7 @@
   "weapon.bow_of_faerdhinen.level.4.desc": "Arrows pass through two more enemies.",
   "weapon.bow_of_faerdhinen.level.5.desc": "Fires one more arrow, a little faster.",
   "weapon.toxic_blowpipe.name": "Toxic blowpipe",
-  "weapon.toxic_blowpipe.desc": "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads.",
+  "weapon.toxic_blowpipe.desc": "Fires darts that leave venom in what they hit, hurting it every second. Goes for enemies without venom first, so it spreads. Now and then its special, Toxic Siphon, hits harder and heals you.",
   "weapon.toxic_blowpipe.level.2.desc": "Steel darts. Stronger venom: 4 damage a second.",
   "weapon.toxic_blowpipe.level.3.desc": "Mithril darts. Fires one more dart.",
   "weapon.toxic_blowpipe.level.4.desc": "Rune darts. +2 damage, fires faster.",

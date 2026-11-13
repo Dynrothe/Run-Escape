@@ -574,6 +574,8 @@ export type Projectile = {
     orbit?: Orbit;
     // Splits at its first hit (WeaponDef.split); gone once it has
     split?: { count: number; damage: number; pierce: number };
+    // Fired as its weapon's special (WeaponDef.siphon): what it deals heals the player
+    siphon?: boolean;
     // Ticks left
     life: number;
     radius: number;

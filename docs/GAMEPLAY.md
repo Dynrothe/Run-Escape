@@ -160,7 +160,9 @@ version and how to run it.
       arrows that fly on through what they hit. The **Toxic blowpipe** fires darts that leave
       venom in what they hit, hurting it every second; it goes for enemies without venom first
       (flying past the ones with it), so the venom spreads through a crowd. Each weapon level
-      upgrades its darts: bronze, steel, mithril, rune, then dragon. From the new maps:
+      upgrades its darts: bronze, steel, mithril, rune, then dragon. One attack in 40 is its
+      special, Toxic Siphon: darts that hit 50% harder and heal you for half what they deal, up
+      to 3 hitpoints each. From the new maps:
       the **Dragon hunter crossbow**, dragon bolts that hit bosses and elites again, and the
       **Eclipse atlatl**, darts that fly through enemies and set them burning. The **Armadyl
       crossbow**'s bolts upgrade from bronze to steel, mithril, runite, then dragon. They go

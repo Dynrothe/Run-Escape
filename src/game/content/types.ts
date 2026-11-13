@@ -1762,6 +1762,17 @@ export type WeaponDef = {
     // Missiles: each hit has this chance of an enchanted bolt's effect, one
     // picked by weight (the Armadyl crossbow)
     boltProcs?: { chance: number; procs: BoltProcDef[] };
+    // Missiles: each attack has this chance of being the weapon's special (the Toxic blowpipe's
+    // Toxic Siphon), its shots flying as projectileSpotAnim, hitting damage times harder and
+    // healing the player heal of what each deals, up to max a shot
+    siphon?: {
+        name: string;
+        chance: number;
+        damage: number;
+        heal: number;
+        max: number;
+        projectileSpotAnim: number;
+    };
     // Auras: each pulse leaves the ground around the player burning for the
     // level's duration, hurting what stands in it every half second for this
     // fraction of the level's damage (Toktz-mej-tal's obsidian), with flames

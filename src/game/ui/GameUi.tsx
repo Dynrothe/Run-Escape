@@ -2714,7 +2714,6 @@ const Hud = memo(function Hud({
                 </div>
                 <RunTimer client={client} />
                 <TombsScabarasReading client={client} />
-                {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
                 <div className="ui-hud-right">
                     <Minimap client={client} muted={muted} />
                     <KillsAndCoins client={client} />
@@ -2731,6 +2730,8 @@ const Hud = memo(function Hud({
                     {/* The dev server's testing buttons: a build drops them whole */}
                     {import.meta.env.DEV && <DevGodButton client={client} />}
                     {import.meta.env.DEV && <DevWardensButton client={client} />}
+                    {/* With the column's other toggles; a phone's layout puts it by the timer */}
+                    {isCoarsePointer && <CameraZoomSlider client={client} disabled={disabled} />}
                     <HudQuests open={questTracker} client={client} disabled={disabled} />
                     <DamagePanel weapons={hud.weapons} open={damagePanel} client={client} />
                     {gearPanel && <GearPanel gear={hud.gear} disabled={disabled} />}
@@ -2768,7 +2769,7 @@ function RunTimer({ client }: { client: GameClient }): JSX.Element {
     return <div className="ui-timer">{formatTime(seconds)}</div>;
 }
 
-// A touch screen's zoom (a mouse has its wheel), behind a toggle beside the timer
+// A touch screen's zoom (a mouse has its wheel), behind a toggle
 function CameraZoomSlider({
     client,
     disabled,
