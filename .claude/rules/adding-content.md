@@ -177,7 +177,9 @@ walk sequences.
 Add it to `ENEMIES` in `enemies.ts` (fun map ones go in `fun/enemies.ts`), with its NPC id,
 animations, sounds and stats. Tests check that every enemy a map or boss refers to exists, and
 that every boss attacks. It's baked for the maps that use it (`getMapEnemies` finds its id wherever
-a map, or an enemy on that map, mentions it), so that needs nothing added.
+a map, or an enemy on that map, mentions it), so that needs nothing added. Then run
+`scripts/cache/npc-looks.ts`: if its NPC looks the same as another enemy's, it's baked once with
+it, and a test with the cache fails until that's run.
 
 - `ghost` goes through everything, and is only for what's really a spirit. Anything with wings gets
   `flies`: over fences, walls, trees and water, and round terrain (`world/FlightGrid.ts`).
@@ -389,6 +391,9 @@ The Tombs of Amascut (`scaperune/maps/tombsOfAmascut.ts`, to the plan in
 `docs/design/tombs-of-amascut.md`) is on the Raids tab, behind its quest, Beneath Cursed Sands
 (`MapDef.requires`). A new invocation goes in `INVOCATIONS`
 (`content/invocations.ts`), with its raid level and group.
+A room's enemies are baked as the raid gets there and freed once its path is done, found from
+its puzzle's content in `TOMBS_ROOM_CONTENT` (`tombs.ts`) and its boss: a new room's content goes
+there, and see What gets drawn in `docs/DEVELOPMENT.md` for an enemy two rooms use.
 A new room or boss, or a mechanic in one, needs the Tombs' bot to know it
 (`scripts/game/tombsBot.ts`: the puzzle's steps, where to stand, what to step round), and its sim
 run on it

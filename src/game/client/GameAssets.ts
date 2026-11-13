@@ -32,6 +32,7 @@ import {
 import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
 import { getHeroNpcSeqs } from "../content/justiciarKit";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
+import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
@@ -759,11 +760,13 @@ export function getCharacterAppearance(characterId: string, look?: WardrobeLook)
 const SMALL_BAKE_BATCH = 64;
 
 // Everything a request's bake depends on but its key and animations: requests
-// with the same body and first animation bake the same model
+// with the same body and first animation bake the same model. An NPC goes by
+// its look, so a boss's forms that are ids of their own (the Wardens', Akkha's)
+// are baked once (content/npcLooks.ts).
 function getRequestBody(request: BakeRequest): string {
     switch (request.kind) {
         case "npc":
-            return `npc:${request.npcId}:${request.seqIds[0]}`;
+            return `npc:${SAME_NPC_LOOK[request.npcId] ?? request.npcId}:${request.seqIds[0]}`;
         case "player":
             return `player:${getAppearanceKey(request.appearance)}:${request.seqIds[0]}`;
         case "spotanim":
@@ -823,11 +826,13 @@ export class GameAssets {
         string,
         Promise<{ models: Map<string, ActorModel>; stance: PlayerStance }>
     >();
-    // The current map's enemies
+    // The current map's enemies: their pages, the keys the run wants (loadEnemies: a page with
+    // none of them is freed, and a bake that lands after it's stopped being wanted is let go),
+    // and the keys being baked, each to its bake
     private enemyPages: ActorPage[] = [];
+    private wantedEnemies = new Set<string>();
+    private readonly bakingEnemies = new Map<string, Promise<void>>();
     private readonly requestedEnemies = new Set<string>();
-    // Counts the times the enemies were dropped: a bake from before is stale
-    private enemyBakes = 0;
     // Pets baked or being baked, by id. They're kept once they are.
     private readonly petBakes = new Map<string, Promise<void>>();
     // Heroes drawn as NPCs (CharacterDef.npcLook) baked or being baked, by id
@@ -1449,70 +1454,120 @@ export class GameAssets {
         return GameAssets.getEnemyRequests(enemies).every((r) => this.models.has(r.key));
     }
 
-    // Bakes the enemies a run needs in place of the last run's. A map played
-    // again has them already.
+    // Bakes the enemies a run needs, in place of what it doesn't: what's baked and still wanted
+    // stays (another map's goblins, the Tombs' Nexus from room to room), and the rest is freed
+    // first, so the two lots aren't in memory together. A map played again has them already.
+    // Resolves once they're all in, those already on their way too.
     async loadEnemies(
         enemies: EnemyDef[],
         onProgress?: (done: number, total: number) => void,
     ): Promise<void> {
-        if (this.hasEnemies(enemies)) {
-            return;
-        }
         const requests = GameAssets.getEnemyRequests(enemies);
-        // Freed first, so the two lots aren't in memory together
-        this.dropEnemies();
-        await this.bakeEnemies(requests, onProgress);
+        this.wantedEnemies = new Set(requests.map((request) => request.key));
+        this.freeUnwantedEnemies();
+        const coming = requests.flatMap((request) => this.bakingEnemies.get(request.key) ?? []);
+        const missing = requests.filter(
+            (request) => !this.models.has(request.key) && !this.bakingEnemies.has(request.key),
+        );
+        await Promise.all([this.bakeEnemies(missing, onProgress), ...coming]);
     }
 
     // A model that isn't baked is baked now, for a run with an enemy the map's
-    // list doesn't have (the console's spawnBoss). It shows up when it's ready.
+    // list doesn't have (the console's spawnBoss). It shows up when it's ready, as one that's
+    // on its way already does (a Tombs room's, before it's in).
     requestEnemy(enemy: EnemyDef): void {
         if (this.requestedEnemies.has(enemy.id)) {
             return;
         }
         this.requestedEnemies.add(enemy.id);
-        console.warn(`${enemy.id} isn't baked for this map`);
-        this.bakeEnemies(GameAssets.getEnemyRequests([enemy])).catch(console.error);
+        const requests = GameAssets.getEnemyRequests([enemy]);
+        for (const request of requests) {
+            this.wantedEnemies.add(request.key);
+        }
+        const missing = requests.filter(
+            (request) => !this.models.has(request.key) && !this.bakingEnemies.has(request.key),
+        );
+        if (missing.length > 0) {
+            console.warn(`${enemy.id} isn't baked for this map`);
+            this.bakeEnemies(missing).catch(console.error);
+        }
     }
 
     // Frees the enemies' models (on a phone, at the title screen)
     dropEnemies(): void {
-        this.enemyBakes++;
-        for (const page of this.enemyPages) {
+        this.wantedEnemies = new Set();
+        this.freeUnwantedEnemies();
+    }
+
+    // Frees the pages with nothing on them the run wants. A page is a bake task's: one NPC's or
+    // player's model, or a batch of small ones.
+    private freeUnwantedEnemies(): void {
+        const kept = new Set<ActorPage>();
+        for (const [key, model] of this.models) {
+            if (this.wantedEnemies.has(key)) {
+                kept.add(model.page);
+            }
+        }
+        const freed = new Set(this.enemyPages.filter((page) => !kept.has(page)));
+        if (freed.size === 0) {
+            return;
+        }
+        for (const page of freed) {
             this.actors.removePage(page);
         }
         for (const [key, model] of this.models) {
-            if (this.enemyPages.includes(model.page)) {
+            if (freed.has(model.page)) {
                 this.models.delete(key);
             }
         }
-        this.enemyPages = [];
+        this.enemyPages = this.enemyPages.filter((page) => !freed.has(page));
+        // One the console spawned may be among them: asked for again, it's baked again
         this.requestedEnemies.clear();
     }
 
-    // What lands after the enemies are dropped is a dropped map's, and isn't kept
+    // Each model's kept as it lands, under its own key and its aliases', if the run still wants
+    // one of them; one it's stopped wanting meanwhile never goes on the GPU
     private async bakeEnemies(
         requests: BakeRequest[],
         onProgress?: (done: number, total: number) => void,
     ): Promise<void> {
+        if (requests.length === 0) {
+            return;
+        }
         const { requests: merged, aliases } = GameAssets.mergeRequests(requests);
-        const bakes = this.enemyBakes;
+        const keysOf = new Map(merged.map((request) => [request.key, [request.key]]));
+        for (const [alias, key] of aliases) {
+            keysOf.get(key)?.push(alias);
+        }
         const onBake = (bake: ActorBakeResult) => {
-            if (bakes === this.enemyBakes) {
-                const [model] = this.addBake(bake).values();
+            const keys = bake.sets.flatMap((set) => keysOf.get(set.key) ?? [set.key]);
+            if (!keys.some((key) => this.wantedEnemies.has(key))) {
+                // Its textures go in anyway: the workers bake later models without them
+                this.renderer.updateTextureArray(bake.loadedTextures);
+                return;
+            }
+            const models = this.addBake(bake);
+            for (const [key, model] of models) {
+                for (const alias of keysOf.get(key) ?? []) {
+                    this.models.set(alias, model);
+                }
+            }
+            const [model] = models.values();
+            if (model) {
                 this.enemyPages.push(model.page);
             }
         };
-        await this.bakeInTasks(merged, onBake, onProgress);
-        if (bakes !== this.enemyBakes) {
-            return;
-        }
-        for (const [alias, key] of aliases) {
-            const model = this.models.get(key);
-            if (model) {
-                this.models.set(alias, model);
+        const baking = this.bakeInTasks(merged, onBake, onProgress).finally(() => {
+            for (const request of requests) {
+                if (this.bakingEnemies.get(request.key) === baking) {
+                    this.bakingEnemies.delete(request.key);
+                }
             }
+        });
+        for (const request of requests) {
+            this.bakingEnemies.set(request.key, baking);
         }
+        await baking;
     }
 
     private loadBake = (bake: ActorBakeResult): void => {
