@@ -18333,15 +18333,22 @@ export class Sim {
         if (level.castSpotAnim !== undefined) {
             this.addEffect(level.castSpotAnim, player.x, player.y, 0, 40);
         }
+        // Now and then the weapon's special instead (the Toxic blowpipe's Toxic Siphon)
+        const siphon = def.siphon && this.rng.chance(def.siphon.chance) ? def.siphon : undefined;
         for (let i = 0; i < amount; i++) {
             const target = targets[i % targets.length];
-            this.addProjectile(
+            const projectile = this.addProjectile(
                 "spell",
                 def,
                 level,
                 target,
                 fm.atan2(target.y - player.y, target.x - player.x),
             );
+            if (siphon) {
+                projectile.siphon = true;
+                projectile.damage *= siphon.damage;
+                projectile.spotAnim = siphon.projectileSpotAnim;
+            }
         }
         return true;
     }
@@ -18474,10 +18481,10 @@ export class Sim {
         angle: number,
         fromX = this.player.x,
         fromY = this.player.y,
-    ): void {
+    ): Projectile {
         const speed = (level.speed * (1 + this.stats.speed)) / TICKS_PER_SECOND;
         const range = kind === "knife" ? 18 : 24;
-        this.projectiles.push({
+        const projectile: Projectile = {
             uid: this.nextUid++,
             hero: this.hero.index,
             kind,
@@ -18507,7 +18514,9 @@ export class Sim {
             objId: getProjectileObjId(def, level) ?? -1,
             startTick: this.tick,
             ...(def.split && { split: def.split }),
-        });
+        };
+        this.projectiles.push(projectile);
+        return projectile;
     }
 
     // A cannonball or a thrall's projectile, steering towards its target
@@ -19040,6 +19049,10 @@ export class Sim {
         }
         if (weapon) {
             this.stealLife(weapon, dealt);
+        }
+        if (projectile.siphon && weapon?.siphon && dealt > 0) {
+            const { heal, max } = weapon.siphon;
+            this.heal(Math.min(Math.round(dealt * heal), max));
         }
         if (proc) {
             this.boltProc(proc, projectile, enemy);
