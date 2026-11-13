@@ -752,7 +752,6 @@ describe("the run's HUD", () => {
             coins: 10,
             item: getItemView(CASKET_GEAR[0]),
             isGear: true,
-            changes: [],
             canStash: false,
             carried: 0,
             instant: false,

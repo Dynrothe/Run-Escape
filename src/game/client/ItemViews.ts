@@ -15,7 +15,7 @@ import { eventName } from "../content/randomEvents";
 import { RARITIES } from "../content/rarity";
 import { countSetPieces, describeSetProgress, getItemSet } from "../content/sets";
 import { SHOP_UPGRADE_BY_ID } from "../content/shop";
-import { STAT_INFO, StatText, diffStats, formatStats } from "../content/stats";
+import { StatText, formatStats, pairStats } from "../content/stats";
 import { TOMBS_SPIRIT_BUNDLES } from "../content/tombs";
 import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
@@ -106,7 +106,6 @@ export function getChestView(sim: Sim): ChestView | undefined {
     const casket = CASKETS[chest.tier];
     const item = getItem(chest.itemId);
     let replaces: ChestView["replaces"];
-    let changes: ChestView["changes"] = [];
     let carried = 0;
     let recommended: ChestView["recommended"] = "take";
     // The gear it's counted with for its set: what's worn, with it on
@@ -118,17 +117,14 @@ export function getChestView(sim: Sim): ChestView | undefined {
         const wornUpgrades = sim.gearUpgrades[item.slot] ?? 0;
         if (worn?.kind === "gear") {
             replaces = {
-                item: getItemView(worn, wornUpgrades),
+                // Its set as it's worn now
+                item: getRunItemView(sim, worn, wornUpgrades),
                 alchCoins: sim.alchValue(worn.id, wornUpgrades),
+                stats: pairStats(
+                    getGearStats(worn, wornUpgrades),
+                    getGearStats(item, chest.upgrades),
+                ),
             };
-            changes = diffStats(
-                getGearStats(worn, wornUpgrades),
-                getGearStats(item, chest.upgrades),
-            ).map((d) => ({
-                text: d.text,
-                english: STAT_INFO[d.key].label,
-                good: d.delta > 0,
-            }));
             if (!shouldWear(sim.gear, sim.gearUpgrades, item, chest.upgrades)) {
                 recommended = "alch";
             }
@@ -151,7 +147,6 @@ export function getChestView(sim: Sim): ChestView | undefined {
             chest.upgradedFrom !== undefined ? getItem(chest.upgradedFrom).name : undefined,
         isGear: item.kind === "gear",
         replaces,
-        changes,
         canStash: item.kind === "utility" && sim.canStash(item.id),
         instant: item.kind === "utility" && item.use.kind === "revive",
         carried,

@@ -4,6 +4,8 @@
 .ui-chest {
     flex-direction: column;
     gap: 4px;
+    /* Clear of the screen's edges, when the card's tall */
+    padding: 8px 0;
     overflow: hidden;
     cursor: pointer;
     background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.8));
@@ -18,6 +20,9 @@
     position: relative;
     width: min(520px, calc(92vw / var(--ui-scale)));
     height: clamp(190px, calc(36vh / var(--ui-scale)), 320px);
+    /* A tall card (gear against the piece it'd replace, sets on both) takes
+       room from the scene, but leaves the item room to float */
+    min-height: 150px;
     pointer-events: none;
 }
 
@@ -555,6 +560,12 @@
 .ui-chest-card {
     width: min(460px, calc(94vw / var(--ui-scale)));
     box-sizing: border-box;
+    /* The scene gives way first, down to its least; past that (a short
+       window) the card scrolls rather than going off the screen. 220px is
+       the scene's least, the caption and the gaps. */
+    flex-shrink: 0;
+    max-height: calc(100% - 220px);
+    overflow-y: auto;
     cursor: default;
     animation: chest-card-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) both;
 }
@@ -631,15 +642,48 @@
     gap: 5px;
 }
 
-.ui-chest-changes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    margin-top: 4px;
+/* Gear against the piece it would replace, a row for each stat: a little
+   wider, so the piece's name and what it alchs for fit on one line */
+.ui-chest-card-compare {
+    width: min(540px, calc(94vw / var(--ui-scale)));
 }
 
-.ui-chest-changes .ui-stat-line {
-    display: inline-flex;
+.ui-chest-table {
+    width: 100%;
+    margin-top: 6px;
+    border-collapse: collapse;
+    color: var(--ui-white);
+}
+
+.ui-chest-table th,
+.ui-chest-table td {
+    padding: 1px 0 1px 12px;
+    font-weight: normal;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.ui-chest-table thead th {
+    font-size: 14px;
+    color: var(--ui-text-dim);
+}
+
+.ui-chest-table thead .ui-icon {
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+/* The stat's name takes what's left, and wraps if it must */
+.ui-chest-table tbody th {
+    width: 100%;
+    padding-left: 0;
+    text-align: left;
+    white-space: normal;
+    color: var(--ui-text-dim);
+}
+
+.ui-chest-table tbody tr + tr {
+    border-top: 1px solid var(--ui-divider);
 }
 
 .ui-good {

@@ -37,6 +37,8 @@ the version in the corner).
   weapon or passive still locked. Screen readers say so too.
 - The keris partisans, by Okaeri: any adventurer can be offered them now, not only melee ones.
   Their stabs still count as melee for style bonuses like Chivalry and the rings.
+- Gear from a casket, by Jp66600: a table sets each of its stats beside the piece you're wearing,
+  with the difference, and both pieces' set bonuses show.
 
 ## 0.31.1 - 2026-11-12
 

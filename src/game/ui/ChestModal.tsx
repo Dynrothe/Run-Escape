@@ -1,7 +1,7 @@
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
-import { ChestView } from "../client/GameStore";
+import { ChestView, ItemView } from "../client/GameStore";
 import { ChestAction } from "../core/Loot";
 import { fmtNum, t, tl, tp } from "../i18n";
 import { BanishButton } from "./BanishButton";
@@ -345,9 +345,13 @@ function ChestCard({
     onBanish: () => void;
 }): JSX.Element {
     const item = chest.item;
+    const replaces = chest.isGear ? chest.replaces : undefined;
     return (
         <div
-            className="ui-panel rs-border rs-background ui-chest-card"
+            className={
+                "ui-panel rs-border rs-background ui-chest-card" +
+                (replaces ? " ui-chest-card-compare" : "")
+            }
             onClick={(e) => e.stopPropagation()}
         >
             <div className="ui-chest-card-head">
@@ -369,41 +373,19 @@ function ChestCard({
                     {t("chest.found")} <Coins amount={chest.coins} />
                 </div>
             </div>
-            <ul className="ui-chest-lines">
-                <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
-            </ul>
-            {item.set && (
-                <div className={"ui-chest-set" + (item.set.active ? " ui-chest-set-on" : "")}>
-                    <StatLine text={item.set.text} />
+            {/* Against a worn piece its stats are in the table */}
+            {!replaces && (
+                <ul className="ui-chest-lines">
+                    <ItemLines item={item} wrap={(line, key) => <li key={key}>{line}</li>} />
+                </ul>
+            )}
+            <SetLine item={item} />
+            {replaces && <GearCompare chest={chest} replaces={replaces} />}
+            {chest.isGear && !replaces && (
+                <div className="ui-chest-compare">
+                    {t("chest.nothing_equipped", { kind: item.kindLabel.toLowerCase() })}
                 </div>
             )}
-            {chest.isGear &&
-                (chest.replaces ? (
-                    <div className="ui-chest-compare">
-                        <div className="ui-chest-replaces">
-                            {t("chest.replaces")}
-                            <ItemIcon objId={chest.replaces.item.objId} size={22} />
-                            <span style={{ color: chest.replaces.item.rarity.color }}>
-                                {tl(chest.replaces.item.name)}
-                            </span>
-                            {t("chest.alched_for", { coins: fmtNum(chest.replaces.alchCoins) })}
-                        </div>
-                        <div className="ui-chest-changes">
-                            {chest.changes.map((change) => (
-                                <span
-                                    key={change.text}
-                                    className={change.good ? "ui-good" : "ui-bad"}
-                                >
-                                    <StatLine text={change.text} english={change.english} />
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="ui-chest-compare">
-                        {t("chest.nothing_equipped", { kind: item.kindLabel.toLowerCase() })}
-                    </div>
-                ))}
             {!chest.isGear && (
                 <div className="ui-chest-compare">
                     {chest.instant
@@ -446,6 +428,78 @@ function ChestCard({
             {chest.queued > 0 && (
                 <div className="ui-subtle ui-chest-queued">{tp("chest.queued", chest.queued)}</div>
             )}
+        </div>
+    );
+}
+
+// A set piece: how its set's coming along, green once its bonus is
+function SetLine({ item }: { item: ItemView }): JSX.Element | null {
+    return item.set ? (
+        <div className={"ui-chest-set" + (item.set.active ? " ui-chest-set-on" : "")}>
+            <StatLine text={item.set.text} />
+        </div>
+    ) : null;
+}
+
+// Gear against the piece it would replace: that piece, its set, and a row
+// for each stat either has, the found piece's value and the difference
+// coloured by whether it's better
+function GearCompare({
+    chest,
+    replaces,
+}: {
+    chest: ChestView;
+    replaces: NonNullable<ChestView["replaces"]>;
+}): JSX.Element {
+    const worn = replaces.item;
+    return (
+        <div className="ui-chest-compare">
+            <div className="ui-chest-replaces">
+                {t("chest.replaces")}
+                <ItemIcon objId={worn.objId} size={22} />
+                <span style={{ color: worn.rarity.color }}>{tl(worn.name)}</span>
+                <span>· {tl(worn.rarity.name)}</span>
+                {t("chest.alched_for", { coins: fmtNum(replaces.alchCoins) })}
+            </div>
+            <SetLine item={worn} />
+            <table className="ui-chest-table">
+                <thead>
+                    <tr>
+                        <td />
+                        <th scope="col">
+                            <ItemIcon objId={worn.objId} size={22} />
+                            {t("chest.wearing")}
+                        </th>
+                        <th scope="col">
+                            <ItemIcon objId={chest.item.objId} size={22} />
+                            {t("chest.new")}
+                        </th>
+                        <td />
+                    </tr>
+                </thead>
+                <tbody>
+                    {replaces.stats.map((pair) => {
+                        const tone =
+                            pair.change === undefined
+                                ? undefined
+                                : pair.better
+                                  ? "ui-good"
+                                  : "ui-bad";
+                        return (
+                            <tr key={pair.key}>
+                                <th scope="row">
+                                    <StatLine text={pair.label} statKey={pair.key} />
+                                </th>
+                                <td>{pair.worn ?? "—"}</td>
+                                <td className={tone}>{pair.found ?? "—"}</td>
+                                <td className={tone}>
+                                    {pair.change !== undefined && `(${pair.change})`}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
         </div>
     );
 }

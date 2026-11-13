@@ -1125,6 +1125,28 @@
         margin-top: 6px;
     }
 
+    /* Gear against the worn piece: a tighter table, so the usual one fits
+       under co-op's countdown too */
+    .ui-chest-compare {
+        margin-top: 4px;
+        padding-top: 4px;
+    }
+
+    .ui-chest-table {
+        margin-top: 2px;
+    }
+
+    .ui-chest-table th,
+    .ui-chest-table td {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .ui-chest-table thead .ui-icon {
+        width: auto;
+        height: 16px;
+    }
+
     /* Pause and results: their columns scroll under the buttons */
 
     .ui-pause-columns,

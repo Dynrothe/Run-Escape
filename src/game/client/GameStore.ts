@@ -1,5 +1,5 @@
 import { Rarity } from "../content/rarity";
-import { StatText } from "../content/stats";
+import { StatPair, StatText } from "../content/stats";
 import { GearSlot } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
@@ -98,10 +98,9 @@ export type ChestView = {
     // Gear the Armoury has upgraded: the name of the piece it was found as
     upgradedFrom?: string;
     isGear: boolean;
-    // Gear: what it replaces (alched when the new piece goes on) and what
-    // changes
-    replaces?: { item: ItemView; alchCoins: number };
-    changes: (StatText & { good: boolean })[];
+    // Gear: what it replaces (alched when the new piece goes on), and each
+    // stat either piece has, worn against found
+    replaces?: { item: ItemView; alchCoins: number; stats: StatPair[] };
     // Utility: whether it fits in the inventory, and how many are carried
     canStash: boolean;
     carried: number;

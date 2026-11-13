@@ -121,18 +121,42 @@ export function compareStats(
     return lines;
 }
 
-// What changes going from one set of stats to another: for comparing a new
-// piece of gear with the one it replaces
-export function diffStats(
-    from: Partial<Stats>,
-    to: Partial<Stats>,
-): { key: StatKey; delta: number; text: string }[] {
-    const diffs: { key: StatKey; delta: number; text: string }[] = [];
+// Every stat either of two pieces has, side by side: a casket's gear against
+// the piece it would replace, for its table. worn or found is undefined where
+// that piece hasn't got the stat, and change (found less worn) when the two
+// show the same. change and better go by the values as shown, so the
+// difference is always what the two columns say, never "-0%" (an upgraded
+// piece's stats have fractions).
+export type StatPair = {
+    key: StatKey;
+    label: string;
+    worn?: string;
+    found?: string;
+    change?: string;
+    better: boolean;
+};
+
+export function pairStats(worn: Partial<Stats>, found: Partial<Stats>): StatPair[] {
+    const pairs: StatPair[] = [];
     for (const key of STAT_ORDER) {
-        const delta = (to[key] ?? 0) - (from[key] ?? 0);
-        if (Math.abs(delta) > 1e-9) {
-            diffs.push({ key, delta, text: formatStat(key, delta) });
+        const was = worn[key] ?? 0;
+        const now = found[key] ?? 0;
+        if (!was && !now) {
+            continue;
         }
+        const label = statLabel(key);
+        // In the steps the lines show (whole percent, or tenths), rounded as statNumber does
+        const step = STAT_INFO[key].unit === "percent" ? 100 : 10;
+        const shown = (value: number) => Math.sign(value) * Math.round(Math.abs(value) * step);
+        const delta = shown(now) - shown(was);
+        pairs.push({
+            key,
+            label: label[0].toUpperCase() + label.slice(1),
+            ...(was !== 0 && { worn: formatStatValue(key, was) }),
+            ...(now !== 0 && { found: formatStatValue(key, now) }),
+            ...(delta !== 0 && { change: formatStatValue(key, delta / step) }),
+            better: delta >= 0,
+        });
     }
-    return diffs;
+    return pairs;
 }
