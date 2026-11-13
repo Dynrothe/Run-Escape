@@ -9,6 +9,10 @@ the version in the corner).
 
 - The Toxic blowpipe now and then fires its special attack, Toxic Siphon: harder-hitting darts
   that heal you for half the damage they deal.
+  
+### Changed
+
+- Right clicking in the game no longer opens the browser's menu.
 
 ## 0.31.1 - 2026-11-12
 

@@ -18,6 +18,9 @@ window.wallpaperPropertyListener = {
     },
 };
 
+// The game has no use for the browser's right click menu
+document.addEventListener("contextmenu", (event) => event.preventDefault());
+
 // Dev only: drive frames with timers instead of requestAnimationFrame, so the
 // game keeps running in a browser pane that isn't being painted (automated
 // testing).
