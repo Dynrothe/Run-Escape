@@ -127,8 +127,8 @@ the version in the corner).
 
 - The map screen's Campaign tab is now Act I, with Act II beside it, and the seasonal maps are on
   the Fun tab, under the fun maps.
-- Monsters, bosses and adventurers take under a third of the memory they did, and the Tombs of
-  Amascut's a fifth, so maps load lighter, most of all on phones. They look just the same.
+- Monsters, bosses and adventurers take under a third of the memory they did, and load faster, so
+  maps start sooner and run lighter, most of all on phones. They look just the same.
 - Act II is harder: its first map is now tougher than the Inferno, and each step after it too.
 - The Stranglewood's ruined town has its walls back: low walls round its huts' yards and its
   tents' lower walls, still light enough for a phone.
