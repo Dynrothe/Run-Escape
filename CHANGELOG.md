@@ -143,6 +143,8 @@ the version in the corner).
   Their stabs still count as melee for style bonuses like Chivalry and the rings.
 - Gear from a casket, by Jp66600: a table sets each of its stats beside the piece you're wearing,
   with the difference, and both pieces' set bonuses show.
+- The Tombs of Amascut starts sooner and uses much less memory: each room's enemies are loaded
+  as the raid gets there, and let go once its path is done.
 
 ### Fixed
 

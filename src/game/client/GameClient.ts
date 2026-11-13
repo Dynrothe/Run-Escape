@@ -22,7 +22,7 @@ import {
     toggleInvocation,
 } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
-import { getMapEnemies } from "../content/mapEnemies";
+import { getMapEnemies, getTombsStageEnemies } from "../content/mapEnemies";
 import {
     ALL_MAPS,
     FUN_MAPS,
@@ -752,6 +752,10 @@ export class GameClient implements GameFrameHandler {
     private readonly sceneLights = new SceneLights(new LightBudget(MAX_SHOWN_LIGHTS));
     private shownDpsTick = 0;
     private readonly damageMeter = new DamageMeter();
+    // What the run's remixes and invasion bring on (travelTo), and how far through the Tombs its
+    // enemies are baked for (followTombs)
+    private runEnemyContent: unknown[] = [];
+    private tombsStage: string | undefined;
     // Each hero's look, as last baked
     private appearanceVersions: number[] = [];
     // Each hero's level-up choices their look was last baked for
@@ -2022,7 +2026,13 @@ export class GameClient implements GameFrameHandler {
         extra: unknown[] = [],
     ): Promise<boolean> {
         const map = getMap(mapId);
-        const enemies = getMapEnemies(map, [...remixContent(remixes), ...extra]);
+        const content = [...remixContent(remixes), ...extra];
+        // The Tombs, a room's enemies at a time (followTombs)
+        this.runEnemyContent = content;
+        this.tombsStage = map.tombs ? getTombsStageKey([], false) : undefined;
+        const enemies = map.tombs
+            ? getTombsStageEnemies(map, [], false, content)
+            : getMapEnemies(map, content);
         if (!this.grids.has(mapId) || !this.assets.hasEnemies(enemies)) {
             this.store.set({
                 screen: "loading",
@@ -3334,6 +3344,7 @@ export class GameClient implements GameFrameHandler {
                 );
             }
         }
+        this.followTombs(sim);
 
         const now = performance.now();
         if (now - this.lastHudUpdate > HUD_INTERVAL_MS) {
@@ -4153,6 +4164,30 @@ export class GameClient implements GameFrameHandler {
             sim.offer?.options.filter((o) => o.kind === "powerUp" && o.sold).length ?? 0,
             sim.waitingOn.map((h) => h.index).join(),
         ].join("|");
+    }
+
+    // The Tombs of Amascut bake a room's enemies as the raid gets there, and free a path's once
+    // it's done (getTombsStageEnemies): baked all at once, the Wardens' alone were hundreds of MB
+    // from the start of the raid. In the background, as each player's game goes by its own sim.
+    private followTombs(sim: Sim): void {
+        if (!sim.map.tombs) {
+            return;
+        }
+        const wardens = sim.tombsWardens !== undefined;
+        const stage = getTombsStageKey(sim.tombsPathsDone, wardens);
+        if (stage === this.tombsStage) {
+            return;
+        }
+        this.tombsStage = stage;
+        const enemies = getTombsStageEnemies(
+            sim.map,
+            sim.tombsPathsDone,
+            wardens,
+            this.runEnemyContent,
+        );
+        this.assets
+            .loadEnemies(enemies)
+            .catch((e) => console.error("Couldn't bake the Tombs' enemies", e));
     }
 
     // The camera's on this player, or on a teammate who's still up while
@@ -5028,6 +5063,11 @@ export class GameClient implements GameFrameHandler {
             }
         }
     }
+}
+
+// How far through the Tombs a run's enemies are baked for: the paths done, and the Wardens begun
+function getTombsStageKey(pathsDone: readonly string[], wardens: boolean): string {
+    return `${pathsDone.join(",")}|${wardens}`;
 }
 
 // "2 revives left"
