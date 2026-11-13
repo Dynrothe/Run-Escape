@@ -1879,13 +1879,30 @@ place of the last map's: they're most of the actors' memory, and a map uses few 
 the enemy ids it finds in the map's waves, events and bosses, and in those enemies, so a new way for
 an enemy to bring on another needs nothing added. An enemy that isn't baked anyway (the console's
 `spawnBoss`) gets baked when it's first drawn, and shows up a moment later. The last map's enemies
-stay on the menus, so playing it again starts at once; a run on another map drops them before
-its own bake starts, so the two lots are never in memory together.
+stay on the menus, so playing it again starts at once; a run on another map frees what it doesn't
+want before its own bake starts, so the two lots are never in memory together, and keeps what
+both maps have (the goblins). A key already being baked isn't baked again, and a bake that lands
+after the run's stopped wanting it never goes on the GPU.
+
+The Tombs of Amascut bakes a room at a time (`getTombsStageEnemies`, `GameClient.followTombs`):
+the Wardens alone were most of the raid's memory. A path's room is baked from the start and freed
+once the path's done; the Wardens' are baked once one path's left, while it's played, or at once
+when they're fought (the devtools' way there). What's no single room's own (`getTombsRooms`:
+what two rooms share, the random events', a remix's) stays the whole raid. A room's enemies are found
+from its puzzle's content (`TOMBS_ROOM_CONTENT` in `tombs.ts`) and its boss. An enemy that one
+room's content brings on and another room spawns only by its id in `Sim.ts` would go with the
+first room: list it in the second's content too. Each player's game follows its own sim, so co-op
+needs nothing more.
 
 Enemies that would bake the same model are baked once (`GameAssets.mergeRequests`): the same NPC
 with the same first animation (Nex's four phases), the same outfit, the same scenery. The merged
 model has all of their animations, and the other enemies' keys point to it. A request's body is
 everything its bake reads (`getRequestBody`), so a new field on a bake request goes in there too.
+NPCs of their own that look the same, the same models, colours, size and first animation (a
+boss's other forms, Akkha's styles, an Awakened boss and its plain self), go by the lowest id
+among them (`SAME_NPC_LOOK` in `content/npcLooks.ts`). That file's made from the cache by
+`scripts/cache/npc-looks.ts`: run it after adding an enemy, and a test with the cache checks it's
+up to date.
 
 A bake is cut into small tasks (`getBakeTasks`: an NPC or player model each, the spot animations,
 items and scenery a batch at a time), and each goes on the GPU as it lands, as a page of its own.
@@ -2117,6 +2134,8 @@ scripts/cache/dump-idk.ts                player body kits
 scripts/cache/dump-config.ts 13 92       raw bytes of a config entry, for working out new opcodes
 scripts/cache/compare-caches.ts osrs-241_2026-09-30   what changed since an older cache, in what the
                                          game reads (see A newer cache)
+scripts/cache/npc-looks.ts               which enemies' NPCs look the same, baked once (content/npcLooks.ts;
+                                         check to only say whether it's up to date)
 scripts/cache/sounds.ts wav out 2266     write sound effects to .wav (also validate, seqs, info)
 scripts/cache/sprites.ts png out 940-950   interface sprites to .png, to find one (and check, for the game's)
 scripts/cache/sprite-sheet.ts out.png 5000 5199   a range of sprites on one sheet, each over its id
@@ -2210,7 +2229,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
    compare an entry with the same one in the old cache. Gate the fix on the revision.
 3. `check-items.ts`, `check-fun-outfits.ts` and `sprites.ts check`, and that again with
    `DEV_MAPS=1`: rev 242 renumbered the Tombs of Amascut's invocation sprites, which only a dev
-   map used then.
+   map used then. `npc-looks.ts check` too, and `npc-looks.ts` if it says the NPCs that look the
+   same have changed.
 4. `compare-caches.ts <old cache>`. It goes over the groups the slim-cache run in `caches/slim/`
    kept, the ones the game reads: the map squares, models and so on that changed or went, and each
    npc, item, animation, spot animation and loc that changed, decoded, with the fields that differ.

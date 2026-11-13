@@ -141,6 +141,7 @@ go stale. Add anything that cost you time to work out.
 | Beneath Cursed Sands, the Tombs' quest (a boss fight)  | `content/cursedSands.ts`, `scaperune/maps/cursedSandsEntrances.ts`     |
 | Its fights' design: four parts, each kept once won     | `docs/design/beneath-cursed-sands.md`                                  |
 | What a frame costs, and what's culled                  | `docs/DEVELOPMENT.md`, `scripts/dev/`                                  |
+| Which enemies are baked when (the Tombs room by room)  | `content/mapEnemies.ts`, `GameAssets.loadEnemies`, `npcLooks.ts`       |
 | Frame cap, lost graphics, the HUD's two stores         | `docs/DEVELOPMENT.md`, Keeping it light                                |
 
 `src/game/core/` has no DOM or rendering. The UI reads from `GameClient` and `GameStore`, and never

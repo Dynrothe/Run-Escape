@@ -12,6 +12,7 @@ import {
     RaidSupplyDef,
     RandomEventDef,
     TombsBundleDef,
+    TombsPathDef,
     WardensDef,
     WaveDef,
     ZebakDef,
@@ -4207,4 +4208,18 @@ export const TOMBS_TIME_LIMITS: Record<string, { minutes: number; drop: number }
     jog_for_it: { minutes: 35, drop: 30 },
     run_for_it: { minutes: 30, drop: 40 },
     sprint_for_it: { minutes: 25, drop: 50 },
+};
+
+// What each of the raid's rooms brings on, for baking a room's enemies as the raid gets there
+// (getTombsStageEnemies): a path's puzzle room's, by its puzzle (the path's boss is its own), and
+// the Wardens'. Anything else stays baked the whole raid, so one missed here only costs memory.
+export const TOMBS_ROOM_CONTENT: Record<
+    NonNullable<NonNullable<TombsPathDef["room"]>["puzzle"]> | "wardens",
+    unknown[]
+> = {
+    apmeken: [APMEKEN_WAVES],
+    het: [HET_WAVES, HET_ENEMIES],
+    scabaras: [SCABARAS_WAVES, SCABARAS_ENEMIES],
+    crondis: [CRONDIS_WAVES, CRONDIS_ENEMIES],
+    wardens: [WARDENS],
 };

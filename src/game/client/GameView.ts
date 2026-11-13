@@ -2830,7 +2830,10 @@ export class GameView {
                 shielded ? getShieldedModelKey(def) : getCachedEnemyModelKey(def, enemy.variant),
             );
         if (!model) {
-            this.assets.requestEnemy(def);
+            // Not one that's dying: it may be a Tombs room's, freed as the party left
+            if (!enemy.dead) {
+                this.assets.requestEnemy(def);
+            }
             return;
         }
         const scale = polymorph && look ? getPolymorphScale(enemy, polymorph) : enemy.scale;
