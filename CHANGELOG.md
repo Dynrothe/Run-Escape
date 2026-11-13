@@ -33,6 +33,8 @@ the version in the corner).
 - Right clicking in the game no longer opens the browser's menu.
 - Regeneration heals steadily all minute long, and the hitpoints bar fills as it does, instead of
   a whole hitpoint at a time.
+- The Armoury's key, by Jp66600: the Weapons and Passives tabs show it too, where a "?" marks one
+  still locked.
 
 ## 0.31.1 - 2026-11-12
 
