@@ -15,6 +15,8 @@ the version in the corner).
   Cards only tab makes runs offer only what you have cards of, no rarer than your best version, with
   a pet whose card you have (in co-op, the host's choice for the whole room); the Collection log
   marks trophies first found in such a run, and the map list marks maps won in one.
+- A card generator for developers, by trippy22: it renders any cache item on the Run Escape card
+  frame as a PNG, with deck numbering, optional foil and a shared back.
 
 ## 0.32.2 - 2026-11-14
 

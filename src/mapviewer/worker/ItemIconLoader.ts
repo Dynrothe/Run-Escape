@@ -245,8 +245,10 @@ function outlineAndShadow(pixels: Int32Array, width: number, height: number): vo
     }
 }
 
+type ItemRenderState = Pick<WorkerState, "objTypeLoader" | "objModelLoader" | "textureLoader">;
+
 // Stacks like coins have their own item (model and view) per stack size
-function getStackObjId(state: WorkerState, objId: number, count: number): number {
+function getStackObjId(state: ItemRenderState, objId: number, count: number): number {
     const objType = state.objTypeLoader.load(objId);
     let stackId = objId;
     if (objType.countObj && count > 1) {
@@ -309,8 +311,33 @@ export function renderItemIcon(
         return renderLocIcon(state, -objId);
     }
     scale = Math.max(1, Math.min(MAX_ICON_SCALE, Math.round(scale)));
-    const width = ICON_WIDTH * scale;
-    const height = ICON_HEIGHT * scale;
+    // The client centers item models at (16, 16) in a 36 × 32 sprite. Only an icon at its own
+    // size gets the client's outline and shadow; a large one keeps its smooth edges.
+    return renderItemModel(
+        state,
+        objId,
+        count,
+        ICON_WIDTH * scale,
+        ICON_HEIGHT * scale,
+        16 * scale,
+        16 * scale,
+        scale,
+        scale === 1,
+    );
+}
+
+// Card art uses the same inventory pose and lighting on a larger, padded raster.
+export function renderItemModel(
+    state: ItemRenderState,
+    objId: number,
+    count: number,
+    width: number,
+    height: number,
+    centerX: number,
+    centerY: number,
+    scale: number,
+    outline = true,
+): Int32Array {
     const pixels = new Int32Array(width * height);
     const stackId = getStackObjId(state, objId, count);
     const objType = state.objTypeLoader.load(stackId);
@@ -322,9 +349,7 @@ export function renderItemIcon(
     Rasterizer2D.setRaster(pixels, width, height);
     Rasterizer2D.setClip(0, 0, width, height);
     Rasterizer3D.setClip();
-    // The client centres item models at (16, 16), not in the middle of the
-    // 36 pixel wide sprite
-    Rasterizer3D.setViewport(16 * scale, 16 * scale);
+    Rasterizer3D.setViewport(centerX, centerY);
     Rasterizer3D.rasterGouraudLowRes = false;
     Rasterizer3D.rasterAlpha = 0;
 
@@ -347,9 +372,8 @@ export function renderItemIcon(
         drawModel(model, (id) => state.textureLoader.getAverageHsl(id));
     }
 
-    // The client's outline and shadow on an icon at its own size; a large one keeps its smooth
-    // edges (the picture it's shown in gives it a shadow)
-    if (scale === 1) {
+    // The client's outline and shadow (not on the in-game cards' large pictures)
+    if (outline) {
         outlineAndShadow(pixels, width, height);
     }
     // The rasterizer writes plain RGB; mark everything drawn as opaque
