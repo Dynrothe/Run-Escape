@@ -1088,6 +1088,25 @@
     transform: translateY(1px);
 }
 
+/* The pause menu's settings button, beside Give up and Resume: pressed in while their page is open */
+.ui-pause-settings-button {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    box-shadow:
+        inset 1px 1px 0 var(--ui-edge-light),
+        inset -1px -1px 0 rgba(0, 0, 0, 0.55);
+}
+
+.ui-pause-settings-button[aria-pressed="true"] {
+    color: var(--ui-green);
+    box-shadow:
+        inset 2px 2px 0 rgba(0, 0, 0, 0.75),
+        inset -1px -1px 0 var(--ui-edge-light);
+    transform: translateY(1px);
+}
+
 /* It scrolls, so it clips what's outside it: the padding is room for a
    controller's highlight around the cards at its edges (3px out, 3px wide),
    and the margin keeps the cards where they'd be without it */
@@ -1516,17 +1535,6 @@
 .ui-dps-label {
     font-family: "OSRS Bold", sans-serif;
     color: var(--ui-orange);
-}
-
-/* A quest in the pause menu's list: its name, what it asks and how far */
-.ui-pause-quest {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-}
-
-.ui-pause-quest .ui-pause-detail {
-    flex: 1;
 }
 
 /* An endless run's round, under the coins */
@@ -2408,10 +2416,118 @@
     margin-top: 10px;
 }
 
+/* The title and tabs on top, the page in the middle and the buttons at the foot. The page is what
+   scrolls, so the buttons stay in view whenever the window has room for the top and a page's
+   minimum (.ui-pause-page); only a window shorter than that scrolls the whole panel. */
 .ui-pause {
     width: min(920px, calc(94vw / var(--ui-scale)));
+    /* Stable between tabs, but capped before a sparse page becomes mostly empty on desktop. */
+    height: min(680px, calc(90vh / var(--ui-scale)));
     max-height: calc(90vh / var(--ui-scale));
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
+}
+
+.ui-pause > .ui-row {
+    flex: none;
+}
+
+/* The pause menu's and the results' pages: a stone tab each, its side tab icon beside its name
+   (the icon alone on a phone), across the panel */
+.ui-page-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 4px 0 10px;
+    flex-shrink: 0;
+}
+
+.ui-page-tabs .ui-button {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 6px;
+}
+
+.ui-page-tab-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+    .ui-page-tabs .ui-page-tab-name {
+        display: none;
+    }
+}
+
+/* The open page: it takes what the window has left and scrolls inside it. Never shorter than the
+   minimum that shows its main items (a weapon or two), so changing tabs moves little. */
+.ui-pause-page {
+    flex: 1 1 auto;
+    min-height: min(300px, calc(40vh / var(--ui-scale)));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-color: #a58b61 #23201b;
+    padding-right: 4px;
+    padding-bottom: 6px;
+}
+
+.ui-pause-page::-webkit-scrollbar-thumb {
+    background: #8d7652;
+    border-color: #c6a56d #4c3e2d #4c3e2d #c6a56d;
+}
+
+/* A short viewport needs the whole screen more than it needs the modal's outside margin. Compact
+   only the chrome; content stays readable and receives the extra room. */
+@media (max-height: 500px) {
+    .ui-pause {
+        box-sizing: border-box;
+        height: calc(100vh / var(--ui-scale));
+        max-height: calc(100vh / var(--ui-scale));
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    .ui-pause h2 {
+        margin-bottom: 2px;
+        font-size: 20px;
+    }
+
+    .ui-pause .ui-page-tabs {
+        margin-top: 2px;
+        margin-bottom: 6px;
+    }
+
+    .ui-pause > .ui-row {
+        margin-top: 6px;
+    }
+}
+
+/* Touch controls should be comfortably hittable even when labels are replaced by icons. */
+@media (pointer: coarse) {
+    .ui-pause .ui-page-tabs .ui-button,
+    .ui-pause > .ui-row .ui-button {
+        min-height: 44px;
+    }
+}
+
+/* Settings two to a row while there's room for both */
+.ui-pause-settings {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+    column-gap: 32px;
+    align-items: start;
+}
+
+/* A short list (the party) not stretched across the whole panel */
+.ui-pause-narrow {
+    max-width: 420px;
+    margin: 0 auto;
 }
 
 /* The run (weapons, passives and worn equipment) on the left, the quests and

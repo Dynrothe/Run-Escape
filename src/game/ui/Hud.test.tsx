@@ -41,6 +41,7 @@ function hud(weapons: SlotView[]): HudView {
         weapons,
         passives: [],
         stats: [],
+        statRows: [],
         gear: [],
         inventory: [null, null, null, null],
         rerolls: 0,
@@ -225,7 +226,15 @@ describe("the run's HUD", () => {
             ...slot("bow", 8),
             stats: ["Damage: 20", "Cooldown: 1s"],
             detail: "Shoots an arrow.",
-            evolution: { passive: "Piety", maxed: true, hasPassive: false, ready: false },
+            evolution: {
+                passive: "Piety",
+                passiveIconObjId: 1,
+                into: "Dragon bow",
+                intoIconObjId: 2,
+                maxed: true,
+                hasPassive: false,
+                ready: false,
+            },
         };
         const passive: SlotView = { ...slot("Piety", 2), detail: "+10% damage" };
         act(() => store.set({ hud: { ...hud([weapon]), passives: [passive] } }));
@@ -402,7 +411,7 @@ describe("the run's HUD", () => {
                 store.set(changes);
                 store.setNumbers(numbers({ decisionSeconds: 12 }));
             });
-            const timer = view.getByRole("timer");
+            const timer = view.getByRole("timer", { hidden: true });
             expect(timer.textContent).toContain("12s");
             // GameUi.css makes room under it by the modal coming after it
             const modal = view.container.querySelector(".ui-modal")!;

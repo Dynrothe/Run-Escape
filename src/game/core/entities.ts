@@ -1,3 +1,4 @@
+import type { Rarity } from "../content/rarity";
 import {
     ArenaStatue,
     BossAttackDef,
@@ -954,6 +955,18 @@ export type Debuff = {
     stats: Partial<Stats>;
     startTick: number;
     endTick: number;
+};
+
+// Where some of a stat comes from, for the pause menu's tooltip on it: the adventurer, the shop,
+// a passive's pick (with the rarity it was picked at), a worn piece, a set, a potion or a drain
+export type StatSource = {
+    kind: "adventurer" | "shop" | "passive" | "gear" | "set" | "buff" | "debuff" | "level";
+    name: string;
+    value: number;
+    // A passive's pick: the rarity it was offered at
+    quality?: Rarity;
+    // A worn piece's own rarity, for its colour
+    rarity?: Rarity;
 };
 
 export type PassiveState = {

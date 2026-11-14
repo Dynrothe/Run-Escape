@@ -20,6 +20,7 @@ import {
 } from "../../rs/model/player/PlayerModelLoader";
 import { getCharacter } from "../content/characters";
 import { REVIVE_SEQ, REVIVE_SPOTANIM } from "../content/coop";
+import { DAMAGE_KIND_SPRITE_IDS } from "../content/damageKinds";
 import { ENEMIES } from "../content/enemies";
 import { FLAG_SPRITE } from "../content/flags";
 import { INVOCATIONS, OFF_SPRITE, RAID_BAND_SPRITES } from "../content/invocations";
@@ -28,11 +29,18 @@ import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { PASSIVES, getPassive } from "../content/passives";
 import { PET_BY_ID, PetDef, getPetModelKey } from "../content/pets";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { SLAYER_SPRITE_ID } from "../content/questIcons";
 import { RAID_PORTAL_LOC } from "../content/raids";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { PlayerStance, getPlayerStance } from "../content/stances";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
-import { CLOUD_SAVE_SPRITES, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    CLOUD_SAVE_SPRITES,
+    PAUSE_TAB_SPRITES,
+    REFUND_SPRITE,
+    STONE_SLOT_SPRITE,
+    TITLE_TAB_SPRITES,
+} from "../content/titleIcons";
 import {
     AKKHA,
     APMEKEN_BARRIER_LOC,
@@ -188,9 +196,13 @@ export function getGameSpriteIds(): number[] {
         ...GAME_VIEW_SPRITES,
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
+        ...Object.values(PAUSE_TAB_SPRITES),
+        ...DAMAGE_KIND_SPRITE_IDS,
+        SLAYER_SPRITE_ID,
         ...Object.values(CLOUD_SAVE_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
+        STONE_SLOT_SPRITE,
         FLAG_SPRITE,
         ...STAT_ICON_SPRITE_IDS,
         ...PASSIVES.flatMap((passive) =>

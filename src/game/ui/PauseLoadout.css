@@ -1,0 +1,1044 @@
+/* The pause menu's Loadout tab, dressed as the client's own interface: items sunk in their dark
+   squares (as the HUD's slots are), level and stats in its yellow, orange and white, and the
+   weapons' and passives' cards at the left, the hero's stats and worn equipment at the right.
+   It tightens (.ui-loadout-d1 to -d3: PauseLoadout's useFit) until it fits the room its page has,
+   or scrolls inside the page, and is one column on a narrow window. */
+.ui-loadout {
+    display: flex;
+    gap: 0;
+    align-items: flex-start;
+}
+
+.ui-loadout-column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.ui-loadout-column-main {
+    flex: 1.9 1 0;
+    padding-right: 18px;
+}
+
+/* A rule between the two sides of the page */
+.ui-loadout-column-side {
+    flex: 1 1 0;
+    align-self: stretch;
+    padding-left: 18px;
+    border-left: 1px solid var(--ui-divider);
+}
+
+/* What's on the right, each in a panel of its own, so it reads apart from the cards */
+.ui-loadout-column-side > section {
+    padding: 6px 8px 8px;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(107, 94, 74, 0.4);
+}
+
+/* A section's name at the left, how many slots of it are used at the right, over a rule */
+.ui-loadout-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--ui-divider);
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 17px;
+    color: var(--ui-orange);
+}
+
+.ui-loadout-count {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    color: var(--ui-yellow);
+}
+
+.ui-loadout-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* The passives are shorter, so two to a row while there's room */
+.ui-loadout-passives {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
+}
+
+/* A card: the interface's dark brown with its light edge inside, as the HUD's slots have */
+.ui-loadout-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    background: var(--ui-card);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+/* One that can evolve now */
+.ui-loadout-card-ready {
+    box-shadow:
+        inset 0 0 0 1px #b8951c,
+        0 0 6px rgba(255, 215, 0, 0.35);
+}
+
+/* Room for another, with nothing in it yet: a faint card with an empty square for its icon */
+.ui-loadout-empty {
+    min-height: 30px;
+    background: rgba(0, 0, 0, 0.14);
+    border-style: dashed;
+    border-color: rgba(107, 94, 74, 0.7);
+    box-shadow: none;
+    color: #8a7f65;
+    font-size: 14px;
+}
+
+.ui-loadout-empty-name {
+    color: #b3a785;
+}
+
+.ui-loadout-empty-hint {
+    font-size: 13px;
+    color: #8a7f65;
+}
+
+/* An empty square, dashed, with a slow pulse in its middle to say something goes here */
+.ui-loadout-ghost {
+    flex: none;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    background: rgba(28, 23, 16, 0.55);
+    border: 1px dashed rgba(107, 94, 74, 0.8);
+}
+
+.ui-loadout-ghost > i {
+    width: 30%;
+    height: 30%;
+    background: rgba(138, 127, 101, 0.5);
+    clip-path: polygon(
+        35% 0,
+        65% 0,
+        65% 35%,
+        100% 35%,
+        100% 65%,
+        65% 65%,
+        65% 100%,
+        35% 100%,
+        35% 65%,
+        0 65%,
+        0 35%,
+        35% 35%
+    );
+    animation: ui-ghost-pulse 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes ui-ghost-pulse {
+    from {
+        opacity: 0.35;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* An item in its square: sunk in, dark, the icon big in it and never out of it */
+.ui-loadout-slot {
+    flex: none;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: rgba(28, 23, 16, 0.9);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-loadout-slot .ui-icon {
+    image-rendering: pixelated;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.ui-loadout-slot-ready {
+    box-shadow: inset 0 0 0 1px #b8951c;
+}
+
+.ui-loadout-slot-over {
+    box-shadow: inset 0 0 0 1px #00a0a0;
+}
+
+/* The slot's tooltip wrapper takes no room of its own */
+.ui-loadout-slot-tip {
+    position: relative;
+    flex: none;
+    line-height: 0;
+}
+
+.ui-loadout-slot {
+    position: relative;
+}
+
+/* An evolved weapon: a violet frame, and a star in the corner */
+.ui-loadout-slot-evolved {
+    box-shadow:
+        inset 0 0 0 1px #b070ff,
+        0 0 5px rgba(176, 112, 255, 0.45);
+}
+
+.ui-loadout-slot-evolved.ui-loadout-slot-ready {
+    box-shadow:
+        inset 0 0 0 1px #ffd700,
+        0 0 6px rgba(255, 215, 0, 0.5);
+}
+
+.ui-loadout-star {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    background: #e6ccff;
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+    filter: drop-shadow(0 0 2px #9b4dff);
+    animation: ui-twinkle 2.4s steps(6) infinite;
+}
+
+@keyframes ui-twinkle {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.55;
+        transform: scale(0.8);
+    }
+}
+
+/* A finished item (its last level, nothing to evolve into) is lit up: its card has a glowing
+   orange edge with bracketed corners, a warm tint and a few embers in its corner, its square has a
+   glow of light motes over its icon, and its level wears the MAX badge. */
+.ui-loadout-card {
+    position: relative;
+}
+
+.ui-loadout-card-final {
+    background:
+        linear-gradient(180deg, rgba(120, 62, 14, 0.4), rgba(60, 34, 14, 0.18)), var(--ui-card);
+    border-color: #6b3a0a;
+    box-shadow:
+        inset 0 0 0 1px #f5a030,
+        inset 0 0 8px rgba(255, 140, 30, 0.14),
+        0 0 5px rgba(255, 130, 20, 0.28);
+}
+
+/* The brackets at the four corners of the card, a little outside it */
+.ui-loadout-corners {
+    position: absolute;
+    inset: -3px;
+    pointer-events: none;
+    background:
+        linear-gradient(#ffb347, #ffb347) top left / 12px 2px no-repeat,
+        linear-gradient(#ffb347, #ffb347) top left / 2px 12px no-repeat,
+        linear-gradient(#ffb347, #ffb347) top right / 12px 2px no-repeat,
+        linear-gradient(#ffb347, #ffb347) top right / 2px 12px no-repeat,
+        linear-gradient(#ffb347, #ffb347) bottom left / 12px 2px no-repeat,
+        linear-gradient(#ffb347, #ffb347) bottom left / 2px 12px no-repeat,
+        linear-gradient(#ffb347, #ffb347) bottom right / 12px 2px no-repeat,
+        linear-gradient(#ffb347, #ffb347) bottom right / 2px 12px no-repeat;
+    filter: drop-shadow(0 0 2px rgba(255, 150, 30, 0.5));
+}
+
+/* A few embers that glint in the card's corner */
+.ui-loadout-embers {
+    position: absolute;
+    right: 12px;
+    bottom: 7px;
+    width: 18px;
+    height: 14px;
+    pointer-events: none;
+}
+
+.ui-loadout-embers > b {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #ffc24a;
+    box-shadow: 0 0 3px #ff8a00;
+    animation: ui-glint 1.8s steps(6) infinite;
+}
+
+.ui-loadout-embers > b:nth-child(1) {
+    right: 2px;
+    bottom: 0;
+}
+
+.ui-loadout-embers > b:nth-child(2) {
+    right: 9px;
+    bottom: 4px;
+    animation-delay: 0.6s;
+}
+
+.ui-loadout-embers > b:nth-child(3) {
+    right: 14px;
+    bottom: 1px;
+    animation-delay: 1.2s;
+}
+
+@keyframes ui-glint {
+    0% {
+        opacity: 0;
+        transform: translateY(2px);
+    }
+    40% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+}
+
+.ui-loadout-slot-final {
+    box-shadow:
+        inset 0 0 0 1px #f5a030,
+        0 0 3px rgba(255, 130, 20, 0.25);
+}
+
+/* Both: the evolved frame, with the fire at its foot */
+.ui-loadout-slot-evolved.ui-loadout-slot-final {
+    box-shadow:
+        inset 0 0 0 1px #b070ff,
+        0 0 5px rgba(176, 112, 255, 0.45);
+}
+
+/* The glow of a finished item, over its square: a soft golden aura, and motes of light that rise
+   and fade here and there over the icon */
+.ui-glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+        circle at 50% 55%,
+        rgba(255, 190, 70, 0.22),
+        rgba(255, 150, 30, 0) 70%
+    );
+    animation: ui-aura 2.8s ease-in-out infinite alternate;
+}
+
+.ui-glow > i {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: #ffe9a8;
+    box-shadow:
+        0 0 3px 1px rgba(255, 190, 70, 0.9),
+        0 0 7px 2px rgba(255, 140, 30, 0.45);
+    opacity: 0;
+    animation: ui-mote 2.6s ease-in-out infinite;
+}
+
+.ui-glow > i:nth-child(1) {
+    left: 14%;
+    top: 68%;
+    animation-delay: 0s;
+}
+
+.ui-glow > i:nth-child(2) {
+    left: 30%;
+    top: 38%;
+    animation-delay: 0.9s;
+}
+
+.ui-glow > i:nth-child(3) {
+    left: 46%;
+    top: 76%;
+    animation-delay: 1.7s;
+}
+
+.ui-glow > i:nth-child(4) {
+    left: 62%;
+    top: 28%;
+    animation-delay: 0.4s;
+}
+
+.ui-glow > i:nth-child(5) {
+    left: 76%;
+    top: 60%;
+    animation-delay: 1.3s;
+}
+
+.ui-glow > i:nth-child(6) {
+    left: 84%;
+    top: 36%;
+    animation-delay: 2.1s;
+}
+
+.ui-glow > i:nth-child(7) {
+    left: 22%;
+    top: 18%;
+    animation-delay: 1.5s;
+}
+
+.ui-glow > i:nth-child(8) {
+    left: 52%;
+    top: 50%;
+    animation-delay: 2.3s;
+}
+
+.ui-glow > i:nth-child(9) {
+    left: 68%;
+    top: 80%;
+    animation-delay: 0.6s;
+}
+
+@keyframes ui-mote {
+    0% {
+        opacity: 0;
+        transform: translateY(3px) scale(0.5);
+    }
+    35% {
+        opacity: 1;
+        transform: translateY(-2px) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.4);
+    }
+}
+
+@keyframes ui-aura {
+    from {
+        opacity: 0.55;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* What the mouse over an item's square says: its name, a line or two of what it is (four lines
+   at most), a rule, and where it stands */
+.ui-examine {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 200px;
+}
+
+.ui-examine-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 17px;
+}
+
+.ui-examine-text {
+    margin: 0;
+    color: #e6dcc0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+}
+
+.ui-examine-note {
+    margin: 0;
+    color: #c9a8ff;
+}
+
+.ui-examine-form {
+    margin: 2px 0 0;
+    padding-top: 4px;
+    border-top: 1px solid var(--ui-divider);
+}
+
+.ui-examine-form-best {
+    color: var(--ui-yellow);
+}
+
+.ui-examine-form-ready {
+    color: #00ff00;
+}
+
+.ui-examine-form-evolve {
+    color: #8fd8ff;
+}
+
+.ui-examine-form-unknown {
+    color: #d98a66;
+}
+
+.ui-examine-form-levelling {
+    color: #b8aa8a;
+}
+
+/* The level of a finished item: in gold, with the MAX badge before it */
+.ui-loadout-level.ui-loadout-level-final {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    color: #ffd98a;
+}
+
+.ui-max {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    gap: 1px;
+}
+
+.ui-max > b {
+    padding: 0 6px;
+    background: #1c1008;
+    border: 1px solid #d98a1a;
+    border-radius: 2px;
+    box-shadow: 0 0 3px rgba(255, 150, 30, 0.25);
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 14px;
+    line-height: 18px;
+    color: #ffcf5a;
+}
+
+/* For anyone who asked for less motion: the star, the embers and the glow stand still */
+@media (prefers-reduced-motion: reduce) {
+    .ui-loadout-star,
+    .ui-loadout-embers > b,
+    .ui-glow,
+    .ui-glow > i,
+    .ui-loadout-ghost > i {
+        animation: none;
+    }
+
+    .ui-loadout-embers > b,
+    .ui-glow > i {
+        opacity: 0.8;
+    }
+}
+
+/* Runes circling: each its own small icon, placed round the square */
+.ui-loadout-orbit {
+    position: relative;
+    display: block;
+}
+
+.ui-loadout-orbit > span {
+    position: absolute;
+    display: block;
+    line-height: 0;
+}
+
+.ui-loadout-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* The name at the left, the level at the right */
+.ui-loadout-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.ui-loadout-title > .ui-loadout-name {
+    flex: 0 1 auto;
+}
+
+.ui-loadout-title > .ui-loadout-level {
+    margin-left: auto;
+}
+
+.ui-loadout-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The level as the client writes one: yellow, green at the most it can be, and the levels past it
+   (an endless run's) in cyan after */
+.ui-loadout-level {
+    flex: none;
+    color: var(--ui-yellow);
+}
+
+.ui-loadout-level-max {
+    color: var(--ui-green);
+}
+
+.ui-loadout-level > b {
+    font-weight: normal;
+    color: var(--ui-cyan);
+}
+
+/* The stats as a grid: an icon, a name and a size at the right in each, lined up down the card,
+   with the same weight and a lit row under the mouse */
+.ui-loadout-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 14px;
+}
+
+.ui-loadout-grid-one {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.ui-loadout-cell {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 3px;
+    border-bottom: 1px solid rgba(107, 94, 74, 0.3);
+}
+
+.ui-loadout-cell:hover,
+.ui-loadout-stat:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.ui-loadout-cell-kind {
+    display: inline-grid;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+.ui-loadout-cell-kind .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-loadout-cell-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ui-orange);
+}
+
+.ui-loadout-cell-value {
+    color: var(--ui-white);
+    text-align: right;
+}
+
+/* An evolution at the card's right: a square with what it makes, dim until it can be and gold once
+   it can, and a count in its corner as an item's is ("1/2": how much of what it takes is there).
+   Its recipe is in the tooltip. */
+.ui-loadout-sq-tip {
+    flex: none;
+    line-height: 0;
+}
+
+.ui-loadout-sq {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    box-sizing: border-box;
+    overflow: hidden;
+    background: rgba(28, 23, 16, 0.9);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-loadout-sq .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-loadout-sq-result .ui-icon {
+    opacity: 0.5;
+}
+
+.ui-loadout-sq-plain {
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-loadout-sq-ready {
+    box-shadow:
+        inset 0 0 0 1px #ffd700,
+        0 0 6px rgba(255, 215, 0, 0.55);
+}
+
+/* The count in the square's corner, as an item's stack is: yellow, green once it's all there */
+.ui-loadout-count-badge {
+    position: absolute;
+    left: 2px;
+    top: 0;
+    font-style: normal;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    line-height: 1.1;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-loadout-count-badge-all {
+    color: #00ff00;
+}
+
+/* The recipe in the tooltip, as a make menu lays one out: what it makes, big, with its name in
+   orange, and under it each thing it takes: green once it's there, red while it isn't */
+.ui-recipe {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 210px;
+}
+
+.ui-recipe-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--ui-divider);
+}
+
+.ui-recipe-title {
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-recipe-title i {
+    font-style: normal;
+    font-size: 14px;
+    color: #b8aa8a;
+}
+
+.ui-recipe-title i.ui-recipe-ready {
+    color: var(--ui-yellow);
+}
+
+.ui-recipe-title b {
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 17px;
+    color: var(--ui-orange);
+}
+
+.ui-recipe-needs {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ui-recipe-need {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-recipe-need .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-recipe-met {
+    color: #00ff00;
+}
+
+.ui-recipe-missing {
+    color: #ff5050;
+}
+
+/* The hero's stats by group: a name and its size on each line, dim when it's nothing */
+.ui-loadout-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ui-loadout-stat-group h4 {
+    margin: 0 0 2px;
+    padding-bottom: 1px;
+    border-bottom: 1px solid var(--ui-divider);
+    font-family: "OSRS Small", sans-serif;
+    font-weight: normal;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ui-orange);
+}
+
+.ui-loadout-stat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 1px 6px;
+    color: var(--ui-white);
+}
+
+/* Every other row a shade lighter, to follow it across to its size */
+.ui-loadout-stat-group .ui-loadout-stat:nth-of-type(even) {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.ui-loadout-stat-value {
+    flex: none;
+    color: var(--ui-green);
+}
+
+/* Nothing adds to it: still readable, just less */
+.ui-loadout-stat-zero {
+    color: #b3a785;
+}
+
+.ui-loadout-stat-zero .ui-loadout-stat-value {
+    color: #9d9274;
+}
+
+/* The equipment keeps OSRS's familiar body-shaped map. Weapon and ammo are deliberate open spaces:
+   Run Escape equips those through the weapon system rather than through gear slots. */
+.ui-loadout-gear-grid {
+    --gear-slot-size: 62px;
+    display: grid;
+    grid-template-areas:
+        ". head ."
+        "cape neck ammo"
+        "weapon body shield"
+        ". legs ."
+        "hands feet ring";
+    grid-template-columns: repeat(3, var(--gear-slot-size));
+    grid-template-rows: repeat(5, var(--gear-slot-size));
+    justify-content: center;
+    gap: 7px 12px;
+    width: min(100%, 230px);
+    margin: 0 auto;
+}
+
+.ui-loadout-gear-anchor {
+    display: block;
+    width: var(--gear-slot-size);
+    height: var(--gear-slot-size);
+}
+
+.ui-loadout-gear-head {
+    grid-area: head;
+}
+
+.ui-loadout-gear-cape {
+    grid-area: cape;
+}
+
+.ui-loadout-gear-neck {
+    grid-area: neck;
+}
+
+.ui-loadout-gear-body {
+    grid-area: body;
+}
+
+.ui-loadout-gear-shield {
+    grid-area: shield;
+}
+
+.ui-loadout-gear-legs {
+    grid-area: legs;
+}
+
+.ui-loadout-gear-hands {
+    grid-area: hands;
+}
+
+.ui-loadout-gear-feet {
+    grid-area: feet;
+}
+
+.ui-loadout-gear-ring {
+    grid-area: ring;
+}
+
+.ui-loadout-gear-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    background: rgba(28, 23, 16, 0.9);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-loadout-gear-cell .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-loadout-gear-cell-empty {
+    border-color: #30291f;
+    background: rgba(68, 60, 47, 0.42);
+    box-shadow:
+        inset 0 0 0 1px rgba(151, 136, 106, 0.35),
+        inset 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+.ui-loadout-gear-cell-empty .ui-icon {
+    opacity: 0.72;
+    filter: saturate(0.35) brightness(0.88);
+}
+
+/* The slot's name under the piece, or alone where there's none */
+.ui-loadout-gear-cell-name {
+    color: #b3a785;
+    font-size: 12px;
+    line-height: 1;
+    text-shadow: 1px 1px #000;
+}
+
+/* Tighter: smaller icons (set by the component), less around them, and shorter rows */
+.ui-loadout-d1 .ui-loadout-card,
+.ui-loadout-d2 .ui-loadout-card {
+    padding: 4px 6px;
+    gap: 8px;
+}
+
+.ui-loadout-d1 .ui-loadout-column,
+.ui-loadout-d2 .ui-loadout-column {
+    gap: 8px;
+}
+
+.ui-loadout-d2 .ui-loadout-heading,
+.ui-loadout-d3 .ui-loadout-heading {
+    margin-bottom: 3px;
+}
+
+.ui-loadout-d2 .ui-loadout-body,
+.ui-loadout-d3 .ui-loadout-body {
+    gap: 1px;
+}
+
+/* Tightest: keep empty slots visible as compact onboarding instead of dropping the new empty
+   state altogether. The page can scroll now, so hiding useful information no longer buys enough. */
+.ui-loadout-d3 .ui-loadout-empty {
+    min-height: 26px;
+    gap: 6px;
+    padding: 2px 6px;
+}
+
+.ui-loadout-d3 .ui-loadout-empty .ui-loadout-ghost {
+    width: 26px !important;
+    height: 26px !important;
+}
+
+.ui-loadout-d3 .ui-loadout-empty-hint {
+    font-size: 12px;
+    line-height: 1.05;
+}
+
+.ui-loadout-d3 .ui-loadout-card {
+    padding: 3px 6px;
+}
+
+.ui-loadout-d3 .ui-loadout-column,
+.ui-loadout-d3 .ui-loadout-stats {
+    gap: 5px;
+}
+
+.ui-loadout-d3 .ui-loadout-column-side > section {
+    padding: 4px 6px 5px;
+}
+
+.ui-loadout-d3 .ui-loadout-stat {
+    padding: 0 6px;
+}
+
+.ui-loadout-d3 .ui-loadout-gear-grid {
+    --gear-slot-size: 54px;
+    gap: 5px 10px;
+    width: min(100%, 205px);
+}
+
+/* On a wide pause panel, the equipment remains the first right-hand section while stats use the
+   otherwise empty space below weapons and passives. Three stat columns keep the page above the
+   fold; narrower layouts return both sections to the right in document order. */
+@media (min-width: 900px) {
+    .ui-loadout {
+        display: grid;
+        grid-template-areas:
+            "main equipment"
+            "stats equipment";
+        grid-template-columns: minmax(0, 1.9fr) minmax(250px, 1fr);
+        column-gap: 0;
+        row-gap: 12px;
+    }
+
+    .ui-loadout-column-main {
+        grid-area: main;
+    }
+
+    .ui-loadout-column-side {
+        display: contents;
+    }
+
+    .ui-loadout-equipment {
+        grid-area: equipment;
+        align-self: start;
+        margin-left: 18px;
+    }
+
+    .ui-loadout-stats-panel {
+        grid-area: stats;
+        margin-right: 18px;
+    }
+
+    .ui-loadout-stats-panel .ui-loadout-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: start;
+        gap: 12px;
+    }
+}
+
+@media (max-width: 760px) {
+    .ui-loadout {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .ui-loadout-column {
+        flex: none;
+        width: 100%;
+    }
+
+    .ui-loadout-column-main {
+        padding-right: 0;
+    }
+
+    .ui-loadout-column-side {
+        padding-left: 0;
+        border-left: none;
+    }
+
+    /* Empty capacity matters on a phone, but repeating the same acquisition hint seven times does
+       not. Keep every slot visible in a compact two-column map and let owned cards use the row. */
+    .ui-loadout-d3 .ui-loadout-cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ui-loadout-d3 .ui-loadout-card:not(.ui-loadout-empty) {
+        grid-column: 1 / -1;
+    }
+
+    .ui-loadout-d3 .ui-loadout-empty {
+        min-width: 0;
+    }
+
+    .ui-loadout-d3 .ui-loadout-empty-hint {
+        display: none;
+    }
+}
+
+@media (max-width: 520px) {
+    .ui-loadout-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

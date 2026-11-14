@@ -1,0 +1,158 @@
+/* The pause menu's Quests tab: cards in the Loadout's style, with the quest's own icon in a sunk
+   square, a bar of how far it's got, and the faces of what it's after. The state's colour (red,
+   yellow, green) is on its name, its bar and its edge. */
+.ui-pq {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ui-pq-card {
+    /* Text needs 4.5:1 against the brown card; keep the stronger red on the decorative edge. */
+    --tone: #ff8585;
+    --edge-tone: #ff4040;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 10px 6px 8px;
+    background: var(--ui-card);
+    border: 1px solid #000;
+    border-left: 3px solid var(--edge-tone);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-pq-started {
+    --tone: #ffd700;
+    --edge-tone: #ffd700;
+}
+
+.ui-pq-done {
+    --tone: #00ff00;
+    --edge-tone: #00c800;
+    background: linear-gradient(90deg, rgba(0, 120, 0, 0.18), rgba(0, 0, 0, 0)), var(--ui-card);
+}
+
+.ui-pq-icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    box-sizing: border-box;
+    background: rgba(28, 23, 16, 0.9);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-pq-icon .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-pq-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ui-pq-name {
+    color: var(--tone);
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 17px;
+}
+
+.ui-pq-task {
+    color: #e6dcc0;
+}
+
+.ui-pq-bar {
+    display: block;
+    height: 6px;
+    margin-top: 3px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid #000;
+}
+
+.ui-pq-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--tone);
+}
+
+.ui-pq-progress {
+    color: var(--tone);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* A quest's reward: a square with "Reward" on top, the Slayer skull for a kill quest, and the coins
+   (or the item it unlocks) below */
+.ui-pq-reward {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 84px;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 3px 6px;
+    background: rgba(28, 23, 16, 0.9);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-pq-reward-label {
+    color: #ffb83f;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.ui-pq-reward-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #ffff00;
+    font-size: 14px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* A kill quest's mark: the Slayer skull, in the reward square */
+.ui-pq-skull {
+    display: grid;
+    place-items: center;
+    cursor: help;
+}
+
+.ui-pq-skull .ui-icon,
+.ui-pq-reward-value .ui-icon {
+    image-rendering: pixelated;
+}
+
+/* The client's grey stone slot (its sprite, once loaded) behind the quest's icon and its reward,
+   as on the equipment screen: the sprite's 5 pixel edge stays, the middle stretches */
+.ui-pq-stone .ui-pq-icon,
+.ui-pq-stone .ui-pq-reward {
+    background: none;
+    border: 5px solid transparent;
+    border-image: var(--ui-stone) 5 fill / 5px;
+    box-shadow: none;
+    image-rendering: pixelated;
+}
+
+.ui-pq-stone .ui-pq-icon {
+    width: 48px;
+    height: 48px;
+}
+
+.ui-pq-stone .ui-pq-reward {
+    min-width: 88px;
+    min-height: 48px;
+    padding: 0 2px;
+}
+
+.ui-pq-stone .ui-pq-card {
+    grid-template-columns: 48px minmax(0, 1fr) auto auto;
+}

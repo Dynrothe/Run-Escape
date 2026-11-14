@@ -1,5 +1,6 @@
+import { DamageKind } from "../content/damageKinds";
 import { Rarity } from "../content/rarity";
-import { GearSlot } from "../content/types";
+import { GearSlot, StatKey } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
 import { ChestAction } from "../core/Loot";
 import { RunResult, ScabarasPuzzleState } from "../core/Sim";
@@ -32,10 +33,34 @@ export type SlotView = {
     iconSpriteId?: number;
     // What it adds up to so far: "+18% damage", "+15% damage to this weapon"
     detail: string;
+    // Weapons: the kinds of damage it deals, its style first (melee, ranged or magic)
+    kinds?: DamageKind[];
     // Weapons: their stats at this level ("Damage 13", "Attacks 0.74/s")
     stats?: string[];
-    // Weapons that evolve: the passive it takes, and what's done of it
-    evolution?: { passive: string; maxed: boolean; hasPassive: boolean; ready: boolean };
+    // Weapons that evolve: the passive it takes, what it evolves into, and what's done of it
+    evolution?: {
+        passive: string;
+        passiveIconObjId: number;
+        passiveIconSpriteId?: number;
+        into: string;
+        intoIconObjId: number;
+        maxed: boolean;
+        hasPassive: boolean;
+        ready: boolean;
+    };
+    // What it says when looked at (a line or two, as the original's examine texts)
+    examine?: string;
+    // Where it stands: at its best, or what's left to do
+    form?: FormView;
+    // Weapons: it's one an evolution made
+    evolved?: boolean;
+    // Weapons that circle the hero (the runes): what's circling now, one item for each, so the
+    // icon can show them all
+    orbit?: number[];
+    // Weapons: the same stats, each with how it got its size
+    statLines?: SlotStatView[];
+    // What the detail line (a passive's size, a weapon's damage bonus) is made of
+    detailBreakdown?: BreakdownView;
     // The item's own rarity, for the slot's border
     rarityColor: string;
 };
@@ -49,9 +74,40 @@ export type ItemView = {
     kindLabel: string;
     // What it does, a line per stat or effect
     lines: string[];
+    // Worn gear: how each of those lines got its size, a view to each (the pause menu's tooltips)
+    lineBreakdowns?: BreakdownView[];
     // A set piece: how the set's coming along ("Void knight 2/4: ..."), and
     // whether its bonus is on
     set?: { text: string; active: boolean };
+};
+
+// Where a number on the pause menu comes from, for the tooltip on it: its parts (each in the
+// colour of the rarity it was taken at) and what they come to. title: what it's the make-up of.
+// label: what this part is of ("Level 3", "Base"): a line with parts that have one is a list, a row
+// each, down the tooltip
+export type BreakdownPart = { text: string; color?: string; label?: string };
+export type BreakdownLine = { label?: string; parts: BreakdownPart[]; total?: string };
+export type BreakdownView = { title: string; total?: string; lines: BreakdownLine[] };
+
+// A weapon's stat as the pause menu lists it ("Damage", "18"), with how it got that size
+export type SlotStatView = { label: string; value: string; breakdown?: BreakdownView };
+
+// Where a weapon or passive stands, for the end of its tooltip: at its best, ready to evolve, able to
+// evolve once it has what it takes, not known how to evolve yet, or still to level up
+export type FormView = {
+    kind: "best" | "ready" | "evolve" | "unknown" | "levelling";
+    text: string;
+};
+
+// One of the hero's stats on the pause menu's Loadout: its name, its size now, and the group it's
+// listed in. zero: nothing's adding to it.
+export type StatRowView = {
+    key: StatKey;
+    group: "offense" | "defense" | "utility";
+    label: string;
+    value: string;
+    zero: boolean;
+    breakdown?: BreakdownView;
 };
 
 export type GearSlotView = { slot: GearSlot; name: string; item?: ItemView };
@@ -140,6 +196,8 @@ export type HudView = {
     // The player's stats from passives, gear, potions and their adventurer,
     // the ones that aren't zero: "+18% damage", "+2 armour"
     stats: string[];
+    // The same stats as rows by group, with the ones a hero has none of too
+    statRows: StatRowView[];
     gear: GearSlotView[];
     inventory: InventorySlotView[];
     // Left this run, for a level up's rewards or a casket's item
@@ -263,6 +321,24 @@ export type DamageView = {
     perSecond?: number;
 };
 
+// The run's damage by its kind (melee, poison, recoil...), most first, none that did nothing
+export type DamageKindView = { kind: DamageKind; damage: number };
+
+// Kills of one enemy, most first; boss: it's a boss
+export type KillView = { enemyId: string; kills: number; boss: boolean };
+
+// The pause menu's Combat tab, and the results' (PlayerResultView has the same): the hero's
+// damage by kind and by source, kills by enemy, and the totals
+export type CombatView = {
+    damageDealt: number;
+    damageTaken: number;
+    healed: number;
+    highestHit: number;
+    kinds: DamageKindView[];
+    sources: DamageView[];
+    kills: KillView[];
+};
+
 // fraction: of its hitpoints, or a fight in phases' shield. fight: how that
 // fight's going, and what's on the player (see BossPhasesDef)
 export type BossView = {
@@ -322,6 +398,19 @@ export type PlayerResultView = {
     rerollsUsed: number;
     skips: number;
     damage: DamageView[];
+    // The same damage by its kind, and kills by enemy
+    kinds: DamageKindView[];
+    killsByEnemy: KillView[];
+    // Co-op: teammates this player revived, times they went down, damage dealt to bosses, and
+    // seconds in the fight (not down or gone)
+    revivesGiven: number;
+    timesDowned: number;
+    bossDamage: number;
+    aliveSeconds: number;
+    // Where they are in the run's party (the timeline's heroes), and a colour that's theirs
+    // for charts and the podium
+    index: number;
+    color: string;
 };
 
 // done / of: how far it's got, this run's kills and caskets included;
@@ -333,6 +422,12 @@ export type QuestTrackView = {
     done: number;
     of: number;
     finished: boolean;
+    // The quest's own icon (an item), and the enemies it's after, for their faces
+    iconObjId?: number;
+    enemyIds: string[];
+    // What it pays when the run ends, and an item it unlocks instead of (or as well as) the coins
+    coins: number;
+    unlockObjId?: number;
 };
 
 export type ChoiceView = {

@@ -329,3 +329,45 @@ export function formatWeaponStat(line: WeaponStatLine): string {
         ? t("weaponstat.line", { label: line.label, value: line.value })
         : t("weaponstat.change", { label: line.label, from: line.from, value: line.value });
 }
+
+// A stat's make-up, for the pause menu's tooltip: what it was at level 1, and each later level's
+// change to it (the level it came with and the change, written out as "+0.2 tiles"). The same
+// stats as weaponStats lists, in the same order. Past the last level only the damage bonus grows,
+// so nothing is added for those.
+export type WeaponStatSteps = {
+    label: string;
+    value: string;
+    // The first is the level 1 value as it reads; the rest are changes ("+2")
+    steps: { level: number; text: string }[];
+};
+
+export function weaponStatSteps(
+    def: WeaponDef,
+    level: number,
+    profile: WeaponDamageProfile | undefined = WEAPON_DAMAGE_BALANCE.global,
+): WeaponStatSteps[] {
+    const reached = Math.min(level, def.levels.length);
+    const top = def.levels[reached - 1];
+    const result: WeaponStatSteps[] = [];
+    for (const field of statFields(def, profile)) {
+        const value = field.get(top);
+        if (value === undefined || !field.listed?.(value)) {
+            continue;
+        }
+        const steps = [{ level: 1, text: field.format(field.get(def.levels[0]) ?? 0) }];
+        for (let l = 2; l <= reached; l++) {
+            const before = field.get(def.levels[l - 2]) ?? 0;
+            const after = field.get(def.levels[l - 1]) ?? 0;
+            const change = after - before;
+            // A change too small to show once rounded isn't a step
+            if (field.format(Math.abs(change)) !== field.format(0)) {
+                steps.push({
+                    level: l,
+                    text: (change < 0 ? "-" : "+") + field.format(Math.abs(change)),
+                });
+            }
+        }
+        result.push({ label: t(field.label), value: field.format(value), steps });
+    }
+    return result;
+}

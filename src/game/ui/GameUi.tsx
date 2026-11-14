@@ -37,7 +37,6 @@ import {
     characterName,
     getCharacter,
 } from "../content/characters";
-import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../content/invocations";
 import { GEAR_SLOT_BY_ID } from "../content/items";
 import {
     CAMPAIGN_MAPS,
@@ -57,14 +56,19 @@ import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { formatStats } from "../content/stats";
-import { COLLECTION_LOG_OBJ, REFUND_SPRITE, TITLE_TAB_SPRITES } from "../content/titleIcons";
+import {
+    COLLECTION_LOG_OBJ,
+    PAUSE_TAB_SPRITES,
+    REFUND_SPRITE,
+    TITLE_TAB_SPRITES,
+} from "../content/titleIcons";
 import { SCABARAS } from "../content/tombs";
-import { TROPHY_BY_ID, trophyName } from "../content/trophies";
+import { trophyName } from "../content/trophies";
 import { CharacterDef, CombatStyle, MapDef } from "../content/types";
 import { MapReward, describeUnlockTask, getMapRewards } from "../content/unlocks";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
-import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
+import type { ScabarasPuzzle } from "../core/Sim";
 import {
     NewerSaveError,
     SaveData,
@@ -78,7 +82,7 @@ import {
     isHardUnlocked,
     isMapUnlocked,
 } from "../core/save";
-import { dateLocale, fmtNum, getLang, list, t, tl, tp, tr, useLang } from "../i18n";
+import { dateLocale, fmtNum, getLang, t, tl, tp, tr, useLang } from "../i18n";
 import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
@@ -88,6 +92,7 @@ import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
 import { CollectionLogScreen } from "./CollectionLogScreen";
+import { CombatReport } from "./CombatBreakdown";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { EventModal } from "./EventModal";
@@ -99,16 +104,20 @@ import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, PadControls, PadIcon, usePadKind } from "./PadHint";
+import { PauseLoadout, SlotIcon } from "./PauseLoadout";
+import { PauseQuests } from "./PauseQuests";
 import { QuestScreen } from "./QuestScreen";
 import { RerollButton } from "./RerollButton";
 import { ExportReminder, SaveBlockPanel, UnreadableSavePanel } from "./SavePanels";
 import { SkipButton } from "./SkipButton";
 import { StatLine } from "./StatLine";
+import { TabBar, TabDef, getTabFromKey } from "./TabBar";
 import { TitleLanguageMenu } from "./TitleLanguageMenu";
 import { RotateNotice, TouchControls, enterFullscreen } from "./TouchControls";
 import { GAME_VERSION } from "./changelog";
 import { formatCompact, formatShare } from "./formatCompact";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
+import { ClassicResults } from "./results/ClassicResults";
 
 type Props = {
     store: GameStore;
@@ -1135,143 +1144,6 @@ function RaidObjective({
     );
 }
 
-// The chest at the end of a raid: what it was rolled with, and what came out
-function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
-    const found = chest.found.map((id) => TROPHY_BY_ID.get(id)!).filter(Boolean);
-    // The Tombs' pet, Thread and jewels aren't purples
-    const purple = found.some((t) => t.from.kind !== "tombs" || t.from.weight !== undefined);
-    return (
-        <div className="ui-raid-chest">
-            <div className="ui-raid-chest-title">
-                {purple ? t("ui.raid.chest.purple") : t("ui.raid.chest.regular")}
-            </div>
-            <div className="ui-subtle">
-                {t(
-                    chest.level !== undefined
-                        ? "ui.raid.chest.points_level"
-                        : "ui.raid.chest.points",
-                    {
-                        points: fmtNum(chest.points),
-                        level: chest.level ?? 0,
-                        chance: Math.round(chest.chance * 100),
-                    },
-                )}
-            </div>
-            {found.length > 0 ? (
-                <div className="ui-raid-chest-items">
-                    {found.map((trophy) => (
-                        <span key={trophy.id} className="ui-raid-chest-item">
-                            <ItemIcon objId={trophy.objId} size={36} />
-                            {trophyName(trophy)}
-                        </span>
-                    ))}
-                </div>
-            ) : (
-                <div className="ui-subtle">{t("ui.raid.chest.no_unique")}</div>
-            )}
-        </div>
-    );
-}
-
-// The Tombs of Amascut's board at the end, as OSRS's raid summary has it: the raid level and the
-// invocations that made it, each path's time and the Wardens', and the party's points and deaths
-function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element {
-    const band = getRaidBand(tombs.level);
-    const total =
-        tombs.paths.reduce((sum, path) => sum + path.seconds, 0) + (tombs.wardensSeconds ?? 0);
-    const party = tombs.party.reduce((sum, player) => sum + player.points, 0);
-    return (
-        <div className="ui-tombs-board">
-            <div className="ui-tombs-board-level">
-                <ItemIcon objId={-1} spriteId={RAID_BAND_SPRITES[band]} size={32} />
-                <span>
-                    Raid level <b>{tombs.level}</b> ({band})
-                </span>
-            </div>
-            {tombs.invocations.length > 0 && (
-                <div className="ui-tombs-board-invocations" aria-label="Invocations">
-                    {tombs.invocations.map((id) => {
-                        const invocation = INVOCATION_BY_ID.get(id);
-                        return invocation ? (
-                            <span key={id} title={invocation.name}>
-                                <ItemIcon objId={-1} spriteId={invocation.icon} size={24} />
-                            </span>
-                        ) : null;
-                    })}
-                </div>
-            )}
-            <div className="ui-tombs-board-columns">
-                <table className="ui-tombs-board-table">
-                    <thead>
-                        <tr>
-                            <th>Room</th>
-                            <th>Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tombs.paths.map((path) => (
-                            <tr key={path.id}>
-                                <td>{path.name}</td>
-                                <td>{formatTime(path.seconds)}</td>
-                            </tr>
-                        ))}
-                        {tombs.wardensSeconds !== undefined && (
-                            <tr>
-                                <td>The Wardens</td>
-                                <td>{formatTime(tombs.wardensSeconds)}</td>
-                            </tr>
-                        )}
-                        <tr className="ui-tombs-board-total">
-                            <td>Total</td>
-                            <td>{formatTime(total)}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <table className="ui-tombs-board-table">
-                    <thead>
-                        <tr>
-                            <th>Player</th>
-                            <th>Points</th>
-                            <th>Deaths</th>
-                            <th>Purple</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tombs.party.map((player, i) => (
-                            <tr key={i} className={player.you ? "ui-tombs-board-you" : undefined}>
-                                <td>{player.name || "You"}</td>
-                                <td>{player.points.toLocaleString("en-GB")}</td>
-                                <td>{player.deaths}</td>
-                                <td>{Math.round(player.chance * 100)}%</td>
-                            </tr>
-                        ))}
-                        {tombs.party.length > 1 && (
-                            <tr className="ui-tombs-board-total">
-                                <td>Party</td>
-                                <td>{party.toLocaleString("en-GB")}</td>
-                                <td>{tombs.party.reduce((sum, p) => sum + p.deaths, 0)}</td>
-                                <td />
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-            {tombs.timeLimit && (
-                <div className="ui-subtle">
-                    {tombs.timeLimit.met
-                        ? `Inside the ${tombs.timeLimit.minutes} minute time limit.`
-                        : `Past the ${tombs.timeLimit.minutes} minute time limit: the chest goes by raid level ${Math.max(0, tombs.level - tombs.timeLimit.drop)}.`}
-                </div>
-            )}
-            {tombs.wipes > 0 && (
-                <div className="ui-subtle">
-                    The party died {tombs.wipes} {tombs.wipes === 1 ? "time" : "times"}.
-                </div>
-            )}
-        </div>
-    );
-}
-
 // A raid's expert mode, once it's been beaten on hard: hard mode, and the Nylocas only hurt by
 // their own style
 function ExpertSwitch({ ui, client }: ScreenProps): JSX.Element {
@@ -1744,23 +1616,6 @@ function MapPanel({ ui, client }: ScreenProps): JSX.Element {
     );
 }
 
-// The result screen's button back into a boss fight: a fight in parts (MapDef.stages) goes on to
-// its next part once one's won ("Next fight"), or from the first again once the last has been;
-// anything else is tried again
-function nextFightLabel(map: MapDef, victory: boolean, stage: number | undefined): string {
-    if (!victory || !map.stages) {
-        return t("ui.result.retry");
-    }
-    return (stage ?? 0) + 1 < map.stages.length
-        ? t("ui.result.next_fight")
-        : t("ui.result.fight_again");
-}
-
-// What a win says: the part's own words in a fight in parts (MapDef.stages), else the map's
-function stageVictoryText(map: MapDef, stage: number | undefined): string {
-    return map.stages?.[stage ?? 0]?.victoryText ?? map.victoryText;
-}
-
 function MapDetails({
     save,
     map,
@@ -1932,21 +1787,6 @@ function MapTasks({ save, mapId }: { save: SaveData; mapId: string }): JSX.Eleme
             ))}
         </div>
     );
-}
-
-// The tab an arrow key, Home or End moves to from the one that's open, round from the last to
-// the first and back
-function getTabFromKey<T>(key: string, tabs: readonly T[], open: T): T | undefined {
-    const index = tabs.indexOf(open);
-    return key === "ArrowRight"
-        ? tabs[(index + 1) % tabs.length]
-        : key === "ArrowLeft"
-          ? tabs[(index + tabs.length - 1) % tabs.length]
-          : key === "Home"
-            ? tabs[0]
-            : key === "End"
-              ? tabs[tabs.length - 1]
-              : undefined;
 }
 
 function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
@@ -2250,11 +2090,7 @@ const Slots = memo(function Slots({
                     >
                         {slot && (
                             <>
-                                <ItemIcon
-                                    objId={slot.iconObjId}
-                                    spriteId={slot.iconSpriteId}
-                                    size={30}
-                                />
+                                <SlotIcon slot={slot} size={30} />
                                 <span className="ui-slot-level">{formatSlotLevel(slot)}</span>
                             </>
                         )}
@@ -3160,6 +2996,13 @@ function formatQuestProgress(quest: QuestTrackView): string {
         : `${quest.done.toLocaleString()} / ${quest.of.toLocaleString()}`;
 }
 
+type PauseTab = "loadout" | "combat" | "quests" | "party" | "settings";
+
+// The tab the menu was left on, open again next time it's opened (this page's, not saved)
+let lastPauseTab: PauseTab = "loadout";
+
+// The pause menu: a page for each part of it (the run's loadout, its fighting, the quests, the
+// party and the settings) under a row of the client's own side tab icons
 function PauseModal({
     ui,
     hud,
@@ -3169,20 +3012,144 @@ function PauseModal({
     hud: HudView;
     client: GameClient;
 }): JSX.Element {
+    const overlayRef = useRef<HTMLDivElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
     const quests = useHudNumber(client, (n) => n.quests) ?? [];
-    const padKind = usePadKind();
     // The host can remove anyone still in the run (one who's stopped playing)
     const kickable =
         coop && ui.coop.room?.hostId === ui.coop.you
             ? ui.party.filter((member) => member.id && !member.left)
             : [];
+    const tabs: TabDef<PauseTab>[] = [
+        { id: "loadout", name: t("pause.tab.loadout"), spriteId: PAUSE_TAB_SPRITES.loadout },
+        { id: "combat", name: t("pause.tab.combat"), spriteId: PAUSE_TAB_SPRITES.combat },
+        ...(quests.length > 0
+            ? [
+                  {
+                      id: "quests" as const,
+                      name: t("pause.tab.quests"),
+                      spriteId: PAUSE_TAB_SPRITES.quests,
+                  },
+              ]
+            : []),
+        ...(kickable.length > 0
+            ? [
+                  {
+                      id: "party" as const,
+                      name: t("pause.tab.party"),
+                      spriteId: PAUSE_TAB_SPRITES.party,
+                  },
+              ]
+            : []),
+    ];
+    const [picked, setPicked] = useState<PauseTab>(lastPauseTab);
+    // One that's gone (the last quest done with, the party's left) falls back to the first. The
+    // settings are not a tab: their button's at the bottom, and its page replaces the open one.
+    const open: PauseTab =
+        picked === "settings" || tabs.some((tab) => tab.id === picked) ? picked : tabs[0].id;
+    const openTab = (tab: PauseTab) => {
+        lastPauseTab = tab;
+        setPicked(tab);
+    };
+    // The page the settings came from, for the button to go back to
+    const cameFrom = useRef<PauseTab>("loadout");
+    const toggleSettings = () => {
+        if (open === "settings") {
+            openTab(cameFrom.current);
+        } else {
+            cameFrom.current = open;
+            openTab("settings");
+        }
+    };
+    // The pause covers the run, so keep assistive technology and keyboard focus in it. Restore
+    // every sibling exactly as it was when the menu closes, then put focus back where it came from.
+    useEffect(() => {
+        const overlay = overlayRef.current;
+        const dialog = dialogRef.current;
+        if (!overlay || !dialog) {
+            return;
+        }
+        const before =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const siblings = overlay.parentElement
+            ? [...overlay.parentElement.children].filter(
+                  (element): element is HTMLElement =>
+                      element instanceof HTMLElement && element !== overlay,
+              )
+            : [];
+        const previous = siblings.map((element) => ({
+            element,
+            inert: element.hasAttribute("inert"),
+            ariaHidden: element.getAttribute("aria-hidden"),
+        }));
+        for (const { element } of previous) {
+            element.setAttribute("inert", "");
+            element.setAttribute("aria-hidden", "true");
+        }
+        const selected = dialog.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+        (selected ?? dialog).focus();
+        return () => {
+            for (const state of previous) {
+                if (!state.inert) {
+                    state.element.removeAttribute("inert");
+                }
+                if (state.ariaHidden === null) {
+                    state.element.removeAttribute("aria-hidden");
+                } else {
+                    state.element.setAttribute("aria-hidden", state.ariaHidden);
+                }
+            }
+            if (before?.isConnected) {
+                before.focus();
+            }
+        };
+    }, []);
     return (
-        <div className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
-            <div className="ui-panel rs-border rs-background ui-pause">
-                <h2>{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
-                {coop && <p className="ui-subtle">{t("pause.coop_warning")}</p>}
+        <div ref={overlayRef} className={coop ? "ui-modal ui-modal-clear" : "ui-modal"}>
+            <div
+                ref={dialogRef}
+                className="ui-panel rs-border rs-background ui-pause"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="pause-title"
+                aria-describedby={coop ? "pause-live-warning" : undefined}
+                tabIndex={-1}
+                onKeyDown={(event) => {
+                    if (event.key !== "Tab") {
+                        return;
+                    }
+                    const dialog = dialogRef.current;
+                    if (!dialog) {
+                        return;
+                    }
+                    const focusable = [
+                        ...dialog.querySelectorAll<HTMLElement>(
+                            'button:not(:disabled):not([tabindex="-1"]), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+                        ),
+                    ];
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (!first || !last) {
+                        return;
+                    }
+                    const active = document.activeElement;
+                    if (event.shiftKey && (active === first || !dialog.contains(active))) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && active === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                }}
+            >
+                <h2 id="pause-title">{coop ? t("pause.title.coop") : t("pause.title.paused")}</h2>
+                {coop && (
+                    <p id="pause-live-warning" className="ui-subtle">
+                        {t("pause.coop_warning")}
+                    </p>
+                )}
                 {ui.saveBlock && ui.saveBlockClosed && (
                     <p className="ui-subtle">
                         <button
@@ -3193,161 +3160,24 @@ function PauseModal({
                         </button>
                     </p>
                 )}
-                <div className="ui-pause-columns">
-                    <div className="ui-pause-column">
-                        <div className="ui-pause-list">
-                            {[...hud.weapons, ...hud.passives].map((slot) => (
-                                <div key={slot.id} className="ui-pause-item">
-                                    <ItemIcon
-                                        objId={slot.iconObjId}
-                                        spriteId={slot.iconSpriteId}
-                                        size={28}
-                                    />
-                                    {/* The name, and what it does under it */}
-                                    <span className="ui-pause-name">
-                                        <span style={{ color: slot.rarityColor }}>
-                                            {tl(slot.name)}
-                                        </span>
-                                        <span className="ui-pause-detail">
-                                            {[...(slot.stats ?? []), slot.detail]
-                                                .filter((text): text is string => Boolean(text))
-                                                .map((text, i) => (
-                                                    <StatLine key={i} text={text} />
-                                                ))}
-                                        </span>
-                                        {slot.evolution && <EvolutionLine {...slot.evolution} />}
-                                    </span>
-                                    <span className="ui-pause-level">
-                                        {slot.level >= slot.maxLevel
-                                            ? t("pause.slot_max")
-                                            : t("pause.slot_level", { level: slot.level })}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                        {hud.stats.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.your_stats")}
-                                </h3>
-                                <div className="ui-pause-stats">
-                                    {hud.stats.map((line) => (
-                                        <StatLine key={line} text={line} />
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                        {hud.gear.some((slot) => slot.item) && (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.worn_equipment")}
-                                </h3>
-                                <div className="ui-pause-list">
-                                    {hud.gear.map(
-                                        ({ slot, item }) =>
-                                            item && (
-                                                <div key={slot} className="ui-pause-item">
-                                                    <ItemIcon objId={item.objId} size={28} />
-                                                    <span className="ui-pause-name">
-                                                        <span style={{ color: item.rarity.color }}>
-                                                            {tl(item.name)}
-                                                        </span>
-                                                        <span className="ui-pause-detail">
-                                                            {item.lines.map((line, i) => (
-                                                                <StatLine key={i} text={line} />
-                                                            ))}
-                                                            {item.set && (
-                                                                <span
-                                                                    className={
-                                                                        "ui-pause-set" +
-                                                                        (item.set.active
-                                                                            ? " ui-pause-set-on"
-                                                                            : "")
-                                                                    }
-                                                                >
-                                                                    <StatLine
-                                                                        text={item.set.text}
-                                                                    />
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                    </span>
-                                                </div>
-                                            ),
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    <div className="ui-pause-column">
-                        {quests.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">{t("pause.heading.quests")}</h3>
-                                <div className="ui-pause-list">
-                                    {quests.map((quest) => (
-                                        <div
-                                            key={quest.id}
-                                            className={"ui-pause-quest " + questTrackClass(quest)}
-                                        >
-                                            <span className="ui-quest-name">{tl(quest.name)}</span>
-                                            <span className="ui-pause-detail">
-                                                {tl(quest.task)}
-                                            </span>
-                                            <span className="ui-quest-progress">
-                                                {formatQuestProgress(quest)}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                        {kickable.length > 0 && (
-                            <>
-                                <h3 className="ui-pause-heading">{t("pause.heading.party")}</h3>
-                                <div className="ui-pause-list">
-                                    {kickable.map((member) => (
-                                        <div key={member.id} className="ui-pause-item">
-                                            <span className="ui-pause-name">{member.name}</span>
-                                            <button
-                                                className="ui-button ui-button-small ui-coop-kick"
-                                                title={t("pause.party.kick_title", {
-                                                    name: member.name,
-                                                })}
-                                                aria-label={t("pause.party.kick_aria", {
-                                                    name: member.name,
-                                                })}
-                                                onClick={() => client.kickPlayer(member.id!)}
-                                            >
-                                                {t("pause.party.kick_button")}
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                        {padKind && (
-                            <>
-                                <h3 className="ui-pause-heading">
-                                    {t("pause.heading.controller")}
-                                </h3>
-                                <PadControls />
-                            </>
-                        )}
-                        <h3 className="ui-pause-heading">{t("pause.heading.settings")}</h3>
-                        <LanguageSetting />
-                        <SoundSettings
-                            ui={ui}
-                            client={client}
-                            music={getMap(ui.mapId).music !== undefined}
-                        />
-                        <PickupTimerSetting ui={ui} client={client} />
-                        <PuzzleHelperSetting ui={ui} client={client} />
-                        <AutoPauseSetting ui={ui} client={client} />
-                        <AutoAlchSetting ui={ui} client={client} />
-                        <AutoEquipSetting ui={ui} client={client} />
-                        <MovePredictionSetting ui={ui} client={client} />
-                        <FrameRateSetting ui={ui} client={client} />
-                    </div>
+                <TabBar
+                    tabs={tabs}
+                    open={open === "settings" ? undefined : open}
+                    onOpen={openTab}
+                    idPrefix="pause"
+                    label={t("pause.tabs_aria")}
+                />
+                <div
+                    className="ui-pause-page"
+                    id={`pause-page-${open}`}
+                    role="tabpanel"
+                    aria-labelledby={`pause-tab-${open}`}
+                >
+                    {open === "loadout" && <PauseLoadout hud={hud} />}
+                    {open === "combat" && <PauseCombat client={client} live={coop} />}
+                    {open === "quests" && <PauseQuests quests={quests} />}
+                    {open === "party" && <PauseParty kickable={kickable} client={client} />}
+                    {open === "settings" && <PauseSettings ui={ui} client={client} />}
                 </div>
                 <div className="ui-row">
                     <button
@@ -3361,6 +3191,15 @@ function PauseModal({
                     >
                         {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
                     </button>
+                    <button
+                        id="pause-tab-settings"
+                        className="ui-button ui-pause-settings-button"
+                        aria-pressed={open === "settings"}
+                        onClick={toggleSettings}
+                    >
+                        <ItemIcon objId={-1} spriteId={PAUSE_TAB_SPRITES.settings} size={24} />
+                        <span>{t("pause.tab.settings")}</span>
+                    </button>
                     <button className="ui-button ui-button-go" onClick={() => client.resume()}>
                         {t("pause.resume")}
                     </button>
@@ -3370,430 +3209,83 @@ function PauseModal({
     );
 }
 
-// Co-op's results name everyone else
-const MAX_LISTED_TEAMMATES = 3;
-
-// "Coif, Rune boots and Seers ring", or the first few "and 5 more"
-function listNames(names: string[], most = 3): string {
-    if (names.length === 0) {
-        return "";
-    }
-    if (names.length === 1) {
-        return names[0];
-    }
-    const shown = names.length > most ? names.slice(0, most - 1) : names;
-    if (names.length > most) {
-        const rest = tp("ui.result.and_more", names.length - shown.length);
-        return list([...shown, rest]);
-    }
-    return list(names);
-}
-
-// Damage a second, with a decimal while it's small
-function formatPerSecond(perSecond: number): string {
-    return perSecond < 100_000
-        ? perSecond.toLocaleString(undefined, { maximumFractionDigits: perSecond < 10 ? 1 : 0 })
-        : formatBig(perSecond);
-}
-
-// Big numbers the way OSRS shows a stack: in full up to 99,999, then 100K,
-// then 10M, so an endless run's totals still fit. Past what a stack can hold
-// (10,000M), the damage panel's short form: 12B, 4.6Qa.
-function formatBig(value: number): string {
-    const n = Math.round(value);
-    if (n < 100_000) {
-        return n.toLocaleString();
-    }
-    if (n < 10_000_000) {
-        return `${Math.floor(n / 1000).toLocaleString()}K`;
-    }
-    if (n < 10_000_000_000) {
-        return `${Math.floor(n / 1_000_000).toLocaleString()}M`;
-    }
-    return formatCompact(n);
-}
-
-// A stat's number, shortened when it's big, in full when pointed at
-function Big({ value }: { value: number }): JSX.Element {
-    const n = Math.round(value);
-    return <span title={n >= 100_000 ? n.toLocaleString() : undefined}>{formatBig(n)}</span>;
-}
-
-export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
-    const result = ui.result;
-    const victory = ui.overlay === "victory";
-    const players = result?.players ?? [];
-    // Your own page first (the modal is mounted afresh for each run's result)
-    const [playerIndex, setPlayerIndex] = useState(() =>
-        Math.max(
-            0,
-            players.findIndex((player) => player.isLocal),
-        ),
-    );
-    const player = players[playerIndex];
-    const multiplayer = players.length > 1;
-    const changePlayer = useCallback(
-        (direction: number) =>
-            setPlayerIndex((current) => (current + direction + players.length) % players.length),
-        [players.length],
-    );
+// What the hero's damage was and what they've killed. Read from the run as the tab opens, and
+// each second in co-op, whose run goes on behind the menu.
+function PauseCombat({ client, live }: { client: GameClient; live: boolean }): JSX.Element {
+    const [view, setView] = useState(() => client.getCombatView());
     useEffect(() => {
-        if (!multiplayer) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            const target = event.target;
-            if (
-                event.altKey ||
-                event.ctrlKey ||
-                event.metaKey ||
-                event.shiftKey ||
-                (target instanceof HTMLElement &&
-                    (target.isContentEditable || target.closest("input, textarea, select")))
-            )
-                return;
-            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                event.preventDefault();
-                if (!event.repeat) changePlayer(event.key === "ArrowLeft" ? -1 : 1);
-            }
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [changePlayer, multiplayer]);
+        if (!live) {
+            return;
+        }
+        const timer = window.setInterval(() => setView(client.getCombatView()), 1000);
+        return () => window.clearInterval(timer);
+    }, [client, live]);
+    if (!view) {
+        return <></>;
+    }
     return (
-        <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-result">
-                <h2 className={victory ? "ui-victory" : "ui-defeat"}>
-                    {victory && result
-                        ? tl(stageVictoryText(getMap(result.mapId), result.stage))
-                        : (result?.endedEarly ?? t("ui.result.dead"))}
-                </h2>
-                {result?.party && (
-                    <p className="ui-subtle">
-                        {t("ui.result.with_party", {
-                            party: listNames(result.party, MAX_LISTED_TEAMMATES),
-                        })}
-                    </p>
-                )}
-                {result?.endlessRecord && (
-                    <p className="ui-unlocked">
-                        {result.hard
-                            ? t("ui.result.endless_record_hard", {
-                                  map: mapName(getMap(result.mapId)),
-                              })
-                            : t("ui.result.endless_record", { map: mapName(getMap(result.mapId)) })}
-                    </p>
-                )}
-                {result?.tombs && <TombsBoardView tombs={result.tombs} />}
-                {result?.raidChest && <RaidChestView chest={result.raidChest} />}
-                {result?.firstHardWin && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
-                    </p>
-                )}
-                {result?.unlockedMap && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.unlocked_map", { map: tl(result.unlockedMap) })}
-                    </p>
-                )}
-                {result?.unlockedCharacters.map((name) => (
-                    <p key={name} className="ui-unlocked">
-                        {t("ui.result.unlocked_character", { name: tl(name) })}
-                    </p>
-                ))}
-                {result?.unlockedItems.map((name) => (
-                    <p key={name} className="ui-unlocked">
-                        {t("ui.result.unlocked_item", { name: tl(name) })}
-                    </p>
-                ))}
-                {result && result.newTrophies.length > 0 && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.new_trophies", {
-                            trophies: listNames(result.newTrophies.map(tl)),
-                        })}
-                    </p>
-                )}
-                {result && result.newGear.length > 0 && (
-                    <p className="ui-unlocked">
-                        {t("ui.result.new_gear", {
-                            gear: listNames(result.newGear.map(tl)),
-                        })}
-                    </p>
-                )}
-                {result?.quests.map((quest) => (
-                    <p key={quest.name} className="ui-unlocked">
-                        {t("ui.result.quest_complete", { name: tl(quest.name) })}{" "}
-                        <Coins amount={quest.coins} />
-                    </p>
-                ))}
-                {multiplayer && player && (
-                    <div
-                        className="ui-result-player-nav"
-                        role="group"
-                        aria-label={t("ui.result.player_nav_aria")}
-                    >
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.prev_player_aria")}
-                            title={t("ui.result.prev_player_title")}
-                            onClick={() => changePlayer(-1)}
-                        >
-                            <span className="ui-result-arrow-left" aria-hidden="true" />
-                        </button>
-                        <div className="ui-result-player" aria-live="polite" aria-atomic="true">
-                            <div className="ui-result-player-name">
-                                {player.name}
-                                {player.isLocal && t("ui.result.you")}
-                            </div>
-                            <div className="ui-result-player-detail">
-                                {t("ui.result.player_index", {
-                                    current: playerIndex + 1,
-                                    total: players.length,
-                                })}
-                                {player.left
-                                    ? t("ui.result.left_run")
-                                    : player.down
-                                      ? t("ui.result.down")
-                                      : ""}
-                            </div>
-                        </div>
-                        <button
-                            className="ui-button ui-result-arrow"
-                            aria-label={t("ui.result.next_player_aria")}
-                            title={t("ui.result.next_player_title")}
-                            onClick={() => changePlayer(1)}
-                        >
-                            <span className="ui-result-arrow-right" aria-hidden="true" />
-                        </button>
-                    </div>
-                )}
-                {result && player && (
-                    <div className="ui-result-columns">
-                        <div className="ui-result-column">
-                            {multiplayer && (
-                                <h3 className="ui-pause-heading">
-                                    {t("ui.result.individual_stats")}
-                                </h3>
-                            )}
-                            <table
-                                className="ui-result-table"
-                                aria-label={t("ui.result.individual_stats")}
-                            >
-                                <tbody>
-                                    <tr>
-                                        <td>{t("ui.result.stat.adventurer")}</td>
-                                        <td>{tl(player.characterName)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.kills")}</td>
-                                        <td>
-                                            <Big value={player.kills} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.damage_dealt")}</td>
-                                        <td>
-                                            <Big value={player.damageDealt} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.biggest_hit")}</td>
-                                        <td>
-                                            <Big value={player.highestHit} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.damage_taken")}</td>
-                                        <td>
-                                            <Big value={player.damageTaken} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.healed")}</td>
-                                        <td>
-                                            <Big value={player.healed} />
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.caskets")}</td>
-                                        <td>{player.caskets}</td>
-                                    </tr>
-                                    {(player.rerollsUsed > 0 || player.skips > 0) && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.rerolls_skips")}</td>
-                                            <td>
-                                                {player.rerollsUsed} / {player.skips}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                            <h3 className="ui-pause-heading">
-                                {multiplayer
-                                    ? t("ui.result.party_totals")
-                                    : t("ui.result.run_totals")}
-                            </h3>
-                            <table
-                                className="ui-result-table"
-                                aria-label={
-                                    multiplayer
-                                        ? t("ui.result.party_totals_aria")
-                                        : t("ui.result.run_totals")
-                                }
-                            >
-                                <tbody>
-                                    {result.hard && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.difficulty")}</td>
-                                            <td>
-                                                {result.expert
-                                                    ? t("ui.expert.name")
-                                                    : t("ui.hard.name")}
-                                            </td>
-                                        </tr>
-                                    )}
-                                    {result.endless && (
-                                        <tr>
-                                            <td>{t("ui.result.stat.endless_round")}</td>
-                                            <td>{result.round}</td>
-                                        </tr>
-                                    )}
-                                    <tr>
-                                        <td>{t("ui.result.stat.run_time")}</td>
-                                        <td>{formatTime(result.seconds)}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{t("ui.result.stat.level")}</td>
-                                        <td>{result.level}</td>
-                                    </tr>
-                                    {multiplayer && (
-                                        <>
-                                            <tr>
-                                                <td>{t("ui.result.stat.kills")}</td>
-                                                <td>
-                                                    <Big value={result.kills} />
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>{t("ui.result.stat.damage_dealt")}</td>
-                                                <td>
-                                                    <Big
-                                                        value={players.reduce(
-                                                            (total, entry) =>
-                                                                total + entry.damageDealt,
-                                                            0,
-                                                        )}
-                                                    />
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>{t("ui.result.stat.caskets")}</td>
-                                                <td>{result.caskets}</td>
-                                            </tr>
-                                        </>
-                                    )}
-                                    <tr>
-                                        <td>{t("ui.result.stat.coins_banked")}</td>
-                                        <td>
-                                            <Coins amount={result.coins} />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            {result.bossKills.length > 0 && (
-                                <>
-                                    <h3 className="ui-pause-heading">
-                                        {multiplayer
-                                            ? t("ui.result.party_bosses")
-                                            : t("ui.result.bosses")}
-                                    </h3>
-                                    <table className="ui-result-table">
-                                        <tbody>
-                                            {result.bossKills.map((boss, i) => (
-                                                <tr key={i}>
-                                                    <td>{tl(boss.name)}</td>
-                                                    <td>{formatTime(boss.seconds)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </>
-                            )}
-                        </div>
-                        {player.damage.length > 0 && (
-                            <div className="ui-result-column">
-                                <h3 className="ui-pause-heading">
-                                    {t("ui.result.damage_breakdown")}
-                                </h3>
-                                <table
-                                    className="ui-result-damage"
-                                    aria-label={t("ui.result.damage_breakdown")}
-                                >
-                                    <thead>
-                                        <tr>
-                                            <th />
-                                            <th>{t("ui.result.damage")}</th>
-                                            <th>{t("ui.result.stat.kills")}</th>
-                                            <th>{t("ui.damage.dps")}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {player.damage.map((row, i) => (
-                                            <tr key={i}>
-                                                <td>
-                                                    <span className="ui-result-source">
-                                                        {row.iconObjId !== undefined && (
-                                                            <ItemIcon
-                                                                objId={row.iconObjId}
-                                                                spriteId={row.iconSpriteId}
-                                                                size={24}
-                                                            />
-                                                        )}
-                                                        <span
-                                                            className="ui-result-name"
-                                                            style={{ color: row.color }}
-                                                            title={tl(row.name)}
-                                                        >
-                                                            {tl(row.name)}
-                                                        </span>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <Big value={row.damage} />
-                                                </td>
-                                                <td>
-                                                    <Big value={row.kills} />
-                                                </td>
-                                                <td>
-                                                    {row.perSecond !== undefined
-                                                        ? formatPerSecond(row.perSecond)
-                                                        : ""}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                )}
-                <div className="ui-row">
-                    {/* A boss fight on your own: straight into it again */}
-                    {!ui.coop.room && getMap(ui.mapId).fight && (
-                        <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                            {nextFightLabel(getMap(ui.mapId), victory, result?.stage)}
-                        </button>
-                    )}
+        <CombatReport kinds={view.kinds} sources={view.sources} kills={view.kills} totals={view} />
+    );
+}
+
+// The host's: anyone still in the run, to remove one who's stopped playing
+function PauseParty({
+    kickable,
+    client,
+}: {
+    kickable: UiSnapshot["party"];
+    client: GameClient;
+}): JSX.Element {
+    return (
+        <div className="ui-pause-list ui-pause-narrow">
+            {kickable.map((member) => (
+                <div key={member.id} className="ui-pause-item">
+                    <span className="ui-pause-name">{member.name}</span>
                     <button
-                        className={
-                            !ui.coop.room && getMap(ui.mapId).fight
-                                ? "ui-button"
-                                : "ui-button ui-button-go"
-                        }
-                        onClick={() => client.leaveRun()}
+                        className="ui-button ui-button-small ui-coop-kick"
+                        title={t("pause.party.kick_title", { name: member.name })}
+                        aria-label={t("pause.party.kick_aria", { name: member.name })}
+                        onClick={() => client.kickPlayer(member.id!)}
                     >
-                        {ui.coop.room ? t("ui.result.back_party") : t("ui.result.back_title")}
+                        {t("pause.party.kick_button")}
                     </button>
                 </div>
-            </div>
+            ))}
         </div>
     );
+}
+
+// The settings in two columns while there's room, and a controller's buttons under them
+function PauseSettings({ ui, client }: ScreenProps): JSX.Element {
+    const padKind = usePadKind();
+    return (
+        <>
+            <div className="ui-pause-settings">
+                <LanguageSetting />
+                <SoundSettings
+                    ui={ui}
+                    client={client}
+                    music={getMap(ui.mapId).music !== undefined}
+                />
+                <PickupTimerSetting ui={ui} client={client} />
+                <PuzzleHelperSetting ui={ui} client={client} />
+                <AutoPauseSetting ui={ui} client={client} />
+                <AutoAlchSetting ui={ui} client={client} />
+                <AutoEquipSetting ui={ui} client={client} />
+                <MovePredictionSetting ui={ui} client={client} />
+                <FrameRateSetting ui={ui} client={client} />
+            </div>
+            {padKind && (
+                <>
+                    <h3 className="ui-pause-heading">{t("pause.heading.controller")}</h3>
+                    <PadControls />
+                </>
+            )}
+        </>
+    );
+}
+
+// The results screen
+export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
+    return <ClassicResults ui={ui} client={client} />;
 }

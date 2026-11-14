@@ -32,12 +32,12 @@ const SHADOW_RGB = 0x302020;
 
 const INVALID_HSL_COLOR = -2;
 
-const screenX = new Int32Array(4096);
-const screenY = new Int32Array(4096);
+export const screenX = new Int32Array(4096);
+export const screenY = new Int32Array(4096);
 // Depth from the model's origin
 const viewZ = new Int32Array(4096);
 
-function projectModel(
+export function projectModel(
     model: Model,
     yan2d: number,
     zan2d: number,
@@ -143,7 +143,7 @@ function drawFace(model: Model, f: number, textureAverageHsl: (id: number) => nu
 // faces are ordered by average depth, then by render priority, with the
 // priority 10 and 11 faces (decals and the like) slotted in between the others
 // by depth.
-function drawModel(model: Model, textureAverageHsl: (id: number) => number): void {
+export function drawModel(model: Model, textureAverageHsl: (id: number) => number): void {
     const faceCount = model.faceCount;
     const faces: number[] = [];
     const depth = new Int32Array(faceCount);

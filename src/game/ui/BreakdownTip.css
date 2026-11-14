@@ -1,0 +1,110 @@
+/* The tooltip that shows how a number got its size, and what it's on */
+.ui-breakdown-anchor {
+    cursor: help;
+}
+
+.ui-breakdown-anchor:focus-visible {
+    outline: 1px solid var(--ui-yellow);
+    outline-offset: -1px;
+}
+
+.ui-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 170px;
+}
+
+/* What it is in orange, and what it comes to at the right */
+.ui-breakdown-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--ui-divider);
+    color: var(--ui-orange);
+}
+
+.ui-breakdown-sum {
+    color: var(--ui-white);
+}
+
+/* The lines under the head: they scroll when there's more than fits (an endless run's list of
+   level ups), the head staying put. The tooltip doesn't take the mouse, but its list does, so a
+   finger can scroll it. */
+.ui-breakdown-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: min(260px, 45vh);
+    overflow-y: auto;
+    padding-right: 4px;
+    pointer-events: auto;
+    touch-action: pan-y;
+    scrollbar-width: thin;
+    scrollbar-color: #8a7a5c rgba(0, 0, 0, 0.35);
+}
+
+.ui-breakdown-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 10px;
+}
+
+.ui-breakdown-label {
+    color: #d8ccae;
+}
+
+.ui-breakdown-parts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 7px;
+    margin-left: auto;
+    text-align: right;
+}
+
+.ui-breakdown-line > .ui-breakdown-parts:first-child {
+    margin-left: 0;
+    text-align: left;
+}
+
+.ui-breakdown-total {
+    flex-basis: 100%;
+    text-align: right;
+    color: var(--ui-white);
+}
+
+.ui-breakdown-line > .ui-breakdown-label + .ui-breakdown-parts + .ui-breakdown-total {
+    flex-basis: auto;
+}
+
+/* A list: a row for each step, what it's of at the left and its size at the right, in order */
+.ui-breakdown-line-list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1px;
+}
+
+.ui-breakdown-rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ui-breakdown-rows > li {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 0 3px;
+}
+
+.ui-breakdown-rows > li:nth-child(even) {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.ui-breakdown-row-label {
+    color: #d8ccae;
+}

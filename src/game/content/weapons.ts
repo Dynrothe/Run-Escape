@@ -1,4 +1,5 @@
 import { tr } from "../i18n";
+import { DamageKind } from "./damageKinds";
 import { CombatStyle, ProjectileItemLook, SpecialAttackDef, WeaponDef, WeaponLevel } from "./types";
 
 // Builds a weapon's level table from its first level and what each later level
@@ -2888,4 +2889,17 @@ export function weaponLevelDescription(weapon: WeaponDef, levelIndex: number): s
     return description === ""
         ? description
         : tr(`weapon.${weapon.id}.level.${levelIndex + 1}.desc`, description);
+}
+
+// The kinds of damage a weapon deals, for the loadout: its style first, then the venom it
+// poisons with and the ground it burns, as the sim files them (Sim.damageKind)
+export function getWeaponDamageKinds(weapon: WeaponDef): DamageKind[] {
+    const kinds: DamageKind[] = [getWeaponStyle(weapon)];
+    if (weapon.levels.some((level) => level.venom !== undefined && level.venom > 0)) {
+        kinds.push("poison");
+    }
+    if (weapon.burns) {
+        kinds.push("burn");
+    }
+    return kinds;
 }

@@ -10,6 +10,7 @@ import { SdMapDataLoader } from "../../src/mapviewer/webgl/loader/SdMapDataLoade
 import { getSdTextureIds } from "../../src/mapviewer/webgl/loader/TextureIndex";
 import { ItemIconLoader } from "../../src/mapviewer/worker/ItemIconLoader";
 import { loadMinimapData } from "../../src/mapviewer/worker/MinimapData";
+import { NpcHeadLoader } from "../../src/mapviewer/worker/NpcHeadLoader";
 import { RegionDataLoader } from "../../src/mapviewer/worker/RegionDataLoader";
 import { RenderDataLoader } from "../../src/mapviewer/worker/RenderDataLoader";
 import { SoundLoader } from "../../src/mapviewer/worker/SoundLoader";
@@ -135,6 +136,8 @@ class SlimLoader {
                 return this.load(new SoundLoader(), { ids: unit.ids });
             case "sprites":
                 return this.load(new SpriteDataLoader(), { spriteIds: unit.ids });
+            case "heads":
+                return this.load(new NpcHeadLoader(), { npcIds: unit.npcIds });
             case "icons":
                 // Stackables like coins have a model per stack size
                 return this.load(new ItemIconLoader(), {

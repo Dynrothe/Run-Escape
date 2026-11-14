@@ -49,7 +49,7 @@ reloaded while a phone's still writing it (or out of room) is put together from 
 resume asks past the end, and a 416 with the parts' length means every part was there.
 
 `scripts/cache/slim-plan.ts` resolves the content into plain units: each map's region, batches of
-bakes and of item icons, and the textures, sounds and sprites. Worker threads, each holding the
+bakes, of item icons and of monster chatheads, and the textures, sounds and sprites. Worker threads, each holding the
 full cache, load them with `slim-load.ts`. Each unit gets loaders of its own, and its reads include
 what making them read, so what it reads doesn't depend on what ran before it in that worker: a warm
 model cache would hide a group an earlier unit read, and a map would keep an earlier map's
@@ -737,12 +737,102 @@ src/mapviewer/webgl/actor/   actor renderer: baked animation frames drawn anywhe
                              any number of them, one multi-draw per segment and pass (without
                              multi draw, one instanced draw per frame of an animation)
 src/mapviewer/worker/        RegionDataLoader (collision and heights for the whole arena in one
-                             scene build), ItemIconLoader (inventory icons drawn like the client)
+                             scene build), ItemIconLoader (inventory icons drawn like the client),
+                             NpcHeadLoader (a monster's chathead, fitted to its picture)
                              SoundLoader (sound effects synthesized off the main thread),
                              SpriteDataLoader (interface sprites, like hitsplats)
 src/rs/audio/               the client's sound effect synth: instruments, envelopes, filters
 src/rs/model/player/         player models from identity kits and worn items
 ```
+
+### Results screens
+
+A finished run's results are `ClassicResults` (`ui/results/ClassicResults.tsx`); `ResultModal` in `ui/GameUi.tsx` shows it. The screen takes the shared `{ ui, client }` `ScreenProps`, and uses `ResultNotices` and `ResultButtons` (`ui/results/shared.tsx`, with the raid chest and the Tombs' board) so unlocks and Retry/Back behave as before.
+
+The classic screen has two tabs (`TabBar`, `ui/TabBar.tsx`): Summary, the player's stats beside the
+run's totals and bosses, and Combat, `CombatBreakdown` (`ui/CombatBreakdown.tsx`) for the player
+whose page it is. The pause menu's Combat tab is `CombatReport` in the same file, a fight report
+laid out for it alone (totals as tiles, damage mix bar, ranking, bestiary); the two read the same
+`CombatView`.
+The monsters killed are shown as their chatheads: `NpcHead` (`ui/ItemIcon.tsx`) asks `iconCache`
+for one, and `NpcHeadLoader` draws it in a worker from the NPC's head models (its body for an NPC
+with none), fitted by where the faces land. A monster drawn as a player (the fun maps') has no
+head. New monsters need nothing: `slim-plan.ts` loads every enemy's head.
+
+The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
+(`PauseModal`), and its settings are a button at the bottom, beside Give up and Resume, whose page
+replaces the open one (the button goes back to it). The panel has one fixed height for every tab
+(`.ui-pause`), and the open page scrolls inside it. The Quests tab (`ui/PauseQuests.tsx`) is a card
+a quest: its icon is an item from `content/questIcons.ts` (a new quest needs an entry, a test
+checks, and `slim-plan.ts` keeps it), and a kill quest wears the Slayer skull
+(`SLAYER_SPRITE_ID`), with its enemies' names in the tooltip (`QuestTrackView.enemyIds`). The
+icon and the reward square sit on the client's stone slot (`STONE_SLOT_SPRITE`, drawn at its own
+size and used as a `border-image`, so it's in `getGameSpriteIds`), and the reward square shows
+the coins (`QuestTrackView.coins`) or, with `unlockObjId` set, that item and "Unlock" (no quest
+sets it yet). A
+weapon's Damage line wears its kind of damage as its icon (`SlotView.kinds`, from
+`getWeaponDamageKinds` in `weapons.ts`: its style, then poison for venom and burn for burning
+ground, the extras after the name), the same icons as the Combat tab. The Loadout (`ui/PauseLoadout.tsx` and `.css`)
+has weapon and passive cards on the left (with free slots, and a weapon's evolution:
+`SlotView.evolution`) and the hero's stats and every gear slot at the right.
+The stat rows are `HudView.statRows`, made by `getStatRows` (`client/LoadoutViews.ts`): a new stat
+needs a group there (a test checks that all are in one).
+
+Every number on the Loadout can have a tooltip that says how it got its size (`BreakdownTip`,
+`ui/BreakdownTip.tsx`, on the mouse over, a focus or a tap), made of a `BreakdownView` (`GameStore.ts`):
+parts, each in the colour of the rarity it was taken at. `client/BreakdownViews.ts` builds them: a
+weapon's stats from `weaponStatSteps` (`content/weaponStats.ts`: level 1's value and each level's
+change) with the damage bonus the picks' rarities gave, a passive's picks, worn gear's base and
+upgrades, and each of the hero's stats from `Sim.getStatSources` (what `updateStats` adds up, so
+change them together). The rarity of every pick is written by `Sim.apply` into
+`Hero.upgradeQualities`, by weapon and passive id; it's only written, so it's in no hash. A
+starting weapon's levels, and a weapon an evolution made, have none (uncoloured). What heals on a
+hit says when too: `getHealChanceLines` (the amulet's chance, its `BLOOD_FURY_HEAL` and its
+once-a-second roll, for the stat and the piece) and `getLifestealStat` (a weapon's `lifesteal`), so
+a new way to heal on a hit needs a line there.
+
+The pause panel keeps its buttons (Give up, Settings, Resume) in view: it's a flex column whose
+page (`.ui-pause-page`) takes the room left and scrolls inside it, never shorter than a minimum
+that shows the main items. Only a window shorter than the title, tabs and that minimum scrolls the
+whole panel. The Loadout tightens to the room its page has: `useFit` (in `PauseLoadout.tsx`) draws
+it at the roomiest and, while its page still scrolls, tries a tighter one (smaller icons, then the
+gear as a grid of squares, then the empty slots left out); what still doesn't fit scrolls in the
+page, and nothing is scaled down. It starts again from the roomiest when the window or what's in it
+changes. Empty slots (`EmptyCard`, an empty gear row) show a dashed square, what the slot is and
+where one comes from. An evolution is `EvolutionBadge`: a square with what it makes and a count of how
+many of what it takes are there, and `RecipePanel` as its tooltip (`BreakdownTip`'s `content`),
+laid out as a make menu is; only weapons have one, not passives. A `BreakdownLine` whose parts
+say what they're of (`BreakdownPart.label`, "Level 7") or that has several is a list, a row for each
+level up and never joined up (an endless run has a pick for every level, hundreds): the lines scroll
+under the head with the mouse wheel, the arrow keys or a finger. The Loadout marks an evolved
+weapon (`SlotView.evolved`: a violet frame and a star) and a finished item (last level, no
+evolution, not endless: `.ui-loadout-card-final`, all CSS: the glowing edge, the bracketed corners
+(`.ui-loadout-corners`), the embers, the MAX badge (`MaxBadge`, a plate) and `Glow`, motes of light
+over the icon). The mouse over an item's icon shows `ExamineTip`: its name, an examine text from
+`content/examine.ts` (`WEAPON_EXAMINE`, `PASSIVE_EXAMINE`: a test needs one for every weapon and
+passive, of four lines at most; they're in `locales/en/items.json` as `.examine`, and the extractor
+writes them), and where it stands (`SlotView.form`, from `getWeaponForm` and `getLevellingForm`:
+best form, ready to evolve, can evolve, evolution not unlocked yet, or still levelling). A weapon that circles the hero (`orbitObjIds`) has `SlotView.orbit`, the runes
+now in the circle, and `SlotIcon` draws them all in one icon (the HUD's slots too). An item in a
+square can't leave it: icons are sized to fit and the squares clip.
+
+### Damage by type, kills by monster
+
+Each `Hero` keeps its damage by kind (`damageByKind`) and kills by enemy id (`killsByEnemy`), for
+the Combat tabs; `getRunStats` copies them, and `RunStatsViews` turns them into `DamageKindView`s
+and `KillView`s. `Sim.damageKind` decides a hit's kind as it lands in `damageEnemy`, from the
+damage source: a weapon's by its style (`getWeaponStyle`), venom (`damageEnemy`'s `poison`) as
+`poison` and a weapon's burning ground (`stepFires` sets `burning`) as `burn`, even though both
+still count as their weapon's damage by source. Then `recoil`, `powerUp` (the cannon, thralls),
+`item` (a utility item, like chinchompas), `arena` (`ability:` and `court`, the fight's button and
+its arena turned on the boss) and `other` for the rest (an enemy's blast catching its own pack, a
+floor's burns, Het's beam). The kinds, their names and their cache icons are in
+`content/damageKinds.ts`; a new kind needs its `combat.kind.<kind>` and `.desc` keys in `ui.json`.
+Kills by enemy count a boss's co-op copies once, as `enemyKills` does.
+
+`Hero.recentHitsTaken` keeps the last `RECENT_HITS_KEPT` hits the hero took (when, how much, the
+enemy and the boss attack's name; none for poison). Nothing shows it yet, and the sim never reads
+it. None of this touches the RNG, so `runHash.test.ts` keeps its runs.
 
 A loc blocks only the ground its model stands on (below about waist height, from
 `RegionDataLoader`), where that opens no way that couldn't be walked before. `ArenaGrid` shrinks a
@@ -1570,8 +1660,8 @@ opens the original map viewer (loaded only then), `?bgtick` (dev only) keeps the
 browser tab that isn't being painted, `?notice` shows the notice even after it's been closed,
 `?movementDiagnostics` enables local co-op prediction measurements (see below),
 `?raidtest` (dev only) speeds up a raid (see Raids), `?devtools` (dev only) shows the Tombs of
-Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens). F3
-shows collision and stats.
+Amascut's testing buttons (god mode, skip to boss, straight to any boss or the Wardens),
+F3 shows collision and stats.
 
 ### A newer cache
 

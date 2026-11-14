@@ -9,6 +9,7 @@ import { CHARACTERS, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
 import { getEnemy } from "../content/enemies";
+import { passiveExamine, weaponExamine } from "../content/examine";
 import { getRaidBand, saveInvocationPreset, toggleInvocation } from "../content/invocations";
 import { CASKETS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
@@ -29,6 +30,7 @@ import {
 import { formatPassiveValue, getPassive } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
+import { QUEST_ICON_OBJ_IDS } from "../content/questIcons";
 import { QUESTS, canDoQuestOn, describeQuest } from "../content/quests";
 import { getRaidBossShare, raidHasColours } from "../content/raidBosses";
 import { RAID_TELEPORTS } from "../content/raids";
@@ -37,10 +39,10 @@ import { SHOP_UPGRADES } from "../content/shop";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getEveryTimeTrophiesFound } from "../content/trophies";
-import { CombatStyle, MapDef, Stats, emptyStats } from "../content/types";
+import { CombatStyle, GearSlot, MapDef, Stats, emptyStats } from "../content/types";
 import { LOCKABLE_ITEMS, describeUnlockTask, isAvailable } from "../content/unlocks";
-import { formatWeaponBonus, formatWeaponStat, weaponStats } from "../content/weaponStats";
-import { getWeapon, getWeaponStyle } from "../content/weapons";
+import { formatWeaponStat, weaponStats } from "../content/weaponStats";
+import { getWeapon, getWeaponDamageKinds, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
@@ -78,6 +80,14 @@ import { CameraReach, GameFrameHandler, GameWebGLRenderer } from "../render/Game
 import { installRecipe } from "../scaperune/squares";
 import { OVERHEAD_GAP, OVERHEAD_SCALE } from "./BossFightView";
 import {
+    formatBonusText,
+    getBonusLine,
+    getLifestealStat,
+    getOrbitObjIds,
+    getPassiveBreakdown,
+    getWeaponStatLines,
+} from "./BreakdownViews";
+import {
     CinematicCamera,
     CinematicPlayer,
     getCinematicCamera,
@@ -107,6 +117,7 @@ import { ChestCue, GameSounds, getGameSoundIds } from "./GameSounds";
 import {
     AbilityView,
     ChoiceView,
+    CombatView,
     GameStore,
     HudNumbers,
     HudView,
@@ -127,11 +138,12 @@ import {
     getUsedRevive,
 } from "./ItemViews";
 import { LightBudget, MAX_SHOWN_LIGHTS } from "./LightBudget";
+import { getLevellingForm, getStatRows, getWeaponForm } from "./LoadoutViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getPlayerPose } from "./PlayerPose";
 import { RUN_ANALYTICS_URL, startRunAnalytics } from "./RunAnalytics";
-import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
+import { getBossKillViews, getCombatView, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
 import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
@@ -294,6 +306,12 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
             done,
             of,
             finished: done >= of,
+            iconObjId: QUEST_ICON_OBJ_IDS[quest.id],
+            coins: quest.coins,
+            enemyIds:
+                quest.objective.kind === "kill" || quest.objective.kind === "killEach"
+                    ? quest.objective.enemyIds
+                    : [],
         };
     });
 }
@@ -305,8 +323,15 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
         return undefined;
     }
     const owned = new Set(sim.passives.map((p) => p.id));
+    const passive = getPassive(evolution.requiresPassive);
+    const into = getWeapon(evolution.into);
+    const top = into.levels[into.levels.length - 1];
     return {
-        passive: getPassive(evolution.requiresPassive).name,
+        passive: passive.name,
+        passiveIconObjId: passive.iconObjId,
+        passiveIconSpriteId: passive.iconSpriteId,
+        into: top.name ?? into.name,
+        intoIconObjId: top.objId ?? into.iconObjId,
         maxed: weapon.level >= weapon.def.levels.length,
         hasPassive: owned.has(evolution.requiresPassive),
         ready: canEvolve(weapon, owned, sim.unlockedItems),
@@ -1319,6 +1344,12 @@ export class GameClient implements GameFrameHandler {
             !this.sim.runOver &&
             this.store.getSnapshot().overlay === "none"
         );
+    }
+
+    // The pause menu's Combat tab: this player's damage by kind and source, and kills by enemy
+    getCombatView(): CombatView | undefined {
+        const sim = this.sim;
+        return sim ? sim.as(sim.focus, () => getCombatView(sim)) : undefined;
     }
 
     toggleDamagePanel(): void {
@@ -3547,13 +3578,46 @@ export class GameClient implements GameFrameHandler {
                     level: w.level,
                     maxLevel: w.def.levels.length,
                     iconObjId: level.objId ?? w.def.iconObjId,
+                    kinds: getWeaponDamageKinds(w.def),
                     detail:
                         w.bonus > 0
                             ? t("canvas.weapon_bonus_damage", {
-                                  bonus: formatWeaponBonus(w.bonus),
+                                  bonus: formatBonusText(w.bonus),
                               })
                             : "",
                     stats: weaponStats(w.def, level).map(formatWeaponStat),
+                    ...(w.def.evolved && { evolved: true }),
+                    examine: weaponExamine(w.def),
+                    form: getWeaponForm(
+                        w,
+                        new Set(sim.passives.map((p) => p.id)),
+                        sim.unlockedItems,
+                        sim.endless,
+                    ),
+                    orbit: getOrbitObjIds(w.def, level.amount + sim.stats.amount),
+                    statLines: [
+                        ...getWeaponStatLines(
+                            w.def,
+                            w.level,
+                            w.bonus,
+                            sim.upgradeQualities.weapons[w.def.id] ?? [],
+                        ),
+                        ...[getLifestealStat(w.def)].filter((stat) => stat !== undefined),
+                    ],
+                    detailBreakdown:
+                        w.bonus > 0
+                            ? {
+                                  title: t("ui.levelup.damage_bonus"),
+                                  lines: [
+                                      getBonusLine(
+                                          w.def,
+                                          w.level,
+                                          w.bonus,
+                                          sim.upgradeQualities.weapons[w.def.id] ?? [],
+                                      ),
+                                  ],
+                              }
+                            : undefined,
                     evolution: getEvolutionView(sim, w),
                     rarityColor: RARITIES[w.def.rarity].color,
                 };
@@ -3568,10 +3632,19 @@ export class GameClient implements GameFrameHandler {
                     iconObjId: def.iconObjId,
                     iconSpriteId: def.iconSpriteId,
                     detail: formatPassiveValue(def, p.value),
+                    examine: passiveExamine(def),
+                    form: getLevellingForm(p.level, def.maxLevel, sim.endless),
+                    detailBreakdown: getPassiveBreakdown(
+                        def,
+                        p.value,
+                        sim.upgradeQualities.passives[p.id] ?? [],
+                        p.level,
+                    ),
                     rarityColor: RARITIES[def.rarity].color,
                 };
             }),
             stats: formatStats(sim.stats),
+            statRows: getStatRows(sim.stats, sim.player.maxHp, sim.getStatSources()),
             gear: getGearViews(sim),
             inventory: getInventoryViews(sim),
             rerolls: sim.rerollsLeft,

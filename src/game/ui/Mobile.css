@@ -259,8 +259,10 @@
     .ui-changelog-list,
     .ui-pause,
     .ui-pause-columns,
+    .ui-pause-page,
     .ui-result,
     .ui-result-columns,
+    .ui-result-page,
     .ui-choice,
     .ui-chest-card {
         overscroll-behavior: contain;
@@ -980,6 +982,22 @@
         min-height: 0;
         overflow-y: auto;
         padding-right: 4px;
+    }
+
+    /* A page under its tabs scrolls as a whole, its columns with it */
+    .ui-pause-page,
+    .ui-result-page {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+    .ui-pause-page .ui-pause-columns,
+    .ui-result-page .ui-result-columns {
+        flex: none;
+        overflow: visible;
+        padding-right: 0;
     }
 
     .ui-pause-column + .ui-pause-column,

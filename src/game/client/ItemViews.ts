@@ -21,6 +21,7 @@ import { GearSlot, ItemDef } from "../content/types";
 import { describeItem, shouldWear } from "../core/Loot";
 import { Hero, Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { t, tl, tr } from "../i18n";
+import { getGearBreakdowns } from "./BreakdownViews";
 import {
     BuffView,
     ChestView,
@@ -152,6 +153,13 @@ export function getChestView(sim: Sim): ChestView | undefined {
     };
 }
 
+// A worn piece with how each of its lines got its size, for the pause menu's tooltips
+function withBreakdowns(view: ItemView, item: ItemDef, upgrades: number): ItemView {
+    return item.kind === "gear"
+        ? { ...view, lineBreakdowns: getGearBreakdowns(item, upgrades) }
+        : view;
+}
+
 export function getGearViews(sim: Sim): GearSlotView[] {
     return GEAR_SLOTS.map((slot) => {
         const itemId = sim.gear[slot.id];
@@ -160,7 +168,11 @@ export function getGearViews(sim: Sim): GearSlotView[] {
             name: slot.name,
             item:
                 itemId !== undefined
-                    ? getRunItemView(sim, getItem(itemId), sim.gearUpgrades[slot.id] ?? 0)
+                    ? withBreakdowns(
+                          getRunItemView(sim, getItem(itemId), sim.gearUpgrades[slot.id] ?? 0),
+                          getItem(itemId),
+                          sim.gearUpgrades[slot.id] ?? 0,
+                      )
                     : undefined,
         };
     });

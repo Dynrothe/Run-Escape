@@ -28,6 +28,8 @@ export function unitId(unit: SlimUnit): string {
             return `bake:${unit.group}:${unit.requests[0].key}`;
         case "icons":
             return `icons:${unit.objIds[0]}`;
+        case "heads":
+            return `heads:${unit.npcIds[0]}`;
         default:
             return unit.kind;
     }

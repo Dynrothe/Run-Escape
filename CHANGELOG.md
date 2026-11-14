@@ -3,6 +3,51 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- The pause menu and the results show your damage by type (melee, ranged, magic, poison, burning
+  ground, recoil, power-ups, items) and how many of each monster you've killed, each shown by
+  its face.
+
+### Changed
+
+- The pause menu is in tabs: Loadout, Combat, Quests and Party, with Settings as a button at the
+  bottom beside Give up and Resume. Every tab is the same size, and Give up, Settings and Resume
+  stay in view.
+- The pause menu's Combat tab is a fight report: your totals as tiles, the damage mix as one bar by
+  type, a ranking of what dealt it (the best one crowned) and a bestiary of what you've killed.
+- The pause menu's Quests are cards like the Loadout's: each quest has an icon from the OSRS quest
+  it's named for, a bar of how far it's got, and the Slayer skull on a kill quest (the creatures
+  it's after are in its tooltip). The icon and the reward sit in the client's grey stone slots,
+  and the reward square says "Reward" with the coins the quest pays below.
+- The pause menu's Loadout shows a weapon's kind of damage as the icon of its Damage line: the
+  Attack, Ranged or Magic icon, with poison or burning after the name where it has them.
+- The pause menu's Loadout is redone in the game's own style, and tightens to fit the room it has,
+  with the buttons at the bottom always in view (a tall page scrolls inside itself): empty weapon,
+  passive and equipment slots show an empty square and where one comes from. Weapons and passives
+  are cards with
+  their item big in its square, their level written as the client does (and past the last level in
+  an endless run), their stats in an aligned grid, a square with the passive a weapon evolves with
+  (green, red or gold), free slots, your stats by group (the ones you have none of too), and every
+  equipment slot. What a weapon evolves into is a square
+  with its count of what's there ("1/2", gold and "2/2" once it can evolve), and the recipe is in
+  its tooltip. Each level up is a row of its own, in a list that scrolls (with the mouse wheel,
+  the arrow keys or a finger), so an endless run's hundreds fit.
+- In the Loadout, an evolved weapon has a violet frame and a star, and anything at its last level with
+  nothing left to evolve into (and no more levels to come) is lit up: a softly glowing orange card with bracketed corners and embers, a MAX badge beside its level,
+  and motes of golden light rising over its icon.
+- The mouse over a weapon's or passive's icon in the Loadout says what it is, in the manner of the
+  original's examine texts, and where it stands: at its best form, ready to evolve, able to evolve
+  once it has what it takes, or (for one you haven't unlocked the evolution of) that you don't yet
+  know how to evolve it.
+- Hold the mouse over any number in the Loadout (a weapon's damage, a passive, a worn piece, one
+  of your stats) to see how it got that size: its starting value and each upgrade, in the colour of
+  the rarity it was taken at. Anything that heals on a hit says how often, how much and when.
+- The runes that circle you show all of them in the weapon's icon, as many as are circling.
+- The classic results are in two tabs, Summary and Combat.
+
 ## 0.30.0 - 2026-11-09
 
 ### Added
@@ -262,18 +307,18 @@ the version in the corner).
   beaten: a trial in the Owl's Court, hung in the Hallowed Sepulchre's dark, where the court
   itself is his weapon. You play the Saradominist, with Saradomin Strike, which only reaches him
   from close by. With its own track, Blade of Forgotten Justice.
-  - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
-    him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
-    for a few seconds after, as he'll tell you).
-  - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
-    a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
-    early still lands.
-  - Each phase has its own full health bar.
-  - His gaze lights up the court, and the pillars' shadows are where it can't see you.
-  - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
-    slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
-    a burst of light as he kneels, and a ring across the court as he rises.
-  - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
+    - Fight back: dodge his lunge or his shock wave and his guard drops, for double damage; lead
+      him into his own court's bolts, or make him lunge into a pillar and he's stunned (not again
+      for a few seconds after, as he'll tell you).
+    - Smite, the fight's own button (Space, a controller's A, or the button on a touch screen):
+      a heavy blow from right beside him, twice as hard while his guard's down. A press a moment
+      early still lands.
+    - Each phase has its own full health bar.
+    - His gaze lights up the court, and the pillars' shadows are where it can't see you.
+    - Dust and flashes where his blows land, and a little camera shake. Each of his swings and
+      slams lands as his sword falls, and you face him as he comes down. Each new phase is marked:
+      a burst of light as he kneels, and a ring across the court as he rises.
+    - A pet, the Dark squirrel: 1 in 10 for beating him, and always on hard mode.
 - A Screen shake setting, on unless your system asks for less motion.
 - Retry on a boss fight's results, to go straight into it again.
 
@@ -307,31 +352,31 @@ the version in the corner).
   than every few seconds.
 - The co-op menu disconnects after about 10 minutes with nothing happening. Try again reconnects.
 - The Theatre of Blood's bosses, by Okaeri: each one a real fight, with a mechanic of its own.
-  - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
-    Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
-    Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
-  - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
-    bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
-  - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
-    to 1s.
-  - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
-    attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
-    one marked on the ground first.
-  - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
-    round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
-  - Hard and expert mode fire half as many bullets again, with the space between them as wide:
-    spreads fan out wider, and rings with no way through stay as they are.
-  - The raid's green and blue Nylocas shoot from range, Verzik's too.
-  - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
-    fight is worth as much as a quick early one.
-  - The Theatre is brighter, the woods outside Canifis most of all.
+    - Each boss has a mechanic from the real raid: the Maiden's Nylocas crawl to her and feed her,
+      Nylocas Vasilias changes colour on normal too, Sotetseg drags you into his shadow realm,
+      Xarpus can't be hurt until his exhumeds are smothered, and Verzik's spider throws her yellows.
+    - They're much tougher: two and a half to six times their hitpoints, harder hits, and their
+      bullets can hit twice as often. They take 15% from missiles and magic, from 30%.
+    - Armour takes off at most half of a boss's hit, so Protect from Melee no longer turns them all
+      to 1s.
+    - Standing on a boss is no longer safe: its bullets start from its middle, and each has an
+      attack all round it for whoever's up close, the Maiden, Xarpus and Verzik on her throne a new
+      one marked on the ground first.
+    - Keeping away isn't safe either: the Pestilent Bloat's flies and Verzik's power blasts close in
+      round you, and Verzik's spider leaps on you. The Bloat naps for less of the fight.
+    - Hard and expert mode fire half as many bullets again, with the space between them as wide:
+      spreads fan out wider, and rings with no way through stay as they are.
+    - The raid's green and blue Nylocas shoot from range, Verzik's too.
+    - A room's raid points for speed go by how long its boss is meant to take, so a later, longer
+      fight is worth as much as a quick early one.
+    - The Theatre is brighter, the woods outside Canifis most of all.
 - Expert mode in the Theatre of Blood, by Okaeri:
-  - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
-    Vasilias turns to a colour its weapon can't hurt.
-  - The Maiden's Nylocas feed her more.
-  - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
-    can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
-  - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
+    - Weapons don't aim at, poison or burn a Nylocas they can't hurt, and venom stops when Nylocas
+      Vasilias turns to a colour its weapon can't hurt.
+    - The Maiden's Nylocas feed her more.
+    - Verzik's doom-ball circle is bigger, lasts as long as the ball, and is always somewhere you
+      can reach. Her yellows wait until it's landed, and she can't be hurt meanwhile.
+    - Nylocas Vasilias's colours take their own style through its prayer, as on normal.
 - The Theatre of Blood's weapons come from its chest, by Okaeri: a Ghrazi rapier in the chest
   unlocks the rapier, and on hard or expert the chest can hold the Holy Scythe of Vitur, which
   unlocks the Holy Scythe. Beating the raid no longer unlocks them. Weapons already unlocked stay
@@ -375,16 +420,16 @@ the version in the corner).
 - Raids, by Okaeri: the Theatre of Blood, a new section on the map screen. Six rooms one after
   another, each with its own waves and then its boss in its real room from OSRS, fought as a
   bullet hell. It's a melee raid: its bosses take far less from missiles and magic.
-  - Raid points for each room, more for a fast, clean kill: they pay coins, buy food and potions from
-    a supply chest between rooms, and better your chance of a purple from the chest at the end.
-  - The Theatre's uniques for the Collection log, Lil' Zik, and two weapons: the Ghrazi rapier for
-    beating it, and the Holy Scythe of Vitur for beating it on hard.
-  - The raid runs through Morytania: each room fights its waves in a real place, from the woods
-    outside Canifis to Vampyrium. Bones and coins left on a hall floor go with you to its boss.
-  - Teleporters: once you've killed a room's boss, its hall has a portal straight to it (three a raid),
-    to get back to the boss you're learning quicker.
-  - Beat the raid on hard for expert mode, with more of the real raid's mechanics, twice the coins
-    and Lil' Zik's looks.
+    - Raid points for each room, more for a fast, clean kill: they pay coins, buy food and potions from
+      a supply chest between rooms, and better your chance of a purple from the chest at the end.
+    - The Theatre's uniques for the Collection log, Lil' Zik, and two weapons: the Ghrazi rapier for
+      beating it, and the Holy Scythe of Vitur for beating it on hard.
+    - The raid runs through Morytania: each room fights its waves in a real place, from the woods
+      outside Canifis to Vampyrium. Bones and coins left on a hall floor go with you to its boss.
+    - Teleporters: once you've killed a room's boss, its hall has a portal straight to it (three a raid),
+      to get back to the boss you're learning quicker.
+    - Beat the raid on hard for expert mode, with more of the real raid's mechanics, twice the coins
+      and Lil' Zik's looks.
 - Phosani's Nightmare: a boss fight on its own, open once Hallowed Night's beaten. One fight in
   the Sisterhood Sanctuary under Slepe, with no waves, picks or items: everything The Nightmare
   has, quicker, plus bullet hell patterns, eggs that hatch parasites and husks that hold you where

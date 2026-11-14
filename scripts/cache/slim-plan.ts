@@ -17,12 +17,14 @@ import {
 } from "../../src/game/client/GameAssets";
 import { getGameSoundIds } from "../../src/game/client/GameSounds";
 import { CHARACTERS } from "../../src/game/content/characters";
+import { DAMAGE_KIND_OBJ_IDS } from "../../src/game/content/damageKinds";
 import { ENEMIES } from "../../src/game/content/enemies";
 import { CASKETS, GEAR, GEAR_SLOT_BY_ID, ITEMS } from "../../src/game/content/items";
 import { ALL_MAPS, getArenaRegion } from "../../src/game/content/maps";
 import { PASSIVES } from "../../src/game/content/passives";
 import { PETS } from "../../src/game/content/pets";
 import { POWER_UPS, THRALLS } from "../../src/game/content/powerups";
+import { QUEST_ICON_OBJ_IDS } from "../../src/game/content/questIcons";
 import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
@@ -57,7 +59,9 @@ export type SlimUnit =
     | { kind: "textures" }
     | { kind: "sounds"; ids: number[] }
     | { kind: "sprites"; ids: number[] }
-    | { kind: "icons"; objIds: number[] };
+    | { kind: "icons"; objIds: number[] }
+    // The chatheads of the monsters the Combat tabs show
+    | { kind: "heads"; npcIds: number[] };
 
 export function describeUnit(unit: SlimUnit): string {
     switch (unit.kind) {
@@ -67,6 +71,8 @@ export function describeUnit(unit: SlimUnit): string {
             return `${unit.group} bakes from ${unit.requests[0].key}`;
         case "icons":
             return `icons from ${unit.objIds[0]}`;
+        case "heads":
+            return `heads from ${unit.npcIds[0]}`;
         default:
             return unit.kind;
     }
@@ -156,6 +162,8 @@ function getContentObjIds(): number[] {
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
         ...STAT_ICON_OBJ_IDS,
+        ...DAMAGE_KIND_OBJ_IDS,
+        ...Object.values(QUEST_ICON_OBJ_IDS),
     ]);
     for (const [, objId] of getWornObjs()) {
         ids.add(objId);
@@ -267,6 +275,11 @@ export function getSlimUnits(recipes: string): SlimUnit[] {
         }
     }
     const icons = batchByKey(getContentObjIds(), String, 32, ICON_BATCH);
+    // An enemy drawn as a player (the fun maps') has no NPC to show
+    const npcIds = [
+        ...new Set(ENEMIES.filter((enemy) => !enemy.outfits).map((enemy) => enemy.npcId)),
+    ].sort((a, b) => a - b);
+    const heads = batchByKey(npcIds, String, 32, ICON_BATCH);
     return [
         ...maps,
         ...bakes,
@@ -274,5 +287,6 @@ export function getSlimUnits(recipes: string): SlimUnit[] {
         { kind: "sounds", ids: getGameSoundIds() },
         { kind: "sprites", ids: getGameSpriteIds() },
         ...icons.map((objIds): SlimUnit => ({ kind: "icons", objIds })),
+        ...heads.map((npcIds): SlimUnit => ({ kind: "heads", npcIds })),
     ];
 }

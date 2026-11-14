@@ -1,13 +1,28 @@
 import { getCharacter } from "../content/characters";
+import { DAMAGE_KINDS } from "../content/damageKinds";
 import { upgradedName } from "../content/endless";
-import { getEnemy } from "../content/enemies";
+import { ENEMY_BY_ID, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
 import { getPowerUp } from "../content/powerups";
 import { RARITIES } from "../content/rarity";
 import { getWeapon } from "../content/weapons";
 import { RunStats, Sim } from "../core/Sim";
 import { DamageSource } from "../core/entities";
-import { BossKillView, DamageView, PlayerResultView } from "./GameStore";
+import {
+    BossKillView,
+    CombatView,
+    DamageKindView,
+    DamageView,
+    KillView,
+    PlayerResultView,
+} from "./GameStore";
+
+// One colour for each place in the party, the same on every client (and in every chart)
+export const PLAYER_COLORS = ["#4fc3f7", "#ff8a65", "#aed581", "#ba68c8"];
+
+export function playerColor(index: number): string {
+    return PLAYER_COLORS[index % PLAYER_COLORS.length];
+}
 
 export function getPlayerResultViews(sim: Sim): PlayerResultView[] {
     return sim.heroes.map((hero) =>
@@ -29,6 +44,14 @@ export function getPlayerResultViews(sim: Sim): PlayerResultView[] {
                 skips: stats.skips,
                 // Weapon names and tiers come from this hero's own loadout
                 damage: getDamageViews(sim, stats),
+                kinds: getDamageKindViews(stats),
+                killsByEnemy: getKillViews(stats),
+                revivesGiven: hero.revivesGiven,
+                timesDowned: hero.timesDowned,
+                bossDamage: hero.bossDamage,
+                aliveSeconds: sim.aliveSeconds(hero),
+                index: hero.index,
+                color: playerColor(hero.index),
             };
         }),
     );
@@ -43,6 +66,39 @@ export function getDamageViews(sim: Sim, stats: RunStats): DamageView[] {
         kills,
         ...(seconds !== undefined && seconds > 0 && { perSecond: damage / seconds }),
     }));
+}
+
+// The run's damage by its kind, most first, leaving out kinds that did nothing
+export function getDamageKindViews(stats: RunStats): DamageKindView[] {
+    return DAMAGE_KINDS.map((kind) => ({ kind, damage: stats.damageByKind[kind] ?? 0 }))
+        .filter((view) => view.damage > 0)
+        .sort((a, b) => b.damage - a.damage);
+}
+
+// Kills by enemy, most first (bosses first among the same), leaving out ids no longer in the game
+export function getKillViews(stats: RunStats): KillView[] {
+    return Object.entries(stats.killsByEnemy)
+        .filter(([enemyId, kills]) => kills > 0 && ENEMY_BY_ID.has(enemyId))
+        .map(([enemyId, kills]) => ({
+            enemyId,
+            kills,
+            boss: getEnemy(enemyId).boss !== undefined,
+        }))
+        .sort((a, b) => b.kills - a.kills || Number(b.boss) - Number(a.boss));
+}
+
+// The current hero's damage and kills so far, for the pause menu's Combat tab
+export function getCombatView(sim: Sim): CombatView {
+    const stats = sim.getRunStats();
+    return {
+        damageDealt: stats.sources.reduce((total, source) => total + source.damage, 0),
+        damageTaken: stats.damageTaken,
+        healed: stats.healed,
+        highestHit: stats.highestHit,
+        kinds: getDamageKindViews(stats),
+        sources: getDamageViews(sim, stats),
+        kills: getKillViews(stats),
+    };
 }
 
 export function getBossKillViews(stats: RunStats): BossKillView[] {

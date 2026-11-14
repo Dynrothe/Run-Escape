@@ -13,8 +13,6 @@
   "pause.quit.host_warning": "Você é o anfitrião: se sair, a partida terminará para todos",
   "pause.quit.leave": "Sair da partida",
   "pause.resume": "Continuar",
-  "pause.slot_level": "nível {level}",
-  "pause.slot_max": "máx.",
   "pause.title.coop": "Menu",
   "pause.title.paused": "Pausado",
   "settings.auto_alch.desc": "Usa Alquimia alta no item de cada baú de recompensa assim que ele é aberto, sem interromper o jogo",
