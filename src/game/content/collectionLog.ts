@@ -119,6 +119,8 @@ export type LogItem = {
     count?: number;
     // An evolution's: what it makes stays hidden until it's been made
     evolution?: EvolutionDef;
+    // Found in the run under way, not saved yet (getRunLogEntries)
+    thisRun?: boolean;
 };
 
 export type LogEntry = {
@@ -216,6 +218,26 @@ export function getLogEntries(save: SaveData): LogEntry[] {
     };
     const entries = [...maps, ...clues, evolutions];
     return LOG_TABS.flatMap((tab) => entries.filter((entry) => entry.tab === tab));
+}
+
+// The log during a run: built from runSave, the save as the run would leave it
+// (GameClient.getRunLogSaves), with what only that has found marked thisRun. The counts and tallies
+// stay the save's, as a run's kills and caskets aren't counted till it ends.
+export function getRunLogEntries(save: SaveData, runSave: SaveData): LogEntry[] {
+    const saved = getLogEntries(save);
+    const savedEntries = new Map(saved.map((entry) => [entry.id, entry]));
+    const savedItems = new Map(saved.flatMap((entry) => entry.items).map((i) => [i.key, i]));
+    return getLogEntries(runSave).map((entry) => ({
+        ...entry,
+        tally: savedEntries.get(entry.id)?.tally ?? entry.tally,
+        items: entry.items.map((item) => {
+            const before = savedItems.get(item.key);
+            if (!before) return item;
+            return item.found && !before.found
+                ? { ...item, count: before.count, thisRun: true }
+                : before;
+        }),
+    }));
 }
 
 // The log's whole count, obtained over total. Each item's listed once (its key), though two finds

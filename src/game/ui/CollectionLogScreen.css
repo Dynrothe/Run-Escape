@@ -286,6 +286,25 @@
     pointer-events: none;
 }
 
+/* Found in the run under way and not saved yet (the log opened from the pause menu): written,
+   not only coloured, on the entry and on the item */
+.ui-log-new {
+    flex-shrink: 0;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 13px;
+    line-height: 13px;
+    color: var(--ui-yellow);
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ui-log-item-new {
+    position: absolute;
+    left: 2px;
+    bottom: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
 .ui-log-detail {
     flex-shrink: 0;
     margin-top: auto;

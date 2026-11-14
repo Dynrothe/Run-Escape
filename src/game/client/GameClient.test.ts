@@ -5,6 +5,7 @@ import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { YAMA_WAKES } from "../content/fun/yamaWakes";
 import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { getMap } from "../content/maps";
+import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { hasBadNumber, syncHash } from "../core/lockstep";
@@ -1206,6 +1207,23 @@ describe("a co-op run that breaks", () => {
             ).updateCoop(ms, sim, fake);
         return { client, store, coop, finishRun, flush, stepFrame, update };
     }
+
+    it("walks on under co-op's menu, but stands still under the Collection log over it", () => {
+        const setMove = vi.fn();
+        const { client, store, update } = coopClient({ setMove });
+        Object.assign(client, {
+            input: {
+                getMoveVector: (into: { x: number; y: number }) => Object.assign(into, { x: 1 }),
+            },
+        });
+        client.pause();
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(1, 0);
+        client.openRunLog();
+        expect(store.getSnapshot().runLog).toBe(true);
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(0, 0);
+    });
 
     it("sends the host's frames even when something after a step throws", () => {
         const { client, flush, stepFrame, update } = coopClient({});
@@ -2674,5 +2692,53 @@ describe("boss attacks' instructions", () => {
         } finally {
             c.restore();
         }
+    });
+});
+
+describe("the Collection log over the pause menu", () => {
+    test("opens only on the pause menu, and Escape or P goes back to the menu before resuming", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        const snapshot = () => store.getSnapshot();
+        client.openRunLog();
+        expect(snapshot().runLog).toBeFalsy();
+        press("Escape");
+        expect(snapshot().overlay).toBe("paused");
+        for (const code of ["Escape", "KeyP"]) {
+            client.openRunLog();
+            expect(snapshot().runLog).toBe(true);
+            press(code);
+            expect(snapshot().runLog).toBe(false);
+            expect(snapshot().overlay).toBe("paused");
+        }
+        press("Escape");
+        expect(snapshot().overlay).toBe("none");
+        // A run that left the menu with the log open (a co-op run's end, or leaving it) pauses
+        // to the menu next time
+        press("KeyP");
+        client.openRunLog();
+        Object.assign(client, { paused: false });
+        store.set({ overlay: "none" });
+        client.pause();
+        expect(snapshot().overlay).toBe("paused");
+        expect(snapshot().runLog).toBe(false);
+    });
+
+    test("shows the run's finds from a copy of the save, saving nothing", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        const trophy = TROPHIES[0];
+        sim.trophies.add(trophy.id);
+        const save = structuredClone(client.save);
+        const result = sim.getResult();
+        const { saved, withRun } = client.getRunLogSaves();
+        expect(saved).toEqual(save);
+        expect(withRun?.trophies).toEqual([trophy.id]);
+        expect(client.save).toEqual(save);
+        expect(sim.getResult()).toEqual(result);
+        // Once it's recorded, the save has them
+        Object.assign(client, { runRecorded: true });
+        expect(client.getRunLogSaves().withRun).toBeUndefined();
     });
 });

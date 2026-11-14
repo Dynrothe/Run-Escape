@@ -5,6 +5,12 @@ the version in the corner).
 
 ## Unreleased
 
+### Added
+
+- The Collection log in a run, by Okaeri: open it from the pause menu to see what you have, with
+  anything this run has found and not saved yet marked New. Closing it goes back to the menu. In
+  co-op it opens from the party's menu, and the run goes on while your hero stands still.
+
 ### Fixed
 
 - On the title screen, your pet stands closer beside your adventurer, and the courtyard's bushes

@@ -1,14 +1,23 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { GameClient } from "../client/GameClient";
 import { GamePads, PAD } from "../client/GamePad";
 import { GameStore } from "../client/GameStore";
+import {
+    REWARD_MAPS,
+    getLogEntries,
+    getLogTotal,
+    getMapTab,
+    getTrophyMap,
+} from "../content/collectionLog";
 import { EVOLUTIONS } from "../content/evolutions";
 import { getMap, mapName } from "../content/maps";
+import { TROPHIES, trophyName } from "../content/trophies";
 import { weaponName } from "../content/weapons";
 import { createSave } from "../core/save";
+import { t } from "../i18n";
 import { GameUi } from "./GameUi";
 import { iconCache } from "./ItemIcon";
 
@@ -18,19 +27,27 @@ afterEach(() => {
 });
 
 // The log open on a new save, each item's icon its object id
-function openLog(): { showScreen: ReturnType<typeof vi.fn>; log: HTMLElement } {
+function openLog(): {
+    showScreen: ReturnType<typeof vi.fn>;
+    getRunLogSaves: ReturnType<typeof vi.fn>;
+    log: HTMLElement;
+} {
     vi.spyOn(iconCache, "get").mockImplementation((objId: number) => `obj:${objId}`);
     vi.spyOn(iconCache, "request").mockImplementation(() => {});
     vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
     const store = new GameStore(createSave());
     store.set({ screen: "collectionLog" });
     const showScreen = vi.fn();
+    // A run's finds, which the title's log never asks for
+    const withRun = createSave();
+    withRun.trophies.push(...TROPHIES.map((trophy) => trophy.id));
+    const getRunLogSaves = vi.fn(() => ({ saved: createSave(), withRun }));
     const client = new Proxy(
-        { showScreen },
+        { showScreen, getRunLogSaves },
         { get: (target, key) => target[key as keyof typeof target] ?? vi.fn() },
     );
     render(<GameUi store={store} client={client as unknown as GameClient} />);
-    return { showScreen, log: screen.getByRole("dialog") };
+    return { showScreen, getRunLogSaves, log: screen.getByRole("dialog") };
 }
 
 function pageTitle(log: HTMLElement): string | null {
@@ -108,5 +125,116 @@ describe("the Collection log's screen", () => {
         fireEvent.mouseEnter(first);
         expect(within(log).getByText("???")).toBeInTheDocument();
         expect(within(log).queryByText(weaponName(EVOLUTIONS[0].into))).toBeNull();
+    });
+});
+
+describe("the Collection log during a run", () => {
+    const trophy = TROPHIES.find((def) => REWARD_MAPS.includes(getTrophyMap(def)))!;
+    const mapId = getTrophyMap(trophy);
+
+    // A paused run's menu, with a client whose run has found the trophy, not saved yet
+    function pauseRun(runLog = false) {
+        vi.spyOn(iconCache, "get").mockImplementation((objId: number) => `obj:${objId}`);
+        vi.spyOn(iconCache, "request").mockImplementation(() => {});
+        vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
+        const save = createSave();
+        const store = new GameStore(save);
+        const withRun = createSave();
+        withRun.trophies.push(trophy.id);
+        const calls = {
+            openRunLog: vi.fn(() => store.set({ runLog: true })),
+            closeRunLog: vi.fn(() => store.set({ runLog: false })),
+            getRunLogSaves: vi.fn(() => ({ saved: save, withRun })),
+        };
+        const client = new Proxy(
+            { store, input: { stick: {} }, ...calls },
+            {
+                get: (target, key) =>
+                    key in target ? target[key as keyof typeof target] : () => {},
+            },
+        );
+        store.set({
+            screen: "run",
+            overlay: "paused",
+            runLog,
+            hud: {
+                mapId: "lumbridge",
+                level: 1,
+                maxWeapons: 6,
+                maxPassives: 6,
+                weapons: [],
+                passives: [],
+                stats: [],
+                gear: [],
+                inventory: [null, null, null, null],
+                rerolls: 0,
+                banishes: 0,
+            },
+        });
+        render(<GameUi store={store} client={client as unknown as GameClient} />);
+        return { store, calls };
+    }
+
+    function runLog(): HTMLElement {
+        return screen.getByRole("dialog", { name: /^Collection log/ });
+    }
+
+    test("opens from the pause menu, over it, and its X goes back to the menu", () => {
+        const { store, calls } = pauseRun();
+        const pause = screen.getByRole("dialog", { name: "Paused" });
+        expect(screen.queryByRole("dialog", { name: /^Collection log/ })).toBeNull();
+        act(() => {
+            fireEvent.click(within(pause).getByRole("button", { name: "Collection log" }));
+        });
+        expect(calls.openRunLog).toHaveBeenCalled();
+        const log = runLog();
+        // A window over the menu, which is out of reach meanwhile
+        expect(log.closest(".ui-modal")?.parentElement?.closest(".ui-modal")).toBe(
+            pause.closest(".ui-modal"),
+        );
+        expect(pause).toHaveAttribute("inert");
+        act(() => {
+            fireEvent.click(within(log).getByRole("button", { name: "Close" }));
+        });
+        expect(calls.closeRunLog).toHaveBeenCalled();
+        expect(store.getSnapshot().overlay).toBe("paused");
+        expect(screen.queryByRole("dialog", { name: /^Collection log/ })).toBeNull();
+        expect(screen.getByRole("dialog", { name: "Paused" })).not.toHaveAttribute("inert");
+    });
+
+    test("leaves Escape to the client, whose pause key it is in a run", () => {
+        const { calls } = pauseRun(true);
+        fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
+        expect(calls.closeRunLog).not.toHaveBeenCalled();
+    });
+
+    test("marks what the run's found and not saved yet, in words", () => {
+        pauseRun(true);
+        const log = runLog();
+        fireEvent.click(
+            within(log).getByRole("button", { name: t(`collection.tab.${getMapTab(mapId)}`) }),
+        );
+        const entry = within(log)
+            .getAllByText(mapName(getMap(mapId)), { selector: ".ui-log-entry-name" })[0]
+            .closest("button")!;
+        expect(within(entry).getByText("New")).toBeInTheDocument();
+        fireEvent.click(entry);
+        const slot = within(log).getByRole("button", {
+            name: `${trophyName(trophy)}, Found this run`,
+        });
+        expect(within(slot).getByText("New")).toBeInTheDocument();
+        fireEvent.mouseEnter(slot);
+        expect(within(log).getByText(/\(Found this run\)/)).toBeInTheDocument();
+        // Counted in the title's total, as it'll be saved however the run ends
+        const total = getLogTotal(getLogEntries(createSave()));
+        expect(within(log).getByRole("heading", { level: 2 })).toHaveTextContent(
+            `Collection log - 1/${total.total}`,
+        );
+    });
+
+    test("marks nothing on the title's log", () => {
+        const { getRunLogSaves, log } = openLog();
+        expect(getRunLogSaves).not.toHaveBeenCalled();
+        expect(within(log).queryByText("New")).toBeNull();
     });
 });

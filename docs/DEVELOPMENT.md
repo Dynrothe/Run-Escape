@@ -1437,6 +1437,17 @@ adventurer can have:
   always in view. Narrower than 600px, or on a phone held upright (the rotate notice's own
   query), the entries are a dropdown, and the log is the one screen the rotate notice leaves
   readable there (`GameUi.tsx`).
+- **The log in a run**: the pause menu's Collection log opens the same screen over it
+  (`CollectionLogScreen`'s `inRun`, the store's `runLog`, `GameClient.openRunLog`). It's only the
+  UI's: a solo run stays paused under it, and a co-op run goes on, as it does under co-op's menu,
+  except that the hero stands still meanwhile, as the log hides the run (a zero move, as while
+  choosing a level up: `updateCoop`'s `deciding`). Escape and P are the client's pause keys
+  there, so `GameClient.pressPauseKey` closes the log before it resumes, and a pad's back and Start (P, with no `.ui-button-go` in the
+  log) do the same. What the run has found and not saved is marked New (`LogItem.thisRun`):
+  `GameClient.getRunLogSaves` gives the save and a copy with `recordRun` applied to the run's
+  result as it stands, and `getRunLogEntries` marks what only the copy has, keeping the save's
+  counts and tallies. It's worked out as the log opens: a co-op find made while it's open shows
+  the next time.
 
 ### Thanksgiving's Avian Assaulter
 

@@ -4885,11 +4885,16 @@ function PauseModal({
                     >
                         {coop ? t("pause.quit.leave") : t("pause.quit.give_up")}
                     </button>
+                    <button className="ui-button" onClick={() => client.openRunLog()}>
+                        {t("collection.title")}
+                    </button>
                     <button className="ui-button ui-button-go" onClick={() => client.resume()}>
                         {t("pause.resume")}
                     </button>
                 </div>
             </div>
+            {/* Over the menu, which is there again once it's closed */}
+            {ui.runLog && <CollectionLogScreen ui={ui} client={client} inRun />}
             {confirmDialog}
         </div>
     );

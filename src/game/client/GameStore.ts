@@ -494,6 +494,8 @@ export type UiSnapshot = {
     expert: boolean;
     hud?: HudView;
     overlay: RunOverlay;
+    // The Collection log, open over the pause menu (or co-op's menu, with the run going on)
+    runLog?: boolean;
     // Co-op: the room and its menus, everyone else in the run, and who the
     // run's waiting on to choose (when it isn't you)
     coop: CoopView;
