@@ -277,7 +277,8 @@ export function GameUi({ store, client }: Props): JSX.Element {
             ) : (
                 <LanguageNotice />
             )}
-            {isCoarsePointer && <RotateNotice />}
+            {/* The Collection log has a layout for a phone held upright, so it's left readable */}
+            {isCoarsePointer && ui.screen !== "collectionLog" && <RotateNotice />}
         </div>
     );
 }

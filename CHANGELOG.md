@@ -12,6 +12,10 @@ the version in the corner).
   beside it.
 - On a phone, the co-op room shows the party beside the map and your adventurer: tap either to
   choose from the whole list.
+- The Collection log, by Okaeri: it looks like the one in OSRS now, with its total in the title,
+  Bosses, Raids, Clues, Minigames and Other tabs, each entry's items in a grid (faded until you
+  have them, names green once an entry is complete) and its wins. Clues lists the gear reward
+  caskets hold, and it can be read on a phone held upright.
 
 ## 0.32.1 - 2026-11-14
 

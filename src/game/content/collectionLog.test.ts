@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { createSave } from "../core/save";
 import { isMapOut } from "./acts";
-import { REWARD_MAPS, getRewards, getTrophyMap } from "./collectionLog";
+import {
+    LOG_TABS,
+    REWARD_MAPS,
+    getLogEntries,
+    getLogTotal,
+    getRewards,
+    getTrophyMap,
+} from "./collectionLog";
+import { EVOLUTIONS } from "./evolutions";
+import { CASKET_GEAR } from "./items";
 import { MAP_BY_ID, getMap } from "./maps";
 import { TROPHIES } from "./trophies";
 
@@ -119,5 +128,54 @@ describe("the Collection log's rewards", () => {
         for (const reward of rewards) {
             expect(reward.how).not.toMatch(/\b1 in\b/);
         }
+    });
+});
+
+describe("the Collection log's tabs, as OSRS's client has them", () => {
+    it("files each map under its tab: raids, bosses, seasonal events as minigames", () => {
+        const tabs = new Map(getLogEntries(createSave()).map((entry) => [entry.id, entry.tab]));
+        expect(tabs.get("theatre_of_blood")).toBe("raids");
+        expect(tabs.get("tombs_of_amascut")).toBe("raids");
+        expect(tabs.get("phosani")).toBe("bosses");
+        expect(tabs.get("zachariah")).toBe("bosses");
+        expect(tabs.get("halloween")).toBe("minigames");
+        expect(tabs.get("thanksgiving")).toBe("minigames");
+        expect(tabs.get("evolutions")).toBe("other");
+        expect(tabs.get("clues_common")).toBe("clues");
+    });
+
+    it("keeps every map's rewards, every casket's gear and every evolution, in tab order", () => {
+        const save = createSave();
+        const entries = getLogEntries(save);
+        for (const mapId of REWARD_MAPS) {
+            const entry = entries.find((e) => e.id === mapId)!;
+            expect(entry.items.map((item) => item.id)).toEqual(
+                getRewards(save, mapId).map((r) => r.id),
+            );
+        }
+        const clueIds = entries
+            .filter((entry) => entry.tab === "clues")
+            .flatMap((entry) => entry.items.map((item) => item.id));
+        expect(clueIds.sort()).toEqual(CASKET_GEAR.map((gear) => gear.id).sort());
+        expect(entries.find((e) => e.id === "evolutions")!.items).toHaveLength(EVOLUTIONS.length);
+        const order = entries.map((entry) => LOG_TABS.indexOf(entry.tab));
+        expect(order).toEqual([...order].sort((a, b) => a - b));
+    });
+
+    it("reads what's obtained from the save as it is, and counts each item once", () => {
+        const save = createSave();
+        const before = getLogTotal(getLogEntries(save));
+        expect(before.found).toBe(0);
+        save.trophies.push("lil_zik");
+        save.foundGear.push(CASKET_GEAR[0].id);
+        save.evolutionsMade.push(EVOLUTIONS[0].into.id);
+        save.mapVictories.theatre_of_blood = 3;
+        const entries = getLogEntries(save);
+        expect(getLogTotal(entries)).toEqual({ found: 3, total: before.total });
+        const theatre = entries.find((e) => e.id === "theatre_of_blood")!;
+        expect(theatre.items.find((item) => item.id === "lil_zik")!.found).toBe(true);
+        expect(theatre.tally).toEqual({ key: "collection.wins", n: 3 });
+        const keys = entries.flatMap((entry) => entry.items.map((item) => item.key));
+        expect(new Set(keys).size).toBe(keys.length);
     });
 });
