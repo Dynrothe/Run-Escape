@@ -109,14 +109,17 @@ describe("the Collection log's Cards tab", () => {
         expect(tab.find((entry) => entry.id === "cards_raids")!.items.length).toBeGreaterThan(0);
     });
 
-    it("counts each card once in the log's total, apart from the item it's a card of", () => {
+    it("keeps cards out of the log's title total, which counts the game's own finds", () => {
         const save = createSave();
         const before = getLogTotal(getLogEntries(save));
         const withCard = getLogTotal(
             getLogEntries({ ...save, cards: { "trophy:jar_of_dreams": 1 } }),
         );
-        expect(withCard.found).toBe(before.found + 1);
-        expect(withCard.total).toBe(before.total);
+        expect(withCard).toEqual(before);
+        const items = getLogEntries(save)
+            .filter((entry) => entry.tab !== "cards")
+            .flatMap((entry) => entry.items.map((item) => item.key));
+        expect(before.total).toBe(new Set(items).size);
         const cardKeys = getLogEntries(save)
             .filter((entry) => entry.tab === "cards")
             .flatMap((entry) => entry.items.map((item) => item.key));

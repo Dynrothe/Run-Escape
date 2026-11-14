@@ -124,7 +124,15 @@ describe("the Card shop's packs", () => {
         expect(pool("trophies").every((c) => c.kind === "trophy")).toBe(true);
         expect(pool("raids")).toContain(card("trophy:avernic_defender_hilt"));
         expect(pool("raids")).not.toContain(card("weapon:scimitar"));
-        expect(pool("adventurer")).toEqual(CARDS);
+        // Gear comes only from the Treasure trail pack
+        expect(pool("adventurer")).toEqual(CARDS.filter((c) => c.kind !== "gear"));
+        expect(pool("champion")).toEqual(pool("adventurer"));
+        for (const pack of PACKS.filter((p) => p.id !== "gear")) {
+            expect(
+                pool(pack.id).some((c) => c.kind === "gear"),
+                pack.id,
+            ).toBe(false);
+        }
     });
 
     it("prices the premium pack above the basic one, with better odds", () => {

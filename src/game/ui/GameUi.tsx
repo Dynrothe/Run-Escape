@@ -5,6 +5,7 @@ import {
     useCallback,
     useEffect,
     useId,
+    useMemo,
     useRef,
     useState,
     useSyncExternalStore,
@@ -1605,6 +1606,18 @@ export function AdventurerPanel({
     const roster = getRoster();
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
+    // Cards only on, solo: the adventurers it can't start as (isCardLocked), worked out once for
+    // the save, not on every peek. Only those they have: one they haven't is locked anyway.
+    const cardLocked = useMemo(() => {
+        const map = getMap(ui.mapId);
+        return new Set(
+            ui.screen === "coop"
+                ? []
+                : roster
+                      .filter((c) => unlocked.includes(c.id) && isCardLocked(ui.save, c.id, map))
+                      .map((c) => c.id),
+        );
+    }, [ui.save, ui.mapId, ui.screen, roster, unlocked]);
     return (
         <div
             className={
@@ -1659,6 +1672,9 @@ export function AdventurerPanel({
                                             `char.${character.id}.name`,
                                             character.name,
                                         );
+                                        // Cards only on, solo, without their starter cards: dimmed
+                                        // and marked, still picked to read why (AdventurerDetails)
+                                        const cardsLocked = cardLocked.has(character.id);
                                         return (
                                             <button
                                                 key={character.id}
@@ -1667,9 +1683,16 @@ export function AdventurerPanel({
                                                     (selected ? " ui-card-selected" : "") +
                                                     (unlocked.includes(character.id)
                                                         ? ""
-                                                        : " ui-card-locked")
+                                                        : " ui-card-locked") +
+                                                    (cardsLocked ? " ui-tile-cards-locked" : "")
                                                 }
-                                                aria-label={charName}
+                                                aria-label={
+                                                    cardsLocked
+                                                        ? t("ui.cards_only.tile_locked", {
+                                                              name: charName,
+                                                          })
+                                                        : charName
+                                                }
                                                 aria-pressed={selected}
                                                 onMouseMove={() => setPeek(character.id)}
                                                 onFocus={() => setPeek(character.id)}
@@ -1691,6 +1714,12 @@ export function AdventurerPanel({
                                                         size={18}
                                                     />
                                                 </span>
+                                                {cardsLocked && (
+                                                    <span
+                                                        className="ui-tile-lock"
+                                                        aria-hidden="true"
+                                                    />
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -1709,11 +1738,7 @@ export function AdventurerPanel({
                 character={getCharacter(shown)}
                 onFavourite={fixed ? undefined : () => client.toggleFavouriteCharacter(shown)}
                 // Solo only: in co-op a locked player plays without Cards only (their loadout)
-                cardLock={
-                    ui.screen !== "coop" && isCardLocked(ui.save, shown, getMap(ui.mapId))
-                        ? getCardLock(ui.save, shown)
-                        : undefined
-                }
+                cardLock={cardLocked.has(shown) ? getCardLock(ui.save, shown) : undefined}
             />
         </div>
     );

@@ -215,8 +215,8 @@ export function getLogEntries(save: SaveData): LogEntry[] {
 }
 
 // The Cards tab (content/cards.ts): a set for each kind of card, then the raids' finds (the Raider's
-// pack's), each card at its rarest version owned. A card's key is its own, so it counts in the
-// log's total once, apart from the item it's a card of: a card's a find of its own.
+// pack's), each card at its rarest version owned. Its keys are the cards' own; the log's title
+// total leaves the tab out (getLogTotal), as its entries count themselves.
 export function getCardEntries(save: SaveData): LogEntry[] {
     const item = (card: CardDef): LogItem => {
         const best = getBestVersion(save, card);
@@ -263,10 +263,11 @@ export function getCardEntries(save: SaveData): LogEntry[] {
     ];
 }
 
-// The log's whole count, each item once: obtained over total
+// The log's whole count, each item once: obtained over total. Cards (the Cards tab) are kept apart,
+// each of its entries with its own count: the total is the game's own finds.
 export function getLogTotal(entries: LogEntry[]): { found: number; total: number } {
     const items = new Map<string, boolean>();
-    for (const entry of entries) {
+    for (const entry of entries.filter((e) => e.tab !== "cards")) {
         for (const item of entry.items) {
             items.set(item.key, (items.get(item.key) ?? false) || item.found);
         }

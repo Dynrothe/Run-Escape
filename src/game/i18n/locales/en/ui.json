@@ -190,6 +190,7 @@
     "ui.cards_only.short.one": "Need 1 more card",
     "ui.cards_only.short.other": "Need {n} more cards",
     "ui.cards_only.locked": "Card collection only needs {list}.",
+    "ui.cards_only.tile_locked": "{name}, locked for Cards only",
     "ui.cards_only.character_locked": "Locked for Cards only: needs the {list} card.",
     "ui.cards_only.need_weapons.one": "1 more weapon card",
     "ui.cards_only.need_weapons.other": "{n} more weapon cards",

@@ -1452,7 +1452,8 @@ Wardrobe spend them, and no real money is ever involved.
   under its id, the rarer ones as `<id>@<rarity>` (`versionKey`, `parseVersionKey`). The rarity is
   always written on the card, not only shown by its frame's colour.
 - **Packs** (`PACKS`, `core/cards.ts`): each has a pool (`holds`), a price and odds by version;
-  a kind of card each, the raids' finds, and any card (two prices, two sets of odds).
+  a kind of card each, the raids' finds, and any card but gear (two prices, two sets of odds):
+  gear comes only from its own pack.
   A card rolls a version by the odds, then a card of the pool that comes in it; in a pack with
   odds for three rarities or more, the last card never rolls the commonest (`lastCardRarities`),
   which the shop says. A bought pack opens at once. `SaveData.cardPacks` holds only the free
@@ -1461,16 +1462,16 @@ Wardrobe spend them, and no real money is ever involved.
   weapon's, as adventurers start with no passives or gear) and random cards to `PACK_SIZE`; a save
   that opened it before then gets the missing ones once on loading (`giveStarterCards`,
   `SaveData.cardStarterGiven`). Opening takes the client's `Math.random`: it isn't part of a run.
-- **Card collection only** (`core/cardRuns.ts`, `SaveData.cardsOnly`, the run screen's Cards
-  only switch): level ups offer only weapons and passives with a card, no rarer than the rarest
-  version owned (`Upgrades.CardCaps`, `capQuality`); an evolution only with three cards, the
-  weapon's, the passive's and what it becomes (`canEvolve`); and a pick
-  into another weapon (a godsword's hilt) only with its card, while that leaves two picks (a
-  blade can't be held without a hilt). Reward caskets give only gear with a card
-  (`rollCasketItem`'s `cards`): gear has one rarity, its card's own, so no version lowers it, and
-  a rarity rolled with no carded gear gives one of its utility items (every rarity has some). An item still has to be in the game as usual
-  (`isAvailable`). The caps go into the run's setup (`SimOptions.cardCaps`,
-  `HeroOptions.cardCaps`), so the run plays the same on every copy and from the same seed.
+- **Card collection only** (`core/cardRuns.ts`, `SaveData.cardsOnly`, the run screen's Cards only
+  switch): level ups offer only weapons and passives with a card, no rarer than the rarest version
+  owned (`Upgrades.CardCaps`, `capQuality`); an evolution only with three cards, the weapon's, the
+  passive's and what it becomes (`canEvolve`); and a pick into another weapon (a godsword's hilt)
+  only with its card, while that leaves two picks (a blade can't be held without a hilt). Reward
+  caskets give only gear with a card (`rollCasketItem`'s `cards`): gear has one rarity, its card's
+  own, so no version lowers it, and a rarity rolled with no carded gear gives one of its utility
+  items (every rarity has some). An item still has to be in the game as usual (`isAvailable`). The
+  caps go into the run's setup (`SimOptions.cardCaps`, `HeroOptions.cardCaps`), so the run plays the
+  same on every copy and from the same seed.
 - **In co-op** each player's own caps come in their loadout (`Loadout.cardCaps`), as their
   unlocked items do: a character for each card in `ALL_CARDS`' order (`encodeCardCaps`), which
   every copy shares as a room runs the host's build, read back by `decodeCardCaps`. It's each
@@ -1479,20 +1480,20 @@ Wardrobe spend them, and no real money is ever involved.
 - **A weapon's metals** (bronze to dragon) are its levels, not cards of their own, so its one
   card covers them all: there's no rank to unlock.
 - **When it doesn't play**: the switch is off, saying how many more cards are needed, while the
-  collection can't fill a level up (`getCardRunShortfall`). With it on, an adventurer whose
-  starter cards aren't owned is locked (`getCardLock`, `isCardLocked`): their details
-  name the cards, and a solo run can't start as them. A co-op player locked that way plays as
-  usual (their loadout carries no caps), and the co-op screen doesn't show the lock. The
-  Vault never plays it, nor does a map whose level ups are blessings (no switch there). Such a
-  run counts as any other, and its results say it was one.
+  collection can't fill a level up (`getCardRunShortfall`). With it on, an adventurer whose starter
+  cards aren't owned is locked (`getCardLock`, `isCardLocked`): their portrait is dimmed with a
+  drawn padlock (still pickable), their details name the cards, and a solo run can't start as them.
+  A co-op player locked that way plays as usual (their loadout carries no caps), and the co-op
+  screen doesn't show the lock. The Vault never plays it, nor does a map whose level ups are
+  blessings (no switch there). Such a run counts as any other, and its results say it was one.
 - **The screen** (`ui/CardsScreen.tsx`): its classes are `ui-cards-*` and `ui-tcg-*`, since
   `ui-card` is the level up's. A found card shows big beside the album (in a window of its own on
   a phone). Rare and Very rare versions have a foil sheen, which passes a few times only on the
   big card and in a pack's window, and never with `prefers-reduced-motion`.
 - **The Collection log's Cards tab** (`getCardEntries` in `content/collectionLog.ts`): a set for
   each kind of card, then the raids' finds, each card at its rarest version owned, its slot
-  ringed in that version's colour and the version said in words. A card's key is `card:<id>`, so
-  it counts in the log's total once, apart from the item it's a card of.
+  ringed in that version's colour and the version said in words. Its entries count themselves:
+  the log's title total leaves the tab out (`getLogTotal`), so it's the game's own finds.
 - **Loading** (`migrateCards`, from `migrateSave`): only versions of cards that exist, whole
   counts capped at `MAX_CARD_COPIES` and `MAX_CARD_PACKS`.
 

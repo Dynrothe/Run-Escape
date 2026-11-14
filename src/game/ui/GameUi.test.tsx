@@ -273,8 +273,8 @@ test("unaffordable skills cannot purchase but can refund a bought rank", () => {
     expect(actions.refundUpgrade).toHaveBeenCalledExactlyOnceWith("strength", "melee");
 });
 
-function renderMaps(mapId = "lumbridge") {
-    const store = new GameStore(createSave());
+function renderMaps(mapId = "lumbridge", save = createSave()) {
+    const store = new GameStore(save);
     store.set({ screen: "characters", mapId });
     const actions = {
         selectMap: vi.fn((id: string) => store.set({ mapId: id })),
@@ -380,6 +380,35 @@ test("the favourite button is the shown adventurer's, and stays as focus moves t
     // None for one who isn't open yet
     fireEvent.focus(document.querySelector(".ui-select-adventurers .ui-card-locked")!);
     expect(screen.queryByRole("button", { name: "Make favourite" })).toBeNull();
+});
+
+test("Cards only marks the adventurers it can't start as, still pickable", () => {
+    expect.hasAssertions();
+    // Enough cards to fill a level up, but not the warrior's starting weapon's
+    const cards = {
+        "weapon:two_handed_sword": 1,
+        "weapon:throwing_knives": 1,
+        "weapon:fire_spells": 1,
+        "weapon:shortbow": 1,
+        "weapon:dark_bow": 1,
+        "passive:rapid_heal": 1,
+        "passive:graceful": 1,
+        "passive:amulet_of_glory": 1,
+    };
+    renderMaps("lumbridge", { ...createSave(), cardsOnly: true, cards });
+    const warrior = screen.getByRole("button", { name: "Warrior, locked for Cards only" });
+    expect(warrior).toHaveClass("ui-tile-cards-locked");
+    expect(warrior.querySelector(".ui-tile-lock")).not.toBeNull();
+    expect(warrior).toBeEnabled();
+    // The wizard starts with the fire spells, whose card's owned
+    expect(screen.getByRole("button", { name: "Wizard" })).not.toHaveClass("ui-tile-cards-locked");
+    expect(screen.getByText("Locked for Cards only: needs the Scimitar card.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Enter Lumbridge/ })).toBeDisabled();
+    cleanup();
+    // Off, nothing's marked
+    renderMaps("lumbridge", { ...createSave(), cards });
+    expect(screen.getByRole("button", { name: "Warrior" })).not.toHaveClass("ui-tile-cards-locked");
+    expect(document.querySelector(".ui-tile-lock")).toBeNull();
 });
 
 test("a map's own adventurer has no favourite button", () => {

@@ -230,12 +230,13 @@ export const PACKS: PackDef[] = [
     {
         id: "adventurer",
         name: "Adventurer's pack",
-        description: "Any card in the game.",
+        description: "Any weapon, passive or trophy card.",
         objId: iconOf("weapon:scimitar"),
         color: "#7a5a2e",
         price: 2500,
         odds: STANDARD_ODDS,
-        holds: () => true,
+        // Every card but gear, which only the Treasure trail pack holds
+        holds: (card) => card.kind !== "gear",
     },
     {
         id: "weapons",
@@ -290,12 +291,13 @@ export const PACKS: PackDef[] = [
     {
         id: "champion",
         name: "Champion's pack",
-        description: "Any card, with better odds of the rarer versions.",
+        description: "Any weapon, passive or trophy card, with better odds of the rarer versions.",
         objId: CARDS_ICON_OBJ,
         color: "#2f5e3e",
         price: 7500,
         odds: { common: 0, uncommon: 0.45, rare: 0.4, veryRare: 0.15 },
-        holds: () => true,
+        // Every card but gear, which only the Treasure trail pack holds
+        holds: (card) => card.kind !== "gear",
     },
 ];
 
