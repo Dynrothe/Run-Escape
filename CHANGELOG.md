@@ -3,6 +3,15 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- A Customisable max cape in the Wardrobe's store, for 25,000 coins: pick the colour of each of
+  its parts in the Outfit tab, or start from any other max cape's colours. Saved outfits keep
+  them.
+- With a controller, left and right move a highlighted slider.
+
 ## 0.32.2 - 2026-11-14
 
 ### Changed

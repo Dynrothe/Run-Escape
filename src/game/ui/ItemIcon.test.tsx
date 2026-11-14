@@ -63,7 +63,8 @@ describe("ItemIcon", () => {
         expect(request).not.toHaveBeenCalled();
         sprite = "";
         act(() => spriteLoaded!(""));
-        expect(request).toHaveBeenCalledWith(21034, 1, expect.any(Function));
+        // No recolours: it's drawn as the cache has it
+        expect(request).toHaveBeenCalledWith(21034, 1, expect.any(Function), undefined);
         act(() => itemLoaded!(scroll));
         expect(container.querySelector("img")).toHaveAttribute("src", scroll);
     });

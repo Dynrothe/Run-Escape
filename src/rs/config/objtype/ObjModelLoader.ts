@@ -1,5 +1,6 @@
 import { Model } from "../../model/Model";
 import { ModelLoader } from "../../model/ModelLoader";
+import { recolorAtOnce } from "../../model/player/PlayerModelLoader";
 import { TextureLoader } from "../../texture/TextureLoader";
 import { ObjTypeLoader } from "./ObjTypeLoader";
 
@@ -17,7 +18,9 @@ export class ObjModelLoader {
         this.modelCache = new Map();
     }
 
-    getModel(id: number, count: number): Model | undefined {
+    // recolors: colours repainted after the item's own, as pairs of from and to
+    // (PlayerAppearance.recolors: the customisable max cape's icon). Not kept.
+    getModel(id: number, count: number, recolors?: readonly number[]): Model | undefined {
         if (id === -1) {
             return undefined;
         }
@@ -35,11 +38,12 @@ export class ObjModelLoader {
             }
 
             if (countId !== -1) {
-                return this.getModel(countId, 1);
+                return this.getModel(countId, 1, recolors);
             }
         }
 
-        let model = this.modelCache.get(id);
+        const repainted = recolors !== undefined && recolors.length > 0;
+        let model = repainted ? undefined : this.modelCache.get(id);
         if (model) {
             return model;
         }
@@ -70,6 +74,10 @@ export class ObjModelLoader {
             }
         }
 
+        if (repainted) {
+            recolorAtOnce(modelData, recolors);
+        }
+
         model = modelData.light(
             this.textureLoader,
             objType.ambient + 64,
@@ -78,7 +86,9 @@ export class ObjModelLoader {
             -10,
             -50,
         );
-        this.modelCache.set(id, model);
+        if (!repainted) {
+            this.modelCache.set(id, model);
+        }
         return model;
     }
 

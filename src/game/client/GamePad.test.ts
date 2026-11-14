@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/react";
-import { Fragment, createElement } from "react";
+import { act, cleanup, render } from "@testing-library/react";
+import { Fragment, createElement, useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { Renderer } from "../../components/renderer/Renderer";
@@ -237,6 +237,60 @@ describe("GamePads", () => {
         press(PAD.left);
         expect(changes).toEqual(["b", "a"]);
         expect(document.activeElement).toBe(select);
+        press(PAD.down);
+        expect(document.activeElement).toBe(under);
+    });
+
+    // The Wardrobe's colours for the max cape, and the volume
+    test("in a menu, left and right move a highlighted slider, as React sees a drag", () => {
+        const { p } = pads();
+        const changes: number[] = [];
+        function Slider(): JSX.Element {
+            const [value, setValue] = useState(62);
+            return createElement(
+                Fragment,
+                null,
+                createElement("input", {
+                    id: "hue",
+                    type: "range",
+                    min: 0,
+                    max: 63,
+                    value,
+                    onChange: (e: { target: HTMLInputElement }) => {
+                        changes.push(Number(e.target.value));
+                        setValue(Number(e.target.value));
+                    },
+                }),
+                createElement("button", { id: "under" }, "Under"),
+            );
+        }
+        render(createElement(Slider));
+        const slider = document.getElementById("hue") as HTMLInputElement;
+        const under = document.getElementById("under")!;
+        slider.getBoundingClientRect = () =>
+            ({ left: 0, top: 0, width: 100, height: 20 }) as DOMRect;
+        under.getBoundingClientRect = () =>
+            ({ left: 0, top: 40, width: 100, height: 20 }) as DOMRect;
+        slider.focus();
+        let now = 0;
+        const press = (button: number) => {
+            act(() => {
+                pad = fakePad([button]);
+                p.poll(now, "menu");
+                pad = fakePad();
+                p.poll(now + 16, "menu");
+            });
+            now += 32;
+        };
+        // A press is a 32nd of the way: 2 of the 63 hues, and no further than the end
+        press(PAD.left);
+        press(PAD.right);
+        press(PAD.right);
+        // At the end: nothing new to tell
+        press(PAD.right);
+        expect(changes).toEqual([60, 62, 63]);
+        expect(slider.value).toBe("63");
+        expect(document.activeElement).toBe(slider);
         press(PAD.down);
         expect(document.activeElement).toBe(under);
     });

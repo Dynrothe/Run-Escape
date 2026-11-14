@@ -13,6 +13,7 @@ import { ENEMIES, getEnemy } from "../content/enemies";
 import { GEAR_SLOTS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
+import { CUSTOM_MAX_CAPE, DEFAULT_CAPE_COLOURS, getCapeRecolors } from "../content/maxCape";
 import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES } from "../content/passives";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
@@ -444,6 +445,19 @@ describe("player bakes", () => {
         expect(kept.equipment[EquipSlot.LEGS]).toBe(-1);
         // The weapon stays the sim's
         expect(kept.equipment[EquipSlot.WEAPON]).toBe(sim.getHeldObjId());
+    });
+
+    test("wear the customisable max cape's colours only while it's the cape on show", () => {
+        const sim = createRun(1, "warrior");
+        const colours = DEFAULT_CAPE_COLOURS.map((c, i) => (i === 0 ? 0 : c));
+        const look = { outfit: { [EquipSlot.CAPE]: CUSTOM_MAX_CAPE }, capeColours: colours };
+        const recolors = { [EquipSlot.CAPE]: getCapeRecolors(colours) };
+        expect(getRunAppearance(sim, 0, look).recolors).toEqual(recolors);
+        sim.gear = { cape: "obsidian_cape" };
+        const covered = getRunAppearance(sim, 0, look);
+        expect(covered.equipment[EquipSlot.CAPE]).toBe(getItem("obsidian_cape").objId);
+        expect(covered.recolors).toBeUndefined();
+        expect(getRunAppearance(sim, 0, { ...look, overGear: true }).recolors).toEqual(recolors);
     });
 
     test("bake the swings a level-up offers ahead, and not ones held", () => {

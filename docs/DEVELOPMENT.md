@@ -1834,6 +1834,23 @@ the sim never sees it.
   cache's). Hair and tops have a second colour too (`BODY_COLOR_SOURCE_2`, the newer hairstyles'
   and beards' streaks, made in pink), recoloured by every choice, the first included: without
   it they come out pink.
+- **The Customisable max cape** (`content/maxCape.ts`) is a Max cape item with no recolour of
+  its own (13342) sold as a piece of its own, spliced into `COSMETICS` by hand.
+  The cache's max capes are all one model recoloured, so its parts (`CAPE_PARTS`) are that
+  model's face colours, grouped by where they are, and `CAPE_PRESETS` are the other max capes'
+  colours for each part. `WardrobeLook.capeColours` (and a `SavedOutfit`'s) is a colour a part,
+  OSRS's 16-bit HSL; `getCapeRecolors` turns it into pairs of from and to, keeping each shade's
+  lightness apart from its part's main colour, and `applyCapeColours` puts them in
+  `PlayerAppearance.recolors` for the cape slot, only while it's the cape worn (gear can go over
+  it). `PlayerModelLoader` repaints that slot's worn model with them (`recolorAtOnce`: all at
+  once, so a colour painted can't be painted again by the next pair, and nudged off the body's
+  recolour sources, which the merged model is recoloured by after), and they're in the
+  appearance's key, so each set of colours is its own bake. The picker (`CapeColours` in
+  `ui/WardrobeScreen.tsx`) previews a slider at most every `PREVIEW_MS` and writes the look once
+  it's been still for `KEEP_MS`, since a drag would otherwise bake a model a frame. Icons take
+  the same pairs (`ItemIcon`'s `recolors`, through `ItemIconLoader` to
+  `ObjModelLoader.getModel`, which keeps no model it repainted). `scripts/cache/check-items.ts`
+  checks the parts' colours are in the model and the presets are what the max capes recolour to.
 - **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
   so it needed no relay change; `beginCoopRun` cleans each hero's.
 - **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each
@@ -2862,7 +2879,9 @@ of its own.
   Resume, a casket's best choice) wherever the focus is, so starting a run doesn't mean walking
   the highlight across the screen. A click can't open a dropdown (`<select>`), so left and right
   step through its options while it's highlighted (the Collection log's entries on a narrow
-  screen), and up and down move on.
+  screen), and up and down move on. Left and right move a highlighted slider
+  (`<input type="range">`, the max cape's colours) a 32nd of the way (`RANGE_PRESSES`), set
+  through `HTMLInputElement`'s own value setter so React's `onChange` hears it.
 - **Hints.** `ui/PadHint.tsx`'s `KeyHint` shows a key, or the pad's button while one's in use. The
   numbered choices have none (the d-pad picks them). `:root[data-input="pad"]` shows the highlight.
   The icons are Kenney's [Input Prompts](https://kenney.nl/assets/input-prompts) (CC0, its licence

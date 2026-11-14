@@ -6,6 +6,7 @@ import {
     ItemIcon as ItemIconData,
     ItemIconInput,
     ItemIconLoader,
+    ItemIconRequest,
 } from "../../mapviewer/worker/ItemIconLoader";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
 import {
@@ -33,7 +34,7 @@ export class IconCache {
     private workerPool?: RenderDataWorkerPool;
     private readonly urls = new Map<string, string>();
     private readonly waiting = new Map<string, ((url: string) => void)[]>();
-    private queued: { objId: number; count: number }[] = [];
+    private queued: ItemIconRequest[] = [];
     private queuedSprites: SpriteRequest[] = [];
     private flushScheduled = false;
     // Batches that failed in a row, for how long to wait before trying again
@@ -44,9 +45,12 @@ export class IconCache {
         this.scheduleFlush();
     }
 
-    // Coins and other stackables have a model per stack size
-    static key(objId: number, count: number): string {
-        return `${objId}:${count}`;
+    // Coins and other stackables have a model per stack size, and the customisable max cape an
+    // icon for each set of colours (recolors)
+    static key(objId: number, count: number, recolors?: readonly number[]): string {
+        return recolors && recolors.length > 0
+            ? `${objId}:${count}:${recolors.join(",")}`
+            : `${objId}:${count}`;
     }
 
     static spriteKey(spriteId: number): string {
@@ -61,8 +65,8 @@ export class IconCache {
         return frame === undefined ? IconCache.spriteKey(id) : IconCache.frameKey(id, frame);
     }
 
-    get(objId: number, count: number): string | undefined {
-        return this.urls.get(IconCache.key(objId, count));
+    get(objId: number, count: number, recolors?: readonly number[]): string | undefined {
+        return this.urls.get(IconCache.key(objId, count, recolors));
     }
 
     // "" for a sprite the cache hasn't got
@@ -75,9 +79,15 @@ export class IconCache {
         return this.urls.get(IconCache.frameKey(spriteId, frame));
     }
 
-    request(objId: number, count: number, callback: (url: string) => void): void {
-        if (this.wait(IconCache.key(objId, count), callback)) {
-            this.queued.push({ objId, count });
+    request(
+        objId: number,
+        count: number,
+        callback: (url: string) => void,
+        recolors?: readonly number[],
+    ): void {
+        if (this.wait(IconCache.key(objId, count, recolors), callback)) {
+            const repaint = recolors && recolors.length > 0 ? { recolors: [...recolors] } : {};
+            this.queued.push({ objId, count, ...repaint });
             this.scheduleFlush();
         }
     }
@@ -171,11 +181,13 @@ export class IconCache {
             // don't stay blank until something redraws them
             console.error("Loading icons failed", e);
             const again: (() => void)[] = [];
-            for (const { objId, count } of requests) {
-                const key = IconCache.key(objId, count);
+            for (const { objId, count, recolors } of requests) {
+                const key = IconCache.key(objId, count, recolors);
                 const callbacks = this.waiting.get(key) ?? [];
                 this.waiting.delete(key);
-                again.push(() => callbacks.forEach((cb) => this.request(objId, count, cb)));
+                again.push(() =>
+                    callbacks.forEach((cb) => this.request(objId, count, cb, recolors)),
+                );
             }
             for (const request of spriteRequests) {
                 const key = IconCache.requestKey(request);
@@ -191,7 +203,10 @@ export class IconCache {
         }
         this.failures = 0;
         for (const icon of icons) {
-            this.resolve(IconCache.key(icon.objId, icon.count), toDataUrl(icon.pixels));
+            this.resolve(
+                IconCache.key(icon.objId, icon.count, icon.recolors),
+                toDataUrl(icon.pixels),
+            );
         }
         // The worker answers in the order it was asked
         sprites.forEach((sprite, i) => {
@@ -278,10 +293,12 @@ type Props = (
     // Display height in pixels (icons are 36x32)
     size?: number;
     count?: number;
+    // Colours repainted on the item, as pairs of from and to: the customisable max cape's
+    recolors?: readonly number[];
 };
 
 export function ItemIcon(props: Props): JSX.Element {
-    const { spriteId, size = 32, count = 1 } = props;
+    const { spriteId, size = 32, count = 1, recolors } = props;
     // A loc's icon goes through as a negative item (ItemIconLoader.renderLocIcon)
     const objId = "locId" in props ? -props.locId : props.objId;
     const stack = objId === 995 ? coinStackCount(count) : 1;
@@ -289,9 +306,10 @@ export function ItemIcon(props: Props): JSX.Element {
         spriteId !== undefined && (objId === undefined || iconCache.getSprite(spriteId) !== "")
             ? spriteId
             : undefined;
-    const key = sprite !== undefined ? IconCache.spriteKey(sprite) : IconCache.key(objId!, stack);
+    const key =
+        sprite !== undefined ? IconCache.spriteKey(sprite) : IconCache.key(objId!, stack, recolors);
     const cached = (): string | undefined =>
-        sprite !== undefined ? iconCache.getSprite(sprite) : iconCache.get(objId!, stack);
+        sprite !== undefined ? iconCache.getSprite(sprite) : iconCache.get(objId!, stack, recolors);
     const [loaded, setLoaded] = useState(() => ({ key, url: cached() }));
     // When the item changes (a reroll), never the last item's icon while the
     // new one is drawn
@@ -308,11 +326,12 @@ export function ItemIcon(props: Props): JSX.Element {
         if (sprite !== undefined) {
             iconCache.requestSprite(sprite, callback);
         } else {
-            iconCache.request(objId!, stack, callback);
+            iconCache.request(objId!, stack, callback, recolors);
         }
         return () => {
             cancelled = true;
         };
+        // (recolors goes by the key, which has them in it)
     }, [key, objId, stack, sprite]);
     const width = Math.round((size * ICON_WIDTH) / ICON_HEIGHT);
     // Nearest neighbour keeps the client's crisp pixels when scaling up, but
