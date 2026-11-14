@@ -360,6 +360,10 @@ export type WeaponStatSteps = {
     // The label in English, for the stat's icon in any language
     english: string;
     value: string;
+    // The stat's key in WEAPON_STAT_MESSAGES, and its size at level 1 and now, as numbers
+    key: string;
+    base: number;
+    now: number;
     // The first is the level 1 value as it reads; the rest are changes ("+2")
     steps: { level: number; text: string }[];
 };
@@ -394,6 +398,9 @@ export function weaponStatSteps(
             label: t(field.label),
             english: WEAPON_STAT_MESSAGES[field.label],
             value: field.format(value),
+            key: field.label,
+            base: field.get(def.levels[0]) ?? 0,
+            now: value,
             steps,
         });
     }

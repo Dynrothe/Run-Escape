@@ -108,3 +108,37 @@
 .ui-breakdown-row-label {
     color: #d8ccae;
 }
+
+/* Under the numbers: what it means, how it's worked out, where more comes from and how far past its
+   base it is. Narrow, so a long sentence wraps instead of stretching the tooltip. */
+.ui-breakdown-about {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-width: 260px;
+    margin-top: 3px;
+    padding-top: 4px;
+    border-top: 1px solid var(--ui-divider);
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+.ui-breakdown-about > p {
+    margin: 0;
+}
+
+.ui-breakdown-about-what {
+    color: #e6dcc0;
+}
+
+.ui-breakdown-about-calc {
+    color: #b8aa8a;
+}
+
+.ui-breakdown-about-from {
+    color: #8fd8ff;
+}
+
+.ui-breakdown-about-power {
+    color: var(--ui-yellow);
+}

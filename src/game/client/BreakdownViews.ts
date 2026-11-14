@@ -1,6 +1,7 @@
 import { CAPPED_STATS, GEAR_UPGRADE, getGearStats } from "../content/endless";
 import { formatPassiveNumber, getPassiveGain } from "../content/passives";
 import { RARITIES, Rarity } from "../content/rarity";
+import { passiveAbout, statAbout, weaponStatAbout } from "../content/statLore";
 import { STAT_INFO, formatStatValue, statLabel } from "../content/stats";
 import { GearDef, StatKey } from "../content/types";
 import type { PassiveDef, WeaponDef } from "../content/types";
@@ -58,7 +59,11 @@ export function getWeaponStatLines(
             label: stat.label,
             value: stat.value,
             english: `${stat.english} ${stat.value}`,
-            breakdown: { title: stat.label, lines },
+            breakdown: {
+                title: stat.label,
+                lines,
+                about: weaponStatAbout(stat.key, stat.base, stat.now),
+            },
         };
     });
 }
@@ -160,6 +165,7 @@ export function getLifestealStat(def: WeaponDef): SlotStatView | undefined {
         breakdown: {
             title: label,
             total: value,
+            about: statAbout("healChance"),
             lines: [
                 {
                     label: t("pause.heal.chance"),
@@ -206,6 +212,7 @@ export function getPassiveBreakdown(
     const known = qualities.length === level && level > 0;
     return {
         title: tl(def.name),
+        about: passiveAbout(def.stat),
         lines: [
             {
                 parts: known
@@ -228,6 +235,8 @@ export function getStatBreakdown(
     label: string,
     total: string,
     sources: readonly StatSource[] | undefined,
+    // Its size, and for max hitpoints the hitpoints themselves, to say how far past the base it is
+    size?: { value: number; maxHp?: number },
 ): BreakdownView {
     const lines: BreakdownLine[] = [];
     for (const source of sources ?? []) {
@@ -270,7 +279,16 @@ export function getStatBreakdown(
         const chance = (sources ?? []).reduce((sum, source) => sum + source.value, 0);
         lines.push(...getHealChanceLines(chance));
     }
-    return { title: label, total, lines };
+    return {
+        title: label,
+        total,
+        lines,
+        about: statAbout(
+            key,
+            size?.value,
+            size?.maxHp === undefined ? undefined : size.maxHp / PLAYER_BASE_HP,
+        ),
+    };
 }
 
 // What a worn piece's stats are: its own, and what each endless upgrade added (half of it again)
@@ -301,6 +319,7 @@ export function getGearBreakdowns(item: GearDef, upgrades: number): BreakdownVie
         }
         views.push({
             title: capitalise(statLabel(key)),
+            about: { what: statAbout(key).what },
             lines: [
                 { parts, total: formatStatValue(key, shown[key] as number) },
                 ...(key === "healChance" ? getHealChanceLines(shown[key] as number) : []),

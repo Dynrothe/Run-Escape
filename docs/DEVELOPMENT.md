@@ -891,7 +891,9 @@ head. New monsters need nothing: `slim-plan.ts` loads every enemy's head.
 
 The pause menu's tabs are Loadout, Combat, then the Quests and Party tabs when there are any
 (`PauseModal`), and its settings are a button at the bottom, beside Give up and Resume, whose page
-replaces the open one (the button goes back to it). The window is a dialog (`useDialog`, modal
+replaces the open one (the button goes back to it). The menu opens on the tab it was left on, and
+each tab keeps how far it was scrolled (`lastPauseTab` and `lastPauseScroll`, module state: this
+page's, not saved). The window is a dialog (`useDialog`, modal
 except in co-op, whose run goes on behind it), and Give up asks first (`useConfirm`). The Loadout
 lists the hero's active effects (`HudView`'s `buffs`) and, on a map with blessings, those in place
 of passives (`×level`); the Combat tab ends with the run's recent messages (`UiSnapshot.toastLog`);
@@ -909,9 +911,16 @@ weapon's Damage line wears its kind of damage as its icon (`SlotView.kinds`, fro
 `getWeaponDamageKinds` in `weapons.ts`: its style, then poison for venom and burn for burning
 ground, the extras after the name), the same icons as the Combat tab. The Loadout (`ui/PauseLoadout.tsx` and `.css`)
 has weapon and passive cards on the left (with free slots, and a weapon's evolution:
-`SlotView.evolution`) and the hero's stats and every gear slot at the right.
+`SlotView.evolution`) with the hero's stats under them, and at the right every gear slot with the
+active effects under it (one column on a narrow window: cards, equipment, effects, stats).
 The stat rows are `HudView.statRows`, made by `getStatRows` (`client/LoadoutViews.ts`): a new stat
-needs a group there (a test checks that all are in one).
+needs a group there (a test checks that all are in one). The tooltips on those numbers are
+`BreakdownView`s (`client/BreakdownViews.ts`), and their `about` (`content/statLore.ts`) is what the
+number means, how it's worked out, where more comes from (read off `PASSIVES`, `CASKET_GEAR`,
+`UTILITY` and `SHOP_UPGRADES`) and how far past its base it is. A new stat needs its words in
+`STAT_LORE` there (a test checks), and a new weapon stat label one in `WEAPON_LORE`; both land in
+`locales/en/gen.json` through the extractor, in English only. A weapon that can evolve shows the
+passive it still needs beside its square (`EvolutionBadge`).
 
 Every number on the Loadout can have a tooltip that says how it got its size (`BreakdownTip`,
 `ui/BreakdownTip.tsx`, on the mouse over, a focus or a tap), made of a `BreakdownView` (`GameStore.ts`):

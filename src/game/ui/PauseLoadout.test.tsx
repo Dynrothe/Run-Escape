@@ -159,13 +159,21 @@ const emptyGear: GearSlotView[] = [
     { slot: "ring", name: "Ring" },
 ];
 
-test("worn equipment comes before stats and uses the canonical OSRS slot map", () => {
+test("the active effects sit in the equipment's column, under it, and the stats are apart", () => {
+    const view = render(<PauseLoadout hud={{ ...hud([]), gear: emptyGear }} />);
+    const side = view.container.querySelector(".ui-loadout-column-side")!;
+    const equipment = side.querySelector(".ui-loadout-equipment")!;
+    const effects = side.querySelector(".ui-loadout-effects")!;
+    expect(
+        equipment.compareDocumentPosition(effects) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(side.querySelector(".ui-loadout-stats-panel")).toBeNull();
+    expect(view.container.querySelector(".ui-loadout > .ui-loadout-stats-panel")).not.toBeNull();
+});
+
+test("worn equipment uses the canonical OSRS slot map", () => {
     const view = render(<PauseLoadout hud={{ ...hud([]), gear: emptyGear }} />);
     const equipment = view.container.querySelector(".ui-loadout-equipment")!;
-    const stats = view.container.querySelector(".ui-loadout-stats-panel")!;
-    expect(
-        equipment.compareDocumentPosition(stats) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
     expect(equipment.querySelectorAll(".ui-loadout-gear-anchor")).toHaveLength(9);
     for (const slot of emptyGear) {
         const anchor = equipment.querySelector(`.ui-loadout-gear-${slot.slot}`)!;
@@ -522,4 +530,57 @@ test("a passive has its examine tooltip too, and an item with no text has none",
 test("a finished item glows with motes of light over its icon", () => {
     const view = render(<PauseLoadout hud={hud([slot("scimitar", 8, 8)])} />);
     expect(view.container.querySelectorAll(".ui-loadout-slot .ui-glow > i")).toHaveLength(9);
+});
+
+test("an evolution shows the passive it still needs beside its square, red while it's missing", () => {
+    const view = render(
+        <PauseLoadout hud={hud([slot("scimitar", 8, 8, { evolution: missing })])} />,
+    );
+    const need = view.container.querySelector(".ui-loadout-need")!;
+    expect(need.classList.contains("ui-loadout-need-missing")).toBe(true);
+    expect(need.getAttribute("title")).toBe("Piety");
+    cleanup();
+    const owned = render(
+        <PauseLoadout
+            hud={hud([
+                slot("scimitar", 8, 8, {
+                    evolution: { ...missing, hasPassive: true, ready: true },
+                }),
+            ])}
+        />,
+    );
+    expect(
+        owned.container
+            .querySelector(".ui-loadout-need")!
+            .classList.contains("ui-loadout-need-met"),
+    ).toBe(true);
+});
+
+test("a tooltip can say what the number means, how it's worked out and how strong it is", () => {
+    const weapon = slot("scimitar", 3, 8, {
+        statLines: [
+            {
+                label: "Damage",
+                value: "13",
+                breakdown: {
+                    ...breakdown,
+                    about: {
+                        what: "How hard each hit lands.",
+                        calc: "Grows with levels.",
+                        from: "More from: passives (Piety).",
+                        power: "1.6× its level 1 size: properly above base.",
+                    },
+                },
+            },
+        ],
+    });
+    const view = render(<PauseLoadout hud={hud([weapon])} />);
+    mouse(view.container.querySelector(".ui-loadout-cell")!, "pointerover");
+    const about = screen.getByRole("tooltip").querySelector(".ui-breakdown-about")!;
+    expect([...about.children].map((line) => line.textContent)).toEqual([
+        "How hard each hit lands.",
+        "Grows with levels.",
+        "More from: passives (Piety).",
+        "1.6× its level 1 size: properly above base.",
+    ]);
 });

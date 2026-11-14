@@ -70,6 +70,20 @@ export function BreakdownContent({ breakdown }: { breakdown: BreakdownView }): J
                     />
                 ))}
             </div>
+            {breakdown.about && (
+                <div className="ui-breakdown-about">
+                    <p className="ui-breakdown-about-what">{breakdown.about.what}</p>
+                    {breakdown.about.calc && (
+                        <p className="ui-breakdown-about-calc">{breakdown.about.calc}</p>
+                    )}
+                    {breakdown.about.from && (
+                        <p className="ui-breakdown-about-from">{breakdown.about.from}</p>
+                    )}
+                    {breakdown.about.power && (
+                        <p className="ui-breakdown-about-power">{breakdown.about.power}</p>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

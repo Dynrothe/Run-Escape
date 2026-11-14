@@ -85,3 +85,42 @@ test("Tab and Shift+Tab wrap inside the pause dialog", () => {
     fireEvent.keyDown(loadout, { key: "Tab", shiftKey: true });
     expect(resume).toHaveFocus();
 });
+
+test("each page keeps its scroll, and the menu opens again on the page it was left on", () => {
+    paused();
+    const page = () => document.querySelector<HTMLElement>(".ui-pause-page")!;
+    page().scrollTop = 120;
+    fireEvent.scroll(page());
+
+    fireEvent.click(screen.getByRole("tab", { name: "Combat" }));
+    expect(page().scrollTop).toBe(0);
+    page().scrollTop = 40;
+    fireEvent.scroll(page());
+
+    fireEvent.click(screen.getByRole("tab", { name: "Loadout" }));
+    expect(page().scrollTop).toBe(120);
+    fireEvent.click(screen.getByRole("tab", { name: "Combat" }));
+    expect(page().scrollTop).toBe(40);
+
+    // Closed and opened again: the same page, scrolled the same
+    cleanup();
+    paused();
+    expect(screen.getByRole("tab", { name: "Combat" })).toHaveAttribute("aria-selected", "true");
+    expect(page().scrollTop).toBe(40);
+    fireEvent.click(screen.getByRole("tab", { name: "Loadout" }));
+    expect(page().scrollTop).toBe(120);
+});
+
+test("the settings button goes back to the page it came from, even after the menu was reopened", () => {
+    paused();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    cleanup();
+    paused();
+    // It opens where it was left, on the settings: the button leads back to the page before them
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("tab", { name: "Loadout" })).toHaveAttribute("aria-selected", "true");
+});

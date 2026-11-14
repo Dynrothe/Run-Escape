@@ -397,6 +397,9 @@ function EvolutionBadge({
     ingredients: Ingredient[];
 }): JSX.Element {
     const met = ingredients.filter((ingredient) => ingredient.met).length;
+    // What it takes besides the weapon's own last level (its card says that): the passive, small
+    // beside the square, red-edged while it's missing and green once it's there
+    const needs = ingredients.slice(1);
     return (
         <BreakdownTip
             className="ui-loadout-sq-tip"
@@ -409,6 +412,18 @@ function EvolutionBadge({
                 />
             }
         >
+            {needs.map((need, i) => (
+                <span
+                    key={i}
+                    className={
+                        "ui-loadout-need " +
+                        (need.met ? "ui-loadout-need-met" : "ui-loadout-need-missing")
+                    }
+                    title={need.name}
+                >
+                    <ItemIcon objId={need.objId} spriteId={need.spriteId} size={20} />
+                </span>
+            ))}
             <span className={"ui-loadout-sq ui-loadout-sq-" + (ready ? "ready" : "result")}>
                 <ItemIcon objId={intoIconObjId} size={32} />
                 <i
@@ -683,9 +698,6 @@ function GearGrid({ gear }: { gear: GearSlotView[] }): JSX.Element {
     );
 }
 
-// The pause menu's Loadout: the run's weapons and passives (with the recipe of what each evolves
-// into), followed by canonical worn equipment and the hero's stats. Wide layouts use the spare room
-// below the cards for stats; narrow layouts keep equipment before stats in one column.
 // What's on the hero now: potions and power-ups, and a boss attack's drain, each with what it does
 // and how long it has left
 function EffectsList({ effects }: { effects: BuffView[] }): JSX.Element {
@@ -720,6 +732,10 @@ function EffectsList({ effects }: { effects: BuffView[] }): JSX.Element {
     );
 }
 
+// The pause menu's Loadout: the run's weapons and passives (with the recipe of what each evolves
+// into) at the left with the hero's stats under them, and at the right the worn equipment with what
+// the hero has on them (potions, power-ups) under it. A narrow window stacks it all in one column:
+// weapons and passives, equipment, effects, then stats.
 export function PauseLoadout({
     hud,
     effects = [],
@@ -793,14 +809,14 @@ export function PauseLoadout({
                     </div>
                 </section>
             </div>
+            <section className="ui-loadout-stats-panel">
+                <Heading name={t("pause.heading.your_stats")} />
+                <StatsPanel rows={hud.statRows} />
+            </section>
             <div className="ui-loadout-column ui-loadout-column-side">
                 <section className="ui-loadout-equipment">
                     <Heading name={t("pause.heading.worn_equipment")} />
                     <GearGrid gear={hud.gear} />
-                </section>
-                <section className="ui-loadout-stats-panel">
-                    <Heading name={t("pause.heading.your_stats")} />
-                    <StatsPanel rows={hud.statRows} />
                 </section>
                 <section className="ui-loadout-effects">
                     <Heading name={t("pause.heading.effects")} />

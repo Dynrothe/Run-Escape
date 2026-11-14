@@ -52,6 +52,7 @@ import { RARITIES, Rarity, rarityName } from "../content/rarity";
 import { RelicTier, cleanRelics, getOpenRelicTiers, pickRelic } from "../content/relics";
 import { RemixId, cleanRemixes, isRemixOpen } from "../content/remixes";
 import { SHOP_UPGRADES } from "../content/shop";
+import { bonusAbout } from "../content/statLore";
 import { formatStats } from "../content/stats";
 import { APMEKEN_WAVES } from "../content/tombs";
 import { TROPHY_BY_ID, getRaidChestTrophiesFound } from "../content/trophies";
@@ -4910,6 +4911,7 @@ export class GameClient implements GameFrameHandler {
                         w.bonus > 0
                             ? {
                                   title: t("ui.levelup.damage_bonus"),
+                                  about: bonusAbout(),
                                   lines: [
                                       getBonusLine(
                                           w.def,

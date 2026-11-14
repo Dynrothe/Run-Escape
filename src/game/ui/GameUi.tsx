@@ -5,6 +5,7 @@ import {
     useCallback,
     useEffect,
     useId,
+    useLayoutEffect,
     useRef,
     useState,
     useSyncExternalStore,
@@ -4179,8 +4180,11 @@ function formatQuestProgress(quest: QuestTrackView): string {
 
 type PauseTab = "loadout" | "combat" | "quests" | "party" | "settings";
 
-// The tab the menu was left on, open again next time it's opened (this page's, not saved)
+// The tab the menu was left on, open again next time it's opened (this page's, not saved), the page
+// the settings were opened from, and how far each page was scrolled
 let lastPauseTab: PauseTab = "loadout";
+let lastPauseFrom: PauseTab = "loadout";
+const lastPauseScroll: Partial<Record<PauseTab, number>> = {};
 
 // The pause menu: a page for each part of it (the run's loadout, its fighting, the quests, the
 // party and the settings) under a row of the client's own side tab icons
@@ -4236,15 +4240,21 @@ function PauseModal({
         setPicked(tab);
     };
     // The page the settings came from, for the button to go back to
-    const cameFrom = useRef<PauseTab>("loadout");
     const toggleSettings = () => {
         if (open === "settings") {
-            openTab(cameFrom.current);
+            openTab(lastPauseFrom);
         } else {
-            cameFrom.current = open;
+            lastPauseFrom = open;
             openTab("settings");
         }
     };
+    // Each page keeps how far it was scrolled: as it opens (or the menu does) it goes back there
+    const pageRef = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+        if (pageRef.current) {
+            pageRef.current.scrollTop = lastPauseScroll[open] ?? 0;
+        }
+    }, [open]);
     const { titleId, dialogProps } = useDialog<HTMLDivElement>({ modal: !coop });
     const [confirm, confirmDialog] = useConfirm();
     const host = coop && ui.coop.room?.hostId === ui.coop.you;
@@ -4333,7 +4343,11 @@ function PauseModal({
                     label={t("pause.tabs_aria")}
                 />
                 <div
+                    ref={pageRef}
                     className="ui-pause-page"
+                    onScroll={(event) => {
+                        lastPauseScroll[open] = event.currentTarget.scrollTop;
+                    }}
                     id={`pause-page-${open}`}
                     role="tabpanel"
                     aria-labelledby={`pause-tab-${open}`}

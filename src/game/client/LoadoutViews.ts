@@ -79,7 +79,12 @@ export function getStatRows(
                 label,
                 value: text,
                 zero: !value && key !== "maxHp",
-                ...(sources && { breakdown: getStatBreakdown(key, label, text, sources[key]) }),
+                ...(sources && {
+                    breakdown: getStatBreakdown(key, label, text, sources[key], {
+                        value,
+                        maxHp: key === "maxHp" ? maxHp : undefined,
+                    }),
+                }),
             });
         }
     }

@@ -1,6 +1,7 @@
 import { DamageKind } from "../content/damageKinds";
 import { Rarity } from "../content/rarity";
 import type { RemixId } from "../content/remixes";
+import type { About } from "../content/statLore";
 import { StatPair, StatText } from "../content/stats";
 import { GearSlot, StatKey } from "../content/types";
 import { WeaponStatLine } from "../content/weaponStats";
@@ -111,7 +112,13 @@ export type ItemView = {
 // each, down the tooltip
 export type BreakdownPart = { text: string; color?: string; label?: string };
 export type BreakdownLine = { label?: string; parts: BreakdownPart[]; total?: string };
-export type BreakdownView = { title: string; total?: string; lines: BreakdownLine[] };
+// about: what the number means, how it's worked out and how far past its base it is
+export type BreakdownView = {
+    title: string;
+    total?: string;
+    lines: BreakdownLine[];
+    about?: About;
+};
 
 // A weapon's stat as the pause menu lists it ("Damage", "18"), with how it got that size
 // english: the line in English ("Damage 13"), for its icon in any language

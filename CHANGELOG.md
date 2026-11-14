@@ -16,8 +16,14 @@ the version in the corner).
 - The pause menu is in tabs: Loadout, Combat, Quests and Party, with Settings as a button at the
   bottom beside Give up and Resume. Every tab is the same size, and Give up, Settings and Resume
   stay in view.
-- The pause menu's Loadout lists your active effects, and its Combat tab ends with the run's recent
-  messages.
+- The pause menu's Loadout lists your active effects under your worn equipment, and its Combat tab
+  ends with the run's recent messages.
+- The pause menu opens on the tab you left it on, and each tab keeps how far you'd scrolled it.
+- The tooltip on a number in the Loadout (a weapon's stat, a passive, a worn piece, one of your
+  stats) now also says what it means, how it's worked out, where more of it comes from and how far
+  past its base you are.
+- A weapon that can evolve shows the passive it still needs as a small icon beside its square, red
+  while it's missing and green once you have it.
 - The pause menu's Combat tab is a fight report: your totals as tiles, the damage mix as one bar by
   type, a ranking of what dealt it (the best one crowned) and a bestiary of what you've killed.
 - The pause menu's Quests are cards like the Loadout's: each quest has an icon from the OSRS quest

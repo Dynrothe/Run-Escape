@@ -30,7 +30,8 @@
 }
 
 /* What's on the right, each in a panel of its own, so it reads apart from the cards */
-.ui-loadout-column-side > section {
+.ui-loadout-column-side > section,
+.ui-loadout-stats-panel {
     padding: 6px 8px 8px;
     background: rgba(0, 0, 0, 0.18);
     border: 1px solid rgba(107, 94, 74, 0.4);
@@ -942,7 +943,8 @@
     gap: 5px;
 }
 
-.ui-loadout-d3 .ui-loadout-column-side > section {
+.ui-loadout-d3 .ui-loadout-column-side > section,
+.ui-loadout-d3 .ui-loadout-stats-panel {
     padding: 4px 6px 5px;
 }
 
@@ -956,16 +958,17 @@
     width: min(100%, 205px);
 }
 
-/* On a wide pause panel, the equipment remains the first right-hand section while stats use the
-   otherwise empty space below weapons and passives. Three stat columns keep the page above the
-   fold; narrower layouts return both sections to the right in document order. */
+/* On a wide pause panel the right column runs the whole height beside the cards: the worn equipment,
+   and under it what the hero has on them, which fills the room the equipment leaves. The stats use
+   the room below the weapons and passives, in three columns to keep the page above the fold. */
 @media (min-width: 900px) {
     .ui-loadout {
         display: grid;
         grid-template-areas:
-            "main equipment"
-            "stats equipment";
+            "main side"
+            "stats side";
         grid-template-columns: minmax(0, 1.9fr) minmax(250px, 1fr);
+        grid-template-rows: auto 1fr;
         column-gap: 0;
         row-gap: 12px;
     }
@@ -975,17 +978,12 @@
     }
 
     .ui-loadout-column-side {
-        display: contents;
-    }
-
-    .ui-loadout-equipment {
-        grid-area: equipment;
-        align-self: start;
-        margin-left: 18px;
+        grid-area: side;
     }
 
     .ui-loadout-stats-panel {
         grid-area: stats;
+        align-self: start;
         margin-right: 18px;
     }
 
@@ -1015,6 +1013,13 @@
     .ui-loadout-column-side {
         padding-left: 0;
         border-left: none;
+    }
+
+    /* Under the equipment and what's on the hero, not between them and the cards */
+    .ui-loadout-stats-panel {
+        order: 1;
+        box-sizing: border-box;
+        width: 100%;
     }
 
     /* Empty capacity matters on a phone, but repeating the same acquisition hint seven times does
@@ -1061,4 +1066,38 @@
 .ui-loadout-d3 .ui-loadout-stone .ui-loadout-gear-cell-name,
 .ui-loadout-stone.ui-loadout-gear-grid .ui-loadout-gear-cell-name {
     font-size: 11px;
+}
+
+/* The passive an evolution still needs, small beside its square: red-edged while it's missing, green
+   once it's there */
+.ui-loadout-sq-tip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ui-loadout-need {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 26px;
+    height: 26px;
+    background: rgba(28, 23, 16, 0.9);
+    border: 1px solid #000;
+}
+
+.ui-loadout-need .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-loadout-need-missing {
+    box-shadow: inset 0 0 0 1px #c0392b;
+}
+
+.ui-loadout-need-missing .ui-icon {
+    opacity: 0.75;
+}
+
+.ui-loadout-need-met {
+    box-shadow: inset 0 0 0 1px #00c800;
 }
