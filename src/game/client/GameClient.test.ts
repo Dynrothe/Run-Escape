@@ -5,8 +5,10 @@ import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { YAMA_WAKES } from "../content/fun/yamaWakes";
 import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { getMap } from "../content/maps";
+import { Rarity } from "../content/rarity";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { encodeCardCaps } from "../core/cardRuns";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -2674,5 +2676,24 @@ describe("boss attacks' instructions", () => {
         } finally {
             c.restore();
         }
+    });
+});
+
+describe("a co-op player's Card collection only pet", () => {
+    const butch = "butch";
+    it("keeps a co-op player's pet to one whose card they've sent, in a Cards only run", () => {
+        const caps = new Map<string, Rarity>([["weapon:scimitar", "common"]]);
+        const withCard = new Map(caps).set(`trophy:${butch}`, "veryRare");
+        const loadout = (cardCaps?: string) => ({
+            metaStats: {},
+            unlockedItems: [],
+            armoury: {},
+            pet: butch,
+            ...(cardCaps !== undefined && { cardCaps }),
+        });
+        expect(cleanLoadout(loadout(encodeCardCaps(withCard))).pet).toBe(butch);
+        expect(cleanLoadout(loadout(encodeCardCaps(caps))).pet).toBeUndefined();
+        // Not playing Cards only: their found pet, as before
+        expect(cleanLoadout(loadout()).pet).toBe(butch);
     });
 });

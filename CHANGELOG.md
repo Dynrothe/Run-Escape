@@ -9,8 +9,9 @@ the version in the corner).
 
 - Cards, by Okaeri: a collectible card for every weapon, passive, casket gear and Collection log
   trophy, each in versions from its own rarity up to Very rare, with a Cards tab in the Collection
-  log. Buy packs in the Card shop with coins (the first one's free), and turn on Cards only for
-  runs that offer only what you have cards of, no rarer than your best version.
+  log. Runs earn platinum tokens, which buy packs in the Card shop (the first one's free), and
+  Cards only makes runs offer only what you have cards of, no rarer than your best version, with
+  a pet whose card you have; the Collection log marks trophies first found in such a run.
 
 ### Changed
 

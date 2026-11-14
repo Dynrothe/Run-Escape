@@ -356,3 +356,25 @@
 .ui-log-item-card {
     box-shadow: inset 0 0 0 2px var(--card-rarity);
 }
+
+/* A trophy first found in a Card collection only run: a little card drawn in the slot's top
+   left corner, gold on dark like the deck's back (the description says it in words too) */
+.ui-log-cards-badge {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 8px;
+    height: 11px;
+    pointer-events: none;
+    background: #2a1f14;
+    border: 1px solid #c8a24a;
+    border-radius: 1px;
+    box-shadow:
+        0 0 0 1px #000,
+        inset 0 0 0 1px #2a1f14,
+        inset 0 0 0 2px #c8a24a;
+}
+
+.ui-log-cards-only {
+    color: #c8a24a;
+}

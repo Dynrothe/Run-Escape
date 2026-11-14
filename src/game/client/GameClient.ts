@@ -89,7 +89,9 @@ import {
     getCardCaps,
     getCardLock,
     getCardRunShortfall,
+    getRunPet,
     getStarterCards,
+    hasPetCard,
 } from "../core/cardRuns";
 import { PackCard, buyCardPack, openCardPack } from "../core/cards";
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
@@ -533,6 +535,9 @@ export function cleanLoadout(loadout: Loadout | undefined): {
     relics?: string[];
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
+    const caps = loadout?.cardCaps !== undefined ? decodeCardCaps(loadout.cardCaps) : undefined;
+    const pet =
+        typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) ? loadout.pet : undefined;
     const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
     const armoury: Record<string, number> = {};
     for (const [id, times] of Object.entries(loadout?.armoury ?? {})) {
@@ -544,12 +549,12 @@ export function cleanLoadout(loadout: Loadout | undefined): {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
         trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
-        // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
-        ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
         // Their relics, each player's own (the Sim keeps them off maps that take none)
         ...(Array.isArray(loadout?.relics) && { relics: cleanRelics(loadout.relics) }),
         // Card collection only, their own cards (core/cardRuns.ts)
-        ...(loadout?.cardCaps !== undefined && { cardCaps: decodeCardCaps(loadout.cardCaps) }),
+        ...(caps && { cardCaps: caps }),
+        // Their pet: in a Card collection only run, only one whose card they've sent
+        ...(pet && (!caps || caps.has(`trophy:${pet}`)) && { pet }),
     };
 }
 
@@ -1364,6 +1369,17 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ actEnding: act?.id });
     }
 
+    // The pet a Card collection only run takes along: one whose card is owned, or none
+    selectCardsOnlyPet(petId: string | undefined): void {
+        if (petId !== undefined && !hasPetCard(this.save, petId)) {
+            this.sounds.denied();
+            return;
+        }
+        this.save.cardsOnlyPet = petId;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
     // The pet to take along (one of the trophies found), or none
     selectPet(petId: string | undefined): void {
         if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
@@ -1588,13 +1604,15 @@ export class GameClient implements GameFrameHandler {
             (room && getMap(room.mapId).fun?.character) ?? this.store.getSnapshot().characterId;
         // The adventurer the run's played as, for Card collection only's check
         const runCharacter = (room && getMapCharacter(getMap(room.mapId))) ?? characterId;
+        const cardCaps = this.loadoutCardCaps(room && getMap(room.mapId), runCharacter);
         return makeLoadout(
             getMetaStats(this.save, getCharacter(characterId).style),
             [...this.save.unlockedItems],
             {
                 ...this.save.armoury,
             },
-            this.save.pet,
+            // Card collection only's own pet, with its card (getRunPet)
+            getRunPet(this.save, cardCaps !== undefined),
             // A Tombs room's lobby shows the host's raid level, and a run's its invocation points
             room && getMap(room.mapId).tombs
                 ? [...(this.save.invocations ?? [])]
@@ -1604,7 +1622,7 @@ export class GameClient implements GameFrameHandler {
             getRaidChestTrophiesFound(this.save.trophies),
             this.save.look,
             room ? this.runRelics(getMap(room.mapId)) : undefined,
-            this.loadoutCardCaps(room && getMap(room.mapId), runCharacter),
+            cardCaps,
         );
     }
 
@@ -2212,6 +2230,8 @@ export class GameClient implements GameFrameHandler {
             this.sounds.denied();
             return;
         }
+        // Its own pet in a Card collection only run (getRunPet): never the other in its place
+        const pet = getRunPet(this.save, cardCaps !== undefined);
         const remixes = vault
             ? vault.remixes
             : gauntlet
@@ -2230,13 +2250,7 @@ export class GameClient implements GameFrameHandler {
                 : undefined;
         const awakened = plain && !endless && snapshot.awaken && canAwaken(this.save, mapId);
         if (
-            !(await this.travelTo(
-                mapId,
-                "characters",
-                [this.save.pet],
-                remixes,
-                invasionContent(invasion),
-            ))
+            !(await this.travelTo(mapId, "characters", [pet], remixes, invasionContent(invasion)))
         ) {
             return;
         }
@@ -2254,7 +2268,7 @@ export class GameClient implements GameFrameHandler {
             unlockedItems: new Set(this.save.unlockedItems),
             ...(cardCaps && { cardCaps }),
             trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
-            pet: this.save.pet,
+            pet,
             endless,
             hard,
             expert,
@@ -2284,7 +2298,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet], [this.save.look], cinematic);
+        this.enterRun(sim, [pet], [this.save.look], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -3211,7 +3225,12 @@ export class GameClient implements GameFrameHandler {
             vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
         const quests = hasBadNumber(result)
             ? []
-            : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
+            : recordRun(this.save, {
+                  ...result,
+                  ...(vaultKey && { vault: vaultKey }),
+                  // This player's own: each co-op player records their run on their own save
+                  ...(sim.cardCaps && { cardsOnly: true }),
+              });
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();

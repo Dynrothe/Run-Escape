@@ -30,13 +30,14 @@ import {
     getCardCopies,
     getCardPacks,
     getOwnedVersions,
+    getPlatinum,
     lastCardRarities,
 } from "../core/cards";
 import type { SaveData } from "../core/save";
-import { fmtNum, list, t } from "../i18n";
+import { fmtNum, list, t, tp } from "../i18n";
 import "./CardsScreen.css";
-import { Coins } from "./Coins";
 import { ItemIcon } from "./ItemIcon";
+import { Platinum } from "./Platinum";
 import { useMenuKeys } from "./menuKeys";
 import { useDialog } from "./useDialog";
 
@@ -192,7 +193,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                             total: fmtNum(CARDS.length),
                         })}
                     </span>
-                    <Coins amount={save.coins} />
+                    <Platinum amount={getPlatinum(save)} />
                     {packs > 0 && (
                         <button className="ui-button" onClick={openHeld}>
                             {t("cards.open_free", { n: fmtNum(packs) })}
@@ -264,7 +265,7 @@ function CardShop({
                                 })}
                             </div>
                             <div className="ui-cards-offer-buy">
-                                <Coins amount={pack.price} />
+                                <Platinum amount={pack.price} />
                                 <button
                                     className="ui-button"
                                     disabled={why !== undefined}
@@ -274,11 +275,9 @@ function CardShop({
                                     {t("cards.buy")}
                                 </button>
                             </div>
-                            {why === "coins" && (
+                            {why === "platinum" && (
                                 <div className="ui-cards-offer-why">
-                                    {t("cards.need_coins", {
-                                        n: fmtNum(pack.price - save.coins),
-                                    })}
+                                    {tp("cards.need_platinum", pack.price - getPlatinum(save))}
                                 </div>
                             )}
                         </div>

@@ -1438,8 +1438,16 @@ adventurer can have:
 ### Cards
 
 The title's Cards tile: an album and the Card shop. Cards do nothing in a run except in Card
-collection only runs. Packs are bought with the coins runs pay out, as the Armoury and the
-Wardrobe spend them, and no real money is ever involved.
+collection only runs. Packs are bought with platinum tokens (`SaveData.platinum`), a currency of
+their own that runs earn beside their coins; coins never buy packs, and no real money is ever
+involved.
+
+- **Platinum tokens** (`PLATINUM_PER_KILL`, `PLATINUM_PER_BOSS`, `PLATINUM_WIN` in
+  `content/cards.ts`): the sim adds them up as kills and bosses come (`Sim.platinum`), each at the
+  run's `coinScale` of the moment, so endless runs earn them at coins' reduced rate
+  (`ENDLESS_COINS`, less again in later rounds) and hard mode and invocations at coins' raised one.
+  A win adds its share at the end, and `RunResult.platinum` is the whole. In co-op it's the
+  party's, the same on every copy as coins are, and `recordRun` adds it to each player's own save. The icon is the Platinum token item.
 
 - **Cards are made from content** (`ALL_CARDS` in `content/cards.ts`): one for each weapon,
   passive, reward casket gear (`CASKET_GEAR`) and trophy, its picture that thing's item icon.
@@ -1479,6 +1487,11 @@ Wardrobe spend them, and no real money is ever involved.
   their row. The switch is on the run screen only, so co-op players set it before joining.
 - **A weapon's metals** (bronze to dragon) are its levels, not cards of their own, so its one
   card covers them all: there's no rank to unlock.
+- **Pets**: a Card collection only run takes along `SaveData.cardsOnlyPet`, picked on the run
+  screen's pet row while the run will be one (`playsCardsOnly`), and only while its card's owned (`getRunPet`,
+  `hasPetCard`); never `SaveData.pet` in its place, which still needs the real find for other
+  runs. A card pet fights as the real one does. In co-op it's the loadout's `pet`, kept only if
+  the player's caps (which carry pets' cards) have its card (`cleanLoadout`).
 - **When it doesn't play**: the switch is off, saying how many more cards are needed, while the
   collection can't fill a level up (`getCardRunShortfall`). With it on, an adventurer whose starter
   cards aren't owned is locked (`getCardLock`, `isCardLocked`): their portrait is dimmed with a
@@ -1493,7 +1506,11 @@ Wardrobe spend them, and no real money is ever involved.
 - **The Collection log's Cards tab** (`getCardEntries` in `content/collectionLog.ts`): a set for
   each kind of card, then the raids' finds, each card at its rarest version owned, its slot
   ringed in that version's colour and the version said in words. Its entries count themselves:
-  the log's title total leaves the tab out (`getLogTotal`), so it's the game's own finds.
+  the log's title total leaves the tab out (`getLogTotal`), so it's the game's own finds. A
+  trophy first found in a Card collection only run is listed in `SaveData.cardsOnlyFinds`
+  (`recordRun`, from the run's `RunSummary.cardsOnly` and its own `trophies`, each co-op
+  player's own), and the log gives
+  its slot a little drawn card and its description "First found in a Cards only run".
 - **Loading** (`migrateCards`, from `migrateSave`): only versions of cards that exist, whole
   counts capped at `MAX_CARD_COPIES` and `MAX_CARD_PACKS`.
 

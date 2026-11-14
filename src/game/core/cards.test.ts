@@ -6,6 +6,7 @@ import {
     CardDef,
     MAX_CARD_COPIES,
     MAX_CARD_PACKS,
+    MAX_PLATINUM,
     PACKS,
     PACK_BY_ID,
     PACK_SIZE,
@@ -52,12 +53,14 @@ function card(id: string): CardDef {
 const index = (rarity: string) => RARITY_ORDER.indexOf(rarity as never);
 
 describe("buying packs", () => {
-    it("spends the pack's price in coins and opens it at once", () => {
+    it("spends the pack's price in platinum tokens and opens it at once", () => {
         const raids = PACK_BY_ID.get("raids")!;
-        const save = { ...createSave(), coins: raids.price + 7 };
+        const save = { ...createSave(), coins: 5000, platinum: raids.price + 7 };
         const cards = buyCardPack(save, raids, spread())!;
         expect(cards).toHaveLength(PACK_SIZE);
-        expect(save.coins).toBe(7);
+        expect(save.platinum).toBe(7);
+        // Coins never pay for packs
+        expect(save.coins).toBe(5000);
         expect(save.cardPacksOpened).toBe(1);
         // Bought packs aren't held: the free one's still there
         expect(getCardPacks(save)).toBe(STARTER_PACKS);
@@ -65,12 +68,13 @@ describe("buying packs", () => {
         expect(cards.every(({ card }) => pool.includes(card))).toBe(true);
     });
 
-    it("sells nothing without the coins, and takes none", () => {
+    it("sells nothing without the platinum tokens, however many coins, and takes none", () => {
         for (const pack of PACKS) {
-            const save = { ...createSave(), coins: pack.price - 1 };
-            expect(cantBuyCardPack(save, pack)).toBe("coins");
+            const save = { ...createSave(), coins: 1e6, platinum: pack.price - 1 };
+            expect(cantBuyCardPack(save, pack)).toBe("platinum");
             expect(buyCardPack(save, pack, Math.random)).toBeUndefined();
-            expect(save.coins).toBe(pack.price - 1);
+            expect(save.platinum).toBe(pack.price - 1);
+            expect(save.coins).toBe(1e6);
             expect(save.cards).toBeUndefined();
         }
     });
@@ -78,7 +82,7 @@ describe("buying packs", () => {
     it("gives each pack only its own cards, at versions they come in and it has odds for", () => {
         for (const pack of PACKS) {
             const pool = packCards(pack);
-            const save = { ...createSave(), coins: pack.price * 60 };
+            const save = { ...createSave(), platinum: pack.price * 60 };
             const random = spread(7);
             for (let i = 0; i < 60; i++) {
                 for (const { card, rarity } of buyCardPack(save, pack, random)!) {
@@ -87,13 +91,13 @@ describe("buying packs", () => {
                     expect(pack.odds[rarity], `${pack.id} ${card.id} ${rarity}`).toBeGreaterThan(0);
                 }
             }
-            expect(save.coins).toBe(0);
+            expect(save.platinum).toBe(0);
         }
     });
 
     it("never makes a pack's last card its commonest version, with three rarities or more", () => {
         for (const pack of PACKS) {
-            const save = { ...createSave(), coins: pack.price };
+            const save = { ...createSave(), platinum: pack.price };
             // The lowest roll every time
             const cards = buyCardPack(save, pack, () => 0)!;
             const rarities = RARITY_ORDER.filter((rarity) => pack.odds[rarity] > 0);
@@ -108,7 +112,7 @@ describe("buying packs", () => {
 
     it("rolls versions in proportion to the pack's odds", () => {
         const pack = PACK_BY_ID.get("champion")!;
-        const save = { ...createSave(), coins: pack.price * 3000 };
+        const save = { ...createSave(), platinum: pack.price * 3000 };
         const counts: Record<string, number> = {};
         const random = spread();
         for (let i = 0; i < 3000; i++) {
@@ -124,7 +128,7 @@ describe("buying packs", () => {
         }
     });
 
-    it("gives runs no packs: they pay coins, which buy them", () => {
+    it("gives runs no packs: they pay platinum tokens, apart from their coins", () => {
         const save = createSave();
         const run: RunSummary = {
             mapId: "lumbridge",
@@ -133,12 +137,21 @@ describe("buying packs", () => {
             level: 40,
             kills: 5000,
             coins: 900,
+            platinum: 87,
             bossesKilled: ["wise_old_man"],
         };
         recordRun(save, run);
+        expect(save.platinum).toBe(87);
+        // Whole and in range from a co-op player's numbers
+        recordRun(save, { ...run, coins: 0, platinum: 2.9 });
+        recordRun(save, { ...run, coins: 0, platinum: -50 });
+        expect(save.platinum).toBe(89);
         expect(save.cardPacks).toBeUndefined();
         expect(getCardPacks(save)).toBe(STARTER_PACKS);
         expect(save.coins).toBe(900);
+        expect(importSave(exportSave(save, "1.0.0"), "1.0.0").platinum).toBe(89);
+        expect(migrateSave({ version: 11, platinum: -3 }).platinum).toBeUndefined();
+        expect(migrateSave({ version: 11, platinum: 1e12 }).platinum).toBe(MAX_PLATINUM);
     });
 });
 

@@ -12,9 +12,9 @@ import type { GearDef, PassiveDef, WeaponDef } from "./types";
 import { WEAPONS, weaponDescription, weaponName } from "./weapons";
 
 // Cards: a card for each weapon, passive, reward casket gear and Collection log trophy the game
-// already has, with that thing's cache item as its picture. Packs are bought with the coins runs pay out and opened on the
-// Cards screen (core/cards.ts, ui/CardsScreen.tsx). They only touch a run that's Card collection
-// only (core/cardRuns.ts). No real money is ever involved: coins are only earned by playing.
+// already has, with that thing's cache item as its picture. Packs are bought with the platinum tokens
+// runs earn and opened on the Cards screen (core/cards.ts, ui/CardsScreen.tsx). They only touch a run that's Card collection
+// only (core/cardRuns.ts). No real money is ever involved: platinum tokens are only earned by playing.
 
 export type CardKind = "weapon" | "passive" | "gear" | "trophy";
 
@@ -36,6 +36,16 @@ export type CardDef = {
 
 // Cards in each pack
 export const PACK_SIZE = 5;
+
+// Platinum tokens: what packs are bought with, apart from the coins (SaveData.platinum). A run
+// earns them from its own play (Sim.platinum, RunResult.platinum), each scaled as the run's
+// coins are (Sim.coinScale: less in endless runs, ENDLESS_COINS and less again in their later
+// rounds, and more on hard mode and with invocations), so an endless run left to play itself can't pile them up.
+export const PLATINUM_PER_KILL = 0.01;
+export const PLATINUM_PER_BOSS = 5;
+export const PLATINUM_WIN = 25;
+// The most a save holds: a crafted save's number stops here
+export const MAX_PLATINUM = 1_000_000;
 // Packs a save starts with, free, once: every save, old ones too, until SaveData.cardPacks is set
 export const STARTER_PACKS = 1;
 // The most a save holds, of packs and of copies of a card: a crafted save's numbers stop here
@@ -233,7 +243,7 @@ export const PACKS: PackDef[] = [
         description: "Any weapon, passive or trophy card.",
         objId: iconOf("weapon:scimitar"),
         color: "#7a5a2e",
-        price: 2500,
+        price: 100,
         odds: STANDARD_ODDS,
         // Every card but gear, which only the Treasure trail pack holds
         holds: (card) => card.kind !== "gear",
@@ -244,7 +254,7 @@ export const PACKS: PackDef[] = [
         description: "Weapons only.",
         objId: iconOf("weapon:dark_bow"),
         color: "#55606c",
-        price: 3000,
+        price: 120,
         odds: STANDARD_ODDS,
         holds: (card) => card.kind === "weapon",
     },
@@ -254,7 +264,7 @@ export const PACKS: PackDef[] = [
         description: "Passives only: prayers, worn passives and spells.",
         objId: iconOf("passive:amulet_of_glory"),
         color: "#3d5a80",
-        price: 3000,
+        price: 120,
         odds: STANDARD_ODDS,
         holds: (card) => card.kind === "passive",
     },
@@ -264,7 +274,7 @@ export const PACKS: PackDef[] = [
         description: "Reward casket gear only.",
         objId: CASKET_GEAR.find((gear) => gear.id === "rune_full_helm")!.objId,
         color: "#5a4a7a",
-        price: 3000,
+        price: 120,
         odds: STANDARD_ODDS,
         holds: (card) => card.kind === "gear",
     },
@@ -274,7 +284,7 @@ export const PACKS: PackDef[] = [
         description: "Collection log trophies and pets only.",
         objId: iconOf("trophy:jar_of_dreams"),
         color: "#8a6a1e",
-        price: 3000,
+        price: 120,
         odds: { common: 0, uncommon: 0.55, rare: 0.35, veryRare: 0.1 },
         holds: (card) => card.kind === "trophy",
     },
@@ -284,7 +294,7 @@ export const PACKS: PackDef[] = [
         description: "Only what the Theatre of Blood and the Tombs of Amascut bring.",
         objId: iconOf("weapon:scythe_of_vitur"),
         color: "#7a2420",
-        price: 5000,
+        price: 200,
         odds: { common: 0, uncommon: 0, rare: 0.75, veryRare: 0.25 },
         holds: (card) => card.mapId !== undefined && RAID_PACK_MAPS.includes(card.mapId),
     },
@@ -294,7 +304,7 @@ export const PACKS: PackDef[] = [
         description: "Any weapon, passive or trophy card, with better odds of the rarer versions.",
         objId: CARDS_ICON_OBJ,
         color: "#2f5e3e",
-        price: 7500,
+        price: 300,
         odds: { common: 0, uncommon: 0.45, rare: 0.4, veryRare: 0.15 },
         // Every card but gear, which only the Treasure trail pack holds
         holds: (card) => card.kind !== "gear",

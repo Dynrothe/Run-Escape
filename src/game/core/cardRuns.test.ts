@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ALL_CARDS } from "../content/cards";
 import { getCharacter } from "../content/characters";
+import { PET_BY_ID } from "../content/pets";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { emptyStats } from "../content/types";
 import { getWeapon } from "../content/weapons";
@@ -23,11 +24,14 @@ import {
     getCardCaps,
     getCardLock,
     getCardRunShortfall,
+    getRunPet,
     getStarterCards,
+    hasPetCard,
     isCardLocked,
+    playsCardsOnly,
 } from "./cardRuns";
 import { WeaponState } from "./entities";
-import { createSave } from "./save";
+import { createSave, exportSave, importSave, migrateSave } from "./save";
 import { makeGrid } from "./world/testGrid";
 
 const at = (rarity: Rarity) => RARITY_ORDER.indexOf(rarity);
@@ -281,6 +285,12 @@ describe("whether a collection can play one", () => {
         expect(isCardLocked({ ...full, cards: {} }, "warrior")).toBe(false);
         // Not on a map whose level ups are blessings, which Cards only doesn't touch
         expect(isCardLocked(full, "warrior", { blessings: {} })).toBe(false);
+        // Whether the run will be one: only with the starter card too, and not there
+        expect(playsCardsOnly(full, "warrior")).toBe(false);
+        const owned = { ...full, cards: { [start]: 1, ...full.cards } };
+        expect(playsCardsOnly(owned, "warrior")).toBe(true);
+        expect(playsCardsOnly(owned, "warrior", { blessings: {} })).toBe(false);
+        expect(playsCardsOnly({ ...owned, cardsOnly: undefined }, "warrior")).toBe(false);
     });
 
     it("counts cards, not versions, and only what the adventurer could be offered", () => {
@@ -431,5 +441,51 @@ describe("in co-op", () => {
         ).toBe(true);
         // The same run again offers the same
         expect(levelUps(party([a, b]))).toEqual([aOffers, bOffers]);
+    });
+});
+
+describe("pets in Card collection only runs", () => {
+    const butch = "butch";
+
+    it("take the pet picked for them only with its card, and never another", () => {
+        const found = { ...createSave(), trophies: [butch], pet: butch };
+        // Found but no card: none in a Cards only run, the found one in any other
+        expect(getRunPet({ ...found, cardsOnlyPet: butch }, true)).toBeUndefined();
+        expect(getRunPet(found, false)).toBe(butch);
+        // A card but not found: in a Cards only run, never in any other
+        const carded = { ...createSave(), cards: { [`trophy:${butch}`]: 1 }, cardsOnlyPet: butch };
+        expect(hasPetCard(carded, butch)).toBe(true);
+        expect(getRunPet(carded, true)).toBe(butch);
+        expect(getRunPet(carded, false)).toBeUndefined();
+        // Nothing picked for Cards only: no pet, not the other runs' one
+        expect(getRunPet({ ...found, cards: carded.cards }, true)).toBeUndefined();
+    });
+
+    it("lets a card pet follow and fight as the real one does", () => {
+        expect(PET_BY_ID.get(butch)!.power).toBeDefined();
+        const rows = Array.from({ length: 72 }, (_, y) =>
+            Array.from({ length: 72 }, (_, x) =>
+                x === 0 || y === 0 || x === 71 || y === 71 ? "#" : ".",
+            ).join(""),
+        );
+        const sim = new Sim({
+            grid: makeGrid(rows, 1000, 1000),
+            characterId: "warrior",
+            metaStats: emptyStats(),
+            seed: 1,
+            spawnX: 1036.5,
+            spawnY: 1036.5,
+            cardCaps: new Map<string, Rarity>([[`trophy:${butch}`, "veryRare"]]),
+            pet: butch,
+        });
+        expect(sim.heroes[0].pet?.id).toBe(butch);
+    });
+
+    it("keeps the Cards only pet through an export and an import", () => {
+        const save = { ...createSave(), cardsOnlyPet: butch };
+        expect(importSave(exportSave(save, "1.0.0"), "1.0.0").cardsOnlyPet).toBe(butch);
+        expect(
+            migrateSave({ version: 11, cardsOnlyPet: "not_a_pet" }).cardsOnlyPet,
+        ).toBeUndefined();
     });
 });

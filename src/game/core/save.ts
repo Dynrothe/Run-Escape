@@ -35,7 +35,7 @@ import {
     isSeasonalMap,
     takesRelics,
 } from "../content/maps";
-import { isPetFound } from "../content/pets";
+import { PET_BY_ID, isPetFound } from "../content/pets";
 import { QUESTS, QUEST_BY_ID } from "../content/quests";
 import { cleanRelics } from "../content/relics";
 import { cleanRemixes, parseRemixKey, remixKey } from "../content/remixes";
@@ -63,7 +63,7 @@ import {
 } from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
 import { getStarterCards } from "./cardRuns";
-import { giveStarterCards, migrateCards } from "./cards";
+import { addPlatinum, giveStarterCards, migrateCards } from "./cards";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
 // records. Versioned so older saves can be upgraded when the format changes.
@@ -202,6 +202,14 @@ export type SaveData = {
     // The starting adventurer's starter cards have been given (core/cards.ts): in the free pack,
     // or once to a save that opened it before the free pack held them
     cardStarterGiven?: boolean;
+    // Trophies (pets too) first found in a Card collection only run: the Collection log marks
+    // them. Only finds made since it came in; a later find of one already found changes nothing.
+    cardsOnlyFinds?: string[];
+    // The pet a Card collection only run takes along: one whose card is owned (core/cardRuns.ts,
+    // getCardsOnlyPet), found or not. SaveData.pet stays the other runs' and needs the real find.
+    cardsOnlyPet?: string;
+    // Platinum tokens held (core/cards.ts): what packs are bought with, earned in runs apart from coins
+    platinum?: number;
 };
 
 // What a record was set with: its run's invocation points and the relics on (content/relics.ts),
@@ -588,6 +596,17 @@ export function migrateSave(raw: unknown): SaveData {
         save.outfits = outfits;
     }
     Object.assign(save, migrateCards(data));
+    // Card collection only's pet: a pet (its card is checked as it's taken, getCardsOnlyPet)
+    if (typeof data.cardsOnlyPet === "string" && PET_BY_ID.has(data.cardsOnlyPet)) {
+        save.cardsOnlyPet = data.cardsOnlyPet;
+    }
+    // Card collection only's first finds: trophies the save has, each once
+    if (Array.isArray(data.cardsOnlyFinds)) {
+        const finds = [...new Set(data.cardsOnlyFinds.filter((id) => save.trophies.includes(id)))];
+        if (finds.length > 0) {
+            save.cardsOnlyFinds = finds;
+        }
+    }
     giveStarterCards(save, getStarterCards(getStartingCharacter(save)));
     return save;
 }
@@ -789,6 +808,10 @@ export type RunSummary = {
     awakened?: { seen: boolean };
     // The weekly Vault's run: its week's key (content/vault.ts)
     vault?: string;
+    // Played Card collection only (core/cardRuns.ts): its first finds are marked in the log
+    cardsOnly?: boolean;
+    // Platinum tokens the run earned (Sim's RunResult.platinum)
+    platinum?: number;
 };
 
 function migrateGauntletMode(
@@ -977,8 +1000,11 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         return [];
     }
     const quests = getFinishedQuests(save, run);
+    // What was found before, so a Card collection only run's first finds can be told apart
+    const trophiesBefore = new Set(save.trophies);
     save.coins += run.coins;
     save.totalCoins += run.coins;
+    addPlatinum(save, run.platinum);
     save.runs++;
     // A fight in parts: a part beaten is kept, the next to play; past the last, from the first
     // again (the map's beaten for good). Only the last beats the map.
@@ -1089,6 +1115,15 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
     }
     applyQuestTrophies(save);
     applyUnlocks(save, run);
+    if (run.cardsOnly) {
+        // The run's own finds, not a quest's or an older save's caught up
+        const first = [...new Set(run.trophies ?? [])].filter(
+            (id) => !trophiesBefore.has(id) && save.trophies.includes(id),
+        );
+        if (first.length > 0) {
+            save.cardsOnlyFinds = [...(save.cardsOnlyFinds ?? []), ...first];
+        }
+    }
     return quests;
 }
 

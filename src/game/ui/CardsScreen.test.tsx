@@ -86,24 +86,28 @@ test("opens the free pack face down, turns its cards over, and puts them in the 
     );
 });
 
-test("sells each pack for coins, and says why one can't be bought", () => {
+test("sells each pack for platinum tokens, and says why one can't be bought", () => {
     const raids = PACK_BY_ID.get("raids")!;
     const basic = PACK_BY_ID.get("adventurer")!;
-    render(<Harness start={{ ...createSave(), cardPacks: 0, coins: basic.price + 100 }} />);
+    render(
+        <Harness
+            start={{ ...createSave(), cardPacks: 0, coins: 1e6, platinum: basic.price + 10 }}
+        />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Card shop" }));
     const buyRaids = screen.getByRole("button", { name: `Buy the ${packName(raids)}` });
     expect(buyRaids).toBeDisabled();
     const offer = buyRaids.closest(".ui-cards-offer") as HTMLElement;
     expect(
         within(offer).getByText(
-            `You need ${(raids.price - basic.price - 100).toLocaleString("en")} more coins.`,
+            `You need ${(raids.price - basic.price - 10).toLocaleString("en")} more platinum tokens.`,
         ),
     ).toBeInTheDocument();
     expect(within(offer).getByText("Rare 75%")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: `Buy the ${packName(basic)}` }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Turn all over" }));
-    // No coins left for another
+    // No platinum tokens left for another
     expect(screen.queryByRole("button", { name: /Buy another/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.getByRole("button", { name: `Buy the ${packName(basic)}` })).toBeDisabled();

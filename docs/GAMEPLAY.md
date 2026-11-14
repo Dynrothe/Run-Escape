@@ -90,16 +90,17 @@ version and how to run it.
   in, then its trophies. Clues has the gear reward caskets hold, by rarity, and Other the
   evolutions.
 - **Cards** (the title's Cards tile): a card for every weapon, passive, reward casket gear and
-  Collection log trophy, each in versions from its own rarity up to Very rare. The Card shop sells
-  packs of five for coins: one of any weapon, passive or trophy card, one each of weapons, passives,
-  casket gear and trophies, one of the raids' finds, and a dearer one with better odds of the rarer
-  versions. Every save gets one pack free. The Collection log has a Cards tab too. **Cards only** on
-  the run screen makes level ups offer only what you have a card of, no rarer than your best version
-  of it, and reward caskets give only gear you have a card of; it's off until your collection has
-  enough cards to fill a level up, and locks an adventurer whose starting weapon's card you haven't
-  got (their portrait is dimmed with a padlock, and can still be picked to read why). The free pack
-  holds your starting adventurer's. The Collection log's Cards tab counts its own cards, apart from
-  the log's total.
+  Collection log trophy, each in versions from its own rarity up to Very rare. Runs earn platinum
+  tokens beside their coins (less in endless runs, as coins are), and the Card shop sells packs of
+  five for platinum tokens (never coins): one of any weapon, passive or trophy card, one each of
+  weapons, passives, casket gear and trophies, one of the raids' finds, and a dearer one with better
+  odds of the rarer versions. Every save gets one pack free. The Collection log has a Cards tab too.
+  **Cards only** on the run screen makes level ups offer only what you have a card of, no rarer than
+  your best version of it, and reward caskets give only gear you have a card of; it's off until your
+  collection has enough cards to fill a level up, and locks an adventurer whose starting weapon's
+  card you haven't got (their portrait is dimmed with a padlock, and can still be picked to read
+  why). The free pack holds your starting adventurer's. The Collection log's Cards tab counts its
+  own cards, apart from the log's total.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.

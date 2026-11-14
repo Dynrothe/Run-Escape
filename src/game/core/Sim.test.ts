@@ -1,5 +1,6 @@
 import { getBuffViews, getInventoryViews } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
+import { PLATINUM_PER_BOSS, PLATINUM_PER_KILL, PLATINUM_WIN } from "../content/cards";
 import { CHARACTERS } from "../content/characters";
 import {
     ENDLESS_COINS,
@@ -6317,5 +6318,64 @@ describe("the power-up rate", () => {
         const ratio = dropsOver(rate) / dropsOver(0);
         expect(ratio).toBeGreaterThan((1 + rate) * 0.9);
         expect(ratio).toBeLessThan((1 + rate) * 1.1);
+    });
+});
+
+describe("platinum tokens (card packs' currency)", () => {
+    // Kills goblins next to the player, then the Wise Old Man as the final boss
+    function play(endless: boolean, hard = false): Sim {
+        const sim = createSim("warrior", 1, "lumbridge", emptyStats(), endless, hard);
+        for (let i = 0; i < 200; i++) {
+            const goblin = sim.spawnEnemy(getEnemy("goblin"), "normal", { x: 1040.5, y: 1036.5 });
+            if (goblin) {
+                sim.damageEnemy(goblin, 1e9, 0, sim.player.x, sim.player.y);
+            }
+        }
+        return sim;
+    }
+
+    it("are earned by kills, bosses and the win, apart from coins", () => {
+        const sim = play(false);
+        const kills = sim.kills;
+        expect(kills).toBeGreaterThan(100);
+        expect(sim.platinum).toBeCloseTo(kills * PLATINUM_PER_KILL);
+        const boss = sim.spawnEnemy(getEnemy("wise_old_man"), "finalBoss", {
+            x: 1040.5,
+            y: 1036.5,
+        })!;
+        sim.damageEnemy(boss, 1e9, 0, sim.player.x, sim.player.y);
+        expect(sim.state).toBe("victory");
+        expect(sim.getResult().platinum).toBe(
+            Math.floor(sim.kills * PLATINUM_PER_KILL + PLATINUM_PER_BOSS + PLATINUM_WIN),
+        );
+    });
+
+    it("never fall a token short from adding hundredths", () => {
+        // 300 kills at 0.01 sum to 2.9999... as floats
+        const sim = createSim();
+        let kills = 0;
+        while (kills < 300) {
+            const goblin = sim.spawnEnemy(getEnemy("goblin"), "normal", { x: 1040.5, y: 1036.5 });
+            if (goblin) {
+                sim.damageEnemy(goblin, 1e9, 0, sim.player.x, sim.player.y);
+                kills = sim.kills;
+            }
+        }
+        expect(sim.kills).toBe(300);
+        expect(sim.getResult().platinum).toBe(3);
+    });
+
+    it("come at the coins' rate: less in endless runs, more on hard mode", () => {
+        const normal = play(false);
+        const endless = play(true);
+        const hard = play(false, true);
+        expect(endless.coinScale).toBeLessThan(1);
+        expect(endless.platinum / endless.kills).toBeCloseTo(
+            (normal.platinum / normal.kills) * endless.coinScale,
+        );
+        expect(hard.platinum / hard.kills).toBeCloseTo(
+            (normal.platinum / normal.kills) * hard.coinScale,
+        );
+        expect(hard.coinScale).toBeGreaterThan(1);
     });
 });

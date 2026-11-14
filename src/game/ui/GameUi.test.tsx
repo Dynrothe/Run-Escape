@@ -282,6 +282,8 @@ function renderMaps(mapId = "lumbridge", save = createSave()) {
         startRun: vi.fn(),
         toggleFavouriteCharacter: vi.fn(),
         playClick: vi.fn(),
+        selectPet: vi.fn(),
+        selectCardsOnlyPet: vi.fn(),
     };
     render(<GameUi store={store} client={actions as unknown as GameClient} />);
     return actions;
@@ -409,6 +411,34 @@ test("Cards only marks the adventurers it can't start as, still pickable", () =>
     renderMaps("lumbridge", { ...createSave(), cards });
     expect(screen.getByRole("button", { name: "Warrior" })).not.toHaveClass("ui-tile-cards-locked");
     expect(document.querySelector(".ui-tile-lock")).toBeNull();
+});
+
+test("the pet row picks Cards only's pet from pets with their card, when the run is one", () => {
+    expect.hasAssertions();
+    const cards = {
+        "weapon:scimitar": 1,
+        "weapon:two_handed_sword": 1,
+        "weapon:throwing_knives": 1,
+        "weapon:shortbow": 1,
+        "passive:rapid_heal": 1,
+        "passive:graceful": 1,
+        "passive:amulet_of_glory": 1,
+        "trophy:little_nightmare": 1,
+    };
+    const save = { ...createSave(), trophies: ["butch"], pet: "butch", cards };
+    const actions = renderMaps("lumbridge", { ...save, cardsOnly: true });
+    expect(screen.getByText("Pet for Cards only:")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Little Nightmare, Card" }));
+    expect(actions.selectCardsOnlyPet).toHaveBeenCalledWith("little_nightmare");
+    const butch = screen.getByRole("button", { name: "Butch, needs its card for Cards only" });
+    expect(butch).toHaveAttribute("aria-disabled", "true");
+    expect(actions.selectPet).not.toHaveBeenCalled();
+    cleanup();
+    // A normal run: the found pets, as before, and no card pet
+    renderMaps("lumbridge", save);
+    expect(screen.getByText("Pet:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Butch" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Little Nightmare/ })).toBeNull();
 });
 
 test("a map's own adventurer has no favourite button", () => {

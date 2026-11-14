@@ -936,6 +936,7 @@
 }
 
 .ui-pet-tile {
+    position: relative;
     justify-content: center;
     width: 36px;
     height: 34px;
@@ -3952,4 +3953,25 @@
     background: #c8a24a;
     border-radius: 1px;
     box-shadow: 0 0 0 1px #000;
+}
+
+/* Card collection only's pet pick: "Card" on a pet whose card's owned, and a pet found without
+   its card faded, with no hover (its name says it needs the card) */
+
+.ui-pet-card-mark {
+    position: absolute;
+    bottom: 0;
+    right: 1px;
+    font-size: 11px;
+    line-height: 11px;
+    color: #c8a24a;
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: none;
+}
+
+.ui-pet-needs-card,
+.ui-pet-needs-card:hover {
+    opacity: 0.45;
+    cursor: default;
+    background: var(--ui-card);
 }

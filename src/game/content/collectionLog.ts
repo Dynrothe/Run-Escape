@@ -9,7 +9,7 @@ import { invaderName } from "./invasions";
 import { CASKETS, CASKET_GEAR, CASKET_TIERS } from "./items";
 import { FIGHT_MAPS, MAP_BY_ID, RAID_MAPS, getMap } from "./maps";
 import { Rarity, rarityName } from "./rarity";
-import { TROPHIES, TrophyDef } from "./trophies";
+import { TROPHIES, TROPHY_BY_ID, TrophyDef } from "./trophies";
 import { GearDef } from "./types";
 import { describeUnlockTask } from "./unlocks";
 import { WEAPONS } from "./weapons";
@@ -124,6 +124,9 @@ export type LogItem = {
     evolution?: EvolutionDef;
     // A card's (the Cards tab): its rarest version owned, shown on its slot and said in words
     version?: Rarity;
+    // A trophy first found in a Card collection only run (SaveData.cardsOnlyFinds): a badge on
+    // its slot, and a line in its description
+    cardsOnly?: boolean;
 };
 
 export type LogEntry = {
@@ -177,6 +180,9 @@ export function getLogEntries(save: SaveData): LogEntry[] {
             count: INVADERS.some((invader) => invader.id === reward.id)
                 ? (save.invasions?.[reward.id] ?? 0)
                 : undefined,
+            ...(reward.found &&
+                TROPHY_BY_ID.has(reward.id) &&
+                save.cardsOnlyFinds?.includes(reward.id) && { cardsOnly: true }),
         })),
         tally: { key: "collection.wins", n: save.mapVictories[mapId] ?? 0 },
     }));

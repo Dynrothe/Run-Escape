@@ -77,7 +77,7 @@ import {
     takesInvocations,
     takesRelics,
 } from "../content/maps";
-import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
+import { PETS, PET_BY_ID, getFoundPets, getPetTrophy, isPetFound } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { RELIC_BY_ID, relicName } from "../content/relics";
 import {
@@ -108,7 +108,14 @@ import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
-import { getCardLock, getCardRunShortfall, isCardLocked } from "../core/cardRuns";
+import {
+    getCardLock,
+    getCardRunShortfall,
+    getCardsOnlyPet,
+    hasPetCard,
+    isCardLocked,
+    playsCardsOnly,
+} from "../core/cardRuns";
 import {
     NewerSaveError,
     RecordSetup,
@@ -158,6 +165,7 @@ import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
+import { Platinum } from "./Platinum";
 import { QuestScreen } from "./QuestScreen";
 import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
@@ -1747,11 +1755,21 @@ export function AdventurerPanel({
 // The pet to take along, from those found: none until one's been found. Most are looks only; a
 // fighting one (PetDef.power) says what it does
 function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
-    const found = getFoundPets(ui.save.trophies);
+    // A Card collection only run: its own pick, of the pets whose card is owned
+    // (SaveData.cardsOnlyPet). Only when the run will be one (playsCardsOnly), as it takes that pet.
+    const map = getMap(ui.mapId);
+    const cardsOnly =
+        ui.screen !== "coop" &&
+        playsCardsOnly(ui.save, getMapCharacter(map) ?? ui.characterId, map);
+    const found = cardsOnly
+        ? PETS.filter((pet) => hasPetCard(ui.save, pet.id) || isPetFound(ui.save.trophies, pet.id))
+        : getFoundPets(ui.save.trophies);
     if (found.length === 0) {
         return null;
     }
-    const chosen = ui.save.pet;
+    const chosen = cardsOnly ? getCardsOnlyPet(ui.save) : ui.save.pet;
+    const pick = (petId: string | undefined) =>
+        cardsOnly ? client.selectCardsOnlyPet(petId) : client.selectPet(petId);
     const name = chosen
         ? tr(
               `trophy.${getPetTrophy(PET_BY_ID.get(chosen)!).id}.name`,
@@ -1762,7 +1780,8 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
     return (
         <div className="ui-pet-row">
             <span className="ui-pet-label">
-                {t("ui.pet.label")} <span className="ui-pet-name">{name}</span>
+                {cardsOnly ? t("ui.pet.label_cards_only") : t("ui.pet.label")}{" "}
+                <span className="ui-pet-name">{name}</span>
             </span>
             <div className="ui-pet-tiles">
                 <button
@@ -1770,7 +1789,7 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     aria-label={t("ui.pet.none_aria")}
                     aria-pressed={!chosen}
                     title={t("ui.pet.none_aria")}
-                    onClick={() => client.selectPet(undefined)}
+                    onClick={() => pick(undefined)}
                 >
                     <span className="ui-pet-none">{t("ui.common.none")}</span>
                 </button>
@@ -1778,18 +1797,34 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     const trophy = getPetTrophy(pet);
                     const selected = pet.id === chosen;
                     const shownTrophyName = trophyName(trophy);
+                    // In Card collection only: a pet with its card says so; one found without it
+                    // can't be taken, and says what it needs
+                    const carded = cardsOnly && hasPetCard(ui.save, pet.id);
+                    const needsCard = cardsOnly && !carded;
+                    const label = carded
+                        ? t("ui.pet.card", { name: shownTrophyName })
+                        : needsCard
+                          ? t("ui.pet.needs_card", { name: shownTrophyName })
+                          : shownTrophyName;
                     return (
                         <button
                             key={pet.id}
                             className={
-                                "ui-card ui-pet-tile" + (selected ? " ui-card-selected" : "")
+                                "ui-card ui-pet-tile" +
+                                (selected ? " ui-card-selected" : "") +
+                                (needsCard ? " ui-pet-needs-card" : "")
                             }
-                            aria-label={shownTrophyName}
+                            aria-label={label}
                             aria-pressed={selected}
-                            title={shownTrophyName}
-                            onClick={() => client.selectPet(pet.id)}
+                            aria-disabled={needsCard || undefined}
+                            title={label}
+                            // One without its card says no (its name says why)
+                            onClick={() => pick(pet.id)}
                         >
                             <ItemIcon objId={trophy.objId} size={26} />
+                            {carded && (
+                                <span className="ui-pet-card-mark">{t("ui.pet.card_mark")}</span>
+                            )}
                         </button>
                     );
                 })}
@@ -4887,6 +4922,12 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                     <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
                 )}
                 {result?.cardsOnly && <p className="ui-subtle">{t("ui.result.cards_only")}</p>}
+                {/* What packs are bought with, apart from the coins (content/cards.ts) */}
+                {result !== undefined && (result.platinum ?? 0) > 0 && (
+                    <p className="ui-unlocked">
+                        {t("ui.result.platinum")} <Platinum amount={result.platinum!} />
+                    </p>
+                )}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
                         {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}

@@ -28,7 +28,11 @@ import { RANDOM_EVENTS } from "../../src/game/content/randomEvents";
 import { SHOP_UPGRADES } from "../../src/game/content/shop";
 import { getPlayerStanceSeqs } from "../../src/game/content/stances";
 import { STAT_ICON_OBJ_IDS } from "../../src/game/content/statIcons";
-import { CARDS_ICON_OBJ, COLLECTION_LOG_OBJ } from "../../src/game/content/titleIcons";
+import {
+    CARDS_ICON_OBJ,
+    COLLECTION_LOG_OBJ,
+    PLATINUM_TOKEN_OBJ,
+} from "../../src/game/content/titleIcons";
 import { TROPHIES } from "../../src/game/content/trophies";
 import {
     BODY_PARTS,
@@ -164,6 +168,7 @@ function getContentObjIds(): number[] {
     const ids = new Set<number>([
         COLLECTION_LOG_OBJ,
         CARDS_ICON_OBJ,
+        PLATINUM_TOKEN_OBJ,
         ...Object.values(PICKUP_OBJS),
         ...Object.values(PILE_LOOKS).flatMap((looks) => looks.map((look) => look.objId)),
         ...STAT_ICON_OBJ_IDS,

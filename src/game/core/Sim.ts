@@ -9,6 +9,7 @@ import { getStepCoins, getStepDifficulty } from "../content/acts";
 import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { WeaponDamageBalance } from "../content/balance";
 import { BLESSED_FAN_ANGLE, blessAbility, getBlessing } from "../content/blessings";
+import { PLATINUM_PER_BOSS, PLATINUM_PER_KILL, PLATINUM_WIN } from "../content/cards";
 import { getCharacter } from "../content/characters";
 import {
     EXTRA_REVIVE_PRICE,
@@ -981,6 +982,8 @@ export type RunResult = {
     level: number;
     kills: number;
     coins: number;
+    // Platinum tokens earned (content/cards.ts): kills, bosses and the win, scaled as coins are
+    platinum?: number;
     // Enemy ids of the bosses killed, in order
     bossesKilled: string[];
     // The gear that came out of caskets (as found, before the Armoury's
@@ -1915,6 +1918,9 @@ export class Sim {
     // When the next turkey can drop
     private nextTurkeyTick = 0;
     coins = 0;
+    // Platinum tokens so far (content/cards.ts), unrounded: each kill's and boss's, at the coin scale
+    // of the moment, so endless rounds give less as they do coins
+    platinum = 0;
     // Party income before purchases or theft. Returning stolen coins isn't new income.
     coinsGained = 0;
     // Co-op: the run ended because its last hero standing left rather than fell. A party that
@@ -2989,6 +2995,12 @@ export class Sim {
             level: this.level,
             kills: this.kills,
             coins: this.coins,
+            // (a little over, so hundredths summed as floats don't fall a token short)
+            platinum: Math.floor(
+                this.platinum +
+                    (this.state === "victory" ? PLATINUM_WIN * this.coinScale : 0) +
+                    1e-6,
+            ),
             bossesKilled: [...this.bossesKilled],
             gearFound: [...this.gearFound],
             evolutionsMade: [...this.evolutionsMade],
@@ -3744,6 +3756,18 @@ export class Sim {
             (1 + Math.min(COIN_BONUS_CAP, bonus))
         );
     }
+
+    // coinScale, worked out once a tick: a crowd's kills each want it, and with invocations it
+    // builds their list
+    private tickCoinScale(): number {
+        if (this.coinScaleTick !== this.tick) {
+            this.coinScaleTick = this.tick;
+            this.coinScaleAt = this.coinScale;
+        }
+        return this.coinScaleAt;
+    }
+    private coinScaleTick = -1;
+    private coinScaleAt = 1;
 
     // Coins for high alching an item, as the run pays them
     alchValue(itemId: string, upgrades = 0): number {
@@ -20216,6 +20240,7 @@ export class Sim {
         // One brought back by a reviver was counted the first time it died
         if (!byEnemy && !enemy.noDrops) {
             this.kills++;
+            this.platinum += PLATINUM_PER_KILL * this.tickCoinScale();
             this.countTraitKill();
             this.countRelicKill();
             if (lastCopy) {
@@ -20227,6 +20252,7 @@ export class Sim {
         if (enemy.boss) {
             if (lastCopy) {
                 this.bossesKilled.push(enemy.def.id);
+                this.platinum += PLATINUM_PER_BOSS * this.tickCoinScale();
                 this.bossKills.push({ enemyId: enemy.def.id, seconds: this.seconds });
                 if (INVADER_BY_ID.has(enemy.def.id) && !byEnemy) {
                     this.invaderDown(enemy);

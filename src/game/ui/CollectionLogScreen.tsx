@@ -248,7 +248,10 @@ function ItemSlot({
                     ? ({ "--card-rarity": RARITIES[item.version].color } as CSSProperties)
                     : undefined
             }
-            aria-label={`${name}, ${state}`}
+            aria-label={
+                `${name}, ${state}` +
+                (item.cardsOnly ? `, ${t("collection.cards_only_first")}` : "")
+            }
             aria-describedby="ui-log-detail"
             onMouseEnter={onShow}
             onFocus={onShow}
@@ -264,6 +267,7 @@ function ItemSlot({
                     {fmtNum(item.count)}
                 </span>
             )}
+            {item.cardsOnly && <span className="ui-log-cards-badge" aria-hidden="true" />}
         </button>
     );
 }
@@ -285,6 +289,11 @@ function ItemDetail({ item }: { item: LogItem }): JSX.Element {
                 </span>
             </div>
             <div className="ui-log-how">{tl(item.how)}</div>
+            {item.cardsOnly && (
+                <div className="ui-log-how ui-log-cards-only">
+                    {t("collection.cards_only_first")}
+                </div>
+            )}
         </div>
     );
 }

@@ -5,6 +5,7 @@ import {
     CardDef,
     MAX_CARD_COPIES,
     MAX_CARD_PACKS,
+    MAX_PLATINUM,
     PACK_SIZE,
     PackDef,
     STARTER_PACKS,
@@ -26,9 +27,22 @@ export function getCardPacks(save: SaveData): number {
     return save.cardPacks ?? STARTER_PACKS;
 }
 
-// Why a pack can't be bought, or undefined if it can
-export function cantBuyCardPack(save: SaveData, pack: PackDef): "coins" | undefined {
-    return save.coins < pack.price ? "coins" : undefined;
+// The platinum tokens held (none till a run's earned some)
+export function getPlatinum(save: SaveData): number {
+    return save.platinum ?? 0;
+}
+
+// Adds a run's platinum tokens (RunResult.platinum), whole and in range
+export function addPlatinum(save: SaveData, points: number | undefined): void {
+    const earned = typeof points === "number" && isFinite(points) ? Math.floor(points) : 0;
+    if (earned > 0) {
+        save.platinum = Math.min(getPlatinum(save) + earned, MAX_PLATINUM);
+    }
+}
+
+// Why a pack can't be bought, or undefined if it can: only platinum tokens buy them, never coins
+export function cantBuyCardPack(save: SaveData, pack: PackDef): "platinum" | undefined {
+    return getPlatinum(save) < pack.price ? "platinum" : undefined;
 }
 
 // The copies of one version of a card
@@ -188,7 +202,7 @@ export function buyCardPack(
     if (cantBuyCardPack(save, pack) || pool.length === 0) {
         return undefined;
     }
-    save.coins -= pack.price;
+    save.platinum = getPlatinum(save) - pack.price;
     return rollPack(save, pack, random, pool);
 }
 
@@ -197,7 +211,7 @@ export function buyCardPack(
 // save can't break the album
 type CardFields = Pick<
     SaveData,
-    "cards" | "cardPacks" | "cardPacksOpened" | "cardsOnly" | "cardStarterGiven"
+    "cards" | "cardPacks" | "cardPacksOpened" | "cardsOnly" | "cardStarterGiven" | "platinum"
 >;
 
 export function migrateCards(data: Partial<CardFields>): CardFields {
@@ -231,6 +245,10 @@ export function migrateCards(data: Partial<CardFields>): CardFields {
     }
     if (data.cardStarterGiven === true) {
         out.cardStarterGiven = true;
+    }
+    const points = whole(data.platinum, MAX_PLATINUM);
+    if (points) {
+        out.platinum = points;
     }
     return out;
 }

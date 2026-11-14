@@ -1,6 +1,7 @@
 import { ALL_CARDS, CARDS, CARD_BY_ID, CardDef } from "../content/cards";
 import { getCharacter } from "../content/characters";
 import { PASSIVES } from "../content/passives";
+import { PET_BY_ID } from "../content/pets";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { isAvailable } from "../content/unlocks";
 import { WEAPONS, getWeapon } from "../content/weapons";
@@ -21,11 +22,12 @@ import type { SaveData } from "./save";
 export const CARD_RUN_WEAPONS = 2;
 export const CARD_RUN_PASSIVES = 3;
 
-// A save's caps: each weapon, passive and gear card owned -> its rarest version owned
+// A save's caps: each weapon, passive and gear card owned -> its rarest version owned, and each
+// pet's card (a trophy's that's a pet: which pets a Card collection only run can take along)
 export function getCardCaps(save: SaveData): Map<string, Rarity> {
     const caps = new Map<string, Rarity>();
     for (const card of CARDS) {
-        if (card.kind !== "trophy") {
+        if (card.kind !== "trophy" || isPetCard(card)) {
             const best = getBestVersion(save, card);
             if (best) {
                 caps.set(card.id, best);
@@ -101,7 +103,7 @@ export function encodeCardCaps(caps: CardCaps): string {
 }
 
 // A co-op player's caps from their loadout (another player's game could send anything): weapon,
-// passive and gear cards, at versions they come in
+// passive, gear and pet cards, at versions they come in
 export function decodeCardCaps(raw: unknown): Map<string, Rarity> | undefined {
     if (typeof raw !== "string") {
         return undefined;
@@ -111,7 +113,7 @@ export function decodeCardCaps(raw: unknown): Map<string, Rarity> | undefined {
         const card = ALL_CARDS[i];
         const version = /^[0-3]$/.test(raw[i]) ? RARITY_ORDER[Number(raw[i])] : undefined;
         if (
-            card.kind !== "trophy" &&
+            (card.kind !== "trophy" || isPetCard(card)) &&
             version &&
             RARITY_ORDER.indexOf(version) >= RARITY_ORDER.indexOf(card.rarity)
         ) {
@@ -134,5 +136,46 @@ export function isCardLocked(
         !map?.blessings &&
         getCardLock(save, characterId) !== undefined &&
         !getCardRunShortfall(save, characterId)
+    );
+}
+
+// A trophy card that's a pet's
+function isPetCard(card: CardDef): boolean {
+    return card.kind === "trophy" && PET_BY_ID.has(card.id.slice("trophy:".length));
+}
+
+// Whether a pet's card is owned (any version): what taking it along in a Card collection only run
+// takes, in place of having found it
+export function hasPetCard(save: SaveData, petId: string): boolean {
+    const card = CARD_BY_ID.get(`trophy:${petId}`);
+    return PET_BY_ID.has(petId) && card !== undefined && getBestVersion(save, card) !== undefined;
+}
+
+// The pet a Card collection only run takes along: the one picked for them
+// (SaveData.cardsOnlyPet), while its card's owned; never another in its place
+export function getCardsOnlyPet(save: SaveData): string | undefined {
+    const pet = save.cardsOnlyPet;
+    return pet !== undefined && hasPetCard(save, pet) ? pet : undefined;
+}
+
+// The pet a run takes along: a Card collection only run's (getCardsOnlyPet), or the found one
+// picked (SaveData.pet) in any other
+export function getRunPet(save: SaveData, cardsOnly: boolean): string | undefined {
+    return cardsOnly ? getCardsOnlyPet(save) : save.pet;
+}
+
+// Whether a solo run as this adventurer on this map plays Card collection only: on, a map whose
+// level ups aren't blessings, a collection that can fill a level up, and their starter cards
+// owned. What the run screen shows (the pet row) goes by this, as the run itself does.
+export function playsCardsOnly(
+    save: SaveData,
+    characterId: string,
+    map?: { blessings?: unknown },
+): boolean {
+    return (
+        save.cardsOnly === true &&
+        !map?.blessings &&
+        !getCardRunShortfall(save, characterId) &&
+        getCardLock(save, characterId) === undefined
     );
 }
