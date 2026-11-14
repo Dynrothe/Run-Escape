@@ -1,12 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { getBodyColorHsl } from "../../rs/model/player/PlayerModelLoader";
+import { EquipSlot, getBodyColorHsl } from "../../rs/model/player/PlayerModelLoader";
 import { HSL_RGB_MAP } from "../../rs/util/ColorUtil";
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
 import { characterName, getCharacter } from "../content/characters";
 import { getTrophyMap } from "../content/collectionLog";
 import { getMap, getRoster, mapName } from "../content/maps";
+import {
+    CAPE_PARTS,
+    CAPE_PRESETS,
+    CUSTOM_MAX_CAPE,
+    DEFAULT_CAPE_COLOURS,
+    Hsl,
+    capePartName,
+    getCapeRecolors,
+    packHsl,
+    sameCapeColours,
+    unpackHsl,
+} from "../content/maxCape";
 import { RARITIES, RARITY_ORDER, Rarity } from "../content/rarity";
 import { trophyName } from "../content/trophies";
 import {
@@ -142,7 +154,15 @@ export function WardrobeScreen({ ui, client }: Props): JSX.Element {
                             client={client}
                         />
                     ) : (
-                        <StoreTab save={save} look={look} client={client} />
+                        <StoreTab
+                            save={save}
+                            look={look}
+                            client={client}
+                            onPickColours={() => {
+                                client.previewLook(undefined);
+                                setTab("outfit");
+                            }}
+                        />
                     )}
                 </div>
                 <div className="ui-row">
@@ -384,7 +404,11 @@ function OutfitTab({
                             <span className="ui-wardrobe-worn">
                                 {piece ? (
                                     <>
-                                        <ItemIcon objId={piece.objId} size={24} />
+                                        <ItemIcon
+                                            objId={piece.objId}
+                                            recolors={iconRecolors(piece.objId, look)}
+                                            size={24}
+                                        />
                                         {cosmeticName(piece)}
                                     </>
                                 ) : worn === -1 ? (
@@ -429,11 +453,15 @@ function OutfitTab({
                                     <CosmeticTile
                                         key={cosmetic.objId}
                                         cosmetic={cosmetic}
+                                        recolors={iconRecolors(cosmetic.objId, look)}
                                         selected={worn === cosmetic.objId}
                                         onClick={() => wear(slot.equipSlot, cosmetic.objId)}
                                     />
                                 ))}
                             </div>
+                        )}
+                        {slot.equipSlot === EquipSlot.CAPE && worn === CUSTOM_MAX_CAPE && (
+                            <CapeColours look={look} client={client} />
                         )}
                     </div>
                 );
@@ -451,6 +479,172 @@ function OutfitTab({
                 >
                     {t("wardrobe.clear_outfit")}
                 </button>
+            </div>
+        </div>
+    );
+}
+
+// ---- The customisable max cape's colours ----
+
+// Each colour the adventurer's tried on in is a bake of its own, so while a slider moves they're
+// shown it at most this often, and the colours are kept once it's been still this long
+const PREVIEW_MS = 250;
+const KEEP_MS = 600;
+
+function hslToCss(hsl: Hsl): string {
+    return "#" + HSL_RGB_MAP[hsl & 0xffff].toString(16).padStart(6, "0");
+}
+
+// A slider's track: the colours along it, from one end to the other
+function gradient(colours: Hsl[]): string {
+    return `linear-gradient(to right, ${colours.map(hslToCss).join(", ")})`;
+}
+
+// Colours picked on a slider but not kept yet: shown on the adventurer every PREVIEW_MS, and kept
+// (saved, and sent to co-op's room) once they've settled, or as the Wardrobe's left
+function useDraftColours(
+    look: WardrobeLook,
+    client: GameClient,
+): [Hsl[] | undefined, (colours: Hsl[] | undefined) => void] {
+    const [draft, setDraft] = useState<Hsl[]>();
+    const lastPreview = useRef(0);
+    const latest = useRef({ look, draft });
+    latest.current = { look, draft };
+    useEffect(() => {
+        if (!draft) {
+            return;
+        }
+        const wait = Math.max(0, lastPreview.current + PREVIEW_MS - performance.now());
+        const preview = setTimeout(() => {
+            lastPreview.current = performance.now();
+            client.previewLook({ ...latest.current.look, capeColours: draft });
+        }, wait);
+        const keep = setTimeout(() => {
+            client.setLook({ ...latest.current.look, capeColours: draft });
+            setDraft(undefined);
+        }, KEEP_MS);
+        return () => {
+            clearTimeout(preview);
+            clearTimeout(keep);
+        };
+    }, [client, draft]);
+    useEffect(
+        () => () => {
+            const { look, draft } = latest.current;
+            if (draft) {
+                client.setLook({ ...look, capeColours: draft });
+            }
+        },
+        [client],
+    );
+    return [draft, setDraft];
+}
+
+// The customisable max cape's colours, under the cape it's on: a part at a time, its hue,
+// saturation and lightness on sliders, or all of another max cape's colours in one go
+function CapeColours({ look, client }: { look: WardrobeLook; client: GameClient }): JSX.Element {
+    const [draft, setDraft] = useDraftColours(look, client);
+    const [part, setPart] = useState(0);
+    const colours = draft ?? look.capeColours ?? DEFAULT_CAPE_COLOURS;
+    const { hue, saturation, lightness } = unpackHsl(colours[part]);
+    const set = (h: number, s: number, l: number) => {
+        const next = colours.slice();
+        next[part] = packHsl(h, s, l);
+        setDraft(next);
+    };
+    const sliders = [
+        {
+            label: t("wardrobe.hue"),
+            value: hue,
+            max: 63,
+            // Every hue at its brightest, so the track shows them all whatever's picked
+            track: Array.from({ length: 16 }, (_, i) => packHsl(i * 4, 7, 64)),
+            onChange: (v: number) => set(v, saturation, lightness),
+        },
+        {
+            label: t("wardrobe.saturation"),
+            value: saturation,
+            max: 7,
+            track: Array.from({ length: 8 }, (_, i) => packHsl(hue, i, lightness)),
+            onChange: (v: number) => set(hue, v, lightness),
+        },
+        {
+            label: t("wardrobe.lightness"),
+            value: lightness,
+            max: 127,
+            track: Array.from({ length: 9 }, (_, i) =>
+                packHsl(hue, saturation, Math.min(127, i * 16)),
+            ),
+            onChange: (v: number) => set(hue, saturation, v),
+        },
+    ];
+    return (
+        <div className="ui-wardrobe-dye">
+            <div className="ui-wardrobe-dye-title">{t("wardrobe.cape_colours")}</div>
+            <div className="ui-wardrobe-dye-parts">
+                {CAPE_PARTS.map((p, i) => (
+                    <button
+                        key={p.id}
+                        className={
+                            "ui-armoury-tab ui-wardrobe-dye-part" +
+                            (part === i ? " ui-armoury-tab-selected" : "")
+                        }
+                        aria-pressed={part === i}
+                        onClick={() => setPart(i)}
+                    >
+                        <span
+                            className="ui-wardrobe-dye-chip"
+                            style={{ background: hslToCss(colours[i]) }}
+                        />
+                        {capePartName(p)}
+                    </button>
+                ))}
+            </div>
+            {sliders.map((slider) => (
+                <label key={slider.label} className="ui-wardrobe-row ui-wardrobe-dye-row">
+                    <span className="ui-wardrobe-label">{slider.label}</span>
+                    <input
+                        className="ui-wardrobe-dye-slider"
+                        type="range"
+                        min={0}
+                        max={slider.max}
+                        step={1}
+                        value={slider.value}
+                        style={{ background: gradient(slider.track) }}
+                        aria-label={`${capePartName(CAPE_PARTS[part])}: ${slider.label}`}
+                        onChange={(e) => slider.onChange(parseInt(e.target.value))}
+                    />
+                </label>
+            ))}
+            <div className="ui-wardrobe-dye-presets">
+                <span className="ui-subtle">{t("wardrobe.cape_presets")}</span>
+                <div className="ui-wardrobe-tiles">
+                    {CAPE_PRESETS.map((preset) => {
+                        const cape = COSMETIC_BY_ID.get(preset.objId);
+                        const name = cape ? cosmeticName(cape) : "";
+                        const on = sameCapeColours(colours, preset.colours);
+                        return (
+                            <button
+                                key={preset.objId}
+                                className={
+                                    "ui-card ui-wardrobe-tile" + (on ? " ui-card-selected" : "")
+                                }
+                                title={name}
+                                aria-label={t("wardrobe.cape_preset", { name })}
+                                aria-pressed={on}
+                                onClick={() => {
+                                    setDraft(undefined);
+                                    client.setLook({
+                                        ...look,
+                                        capeColours: preset.colours.slice(),
+                                    });
+                                }}
+                            >
+                                <ItemIcon objId={preset.objId} size={30} />
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
@@ -576,15 +770,24 @@ function SavedOutfits({
     );
 }
 
+// The customisable max cape's icon is in the look's colours
+function iconRecolors(objId: number, look: WardrobeLook): number[] | undefined {
+    return objId === CUSTOM_MAX_CAPE
+        ? getCapeRecolors(look.capeColours ?? DEFAULT_CAPE_COLOURS)
+        : undefined;
+}
+
 function CosmeticTile({
     cosmetic,
     selected,
     owned = true,
+    recolors,
     onClick,
 }: {
     cosmetic: CosmeticDef;
     selected: boolean;
     owned?: boolean;
+    recolors?: readonly number[];
     onClick: () => void;
 }): JSX.Element {
     return (
@@ -600,7 +803,7 @@ function CosmeticTile({
             aria-pressed={selected}
             onClick={onClick}
         >
-            <ItemIcon objId={cosmetic.objId} size={30} />
+            <ItemIcon objId={cosmetic.objId} recolors={recolors} size={30} />
         </button>
     );
 }
@@ -611,10 +814,13 @@ function StoreTab({
     save,
     look,
     client,
+    onPickColours,
 }: {
     save: SaveData;
     look: WardrobeLook;
     client: GameClient;
+    // To the Outfit tab, where the customisable max cape's colours are picked
+    onPickColours: () => void;
 }): JSX.Element {
     const [slot, setSlot] = useState<number>(WARDROBE_SLOTS[0].equipSlot);
     const [rarity, setRarity] = useState<Rarity>();
@@ -722,6 +928,7 @@ function StoreTab({
                                     key={cosmetic.objId}
                                     cosmetic={cosmetic}
                                     owned={owned(cosmetic.objId)}
+                                    recolors={iconRecolors(cosmetic.objId, look)}
                                     selected={selected === cosmetic.objId}
                                     onClick={() => pick(cosmetic)}
                                 />
@@ -753,7 +960,13 @@ function StoreTab({
                         </span>
                     </div>
                 </div>
-                <StoreDetails save={save} look={look} piece={piece} client={client} />
+                <StoreDetails
+                    save={save}
+                    look={look}
+                    piece={piece}
+                    client={client}
+                    onPickColours={onPickColours}
+                />
             </div>
         </div>
     );
@@ -764,11 +977,13 @@ function StoreDetails({
     look,
     piece,
     client,
+    onPickColours,
 }: {
     save: SaveData;
     look: WardrobeLook;
     piece: CosmeticDef | undefined;
     client: GameClient;
+    onPickColours: () => void;
 }): JSX.Element {
     if (!piece) {
         return (
@@ -783,13 +998,18 @@ function StoreDetails({
     // Found on a map, never sold
     const trophy = getPieceTrophy(piece.objId);
     const worn = look.outfit?.[piece.slot] === piece.objId;
+    const custom = piece.objId === CUSTOM_MAX_CAPE;
     const slot = WARDROBE_SLOTS.find((s) => s.equipSlot === piece.slot);
     const wear = () =>
         client.setLook({ ...look, outfit: { ...look.outfit, [piece.slot]: piece.objId } });
     return (
         <div className="ui-select-details ui-wardrobe-details">
             <div className="ui-select-details-head">
-                <ItemIcon objId={piece.objId} size={36} />
+                <ItemIcon
+                    objId={piece.objId}
+                    recolors={iconRecolors(piece.objId, look)}
+                    size={36}
+                />
                 <div>
                     <div className="ui-card-title" style={{ color: RARITIES[piece.rarity].color }}>
                         {cosmeticName(piece)}
@@ -803,6 +1023,7 @@ function StoreDetails({
                 </div>
             </div>
             <p className="ui-subtle">{t("wardrobe.trying_on")}</p>
+            {custom && <p className="ui-subtle">{t("wardrobe.custom_cape_note")}</p>}
             {owned ? (
                 <>
                     <div className="ui-card-style">
@@ -819,6 +1040,19 @@ function StoreDetails({
                     <button className="ui-button ui-button-go" disabled={worn} onClick={wear}>
                         {worn ? t("wardrobe.wearing") : t("wardrobe.wear")}
                     </button>
+                    {custom && (
+                        <button
+                            className="ui-button"
+                            onClick={() => {
+                                if (!worn) {
+                                    wear();
+                                }
+                                onPickColours();
+                            }}
+                        >
+                            {t("wardrobe.pick_colours")}
+                        </button>
+                    )}
                 </>
             ) : trophy ? (
                 <>

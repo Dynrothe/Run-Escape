@@ -161,6 +161,9 @@ A piece that's only found, never sold (the Halloween masks, raid armour), is a t
 named in `FOUND_PIECE_TROPHIES` in `content/wardrobe.ts`, with any pieces it makes besides its
 own item. A new trophy that's a worn item goes there too, or the store sells it.
 `slim-plan.ts` bakes every piece on both bodies. See The Wardrobe in `docs/DEVELOPMENT.md`.
+The Customisable max cape is the one piece added by hand (`content/maxCape.ts`, spliced into
+`COSMETICS`): its parts' colours and the other max capes' presets are checked against the cache
+by `scripts/cache/check-items.ts`.
 
 ## Collection log reward
 

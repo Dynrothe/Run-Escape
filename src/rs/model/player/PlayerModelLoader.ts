@@ -121,15 +121,47 @@ export type PlayerAppearance = {
     colors: number[];
     // Worn item per equipment slot (12), -1 for none
     equipment: number[];
+    // Colours repainted on the item worn in a slot, as pairs of from and to (HSL, as the cache
+    // packs it), all at once: the Wardrobe's customisable max cape
+    recolors?: Partial<Record<number, readonly number[]>>;
 };
 
 export function getAppearanceKey(appearance: PlayerAppearance): string {
-    return [
+    const key = [
         appearance.female ? 1 : 0,
         appearance.kits.join(","),
         appearance.colors.join(","),
         appearance.equipment.join(","),
-    ].join("|");
+    ];
+    for (const [slot, pairs] of Object.entries(appearance.recolors ?? {})) {
+        if (pairs && pairs.length > 0) {
+            key.push(`${slot}:${pairs.join(",")}`);
+        }
+    }
+    return key.join("|");
+}
+
+// The colours the body colours repaint once the model's merged (BODY_COLOR_SOURCE and its second)
+const BODY_SOURCES = new Set<number>(
+    [...BODY_COLOR_SOURCE, ...BODY_COLOR_SOURCE_2].filter((c) => c !== -1).map((c) => c & 0xffff),
+);
+
+// Repaints a worn item's colours, every pair at once, so one pair's new colour isn't another's
+// old one. A colour the body colours would repaint after (the hair's, the skin's) goes a shade
+// lighter or darker instead, or the cape would come out in the player's hair colour.
+export function recolorAtOnce(model: ModelData, pairs: readonly number[]): void {
+    const to = new Map<number, number>();
+    for (let i = 0; i + 1 < pairs.length; i += 2) {
+        const color = pairs[i + 1] & 0xffff;
+        to.set(pairs[i] & 0xffff, BODY_SOURCES.has(color) ? color ^ 1 : color);
+    }
+    const colors = model.faceColors;
+    for (let i = 0; i < model.faceCount; i++) {
+        const color = to.get(colors[i]);
+        if (color !== undefined) {
+            colors[i] = color;
+        }
+    }
 }
 
 export function createAppearance(
@@ -277,6 +309,10 @@ export class PlayerModelLoader {
             let part: ModelData | undefined;
             if (objType) {
                 part = this.getWornModel(objType, appearance.female);
+                const pairs = appearance.recolors?.[slot];
+                if (part && pairs) {
+                    recolorAtOnce(part, pairs);
+                }
             } else if (!hidden.has(slot)) {
                 const kitId = kitBySlot.get(slot);
                 if (kitId !== undefined) {

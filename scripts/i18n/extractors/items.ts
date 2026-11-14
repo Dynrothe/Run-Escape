@@ -1,5 +1,6 @@
 import { CHARACTERS } from "../../../src/game/content/characters";
 import { CASKETS, CASKET_TIERS, GEAR, GEAR_SLOTS, UTILITY } from "../../../src/game/content/items";
+import { CAPE_PARTS } from "../../../src/game/content/maxCape";
 import { PASSIVES } from "../../../src/game/content/passives";
 import { POWER_UPS, THRALLS, getPolymorphLooks } from "../../../src/game/content/powerups";
 import { RARITIES, RARITY_ORDER } from "../../../src/game/content/rarity";
@@ -90,6 +91,7 @@ export default function extract(): Record<string, string> {
     for (const cosmetic of COSMETICS) {
         strings[`cosmetic.${cosmetic.objId}.name`] = cosmetic.name;
     }
+    for (const part of CAPE_PARTS) strings[`wardrobe.cape_part.${part.id}.name`] = part.name;
 
     return strings;
 }

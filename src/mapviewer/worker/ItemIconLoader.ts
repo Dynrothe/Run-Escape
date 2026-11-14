@@ -15,14 +15,16 @@ export const ICON_WIDTH = 36;
 export const ICON_HEIGHT = 32;
 
 // A negative objId is a loc's model instead (-locId), seen from above: a floor symbol, for a
-// screen that shows what's on the ground (renderLocIcon)
-export type ItemIconRequest = { objId: number; count: number };
+// screen that shows what's on the ground (renderLocIcon). recolors: colours repainted on the
+// item, as pairs of from and to (the customisable max cape's, ObjModelLoader.getModel).
+export type ItemIconRequest = { objId: number; count: number; recolors?: number[] };
 
 export type ItemIconInput = { requests: ItemIconRequest[] };
 
 export type ItemIcon = {
     objId: number;
     count: number;
+    recolors?: number[];
     // ARGB, ICON_WIDTH x ICON_HEIGHT; empty when the item has no model
     pixels: Int32Array;
 };
@@ -292,14 +294,19 @@ export function renderLocIcon(state: WorkerState, locId: number): Int32Array {
     return pixels;
 }
 
-export function renderItemIcon(state: WorkerState, objId: number, count: number): Int32Array {
+export function renderItemIcon(
+    state: WorkerState,
+    objId: number,
+    count: number,
+    recolors?: readonly number[],
+): Int32Array {
     if (objId < 0) {
         return renderLocIcon(state, -objId);
     }
     const pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
     const stackId = getStackObjId(state, objId, count);
     const objType = state.objTypeLoader.load(stackId);
-    const model = state.objModelLoader.getModel(stackId, 1);
+    const model = state.objModelLoader.getModel(stackId, 1, recolors);
     if (!model) {
         return pixels;
     }
@@ -347,15 +354,15 @@ export class ItemIconLoader implements RenderDataLoader<ItemIconInput, ItemIcon[
     init(): void {}
 
     async load(state: WorkerState, input: ItemIconInput): Promise<RenderDataResult<ItemIcon[]>> {
-        const icons = input.requests.map(({ objId, count }) => {
+        const icons = input.requests.map(({ objId, count, recolors }) => {
             let pixels: Int32Array;
             try {
-                pixels = renderItemIcon(state, objId, count);
+                pixels = renderItemIcon(state, objId, count, recolors);
             } catch (e) {
                 console.error("Failed drawing item icon", objId, e);
                 pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
             }
-            return { objId, count, pixels };
+            return { objId, count, recolors, pixels };
         });
         return { data: icons, transferables: icons.map((icon) => icon.pixels.buffer) };
     }

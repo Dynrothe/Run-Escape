@@ -1721,6 +1721,20 @@
         height: 28px;
     }
 
+    /* The max cape's sliders, as tall as the swatches, with a thumb a finger can find */
+    .ui-wardrobe-screen .ui-wardrobe-dye-slider {
+        height: 28px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-dye-slider::-webkit-slider-thumb {
+        width: 14px;
+        height: 32px;
+    }
+
+    .ui-wardrobe-screen .ui-wardrobe-dye-row > .ui-wardrobe-label {
+        min-width: 72px;
+    }
+
     .ui-wardrobe-screen .ui-wardrobe-preview {
         left: auto;
         right: calc(var(--safe-right) + 6px);

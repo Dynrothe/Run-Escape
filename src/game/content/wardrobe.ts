@@ -10,6 +10,14 @@ import { CHARACTERS } from "./characters";
 import { BODY_KIT_IDS, COSMETIC_ROWS } from "./cosmeticItems";
 import { GEAR_SLOTS } from "./items";
 import { isCharacterOut } from "./maps";
+import {
+    CUSTOM_MAX_CAPE,
+    CUSTOM_MAX_CAPE_NAME,
+    CUSTOM_MAX_CAPE_PRICE,
+    Hsl,
+    cleanCapeColours,
+    sameCapeColours,
+} from "./maxCape";
 import { Rarity } from "./rarity";
 import { TROPHY_BY_ID, TrophyDef } from "./trophies";
 import { CharacterDef } from "./types";
@@ -32,6 +40,9 @@ export type WardrobeLook = {
     outfit?: Outfit;
     // The outfit stays on over gear from passives and caskets, as an adventurer's fixed outfit does
     overGear?: boolean;
+    // The customisable max cape's colours, a part each (content/maxCape.ts), kept while another
+    // cape's worn. None is the max cape's own.
+    capeColours?: Hsl[];
 };
 
 export type CosmeticDef = { objId: number; name: string; slot: EquipSlot; rarity: Rarity };
@@ -57,14 +68,28 @@ export const COSMETIC_PRICES: Record<Rarity, number> = {
 const THIRD_AGE = /^3rd age\b/i;
 export const THIRD_AGE_PRICE = 250_000;
 
-export const COSMETICS: CosmeticDef[] = COSMETIC_ROWS.flatMap(([slot, rows]) =>
-    rows.map(([objId, name, rarity]) => ({
+// The customisable max cape isn't one of the cache's looks (it's the max cape's), so it's added
+// to the capes by hand, in its place by name
+const CUSTOM_CAPE: CosmeticDef = {
+    objId: CUSTOM_MAX_CAPE,
+    name: CUSTOM_MAX_CAPE_NAME,
+    slot: EquipSlot.CAPE,
+    rarity: "veryRare",
+};
+
+export const COSMETICS: CosmeticDef[] = COSMETIC_ROWS.flatMap(([slot, rows]) => {
+    const pieces: CosmeticDef[] = rows.map(([objId, name, rarity]) => ({
         objId,
         name,
         slot,
         rarity: RARITY_CODES[rarity] ?? "common",
-    })),
-);
+    }));
+    if (slot === EquipSlot.CAPE) {
+        const at = pieces.findIndex((c) => c.name.localeCompare(CUSTOM_CAPE.name) > 0);
+        pieces.splice(at < 0 ? pieces.length : at, 0, CUSTOM_CAPE);
+    }
+    return pieces;
+});
 
 export const COSMETIC_BY_ID: Map<number, CosmeticDef> = new Map(COSMETICS.map((c) => [c.objId, c]));
 
@@ -80,6 +105,9 @@ export function cosmeticName(cosmetic: CosmeticDef): string {
 }
 
 export function getCosmeticPrice(cosmetic: CosmeticDef): number {
+    if (cosmetic.objId === CUSTOM_MAX_CAPE) {
+        return CUSTOM_MAX_CAPE_PRICE;
+    }
     return THIRD_AGE.test(cosmetic.name) ? THIRD_AGE_PRICE : COSMETIC_PRICES[cosmetic.rarity];
 }
 
@@ -291,6 +319,10 @@ export function cleanLook(
     if (data.overGear === true) {
         look.overGear = true;
     }
+    const capeColours = cleanCapeColours(data.capeColours);
+    if (capeColours) {
+        look.capeColours = capeColours;
+    }
     return Object.keys(look).length > 0 ? look : undefined;
 }
 
@@ -316,8 +348,18 @@ export function applyOutfit(appearance: PlayerAppearance, outfit: Outfit | undef
 // ---- Saved outfits ----
 
 // An outfit kept under a name, to put on again in one go: its pieces and whether they go over
-// gear. The body isn't in it, so changing the body needn't mean saving each outfit again.
-export type SavedOutfit = { name: string; outfit?: Outfit; overGear?: boolean };
+// gear, and the customisable max cape's colours if it's in it. The body isn't in it, so changing
+// the body needn't mean saving each outfit again.
+export type SavedOutfit = {
+    name: string;
+    outfit?: Outfit;
+    overGear?: boolean;
+    capeColours?: Hsl[];
+};
+
+function wearsCustomCape(outfit: Outfit | undefined): boolean {
+    return outfit?.[EquipSlot.CAPE] === CUSTOM_MAX_CAPE;
+}
 
 export const MAX_SAVED_OUTFITS = 10;
 export const MAX_OUTFIT_NAME = 24;
@@ -344,6 +386,9 @@ export function saveOutfit(
     if (look?.overGear) {
         saved.overGear = true;
     }
+    if (wearsCustomCape(saved.outfit) && look?.capeColours) {
+        saved.capeColours = look.capeColours.slice();
+    }
     const at = outfits.findIndex((o) => o.name === named);
     if (at >= 0) {
         return outfits.map((o, i) => (i === at ? saved : o));
@@ -351,9 +396,18 @@ export function saveOutfit(
     return outfits.length < MAX_SAVED_OUTFITS ? [...outfits, saved] : undefined;
 }
 
-// The look with a saved outfit on, its body as it was
+// The look with a saved outfit on, its body as it was. An outfit with the customisable max cape
+// brings its colours; one without keeps the look's for the next time it's worn.
 export function wearOutfit(look: WardrobeLook | undefined, saved: SavedOutfit): WardrobeLook {
-    return { ...look, outfit: saved.outfit && { ...saved.outfit }, overGear: saved.overGear };
+    const worn: WardrobeLook = {
+        ...look,
+        outfit: saved.outfit && { ...saved.outfit },
+        overGear: saved.overGear,
+    };
+    if (wearsCustomCape(saved.outfit)) {
+        worn.capeColours = saved.capeColours?.slice();
+    }
+    return worn;
 }
 
 // Whether the look has this saved outfit on
@@ -363,7 +417,8 @@ export function isWearingOutfit(look: WardrobeLook | undefined, saved: SavedOutf
     const slots = new Set([...Object.keys(a), ...Object.keys(b)].map(Number));
     return (
         (look?.overGear === true) === (saved.overGear === true) &&
-        [...slots].every((slot) => a[slot] === b[slot])
+        [...slots].every((slot) => a[slot] === b[slot]) &&
+        (!wearsCustomCape(b) || sameCapeColours(look?.capeColours, saved.capeColours))
     );
 }
 
@@ -381,16 +436,18 @@ export function cleanSavedOutfits(
         if (out.length >= MAX_SAVED_OUTFITS || typeof item !== "object" || item === null) {
             continue;
         }
-        const { name, outfit, overGear } = item as Partial<SavedOutfit>;
+        const { name, outfit, overGear, capeColours } = item as Partial<SavedOutfit>;
         const named = typeof name === "string" ? cleanOutfitName(name) : "";
         if (!named || out.some((o) => o.name === named)) {
             continue;
         }
-        const look = cleanLook({ outfit, overGear }, canWear);
+        const look = cleanLook({ outfit, overGear, capeColours }, canWear);
         out.push({
             name: named,
             ...(look?.outfit && { outfit: look.outfit }),
             ...(look?.overGear && { overGear: true }),
+            ...(wearsCustomCape(look?.outfit) &&
+                look?.capeColours && { capeColours: look.capeColours }),
         });
     }
     return out;

@@ -10,6 +10,10 @@ the version in the corner).
 - The Collection log in a run, by Okaeri: open it from the pause menu to see what you have, with
   anything this run has found and not saved yet marked New. Closing it goes back to the menu. In
   co-op it opens from the party's menu, and the run goes on while your hero stands still.
+- A Customisable max cape in the Wardrobe's store, for 25,000 coins: pick the colour of each of
+  its parts in the Outfit tab, or start from any other max cape's colours. Saved outfits keep
+  them.
+- With a controller, left and right move a highlighted slider.
 
 ### Fixed
 
