@@ -2234,9 +2234,12 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
 ```
 
 Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
-request (without the game's cache). `generator.test.ts`'s long map checks are opt-in: `bun run
-test:maps` (`MAP_CHECKS=1`) runs them, for changes to ScapeRune or a map, and the release workflow
-runs them every time.
+request (without the game's cache). `generator.test.ts`'s long map checks are opt-in:
+`bun run test:maps` (`MAP_CHECKS=1`, with the cache) runs them, and the release workflow runs them
+every time. They build the maps with ScapeRune, collision and how a map's scenery loads, so run
+them after a change to any of those (`src/game/scaperune/`, `scripts/scaperune/`, `core/world/`,
+`RegionDataLoader.ts`, `SceneBuilder.ts`, `LocOverrides.ts`), to a map, or to a newer cache. Asked
+for without the cache, they fail rather than pass with nothing checked.
 
 The dev server's file watcher leaves out `.claude/`, where Claude Code keeps its worktrees. Each is
 a whole checkout, and watching them all held up the first load after every start by tens of
@@ -2282,7 +2285,8 @@ The game runs on the one cache `GAME_CACHE_NAME` names (README, Cache version). 
    A type only written a new way doesn't count. Look up the ids that changed in the content; a map
    square that changed in an arena can move its collision. Then for the dev maps:
    `compare-caches.ts <old cache> caches/slim-dev/`.
-5. The tests with the cache there. `grid-hash.ts` pins what the ScapeRune maps write, and a map
+5. `bun run test` and `bun run test:maps` with the cache there (a plain `bun run test` leaves the
+   map checks out). `grid-hash.ts` pins what the ScapeRune maps write, and a map
    that copies the real world's squares can change with them: re-pin it on purpose.
 6. A sim sweep of every map on both caches, the same code. The maps whose collision didn't change
    play exactly as before, run for run, so any difference there is a bug; the ones that changed

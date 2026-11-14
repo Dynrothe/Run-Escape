@@ -2123,7 +2123,7 @@ room is upstairs, so it's cut with `plane: 1` (see [Prefabs](#prefabs)).
   foam) as warnings, not failures. They must stay byte for byte: Hallowed Night imports `Ground`, `collision`, `format`,
   `mapBuild`, `noise`, `prefabs` and `recipe`. Each shipped map's hash is pinned in `scripts/scaperune/grid-hash.ts`
   (`SHIPPED_HASHES`). Run `CHECK=1 bun run tsx scripts/scaperune/grid-hash.ts` to build every
-  shipped map and compare its hash. `generator.test.ts` runs this check when the cache is present.
+  shipped map and compare its hash. `bun run test:maps` runs this check (a plain `bun run test` doesn't).
   If you change a shipped map, update its hash and explain why in the pull request. Add a hash for
   each new shipped map too. A missing hash fails the check.
 - A recipe whose test builds without the cache keeps a table of its locs' sizes and which are walked through (the
