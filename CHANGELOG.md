@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- On the title screen, your pet stands closer beside your adventurer, and the courtyard's bushes
+  are gone, so they no longer hide it. A run in Lumbridge keeps them.
+
 ## 0.32.2 - 2026-11-14
 
 ### Changed

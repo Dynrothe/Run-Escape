@@ -19,6 +19,37 @@ function square(mapX: number, mapY: number): MapSquare {
     return { mapX, mapY, canRender: () => true, delete() {} };
 }
 
+describe("reloading a square", () => {
+    it("keeps drawing the loaded one until the new one takes its place", () => {
+        const asked: number[] = [];
+        const manager = new MapManager<MapSquare>(10, (mapX, mapY) =>
+            asked.push(getMapSquareId(mapX, mapY)),
+        );
+        const old = square(3, 4);
+        manager.addMap(3, 4, old);
+        manager.reloadMap(3, 4);
+        expect(asked).toEqual([getMapSquareId(3, 4)]);
+        expect(manager.getMap(3, 4)).toBe(old);
+
+        const reloaded = square(3, 4);
+        manager.addMap(3, 4, reloaded);
+        expect(manager.getMap(3, 4)).toBe(reloaded);
+        expect(manager.loadingMapIds.size).toBe(0);
+    });
+
+    it("asks afresh for one still on its way", () => {
+        const asked: number[] = [];
+        const manager = new MapManager<MapSquare>(10, (mapX, mapY) =>
+            asked.push(getMapSquareId(mapX, mapY)),
+        );
+        manager.loadMap(3, 4);
+        manager.reloadMap(3, 4);
+        expect(manager.loadingMapIds.has(getMapSquareId(3, 4))).toBe(false);
+        manager.loadMap(3, 4);
+        expect(asked).toEqual([getMapSquareId(3, 4), getMapSquareId(3, 4)]);
+    });
+});
+
 describe("pinned map squares", () => {
     it("load wherever the camera is, stay loaded, and go back to streaming once unpinned", () => {
         const asked: number[] = [];

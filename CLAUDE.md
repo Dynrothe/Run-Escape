@@ -105,6 +105,7 @@ go stale. Add anything that cost you time to work out.
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
 | Cloud save in the game: syncing, the choice, Settings  | `client/CloudSave.ts`, `ui/CloudSave.tsx`, `docs/DEVELOPMENT.md` Saves |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
+| Scenery left out of the title screen (its bushes)      | `GameClient.ts` (`TITLE_HIDDEN_LOCS`), `SdMapLoaderInput.hiddenLocs`   |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
 | Actors' frames, baked as positions on a shared mesh    | `actor/ActorBakeFrames.ts`, `actor.vert.glsl`, `check-actor-frames.ts` |

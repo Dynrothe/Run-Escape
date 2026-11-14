@@ -236,6 +236,13 @@ const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
 
 // The title screen is in the first map (Lumbridge castle's courtyard)
 const TITLE_MAP = MAPS[0];
+// The courtyard's bushes, left out of the title screen (not a run there), as they hid the pet:
+// the world tile each stands on and its loc id (SdMapLoaderInput.hiddenLocs)
+// prettier-ignore
+const TITLE_HIDDEN_LOCS: readonly number[] = [
+    3218, 3217, 1124, 3218, 3220, 1124, 3219, 3217, 1124, 3219, 3220, 1124,
+    3220, 3217, 10586, 3220, 3220, 44782, 3223, 3217, 10778, 3223, 3220, 29715,
+];
 
 // Recordings of the OSRS music tracks maps play (MapDef.music), from the OSRS
 // Wiki, in src/media/music: a track's file is its name in lower case with
@@ -278,9 +285,8 @@ function settleYaw(yaw: number, target: number, settle: number): number {
     return wrapYaw(target + (Math.abs(settled) < 1 ? 0 : settled));
 }
 
-// The pet taken along stands beside the character on the menus: tiles to their side and behind
-const PREVIEW_PET_SIDE = 1.1;
-const PREVIEW_PET_BACK = 0.4;
+// The pet taken along stands beside the character on the menus, this many tiles to their side
+const PREVIEW_PET_SIDE = 0.7;
 const RUN_PITCH = -400;
 // Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
 const OPEN_WORLD_MARGIN = 56;
@@ -3292,6 +3298,7 @@ export class GameClient implements GameFrameHandler {
         this.showInstruction(performance.now());
 
         setPlayArea(this.renderer, this.grid, this.sim?.map.scaperune === true);
+        this.renderer.setHiddenLocs(this.sim ? undefined : TITLE_HIDDEN_LOCS);
 
         const sim = this.sim;
         if (!sim) {
@@ -4948,7 +4955,7 @@ export class GameClient implements GameFrameHandler {
         if (pet && petModel) {
             const anim = petModel.getAnim(pet.idleSeq);
             const x = TITLE_MAP.spawn.x + PREVIEW_PET_SIDE;
-            const y = TITLE_MAP.spawn.y - PREVIEW_PET_BACK;
+            const y = TITLE_MAP.spawn.y;
             actors.draw(
                 petModel,
                 anim,

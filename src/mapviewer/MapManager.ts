@@ -243,6 +243,18 @@ export class MapManager<T extends MapSquare> {
         this.mapSquares.set(mapId, mapSquare);
     }
 
+    // Loads a square again for what's changed in it, drawing it as it was until the new one's in
+    // its place (addMap). One not loaded yet is asked for afresh: what's on its way was asked
+    // for before the change, and the renderer drops it (isValidMapData).
+    reloadMap(mapX: number, mapY: number): void {
+        const mapId = getMapSquareId(mapX, mapY);
+        this.loadingMapIds.delete(mapId);
+        if (this.mapSquares.has(mapId)) {
+            this.loadingMapIds.add(mapId);
+            this.loadMapFunction(mapX, mapY);
+        }
+    }
+
     removeMap(mapX: number, mapY: number): void {
         const mapId = getMapSquareId(mapX, mapY);
         const map = this.mapSquares.get(mapId);
