@@ -269,6 +269,35 @@ describe("Ghorrock", () => {
         expect(cold.coldOf(0)).toBeCloseTo(10 + GHORROCK_COLD.cold.fast / TICKS_PER_SECOND, 3);
     });
 
+    test("a puff's progress runs from its start to its end, as long as its gas hurts", () => {
+        const sim = createSim();
+        const cold = coldOf(sim);
+        const puffTicks = Math.round(GHORROCK_COLD.vents.puff * TICKS_PER_SECOND);
+        // A boss's spit: from the tick it lands
+        const vent = cold.vents[3];
+        const at = sim.tick + 1000;
+        cold.puffNearest(vent.x, vent.y, at);
+        expect(cold.puffProgress(vent, at)).toBe(0);
+        expect(cold.puffProgress(vent, at + puffTicks / 2)).toBeCloseTo(0.5, 2);
+        for (let t = at; t < at + puffTicks + 5; t++) {
+            const progress = cold.puffProgress(vent, t);
+            expect(progress !== undefined).toBe(cold.ventState(vent, t) === "puff");
+        }
+        expect(cold.puffProgress(vent, at + puffTicks - 1)).toBeLessThan(1);
+        // Its own cycle's, the same way
+        const other = cold.vents[0];
+        let start = -1;
+        for (let t = 0; t < GHORROCK_COLD.vents.every * TICKS_PER_SECOND * 2 && start < 0; t++) {
+            if (cold.ventState(other, t) !== "puff" && cold.ventState(other, t + 1) === "puff") {
+                start = t + 1;
+            }
+        }
+        expect(start).toBeGreaterThan(0);
+        expect(cold.puffProgress(other, start)).toBe(0);
+        expect(cold.puffProgress(other, start + puffTicks - 1)).toBeCloseTo(1 - 1 / puffTicks, 5);
+        expect(cold.puffProgress(other, start + puffTicks)).toBeUndefined();
+    });
+
     test("Ketla snuffs the braziers she passes, and every one goes out as the Duke wakes", () => {
         const sim = createSim();
         quiet(sim);

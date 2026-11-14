@@ -218,6 +218,20 @@ export class ColdRule implements RunRule {
         return phase >= this.period - this.warnTicks ? "warn" : undefined;
     }
 
+    // How far through its puff a vent is, from 0 as it starts to just under 1 as it stops
+    // (undefined when it isn't puffing), so the view plays the cloud out over the time it hurts.
+    // As ventState: a puff it's made to give over its own cycle's.
+    puffProgress(vent: Vent, tick: number): number | undefined {
+        if (vent.forced >= 0) {
+            const into = tick - vent.forced;
+            if (into >= 0 && into < this.puffTicks) {
+                return into / this.puffTicks;
+            }
+        }
+        const phase = (((tick - vent.offset) % this.period) + this.period) % this.period;
+        return phase < this.puffTicks ? phase / this.puffTicks : undefined;
+    }
+
     // In a vent's cloud while it's out
     gasAt(x: number, y: number, tick: number): boolean {
         const half = this.def.vents.size / 2;
