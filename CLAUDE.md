@@ -108,6 +108,7 @@ go stale. Add anything that cost you time to work out.
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
 | Actors' frames, baked as positions on a shared mesh    | `actor/ActorBakeFrames.ts`, `actor.vert.glsl`, `check-actor-frames.ts` |
 | Touch screens: the stick, its buttons, phone layouts   | `docs/DEVELOPMENT.md`, Touch screens                                   |
+| A phone's run setup and co-op room: cards, whole lists | `GameUi.tsx` (`PhoneSetup`), `CoopScreen.tsx`, `ui/usePhoneLayout.ts`  |
 | Controllers: which pad, its buttons, menus' highlight  | `docs/DEVELOPMENT.md`, Controllers                                     |
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |

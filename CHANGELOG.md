@@ -3,6 +3,16 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- On a phone, setting up a run starts from a screen of what's picked, with your adventurer
+  standing in view: tap the map or the adventurer to choose from the whole list, with the details
+  beside it.
+- On a phone, the co-op room shows the party beside the map and your adventurer: tap either to
+  choose from the whole list.
+
 ## 0.32.1 - 2026-11-14
 
 ### Fixed
