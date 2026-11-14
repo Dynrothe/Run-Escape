@@ -5,10 +5,6 @@ the version in the corner).
 
 ## 0.32.1 - 2026-11-14
 
-### Changed
-
-- The Battle for Varrock's row on the map screen's Fun tab is now called Memories.
-
 ### Fixed
 
 - A gas vent's cloud, the Duke's gas included, now grows for as long as it hurts, instead of
