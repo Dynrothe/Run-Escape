@@ -1429,11 +1429,14 @@ adventurer can have:
   with nothing of its own saved. Each `REWARD_MAPS` map is an entry, filed by `getMapTab`: a raid
   (`RAID_MAPS`; the Tombs have no `MapDef.raid`) under Raids, a seasonal map under Minigames, a
   boss fight or an act's map under Bosses. Clues is the casket gear (`SaveData.foundGear`) by
-  rarity, and Other the evolutions. A tab with no entries isn't shown. An item's `key` is unique
-  in the whole log, as a casket's Justiciar faceguard isn't the Theatre's trophy, and the title's
-  total counts each key once. Narrower than 600px, or on a phone held upright (the rotate
-  notice's own query), the entries are a dropdown, and the log is the one screen the rotate notice
-  leaves readable there (`GameUi.tsx`).
+  rarity, and Other the evolutions, but for gear and evolutions brought in on a map that isn't
+  out (`isMapOut`). A tab with no entries isn't shown. Names and sentences come in the player's
+  language. An item's `key` is unique in the whole log, and the title's total counts every item:
+  two finds can share a name, as a casket's Justiciar faceguard isn't the Theatre's trophy. The
+  items scroll between the entry's head and the description of the one pointed at, so that's
+  always in view. Narrower than 600px, or on a phone held upright (the rotate notice's own
+  query), the entries are a dropdown, and the log is the one screen the rotate notice leaves
+  readable there (`GameUi.tsx`).
 
 ### Thanksgiving's Avian Assaulter
 
@@ -2852,7 +2855,9 @@ of its own.
   `.ui-modal` (or the screen), and the bottom button clicks it. With nothing focused it sends Enter
   and focuses the `.ui-button-go` or first button, so a press as a level up appears can't pick one. Start
   clicks the `.ui-button-go` (Enter the map, Resume, a casket's best choice) wherever the focus is,
-  so starting a run doesn't mean walking the highlight across the screen.
+  so starting a run doesn't mean walking the highlight across the screen. A click can't open a
+  dropdown (`<select>`), so left and right step through its options while it's highlighted (the
+  Collection log's entries on a narrow screen), and up and down move on.
 - **Hints.** `ui/PadHint.tsx`'s `KeyHint` shows a key, or the pad's button while one's in use. The
   numbered choices have none (the d-pad picks them). `:root[data-input="pad"]` shows the highlight.
   The icons are Kenney's [Input Prompts](https://kenney.nl/assets/input-prompts) (CC0, its licence

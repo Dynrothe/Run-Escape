@@ -203,6 +203,39 @@ describe("GamePads", () => {
         expect(keys).toContain("+KeyP");
     });
 
+    // The Collection log's entries, on a narrow screen
+    test("in a menu, left and right step a highlighted dropdown, up and down move on", () => {
+        const { p } = pads();
+        document.body.innerHTML =
+            `<select id="entries"><option value="a">A</option><option value="b">B</option></select>` +
+            `<button id="under">Under</button>`;
+        const select = document.getElementById("entries") as HTMLSelectElement;
+        const under = document.getElementById("under")!;
+        select.getBoundingClientRect = () =>
+            ({ left: 0, top: 0, width: 100, height: 20 }) as DOMRect;
+        under.getBoundingClientRect = () =>
+            ({ left: 0, top: 40, width: 100, height: 20 }) as DOMRect;
+        const changes: string[] = [];
+        select.addEventListener("change", () => changes.push(select.value));
+        select.focus();
+        let now = 0;
+        const press = (button: number) => {
+            pad = fakePad([button]);
+            p.poll(now, "menu");
+            pad = fakePad();
+            p.poll(now + 16, "menu");
+            now += 32;
+        };
+        press(PAD.right);
+        // Already the last: it stays there, with no change told
+        press(PAD.right);
+        press(PAD.left);
+        expect(changes).toEqual(["b", "a"]);
+        expect(document.activeElement).toBe(select);
+        press(PAD.down);
+        expect(document.activeElement).toBe(under);
+    });
+
     // An Xbox pad and a second one, with frame(first's buttons, second's) a
     // frame apart
     const twoPads = (secondId = fakePad().id) => {

@@ -11,10 +11,12 @@ import {
     getLogTotal,
 } from "../content/collectionLog";
 import { EvolutionDef } from "../content/evolutions";
+import { passiveName } from "../content/passives";
 import { RARITIES } from "../content/rarity";
 import { CLOSE_SPRITES } from "../content/titleIcons";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
-import { fmtNum, t, tl, useLang } from "../i18n";
+import { weaponDescription, weaponName } from "../content/weapons";
+import { fmtNum, t, useLang } from "../i18n";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
@@ -30,10 +32,6 @@ type Props = { ui: UiSnapshot; client: GameClient };
 
 const SORTED_TABS: LogTab[] = ["bosses", "raids", "minigames"];
 
-function entryName(entry: LogEntry): string {
-    return entry.nameKey ? t(entry.name) : tl(entry.name);
-}
-
 function entryCount(entry: LogEntry): number {
     return entry.items.filter((item) => item.found).length;
 }
@@ -42,6 +40,21 @@ function entryCount(entry: LogEntry): number {
 function countClass(found: number, total: number): string {
     if (found === 0) return "ui-log-none";
     return found === total ? "ui-log-all" : "ui-log-some";
+}
+
+// A sentence with an element in it, where its {placeholder} is, so a language can move it
+function withPart(text: string, placeholder: string, part: JSX.Element): JSX.Element {
+    const at = text.indexOf(`{${placeholder}}`);
+    if (at < 0) {
+        return <>{text}</>;
+    }
+    return (
+        <>
+            {text.slice(0, at)}
+            {part}
+            {text.slice(at + placeholder.length + 2)}
+        </>
+    );
 }
 
 export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
@@ -54,16 +67,16 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
             tabs: LOG_TABS.filter((tab) => built.some((entry) => entry.tab === tab)),
             total: getLogTotal(built),
         };
-        // lang: the casket gear's sentences are built in it
+        // lang: the names and sentences are built in it
     }, [ui.save, lang]);
     const [tab, setTab] = useState<LogTab>(tabs[0]);
     const inTab = useMemo(() => {
         const list = entries.filter((entry) => entry.tab === tab);
         // The places in order by their name, in the player's language, as OSRS lists its bosses
         return SORTED_TABS.includes(tab)
-            ? list.sort((a, b) => entryName(a).localeCompare(entryName(b)))
+            ? list.sort((a, b) => a.name.localeCompare(b.name, lang))
             : list;
-    }, [entries, tab]);
+    }, [entries, tab, lang]);
     const [entryIds, setEntryIds] = useState<Partial<Record<LogTab, string>>>({});
     const entry = inTab.find((e) => e.id === entryIds[tab]) ?? inTab[0];
     const [itemIndex, setItemIndex] = useState(0);
@@ -90,7 +103,11 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
             >
                 <div className="ui-log-head">
                     <h2 id="ui-log-title" className="ui-log-title">
-                        {t("collection.title")} - {fmtNum(total.found)}/{fmtNum(total.total)}
+                        {t("collection.title_count", {
+                            title: t("collection.title"),
+                            n: fmtNum(total.found),
+                            total: fmtNum(total.total),
+                        })}
                     </h2>
                     <CloseButton onClose={close} />
                 </div>
@@ -125,17 +142,17 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                                         (complete ? " ui-log-entry-complete" : "") +
                                         (e === entry ? " ui-log-selected" : "")
                                     }
+                                    aria-label={
+                                        complete
+                                            ? t("collection.entry_complete", { name: e.name })
+                                            : undefined
+                                    }
                                     aria-pressed={e === entry}
                                     onClick={() => openEntry(e.id)}
                                 >
-                                    <span className="ui-log-entry-name">{entryName(e)}</span>
+                                    <span className="ui-log-entry-name">{e.name}</span>
                                     {complete && (
-                                        <>
-                                            <span className="ui-log-check" aria-hidden="true" />
-                                            <span className="ui-log-sr">
-                                                {", " + t("collection.complete")}
-                                            </span>
-                                        </>
+                                        <span className="ui-log-check" aria-hidden="true" />
                                     )}
                                 </button>
                             );
@@ -149,22 +166,24 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                     >
                         {inTab.map((e) => (
                             <option key={e.id} value={e.id}>
-                                {entryName(e)} ({fmtNum(entryCount(e))}/{fmtNum(e.items.length)})
+                                {t("collection.entry_option", {
+                                    name: e.name,
+                                    n: fmtNum(entryCount(e)),
+                                    total: fmtNum(e.items.length),
+                                })}
                             </option>
                         ))}
                     </select>
                     <div className="ui-log-page ui-log-inset">
                         <div className="ui-log-page-head">
-                            <h3 className="ui-log-page-title">{entryName(entry)}</h3>
+                            <h3 className="ui-log-page-title">{entry.name}</h3>
                             <div>
-                                {t("collection.obtained")}{" "}
-                                <span className={countClass(found, entry.items.length)}>
-                                    {fmtNum(found)}/{fmtNum(entry.items.length)}
-                                </span>
-                                {found === entry.items.length && (
-                                    <span className="ui-log-sr">
-                                        {", " + t("collection.complete")}
-                                    </span>
+                                {withPart(
+                                    t("collection.obtained"),
+                                    "count",
+                                    <span className={countClass(found, entry.items.length)}>
+                                        {fmtNum(found)}/{fmtNum(entry.items.length)}
+                                    </span>,
                                 )}
                             </div>
                             {entry.tally && (
@@ -174,6 +193,7 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                                 <div className="ui-log-how">{t("collection.evolution_intro")}</div>
                             )}
                         </div>
+                        {/* The items scroll, and what's pointed at stays in view under them */}
                         <div
                             className="ui-log-grid"
                             role="group"
@@ -216,11 +236,6 @@ function CloseButton({ onClose }: { onClose: () => void }): JSX.Element {
     );
 }
 
-// What an evolution makes is hidden till it's been made
-function isHidden(item: LogItem): boolean {
-    return item.evolution !== undefined && !item.found;
-}
-
 function ItemSlot({
     item,
     selected,
@@ -230,8 +245,9 @@ function ItemSlot({
     selected: boolean;
     onShow: () => void;
 }): JSX.Element {
-    const hidden = isHidden(item);
-    const name = hidden ? "???" : tl(item.name);
+    // What an evolution makes is hidden till it's been made: its slot shows the weapon that
+    // evolves, faded, with a ? on it
+    const hidden = item.evolution !== undefined && !item.found;
     const state = t(item.found ? "collection.item_found" : "collection.item_missing");
     return (
         <button
@@ -240,16 +256,17 @@ function ItemSlot({
                 (item.found ? " ui-log-item-found" : "") +
                 (selected ? " ui-log-selected" : "")
             }
-            aria-label={`${name}, ${state}`}
+            aria-label={t("collection.item_label", { name: hidden ? "???" : item.name, state })}
             aria-describedby="ui-log-detail"
             onMouseEnter={onShow}
             onFocus={onShow}
             onClick={onShow}
         >
-            {hidden ? (
-                <span className="ui-log-unknown">?</span>
-            ) : (
-                <ItemIcon objId={item.objId} size={32} />
+            <ItemIcon objId={hidden ? item.evolution!.iconObjId : item.objId} size={32} />
+            {hidden && (
+                <span className="ui-log-unknown" aria-hidden="true">
+                    ?
+                </span>
             )}
             {item.count !== undefined && item.count > 1 && (
                 <span className="ui-log-qty" aria-hidden="true">
@@ -265,18 +282,19 @@ function ItemDetail({ item }: { item: LogItem }): JSX.Element {
     if (item.evolution) {
         return <EvolutionDetail evolution={item.evolution} made={item.found} />;
     }
+    const state = t(item.found ? "collection.item_found" : "collection.item_missing");
     return (
         <div id="ui-log-detail" className="ui-log-detail">
-            <div>
-                <span className={item.found ? "ui-log-all" : "ui-log-name-missing"}>
-                    {tl(item.name)}
-                </span>
-                <span className="ui-log-state">
-                    {" "}
-                    ({t(item.found ? "collection.item_found" : "collection.item_missing")})
-                </span>
+            <div className="ui-log-state">
+                {withPart(
+                    t("collection.item_state", { state }),
+                    "name",
+                    <span className={item.found ? "ui-log-all" : "ui-log-name-missing"}>
+                        {item.name}
+                    </span>,
+                )}
             </div>
-            <div className="ui-log-how">{tl(item.how)}</div>
+            <div className="ui-log-how">{item.how}</div>
         </div>
     );
 }
@@ -298,14 +316,14 @@ function EvolutionDetail({
                 <ItemIcon objId={passive.iconObjId} spriteId={passive.iconSpriteId} size={24} />
                 <span className="ui-log-sign">=</span>
                 {made ? (
-                    <span style={{ color: RARITIES[into.rarity].color }}>{tl(into.name)}</span>
+                    <span style={{ color: RARITIES[into.rarity].color }}>{weaponName(into)}</span>
                 ) : (
                     <span className="ui-log-name-missing">???</span>
                 )}
             </div>
             {made ? (
                 <>
-                    <div className="ui-log-how">{tl(into.description)}</div>
+                    <div className="ui-log-how">{weaponDescription(into)}</div>
                     <div className="ui-log-how">
                         {weaponStats(into, into.levels[0]).map(formatWeaponStat).join(", ")}
                     </div>
@@ -313,8 +331,8 @@ function EvolutionDetail({
             ) : (
                 <div className="ui-log-how">
                     {t("collection.locked_hint", {
-                        weapon: tl(evolution.name),
-                        passive: tl(passive.name),
+                        weapon: evolution.name,
+                        passive: passiveName(passive),
                     })}
                 </div>
             )}
