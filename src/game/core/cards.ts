@@ -110,11 +110,12 @@ function rollPack(
     pack: PackDef,
     random: () => number,
     pool: readonly CardDef[],
+    size = PACK_SIZE,
 ): PackCard[] {
     const cards: PackCard[] = [];
     const owned = { ...save.cards };
-    for (let i = 0; i < PACK_SIZE; i++) {
-        const rolled = rollRarity(pack.odds, random, i === PACK_SIZE - 1);
+    for (let i = 0; i < size; i++) {
+        const rolled = rollRarity(pack.odds, random, i === size - 1);
         const { card, rarity } = pickVersion(pool, rolled, random);
         const key = versionKey(card, rarity);
         const copies = owned[key] ?? 0;
@@ -126,19 +127,54 @@ function rollPack(
     return cards;
 }
 
-// Opens one of the packs the save holds (a basic one): undefined with none to open
+// Opens one of the packs the save holds (a basic one): undefined with none to open. The free
+// starter pack (the first, while SaveData.cardStarterGiven is unset) holds `starter` (the starting
+// adventurer's starter cards, core/cardRuns.ts), at their own versions, then random cards to
+// PACK_SIZE; more than PACK_SIZE of them would make it that many, with none random.
 export function openCardPack(
     save: SaveData,
     random: () => number,
     pool: readonly CardDef[] = packCards(BASIC_PACK),
+    starter: readonly CardDef[] = [],
 ): PackCard[] | undefined {
     const packs = getCardPacks(save);
     if (packs <= 0 || pool.length === 0) {
         return undefined;
     }
-    const cards = rollPack(save, BASIC_PACK, random, pool);
+    // Only the starter cards not owned yet (a Weapons pack bought first could have one)
+    const given =
+        save.cardStarterGiven || starter.length === 0
+            ? []
+            : starter.filter((card) => getOwnedVersions(save, card).length === 0);
+    const first = given.map((card) => {
+        const isNew = getVersionCopies(save, card, card.rarity) === 0;
+        save.cards = {
+            ...save.cards,
+            [card.id]: Math.min(getVersionCopies(save, card, card.rarity) + 1, MAX_CARD_COPIES),
+        };
+        return { card, rarity: card.rarity, isNew };
+    });
+    const rest = rollPack(save, BASIC_PACK, random, pool, Math.max(0, PACK_SIZE - first.length));
     save.cardPacks = packs - 1;
-    return cards;
+    if (starter.length > 0) {
+        save.cardStarterGiven = true;
+    }
+    return [...first, ...rest];
+}
+
+// A save that opened its free pack before it held the starter cards gets the ones it's missing,
+// once (SaveData.cardStarterGiven): their own versions, a copy each
+export function giveStarterCards(save: SaveData, starter: readonly CardDef[]): void {
+    // Not while the free pack's held: it holds them
+    if (save.cardStarterGiven || getCardPacks(save) > 0) {
+        return;
+    }
+    for (const card of starter) {
+        if (getOwnedVersions(save, card).length === 0) {
+            save.cards = { ...save.cards, [card.id]: 1 };
+        }
+    }
+    save.cardStarterGiven = true;
 }
 
 // Buys a pack in the Card shop with coins and opens it at once: undefined, and nothing spent, if
@@ -159,7 +195,10 @@ export function buyCardPack(
 // A save's cards, as loaded (migrateSave): versions of known cards only (a card's own id is its
 // own rarity's version, as saves before versions kept it), with whole counts in range, so a crafted
 // save can't break the album
-type CardFields = Pick<SaveData, "cards" | "cardPacks" | "cardPacksOpened" | "cardsOnly">;
+type CardFields = Pick<
+    SaveData,
+    "cards" | "cardPacks" | "cardPacksOpened" | "cardsOnly" | "cardStarterGiven"
+>;
 
 export function migrateCards(data: Partial<CardFields>): CardFields {
     const out: CardFields = {};
@@ -189,6 +228,9 @@ export function migrateCards(data: Partial<CardFields>): CardFields {
     }
     if (data.cardsOnly === true) {
         out.cardsOnly = true;
+    }
+    if (data.cardStarterGiven === true) {
+        out.cardStarterGiven = true;
     }
     return out;
 }

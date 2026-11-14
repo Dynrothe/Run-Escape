@@ -49,6 +49,7 @@ import {
     isActEnded,
     isActOut,
 } from "../content/acts";
+import type { CardDef } from "../content/cards";
 import { characterDescription, characterName, getCharacter } from "../content/characters";
 import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
 import { invaderName } from "../content/invasions";
@@ -106,7 +107,7 @@ import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
-import { getCardRunShortfall } from "../core/cardRuns";
+import { getCardLock, getCardRunShortfall, isCardLocked } from "../core/cardRuns";
 import {
     NewerSaveError,
     RecordSetup,
@@ -282,7 +283,8 @@ export function GameUi({ store, client }: Props): JSX.Element {
             ) : (
                 <LanguageNotice />
             )}
-            {isCoarsePointer && <RotateNotice />}
+            {/* The Collection log has a layout for a phone held upright, so it's left readable */}
+            {isCoarsePointer && ui.screen !== "collectionLog" && <RotateNotice />}
         </div>
     );
 }
@@ -1199,6 +1201,8 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                 {!map.blessings && <CardsOnlySwitch ui={ui} client={client} />}
                 <button
                     className="ui-button ui-button-go ui-select-go"
+                    // Card collection only can't start as an adventurer without their starter cards
+                    disabled={isCardLocked(ui.save, getMapCharacter(map) ?? ui.characterId, map)}
                     onClick={() => client.startRun()}
                 >
                     <KeyHint keyLabel="Enter" pad="start" className="ui-choice-key ui-word-key" />{" "}
@@ -1282,15 +1286,12 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
 }
 
 // Card collection only (core/cardRuns.ts): level ups offer only what the player has cards of, no
-// rarer than their rarest version. Off, saying what's missing, while the collection can't fill a
+// rarer than their rarest version, and caskets only gear they have cards of. Off, saying what's missing, while the collection can't fill a
 // level up for this adventurer: a run never starts on it with nothing to offer.
 function CardsOnlySwitch({ ui, client }: ScreenProps): JSX.Element {
     const characterId = getMapCharacter(getMap(ui.mapId)) ?? ui.characterId;
     const short = getCardRunShortfall(ui.save, characterId);
     const missing = short && [
-        ...(short.startingWeapon
-            ? [t("ui.cards_only.need_start", { name: weaponName(getWeapon(short.startingWeapon)) })]
-            : []),
         ...(short.weapons > 0 ? [tp("ui.cards_only.need_weapons", short.weapons)] : []),
         ...(short.passives > 0 ? [tp("ui.cards_only.need_passives", short.passives)] : []),
     ];
@@ -1309,10 +1310,7 @@ function CardsOnlySwitch({ ui, client }: ScreenProps): JSX.Element {
                     className="ui-endless-hint"
                     aria-label={t("ui.cards_only.locked", { list: listNames(missing!) })}
                 >
-                    {tp(
-                        "ui.cards_only.short",
-                        (short.startingWeapon ? 1 : 0) + short.weapons + short.passives,
-                    )}
+                    {tp("ui.cards_only.short", short.weapons + short.passives)}
                 </span>
             ) : (
                 <Toggle
@@ -1710,6 +1708,12 @@ export function AdventurerPanel({
                 save={ui.save}
                 character={getCharacter(shown)}
                 onFavourite={fixed ? undefined : () => client.toggleFavouriteCharacter(shown)}
+                // Solo only: in co-op a locked player plays without Cards only (their loadout)
+                cardLock={
+                    ui.screen !== "coop" && isCardLocked(ui.save, shown, getMap(ui.mapId))
+                        ? getCardLock(ui.save, shown)
+                        : undefined
+                }
             />
         </div>
     );
@@ -1800,10 +1804,13 @@ function AdventurerDetails({
     save,
     character,
     onFavourite,
+    cardLock,
 }: {
     save: SaveData;
     character: CharacterDef;
     onFavourite?: () => void;
+    // Card collection only is on and can be played, but not as them: the cards they still need
+    cardLock?: CardDef[];
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
     const favourite = save.favouriteCharacter === character.id;
@@ -1861,6 +1868,13 @@ function AdventurerDetails({
             {!unlocked && character.unlock && (
                 <div className="ui-card-cost">
                     {describeUnlockTask(character.unlock)} {t("ui.common.to_unlock")}
+                </div>
+            )}
+            {cardLock && (
+                <div className="ui-card-cost">
+                    {t("ui.cards_only.character_locked", {
+                        list: list(cardLock.map((card) => card.name())),
+                    })}
                 </div>
             )}
         </div>

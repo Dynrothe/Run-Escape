@@ -342,7 +342,8 @@
     .ui-armoury,
     .ui-armoury-slots,
     .ui-armoury-details,
-    .ui-log-list,
+    .ui-log-entries,
+    .ui-log-page,
     .ui-cards-grid,
     .ui-cards-shop,
     .ui-quest-list,
@@ -432,6 +433,42 @@
     .ui-scabaras-puzzle-solved,
     .ui-scabaras-puzzle-waiting {
         display: none;
+    }
+}
+
+/* The Collection log's tabs, entries, items and X, big enough for a finger */
+@media (pointer: coarse) {
+    .ui-cards-tab,
+    .ui-log-tab,
+    .ui-log-entry,
+    .ui-log-entry-select {
+        min-height: 44px;
+    }
+
+    .ui-log-head {
+        min-height: 44px;
+    }
+
+    .ui-log .ui-log-title {
+        padding: 0 48px;
+    }
+
+    .ui-log-close {
+        width: 44px;
+        height: 44px;
+    }
+
+    .ui-log-close-sprite {
+        background-size: 34px 30px;
+    }
+
+    .ui-log-grid {
+        grid-template-columns: repeat(auto-fill, 44px);
+    }
+
+    .ui-log-item {
+        width: 44px;
+        height: 44px;
     }
 }
 
@@ -799,7 +836,6 @@
     /* Quests and the collection log */
 
     .ui-quests > .ui-subtle,
-    .ui-log > .ui-subtle,
     .ui-cards > .ui-subtle,
     .ui-cards-pack > .ui-subtle {
         display: none;
@@ -810,9 +846,8 @@
         display: none;
     }
 
-    .ui-log-card,
-    .ui-log-tab {
-        min-height: 44px;
+    .ui-log-entries {
+        flex-basis: 190px;
     }
 
     /* Run HUD: everything at the edges, the middle left to the fight. Gear has

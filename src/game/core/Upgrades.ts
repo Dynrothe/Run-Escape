@@ -120,6 +120,10 @@ export function canEvolve(
         weapon.level >= weapon.def.levels.length &&
         ownedPassives.has(evolution.requiresPassive) &&
         isAvailable(getWeapon(evolution.into), unlocked) &&
+        // In a Card collection only run, three cards: the weapon's, the passive's and what it
+        // evolves into
+        hasCard(cards, "weapon", weapon.def.id) &&
+        hasCard(cards, "passive", evolution.requiresPassive) &&
         hasCard(cards, "weapon", evolution.into)
     );
 }

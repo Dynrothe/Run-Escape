@@ -16,6 +16,7 @@ import {
     parseVersionKey,
     versionKey,
 } from "./cards";
+import { CASKET_GEAR } from "./items";
 import { PASSIVES } from "./passives";
 import { RARITY_ORDER } from "./rarity";
 import { TROPHIES } from "./trophies";
@@ -30,12 +31,13 @@ const card = (id: string) => {
 };
 
 describe("cards", () => {
-    it("has one for each weapon, passive and trophy, under an id that won't change", () => {
+    it("has one for each weapon, passive, casket gear and trophy, under an id that won't change", () => {
         const ids = ALL_CARDS.map((c) => c.id);
         expect(new Set(ids).size).toBe(ids.length);
         expect(ids).toEqual([
             ...WEAPONS.map((w) => `weapon:${w.id}`),
             ...PASSIVES.map((p) => `passive:${p.id}`),
+            ...CASKET_GEAR.map((g) => `gear:${g.id}`),
             ...TROPHIES.map((t) => `trophy:${t.id}`),
         ]);
     });
@@ -116,6 +118,8 @@ describe("the Card shop's packs", () => {
     it("keeps the themed packs to their theme", () => {
         const pool = (id: string) => packCards(PACK_BY_ID.get(id)!);
         expect(pool("weapons").every((c) => c.kind === "weapon")).toBe(true);
+        expect(pool("gear").every((c) => c.kind === "gear")).toBe(true);
+        expect(pool("gear").length).toBeGreaterThan(0);
         expect(pool("passives").every((c) => c.kind === "passive")).toBe(true);
         expect(pool("trophies").every((c) => c.kind === "trophy")).toBe(true);
         expect(pool("raids")).toContain(card("trophy:avernic_defender_hilt"));

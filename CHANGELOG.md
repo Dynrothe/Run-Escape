@@ -7,10 +7,17 @@ the version in the corner).
 
 ### Added
 
-- Cards, by Okaeri: a collectible card for every weapon, passive and Collection log trophy, each
-  in versions from its own rarity up to Very rare. Buy packs in the Card shop with coins (the
-  first one's free), and turn on Cards only for runs whose level ups offer only what you have
-  cards of, no rarer than your best version.
+- Cards, by Okaeri: a collectible card for every weapon, passive, casket gear and Collection log
+  trophy, each in versions from its own rarity up to Very rare, with a Cards tab in the Collection
+  log. Buy packs in the Card shop with coins (the first one's free), and turn on Cards only for
+  runs that offer only what you have cards of, no rarer than your best version.
+
+### Changed
+
+- The Collection log, by Okaeri: it looks like the one in OSRS now, with its total in the title,
+  Bosses, Raids, Clues, Minigames and Other tabs, each entry's items in a grid (faded until you
+  have them, names green once an entry is complete) and its wins. Clues lists the gear reward
+  caskets hold, and it can be read on a phone held upright.
 
 ## 0.32.1 - 2026-11-14
 

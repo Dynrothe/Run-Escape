@@ -1,4 +1,4 @@
-import { CARDS, CARD_BY_ID } from "../content/cards";
+import { ALL_CARDS, CARDS, CARD_BY_ID, CardDef } from "../content/cards";
 import { getCharacter } from "../content/characters";
 import { PASSIVES } from "../content/passives";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
@@ -9,7 +9,8 @@ import { getBestVersion } from "./cards";
 import type { SaveData } from "./save";
 
 // Card collection only runs (SaveData.cardsOnly): level ups offer only the weapons and passives
-// the player owns a card of, no rarer than the rarest version owned (Upgrades.CardCaps). The caps
+// the player owns a card of, no rarer than the rarest version owned (Upgrades.CardCaps), and
+// reward caskets only gear with a card (Loot.rollCasketItem). The caps
 // are worked out from the save when the run starts and go into the run's setup (SimOptions.cardCaps,
 // or each co-op player's loadout), so the run plays the same on every copy of it and from the same
 // seed. An item still has to be in the game for them too (isAvailable): a card never brings in
@@ -20,7 +21,7 @@ import type { SaveData } from "./save";
 export const CARD_RUN_WEAPONS = 2;
 export const CARD_RUN_PASSIVES = 3;
 
-// A save's caps: each weapon and passive card owned -> its rarest version owned
+// A save's caps: each weapon, passive and gear card owned -> its rarest version owned
 export function getCardCaps(save: SaveData): Map<string, Rarity> {
     const caps = new Map<string, Rarity>();
     for (const card of CARDS) {
@@ -34,14 +35,10 @@ export function getCardCaps(save: SaveData): Map<string, Rarity> {
     return caps;
 }
 
-// What a save's collection is short of, for a run as this adventurer: undefined when it can play
-// one. Items count, not versions: any version of a card will do.
-export type CardRunShortfall = {
-    // The starting weapon's card, when it isn't owned (its weapon's id)
-    startingWeapon?: string;
-    weapons: number;
-    passives: number;
-};
+// What a save's collection is short of to fill a level up, for a run as this adventurer: cards of
+// CARD_RUN_WEAPONS more weapons and CARD_RUN_PASSIVES passives they could be offered, besides
+// their starting weapon. Undefined when it can. Items count, not versions: any version will do.
+export type CardRunShortfall = { weapons: number; passives: number };
 
 export function getCardRunShortfall(
     save: SaveData,
@@ -69,48 +66,73 @@ export function getCardRunShortfall(
     // An adventurer who finds no items, or carries only the one weapon, needs no more cards
     const more = !character.noItems && (character.maxWeapons ?? 2) > 1;
     const shortfall: CardRunShortfall = {
-        ...(!caps.has(`weapon:${startingWeapon}`) && { startingWeapon }),
         weapons: more ? Math.max(0, CARD_RUN_WEAPONS - weapons) : 0,
-        passives: more && !character.noItems ? Math.max(0, CARD_RUN_PASSIVES - passives) : 0,
+        passives: more ? Math.max(0, CARD_RUN_PASSIVES - passives) : 0,
     };
-    return shortfall.startingWeapon || shortfall.weapons > 0 || shortfall.passives > 0
-        ? shortfall
-        : undefined;
+    return shortfall.weapons > 0 || shortfall.passives > 0 ? shortfall : undefined;
 }
 
-// The caps as a co-op loadout carries them, kept small for the relay's cap: a card's id, and
-// "@<n>" (RARITY_ORDER's index) when its rarest version is rarer than its own
-export function encodeCardCaps(caps: CardCaps): string[] {
-    return [...caps].map(([id, rarity]) => {
-        const card = CARD_BY_ID.get(id);
-        return card && rarity !== card.rarity ? `${id}@${RARITY_ORDER.indexOf(rarity)}` : id;
-    });
+// The cards an adventurer starts a run with: their starting weapon's (adventurers start with no
+// passives or gear; their outfit is looks). A run as them is Card collection only only with
+// these owned (getCardLock), and the free starter pack holds the starting adventurer's.
+export function getStarterCards(characterId: string): CardDef[] {
+    const card = CARD_BY_ID.get(`weapon:${getCharacter(characterId).startingWeapon}`);
+    return card ? [card] : [];
 }
 
-// A co-op player's caps from their loadout (another player's game could send anything): weapon
-// and passive cards that exist, at versions they come in
+// The starter cards an adventurer still needs for a Card collection only run, or undefined with
+// none missing: such a run can't start as them till they're owned
+export function getCardLock(save: SaveData, characterId: string): CardDef[] | undefined {
+    const missing = getStarterCards(characterId).filter(
+        (card) => getBestVersion(save, card) === undefined,
+    );
+    return missing.length > 0 ? missing : undefined;
+}
+
+// The caps as a co-op loadout carries them, small for the relay's cap: a character for each card
+// in ALL_CARDS' order (a room's players all run the host's build, so the order's the same), "-"
+// for none and RARITY_ORDER's index for its rarest version
+export function encodeCardCaps(caps: CardCaps): string {
+    return ALL_CARDS.map((card) => {
+        const rarity = caps.get(card.id);
+        const index = rarity ? RARITY_ORDER.indexOf(rarity) : -1;
+        return index >= 0 ? String(index) : "-";
+    }).join("");
+}
+
+// A co-op player's caps from their loadout (another player's game could send anything): weapon,
+// passive and gear cards, at versions they come in
 export function decodeCardCaps(raw: unknown): Map<string, Rarity> | undefined {
-    if (!Array.isArray(raw)) {
+    if (typeof raw !== "string") {
         return undefined;
     }
     const caps = new Map<string, Rarity>();
-    for (const entry of raw.slice(0, 1000)) {
-        if (typeof entry !== "string") {
-            continue;
-        }
-        const [id, index, extra] = entry.split("@");
-        const card = CARD_BY_ID.get(id);
-        const version = index === undefined ? card?.rarity : RARITY_ORDER[Number(index)];
+    for (let i = 0; i < Math.min(raw.length, ALL_CARDS.length); i++) {
+        const card = ALL_CARDS[i];
+        const version = /^[0-3]$/.test(raw[i]) ? RARITY_ORDER[Number(raw[i])] : undefined;
         if (
-            card &&
             card.kind !== "trophy" &&
-            extra === undefined &&
-            (index === undefined || /^[0-3]$/.test(index)) &&
             version &&
             RARITY_ORDER.indexOf(version) >= RARITY_ORDER.indexOf(card.rarity)
         ) {
-            caps.set(id, version);
+            caps.set(card.id, version);
         }
     }
     return caps;
+}
+
+// An adventurer a solo Card collection only run can't start as: it's on, the map plays it (not one
+// whose level ups are blessings), the collection can fill a level up, and their starter cards
+// aren't all owned. The starter check comes first: it's one card, the rest scans them all.
+export function isCardLocked(
+    save: SaveData,
+    characterId: string,
+    map?: { blessings?: unknown },
+): boolean {
+    return (
+        save.cardsOnly === true &&
+        !map?.blessings &&
+        getCardLock(save, characterId) !== undefined &&
+        !getCardRunShortfall(save, characterId)
+    );
 }

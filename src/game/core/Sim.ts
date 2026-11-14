@@ -25146,6 +25146,7 @@ export class Sim {
             this.declinedSets,
             this.heroes.length > 1,
             { items: this.hero.banishedItems, sets: this.hero.banishedSets },
+            this.hero.cardCaps,
         );
         if (getItem(found).kind !== "gear") {
             return { itemId: found };

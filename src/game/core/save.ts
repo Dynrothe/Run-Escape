@@ -62,7 +62,8 @@ import {
     ownsCosmetic,
 } from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
-import { migrateCards } from "./cards";
+import { getStarterCards } from "./cardRuns";
+import { giveStarterCards, migrateCards } from "./cards";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
 // records. Versioned so older saves can be upgraded when the format changes.
@@ -198,6 +199,9 @@ export type SaveData = {
     cardPacksOpened?: number;
     // Card collection only runs picked (core/cardRuns.ts): played whenever the collection can
     cardsOnly?: boolean;
+    // The starting adventurer's starter cards have been given (core/cards.ts): in the free pack,
+    // or once to a save that opened it before the free pack held them
+    cardStarterGiven?: boolean;
 };
 
 // What a record was set with: its run's invocation points and the relics on (content/relics.ts),
@@ -584,6 +588,7 @@ export function migrateSave(raw: unknown): SaveData {
         save.outfits = outfits;
     }
     Object.assign(save, migrateCards(data));
+    giveStarterCards(save, getStarterCards(getStartingCharacter(save)));
     return save;
 }
 

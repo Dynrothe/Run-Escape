@@ -83,7 +83,14 @@ import {
     describeChoice,
     getEvolutionHint,
 } from "../core/Upgrades";
-import { decodeCardCaps, encodeCardCaps, getCardCaps, getCardRunShortfall } from "../core/cardRuns";
+import {
+    decodeCardCaps,
+    encodeCardCaps,
+    getCardCaps,
+    getCardLock,
+    getCardRunShortfall,
+    getStarterCards,
+} from "../core/cardRuns";
 import { PackCard, buyCardPack, openCardPack } from "../core/cards";
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
@@ -1187,7 +1194,12 @@ export class GameClient implements GameFrameHandler {
 
     // Opens one of the save's card packs (core/cards.ts): its cards, or undefined with none held
     openCardPack(): PackCard[] | undefined {
-        const cards = openCardPack(this.save, Math.random);
+        const cards = openCardPack(
+            this.save,
+            Math.random,
+            undefined,
+            getStarterCards(getStartingCharacter(this.save)),
+        );
         if (!cards) {
             this.sounds.denied();
             return undefined;
@@ -1597,8 +1609,12 @@ export class GameClient implements GameFrameHandler {
     }
 
     // Card collection only's caps for a co-op loadout: none on a map whose level ups are blessings
-    private loadoutCardCaps(map: MapDef | undefined, characterId: string): string[] | undefined {
-        const caps = map?.blessings ? undefined : this.cardRunCaps(characterId);
+    private loadoutCardCaps(map: MapDef | undefined, characterId: string): string | undefined {
+        // Not for an adventurer it can't start as (their starter cards missing): they play as usual
+        const caps =
+            map?.blessings || getCardLock(this.save, characterId)
+                ? undefined
+                : this.cardRunCaps(characterId);
         return caps && encodeCardCaps(caps);
     }
 
@@ -2191,6 +2207,11 @@ export class GameClient implements GameFrameHandler {
         // Card collection only, when it's on and the collection can play it (never the Vault's,
         // which is the same run for everyone)
         const cardCaps = vault || map.blessings ? undefined : this.cardRunCaps(characterId);
+        // Card collection only, without the adventurer's starter cards: it can't start
+        if (cardCaps && getCardLock(this.save, characterId)) {
+            this.sounds.denied();
+            return;
+        }
         const remixes = vault
             ? vault.remixes
             : gauntlet

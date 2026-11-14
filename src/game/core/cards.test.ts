@@ -14,6 +14,7 @@ import {
     packCards,
 } from "../content/cards";
 import { RARITY_ORDER } from "../content/rarity";
+import { getStarterCards } from "./cardRuns";
 import {
     buyCardPack,
     cantBuyCardPack,
@@ -161,6 +162,66 @@ describe("the free pack", () => {
     });
 });
 
+describe("the starter cards", () => {
+    it("come in the free pack, topped up with random cards to a pack's size", () => {
+        const starter = getStarterCards("warrior");
+        const save = createSave();
+        const cards = openCardPack(save, spread(), undefined, starter)!;
+        expect(cards).toHaveLength(PACK_SIZE);
+        expect(cards.slice(0, starter.length).map((c) => c.card)).toEqual(starter);
+        expect(cards[0].isNew).toBe(true);
+        expect(save.cardStarterGiven).toBe(true);
+        expect(save.cardPacksOpened).toBe(1);
+        // Already owned (a Weapons pack bought first): the whole pack is random
+        const owns = { ...createSave(), cards: { [starter[0].id]: 1 } };
+        const again = openCardPack(
+            owns,
+            spread(),
+            [CARD_BY_ID.get("trophy:jar_of_dreams")!],
+            starter,
+        )!;
+        expect(again.every((c) => c.card.id === "trophy:jar_of_dreams")).toBe(true);
+        expect(getCardCopies(owns, starter[0].id)).toBe(1);
+        // Only the free pack: a later one is all random
+        const later = { ...createSave(), cardPacks: 1, cardStarterGiven: true };
+        const pool = [CARD_BY_ID.get("trophy:jar_of_dreams")!];
+        expect(openCardPack(later, spread(), pool, starter)!.every((c) => c.card === pool[0])).toBe(
+            true,
+        );
+    });
+
+    it("are given once to a save that opened its free pack before it held them", () => {
+        const start = getStarterCards("warrior")[0];
+        const old = migrateSave({
+            version: 11,
+            cardPacks: 0,
+            cardPacksOpened: 1,
+            cards: { "trophy:scythe": 1 },
+        });
+        expect(getCardCopies(old, start.id)).toBe(1);
+        expect(old.cardStarterGiven).toBe(true);
+        // Not again, even once they're gone
+        delete old.cards![start.id];
+        expect(getCardCopies(migrateSave(JSON.parse(JSON.stringify(old))), start.id)).toBe(0);
+        // Nor to a save that hasn't opened its free pack, which holds them
+        expect(migrateSave({ version: 11 }).cards).toBeUndefined();
+        expect(migrateSave({ version: 11, cardPacks: 1 }).cardStarterGiven).toBeUndefined();
+        // Nor to one that bought a pack but still holds its free one
+        expect(
+            migrateSave({ version: 11, cardPacksOpened: 2, cards: { "trophy:scythe": 1 } })
+                .cardStarterGiven,
+        ).toBeUndefined();
+        // Nor a second copy to one that has the card already
+        const has = migrateSave({
+            version: 11,
+            cardPacks: 0,
+            cardPacksOpened: 1,
+            cards: { [start.id]: 3 },
+        });
+        expect(getCardCopies(has, start.id)).toBe(3);
+    });
+});
+
 describe("versions owned", () => {
     it("adds a pack's cards as versions, new only the first time each is seen", () => {
         const scimitar = card("weapon:scimitar");
@@ -200,7 +261,13 @@ describe("versions owned", () => {
 
 describe("cards in the save", () => {
     it("keeps them through an export and an import", () => {
-        const save = { ...createSave(), cardPacks: 0, cardPacksOpened: 4, cardsOnly: true };
+        const save = {
+            ...createSave(),
+            cardPacks: 0,
+            cardPacksOpened: 4,
+            cardsOnly: true,
+            cardStarterGiven: true,
+        };
         save.cards = {
             "weapon:scimitar": 2,
             "weapon:scimitar@veryRare": 1,
@@ -211,6 +278,7 @@ describe("cards in the save", () => {
         expect(loaded.cardPacks).toBe(0);
         expect(loaded.cardPacksOpened).toBe(4);
         expect(loaded.cardsOnly).toBe(true);
+        expect(loaded.cardStarterGiven).toBe(true);
     });
 
     it("drops what a crafted save can't have", () => {

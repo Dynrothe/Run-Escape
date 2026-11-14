@@ -109,15 +109,19 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
             <div className="ui-panel rs-border rs-background ui-cards">
                 <h2>{t("cards.title")}</h2>
                 <p className="ui-subtle">{t("cards.intro", { n: fmtNum(PACK_SIZE) })}</p>
-                <div className="ui-log-tabs">
+                <div className="ui-cards-tabs">
                     <button
-                        className={"ui-log-tab" + (view === "album" ? " ui-log-selected" : "")}
+                        className={
+                            "ui-cards-tab" + (view === "album" ? " ui-cards-tab-selected" : "")
+                        }
                         onClick={() => setView("album")}
                     >
                         {t("cards.album")}
                     </button>
                     <button
-                        className={"ui-log-tab" + (view === "shop" ? " ui-log-selected" : "")}
+                        className={
+                            "ui-cards-tab" + (view === "shop" ? " ui-cards-tab-selected" : "")
+                        }
                         onClick={() => setView("shop")}
                     >
                         {t("cards.shop")}
@@ -127,7 +131,9 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                         (["all", ...CARD_KINDS] as Tab[]).map((kind) => (
                             <button
                                 key={kind}
-                                className={"ui-log-tab" + (tab === kind ? " ui-log-selected" : "")}
+                                className={
+                                    "ui-cards-tab" + (tab === kind ? " ui-cards-tab-selected" : "")
+                                }
                                 onClick={() => setTab(kind)}
                             >
                                 {kind === "all" ? t("cards.kind.all") : cardKindName(kind)}
@@ -180,7 +186,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                     <button ref={backRef} className="ui-button" onClick={back}>
                         {t("canvas.back")}
                     </button>
-                    <span className="ui-log-count">
+                    <span className="ui-cards-count">
                         {t("cards.collected", {
                             n: fmtNum(countCardsOwned(save)),
                             total: fmtNum(CARDS.length),

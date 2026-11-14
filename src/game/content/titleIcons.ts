@@ -38,6 +38,10 @@ export const COLLECTION_LOG_OBJ = 22711;
 // Cards' tile and their packs (content/cards.ts): Mystic cards, a deck of cards
 export const CARDS_ICON_OBJ = 27645;
 
+// The client's close button, a window's X at its top right, and lit up under the mouse (the
+// Collection log's)
+export const CLOSE_SPRITES = { off: 535, hover: 536 } as const;
+
 // The client's own back-arrow button, on a bought skill to refund a rank. Also kept in the slim
 // cache by scripts/cache/slim-cache.ts.
 export const REFUND_SPRITE = 1021;

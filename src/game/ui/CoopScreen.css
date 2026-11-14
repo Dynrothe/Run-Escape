@@ -448,3 +448,9 @@
 .ui-endless + .ui-coop-ready {
     margin-left: 0;
 }
+
+/* A player playing Card collection only, in words beside their adventurer */
+.ui-coop-cards-only {
+    margin-left: 6px;
+    color: var(--ui-orange);
+}

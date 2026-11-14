@@ -1,20 +1,22 @@
-import { t, tr } from "../i18n";
+import { list, t, tr } from "../i18n";
 import { isMapOut } from "./acts";
+import { CASKET_GEAR, itemName } from "./items";
 import { MAP_BY_ID } from "./maps";
 import { PASSIVES, passiveDescription, passiveName } from "./passives";
 import { PET_BY_ID } from "./pets";
 import { RARITY_ORDER, Rarity, rarityName } from "./rarity";
+import { formatStats } from "./stats";
 import { CARDS_ICON_OBJ } from "./titleIcons";
 import { TROPHIES, TrophyDef, trophyName } from "./trophies";
-import type { PassiveDef, WeaponDef } from "./types";
+import type { GearDef, PassiveDef, WeaponDef } from "./types";
 import { WEAPONS, weaponDescription, weaponName } from "./weapons";
 
-// Cards: a card for each weapon, passive and Collection log trophy the game already has, with that
-// thing's cache item as its picture. Packs are bought with the coins runs pay out and opened on the
+// Cards: a card for each weapon, passive, reward casket gear and Collection log trophy the game
+// already has, with that thing's cache item as its picture. Packs are bought with the coins runs pay out and opened on the
 // Cards screen (core/cards.ts, ui/CardsScreen.tsx). They only touch a run that's Card collection
 // only (core/cardRuns.ts). No real money is ever involved: coins are only earned by playing.
 
-export type CardKind = "weapon" | "passive" | "trophy";
+export type CardKind = "weapon" | "passive" | "gear" | "trophy";
 
 export type CardDef = {
     // "<kind>:<the weapon's, passive's or trophy's id>". It's kept in SaveData.cards, so it's as
@@ -114,6 +116,19 @@ function passiveCard(passive: PassiveDef): CardDef {
     };
 }
 
+// Reward caskets' gear (CASKET_GEAR, not the Armoury's variants of it): its stats are its text
+function gearCard(gear: GearDef): CardDef {
+    return {
+        id: `gear:${gear.id}`,
+        kind: "gear",
+        rarity: gear.rarity,
+        objId: gear.objId,
+        mapId: gear.unlock?.mapId,
+        name: () => itemName(gear),
+        text: () => `${list(formatStats(gear.stats).map((line) => line.text))}.`,
+    };
+}
+
 function trophyCard(trophy: TrophyDef): CardDef {
     return {
         id: `trophy:${trophy.id}`,
@@ -131,6 +146,7 @@ function trophyCard(trophy: TrophyDef): CardDef {
 export const ALL_CARDS: CardDef[] = [
     ...WEAPONS.map(weaponCard),
     ...PASSIVES.map(passiveCard),
+    ...CASKET_GEAR.map(gearCard),
     ...TROPHIES.map(trophyCard),
 ];
 
@@ -145,7 +161,7 @@ export function isCardOut(card: CardDef): boolean {
 // The cards a pack can give and the album lists, in the album's order
 export const CARDS: CardDef[] = ALL_CARDS.filter(isCardOut);
 
-export const CARD_KINDS: CardKind[] = ["weapon", "passive", "trophy"];
+export const CARD_KINDS: CardKind[] = ["weapon", "passive", "gear", "trophy"];
 
 // A card's number in the set, as its footer shows it ("12/148"): its place in the album
 const CARD_NUMBERS = new Map(CARDS.map((card, i) => [card.id, i + 1]));
@@ -234,12 +250,22 @@ export const PACKS: PackDef[] = [
     {
         id: "passives",
         name: "Prayer book pack",
-        description: "Passives only: prayers, gear and spells.",
+        description: "Passives only: prayers, worn passives and spells.",
         objId: iconOf("passive:amulet_of_glory"),
         color: "#3d5a80",
         price: 3000,
         odds: STANDARD_ODDS,
         holds: (card) => card.kind === "passive",
+    },
+    {
+        id: "gear",
+        name: "Treasure trail pack",
+        description: "Reward casket gear only.",
+        objId: CASKET_GEAR.find((gear) => gear.id === "rune_full_helm")!.objId,
+        color: "#5a4a7a",
+        price: 3000,
+        odds: STANDARD_ODDS,
+        holds: (card) => card.kind === "gear",
     },
     {
         id: "trophies",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ALL_CARDS } from "../content/cards";
 import { getCharacter } from "../content/characters";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { emptyStats } from "../content/types";
@@ -20,7 +21,10 @@ import {
     decodeCardCaps,
     encodeCardCaps,
     getCardCaps,
+    getCardLock,
     getCardRunShortfall,
+    getStarterCards,
+    isCardLocked,
 } from "./cardRuns";
 import { WeaponState } from "./entities";
 import { createSave } from "./save";
@@ -122,6 +126,54 @@ describe("Card collection only offers", () => {
         expect(offers(CAPS, 9)).toEqual(offers(CAPS, 9));
     });
 
+    it("evolves only with three cards: the weapon's, the passive's and what it becomes", () => {
+        // The throwing axes at their last level (dragon) with the Tome of fire: the Chain-hit axes
+        const axes = getWeapon("throwing_axes");
+        expect(axes.evolution).toEqual({ into: "chain_hit_axes", requiresPassive: "tome_of_fire" });
+        const maxed = weapon("throwing_axes", axes.levels.length);
+        const owned = new Set(["tome_of_fire"]);
+        const all = new Map<string, Rarity>([
+            ["weapon:throwing_axes", "common"],
+            ["passive:tome_of_fire", "common"],
+            ["weapon:chain_hit_axes", "veryRare"],
+        ]);
+        expect(canEvolve(maxed, owned, undefined, all)).toBe(true);
+        for (const id of all.keys()) {
+            const without = new Map(all);
+            without.delete(id);
+            expect(canEvolve(maxed, owned, undefined, without), id).toBe(false);
+        }
+    });
+
+    it("lets a weapon climb all its metals with its one card", () => {
+        // A weapon's metals are its levels, not cards of their own: its card covers them all
+        const axes = getWeapon("throwing_axes");
+        const caps = new Map<string, Rarity>([["weapon:throwing_axes", "common"]]);
+        const levels = new Set<number>();
+        for (let level = 1; level < axes.levels.length; level++) {
+            for (const choice of rollChoices(
+                new Rng(level),
+                [weapon("throwing_axes", level)],
+                [],
+                0,
+                "ranged",
+                undefined,
+                false,
+                1,
+                0,
+                undefined,
+                caps,
+            )) {
+                if (choice.kind === "weaponLevel") {
+                    levels.add(choice.level);
+                }
+            }
+        }
+        expect([...levels].sort((a, b) => a - b)).toEqual(
+            Array.from({ length: axes.levels.length - 1 }, (_, i) => i + 2),
+        );
+    });
+
     it("hints, picks and evolves only into weapons with a card", () => {
         // With one hilt's card only, the usual picks: a blade can't be held without a hilt
         expect(
@@ -162,6 +214,7 @@ describe("Card collection only offers", () => {
                 undefined,
                 new Map<string, Rarity>([
                     ["weapon:twisted_bow", "veryRare"],
+                    [`passive:${getWeapon("twisted_bow").evolution!.requiresPassive}`, "rare"],
                     [into, "veryRare"],
                 ]),
             ),
@@ -187,18 +240,47 @@ describe("Card collection only offers", () => {
 });
 
 describe("whether a collection can play one", () => {
-    it("says what's missing: the starting weapon's card, and how many more cards", () => {
-        const warrior = getCharacter("warrior");
+    it("says how many more cards a level up needs", () => {
         expect(getCardRunShortfall(createSave(), "warrior")).toEqual({
-            startingWeapon: warrior.startingWeapon,
             weapons: CARD_RUN_WEAPONS,
             passives: CARD_RUN_PASSIVES,
         });
-        const save = { ...createSave(), cards: { [`weapon:${warrior.startingWeapon}`]: 1 } };
-        expect(getCardRunShortfall(save, "warrior")).toEqual({
-            weapons: CARD_RUN_WEAPONS,
-            passives: CARD_RUN_PASSIVES,
-        });
+    });
+
+    it("locks an adventurer whose starter cards aren't owned, saying which", () => {
+        const warrior = getCharacter("warrior");
+        const start = `weapon:${warrior.startingWeapon}`;
+        expect(getStarterCards("warrior").map((card) => card.id)).toEqual([start]);
+        expect(getCardLock(createSave(), "warrior")?.map((card) => card.id)).toEqual([start]);
+        // Any version will do
+        const save = { ...createSave(), cards: { [`${start}@veryRare`]: 1 } };
+        expect(getCardLock(save, "warrior")).toBeUndefined();
+        // Another adventurer still needs theirs
+        expect(getCardLock(save, "ranger")?.map((card) => card.id)).toEqual([
+            `weapon:${getCharacter("ranger").startingWeapon}`,
+        ]);
+        // Locked only with the mode on and a collection that can fill a level up
+        const full = {
+            ...createSave(),
+            cardsOnly: true,
+            cards: {
+                "weapon:two_handed_sword": 1,
+                "weapon:throwing_knives": 1,
+                "weapon:shortbow": 1,
+                "weapon:dark_bow": 1,
+                "passive:rapid_heal": 1,
+                "passive:graceful": 1,
+                "passive:amulet_of_glory": 1,
+            },
+        };
+        expect(isCardLocked(full, "warrior")).toBe(true);
+        expect(isCardLocked({ ...full, cardsOnly: undefined }, "warrior")).toBe(false);
+        expect(isCardLocked({ ...full, cards: { [start]: 1, ...full.cards } }, "warrior")).toBe(
+            false,
+        );
+        expect(isCardLocked({ ...full, cards: {} }, "warrior")).toBe(false);
+        // Not on a map whose level ups are blessings, which Cards only doesn't touch
+        expect(isCardLocked(full, "warrior", { blessings: {} })).toBe(false);
     });
 
     it("counts cards, not versions, and only what the adventurer could be offered", () => {
@@ -236,14 +318,13 @@ describe("whether a collection can play one", () => {
         };
         const save = { ...createSave(), cards: godswords, unlockedItems: ["godsword"] };
         expect(getCardRunShortfall(save, "godsword_knight")?.weapons).toBe(CARD_RUN_WEAPONS);
-        // The Avian Assaulter finds no items and carries one weapon: only his own card's needed
+        // The Avian Assaulter finds no items and carries one weapon: only his own card's needed,
+        // which is his lock's
         const avian = getCharacter("avian_assaulter");
-        expect(
-            getCardRunShortfall(
-                { ...createSave(), cards: { [`weapon:${avian.startingWeapon}`]: 1 } },
-                "avian_assaulter",
-            ),
-        ).toBeUndefined();
+        expect(getCardRunShortfall(createSave(), "avian_assaulter")).toBeUndefined();
+        expect(getCardLock(createSave(), "avian_assaulter")?.map((card) => card.id)).toEqual([
+            `weapon:${avian.startingWeapon}`,
+        ]);
     });
 
     it("sends a co-op player's caps small, and keeps them to cards and versions there are", () => {
@@ -251,24 +332,23 @@ describe("whether a collection can play one", () => {
             ["weapon:scimitar", getWeapon("scimitar").rarity],
             ["weapon:throwing_knives", "veryRare"],
             ["passive:graceful", "rare"],
+            ["gear:rune_full_helm", "veryRare"],
         ]);
         const sent = encodeCardCaps(caps);
-        expect(sent).toContain("weapon:scimitar");
-        expect(sent).toContain("weapon:throwing_knives@3");
+        expect(sent).toHaveLength(ALL_CARDS.length);
         expect(decodeCardCaps(JSON.parse(JSON.stringify(sent)))).toEqual(caps);
-        expect(
-            decodeCardCaps([
-                "weapon:twisted_bow@0",
-                "trophy:jar_of_dreams",
-                "weapon:nothing",
-                "passive:graceful@9",
-                "passive:graceful@1@1",
-                7,
-                "weapon:scimitar@2",
-            ]),
-        ).toEqual(new Map([["weapon:scimitar", "rare"]]));
+        // A version below a card's own, a trophy, junk and a short or long string
+        const bow = ALL_CARDS.findIndex((c) => c.id === "weapon:twisted_bow");
+        const jar = ALL_CARDS.findIndex((c) => c.id === "trophy:jar_of_dreams");
+        const scimitar = ALL_CARDS.findIndex((c) => c.id === "weapon:scimitar");
+        const crafted = ALL_CARDS.map((_, i) =>
+            i === bow ? "0" : i === jar ? "3" : i === scimitar ? "2" : "x",
+        ).join("");
+        expect(decodeCardCaps(crafted + "3333")).toEqual(new Map([["weapon:scimitar", "rare"]]));
+        expect(decodeCardCaps(crafted.slice(0, scimitar))).toEqual(new Map());
+        expect(decodeCardCaps(["weapon:scimitar"])).toBeUndefined();
         expect(decodeCardCaps({ "weapon:scimitar": "rare" })).toBeUndefined();
-        expect(decodeCardCaps("rare")).toBeUndefined();
+        expect(decodeCardCaps("rare")).toEqual(new Map());
     });
 });
 

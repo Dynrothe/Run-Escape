@@ -524,3 +524,33 @@
     font-size: 11px;
     text-shadow: 1px 1px 0 #000;
 }
+
+/* The screen's tabs: Album and Card shop, then the album's kinds */
+.ui-cards-tabs {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.ui-cards-tab {
+    min-height: 28px;
+    padding: 2px 10px;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    background: rgba(40, 33, 24, 0.45);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-cards-tab.ui-cards-tab-selected {
+    color: var(--ui-orange);
+    border-color: var(--ui-orange);
+    background: rgba(40, 33, 24, 0.8);
+}
+
+.ui-cards-count {
+    color: var(--ui-orange);
+}
