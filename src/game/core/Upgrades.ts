@@ -12,7 +12,7 @@ import {
     passiveEffect,
     passiveName,
 } from "../content/passives";
-import { RARITIES, Rarity, atLeast, rollRarity } from "../content/rarity";
+import { RARITIES, RARITY_ORDER, Rarity, atLeast, rollRarity } from "../content/rarity";
 import { BlessingsDef, CombatStyle, PassiveDef, WeaponDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import {
@@ -82,19 +82,49 @@ export type ChoiceDescription = {
     stats?: WeaponStatLine[];
 };
 
+// A Card collection only run's cards (core/cardRuns.ts): "weapon:<id>" or "passive:<id>" -> the
+// rarest version of its card the hero owns. A weapon or passive without one is never offered, and
+// what is offered is no rarer than that version. Undefined in any other run: everything as usual.
+// Something the hero holds without a card (only from a crafted co-op loadout) levels as usual.
+export type CardCaps = ReadonlyMap<string, Rarity>;
+
+// Whether a run's cards allow a weapon or passive (always, outside a Card collection only run)
+function hasCard(cards: CardCaps | undefined, kind: "weapon" | "passive", id: string): boolean {
+    return !cards || cards.has(`${kind}:${id}`);
+}
+
+// A rolled quality, no rarer than the hero's rarest version of the card (as rolled, outside a
+// Card collection only run)
+export function capQuality(
+    quality: Rarity,
+    cards: CardCaps | undefined,
+    kind: "weapon" | "passive",
+    id: string,
+): Rarity {
+    const cap = cards?.get(`${kind}:${id}`);
+    return cap && RARITY_ORDER.indexOf(quality) > RARITY_ORDER.indexOf(cap) ? cap : quality;
+}
+
 // A weapon that's ready to evolve: at its last level, with its passive, and
-// what it evolves into not locked behind a map task
+// what it evolves into not locked behind a map task (nor, in a Card collection only run, without
+// its card)
 export function canEvolve(
     weapon: WeaponState,
     ownedPassives: ReadonlySet<string>,
     unlocked?: ReadonlySet<string>,
+    cards?: CardCaps,
 ): boolean {
     const evolution = weapon.def.evolution;
     return (
         evolution !== undefined &&
         weapon.level >= weapon.def.levels.length &&
         ownedPassives.has(evolution.requiresPassive) &&
-        isAvailable(getWeapon(evolution.into), unlocked)
+        isAvailable(getWeapon(evolution.into), unlocked) &&
+        // In a Card collection only run, three cards: the weapon's, the passive's and what it
+        // evolves into
+        hasCard(cards, "weapon", weapon.def.id) &&
+        hasCard(cards, "passive", evolution.requiresPassive) &&
+        hasCard(cards, "weapon", evolution.into)
     );
 }
 
@@ -107,10 +137,16 @@ export function getEvolutionHint(
     passives: readonly PassiveState[],
     style: CombatStyle,
     unlocked?: ReadonlySet<string>,
+    // A Card collection only run's: an evolution without its card never comes, so isn't hinted
+    cards?: CardCaps,
 ): { text: string; held: boolean } | undefined {
     if (choice.kind === "newWeapon" || choice.kind === "weaponLevel") {
         const evolution = EVOLUTIONS.find((e) => e.weapons.some((w) => w.id === choice.weaponId));
-        if (!evolution || !isAvailable(evolution.into, unlocked)) {
+        if (
+            !evolution ||
+            !isAvailable(evolution.into, unlocked) ||
+            !hasCard(cards, "weapon", evolution.into.id)
+        ) {
             return undefined;
         }
         return {
@@ -122,6 +158,7 @@ export function getEvolutionHint(
         const usable = getEvolutionsWith(choice.passiveId).filter(
             (e) =>
                 isAvailable(e.into, unlocked) &&
+                hasCard(cards, "weapon", e.into.id) &&
                 e.weapons.some((w) => !w.style || w.style === style),
         );
         const held = usable.filter((e) => weapons.some((w) => e.weapons.includes(w.def)));
@@ -339,7 +376,7 @@ const NEW_PASSIVE_WEIGHT = 0.5;
 // Whether a weapon can be offered new: unlocked, or one whose pick keeps it as one of its
 // choices (Ice Burst, the plain keris) with any of the picks unlocked. A jewel found before the
 // Kalphite Queen's kill still comes as the plain keris that takes it.
-function isOfferable(weapon: WeaponDef, unlocked: ReadonlySet<string> | undefined): boolean {
+export function isOfferable(weapon: WeaponDef, unlocked: ReadonlySet<string> | undefined): boolean {
     if (isAvailable(weapon, unlocked)) {
         return true;
     }
@@ -352,7 +389,12 @@ function isOfferable(weapon: WeaponDef, unlocked: ReadonlySet<string> | undefine
 
 // The hilts to pick from when a weapon has just reached its hilt level (the
 // godsword's blade), none otherwise
-export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>): UpgradeChoice[] {
+export function hiltChoices(
+    weapon: WeaponState,
+    unlocked?: ReadonlySet<string>,
+    // A Card collection only run's: a pick into another weapon needs its card
+    cards?: CardCaps,
+): UpgradeChoice[] {
     const hilts = weapon.def.hilts;
     if (!hilts || weapon.level !== hilts.level) {
         return [];
@@ -360,11 +402,17 @@ export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>)
     // Keeping what it is stays a pick even while it's locked, for a weapon level ups offer (see
     // isOfferable): the plain keris, taking a jewel found before the Queen's kill. Not for a burst
     // an adventurer starts with: the Menaphite's Smoke Burst has no pick till the Desert's beaten.
-    const into = hilts.into.filter(
+    const usual = hilts.into.filter(
         ({ weaponId }) =>
             (weaponId === weapon.def.id && !weapon.def.pickOnly) ||
             isAvailable(getWeapon(weaponId), unlocked),
     );
+    // A Card collection only run keeps to the picks with a card, as long as that leaves a pick:
+    // a godsword's blade can't be held without a hilt, so with fewer the usual picks stay
+    const carded = usual.filter(
+        ({ weaponId }) => weaponId === weapon.def.id || hasCard(cards, "weapon", weaponId),
+    );
+    const into = carded.length >= 2 ? carded : usual;
     // Nothing else to pick from yet (Ice Burst before the Desert's beaten)
     if (into.length < 2) {
         return [];
@@ -423,6 +471,8 @@ export function rollChoices(
     maxPassives = MAX_PASSIVES,
     // Weapons and passives banished this run: never offered new
     banished?: ReadonlySet<string>,
+    // A Card collection only run's cards (CardCaps): only what has a card, no rarer than it
+    cards?: CardCaps,
 ): UpgradeChoice[] {
     const random = () => rng.next();
     const pool: { choice: () => UpgradeChoice; weight: number }[] = [];
@@ -448,13 +498,13 @@ export function rollChoices(
                     kind: "weaponLevel",
                     weaponId: weapon.def.id,
                     level: weapon.level + 1,
-                    quality: rollRarity(random, luck),
+                    quality: capQuality(rollRarity(random, luck), cards, "weapon", weapon.def.id),
                     ...(weapon.level >= weapon.def.levels.length && { bonus: weapon.bonus }),
                 }),
                 weight: WEAPON_LEVEL_WEIGHT,
             });
         }
-        if (canEvolve(weapon, ownedPassives, unlocked)) {
+        if (canEvolve(weapon, ownedPassives, unlocked, cards)) {
             evolutions.push({
                 kind: "evolve",
                 weaponId: weapon.def.id,
@@ -470,7 +520,8 @@ export function rollChoices(
                 weapon.pickOnly ||
                 ownedWeapons.has(weapon.id) ||
                 banished?.has(weapon.id) ||
-                !isOfferable(weapon, unlocked)
+                !isOfferable(weapon, unlocked) ||
+                !hasCard(cards, "weapon", weapon.id)
             ) {
                 continue;
             }
@@ -489,11 +540,17 @@ export function rollChoices(
             if (!evolvedOwned) {
                 const familySize = weapon.family ? familySizes.get(weapon.family)! : 1;
                 pool.push({
-                    // A new weapon is offered at its own rarity or better
+                    // A new weapon is offered at its own rarity or better (its card's commonest
+                    // version is that rarity, so the cap never takes it lower)
                     choice: () => ({
                         kind: "newWeapon",
                         weaponId: weapon.id,
-                        quality: atLeast(rollRarity(random, luck), weapon.rarity),
+                        quality: capQuality(
+                            atLeast(rollRarity(random, luck), weapon.rarity),
+                            cards,
+                            "weapon",
+                            weapon.id,
+                        ),
                     }),
                     weight: (RARITIES[weapon.rarity].weight * NEW_WEAPON_WEIGHT) / familySize,
                 });
@@ -508,7 +565,7 @@ export function rollChoices(
                     kind: "passiveLevel",
                     passiveId: passive.id,
                     level: passive.level + 1,
-                    quality: rollRarity(random, luck),
+                    quality: capQuality(rollRarity(random, luck), cards, "passive", passive.id),
                     currentValue: passive.value,
                 }),
                 weight: PASSIVE_LEVEL_WEIGHT,
@@ -520,13 +577,14 @@ export function rollChoices(
             if (
                 !ownedPassives.has(passive.id) &&
                 !banished?.has(passive.id) &&
-                isAvailable(passive, unlocked)
+                isAvailable(passive, unlocked) &&
+                hasCard(cards, "passive", passive.id)
             ) {
                 pool.push({
                     choice: () => ({
                         kind: "newPassive",
                         passiveId: passive.id,
-                        quality: rollRarity(random, luck),
+                        quality: capQuality(rollRarity(random, luck), cards, "passive", passive.id),
                     }),
                     weight: RARITIES[passive.rarity].weight * NEW_PASSIVE_WEIGHT,
                 });

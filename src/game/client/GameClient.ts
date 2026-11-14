@@ -7,6 +7,7 @@ import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { getBlessing } from "../content/blessings";
+import type { PackDef } from "../content/cards";
 import { CHARACTERS, CHARACTER_BY_ID, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -75,7 +76,24 @@ import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponS
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
+import {
+    CardCaps,
+    UpgradeChoice,
+    canEvolve,
+    describeChoice,
+    getEvolutionHint,
+} from "../core/Upgrades";
+import {
+    decodeCardCaps,
+    encodeCardCaps,
+    getCardCaps,
+    getCardLock,
+    getCardRunShortfall,
+    getRunPet,
+    getStarterCards,
+    hasPetCard,
+} from "../core/cardRuns";
+import { PackCard, buyCardPack, openCardPack } from "../core/cards";
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
 import {
@@ -410,7 +428,12 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
 // How far a weapon has got towards its evolution, for the HUD and pause menu
 function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
     const evolution = weapon.def.evolution;
-    if (!evolution || !isAvailable(getWeapon(evolution.into), sim.unlockedItems)) {
+    if (
+        !evolution ||
+        !isAvailable(getWeapon(evolution.into), sim.unlockedItems) ||
+        // A Card collection only run without the evolution's card: it won't come
+        (sim.cardCaps && !sim.cardCaps.has(`weapon:${evolution.into}`))
+    ) {
         return undefined;
     }
     const owned = new Set(sim.passives.map((p) => p.id));
@@ -418,7 +441,7 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
         passive: getPassive(evolution.requiresPassive).name,
         maxed: weapon.level >= weapon.def.levels.length,
         hasPassive: owned.has(evolution.requiresPassive),
-        ready: canEvolve(weapon, owned, sim.unlockedItems),
+        ready: canEvolve(weapon, owned, sim.unlockedItems, sim.cardCaps),
     };
 }
 
@@ -486,7 +509,14 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
                     ? { name: blessed ?? "Blessing", color: BLESSING_COLOR }
                     : rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
-            evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
+            evolves: getEvolutionHint(
+                choice,
+                sim.weapons,
+                sim.passives,
+                style,
+                sim.unlockedItems,
+                sim.cardCaps,
+            ),
             banishable: sim.canBanishChoice(index),
             banished: sim.isBanishedChoice(index),
             bossPenalty: getBossPenalty(sim, choice),
@@ -498,12 +528,16 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
 // player's game could send anything)
 export function cleanLoadout(loadout: Loadout | undefined): {
     unlockedItems: Set<string>;
+    cardCaps?: CardCaps;
     trophiesFound: Set<string>;
     armoury: Record<string, number>;
     pet?: string;
     relics?: string[];
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
+    const caps = loadout?.cardCaps !== undefined ? decodeCardCaps(loadout.cardCaps) : undefined;
+    const pet =
+        typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) ? loadout.pet : undefined;
     const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
     const armoury: Record<string, number> = {};
     for (const [id, times] of Object.entries(loadout?.armoury ?? {})) {
@@ -515,10 +549,12 @@ export function cleanLoadout(loadout: Loadout | undefined): {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
         trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
-        // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
-        ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
         // Their relics, each player's own (the Sim keeps them off maps that take none)
         ...(Array.isArray(loadout?.relics) && { relics: cleanRelics(loadout.relics) }),
+        // Card collection only, their own cards (core/cardRuns.ts)
+        ...(caps && { cardCaps: caps }),
+        // Their pet: in a Card collection only run, only one whose card they've sent
+        ...(pet && (!caps || caps.has(`trophy:${pet}`)) && { pet }),
     };
 }
 
@@ -1129,6 +1165,60 @@ export class GameClient implements GameFrameHandler {
         return true;
     }
 
+    // Buys a pack in the Card shop with coins and opens it straight away (core/cards.ts): its
+    // cards, or undefined if it can't be bought
+    buyCardPack(pack: PackDef): PackCard[] | undefined {
+        const cards = buyCardPack(this.save, pack, Math.random);
+        if (!cards) {
+            this.sounds.denied();
+            return undefined;
+        }
+        this.sounds.cardPack();
+        this.persist();
+        return cards;
+    }
+
+    // Card collection only runs (core/cardRuns.ts): the option's kept in the save, and only
+    // played when the collection can fill a level up for this adventurer (getCardRunShortfall)
+    toggleCardsOnly(): void {
+        this.save.cardsOnly = !this.save.cardsOnly || undefined;
+        this.persist();
+        // A co-op player's loadout carries it
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
+    }
+
+    cardRunCaps(characterId: string): Map<string, Rarity> | undefined {
+        if (!this.save.cardsOnly) {
+            return undefined;
+        }
+        const caps = getCardCaps(this.save);
+        return getCardRunShortfall(this.save, characterId, caps) ? undefined : caps;
+    }
+
+    // Opens one of the save's card packs (core/cards.ts): its cards, or undefined with none held
+    openCardPack(): PackCard[] | undefined {
+        const cards = openCardPack(
+            this.save,
+            Math.random,
+            undefined,
+            getStarterCards(getStartingCharacter(this.save)),
+        );
+        if (!cards) {
+            this.sounds.denied();
+            return undefined;
+        }
+        this.sounds.cardPack();
+        this.persist();
+        return cards;
+    }
+
+    // A card of an opened pack turned over
+    revealCard(rarity: Rarity): void {
+        this.sounds.cardReveal(rarity);
+    }
+
     // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps (and an
     // act that isn't out yet, isActOut). Without
     // it the dev server plays as players will (the Tombs of Amascut, listed with the raids, has none
@@ -1277,6 +1367,17 @@ export class GameClient implements GameFrameHandler {
             return;
         }
         this.store.set({ actEnding: act?.id });
+    }
+
+    // The pet a Card collection only run takes along: one whose card is owned, or none
+    selectCardsOnlyPet(petId: string | undefined): void {
+        if (petId !== undefined && !hasPetCard(this.save, petId)) {
+            this.sounds.denied();
+            return;
+        }
+        this.save.cardsOnlyPet = petId;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
     }
 
     // The pet to take along (one of the trophies found), or none
@@ -1501,13 +1602,17 @@ export class GameClient implements GameFrameHandler {
         const room = this.coop.room;
         const characterId =
             (room && getMap(room.mapId).fun?.character) ?? this.store.getSnapshot().characterId;
+        // The adventurer the run's played as, for Card collection only's check
+        const runCharacter = (room && getMapCharacter(getMap(room.mapId))) ?? characterId;
+        const cardCaps = this.loadoutCardCaps(room && getMap(room.mapId), runCharacter);
         return makeLoadout(
             getMetaStats(this.save, getCharacter(characterId).style),
             [...this.save.unlockedItems],
             {
                 ...this.save.armoury,
             },
-            this.save.pet,
+            // Card collection only's own pet, with its card (getRunPet)
+            getRunPet(this.save, cardCaps !== undefined),
             // A Tombs room's lobby shows the host's raid level, and a run's its invocation points
             room && getMap(room.mapId).tombs
                 ? [...(this.save.invocations ?? [])]
@@ -1517,7 +1622,18 @@ export class GameClient implements GameFrameHandler {
             getRaidChestTrophiesFound(this.save.trophies),
             this.save.look,
             room ? this.runRelics(getMap(room.mapId)) : undefined,
+            cardCaps,
         );
+    }
+
+    // Card collection only's caps for a co-op loadout: none on a map whose level ups are blessings
+    private loadoutCardCaps(map: MapDef | undefined, characterId: string): string | undefined {
+        // Not for an adventurer it can't start as (their starter cards missing): they play as usual
+        const caps =
+            map?.blessings || getCardLock(this.save, characterId)
+                ? undefined
+                : this.cardRunCaps(characterId);
+        return caps && encodeCardCaps(caps);
     }
 
     // The host's Start: everyone's ready, so off to the room's map. The relay
@@ -2106,6 +2222,16 @@ export class GameClient implements GameFrameHandler {
             : plain && snapshot.hard && isHardUnlocked(this.save, mapId);
         const expert = plain && snapshot.expert && isExpertUnlocked(this.save, mapId);
         const characterId = vault?.characterId ?? getMapCharacter(map) ?? snapshot.characterId;
+        // Card collection only, when it's on and the collection can play it (never the Vault's,
+        // which is the same run for everyone)
+        const cardCaps = vault || map.blessings ? undefined : this.cardRunCaps(characterId);
+        // Card collection only, without the adventurer's starter cards: it can't start
+        if (cardCaps && getCardLock(this.save, characterId)) {
+            this.sounds.denied();
+            return;
+        }
+        // Its own pet in a Card collection only run (getRunPet): never the other in its place
+        const pet = getRunPet(this.save, cardCaps !== undefined);
         const remixes = vault
             ? vault.remixes
             : gauntlet
@@ -2124,13 +2250,7 @@ export class GameClient implements GameFrameHandler {
                 : undefined;
         const awakened = plain && !endless && snapshot.awaken && canAwaken(this.save, mapId);
         if (
-            !(await this.travelTo(
-                mapId,
-                "characters",
-                [this.save.pet],
-                remixes,
-                invasionContent(invasion),
-            ))
+            !(await this.travelTo(mapId, "characters", [pet], remixes, invasionContent(invasion)))
         ) {
             return;
         }
@@ -2146,8 +2266,9 @@ export class GameClient implements GameFrameHandler {
             spawnX: spawn.x,
             spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
+            ...(cardCaps && { cardCaps }),
             trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
-            pet: this.save.pet,
+            pet,
             endless,
             hard,
             expert,
@@ -2177,7 +2298,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet], [this.save.look], cinematic);
+        this.enterRun(sim, [pet], [this.save.look], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -2257,8 +2378,11 @@ export class GameClient implements GameFrameHandler {
             characterId: hero.characterId,
             metaStats: loadoutStats(hero.loadout),
             ...cleanLoadout(hero.loadout),
-            // The weekly Vault is played without relics, as on your own (startVault)
-            ...(game.vault !== undefined && { relics: [] }),
+            // The weekly Vault is played without relics or Card collection only, as on your own
+            // (startVault, startRun)
+            ...(game.vault !== undefined && { relics: [], cardCaps: undefined }),
+            // Nor is a map whose level ups are blessings (MapDef.blessings), which cards don't touch
+            ...(map.blessings && { cardCaps: undefined }),
         }));
         const sim = new Sim({
             grid: this.grid,
@@ -3101,7 +3225,12 @@ export class GameClient implements GameFrameHandler {
             vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
         const quests = hasBadNumber(result)
             ? []
-            : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
+            : recordRun(this.save, {
+                  ...result,
+                  ...(vaultKey && { vault: vaultKey }),
+                  // This player's own: each co-op player records their run on their own save
+                  ...(sim.cardCaps && { cardsOnly: true }),
+              });
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
@@ -3134,6 +3263,7 @@ export class GameClient implements GameFrameHandler {
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
                 ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
                 orbWon: result.victory && GAUNTLET_FIGHTS.includes(result.mapId),
+                ...(sim.cardCaps && { cardsOnly: true }),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),

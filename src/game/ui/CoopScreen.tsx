@@ -441,6 +441,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                                             label={t("coop.playing_from")}
                                         />
                                         {tl(character.name)}
+                                        {/* Card collection only, theirs (Loadout.cardCaps) */}
+                                        {typeof member.loadout?.cardCaps === "string" && (
+                                            <span className="ui-coop-cards-only">
+                                                {t("coop.cards_only")}
+                                            </span>
+                                        )}
                                     </span>
                                 </span>
                                 <span

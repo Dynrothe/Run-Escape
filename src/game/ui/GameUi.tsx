@@ -5,6 +5,7 @@ import {
     useCallback,
     useEffect,
     useId,
+    useMemo,
     useRef,
     useState,
     useSyncExternalStore,
@@ -49,6 +50,7 @@ import {
     isActEnded,
     isActOut,
 } from "../content/acts";
+import type { CardDef } from "../content/cards";
 import { characterDescription, characterName, getCharacter } from "../content/characters";
 import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
 import { invaderName } from "../content/invasions";
@@ -75,7 +77,7 @@ import {
     takesInvocations,
     takesRelics,
 } from "../content/maps";
-import { PET_BY_ID, getFoundPets, getPetTrophy } from "../content/pets";
+import { PETS, PET_BY_ID, getFoundPets, getPetTrophy, isPetFound } from "../content/pets";
 import { RARITIES } from "../content/rarity";
 import { RELIC_BY_ID, relicName } from "../content/relics";
 import {
@@ -92,6 +94,7 @@ import {
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
 import {
+    CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
     REFUND_SPRITE,
     TITLE_TAB_SPRITES,
@@ -105,6 +108,14 @@ import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
+import {
+    getCardLock,
+    getCardRunShortfall,
+    getCardsOnlyPet,
+    hasPetCard,
+    isCardLocked,
+    playsCardsOnly,
+} from "../core/cardRuns";
 import {
     NewerSaveError,
     RecordSetup,
@@ -128,6 +139,7 @@ import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton, KitButtons } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
+import { CardsScreen } from "./CardsScreen";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
@@ -153,6 +165,7 @@ import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
+import { Platinum } from "./Platinum";
 import { QuestScreen } from "./QuestScreen";
 import { RelicRow } from "./Relics";
 import { RerollButton } from "./RerollButton";
@@ -245,6 +258,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
         case "collectionLog":
             screen = <CollectionLogScreen ui={ui} client={client} />;
             break;
+        case "cards":
+            screen = <CardsScreen ui={ui} client={client} />;
+            break;
         case "coop":
             screen = <CoopScreen ui={ui} client={client} />;
             break;
@@ -276,7 +292,8 @@ export function GameUi({ store, client }: Props): JSX.Element {
             ) : (
                 <LanguageNotice />
             )}
-            {isCoarsePointer && <RotateNotice />}
+            {/* The Collection log has a layout for a phone held upright, so it's left readable */}
+            {isCoarsePointer && ui.screen !== "collectionLog" && <RotateNotice />}
         </div>
     );
 }
@@ -1021,6 +1038,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             objId={COLLECTION_LOG_OBJ}
                             onClick={() => client.showScreen("collectionLog")}
                         />
+                        <TitleTile
+                            name={t("ui.title.cards")}
+                            objId={CARDS_ICON_OBJ}
+                            onClick={() => client.showScreen("cards")}
+                        />
                     </div>
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
@@ -1184,8 +1206,12 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                         {runBoard && <RunInvocationsButton ui={ui} onOpen={() => setBoard(true)} />}
                     </>
                 )}
+                {/* A map whose level ups are blessings: cards don't touch them */}
+                {!map.blessings && <CardsOnlySwitch ui={ui} client={client} />}
                 <button
                     className="ui-button ui-button-go ui-select-go"
+                    // Card collection only can't start as an adventurer without their starter cards
+                    disabled={isCardLocked(ui.save, getMapCharacter(map) ?? ui.characterId, map)}
                     onClick={() => client.startRun()}
                 >
                     <KeyHint keyLabel="Enter" pad="start" className="ui-choice-key ui-word-key" />{" "}
@@ -1263,6 +1289,44 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
                 />
             ) : (
                 <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
+            )}
+        </div>
+    );
+}
+
+// Card collection only (core/cardRuns.ts): level ups offer only what the player has cards of, no
+// rarer than their rarest version, and caskets only gear they have cards of. Off, saying what's missing, while the collection can't fill a
+// level up for this adventurer: a run never starts on it with nothing to offer.
+function CardsOnlySwitch({ ui, client }: ScreenProps): JSX.Element {
+    const characterId = getMapCharacter(getMap(ui.mapId)) ?? ui.characterId;
+    const short = getCardRunShortfall(ui.save, characterId);
+    const missing = short && [
+        ...(short.weapons > 0 ? [tp("ui.cards_only.need_weapons", short.weapons)] : []),
+        ...(short.passives > 0 ? [tp("ui.cards_only.need_passives", short.passives)] : []),
+    ];
+    return (
+        <div
+            className={"ui-endless" + (short ? " ui-endless-locked" : "")}
+            title={
+                missing
+                    ? t("ui.cards_only.locked", { list: listNames(missing) })
+                    : t("ui.cards_only.tooltip")
+            }
+        >
+            <span className="ui-endless-name">{t("ui.cards_only.name")}</span>
+            {short ? (
+                <span
+                    className="ui-endless-hint"
+                    aria-label={t("ui.cards_only.locked", { list: listNames(missing!) })}
+                >
+                    {tp("ui.cards_only.short", short.weapons + short.passives)}
+                </span>
+            ) : (
+                <Toggle
+                    on={ui.save.cardsOnly === true}
+                    label={t("ui.cards_only.name")}
+                    onToggle={() => client.toggleCardsOnly()}
+                />
             )}
         </div>
     );
@@ -1550,6 +1614,18 @@ export function AdventurerPanel({
     const roster = getRoster();
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
+    // Cards only on, solo: the adventurers it can't start as (isCardLocked), worked out once for
+    // the save, not on every peek. Only those they have: one they haven't is locked anyway.
+    const cardLocked = useMemo(() => {
+        const map = getMap(ui.mapId);
+        return new Set(
+            ui.screen === "coop"
+                ? []
+                : roster
+                      .filter((c) => unlocked.includes(c.id) && isCardLocked(ui.save, c.id, map))
+                      .map((c) => c.id),
+        );
+    }, [ui.save, ui.mapId, ui.screen, roster, unlocked]);
     return (
         <div
             className={
@@ -1604,6 +1680,9 @@ export function AdventurerPanel({
                                             `char.${character.id}.name`,
                                             character.name,
                                         );
+                                        // Cards only on, solo, without their starter cards: dimmed
+                                        // and marked, still picked to read why (AdventurerDetails)
+                                        const cardsLocked = cardLocked.has(character.id);
                                         return (
                                             <button
                                                 key={character.id}
@@ -1612,9 +1691,16 @@ export function AdventurerPanel({
                                                     (selected ? " ui-card-selected" : "") +
                                                     (unlocked.includes(character.id)
                                                         ? ""
-                                                        : " ui-card-locked")
+                                                        : " ui-card-locked") +
+                                                    (cardsLocked ? " ui-tile-cards-locked" : "")
                                                 }
-                                                aria-label={charName}
+                                                aria-label={
+                                                    cardsLocked
+                                                        ? t("ui.cards_only.tile_locked", {
+                                                              name: charName,
+                                                          })
+                                                        : charName
+                                                }
                                                 aria-pressed={selected}
                                                 onMouseMove={() => setPeek(character.id)}
                                                 onFocus={() => setPeek(character.id)}
@@ -1636,6 +1722,12 @@ export function AdventurerPanel({
                                                         size={18}
                                                     />
                                                 </span>
+                                                {cardsLocked && (
+                                                    <span
+                                                        className="ui-tile-lock"
+                                                        aria-hidden="true"
+                                                    />
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -1653,6 +1745,8 @@ export function AdventurerPanel({
                 save={ui.save}
                 character={getCharacter(shown)}
                 onFavourite={fixed ? undefined : () => client.toggleFavouriteCharacter(shown)}
+                // Solo only: in co-op a locked player plays without Cards only (their loadout)
+                cardLock={cardLocked.has(shown) ? getCardLock(ui.save, shown) : undefined}
             />
         </div>
     );
@@ -1661,11 +1755,21 @@ export function AdventurerPanel({
 // The pet to take along, from those found: none until one's been found. Most are looks only; a
 // fighting one (PetDef.power) says what it does
 function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
-    const found = getFoundPets(ui.save.trophies);
+    // A Card collection only run: its own pick, of the pets whose card is owned
+    // (SaveData.cardsOnlyPet). Only when the run will be one (playsCardsOnly), as it takes that pet.
+    const map = getMap(ui.mapId);
+    const cardsOnly =
+        ui.screen !== "coop" &&
+        playsCardsOnly(ui.save, getMapCharacter(map) ?? ui.characterId, map);
+    const found = cardsOnly
+        ? PETS.filter((pet) => hasPetCard(ui.save, pet.id) || isPetFound(ui.save.trophies, pet.id))
+        : getFoundPets(ui.save.trophies);
     if (found.length === 0) {
         return null;
     }
-    const chosen = ui.save.pet;
+    const chosen = cardsOnly ? getCardsOnlyPet(ui.save) : ui.save.pet;
+    const pick = (petId: string | undefined) =>
+        cardsOnly ? client.selectCardsOnlyPet(petId) : client.selectPet(petId);
     const name = chosen
         ? tr(
               `trophy.${getPetTrophy(PET_BY_ID.get(chosen)!).id}.name`,
@@ -1676,7 +1780,8 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
     return (
         <div className="ui-pet-row">
             <span className="ui-pet-label">
-                {t("ui.pet.label")} <span className="ui-pet-name">{name}</span>
+                {cardsOnly ? t("ui.pet.label_cards_only") : t("ui.pet.label")}{" "}
+                <span className="ui-pet-name">{name}</span>
             </span>
             <div className="ui-pet-tiles">
                 <button
@@ -1684,7 +1789,7 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     aria-label={t("ui.pet.none_aria")}
                     aria-pressed={!chosen}
                     title={t("ui.pet.none_aria")}
-                    onClick={() => client.selectPet(undefined)}
+                    onClick={() => pick(undefined)}
                 >
                     <span className="ui-pet-none">{t("ui.common.none")}</span>
                 </button>
@@ -1692,18 +1797,34 @@ function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
                     const trophy = getPetTrophy(pet);
                     const selected = pet.id === chosen;
                     const shownTrophyName = trophyName(trophy);
+                    // In Card collection only: a pet with its card says so; one found without it
+                    // can't be taken, and says what it needs
+                    const carded = cardsOnly && hasPetCard(ui.save, pet.id);
+                    const needsCard = cardsOnly && !carded;
+                    const label = carded
+                        ? t("ui.pet.card", { name: shownTrophyName })
+                        : needsCard
+                          ? t("ui.pet.needs_card", { name: shownTrophyName })
+                          : shownTrophyName;
                     return (
                         <button
                             key={pet.id}
                             className={
-                                "ui-card ui-pet-tile" + (selected ? " ui-card-selected" : "")
+                                "ui-card ui-pet-tile" +
+                                (selected ? " ui-card-selected" : "") +
+                                (needsCard ? " ui-pet-needs-card" : "")
                             }
-                            aria-label={shownTrophyName}
+                            aria-label={label}
                             aria-pressed={selected}
-                            title={shownTrophyName}
-                            onClick={() => client.selectPet(pet.id)}
+                            aria-disabled={needsCard || undefined}
+                            title={label}
+                            // One without its card says no (its name says why)
+                            onClick={() => pick(pet.id)}
                         >
                             <ItemIcon objId={trophy.objId} size={26} />
+                            {carded && (
+                                <span className="ui-pet-card-mark">{t("ui.pet.card_mark")}</span>
+                            )}
                         </button>
                     );
                 })}
@@ -1743,10 +1864,13 @@ function AdventurerDetails({
     save,
     character,
     onFavourite,
+    cardLock,
 }: {
     save: SaveData;
     character: CharacterDef;
     onFavourite?: () => void;
+    // Card collection only is on and can be played, but not as them: the cards they still need
+    cardLock?: CardDef[];
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
     const favourite = save.favouriteCharacter === character.id;
@@ -1804,6 +1928,13 @@ function AdventurerDetails({
             {!unlocked && character.unlock && (
                 <div className="ui-card-cost">
                     {describeUnlockTask(character.unlock)} {t("ui.common.to_unlock")}
+                </div>
+            )}
+            {cardLock && (
+                <div className="ui-card-cost">
+                    {t("ui.cards_only.character_locked", {
+                        list: list(cardLock.map((card) => card.name())),
+                    })}
                 </div>
             )}
         </div>
@@ -4789,6 +4920,13 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 {result?.raidChest && <RaidChestView chest={result.raidChest} />}
                 {result?.hard && result.victory && result.relics && (
                     <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
+                )}
+                {result?.cardsOnly && <p className="ui-subtle">{t("ui.result.cards_only")}</p>}
+                {/* What packs are bought with, apart from the coins (content/cards.ts) */}
+                {result !== undefined && (result.platinum ?? 0) > 0 && (
+                    <p className="ui-unlocked">
+                        {t("ui.result.platinum")} <Platinum amount={result.platinum!} />
+                    </p>
                 )}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">

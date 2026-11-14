@@ -21,6 +21,10 @@ export type Loadout = {
     // The raid chests' trophies they've found (isRaidChestTrophy), so their chest only gives ones
     // they haven't got
     trophies?: string[];
+    // Playing Card collection only (core/cardRuns.ts): their weapon, passive and gear cards, each at
+    // its rarest version owned (encodeCardCaps), which their own level ups and caskets keep to. Only sent when
+    // their collection can play such a run.
+    cardCaps?: string;
 };
 
 // The maps a player has unlocked, and has endless and hard mode for, which

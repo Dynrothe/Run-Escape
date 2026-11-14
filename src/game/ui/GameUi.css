@@ -371,7 +371,9 @@
 
 .ui-title-tiles {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* One row, however many tiles */
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 6px;
 }
 
@@ -934,6 +936,7 @@
 }
 
 .ui-pet-tile {
+    position: relative;
     justify-content: center;
     width: 36px;
     height: 34px;
@@ -3910,4 +3913,65 @@
     .ui-xp-fill {
         transition: none;
     }
+}
+
+/* An adventurer a Card collection only run can't start as (core/cardRuns.ts, isCardLocked):
+   dimmed, with a padlock drawn in its corner (a shackle over a body), and still pickable */
+.ui-tile-cards-locked > .ui-icon {
+    opacity: 0.4;
+}
+
+/* Top right: the top left has a selected tile's marker */
+.ui-tile-lock {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    width: 10px;
+    height: 13px;
+    pointer-events: none;
+}
+
+.ui-tile-lock::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 0;
+    width: 4px;
+    height: 6px;
+    border: 2px solid #c8a24a;
+    border-bottom: 0;
+    border-radius: 4px 4px 0 0;
+}
+
+.ui-tile-lock::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 10px;
+    height: 7px;
+    background: #c8a24a;
+    border-radius: 1px;
+    box-shadow: 0 0 0 1px #000;
+}
+
+/* Card collection only's pet pick: "Card" on a pet whose card's owned, and a pet found without
+   its card faded, with no hover (its name says it needs the card) */
+
+.ui-pet-card-mark {
+    position: absolute;
+    bottom: 0;
+    right: 1px;
+    font-size: 11px;
+    line-height: 11px;
+    color: #c8a24a;
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: none;
+}
+
+.ui-pet-needs-card,
+.ui-pet-needs-card:hover {
+    opacity: 0.45;
+    cursor: default;
+    background: var(--ui-card);
 }
