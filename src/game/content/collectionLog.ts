@@ -221,8 +221,10 @@ export function getLogEntries(save: SaveData): LogEntry[] {
 }
 
 // The log during a run: built from runSave, the save as the run would leave it
-// (GameClient.getRunLogSaves), with what only that has found marked thisRun. The counts and tallies
-// stay the save's, as a run's kills and caskets aren't counted till it ends.
+// (GameClient.getRunLogSaves). What only that has found is marked thisRun and shown as the run
+// leaves it (an invader's first kill counted, and said). Everything else stays as it's saved,
+// its counts and the entries' tallies too, as a run's wins, caskets and kills aren't counted
+// till it ends.
 export function getRunLogEntries(save: SaveData, runSave: SaveData): LogEntry[] {
     const saved = getLogEntries(save);
     const savedEntries = new Map(saved.map((entry) => [entry.id, entry]));
@@ -233,9 +235,7 @@ export function getRunLogEntries(save: SaveData, runSave: SaveData): LogEntry[] 
         items: entry.items.map((item) => {
             const before = savedItems.get(item.key);
             if (!before) return item;
-            return item.found && !before.found
-                ? { ...item, count: before.count, thisRun: true }
-                : before;
+            return item.found && !before.found ? { ...item, thisRun: true } : before;
         }),
     }));
 }

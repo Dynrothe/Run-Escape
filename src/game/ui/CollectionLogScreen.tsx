@@ -1,7 +1,6 @@
-import { CSSProperties, useMemo, useState } from "react";
+import { CSSProperties, MutableRefObject, memo, useEffect, useMemo, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
-import { UiSnapshot } from "../client/GameStore";
 import {
     LOG_TABS,
     LogEntry,
@@ -17,6 +16,7 @@ import { RARITIES } from "../content/rarity";
 import { CLOSE_SPRITES } from "../content/titleIcons";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { weaponDescription, weaponName } from "../content/weapons";
+import { SaveData } from "../core/save";
 import { fmtNum, t, useLang } from "../i18n";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
@@ -32,17 +32,43 @@ import { useSpriteFrame } from "./useSpriteFrame";
 //
 // inRun: open over the pause menu (GameClient.openRunLog), as a window over it, with what the run
 // has found and not saved yet marked New. Its Escape and P are the client's (closeRunLog), as
-// they're the pause keys there.
+// they're the pause keys there. place keeps where it was left, for when a co-op run's level up
+// or casket takes it away a moment and it opens again.
 
-type Props = { ui: UiSnapshot; client: GameClient; inRun?: boolean };
+// Where the log's open: its tab, the entry open on each tab, and the item pointed at
+export type LogPlace = {
+    tab: LogTab;
+    entryIds: Partial<Record<LogTab, string>>;
+    itemIndex: number;
+};
+
+type Props = {
+    save: SaveData;
+    client: GameClient;
+    inRun?: boolean;
+    place?: MutableRefObject<LogPlace | undefined>;
+};
 
 // The log's entries: during a run, with the run's finds (GameClient.getRunLogSaves)
-function buildEntries(ui: UiSnapshot, client: GameClient, inRun: boolean): LogEntry[] {
+function buildEntries(save: SaveData, client: GameClient, inRun: boolean): LogEntry[] {
     if (!inRun) {
-        return getLogEntries(ui.save);
+        return getLogEntries(save);
     }
     const { saved, withRun } = client.getRunLogSaves();
     return withRun ? getRunLogEntries(saved, withRun) : getLogEntries(saved);
+}
+
+// Whether the run under way has found any of an entry's items
+function hasNew(entry: LogEntry): boolean {
+    return entry.items.some((item) => item.thisRun);
+}
+
+// An item's state, in words: found in the run under way, obtained, or not
+function itemState(item: LogItem): string {
+    if (item.thisRun) {
+        return t("collection.item_this_run");
+    }
+    return t(item.found ? "collection.item_found" : "collection.item_missing");
 }
 
 const SORTED_TABS: LogTab[] = ["bosses", "raids", "minigames"];
@@ -64,9 +90,7 @@ function entryOption(entry: LogEntry): string {
         n: fmtNum(entryCount(entry)),
         total: fmtNum(entry.items.length),
     });
-    return entry.items.some((item) => item.thisRun)
-        ? t("collection.entry_new", { name: text })
-        : text;
+    return hasNew(entry) ? t("collection.entry_new", { name: text }) : text;
 }
 
 // A sentence with an element in it, where its {placeholder} is, so a language can move it
@@ -84,19 +108,27 @@ function withPart(text: string, placeholder: string, part: JSX.Element): JSX.Ele
     );
 }
 
-export function CollectionLogScreen({ ui, client, inRun = false }: Props): JSX.Element {
+// Memo: over a co-op run, the pause menu under it draws again as the run goes on, and the log
+// needn't with it
+export const CollectionLogScreen = memo(function CollectionLogScreen({
+    save,
+    client,
+    inRun = false,
+    place,
+}: Props): JSX.Element {
     const lang = useLang();
     // Built once for the save and language, not on each item the mouse crosses
     const { entries, tabs, total } = useMemo(() => {
-        const built = buildEntries(ui, client, inRun);
+        const built = buildEntries(save, client, inRun);
         return {
             entries: built,
             tabs: LOG_TABS.filter((tab) => built.some((entry) => entry.tab === tab)),
             total: getLogTotal(built),
         };
         // lang: the names and sentences are built in it
-    }, [ui.save, lang, client, inRun]);
-    const [tab, setTab] = useState<LogTab>(tabs[0]);
+    }, [save, lang, client, inRun]);
+    const kept = place?.current;
+    const [tab, setTab] = useState<LogTab>(kept && tabs.includes(kept.tab) ? kept.tab : tabs[0]);
     const inTab = useMemo(() => {
         const list = entries.filter((entry) => entry.tab === tab);
         // The places in order by their name, in the player's language, as OSRS lists its bosses
@@ -104,10 +136,15 @@ export function CollectionLogScreen({ ui, client, inRun = false }: Props): JSX.E
             ? list.sort((a, b) => a.name.localeCompare(b.name, lang))
             : list;
     }, [entries, tab, lang]);
-    const [entryIds, setEntryIds] = useState<Partial<Record<LogTab, string>>>({});
+    const [entryIds, setEntryIds] = useState<Partial<Record<LogTab, string>>>(kept?.entryIds ?? {});
     const entry = inTab.find((e) => e.id === entryIds[tab]) ?? inTab[0];
-    const [itemIndex, setItemIndex] = useState(0);
+    const [itemIndex, setItemIndex] = useState(kept?.itemIndex ?? 0);
     const item: LogItem | undefined = entry.items[itemIndex] ?? entry.items[0];
+    useEffect(() => {
+        if (place) {
+            place.current = { tab, entryIds, itemIndex };
+        }
+    }, [place, tab, entryIds, itemIndex]);
     const close = inRun ? () => client.closeRunLog() : () => client.showScreen("title");
     useMenuKeys({ onBack: inRun ? undefined : close });
     // Over a run, a window like the pause menu under it: the focus in it, what's behind out of
@@ -173,7 +210,7 @@ export function CollectionLogScreen({ ui, client, inRun = false }: Props): JSX.E
                     >
                         {inTab.map((e) => {
                             const complete = entryCount(e) === e.items.length;
-                            const fresh = e.items.some((it) => it.thisRun);
+                            const fresh = hasNew(e);
                             return (
                                 <button
                                     key={e.id}
@@ -257,7 +294,7 @@ export function CollectionLogScreen({ ui, client, inRun = false }: Props): JSX.E
             </div>
         </div>
     );
-}
+});
 
 // The client's own X, lit under the mouse; a plain X till its sprites are drawn
 function CloseButton({ onClose }: { onClose: () => void }): JSX.Element {
@@ -291,9 +328,7 @@ function ItemSlot({
     // What an evolution makes is hidden till it's been made: its slot shows the weapon that
     // evolves, faded, with a ? on it
     const hidden = item.evolution !== undefined && !item.found;
-    const state = item.thisRun
-        ? t("collection.item_this_run")
-        : t(item.found ? "collection.item_found" : "collection.item_missing");
+    const state = itemState(item);
     return (
         <button
             className={
@@ -334,9 +369,7 @@ function ItemDetail({ item }: { item: LogItem }): JSX.Element {
             <EvolutionDetail evolution={item.evolution} made={item.found} thisRun={item.thisRun} />
         );
     }
-    const state = item.thisRun
-        ? t("collection.item_this_run")
-        : t(item.found ? "collection.item_found" : "collection.item_missing");
+    const state = itemState(item);
     return (
         <div id="ui-log-detail" className="ui-log-detail">
             <div className="ui-log-state">

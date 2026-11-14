@@ -110,7 +110,7 @@ describe("the sound's on and off", () => {
                     Object.assign(settings, changes),
             },
         });
-        // As M or the orb do (onKeyPress is the constructor's)
+        // As M or the orb do
         const pressM = () => client.toggleMute(true);
         const toasts = () => store.getSnapshot().toasts.map((toast) => toast.text);
         return { client, store, pressM, toasts };
@@ -1223,6 +1223,29 @@ describe("a co-op run that breaks", () => {
         expect(store.getSnapshot().runLog).toBe(true);
         update();
         expect(setMove).toHaveBeenLastCalledWith(0, 0);
+    });
+
+    it("uses items and the hero's button under co-op's menu, not under the Collection log over it", () => {
+        const { client } = coopClient({});
+        const useItem = vi.fn();
+        const useAbility = vi.fn();
+        Object.assign(client, { useItem, useAbility });
+        const press = (code: string) =>
+            (client as unknown as { onKeyPress(code: string): void }).onKeyPress(code);
+        client.pause();
+        press("Space");
+        press("Digit1");
+        expect(useAbility).toHaveBeenCalledOnce();
+        expect(useItem).toHaveBeenCalledWith(0);
+        client.openRunLog();
+        press("Space");
+        press("Digit2");
+        expect(useAbility).toHaveBeenCalledOnce();
+        expect(useItem).toHaveBeenCalledOnce();
+        // Back on the menu, in reach again
+        press("Escape");
+        press("Digit3");
+        expect(useItem).toHaveBeenLastCalledWith(2);
     });
 
     it("sends the host's frames even when something after a step throws", () => {
@@ -2714,15 +2737,36 @@ describe("the Collection log over the pause menu", () => {
         }
         press("Escape");
         expect(snapshot().overlay).toBe("none");
-        // A run that left the menu with the log open (a co-op run's end, or leaving it) pauses
-        // to the menu next time
-        press("KeyP");
-        client.openRunLog();
-        Object.assign(client, { paused: false });
-        store.set({ overlay: "none" });
+    });
+
+    test("shuts with the menu however the run leaves it, so the next pause opens on the menu", () => {
+        const { client, store } = createClient(createSim(), false);
+        Object.assign(client, { updateHud() {} });
         client.pause();
-        expect(snapshot().overlay).toBe("paused");
-        expect(snapshot().runLog).toBe(false);
+        client.openRunLog();
+        expect(store.getSnapshot().runLog).toBe(true);
+        // As starting a run and leaving one do (leavePauseMenu)
+        client.quitRun();
+        expect(store.getSnapshot().runLog).toBe(false);
+    });
+
+    test("leaves Escape and P to the panel saying nothing's being saved, over the menu or the log", () => {
+        const { client, store } = createClient(createSim(), false);
+        const press = (code: string) =>
+            (client as unknown as { pressPauseKey(code: string): void }).pressPauseKey(code);
+        client.pause();
+        client.openRunLog();
+        store.set({ saveBlock: { kind: "otherTab" } });
+        for (const code of ["Escape", "KeyP"]) {
+            press(code);
+            expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: true });
+        }
+        // Played on without saving: the keys are the log's and the menu's again
+        store.set({ saveBlockClosed: true });
+        press("Escape");
+        expect(store.getSnapshot()).toMatchObject({ overlay: "paused", runLog: false });
+        press("Escape");
+        expect(store.getSnapshot().overlay).toBe("none");
     });
 
     test("shows the run's finds from a copy of the save, saving nothing", () => {
@@ -2740,5 +2784,13 @@ describe("the Collection log over the pause menu", () => {
         // Once it's recorded, the save has them
         Object.assign(client, { runRecorded: true });
         expect(client.getRunLogSaves().withRun).toBeUndefined();
+    });
+
+    test("finds nothing the run wouldn't bank: a result with a number that isn't", () => {
+        const sim = createSim();
+        const { client } = createClient(sim, false);
+        sim.trophies.add(TROPHIES[0].id);
+        Object.assign(sim, { coins: NaN });
+        expect(client.getRunLogSaves().withRun?.trophies).toEqual([]);
     });
 });

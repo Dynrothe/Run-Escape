@@ -2348,7 +2348,7 @@ export class GameClient implements GameFrameHandler {
         } else {
             this.audio.stopMusic();
         }
-        this.paused = false;
+        this.leavePauseMenu();
         this.runRecorded = false;
         this.reportRun = this.options.stress
             ? undefined
@@ -2688,12 +2688,17 @@ export class GameClient implements GameFrameHandler {
     // so there's nothing to pause (and its window loses focus to the console often)
     pause(): void {
         if (this.sim && !this.sim.runOver && !this.director) {
-            if (!this.paused) {
-                // A new pause opens on the menu, not on a log left open last time
-                this.store.set({ runLog: false });
-            }
             this.paused = true;
             this.syncOverlay();
+        }
+    }
+
+    // Out of the pause menu, and so out of the Collection log over it: the next pause opens on
+    // the menu
+    private leavePauseMenu(): void {
+        this.paused = false;
+        if (this.store.getSnapshot().runLog) {
+            this.store.set({ runLog: false });
         }
     }
 
@@ -2723,11 +2728,8 @@ export class GameClient implements GameFrameHandler {
     }
 
     resume(): void {
-        this.paused = false;
+        this.leavePauseMenu();
         this.accumulator = 0;
-        if (this.store.getSnapshot().runLog) {
-            this.store.set({ runLog: false });
-        }
         this.syncOverlay();
     }
 
@@ -2745,23 +2747,38 @@ export class GameClient implements GameFrameHandler {
     }
 
     // The save, and the save as this run would leave it if it ended now, for the log's "Found
-    // this run": what finishRun would record, on a copy, so nothing's saved and the run's
-    // untouched. Both from the same moment (saved is only read). No run's finds once the run's recorded, for
-    // the Forgotten Four's fights (they record the gauntlet, not the run), or for a result with a
-    // number that isn't, which finishRun wouldn't record either.
+    // this run": bankRun on a copy, as finishRun would bank it, so nothing's saved and the run's
+    // untouched. Nothing of the run's once it's banked, or in a fight of the Forgotten Four's
+    // (which records the gauntlet, not the run).
     getRunLogSaves(): { saved: SaveData; withRun?: SaveData } {
         const saved = this.save;
         const sim = this.sim;
-        if (!sim || this.runRecorded || this.gauntletRun) {
+        if (!sim || this.runRecorded) {
             return { saved };
         }
         const result = sim.getResult();
-        if (hasBadNumber(result)) {
+        if (this.isGauntletFight(result)) {
             return { saved };
         }
-        const withRun = structuredClone(this.save);
-        recordRun(withRun, result);
+        const withRun = structuredClone(saved);
+        this.bankRun(withRun, result);
         return { saved, withRun };
+    }
+
+    // A fight of the Forgotten Four's, recorded as the gauntlet's (finishGauntletFight)
+    private isGauntletFight(result: RunResult): boolean {
+        return this.gauntletRun !== undefined && result.gauntlet !== undefined;
+    }
+
+    // Banks a run's result on a save, with its Vault week, and pays out the quests it finished.
+    // Not a result with a number that isn't: a co-op run's numbers can come from another
+    // player's modified game, and a NaN in a solo one's would come back from the save as 0 coins.
+    private bankRun(save: SaveData, result: RunResult): ReturnType<typeof recordRun> {
+        if (hasBadNumber(result)) {
+            return [];
+        }
+        const vaultKey = this.runVault;
+        return recordRun(save, { ...result, ...(vaultKey && { vault: vaultKey }) });
     }
 
     // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
@@ -2769,7 +2786,7 @@ export class GameClient implements GameFrameHandler {
     quitRun(): void {
         const sim = this.sim;
         if (sim && !this.coopRun) {
-            this.paused = false;
+            this.leavePauseMenu();
             sim.giveUp();
             // Before the overlay, or it would play as a death
             this.finishRun(t("ui.result.gave_up"), "abandoned");
@@ -2820,7 +2837,7 @@ export class GameClient implements GameFrameHandler {
         this.sim = undefined;
         this.endCinematic();
         this.reportRun = undefined;
-        this.paused = false;
+        this.leavePauseMenu();
         this.audio.stopMusic();
         this.grid = this.grids.get(TITLE_MAP.id)!;
         this.renderer.setPlane(this.grid.plane);
@@ -3108,7 +3125,7 @@ export class GameClient implements GameFrameHandler {
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
-        if (this.gauntletRun && result.gauntlet) {
+        if (this.isGauntletFight(result)) {
             this.finishGauntletFight(result);
             return;
         }
@@ -3140,14 +3157,11 @@ export class GameClient implements GameFrameHandler {
         const newTrophies = isDevMap(sim.map.id)
             ? []
             : result.trophies.filter((id) => !this.save.trophies.includes(id));
-        // A co-op run's numbers can come from another player's modified game,
-        // and a NaN in a solo one's would come back from the save as 0 coins
+        // Before the run's banked
         const vaultKey = this.runVault;
         const vaultBest =
             vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
-        const quests = hasBadNumber(result)
-            ? []
-            : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
+        const quests = this.bankRun(this.save, result);
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
@@ -3261,7 +3275,7 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    private onKeyPress = (code: string): void => {
+    private onKeyPress(code: string): void {
         if (code === "F3") {
             this.store.set({ debug: !this.store.getSnapshot().debug });
             return;
@@ -3282,7 +3296,10 @@ export class GameClient implements GameFrameHandler {
         if (!sim) {
             return;
         }
-        const overlay = this.store.getSnapshot().overlay;
+        const { overlay, runLog } = this.store.getSnapshot();
+        // The run goes on behind co-op's menu, in reach, but not behind the Collection log over
+        // it, which hides it (the hero stands still too: updateCoop)
+        const coopMenu = overlay === "paused" && this.coopRun !== undefined && !runLog;
         if (code === "Escape" || code === "KeyP") {
             this.pressPauseKey(code);
         } else if (overlay === "event" && code.startsWith("Digit")) {
@@ -3292,13 +3309,9 @@ export class GameClient implements GameFrameHandler {
             if (index >= 0 && index < sim.choices.length) {
                 this.choose(index);
             }
-        } else if (overlay === "paused" && this.coopRun && code.startsWith("Digit")) {
-            // The run goes on behind co-op's menu
+        } else if (coopMenu && code.startsWith("Digit")) {
             this.useItem(parseInt(code.slice(5)) - 1);
-        } else if (
-            (overlay === "none" || (overlay === "paused" && this.coopRun)) &&
-            code === "Space"
-        ) {
+        } else if ((overlay === "none" || coopMenu) && code === "Space") {
             this.useAbility();
         } else if (overlay === "levelUp" && code === "KeyR") {
             this.reroll();
@@ -3312,13 +3325,20 @@ export class GameClient implements GameFrameHandler {
             // is done)
             this.useItem(parseInt(code.slice(5)) - 1);
         }
-    };
+    }
 
-    // Escape and P in a run: the Collection log's way back to the pause menu (Escape, a pad's back,
-    // its Start as P), the menu's resume, the run's pause, and Escape leaves an event
+    // Escape and P in a run (a pad's back sends Escape, and its Start P when the top window has no
+    // main button), for the top window: a window over the run and its menu first, then the
+    // menu's resume, the run's pause, and Escape leaves an event
     private pressPauseKey(code: string): void {
-        const { overlay, runLog } = this.store.getSnapshot();
+        const { overlay, runLog, saveBlock, saveBlockClosed } = this.store.getSnapshot();
+        if (saveBlock && !saveBlockClosed) {
+            // The panel saying nothing's being saved comes first, as it does for useMenuKeys: the
+            // run behind it stays as it is till the player picks what to do
+            return;
+        }
         if (overlay === "paused" && runLog) {
+            // The Collection log over the menu, back to the menu
             this.closeRunLog();
         } else if (overlay === "paused") {
             this.resume();
@@ -3813,7 +3833,7 @@ export class GameClient implements GameFrameHandler {
         );
         this.cinematic = this.director.player;
         this.view.cinematic = this.cinematic;
-        this.paused = false;
+        this.leavePauseMenu();
         this.pinCinematic(sim, this.director.def);
         const version = this.director.shotsVersion;
         this.directorPins = { pinned: version, seen: version, changed: 0 };
@@ -4108,7 +4128,8 @@ export class GameClient implements GameFrameHandler {
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
-        // and through the opening cinematic. Not while the Collection log covers the run either.
+        // and through the opening cinematic, and while the Collection log over the menu hides the
+        // run (whose keys are out of reach then too: onKeyPress)
         const { overlay, runLog } = this.store.getSnapshot();
         const deciding =
             (overlay !== "none" && !this.paused) ||

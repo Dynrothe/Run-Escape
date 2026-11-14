@@ -1440,14 +1440,24 @@ adventurer can have:
 - **The log in a run**: the pause menu's Collection log opens the same screen over it
   (`CollectionLogScreen`'s `inRun`, the store's `runLog`, `GameClient.openRunLog`). It's only the
   UI's: a solo run stays paused under it, and a co-op run goes on, as it does under co-op's menu,
-  except that the hero stands still meanwhile, as the log hides the run (a zero move, as while
-  choosing a level up: `updateCoop`'s `deciding`). Escape and P are the client's pause keys
-  there, so `GameClient.pressPauseKey` closes the log before it resumes, and a pad's back and Start (P, with no `.ui-button-go` in the
-  log) do the same. What the run has found and not saved is marked New (`LogItem.thisRun`):
-  `GameClient.getRunLogSaves` gives the save and a copy with `recordRun` applied to the run's
-  result as it stands, and `getRunLogEntries` marks what only the copy has, keeping the save's
-  counts and tallies. It's worked out as the log opens: a co-op find made while it's open shows
-  the next time.
+  except that the run's out of reach while the log hides it. The hero stands still (a zero move,
+  as while choosing a level up: `updateCoop`'s `deciding`), and Space and 1 to 4, which work
+  under co-op's menu, do nothing (`onKeyPress`'s `coopMenu`). Escape and P are the client's
+  pause keys there, so `GameClient.pressPauseKey` closes the log before it resumes, and a pad's
+  back and Start (P, with no `.ui-button-go` in the log) do the same. The panel saying nothing's
+  being saved comes before either, as it does for `useMenuKeys`. Anything that leaves the menu
+  shuts the log with it (`leavePauseMenu`: resuming, giving up, a run starting or left), so the
+  next pause opens on the menu. A co-op level up or casket takes the menu away a moment, the log
+  with it, and the log opens again where it was left (`LogPlace`, kept by `RunScreen`). The log
+  is a `memo`, so the menu under it drawing again as a co-op run goes on doesn't redraw it.
+- **What the run's found**: marked New in the log in a run (`LogItem.thisRun`).
+  `GameClient.getRunLogSaves` gives the save and a copy with the run's result banked on it as it
+  stands, by the same `bankRun` that `finishRun` banks the run with, and `getRunLogEntries`
+  marks what only the copy has, shown as the run leaves it (an invader's first kill, counted).
+  Everything else is as it's saved, the entries' counts and tallies too. These finds count in
+  the title's total, as the run keeps them however it ends in the game (a death, a win, giving
+  up, a co-op disconnect), but closing the game mid-run records nothing, so they go with it.
+  It's worked out as the log opens: a co-op find made while it's open shows the next time.
 
 ### Thanksgiving's Avian Assaulter
 

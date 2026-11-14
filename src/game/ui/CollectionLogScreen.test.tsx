@@ -145,6 +145,7 @@ describe("the Collection log during a run", () => {
             openRunLog: vi.fn(() => store.set({ runLog: true })),
             closeRunLog: vi.fn(() => store.set({ runLog: false })),
             getRunLogSaves: vi.fn(() => ({ saved: save, withRun })),
+            resume: vi.fn(() => store.set({ overlay: "none", runLog: false })),
         };
         const client = new Proxy(
             { store, input: { stick: {} }, ...calls },
@@ -179,6 +180,44 @@ describe("the Collection log during a run", () => {
         return screen.getByRole("dialog", { name: /^Collection log/ });
     }
 
+    // A pad's button pressed once in the menus, and the keys the pad sent for it (GameInput
+    // passes them to the client)
+    function pressPad(button: number): string[] {
+        // jsdom lays nothing out, so give everything a size
+        for (const el of document.querySelectorAll<HTMLElement>("button, select")) {
+            el.getBoundingClientRect = () =>
+                ({ left: 0, top: 0, width: 10, height: 10 }) as DOMRect;
+        }
+        let down: number[] = [];
+        Object.defineProperty(navigator, "getGamepads", {
+            value: () => [
+                {
+                    id: "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)",
+                    index: 0,
+                    connected: true,
+                    mapping: "standard",
+                    axes: [0, 0],
+                    buttons: Array.from({ length: 17 }, (_, i) => ({
+                        pressed: down.includes(i),
+                        touched: down.includes(i),
+                        value: down.includes(i) ? 1 : 0,
+                    })),
+                },
+            ],
+            configurable: true,
+        });
+        const pads = new GamePads();
+        const keys: string[] = [];
+        pads.onKeyDown = (code) => keys.push(code);
+        pads.poll(0, "menu");
+        down = [button];
+        act(() => pads.poll(16, "menu"));
+        down = [];
+        pads.poll(32, "menu");
+        pads.dispose();
+        return keys;
+    }
+
     test("opens from the pause menu, over it, and its X goes back to the menu", () => {
         const { store, calls } = pauseRun();
         const pause = screen.getByRole("dialog", { name: "Paused" });
@@ -208,6 +247,36 @@ describe("the Collection log during a run", () => {
         expect(calls.closeRunLog).not.toHaveBeenCalled();
     });
 
+    test("sends a pad's Start and back to the client as P and Escape, not to the menu's Resume", () => {
+        const { calls } = pauseRun();
+        // On the menu alone, Start presses its Resume
+        expect(pressPad(PAD.start)).toEqual([]);
+        expect(calls.resume).toHaveBeenCalledOnce();
+        cleanup();
+        const run = pauseRun(true);
+        // The log has no main button of its own, so Start is P (GameClient.pressPauseKey)
+        expect(pressPad(PAD.start)).toEqual(["KeyP"]);
+        expect(pressPad(PAD.east)).toEqual(["Escape"]);
+        expect(run.calls.resume).not.toHaveBeenCalled();
+    });
+
+    test("opens where it was left once a co-op run's level up or casket has taken it away", () => {
+        const { store } = pauseRun(true);
+        const theatre = mapName(getMap("theatre_of_blood"));
+        fireEvent.click(within(runLog()).getByRole("button", { name: "Raids" }));
+        fireEvent.click(within(runLog()).getByRole("button", { name: theatre }));
+        expect(pageTitle(runLog())).toBe(theatre);
+        // The menu goes for a moment, and the log with it; the run's still on the log
+        act(() => store.set({ overlay: "none" }));
+        expect(screen.queryByRole("dialog", { name: /^Collection log/ })).toBeNull();
+        act(() => store.set({ overlay: "paused" }));
+        expect(pageTitle(runLog())).toBe(theatre);
+        expect(within(runLog()).getByRole("button", { name: "Raids" })).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+    });
+
     test("marks what the run's found and not saved yet, in words", () => {
         pauseRun(true);
         const log = runLog();
@@ -225,7 +294,7 @@ describe("the Collection log during a run", () => {
         expect(within(slot).getByText("New")).toBeInTheDocument();
         fireEvent.mouseEnter(slot);
         expect(within(log).getByText(/\(Found this run\)/)).toBeInTheDocument();
-        // Counted in the title's total, as it'll be saved however the run ends
+        // Counted in the title's total, as it's kept however the run ends in the game
         const total = getLogTotal(getLogEntries(createSave()));
         expect(within(log).getByRole("heading", { level: 2 })).toHaveTextContent(
             `Collection log - 1/${total.total}`,

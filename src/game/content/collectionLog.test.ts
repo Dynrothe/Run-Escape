@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createSave } from "../core/save";
+import { tp } from "../i18n";
 import { isMapOut } from "./acts";
 import {
     LOG_TABS,
@@ -228,15 +229,33 @@ describe("the log during a run", () => {
         expect(items.find((item) => item.id === had.id)?.thisRun).toBeUndefined();
         expect(entries.find((entry) => entry.id === mapId)?.tally?.n).toBe(2);
         expect(getLogTotal(entries).found).toBe(2);
-        // An invader killed for the first time this run is found, with the save's count
+        // An invader killed for the first time this run is found, as the run leaves it: its
+        // count and its line agree. One killed before keeps the save's. (None while their act
+        // isn't out.)
         const invader = INVADERS.find((def) => REWARD_MAPS.includes(def.mapId));
         if (invader) {
-            const killed = structuredClone(save);
-            killed.invasions = { [invader.id]: 1 };
-            const item = getRunLogEntries(save, killed)
-                .flatMap((entry) => entry.items)
-                .find((it) => it.id === invader.id);
-            expect(item).toMatchObject({ found: true, thisRun: true, count: 0 });
+            const invaderItem = (before: number, after: number) => {
+                const was = structuredClone(save);
+                was.invasions = before > 0 ? { [invader.id]: before } : undefined;
+                const killed = structuredClone(save);
+                killed.invasions = { [invader.id]: after };
+                return getRunLogEntries(was, killed)
+                    .flatMap((entry) => entry.items)
+                    .find((it) => it.id === invader.id);
+            };
+            expect(invaderItem(0, 1)).toMatchObject({
+                found: true,
+                thisRun: true,
+                count: 1,
+                how: tp("log.invasion_kills", 1),
+            });
+            const again = invaderItem(2, 3);
+            expect(again).toMatchObject({
+                found: true,
+                count: 2,
+                how: tp("log.invasion_kills", 2),
+            });
+            expect(again?.thisRun).toBeUndefined();
         }
     });
 });

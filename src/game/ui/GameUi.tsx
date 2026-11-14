@@ -1,5 +1,6 @@
 import {
     CSSProperties,
+    MutableRefObject,
     ReactNode,
     memo,
     useCallback,
@@ -132,7 +133,7 @@ import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
 import { Coins } from "./Coins";
-import { CollectionLogScreen } from "./CollectionLogScreen";
+import { CollectionLogScreen, LogPlace } from "./CollectionLogScreen";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
@@ -244,7 +245,7 @@ export function GameUi({ store, client }: Props): JSX.Element {
             screen = <QuestScreen ui={ui} client={client} />;
             break;
         case "collectionLog":
-            screen = <CollectionLogScreen ui={ui} client={client} />;
+            screen = <CollectionLogScreen save={ui.save} client={client} />;
             break;
         case "coop":
             screen = <CoopScreen ui={ui} client={client} />;
@@ -3156,6 +3157,9 @@ function ShopScreen({ ui, client }: ScreenProps): JSX.Element {
 
 function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     const hud = ui.hud;
+    // Where the Collection log over the pause menu was left, so it opens there again: a co-op
+    // run's level up or casket takes the menu away a moment, the log with it
+    const logPlace = useRef<LogPlace | undefined>(undefined);
     return (
         <div className="ui-fill ui-run">
             <ChoiceCountdown client={client} />
@@ -3220,7 +3224,9 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
             {ui.overlay === "event" && ui.event && (
                 <RunEventModal key={ui.event.uid} event={ui.event} client={client} />
             )}
-            {ui.overlay === "paused" && hud && <PauseModal ui={ui} hud={hud} client={client} />}
+            {ui.overlay === "paused" && hud && (
+                <PauseModal ui={ui} hud={hud} client={client} logPlace={logPlace} />
+            )}
             {ui.gauntlet?.run && hud && !ui.cinematic && ui.overlay === "none" && (
                 <GauntletBadge run={ui.gauntlet.run} />
             )}
@@ -4594,10 +4600,12 @@ function PauseModal({
     ui,
     hud,
     client,
+    logPlace,
 }: {
     ui: UiSnapshot;
     hud: HudView;
     client: GameClient;
+    logPlace: MutableRefObject<LogPlace | undefined>;
 }): JSX.Element {
     // Co-op's menu doesn't stop the run
     const coop = ui.party.length > 0;
@@ -4894,7 +4902,9 @@ function PauseModal({
                 </div>
             </div>
             {/* Over the menu, which is there again once it's closed */}
-            {ui.runLog && <CollectionLogScreen ui={ui} client={client} inRun />}
+            {ui.runLog && (
+                <CollectionLogScreen save={ui.save} client={client} inRun place={logPlace} />
+            )}
             {confirmDialog}
         </div>
     );

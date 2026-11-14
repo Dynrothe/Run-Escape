@@ -18,6 +18,7 @@ the version in the corner).
 - The skin you pick in the Wardrobe now shows on the Dragon plateskirt (cr)'s legs, the Group
   ironman bracers' hands, the Zombie helmet's face and the few other pieces that kept the
   default skin.
+- Escape and P no longer pause or resume a run behind the panel saying the game isn't saving.
 
 ## 0.32.2 - 2026-11-14
 
