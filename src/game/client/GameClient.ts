@@ -2682,6 +2682,10 @@ export class GameClient implements GameFrameHandler {
     // so there's nothing to pause (and its window loses focus to the console often)
     pause(): void {
         if (this.sim && !this.sim.runOver && !this.director) {
+            if (!this.paused) {
+                // A new pause opens on the menu, not on a log left open last time
+                this.store.set({ runLog: false });
+            }
             this.paused = true;
             this.syncOverlay();
         }
@@ -2715,7 +2719,41 @@ export class GameClient implements GameFrameHandler {
     resume(): void {
         this.paused = false;
         this.accumulator = 0;
+        this.store.set({ runLog: false });
         this.syncOverlay();
+    }
+
+    // The Collection log over the pause menu. Only the UI's: a solo run stays paused under it,
+    // and a co-op run goes on as it does under co-op's menu, with nothing sent.
+    openRunLog(): void {
+        if (this.sim && this.store.getSnapshot().overlay === "paused") {
+            this.store.set({ runLog: true });
+        }
+    }
+
+    // Back to the pause menu
+    closeRunLog(): void {
+        this.store.set({ runLog: false });
+    }
+
+    // The save, and the save as this run would leave it if it ended now, for the log's "Found
+    // this run": what finishRun would record, on a copy, so nothing's saved and the run's
+    // untouched. Both copies, from the same moment. No run's finds once the run's recorded, for
+    // the Forgotten Four's fights (they record the gauntlet, not the run), or for a result with a
+    // number that isn't, which finishRun wouldn't record either.
+    getRunLogSaves(): { saved: SaveData; withRun?: SaveData } {
+        const saved = structuredClone(this.save);
+        const sim = this.sim;
+        if (!sim || this.runRecorded || this.gauntletRun) {
+            return { saved };
+        }
+        const result = sim.getResult();
+        if (hasBadNumber(result)) {
+            return { saved };
+        }
+        const withRun = structuredClone(this.save);
+        recordRun(withRun, result);
+        return { saved, withRun };
     }
 
     // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
@@ -3238,13 +3276,7 @@ export class GameClient implements GameFrameHandler {
         }
         const overlay = this.store.getSnapshot().overlay;
         if (code === "Escape" || code === "KeyP") {
-            if (overlay === "paused") {
-                this.resume();
-            } else if (overlay === "none") {
-                this.pause();
-            } else if (overlay === "event" && code === "Escape") {
-                this.leaveEvent();
-            }
+            this.pressPauseKey(code);
         } else if (overlay === "event" && code.startsWith("Digit")) {
             this.chooseEvent(parseInt(code.slice(5)) - 1);
         } else if (overlay === "levelUp" && code.startsWith("Digit")) {
@@ -3273,6 +3305,21 @@ export class GameClient implements GameFrameHandler {
             this.useItem(parseInt(code.slice(5)) - 1);
         }
     };
+
+    // Escape and P in a run: the Collection log's way back to the pause menu (Escape, a pad's back,
+    // its Start as P), the menu's resume, the run's pause, and Escape leaves an event
+    private pressPauseKey(code: string): void {
+        const { overlay, runLog } = this.store.getSnapshot();
+        if (overlay === "paused" && runLog) {
+            this.closeRunLog();
+        } else if (overlay === "paused") {
+            this.resume();
+        } else if (overlay === "none") {
+            this.pause();
+        } else if (overlay === "event" && code === "Escape") {
+            this.leaveEvent();
+        }
+    }
 
     // ---- Frame ----
 

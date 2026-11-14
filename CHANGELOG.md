@@ -3,6 +3,14 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- The Collection log in a run, by Okaeri: open it from the pause menu to see what you have, with
+  anything this run has found and not saved yet marked New. Closing it goes back to the menu. In
+  co-op it opens from the party's menu and the run goes on meanwhile.
+
 ## 0.32.2 - 2026-11-14
 
 ### Changed
