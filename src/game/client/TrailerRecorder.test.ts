@@ -149,8 +149,9 @@ describe("recording a trailer", () => {
         expect(await recorder.record()).toBe("trailers/map.mp4");
 
         expect(drawn.length).toBe(5);
+        // The clock starts at the real time, so adding a frame's 20 ms can come out a hair off
         const start = drawn[0].time - 20;
-        expect(drawn.map(({ time }) => time - start)).toEqual([20, 40, 60, 80, 100]);
+        drawn.forEach(({ time }, i) => expect(time - start).toBeCloseTo(20 * (i + 1), 6));
         expect(drawn.every(({ time, now }) => time === now)).toBe(true);
         expect(audio.startRecording).toHaveBeenCalledWith(drawn[0].time);
         expect(events).toEqual([
