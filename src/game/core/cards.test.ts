@@ -12,15 +12,16 @@ import {
     PACKS,
     PACK_BY_ID,
     PACK_SIZE,
+    PackDef,
     STARTER_PACKS,
     cardTier,
     cardVersions,
     cardWeight,
     packCards,
     packFoilChance,
-    packRarityShares,
 } from "../content/cards";
 import { RARITY_ORDER, atLeast } from "../content/rarity";
+import { exactPackOdds } from "./cardOdds";
 import { getStarterCards } from "./cardRuns";
 import {
     buyCardPack,
@@ -224,8 +225,10 @@ describe("buying packs", () => {
     });
 
     it("makes the Champion's pack's Rare and Very rare cards likelier than a basic pack's", () => {
-        const basic = packRarityShares(BASIC_PACK);
-        const champion = packRarityShares(PACK_BY_ID.get("champion")!);
+        // The share of each pack's cards whose item is each rarity, as the shop's odds say
+        const items = (pack: PackDef) => exactPackOdds(pack, packCards(pack)).items;
+        const basic = items(BASIC_PACK);
+        const champion = items(PACK_BY_ID.get("champion")!);
         expect(champion.veryRare).toBeGreaterThan(basic.veryRare * 1.3);
         expect(champion.rare).toBeGreaterThan(basic.rare);
         // Shares of the pack: they add up to all of it

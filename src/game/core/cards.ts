@@ -156,20 +156,23 @@ export function lastCardRarities(odds: Record<Rarity, number>): Rarity[] {
     return rarities.length >= 3 ? rarities.slice(1) : rarities;
 }
 
-// A rarity for one card of a pack, by its odds; for its last card, from lastCardRarities
-function rollRarity(odds: Record<Rarity, number>, random: () => number, last: boolean): Rarity {
-    const rolled = last
-        ? lastCardRarities(odds)
-        : RARITY_ORDER.filter((rarity) => odds[rarity] > 0);
-    const total = rolled.reduce((sum, rarity) => sum + odds[rarity], 0);
+// The rarities a card of a pack rolls from, with their odds added up (packRoller makes them once)
+type RarityRoll = { odds: Record<Rarity, number>; rarities: Rarity[]; total: number };
+
+function rarityRoll(odds: Record<Rarity, number>, rarities: Rarity[]): RarityRoll {
+    return { odds, rarities, total: rarities.reduce((sum, rarity) => sum + odds[rarity], 0) };
+}
+
+// A rarity for one card of a pack, by its odds
+function rollRarity({ odds, rarities, total }: RarityRoll, random: () => number): Rarity {
     let roll = random() * total;
-    for (const rarity of rolled) {
+    for (const rarity of rarities) {
         roll -= odds[rarity];
         if (roll < 0) {
             return rarity;
         }
     }
-    return rolled[rolled.length - 1];
+    return rarities[rarities.length - 1];
 }
 
 // A pack's cards, without the save: each rolls its version's rarity by the pack's odds first, then
@@ -212,11 +215,17 @@ export function packRoller(
         }
         return { card: from.cards[lo], rarity: from.version };
     };
+    // Every card's rarities but the last's, which rolls from lastCardRarities
+    const anyCard = rarityRoll(
+        pack.odds,
+        RARITY_ORDER.filter((rarity) => pack.odds[rarity] > 0),
+    );
+    const lastCard = rarityRoll(pack.odds, lastCardRarities(pack.odds));
+    const foilChance = packFoilChance(pack);
     return (random, size = PACK_SIZE) => {
         const cards: { card: CardDef; rarity: Rarity; foil: boolean }[] = [];
-        const foilChance = packFoilChance(pack);
         for (let i = 0; i < size; i++) {
-            const rolled = rollRarity(pack.odds, random, i === size - 1);
+            const rolled = rollRarity(i === size - 1 ? lastCard : anyCard, random);
             const { card, rarity } = pick(rolled, random);
             // Then whether it's a foil, on the same numbers
             const foil = random() < foilChance;

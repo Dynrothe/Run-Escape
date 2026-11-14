@@ -80,6 +80,7 @@ import {
     CardCaps,
     UpgradeChoice,
     canEvolve,
+    cardsAllowEvolution,
     describeChoice,
     getEvolutionHint,
 } from "../core/Upgrades";
@@ -432,13 +433,8 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
     if (
         !evolution ||
         !isAvailable(getWeapon(evolution.into), sim.unlockedItems) ||
-        // A Card collection only run without the evolution's card, or its passive's while it
-        // isn't held: it won't come
-        (sim.cardCaps &&
-            (!sim.cardCaps.has(`weapon:${evolution.into}`) ||
-                !sim.cardCaps.has(`weapon:${weapon.def.id}`) ||
-                (!sim.passives.some((p) => p.id === evolution.requiresPassive) &&
-                    !sim.cardCaps.has(`passive:${evolution.requiresPassive}`))))
+        // A Card collection only run without the cards it takes: it won't come
+        !cardsAllowEvolution(sim.cardCaps, weapon.def.id, evolution.requiresPassive, evolution.into)
     ) {
         return undefined;
     }

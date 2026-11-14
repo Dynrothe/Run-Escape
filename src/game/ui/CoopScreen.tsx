@@ -344,6 +344,12 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     const vaultRoom = ui.vaultRoom !== undefined && getVault(ui.vaultRoom).mapId === room.mapId;
     const cardsOnly =
         !vaultRoom && (isHost ? ui.save.cardsOnly === true : roomPlaysCardsOnly(room));
+    // Why the adventurer panel's tabs can't be changed here, if they can't
+    const tabLocked = vaultRoom
+        ? t("ui.cards_only.vault_never")
+        : isHost
+          ? undefined
+          : t("ui.cards_only.host_picks");
     const cardsSave = useMemo(
         () => ({ ...ui.save, cardsOnly: cardsOnly || undefined }),
         [ui.save, cardsOnly],
@@ -774,7 +780,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     client={client}
                     fixed={getMapCharacter(map)}
                     cardsOnly={cardsOnly}
-                    tabLocked={!isHost}
+                    tabLocked={tabLocked}
                     map={map}
                     onCardNeeds={setNeedsFor}
                 />
@@ -801,7 +807,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     client={client}
                     fixed={getMapCharacter(map)}
                     cardsOnly={cardsOnly}
-                    tabLocked={!isHost}
+                    tabLocked={tabLocked}
                     map={map}
                     onCardNeeds={setNeedsFor}
                     onDone={closePicker}

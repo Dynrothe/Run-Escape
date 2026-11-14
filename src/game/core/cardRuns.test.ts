@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ALL_CARDS } from "../content/cards";
 import { getCharacter } from "../content/characters";
+import { getEvolutionsWith } from "../content/evolutions";
 import { PET_BY_ID } from "../content/pets";
 import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { emptyStats } from "../content/types";
@@ -242,6 +243,46 @@ describe("Card collection only offers", () => {
             ),
         ).toBeUndefined();
     });
+
+    it("hints a passive's evolutions only from a weapon with its card", () => {
+        // Piety evolves the scimitar into the Abyssal whip: without the scimitar's card it's never
+        // offered, so Piety's card mustn't promise it
+        const piety: UpgradeChoice = { kind: "newPassive", passiveId: "piety", quality: "common" };
+        const caps = new Map<string, Rarity>([
+            ["passive:piety", "common"],
+            ["weapon:abyssal_whip", "veryRare"],
+        ]);
+        expect(getEvolutionHint(piety, [], [], "melee", undefined, caps)).toBeUndefined();
+        caps.set("weapon:scimitar", "common");
+        expect(getEvolutionHint(piety, [], [], "melee", undefined, caps)?.text).toContain(
+            getEvolutionsWith("piety").find((e) => e.into.id === "abyssal_whip")!.name,
+        );
+    });
+
+    it("shares a family's offer chance only among its members with a card", () => {
+        // The godswords share one weapon's chance: with only one's card, that one has all of it
+        const godswords = [
+            "armadyl_godsword",
+            "bandos_godsword",
+            "saradomin_godsword",
+            "zamorak_godsword",
+            "godsword",
+        ];
+        const offered = (ids: string[]) =>
+            offers(
+                new Map<string, Rarity>([
+                    ...CAPS,
+                    ...ids.map((id): [string, Rarity] => [`weapon:${id}`, "rare"]),
+                ]),
+                5,
+                2000,
+            ).filter((c) => c.kind === "newWeapon" && godswords.includes(c.weaponId)).length;
+        const alone = offered(["armadyl_godsword"]);
+        const family = offered(godswords);
+        expect(family).toBeGreaterThan(100);
+        expect(alone / family).toBeGreaterThan(0.75);
+        expect(alone / family).toBeLessThan(1.25);
+    });
 });
 
 describe("whether a collection can play one", () => {
@@ -341,6 +382,9 @@ describe("whether a collection can play one", () => {
         };
         const save = { ...createSave(), cards: godswords, unlockedItems: ["godsword"] };
         expect(getCardRunShortfall(save, "godsword_knight")?.weapons).toBe(CARD_RUN_WEAPONS);
+        // Nor does a family count more than once for anyone else: one godsword held, no other's
+        // offered
+        expect(getCardRunShortfall(save, "warrior")?.weapons).toBe(CARD_RUN_WEAPONS - 1);
         // The Avian Assaulter finds no items and carries one weapon: only his own card's needed,
         // which is his lock's
         const avian = getCharacter("avian_assaulter");

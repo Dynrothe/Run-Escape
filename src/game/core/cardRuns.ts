@@ -77,7 +77,7 @@ export function getCardRunNeeds(
     const family = getWeapon(startingWeapon).family;
     const owned = (card: CardDef) => ({ card, owned: caps.has(card.id) });
     // As rollChoices offers them: not the starting weapon's family (one godsword's enough)
-    const weapons = WEAPONS.filter(
+    const weaponDefs = WEAPONS.filter(
         (weapon) =>
             weapon.id !== startingWeapon &&
             (!family || weapon.family !== family) &&
@@ -85,10 +85,17 @@ export function getCardRunNeeds(
             !weapon.pickOnly &&
             (!weapon.style || weapon.style === character.style) &&
             isOfferable(weapon, unlocked),
-    ).flatMap((weapon) => {
+    );
+    const weapons = weaponDefs.flatMap((weapon) => {
         const card = CARD_BY_ID.get(`weapon:${weapon.id}`);
         return card ? [owned(card)] : [];
     });
+    // A family's cards count once: with one of its weapons held, no other is offered
+    const weaponsOwned = new Set(
+        weaponDefs
+            .filter((weapon) => caps.has(`weapon:${weapon.id}`))
+            .map((weapon) => weapon.family ?? weapon.id),
+    ).size;
     const passives = PASSIVES.filter((passive) => isAvailable(passive, unlocked)).flatMap(
         (passive) => {
             const card = CARD_BY_ID.get(`passive:${passive.id}`);
@@ -97,20 +104,20 @@ export function getCardRunNeeds(
     );
     // An adventurer who finds no items, or carries only the one weapon, needs no more cards
     const more = !character.noItems && (character.maxWeapons ?? 2) > 1;
-    const need = (list: { card: CardDef; owned: boolean }[], count: number): CardRunNeed => {
+    const need = (
+        list: { card: CardDef; owned: boolean }[],
+        count: number,
+        ownedCount = list.filter((c) => c.owned).length,
+    ): CardRunNeed => {
         const needed = more ? count : 0;
-        return {
-            needed,
-            missing: Math.max(0, needed - list.filter((c) => c.owned).length),
-            cards: list,
-        };
+        return { needed, missing: Math.max(0, needed - ownedCount), cards: list };
     };
     return {
         starter: getStarterCards(characterId).map((card) => ({
             card,
             owned: getBestVersion(save, card) !== undefined,
         })),
-        weapons: need(weapons, CARD_RUN_WEAPONS),
+        weapons: need(weapons, CARD_RUN_WEAPONS, weaponsOwned),
         passives: need(passives, CARD_RUN_PASSIVES),
     };
 }

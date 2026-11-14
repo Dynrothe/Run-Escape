@@ -1778,9 +1778,10 @@ export function AdventurerPanel({
     // Card collection only's needs for an adventurer, opened from their lock or the tab's button
     onCardNeeds?: (characterId: string) => void;
     // A co-op room's Cards only, the host's choice for everyone (roomPlaysCardsOnly), in place of
-    // the save's own tab; a guest's tabs show it but can't change it (tabLocked)
+    // the save's own tab. Tabs that show it but can't change it say why (tabLocked): a guest's,
+    // or anyone's in the weekly Vault's room.
     cardsOnly?: boolean;
-    tabLocked?: boolean;
+    tabLocked?: string;
     // The map the run's on: a co-op room's, not the player's own last pick
     map?: MapDef;
     onDone?: () => void;
@@ -1788,7 +1789,8 @@ export function AdventurerPanel({
     const map = roomMap ?? getMap(ui.mapId);
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
-    const roster = getRoster();
+    // Fixed for the session (acts out or not), so cardLocked below isn't worked out on every render
+    const roster = useMemo(() => getRoster(), []);
     const opened = roster.filter((c) => unlocked.includes(c.id)).length;
     const shown = fixed ?? peek ?? ui.characterId;
     // The save as the Cards only that applies here sees it: the room's in co-op
@@ -2213,13 +2215,15 @@ function CardsOnlyTabs({
 }: ScreenProps & {
     // The save as the tab that applies sees it (a co-op room's, AdventurerPanel)
     save: SaveData;
-    // A co-op guest's: the host picks for the room
-    locked?: boolean;
+    // Why the tabs can't be changed here, shown under them: a co-op guest's (the host picks for
+    // the room), or the weekly Vault's room (never Cards only)
+    locked?: string;
 }): JSX.Element {
     const on = save.cardsOnly === true;
-    // A co-op guest's tabs show the room's choice: pressing them changes nothing
+    const isLocked = locked !== undefined;
+    // Locked tabs show the room's choice: pressing them changes nothing
     const pick = (cardsOnly: boolean) => {
-        if (!locked) {
+        if (!isLocked) {
             client.setCardsOnly(cardsOnly);
         }
     };
@@ -2229,7 +2233,7 @@ function CardsOnlyTabs({
                 <button
                     className={"ui-cards-tab" + (on ? "" : " ui-cards-tab-selected")}
                     aria-pressed={!on}
-                    disabled={locked && on}
+                    disabled={isLocked && on}
                     onClick={() => pick(false)}
                 >
                     {t("ui.cards_only.tab_normal")}
@@ -2238,16 +2242,16 @@ function CardsOnlyTabs({
                     className={"ui-cards-tab" + (on ? " ui-cards-tab-selected" : "")}
                     aria-pressed={on}
                     title={t("ui.cards_only.tooltip")}
-                    disabled={locked && !on}
+                    disabled={isLocked && !on}
                     onClick={() => pick(true)}
                 >
                     {t("ui.cards_only.name")}
                 </button>
             </div>
-            {on && !locked && (
+            {on && !isLocked && (
                 <span className="ui-cards-only-note">{t("ui.cards_only.on_note")}</span>
             )}
-            {locked && <span className="ui-cards-only-note">{t("ui.cards_only.host_picks")}</span>}
+            {isLocked && <span className="ui-cards-only-note">{locked}</span>}
         </div>
     );
 }

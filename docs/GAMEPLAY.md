@@ -106,7 +106,8 @@ version and how to run it.
 - **Cards only**, a tab on the run screen's adventurers, makes level ups offer only what you have a
   card of, no rarer than your best version of it, and reward caskets give only gear you have a card
   of; its pet row takes a pet whose card you have, found or not. A run from it can't start until
-  your collection has enough cards to fill a level up, nor as an adventurer whose starting weapon's
+  your collection has enough cards to fill a level up (the godswords count as one weapon, since
+  only one is ever held), nor as an adventurer whose starting weapon's
   card you haven't got (their portrait is dimmed with a padlock). Either way, a card button beside
   their favourite star shows what's still needed, with the Card shop's pack for it. In co-op the
   host's tab sets it for the whole room; the weekly Vault and the Gauntlet are never Cards only. A

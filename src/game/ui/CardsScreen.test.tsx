@@ -4,15 +4,7 @@ import { useState } from "react";
 
 import { GameClient } from "../client/GameClient";
 import { UiSnapshot } from "../client/GameStore";
-import {
-    CARDS,
-    CARD_BY_ID,
-    PACK_BY_ID,
-    PACK_SIZE,
-    PackDef,
-    packName,
-    packRarityShares,
-} from "../content/cards";
+import { CARDS, CARD_BY_ID, PACK_BY_ID, PACK_SIZE, PackDef, packName } from "../content/cards";
 import { getMap, mapName } from "../content/maps";
 import { buyCardPack, openCardPack, packPool } from "../core/cards";
 import { SaveData, createSave } from "../core/save";

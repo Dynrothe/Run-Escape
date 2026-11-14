@@ -1488,17 +1488,26 @@ involved.
 - **Card collection only** (`core/cardRuns.ts`, `SaveData.cardsOnly`, the adventurer panel's Cards
   only tab): level ups offer only weapons and passives with a card, no rarer than the rarest version
   owned (`Upgrades.CardCaps`, `capQuality`); an evolution only with three cards, the weapon's, the
-  passive's and what it becomes (`canEvolve`); and a pick into another weapon (a godsword's hilt)
-  only with its card, while that leaves two picks (a blade can't be held without a hilt). Reward
+  passive's and what it becomes (`cardsAllowEvolution`, which `canEvolve`, the level up's hint and
+  the HUD's evolution all go by); and a pick into another weapon (a godsword's hilt) only with its
+  card, while that leaves two picks. With fewer, every usual pick comes back (`hiltChoices`), on
+  purpose: a blade can't be held without a hilt, and a run shouldn't stall on one. A hilt taken
+  that way has no card to cap it, so it levels at any quality, as in a normal run, and never
+  evolves. A family shares its offer chance only among its members with a card (one godsword's
+  card alone is offered as often as any weapon of its rarity). Reward
   caskets give only gear with a card (`rollCasketItem`'s `cards`): gear has one rarity, its card's
   own, so no version lowers it, and a rarity rolled with no carded gear gives one of its utility
-  items (every rarity has some). An item still has to be in the game as usual (`isAvailable`). The
+  items (every rarity has some). So the best gear (`CARD_TOP_ITEMS`), the rarest pulls in a pack,
+  comes from a Cards only casket only after a long grind: that's the trade the mode makes, kept on
+  purpose, and the pack weights are where to change it. An item still has to be in the game as
+  usual (`isAvailable`). The
   caps go into the run's setup (`SimOptions.cardCaps`, `HeroOptions.cardCaps`), so the run plays the
   same on every copy and from the same seed.
 - **In co-op** the whole room is Cards only or none of it is: the host's tab decides
   (`Loadout.cardsOnly`, `roomPlaysCardsOnly`), and a guest's tabs show it without changing it
   (`GameClient.playsCardsOnlyHere`, `cardsSave`); never in the weekly Vault's room (`isVaultRoom`),
-  whose loadouts carry no caps. Each player's
+  whose loadouts carry no caps, and where everyone's tabs are locked on Adventurers and say why
+  (`CardsOnlyTabs`' `locked`). Each player's
   own caps come in their loadout (`Loadout.cardCaps`), as their unlocked items do: a character for
   each card in `ALL_CARDS`' order (`encodeCardCaps`), which every copy shares as a room runs the
   host's build, read back by `decodeCardCaps`, for their own level ups and caskets. Each loadout is
@@ -1518,7 +1527,8 @@ involved.
   only, a run is Cards only or doesn't start (`isCardRunBlocked`): not without the adventurer's
   starter cards (`getCardLock`, `isCardLocked`: their portrait is dimmed with a drawn padlock, its
   label telling a screen reader it's locked for Cards only, and still pickable) or while the
-  collection can't fill a level up (`getCardRunShortfall`). Short either way, their details' head
+  collection can't fill a level up (`getCardRunShortfall`, where a weapon family's cards count once:
+  with one godsword held, no other's offered). Short either way, their details' head
   has a small card button (the Cards tile's icon) beside the favourite's drawn star
   (`FavouriteStar`), opening what's needed. The Vault and the Gauntlet never play it, nor does a map
   whose level ups are blessings. Such a run counts as any other, and its results say it was one. A
@@ -1558,10 +1568,10 @@ involved.
   the same keys (`getFoilCopies`, `getCardFoils`). They're only for show: the card generator's gold
   reflection, a band swept back and forth behind the item as the window's own background
   (`ui-tcg-art-holo`), with the name in the foil's gold, both moving where the card's big, on the
-  mat or under a pointer, with twinkling sparkles where it's big or turned over on the mat but never in the album's grid,
-  and neither moving with `prefers-reduced-motion`; screen readers hear "Foil". The album has a Foils
-  tab and shows a card at its best foil when one's owned; a foil dealt from a pack flashes once and
-  chimes. The Collection log's Cards tab counts them.
+  mat or under a pointer, with twinkling sparkles where it's big or turned over on the mat but
+  never in the album's grid, and neither moving with `prefers-reduced-motion`; screen readers hear
+  "Foil". The album has a Foils tab and shows a card at its best foil when one's owned; a foil dealt
+  from a pack flashes once and chimes. The Collection log's Cards tab counts them.
 - **What Cards only needs** (`ui/CardNeeds.tsx`): the window the details' card button opens (and the
   co-op lobby's What's needed, beside why a player can't ready) goes by `getCardRunNeeds`, as the
   run's check does (`getCardRunShortfall`), so they agree; it lists only what's still missing, with

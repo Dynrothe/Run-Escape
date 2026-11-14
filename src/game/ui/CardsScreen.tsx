@@ -486,7 +486,7 @@ export function CardFace({
     versions?: number;
     isNew?: boolean;
     moving?: boolean;
-    // A foil copy (SaveData.cardFoils): a holographic face, and "Foil" written on it
+    // A foil copy (SaveData.cardFoils): a holographic face, and "Foil" said to a screen reader
     foil?: boolean;
 }): JSX.Element {
     return (

@@ -191,6 +191,7 @@
     "ui.cards_only.tab_normal": "Adventurers",
     "ui.cards_only.on_note": "Runs from this tab are Cards only.",
     "ui.cards_only.host_picks": "The host picks this for the room.",
+    "ui.cards_only.vault_never": "The weekly Vault is never Cards only.",
     "ui.pet.label_cards_only": "Pet for Cards only:",
     "ui.pet.card": "{name}, Card",
     "ui.pet.card_mark": "Card",

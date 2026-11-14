@@ -1,3 +1,4 @@
+import { PACKS } from "../../../src/game/content/cards";
 import { CHARACTERS } from "../../../src/game/content/characters";
 import { CASKETS, CASKET_TIERS, GEAR, GEAR_SLOTS, UTILITY } from "../../../src/game/content/items";
 import { PASSIVES } from "../../../src/game/content/passives";
@@ -89,6 +90,10 @@ export default function extract(): Record<string, string> {
     }
     for (const cosmetic of COSMETICS) {
         strings[`cosmetic.${cosmetic.objId}.name`] = cosmetic.name;
+    }
+    for (const pack of PACKS) {
+        strings[`cards.pack.${pack.id}.name`] = pack.name;
+        strings[`cards.pack.${pack.id}.desc`] = pack.description;
     }
 
     return strings;

@@ -4147,5 +4147,19 @@
   "cosmetic.20166.name": "Wooden shield (g)",
   "cosmetic.22260.name": "Yew shield",
   "cosmetic.23194.name": "Zamorak d'hide shield",
-  "cosmetic.2659.name": "Zamorak kiteshield"
+  "cosmetic.2659.name": "Zamorak kiteshield",
+  "cards.pack.adventurer.name": "Adventurer's pack",
+  "cards.pack.adventurer.desc": "Any weapon, passive or trophy card.",
+  "cards.pack.weapons.name": "Armoury pack",
+  "cards.pack.weapons.desc": "Weapons only.",
+  "cards.pack.passives.name": "Prayer book pack",
+  "cards.pack.passives.desc": "Passives only: prayers, worn passives and spells.",
+  "cards.pack.gear.name": "Treasure trail pack",
+  "cards.pack.gear.desc": "Reward casket gear only.",
+  "cards.pack.trophies.name": "Collector's pack",
+  "cards.pack.trophies.desc": "Collection log trophies and pets only.",
+  "cards.pack.raids.name": "Raider's pack",
+  "cards.pack.raids.desc": "Only what the Theatre of Blood and the Tombs of Amascut bring.",
+  "cards.pack.champion.name": "Champion's pack",
+  "cards.pack.champion.desc": "Any weapon, passive or trophy card, likelier to be rare."
 }

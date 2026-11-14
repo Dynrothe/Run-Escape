@@ -236,9 +236,10 @@ export function packFoilChance(pack: PackDef): number {
 
 // The packs' knobs, in one place. A pack only ever holds cards of what the player has unlocked
 // (core/cards.ts, isCardUnlocked), so the best things are rare first by being far into the game.
-// Then a card's picked by its weight: its item's rarity's (CARD_ITEM_WEIGHTS) times its tier's
-// (CARD_TIER_FACTORS), times a pack's `rarer` for Rare and Very rare ones. Then its version's
-// rolled by the pack's odds (PackDef.odds, below), no commoner than the card's own rarity.
+// Each card's version is rolled first, by the pack's odds (PackDef.odds, below). Then a card that
+// comes in that version (its own rarity no rarer) is picked by its weight: its item's rarity's
+// (CARD_ITEM_WEIGHTS) times its tier's (CARD_TIER_FACTORS), times a pack's `rarer` for Rare and
+// Very rare ones.
 export const CARD_ITEM_WEIGHTS: Record<Rarity, number> = {
     common: 10,
     uncommon: 4,
@@ -302,20 +303,6 @@ export function cardWeight(pack: PackDef, card: CardDef): number {
         CARD_TIER_FACTORS[cardTier(card)] *
         (rare ? (pack.rarer ?? 1) : 1)
     );
-}
-
-// The share of a pack's cards that are each rarity of thing, for the shop to say, of its pool
-// (the player's own, core/cards.ts packPool)
-export function packRarityShares(
-    pack: PackDef,
-    pool: readonly CardDef[] = packCards(pack),
-): Record<Rarity, number> {
-    const total = pool.reduce((sum, card) => sum + cardWeight(pack, card), 0);
-    const shares: Record<Rarity, number> = { common: 0, uncommon: 0, rare: 0, veryRare: 0 };
-    for (const card of total > 0 ? pool : []) {
-        shares[card.rarity] += cardWeight(pack, card) / total;
-    }
-    return shares;
 }
 
 const STANDARD_ODDS: Record<Rarity, number> = {

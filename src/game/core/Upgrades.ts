@@ -1,6 +1,6 @@
 import { getBlessing } from "../content/blessings";
 import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
-import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
+import { EVOLUTIONS, EvolutionDef, getEvolutionsWith } from "../content/evolutions";
 import {
     DIVINE_RUNE_POUCH,
     PASSIVES,
@@ -85,12 +85,29 @@ export type ChoiceDescription = {
 // A Card collection only run's cards (core/cardRuns.ts): "weapon:<id>" or "passive:<id>" -> the
 // rarest version of its card the hero owns. A weapon or passive without one is never offered, and
 // what is offered is no rarer than that version. Undefined in any other run: everything as usual.
-// Something the hero holds without a card (only from a crafted co-op loadout) levels as usual.
+// Something the hero holds without a card levels as usual, and never evolves: a hilt picked while
+// fewer than two picks have cards (hiltChoices), or one from a crafted co-op loadout.
 export type CardCaps = ReadonlyMap<string, Rarity>;
 
 // Whether a run's cards allow a weapon or passive (always, outside a Card collection only run)
 function hasCard(cards: CardCaps | undefined, kind: "weapon" | "passive", id: string): boolean {
     return !cards || cards.has(`${kind}:${id}`);
+}
+
+// Whether a run's cards allow an evolution: three cards, the weapon's, its passive's and what it
+// evolves into (always, outside a Card collection only run). canEvolve, the level up's hints and
+// the HUD all go by this, so they agree.
+export function cardsAllowEvolution(
+    cards: CardCaps | undefined,
+    weaponId: string,
+    passiveId: string,
+    intoId: string,
+): boolean {
+    return (
+        hasCard(cards, "weapon", weaponId) &&
+        hasCard(cards, "passive", passiveId) &&
+        hasCard(cards, "weapon", intoId)
+    );
 }
 
 // A rolled quality, no rarer than the hero's rarest version of the card (as rolled, outside a
@@ -120,11 +137,7 @@ export function canEvolve(
         weapon.level >= weapon.def.levels.length &&
         ownedPassives.has(evolution.requiresPassive) &&
         isAvailable(getWeapon(evolution.into), unlocked) &&
-        // In a Card collection only run, three cards: the weapon's, the passive's and what it
-        // evolves into
-        hasCard(cards, "weapon", weapon.def.id) &&
-        hasCard(cards, "passive", evolution.requiresPassive) &&
-        hasCard(cards, "weapon", evolution.into)
+        cardsAllowEvolution(cards, weapon.def.id, evolution.requiresPassive, evolution.into)
     );
 }
 
@@ -145,10 +158,7 @@ export function getEvolutionHint(
         if (
             !evolution ||
             !isAvailable(evolution.into, unlocked) ||
-            !hasCard(cards, "weapon", evolution.into.id) ||
-            // Nor without its passive's card, unless it's held (the passive's never offered)
-            (!passives.some((p) => p.id === evolution.passive.id) &&
-                !hasCard(cards, "passive", evolution.passive.id))
+            !cardsAllowEvolution(cards, choice.weaponId, evolution.passive.id, evolution.into.id)
         ) {
             return undefined;
         }
@@ -158,13 +168,18 @@ export function getEvolutionHint(
         };
     }
     if (choice.kind === "newPassive" || choice.kind === "passiveLevel") {
+        // In a Card collection only run, only from a weapon whose evolution its cards allow (a
+        // weapon without its card is never offered, and never evolves)
+        const allowed = (e: EvolutionDef, weaponId: string) =>
+            cardsAllowEvolution(cards, weaponId, e.passive.id, e.into.id);
         const usable = getEvolutionsWith(choice.passiveId).filter(
             (e) =>
                 isAvailable(e.into, unlocked) &&
-                hasCard(cards, "weapon", e.into.id) &&
-                e.weapons.some((w) => !w.style || w.style === style),
+                e.weapons.some((w) => (!w.style || w.style === style) && allowed(e, w.id)),
         );
-        const held = usable.filter((e) => weapons.some((w) => e.weapons.includes(w.def)));
+        const held = usable.filter((e) =>
+            weapons.some((w) => e.weapons.includes(w.def) && allowed(e, w.def.id)),
+        );
         const shown = held.length > 0 ? held : usable;
         if (shown.length === 0) {
             return undefined;
@@ -482,10 +497,17 @@ export function rollChoices(
     const evolutions: UpgradeChoice[] = [];
 
     // A family shares one weapon's offer chance among the members that are in
-    // (evolutions are never offered, so they don't count)
+    // (evolutions are never offered, so they don't count; nor, in a Card collection only run, do
+    // members without a card)
     const familySizes = new Map<string, number>();
     for (const weapon of WEAPONS) {
-        if (weapon.family && !weapon.evolved && !weapon.pickOnly && isOfferable(weapon, unlocked)) {
+        if (
+            weapon.family &&
+            !weapon.evolved &&
+            !weapon.pickOnly &&
+            isOfferable(weapon, unlocked) &&
+            hasCard(cards, "weapon", weapon.id)
+        ) {
             familySizes.set(weapon.family, (familySizes.get(weapon.family) ?? 0) + 1);
         }
     }
