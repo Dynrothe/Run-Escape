@@ -1130,7 +1130,14 @@ export class GameView {
                 continue;
             }
             const anim = model.anims[0];
-            const frame = anim ? anim.getFrame(clientTicks + vent.offset, true) : 0;
+            // A puff plays its cloud once, from its start, stretched over the time it hurts: looped
+            // from the clock's frame it shrank back partway and was cut off growing
+            const progress = state === "puff" ? cold.puffProgress(vent, tick) : undefined;
+            const frame = !anim
+                ? 0
+                : progress !== undefined
+                  ? anim.getFrame(Math.floor(progress * anim.totalTicks), false)
+                  : anim.getFrame(clientTicks + vent.offset, true);
             const ground = this.ground(sim, vent.x, vent.y);
             if (state === "warn") {
                 actors.draw(model, anim, frame, vent.x, ground, vent.y, 0, { tint: FROZEN_TINT });

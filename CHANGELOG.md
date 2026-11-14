@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- A gas vent's cloud, the Duke's gas included, now grows for as long as it hurts, instead of
+  shrinking back partway and vanishing mid-puff.
+
 ## 0.32.0 - 2026-11-14
 
 ### Added
