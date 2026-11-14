@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Changed
+
+- Rarity colours, by Okaeri: they go up from white now, Common white and Uncommon green, then
+  Rare orange and Very rare red as before.
+
 ## 0.32.2 - 2026-11-14
 
 ### Changed

@@ -1,6 +1,7 @@
 import { tr } from "../i18n";
 
-// OSRS drop table rarities, with the wiki's colours for them.
+// OSRS drop table rarities. Their colours go up from white: Common white, Uncommon green, Rare
+// orange and Very rare red.
 //
 // Every weapon and passive has a rarity that sets how often it turns up in
 // level up offers. Every offer also rolls its own rarity, which sets how big
@@ -26,7 +27,7 @@ export type RarityDef = {
 export const RARITIES: Record<Rarity, RarityDef> = {
     common: {
         name: "Common",
-        color: "#56e156",
+        color: "#ffffff",
         weight: 10,
         chance: 0.7,
         power: 1,
@@ -35,7 +36,7 @@ export const RARITIES: Record<Rarity, RarityDef> = {
     },
     uncommon: {
         name: "Uncommon",
-        color: "#ffed4c",
+        color: "#56e156",
         weight: 5,
         chance: 0.22,
         power: 1.5,
