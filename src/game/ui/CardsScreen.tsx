@@ -480,8 +480,9 @@ export function CardFace({
                 <ItemIcon
                     objId={card.objId}
                     spriteId={card.spriteId}
-                    // Whole multiples of the icon's 32 pixels, so its pixels stay even
                     size={size === "big" ? 96 : 64}
+                    // Drawn from its model at this size, smooth, not the small icon blown up
+                    large
                 />
                 {/* A foil's shimmer, over its picture only, and sparkles where it's shown
                     moving (big, or turned over on the mat), never in the album's grid */}

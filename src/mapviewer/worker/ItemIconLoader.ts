@@ -16,14 +16,17 @@ export const ICON_HEIGHT = 32;
 
 // A negative objId is a loc's model instead (-locId), seen from above: a floor symbol, for a
 // screen that shows what's on the ground (renderLocIcon)
-export type ItemIconRequest = { objId: number; count: number };
+// `scale` draws an item's model that many times the icon's size, for a picture shown large (a
+// card's), smooth rather than a small icon blown up; 1 unless set. A loc's is always 1.
+export type ItemIconRequest = { objId: number; count: number; scale?: number };
 
 export type ItemIconInput = { requests: ItemIconRequest[] };
 
 export type ItemIcon = {
     objId: number;
     count: number;
-    // ARGB, ICON_WIDTH x ICON_HEIGHT; empty when the item has no model
+    scale?: number;
+    // ARGB, ICON_WIDTH x ICON_HEIGHT times its scale; empty when the item has no model
     pixels: Int32Array;
 };
 
@@ -45,6 +48,7 @@ function projectModel(
     xOffset: number,
     yOffset: number,
     zOffset: number,
+    scale = 1,
 ): boolean {
     if (model.verticesCount > screenX.length) {
         return false;
@@ -84,8 +88,8 @@ function projectModel(
         if (z <= 0) {
             z = 1;
         }
-        screenX[i] = (centerX + (x << 9) / z) | 0;
-        screenY[i] = (centerY + (y << 9) / z) | 0;
+        screenX[i] = (centerX + ((x << 9) * scale) / z) | 0;
+        screenY[i] = (centerY + ((y << 9) * scale) / z) | 0;
     }
     return true;
 }
@@ -292,11 +296,22 @@ export function renderLocIcon(state: WorkerState, locId: number): Int32Array {
     return pixels;
 }
 
-export function renderItemIcon(state: WorkerState, objId: number, count: number): Int32Array {
+// The largest scale an icon's drawn at (a card's picture on a sharp phone screen)
+export const MAX_ICON_SCALE = 6;
+
+export function renderItemIcon(
+    state: WorkerState,
+    objId: number,
+    count: number,
+    scale = 1,
+): Int32Array {
     if (objId < 0) {
         return renderLocIcon(state, -objId);
     }
-    const pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
+    scale = Math.max(1, Math.min(MAX_ICON_SCALE, Math.round(scale)));
+    const width = ICON_WIDTH * scale;
+    const height = ICON_HEIGHT * scale;
+    const pixels = new Int32Array(width * height);
     const stackId = getStackObjId(state, objId, count);
     const objType = state.objTypeLoader.load(stackId);
     const model = state.objModelLoader.getModel(stackId, 1);
@@ -304,12 +319,12 @@ export function renderItemIcon(state: WorkerState, objId: number, count: number)
         return pixels;
     }
 
-    Rasterizer2D.setRaster(pixels, ICON_WIDTH, ICON_HEIGHT);
-    Rasterizer2D.setClip(0, 0, ICON_WIDTH, ICON_HEIGHT);
+    Rasterizer2D.setRaster(pixels, width, height);
+    Rasterizer2D.setClip(0, 0, width, height);
     Rasterizer3D.setClip();
     // The client centres item models at (16, 16), not in the middle of the
     // 36 pixel wide sprite
-    Rasterizer3D.setViewport(16, 16);
+    Rasterizer3D.setViewport(16 * scale, 16 * scale);
     Rasterizer3D.rasterGouraudLowRes = false;
     Rasterizer3D.rasterAlpha = 0;
 
@@ -326,13 +341,18 @@ export function renderItemIcon(state: WorkerState, objId: number, count: number)
             objType.offsetX2d,
             ((model.height / 2) | 0) + sin + objType.offsetY2d,
             cos + objType.offsetY2d,
+            scale,
         )
     ) {
         drawModel(model, (id) => state.textureLoader.getAverageHsl(id));
     }
 
+    // The client's outline and shadow on an icon at its own size; a large one keeps its smooth
+    // edges (the picture it's shown in gives it a shadow)
+    if (scale === 1) {
+        outlineAndShadow(pixels, width, height);
+    }
     // The rasterizer writes plain RGB; mark everything drawn as opaque
-    outlineAndShadow(pixels, ICON_WIDTH, ICON_HEIGHT);
     for (let i = 0; i < pixels.length; i++) {
         if (pixels[i] !== 0) {
             pixels[i] |= 0xff000000;
@@ -347,15 +367,17 @@ export class ItemIconLoader implements RenderDataLoader<ItemIconInput, ItemIcon[
     init(): void {}
 
     async load(state: WorkerState, input: ItemIconInput): Promise<RenderDataResult<ItemIcon[]>> {
-        const icons = input.requests.map(({ objId, count }) => {
+        const icons = input.requests.map(({ objId, count, scale = 1 }) => {
+            // A loc's is only drawn at its own size
+            scale = objId < 0 ? 1 : Math.max(1, Math.min(MAX_ICON_SCALE, Math.round(scale)));
             let pixels: Int32Array;
             try {
-                pixels = renderItemIcon(state, objId, count);
+                pixels = renderItemIcon(state, objId, count, scale);
             } catch (e) {
                 console.error("Failed drawing item icon", objId, e);
-                pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT);
+                pixels = new Int32Array(ICON_WIDTH * ICON_HEIGHT * scale * scale);
             }
-            return { objId, count, pixels };
+            return { objId, count, scale, pixels };
         });
         return { data: icons, transferables: icons.map((icon) => icon.pixels.buffer) };
     }
