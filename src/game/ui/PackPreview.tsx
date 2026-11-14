@@ -411,7 +411,7 @@ function PackRates({
                         rarity: rarityName(itemRarity),
                         name: example.name(),
                         // That card's own chance of the version, not every card's share of it
-                        quality: formatChance(versionChanceFor(pack, itemRarity, quality)),
+                        quality: formatChance(versionChanceFor(pack, pool, itemRarity, quality)),
                         version: rarityName(quality),
                     })}
                 </p>

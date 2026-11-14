@@ -36,6 +36,7 @@ import {
     migrateCards,
     openCardPack,
     packPool,
+    packRoller,
 } from "./cards";
 import { RunSummary, createSave, exportSave, importSave, migrateSave, recordRun } from "./save";
 
@@ -124,26 +125,46 @@ describe("buying packs", () => {
         expect(lastCardRarities(PACK_BY_ID.get("raids")!.odds)).toEqual(["rare", "veryRare"]);
     });
 
-    it("rolls versions in proportion to the pack's odds, never below the card's own", () => {
-        const pack = PACK_BY_ID.get("champion")!;
-        const save = { ...createSave(), platinum: pack.price * 3000 };
-        const counts: Record<string, number> = {};
-        let total = 0;
-        const random = spread();
-        for (let i = 0; i < 3000; i++) {
-            // The first four, which roll by the odds as they are
-            for (const { card, rarity } of buyCardPack(save, pack, random)!.slice(0, -1)) {
-                expect(index(rarity)).toBeGreaterThanOrEqual(index(card.rarity));
-                // A Common card's version is the roll itself
-                if (card.rarity === "common") {
+    it("comes out at the pack's odds of each version, never a card below its own rarity", () => {
+        for (const pack of [BASIC_PACK, PACK_BY_ID.get("champion")!]) {
+            const save = { ...createSave(), platinum: pack.price * 3000 };
+            const counts: Record<string, number> = {};
+            let total = 0;
+            const random = spread();
+            for (let i = 0; i < 3000; i++) {
+                // The first four, which roll by the odds as they are (the last never the commonest)
+                for (const { card, rarity } of buyCardPack(save, pack, random)!.slice(0, -1)) {
+                    // A card picked for its version comes in it: its own rarity no rarer
+                    expect(index(rarity)).toBeGreaterThanOrEqual(index(card.rarity));
                     counts[rarity] = (counts[rarity] ?? 0) + 1;
                     total++;
                 }
             }
+            for (const rarity of RARITY_ORDER) {
+                expect(
+                    Math.abs((counts[rarity] ?? 0) / total - pack.odds[rarity]),
+                    `${pack.id} ${rarity}`,
+                ).toBeLessThan(0.02);
+            }
         }
-        for (const rarity of RARITY_ORDER) {
-            expect(Math.abs(counts[rarity] / total - pack.odds[rarity]), rarity).toBeLessThan(0.02);
-        }
+    });
+
+    it("picks a version's card only from those that come in it", () => {
+        // A pool of a Common and a Very rare thing: a Common version roll can only be the Common
+        const common = packCards(BASIC_PACK).find((c) => c.rarity === "common")!;
+        const veryRare = packCards(BASIC_PACK).find((c) => c.rarity === "veryRare")!;
+        const roll = packRoller(BASIC_PACK, [common, veryRare]);
+        // Version roll 0 (Common), any pick, no foil: the Common thing as a Common
+        const cards = roll(sequence(0, 0.999, 0.999), 4);
+        expect(
+            cards.slice(0, -1).every(({ card, rarity }) => card === common && rarity === "common"),
+        ).toBe(true);
+        // The last card's never the commonest version: still the Common thing, as an Uncommon
+        expect(cards[3]).toEqual({ card: common, rarity: "uncommon", foil: false });
+        // A pool of only Rare things: a Common roll comes as the commonest rarity there is
+        const rare = packCards(BASIC_PACK).find((c) => c.rarity === "rare")!;
+        const only = packRoller(BASIC_PACK, [rare])(sequence(0, 0, 0.999), 1);
+        expect(only).toEqual([{ card: rare, rarity: "rare", foil: false }]);
     });
 
     it("holds only what the player's unlocked: a locked thing never comes", () => {

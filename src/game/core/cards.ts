@@ -18,7 +18,7 @@ import {
 } from "../content/cards";
 import { getGear } from "../content/items";
 import { PASSIVES } from "../content/passives";
-import { RARITY_ORDER, Rarity, atLeast } from "../content/rarity";
+import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { isAvailable } from "../content/unlocks";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { type SaveData, isMapUnlocked } from "./save";
@@ -172,44 +172,55 @@ function rollRarity(odds: Record<Rarity, number>, random: () => number, last: bo
     return rolled[rolled.length - 1];
 }
 
-// A pack's cards, without the save: each a card of the pool picked by its weight (cardWeight: its
-// rarity's and its tier's, so the strongest Very rare things are the rarest pulls), then its
-// version rolled by the pack's odds, no commoner than the card's own. Made once for a pool, so
-// a preview's many packs (core/cardOdds.ts) roll as a bought one does.
+// A pack's cards, without the save: each rolls its version's rarity by the pack's odds first, then
+// a card of the pool that comes in that version (its own rarity no rarer than it), picked by its
+// weight (cardWeight: its rarity's and its tier's, so the strongest things are the rarest pulls),
+// then whether it's a foil. So a pack's versions come out at its odds. Where no card of the pool
+// comes in the version rolled (all its things rarer), it's the commonest rarity that has some. Made
+// once for a pool, so a preview's many packs (core/cardOdds.ts) roll as a bought one does.
 export function packRoller(
     pack: PackDef,
     pool: readonly CardDef[],
 ): (random: () => number, size?: number) => { card: CardDef; rarity: Rarity; foil: boolean }[] {
-    // Each card's weight added up, to search for a roll in
-    const upTo: number[] = [];
-    let total = 0;
-    for (const card of pool) {
-        total += cardWeight(pack, card);
-        upTo.push(total);
-    }
-    const pick = (random: () => number): CardDef => {
-        const roll = random() * total;
+    // For each version, the cards that come in it and their weights added up, to search a roll in
+    const byVersion = RARITY_ORDER.map((version) => {
+        const cards = pool.filter(
+            (card) => RARITY_ORDER.indexOf(card.rarity) <= RARITY_ORDER.indexOf(version),
+        );
+        const upTo: number[] = [];
+        let total = 0;
+        for (const card of cards) {
+            total += cardWeight(pack, card);
+            upTo.push(total);
+        }
+        return { version, cards, upTo, total };
+    });
+    const commonest = byVersion.find((v) => v.cards.length > 0);
+    const pick = (rolled: Rarity, random: () => number): { card: CardDef; rarity: Rarity } => {
+        const chosen = byVersion[RARITY_ORDER.indexOf(rolled)];
+        const from = chosen.cards.length > 0 ? chosen : commonest!;
+        const roll = random() * from.total;
         let lo = 0;
-        let hi = pool.length - 1;
+        let hi = from.cards.length - 1;
         while (lo < hi) {
             const mid = (lo + hi) >> 1;
-            if (upTo[mid] > roll) {
+            if (from.upTo[mid] > roll) {
                 hi = mid;
             } else {
                 lo = mid + 1;
             }
         }
-        return pool[lo];
+        return { card: from.cards[lo], rarity: from.version };
     };
     return (random, size = PACK_SIZE) => {
         const cards: { card: CardDef; rarity: Rarity; foil: boolean }[] = [];
         const foilChance = packFoilChance(pack);
         for (let i = 0; i < size; i++) {
             const rolled = rollRarity(pack.odds, random, i === size - 1);
-            const card = pick(random);
+            const { card, rarity } = pick(rolled, random);
             // Then whether it's a foil, on the same numbers
             const foil = random() < foilChance;
-            cards.push({ card, rarity: atLeast(rolled, card.rarity), foil });
+            cards.push({ card, rarity, foil });
         }
         return cards;
     };

@@ -336,23 +336,14 @@
     }
 }
 
-/* "Foil", written in the card's top right corner on a little ribbon */
+/* "Foil", for screen readers only: the shimmer is what shows it */
 .ui-tcg-foil-mark {
     position: absolute;
-    top: 30px;
-    right: -2px;
-    padding: 1px 6px 1px 8px;
-    font-family: "OSRS Bold", sans-serif;
-    font-size: 11px;
-    color: #1a1208;
-    background: linear-gradient(90deg, #ffd1f0, #c8f0ff 50%, #fff0a8);
-    clip-path: polygon(6px 0, 100% 0, 100% 100%, 6px 100%, 0 50%);
-    box-shadow: 0 1px 0 #000;
-}
-
-.ui-tcg-big .ui-tcg-foil-mark {
-    top: 44px;
-    font-size: 13px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* A foil as it's turned over on the mat: a flash of light across it, once */

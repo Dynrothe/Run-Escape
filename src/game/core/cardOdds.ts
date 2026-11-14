@@ -1,5 +1,5 @@
 import { CardDef, PACK_SIZE, PackDef, cardWeight } from "../content/cards";
-import { RARITY_ORDER, Rarity, atLeast } from "../content/rarity";
+import { RARITY_ORDER, Rarity } from "../content/rarity";
 import { LOCKABLE_ITEM_BY_ID } from "../content/unlocks";
 import { WEAPONS } from "../content/weapons";
 import { lastCardRarities, packRoller } from "./cards";
@@ -109,50 +109,109 @@ export function simulatePackOdds(
     };
 }
 
-// The same odds worked out exactly, which the simulated ones come close to (a test checks)
-export function exactPackOdds(pack: PackDef, pool: readonly CardDef[]): PackOdds {
-    const total = pool.reduce((sum, card) => sum + cardWeight(pack, card), 0);
-    const chance = (card: CardDef) => (total > 0 ? cardWeight(pack, card) / total : 0);
-    const items = none();
-    for (const card of pool) {
-        items[card.rarity] += chance(card);
-    }
-    const versions = none();
-    for (let i = 0; i < PACK_SIZE; i++) {
+// Each card of a pack: the chance it rolls each version (its last one only lastCardRarities)
+function slotRolls(pack: PackDef): Record<Rarity, number>[] {
+    return Array.from({ length: PACK_SIZE }, (_, i) => {
         const rolls = i === PACK_SIZE - 1 ? lastCardRarities(pack.odds) : RARITY_ORDER;
         const rolled = rolls.filter((r) => pack.odds[r] > 0);
         const sum = rolled.reduce((s, r) => s + pack.odds[r], 0);
-        for (const card of pool) {
-            for (const r of rolled) {
-                versions[atLeast(r, card.rarity)] +=
-                    (chance(card) * pack.odds[r]) / sum / PACK_SIZE;
+        const out = none();
+        for (const r of rolled) {
+            out[r] = pack.odds[r] / sum;
+        }
+        return out;
+    });
+}
+
+// For each version rolled, the version a card comes in and each card's chance, as packRoller
+// picks: among the cards that come in it, by weight, else the commonest rarity that has some
+function versionPicks(
+    pack: PackDef,
+    pool: readonly CardDef[],
+): Record<Rarity, { version: Rarity; chance: Map<CardDef, number> }> {
+    const sets = RARITY_ORDER.map((version) => ({
+        version,
+        cards: pool.filter((c) => RARITY_ORDER.indexOf(c.rarity) <= RARITY_ORDER.indexOf(version)),
+    }));
+    const commonest = sets.find((set) => set.cards.length > 0);
+    const out = {} as Record<Rarity, { version: Rarity; chance: Map<CardDef, number> }>;
+    for (const set of sets) {
+        const from = set.cards.length > 0 ? set : (commonest ?? set);
+        const total = from.cards.reduce((sum, c) => sum + cardWeight(pack, c), 0);
+        out[set.version] = {
+            version: from.version,
+            chance: new Map(
+                from.cards.map((c) => [c, total > 0 ? cardWeight(pack, c) / total : 0]),
+            ),
+        };
+    }
+    return out;
+}
+
+// The same odds worked out exactly, which the simulated ones come close to (a test checks)
+export function exactPackOdds(pack: PackDef, pool: readonly CardDef[]): PackOdds {
+    const picks = versionPicks(pack, pool);
+    const items = none();
+    const versions = none();
+    const missed = new Map<CardDef, number>(pool.map((c) => [c, 1]));
+    let noVeryRare = 1;
+    for (const slot of slotRolls(pack)) {
+        const here = new Map<CardDef, number>();
+        let veryRare = 0;
+        for (const rolled of RARITY_ORDER) {
+            if (slot[rolled] === 0 || pool.length === 0) {
+                continue;
+            }
+            const { version, chance } = picks[rolled];
+            versions[version] += slot[rolled] / PACK_SIZE;
+            for (const [card, p] of chance) {
+                const q = slot[rolled] * p;
+                here.set(card, (here.get(card) ?? 0) + q);
+                items[card.rarity] += q / PACK_SIZE;
+                if (card.rarity === "veryRare") {
+                    veryRare += q;
+                }
             }
         }
+        for (const [card, q] of here) {
+            missed.set(card, missed.get(card)! * (1 - q));
+        }
+        noVeryRare *= 1 - veryRare;
     }
     return {
         packs: Infinity,
-        perCard: new Map(pool.map((card) => [card.id, 1 - (1 - chance(card)) ** PACK_SIZE])),
+        perCard: new Map(pool.map((card) => [card.id, 1 - missed.get(card)!])),
         items,
         versions,
-        veryRarePack: 1 - (1 - items.veryRare) ** PACK_SIZE,
+        veryRarePack: 1 - noVeryRare,
     };
 }
 
-// The chance a card of this rarity from a pack comes in that version, over a pack's cards (its
-// last one rolls only lastCardRarities): for the preview's example of one card
-export function versionChanceFor(pack: PackDef, cardRarity: Rarity, version: Rarity): number {
-    let chance = 0;
-    for (let i = 0; i < PACK_SIZE; i++) {
-        const rolls = i === PACK_SIZE - 1 ? lastCardRarities(pack.odds) : RARITY_ORDER;
-        const rolled = rolls.filter((r) => pack.odds[r] > 0);
-        const sum = rolled.reduce((s, r) => s + pack.odds[r], 0);
-        for (const r of rolled) {
-            if (atLeast(r, cardRarity) === version) {
-                chance += pack.odds[r] / sum / PACK_SIZE;
+// The chance a card of this rarity from a pack comes in that version: for the preview's example
+// of one card
+export function versionChanceFor(
+    pack: PackDef,
+    pool: readonly CardDef[],
+    cardRarity: Rarity,
+    version: Rarity,
+): number {
+    const picks = versionPicks(pack, pool);
+    let ofRarity = 0;
+    let inVersion = 0;
+    for (const slot of slotRolls(pack)) {
+        for (const rolled of RARITY_ORDER) {
+            for (const [card, p] of picks[rolled].chance) {
+                if (card.rarity === cardRarity) {
+                    const q = slot[rolled] * p;
+                    ofRarity += q;
+                    if (picks[rolled].version === version) {
+                        inVersion += q;
+                    }
+                }
             }
         }
     }
-    return chance;
+    return ofRarity > 0 ? inVersion / ofRarity : 0;
 }
 
 // A player's pack odds, simulated once for their pool and kept till it changes

@@ -439,7 +439,8 @@ function rarityStyle(rarity: Rarity): CSSProperties {
 // a whole multiple of its size in a window over a backdrop for its kind, the type line, a short
 // line of what it is, and its number in the set. A foil copy has a holographic shimmer over its
 // picture, drifting only where `moving` asks (the big card and a pack's mat) or under a pointer,
-// with sparkles where it's moving, neither with prefers-reduced-motion; "Foil" is written on it.
+// with sparkles where it's moving, neither with prefers-reduced-motion; "Foil" is said to a
+// screen reader, not written on it.
 export function CardFace({
     card,
     rarity,
@@ -518,6 +519,7 @@ export function CardFace({
                 </span>
                 <span>{cardNumber(card)}</span>
             </span>
+            {/* Said, not shown: the shimmer and sparkles show it */}
             {foil && <span className="ui-tcg-foil-mark">{t("cards.foil")}</span>}
         </span>
     );

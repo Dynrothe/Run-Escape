@@ -1474,14 +1474,17 @@ involved.
   can't be bought (`cantBuyCardPack`'s `"locked"`). Each shop offer shows its description, its last
   card's line where it has one (`lastCardRarities`) and what's collected of the unlocked cards and
   of all, with no odds lines: those are in its Preview.
-- **Picking a card** (`packRoller`): by its weight, `CARD_ITEM_WEIGHTS` for its item's rarity times
-  `CARD_TIER_FACTORS` for its tier (`cardTier`: gear by how far up its Armoury line it is,
-  `getArmouryDepth`; weapons 3 for an evolution or a raid's or boss fight's, 2 for a boss kill's, 1
-  for another map's, 0 from the start; passives 1 if a map brings them in; `CARD_TOP_ITEMS` always
-  3), times a pack's `rarer` for Rare and Very rare. Then its version's rolled by the pack's odds,
-  no commoner than the card's own rarity; in a pack with odds for three rarities or more, the last
-  card never rolls the commonest (`lastCardRarities`), which the shop says. Then whether it's a foil
-  (see Foils). All these knobs are in `content/cards.ts`. A bought pack opens at once.
+- **Picking a card** (`packRoller`): first its version, rolled by the pack's odds (in a pack with
+  odds for three rarities or more, the last card never rolls the commonest, `lastCardRarities`,
+  which the shop says), so a pack's versions come out at its odds. Then a card of the pool that
+  comes in that version (its own rarity no rarer), by its weight: `CARD_ITEM_WEIGHTS` for its item's
+  rarity times `CARD_TIER_FACTORS` for its tier (`cardTier`: gear by how far up its Armoury line it
+  is, `getArmouryDepth`; weapons 3 for an evolution or a raid's or boss fight's, 2 for a boss
+  kill's, 1 for another map's, 0 from the start; passives 1 if a map brings them in;
+  `CARD_TOP_ITEMS` always 3), times a pack's `rarer` for Rare and Very rare. Where no card of the
+  pool comes in the version rolled (all its things rarer, as in the Raider's pack), it's the
+  commonest rarity that has some. Then whether it's a foil (see Foils). All these knobs are in
+  `content/cards.ts`. A bought pack opens at once.
 - **Card collection only** (`core/cardRuns.ts`, `SaveData.cardsOnly`, the adventurer panel's Cards
   only tab): level ups offer only weapons and passives with a card, no rarer than the rarest version
   owned (`Upgrades.CardCaps`, `capQuality`); an evolution only with three cards, the weapon's, the
