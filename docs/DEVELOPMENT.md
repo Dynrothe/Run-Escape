@@ -1424,6 +1424,16 @@ adventurer can have:
 - **`PetDef`** (`content/pets.ts`): a pet's `id` is its trophy's, and its follower NPC is the
   cache's variant marked as a follower, with its own idle and walk animations. The pet can be
   taken out once its trophy is found.
+- **The log's screen** (`ui/CollectionLogScreen.tsx`) is laid out as OSRS's: tabs, entries and
+  a page of items. `getLogEntries` (`content/collectionLog.ts`) builds it from the save as it is,
+  with nothing of its own saved. Each `REWARD_MAPS` map is an entry, filed by `getMapTab`: a raid
+  (`RAID_MAPS`; the Tombs have no `MapDef.raid`) under Raids, a seasonal map under Minigames, a
+  boss fight or an act's map under Bosses. Clues is the casket gear (`SaveData.foundGear`) by
+  rarity, and Other the evolutions. A tab with no entries isn't shown. An item's `key` is unique
+  in the whole log, as a casket's Justiciar faceguard isn't the Theatre's trophy, and the title's
+  total counts each key once. Narrower than 600px, or on a phone held upright (the rotate
+  notice's own query), the entries are a dropdown, and the log is the one screen the rotate notice
+  leaves readable there (`GameUi.tsx`).
 
 ### Thanksgiving's Avian Assaulter
 
