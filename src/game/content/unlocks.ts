@@ -1,4 +1,4 @@
-import { t, tp, tr } from "../i18n";
+import { list, t, tp, tr } from "../i18n";
 import { CHARACTERS } from "./characters";
 import { getEnemy } from "./enemies";
 import { ITEMS } from "./items";
@@ -71,6 +71,9 @@ export const UNLOCK_MESSAGES: Record<string, string> = {
     "unlock.kill_boss.in": "Kill {enemy} in {map}",
     "unlock.survive": "Survive {time}",
     "unlock.survive.in": "Survive {time} in {map}",
+    "unlock.realm_caskets": "Open {count} caskets in the Shadow Realm in one run",
+    "unlock.realm_caskets.in": "Open {count} caskets in the Shadow Realm in one run in {map}",
+    "unlock.pieces": "Find {pieces}",
     "unlock.survive.minutes.other": "{n} minutes",
     "unlock.survive.clock": "{minutes}:{seconds}",
     "unlock.raid_chest": "Find a {trophy} in its chest",
@@ -105,6 +108,17 @@ export function describeUnlockTask(task: UnlockTask, withMap = true): string {
         }
         case "survive":
             return t(`unlock.survive${suffix}`, { time: describeSurvival(task.seconds), map });
+        case "realmCaskets":
+            return t(`unlock.realm_caskets${suffix}`, { count: task.count, map });
+        case "pieces":
+            return t("unlock.pieces", {
+                pieces: list(
+                    task.trophyIds.map((id) => {
+                        const trophy = TROPHY_BY_ID.get(id)!;
+                        return tr(`trophy.${trophy.id}.name`, trophy.name);
+                    }),
+                ),
+            });
         case "raidChest": {
             // A thing to do, as the rest are: callers build sentences on it ("... to unlock")
             const trophy = TROPHY_BY_ID.get(task.trophyId)!;

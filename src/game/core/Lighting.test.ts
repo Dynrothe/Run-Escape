@@ -1,6 +1,8 @@
 import { getEnemy } from "../content/enemies";
+import { LEVIATHAN_LIGHTING } from "../content/leviathan";
 import { ALL_MAPS, MAP_BY_ID, getMap } from "../content/maps";
 import { LANTERN_ID, POWER_UPS, getPowerUp } from "../content/powerups";
+import { SCAR_LIGHTING } from "../content/scar";
 import { TOMBS_LIGHTING } from "../content/tombs";
 import { EnemyDef, LightingDef, MapDef, emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "./Sim";
@@ -90,11 +92,19 @@ function run(sim: Sim, seconds: number, keep: Enemy[] = []): void {
 }
 
 describe("the dark", () => {
-    test("only dev maps and the Tombs have lights, and everywhere else is lit everywhere", () => {
-        // The Tombs of Amascut and its quest, a tomb lit by its fires, are the shipped ones
+    test("only dev maps, the Tombs, the Scar and burnt Varrock have lights, and everywhere else is lit everywhere", () => {
+        // The Tombs of Amascut and its quest, a tomb lit by its fires, the Scar's dark (the map's,
+        // and the Awakened Leviathan's fight on it), and the Battle for Varrock's fires, its smoke
+        // dimming it a little (fun/maps.ts), are the shipped ones
+        const lit = new Set(["battle_for_varrock"]);
         for (const map of ALL_MAPS) {
             expect(
-                map.lighting === undefined || map.dev === true || map.lighting === TOMBS_LIGHTING,
+                map.lighting === undefined ||
+                    map.dev === true ||
+                    map.lighting === TOMBS_LIGHTING ||
+                    map.lighting === SCAR_LIGHTING ||
+                    map.lighting === LEVIATHAN_LIGHTING ||
+                    lit.has(map.id),
             ).toBe(true);
         }
         const sim = createSim("lumbridge");

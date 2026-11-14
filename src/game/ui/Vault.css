@@ -1,0 +1,181 @@
+/* The weekly Vault's screen, and an Awakener's orb's row on a map's card (Vault.tsx) */
+
+.ui-vault {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: min(640px, calc(94vw / var(--ui-scale)));
+    max-height: calc((100vh - 16px) / var(--ui-scale));
+    max-height: calc((100dvh - 16px) / var(--ui-scale));
+    overflow-y: auto;
+}
+
+.ui-vault .ui-row {
+    flex-shrink: 0;
+}
+
+.ui-vault-help {
+    font-size: 14px;
+}
+
+.ui-vault-run {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.ui-vault-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    align-items: center;
+    padding: 6px 8px;
+    min-width: 0;
+    cursor: default;
+}
+
+.ui-vault-card > .ui-item-icon,
+.ui-vault-card > img,
+.ui-vault-card > canvas {
+    grid-row: 1 / span 2;
+}
+
+.ui-vault-wide {
+    grid-column: 1 / span 2;
+    grid-template-columns: 1fr;
+}
+
+.ui-vault-label {
+    font-size: 12px;
+    color: var(--ui-subtle, #b8a888);
+}
+
+.ui-vault-value {
+    font-size: 16px;
+    color: var(--ui-yellow);
+}
+
+.ui-vault-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+}
+
+.ui-vault-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 14px;
+    color: var(--ui-yellow);
+}
+
+.ui-vault-best {
+    margin-top: 8px;
+    font-size: 15px;
+    color: var(--ui-green);
+}
+
+.ui-vault-past {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    margin-top: 4px;
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+/* The act's middle card: the gauntlet, the Vault and the orbs held, in a row */
+.ui-act-extras {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 4px 6px;
+}
+
+.ui-act-vault {
+    margin-top: 3px;
+    padding: 1px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.ui-orbs {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 3px;
+    font-size: 13px;
+    color: #c8a8ff;
+}
+
+/* A map's card: the orb's switch, the orbs held, and its awakened win */
+.ui-awaken {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.ui-awaken-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.ui-awaken-on {
+    color: #d8b8ff;
+    border-color: #a070e0;
+    box-shadow: 0 0 6px rgba(160, 112, 224, 0.7);
+}
+
+.ui-awaken-orbs {
+    color: #c8a8ff;
+}
+
+.ui-awaken-won {
+    color: #c8a8ff;
+}
+
+/* The map list's tile: its final boss beaten awakened */
+.ui-awakened-mark {
+    display: inline-flex;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 3px rgba(170, 120, 255, 0.9));
+}
+
+/* A phone held sideways: tighter */
+@media (max-height: 460px) {
+    .ui-vault {
+        padding: 8px 12px;
+    }
+
+    .ui-vault h2 {
+        margin-bottom: 2px;
+        font-size: 18px;
+    }
+
+    .ui-vault .ui-subtle {
+        margin-bottom: 4px;
+        font-size: 12px;
+    }
+
+    .ui-vault-card {
+        padding: 3px 6px;
+    }
+
+    .ui-vault-value {
+        font-size: 14px;
+    }
+
+    .ui-vault .ui-row {
+        margin-top: 6px;
+    }
+
+    .ui-vault .ui-button {
+        padding: 4px 12px;
+    }
+}

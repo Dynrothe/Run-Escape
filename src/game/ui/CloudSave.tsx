@@ -5,9 +5,12 @@ import { GameClient } from "../client/GameClient";
 import { CLOUD_SAVE_SPRITES } from "../content/titleIcons";
 import { SaveData } from "../core/save";
 import { dateLocale, fmtNum, t } from "../i18n";
+import { useConfirm } from "./ConfirmDialog";
 import { ItemIcon } from "./ItemIcon";
 import "./NoticePanel.css";
 import { GAME_VERSION } from "./changelog";
+import { releaseFocus } from "./menuKeys";
+import { useDialog } from "./useDialog";
 
 const PROBLEMS: Record<CloudProblem, string> = {
     offline: "cloud.problem.offline",
@@ -85,12 +88,13 @@ export function CloudSaveSettings({
     const first = inPanel ? t("cloud.status") : t("cloud.title");
     const [typed, setTyped] = useState("");
     const [copied, setCopied] = useState(false);
+    const [confirm, confirmDialog] = useConfirm();
     const sync = client.cloud;
     if (!cloud || !sync) {
         return null;
     }
     const busy = cloud.working || !saving;
-    const blur = (e: React.MouseEvent<HTMLElement>) => e.currentTarget.blur();
+    const blur = releaseFocus;
     const problem = describeProblem(cloud);
     // A deleted code's saves can come back
     const restore = cloud.problem === "deleted" && (
@@ -175,9 +179,16 @@ export function CloudSaveSettings({
                 <button
                     className="ui-button ui-button-small"
                     disabled={cloud.working}
-                    onClick={(e) => {
+                    onClick={async (e) => {
                         blur(e);
-                        if (window.confirm(t("cloud.turn_off_confirm"))) {
+                        if (
+                            await confirm({
+                                title: t("confirm.cloud.turn_off.title"),
+                                body: t("cloud.turn_off_confirm"),
+                                confirm: t("cloud.turn_off"),
+                                cancel: t("ui.common.cancel"),
+                            })
+                        ) {
                             sync.turnOff();
                         }
                     }}
@@ -223,9 +234,16 @@ export function CloudSaveSettings({
                 <button
                     className="ui-button ui-button-small"
                     disabled={busy || dead}
-                    onClick={(e) => {
+                    onClick={async (e) => {
                         blur(e);
-                        if (window.confirm(t("cloud.new_code_confirm"))) {
+                        if (
+                            await confirm({
+                                title: t("confirm.cloud.new_code.title"),
+                                body: t("cloud.new_code_confirm"),
+                                confirm: t("cloud.new_code"),
+                                cancel: t("ui.common.cancel"),
+                            })
+                        ) {
                             setCopied(false);
                             sync.newCode();
                         }
@@ -238,9 +256,16 @@ export function CloudSaveSettings({
                 <button
                     className="ui-button ui-button-small"
                     disabled={cloud.working}
-                    onClick={(e) => {
+                    onClick={async (e) => {
                         blur(e);
-                        if (window.confirm(t("cloud.delete_confirm"))) {
+                        if (
+                            await confirm({
+                                title: t("confirm.cloud.delete.title"),
+                                body: t("cloud.delete_confirm"),
+                                confirm: t("cloud.delete"),
+                                cancel: t("ui.common.cancel"),
+                            })
+                        ) {
                             sync.deleteCloud();
                         }
                     }}
@@ -248,6 +273,7 @@ export function CloudSaveSettings({
                     {t("cloud.delete")}
                 </button>
             </CloudRow>
+            {confirmDialog}
         </>
     );
 }
@@ -265,6 +291,7 @@ export function CloudChoicePanel({
 }): JSX.Element | null {
     const choice = cloud.choice;
     const sync = client.cloud;
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     if (!choice || !sync) {
         return null;
     }
@@ -272,8 +299,8 @@ export function CloudChoicePanel({
     const savedAt = theirs.updatedAt && when(theirs.updatedAt);
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-notice">
-                <h2>{t("cloud.choice.title")}</h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-notice">
+                <h2 id={titleId}>{t("cloud.choice.title")}</h2>
                 <div className="ui-notice-body">
                     <p>{t("cloud.choice.different")}</p>
                     <p>
@@ -384,7 +411,7 @@ export function CloudSaveButton({
             title={t("cloud.button.label", { status: status ?? "" })}
             aria-label={t("cloud.button.label", { status: status ?? "" })}
             onClick={(e) => {
-                e.currentTarget.blur();
+                releaseFocus(e);
                 if (cloud.choice) {
                     client.cloud?.reopenChoice();
                 } else {

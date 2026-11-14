@@ -91,6 +91,33 @@ const PAD_CONTROLS: { icons: (PadButton | "move")[]; key: string }[] = [
     { icons: ["north"], key: "canvas.skip_label" },
 ];
 
+// What each key does: for the pause menu and settings, while no controller's in use. Keep it in
+// step with GameClient.onKeyPress.
+const KEYBOARD_CONTROLS: { keys: () => string; key: string }[] = [
+    { keys: () => t("controls.key.move"), key: "controls.keyboard.move" },
+    { keys: () => "1 - 4", key: "controls.keyboard.items" },
+    { keys: () => "Esc / P", key: "controls.keyboard.pause" },
+    { keys: () => t("controls.key.space"), key: "controls.keyboard.ability" },
+    { keys: () => "Tab", key: "canvas.controls.damage" },
+    { keys: () => "Q", key: "canvas.controls.quests" },
+    { keys: () => "M", key: "controls.keyboard.sound" },
+    { keys: () => "R", key: "canvas.reroll_label" },
+    { keys: () => "X", key: "canvas.skip_label" },
+];
+
+export function KeyboardControls(): JSX.Element {
+    return (
+        <div className="ui-pad-controls">
+            {KEYBOARD_CONTROLS.map((row) => (
+                <div key={row.key} className="ui-pad-control">
+                    <span className="ui-pad-control-keys">{row.keys()}</span>
+                    <span className="ui-pad-control-text">{t(row.key)}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export function PadControls(): JSX.Element | null {
     const kind = usePadKind();
     if (!kind) {

@@ -1,5 +1,6 @@
 import { t } from "../i18n";
 import { KeyHint } from "./PadHint";
+import { releaseFocus } from "./menuKeys";
 
 // Rolls a level up's rewards or a casket's item again (R), for one of the
 // run's rerolls
@@ -20,7 +21,7 @@ export function RerollButton({
                 onClick={(e) => {
                     onReroll();
                     // Give the number keys back
-                    e.currentTarget.blur();
+                    releaseFocus(e);
                 }}
             >
                 <KeyHint keyLabel="R" pad="west" /> {t("canvas.reroll", { n: rerolls })}

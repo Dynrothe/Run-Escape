@@ -1,0 +1,207 @@
+/* Dev only: the shot editor's panel (DirectorPanel.tsx) */
+
+/* Behind the panel, over the scene: dragging turns or moves the camera */
+.director-stage {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+    touch-action: none;
+    cursor: grab;
+}
+
+.director-stage:active {
+    cursor: grabbing;
+}
+
+.director-panel {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 8px;
+    font-size: 14px;
+    background: var(--ui-panel-dark);
+    border: 2px solid var(--ui-edge);
+    box-shadow: inset 0 0 0 1px var(--ui-edge-light);
+    pointer-events: auto;
+}
+
+.director-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.director-gap {
+    flex: 1;
+}
+
+.director-time {
+    min-width: 92px;
+    color: var(--ui-yellow);
+    font-variant-numeric: tabular-nums;
+}
+
+.director-label {
+    color: var(--ui-text);
+}
+
+.director-moved {
+    color: var(--ui-orange);
+}
+
+.director-select,
+.director-field input[type="text"],
+.director-code {
+    font-family: "OSRS Small", sans-serif;
+    font-size: 14px;
+    color: var(--ui-text);
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--ui-edge-light);
+}
+
+.director-select {
+    padding: 3px 4px;
+}
+
+.director-field {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.director-field input[type="text"] {
+    width: 64px;
+    padding: 2px 4px;
+}
+
+.director-field input:disabled {
+    color: #7d705b;
+}
+
+.director-code {
+    height: 120px;
+    resize: vertical;
+    white-space: pre;
+    text-shadow: none;
+}
+
+.director-help {
+    font-size: 12px;
+    color: #a89c84;
+}
+
+/* The timeline: second ticks, cues along the top, shots in the middle, the playhead */
+.director-timeline {
+    position: relative;
+    height: 40px;
+    margin: 0 8px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--ui-edge-light);
+    cursor: pointer;
+    touch-action: none;
+}
+
+.director-tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid rgba(107, 94, 74, 0.35);
+    pointer-events: none;
+}
+
+.director-tick-major {
+    border-left-color: rgba(168, 156, 132, 0.6);
+}
+
+.director-tick span {
+    position: absolute;
+    bottom: 0;
+    left: 2px;
+    font-size: 11px;
+    color: #a89c84;
+}
+
+.director-cue {
+    position: absolute;
+    top: 2px;
+    width: 3px;
+    height: 9px;
+    transform: translateX(-50%);
+    background: var(--ui-white);
+}
+
+.director-cue-say {
+    background: var(--ui-yellow);
+}
+
+.director-cue-spot {
+    background: var(--ui-orange);
+}
+
+.director-cue-sound {
+    background: var(--ui-cyan);
+}
+
+.director-cue-gone {
+    background: var(--ui-red);
+}
+
+.director-shot {
+    position: absolute;
+    top: 15px;
+    width: 11px;
+    height: 11px;
+    transform: translateX(-50%) rotate(45deg);
+    background: var(--ui-card);
+    border: 1px solid var(--ui-orange);
+    cursor: ew-resize;
+}
+
+.director-shot-hold {
+    background: #6b4a1a;
+}
+
+.director-shot-player {
+    transform: translateX(-50%);
+    border-color: var(--ui-green);
+}
+
+.director-shot-selected {
+    background: var(--ui-yellow);
+    border-color: var(--ui-white);
+}
+
+.director-playhead {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--ui-red);
+    pointer-events: none;
+}
+
+/* While a trailer's recorded, nothing behind the panel moves the camera */
+.director-stage-recording {
+    cursor: progress;
+}
+
+.director-stage-recording:active {
+    cursor: progress;
+}
+
+.director-progress {
+    height: 6px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--ui-edge-light);
+}
+
+.director-progress > div {
+    height: 100%;
+    background: var(--ui-yellow);
+}

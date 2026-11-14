@@ -1,33 +1,16 @@
-import { type CSSProperties, type JSX, useEffect, useState } from "react";
+import type { CSSProperties, JSX } from "react";
 
 import type { QuestTrackView } from "../client/GameStore";
 import { enemyName, getEnemy } from "../content/enemies";
 import { SLAYER_SPRITE_ID } from "../content/questIcons";
-import { PAUSE_TAB_SPRITES, STONE_SLOT_SPRITE } from "../content/titleIcons";
+import { PAUSE_TAB_SPRITES } from "../content/titleIcons";
 import { fmtNum, t, tl } from "../i18n";
-import { ItemIcon, iconCache } from "./ItemIcon";
+import { ItemIcon } from "./ItemIcon";
 import "./PauseQuests.css";
+import { useStoneSlot } from "./useStoneSlot";
 
 function state(quest: QuestTrackView): "done" | "started" | "new" {
     return quest.finished ? "done" : quest.done > 0 ? "started" : "new";
-}
-
-// The client's grey stone slot, drawn from the cache at its own size. Empty until it's loaded (or
-// when the cache hasn't got it), and the squares keep their dark brown meanwhile.
-function useStoneSlot(): string {
-    const [url, setUrl] = useState(() => iconCache.getFrame(STONE_SLOT_SPRITE, 0) ?? "");
-    useEffect(() => {
-        let cancelled = false;
-        iconCache.requestFrame(STONE_SLOT_SPRITE, 0, (loaded) => {
-            if (!cancelled) {
-                setUrl(loaded);
-            }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-    return url;
 }
 
 // The Slayer skill's skull, for a quest that's after creatures: what they are is in its tooltip
@@ -77,7 +60,7 @@ export function PauseQuests({ quests }: { quests: QuestTrackView[] }): JSX.Eleme
     return (
         <div
             className={"ui-pq" + (stone ? " ui-pq-stone" : "")}
-            style={stone ? ({ "--ui-stone": `url(${stone})` } as CSSProperties) : undefined}
+            style={stone ? ({ "--ui-stone": stone } as CSSProperties) : undefined}
             role="list"
         >
             {quests.map((quest) => {

@@ -41,6 +41,7 @@ import {
     DEFAULT_PATH_ORDER,
     TombsLog,
     chestAction,
+    kerisPickRank,
     kite,
     setPathOrder,
     setSmites,
@@ -539,7 +540,9 @@ function runOnce(seed: number): Outcome {
                                     Number(coversWardensStyle(sim, b.choice)) -
                                         Number(coversWardensStyle(sim, a.choice)) ||
                                     CHOICE_ORDER.indexOf(a.choice.kind) -
-                                        CHOICE_ORDER.indexOf(b.choice.kind),
+                                        CHOICE_ORDER.indexOf(b.choice.kind) ||
+                                    // A keris pick: the best jewel found
+                                    kerisPickRank(b.choice) - kerisPickRank(a.choice),
                             );
                         sim.choose(ranked[0].index);
                     } else if (sim.state === "chest") {
@@ -676,7 +679,11 @@ function boardNotes(sim: Sim): string[] {
             (board.wardensSeconds !== undefined ? `, wardens ${clock(board.wardensSeconds)}` : "") +
             `, ${sim.coins} coins`,
         board.party
-            .map((p) => `${p.name || "bot"} ${p.points} points ${Math.round(p.chance * 100)}%`)
+            .map((p) => {
+                const chance =
+                    p.chance === undefined ? "no purple left" : `${Math.round(p.chance * 100)}%`;
+                return `${p.name || "bot"} ${p.points} points ${chance}`;
+            })
             .join(", "),
     ];
 }

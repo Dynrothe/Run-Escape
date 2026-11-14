@@ -1,7 +1,7 @@
 import { ENEMIES, getEnemy } from "../content/enemies";
 import { getItem } from "../content/items";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
-import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
+import { POWER_UPS, THRALLS, getPolymorphLooks, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SOUND } from "../content/randomEvents";
 import { Rarity } from "../content/rarity";
 import { SOUNDS } from "../content/sounds";
@@ -58,6 +58,12 @@ export function getGameSoundIds(): number[] {
     }
     for (const powerUp of POWER_UPS) {
         ids.push(powerUp.sound, powerUp.endSound ?? -1, powerUp.hitSound ?? -1);
+        if (powerUp.effect.kind === "polymorph") {
+            ids.push(...powerUp.effect.shoutSounds);
+            for (const { def } of getPolymorphLooks(powerUp.effect)) {
+                ids.push(...(def.shoutSounds ?? []));
+            }
+        }
     }
     for (const thrall of THRALLS) {
         ids.push(thrall.sound);
@@ -69,6 +75,7 @@ export function getGameSoundIds(): number[] {
         ids.push(map.tombs?.ability?.sound ?? -1);
     }
     for (const map of ALL_MAPS) {
+        ids.push(map.blessings?.sound ?? -1);
         ids.push(map.floor?.slam.sound ?? -1, map.floor?.drop.sound ?? -1);
         for (const def of getMapCinematics(map)) {
             ids.push(...def.cues.map((cue) => cue.sound ?? -1));
@@ -174,6 +181,13 @@ export class GameSounds {
                 case "bossAttack":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.8 });
                     break;
+                case "enemyShout":
+                    // A flock baas all the time, so not over and over at once
+                    audio.playAt(event.sound, event.x, event.y, px, py, {
+                        volume: 0.5,
+                        minGap: 150,
+                    });
+                    break;
                 case "ability":
                     audio.playAt(event.sound, event.x, event.y, px, py, { volume: 0.9 });
                     break;
@@ -181,6 +195,10 @@ export class GameSounds {
                     // A boss attack has its own sound (played when it was used)
                     const sound = event.sound ?? getEnemy(event.enemyId).sounds.attack;
                     audio.play(sound, { volume: 0.35, minGap: 150 });
+                    // A miss (Trickster's) doesn't hurt
+                    if (event.missed) {
+                        break;
+                    }
                     const hit =
                         SOUNDS.playerHit[Math.floor(Math.random() * SOUNDS.playerHit.length)];
                     audio.play(hit, { volume: 0.55, minGap: 200 });
@@ -231,6 +249,7 @@ export class GameSounds {
                     break;
                 case "bossIntro":
                 case "bossRising":
+                case "lair":
                 case "totemBlast":
                     if (event.sound !== -1) {
                         audio.play(event.sound, { volume: 1 });
@@ -250,6 +269,16 @@ export class GameSounds {
                 case "evolved":
                     audio.play(SOUNDS.evolve, { volume: 1 });
                     break;
+                // A level up on a map with blessings, which has no level up screen to play
+                // the jingle as it opens: that, and the blessing's own sound
+                case "blessing": {
+                    audio.play(SOUNDS.levelUp, { volume: 0.7, minGap: 0 });
+                    const sound = sim.map.blessings?.sound;
+                    if (sound !== undefined) {
+                        audio.play(sound, { volume: 0.8, minGap: 0 });
+                    }
+                    break;
+                }
             }
         }
     }

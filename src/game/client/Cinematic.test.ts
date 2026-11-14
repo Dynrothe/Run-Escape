@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { ALL_MAPS, createDevMap, getMapCinematics, getRunCinematic } from "../content/maps";
+import { getEnemy } from "../content/enemies";
+import { VARROCK_OPENING } from "../content/fun/varrockOpening";
+import { ALL_MAPS, createDevMap, getMap, getMapCinematics, getRunCinematic } from "../content/maps";
 import { CinematicDef, MapDef } from "../content/types";
 import { SCAPERUNE_DEV_MAPS } from "../scaperune/maps/devMaps";
 import { BENEATH_CURSED_SANDS } from "../scaperune/maps/tombsOfAmascut";
@@ -198,13 +200,57 @@ describe("a cinematic playing", () => {
         expect(player.advance(3)).toEqual([]);
         expect(player.seconds).toBe(0);
     });
+
+    it("on the sim's clock, is set to its time, never back, and never holds the run", () => {
+        const player = new CinematicPlayer(DEF, true);
+        expect(player.holdsRun).toBe(false);
+        expect(player.advanceTo(4.5).map((cue) => cue.at)).toEqual([1, 4]);
+        expect(player.advanceTo(3)).toEqual([]);
+        expect(player.seconds).toBe(4.5);
+        expect(player.advanceTo(99).map((cue) => cue.at)).toEqual([5, 6, 7]);
+        expect(player.done).toBe(true);
+    });
+});
+
+describe("Yama waking in his palace (LairDef.opening)", () => {
+    const map = getMap("battle_for_varrock");
+    const opening = map.lairs!.find((lair) => lair.id === "yama")!.opening!;
+    const def = opening.cinematic;
+    const yama = def.cast[0];
+    const intro = getEnemy("yama").boss!.intro!;
+
+    it("is on his throne in its place, and gone from it as his intro begins", () => {
+        const prop = map.props![yama.prop!];
+        expect(yama).toMatchObject({ npcId: prop.npcId, x: prop.x, y: prop.y, seq: prop.seq });
+        expect(getActorState(def, yama, opening.introAt - 0.01).gone).toBe(false);
+        expect(getActorState(def, yama, opening.introAt).gone).toBe(true);
+        // What he plays in OSRS as he's challenged, ending with him gone, before then
+        const goes = def.cues.find((cue) => cue.seq === 12154)!;
+        expect(goes.at).toBeLessThan(opening.introAt);
+        expect(def.cues).toContainEqual(expect.objectContaining({ at: goes.at, spotAnim: 3278 }));
+    });
+
+    it("hands the camera back once he's up, before his intro's over", () => {
+        expect(def.seconds).toBeGreaterThan(opening.introAt + intro.riseAt);
+        expect(def.seconds).toBeLessThan(opening.introAt + intro.seconds);
+    });
+
+    it("has him speak before he goes, each line gone before the next", () => {
+        const lines = def.cues.filter((cue) => cue.say !== undefined);
+        expect(lines.length).toBeGreaterThan(0);
+        for (let i = 1; i < lines.length; i++) {
+            expect(lines[i - 1].at + lines[i - 1].sayFor!).toBeLessThanOrEqual(lines[i].at);
+        }
+        const last = lines[lines.length - 1];
+        expect(last.at + last.sayFor!).toBeLessThanOrEqual(opening.introAt);
+    });
 });
 
 // Yaw units (2048 a turn) a second a cinematic's camera may turn: about 11 degrees
 const MAX_CINEMATIC_TURN = 64;
 
 // Every cinematic is one that can play, the dev maps' too (only on the dev server): each map's
-// opening, and each part's of a fight in parts
+// opening, each part's of a fight in parts, and each lair's (LairDef.opening, and its unsealing)
 const CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)]
     .filter((map, i, all) => all.findIndex((m) => m.id === map.id) === i)
     .flatMap((map) => [
@@ -212,6 +258,20 @@ const CINEMATICS = [...ALL_MAPS, ...SCAPERUNE_DEV_MAPS.map(createDevMap)]
         ...(map.stages ?? []).flatMap((stage, i) =>
             stage.cinematic ? [[`${map.id} part ${i + 1}`, map, stage.cinematic] as const] : [],
         ),
+        ...(map.lairs ?? []).flatMap((lair) => [
+            ...(lair.opening
+                ? [[`${map.id} ${lair.id}`, map, lair.opening.cinematic] as const]
+                : []),
+            ...(lair.requires?.unsealing
+                ? [
+                      [
+                          `${map.id} ${lair.id} unsealing`,
+                          map,
+                          lair.requires.unsealing.cinematic,
+                      ] as const,
+                  ]
+                : []),
+        ]),
     ]);
 
 describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
@@ -223,7 +283,15 @@ describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
         expect([...times].sort((a, b) => a - b)).toEqual(times);
         const last = def.shots[def.shots.length - 1];
         expect("player" in last && last.at).toBe(def.seconds);
-        expect(def.shots.slice(0, -1).every((shot) => !("player" in shot))).toBe(true);
+        // It can begin from the run's camera, too (a lair's, as someone steps onto its floor), held
+        // there a moment (as a general falls, before the palace is unsealed), but not in between
+        const from = def.shots.findIndex((shot) => !("player" in shot));
+        expect(from).toBeGreaterThanOrEqual(0);
+        expect(def.shots.slice(from, -1).every((shot) => !("player" in shot))).toBe(true);
+    });
+
+    it("lists every one of them where what bakes and hears them looks", () => {
+        expect(getMapCinematics(map)).toContain(def);
     });
 
     // Comfort: a camera that swings round fast makes people dizzy. No shot turns it more than
@@ -271,6 +339,61 @@ describe.each(CINEMATICS)("%s's cinematic", (_, map, def) => {
             if (cue.sound !== undefined) {
                 expect(sounds).toContain(cue.sound);
             }
+        }
+    });
+});
+
+describe("the Battle for Varrock's opening", () => {
+    const def = VARROCK_OPENING;
+    const map = getMap("battle_for_varrock");
+
+    it("is the map's, and lasts 15 to 25 seconds", () => {
+        expect(map.cinematic).toBe(def);
+        expect(def.seconds).toBeGreaterThanOrEqual(15);
+        expect(def.seconds).toBeLessThanOrEqual(25);
+    });
+
+    it("opens on Yama, in his throne's place, who says it's futile", () => {
+        const yama = def.cast.find((actor) => actor.id === "yama")!;
+        const prop = map.props![yama.prop!];
+        expect(yama).toMatchObject({ npcId: prop.npcId, x: prop.x, y: prop.y, seq: prop.seq });
+        const first = def.shots[0];
+        expect("player" in first).toBe(false);
+        if (!("player" in first)) {
+            // Looking straight at him, close
+            expect(first).toMatchObject({ x: yama.x, yaw: 0 });
+            expect(Math.hypot(first.x - yama.x, first.y - yama.y)).toBeLessThan(1);
+            expect(first.distance).toBeLessThan(8);
+        }
+        expect(getSaying(def, "yama", 1)).toMatch(/futile/i);
+    });
+
+    it("has Prysin defy him, Yama answer, snap his fingers, and everyone before him die", () => {
+        const prysinSays = def.cues.find((cue) => cue.actor === "prysin" && cue.say)!;
+        const pathetic = def.cues.find((cue) => cue.actor === "yama" && cue.say === "Pathetic.")!;
+        const click = def.cues.find((cue) => cue.actor === "yama" && cue.seq === 12167)!;
+        expect(prysinSays.at).toBeLessThan(pathetic.at);
+        expect(pathetic.at).toBeLessThan(click.at);
+        const challengers = def.cast.filter((actor) => actor.id !== "yama");
+        expect(challengers.length).toBeGreaterThanOrEqual(4);
+        const deaths = challengers.map(
+            (actor) => def.cues.find((cue) => cue.actor === actor.id && cue.seq === 10629)!.at,
+        );
+        // All after the snap, not all at once
+        expect(Math.min(...deaths)).toBeGreaterThan(click.at);
+        expect(new Set(deaths).size).toBe(deaths.length);
+        for (const actor of challengers) {
+            expect(def.cues.some((cue) => cue.actor === actor.id && cue.spotAnim === 2610)).toBe(
+                true,
+            );
+        }
+    });
+
+    it("ends behind the player, after the flight from the palace", () => {
+        const shots = def.shots.filter((shot) => !("player" in shot));
+        const last = shots[shots.length - 1];
+        if (!("player" in last)) {
+            expect(Math.abs(last.y - map.spawn.y)).toBeLessThan(40);
         }
     });
 });
@@ -353,6 +476,23 @@ describe("Vardhelm's opening", () => {
 
 describe("what a cinematic's camera sees", () => {
     const square = (x: number, y: number) => (Math.floor(x / 64) << 8) + Math.floor(y / 64);
+
+    it("is every map square along its way, from Yama's throne to the spawn, and not the world", () => {
+        const map = getMap("battle_for_varrock");
+        const def = map.cinematic!;
+        const { x, y } = map.spawn;
+        const play = { x, y, height: -0.6, pitch: -400, yaw: 0, distance: 18 };
+        const squares = getCinematicSquares(def, () => 0, play);
+        const yama = def.cast.find((actor) => actor.id === "yama")!;
+        expect(squares).toContain(square(yama.x, yama.y));
+        expect(squares).toContain(square(x, y));
+        expect(squares).toContain(square(x, (y + yama.y) / 2));
+        // Seen from close, but no further than the camera's render distance
+        expect(squares.length).toBeLessThanOrEqual(25);
+        for (const id of squares) {
+            expect(Math.abs((id >> 8) - Math.floor(x / 64))).toBeLessThanOrEqual(3);
+        }
+    });
 
     it("is every map square along its way, from the keep to the spawn, and not the world", () => {
         const map = createDevMap(VARDHELM);

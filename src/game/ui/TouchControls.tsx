@@ -5,7 +5,7 @@ import { GameClient } from "../client/GameClient";
 import { InventorySlotView, UiSnapshot } from "../client/GameStore";
 import { STICK_RADIUS, SharedTaps } from "../client/GameTouch";
 import { t } from "../i18n";
-import { AbilityButton } from "./AbilityButton";
+import { AbilityButton, KitButtons } from "./AbilityButton";
 import { InventoryItem } from "./InventoryItem";
 import "./Mobile.css";
 
@@ -185,6 +185,7 @@ export const TouchControls = memo(function TouchControls({
                 }}
             />
             <AbilityButton client={client} touch />
+            <KitButtons client={client} touch />
             <div className="ui-touch-items">
                 {inventory.map((slot, i) => (
                     <div key={i} className="ui-touch-item-place">

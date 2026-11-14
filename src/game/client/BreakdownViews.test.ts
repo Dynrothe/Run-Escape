@@ -238,3 +238,11 @@ test("every level up of an endless run is its own entry: none are joined up", ()
     expect(view.lines[0].parts).toHaveLength(40);
     expect(view.lines[0].parts[39].label).toBe("Level 40");
 });
+
+test("a weapon's stat lines keep their English, so their icons show in any language", () => {
+    const def = getWeapon(WEAPON_ID);
+    const lines = getWeaponStatLines(def, 1, 0, []);
+    const damage = lines.find((line) => line.label === "Damage")!;
+    expect(damage.english).toBe(`Damage ${damage.value}`);
+    expect(lines.every((line) => line.english?.endsWith(line.value))).toBe(true);
+});

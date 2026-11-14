@@ -2,6 +2,7 @@ import { EquipSlot } from "../../rs/model/player/PlayerModelLoader";
 import { tr } from "../i18n";
 import { CAPPED_STATS } from "./endless";
 import { RARITIES, Rarity } from "./rarity";
+import { StatText } from "./stats";
 import { PassiveDef } from "./types";
 
 export const DIVINE_RUNE_POUCH = "divine_rune_pouch";
@@ -277,6 +278,11 @@ export function getPassiveGain(passive: PassiveDef, quality: Rarity): number {
 // "+12% damage", "+1.5 armour"
 export function formatPassiveValue(passive: PassiveDef, value: number): string {
     return `${formatPassiveNumber(passive, value)} ${passiveEffect(passive)}`;
+}
+
+// The same, with its English for the icon
+export function passiveValueText(passive: PassiveDef, value: number): StatText {
+    return { text: formatPassiveValue(passive, value), english: passive.effect };
 }
 
 // Just the number: "+12%", "+1.5"

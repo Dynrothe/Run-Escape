@@ -1,0 +1,34 @@
+/* The client's checkbox (RsCheckbox.tsx): its box sprite in place of the browser's, at the
+   sprite's own size, pixels kept sharp */
+.ui-rs-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+}
+
+.ui-rs-check-box {
+    appearance: none;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    background: var(--rs-check) center / 16px 16px no-repeat;
+    image-rendering: pixelated;
+}
+
+.ui-rs-check:hover .ui-rs-check-box {
+    background-image: var(--rs-check-lit);
+}
+
+/* A finger's bigger than the box: the same box, drawn larger */
+@media (pointer: coarse) {
+    .ui-rs-check-box {
+        width: 24px;
+        height: 24px;
+        background-size: 24px 24px;
+    }
+}

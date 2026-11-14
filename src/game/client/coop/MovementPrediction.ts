@@ -278,7 +278,7 @@ export class MovementPrediction {
             tick: sim.tick,
             sledEndTick: hero.sledEndTick,
             sledSpeed: hero.sledSpeed,
-            frozen: player.frozen > 0 || sim.introHolds,
+            frozen: player.frozen > 0 || sim.introHolds || sim.isCasting(hero),
             held: !!hero.hold || sim.introHolds,
             curse: hero.curse,
             arena: sim.confinedToArena ? sim.bossArena : undefined,

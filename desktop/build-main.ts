@@ -14,5 +14,7 @@ await build({
         __COOP_URL__: JSON.stringify(process.env.VITE_COOP_URL ?? ""),
         __RUN_ANALYTICS_URL__: JSON.stringify(process.env.VITE_RUN_ANALYTICS_URL ?? ""),
         __CLOUD_SAVE_URL__: JSON.stringify(process.env.VITE_CLOUD_SAVE_URL ?? ""),
+        // The website whose build the app keeps to (desktop/siteFiles.ts)
+        __GAME_SITE_URL__: JSON.stringify(process.env.GAME_SITE_URL ?? ""),
     },
 });

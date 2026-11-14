@@ -317,9 +317,14 @@ export class FloorView {
         early: boolean;
         // Its index in the floor's arrays
         index: number;
+        // Its top alone, to draw whenever it isn't coming up, on a floor laid over the ground
+        // (FloorDef.onGround)
+        lid?: ActorModel;
     };
     // The floor being drawn
     private drawing!: ArenaFloor;
+    // Whether it's laid over the ground (FloorDef.onGround): no light under its tiles
+    private onGround = false;
     // How the cues look on the skin being drawn (FloorSkinDef.cue)
     private tileCue: NonNullable<FloorSkinDef["cue"]> = {};
     private goneMask?: Uint8Array;
@@ -371,6 +376,10 @@ export class FloorView {
         const fragileHits = def.drop.fragile?.hits ?? FRAGILE_HITS;
         this.drawing = floor;
         const whole = wholeTiles();
+        // Over the ground, not a pit: nothing under its tiles shows, and their sides are a
+        // whisker, so a phone draws a moving floor of paving as tops (FloorDef.onGround)
+        const onGround = def.onGround === true;
+        this.onGround = onGround;
         for (let i = 0; i < floor.riseAt.length; i++) {
             // What isn't floor is the pit's; a slab's drawn from its south-west tile, as one
             if (!layout.mask[i] || layout.anchor[i] !== i) {
@@ -456,6 +465,18 @@ export class FloorView {
                 roll,
                 early: layout.type[i] === TYPE_PILLAR || lift > RAISED_HIDES,
                 index: i,
+                lid:
+                    onGround &&
+                    !whole &&
+                    !under &&
+                    skin.light === undefined &&
+                    layout.trigger[i] < 0 &&
+                    sink === 0 &&
+                    ramp === RAMP_NONE &&
+                    w === 1 &&
+                    h === 1
+                        ? lids[skinIndex]
+                        : undefined,
             };
             this.tileCue = skin.cue ?? NO_CUE;
             const material = skin.material;
@@ -531,7 +552,7 @@ export class FloorView {
                 }
                 continue;
             }
-            const edged = this.besideHole(floor, col, row, w, h, tick);
+            const edged = !onGround && this.besideHole(floor, col, row, w, h, tick);
             // About to fall: trembling and sagging, darker as it sinks, and grit crumbling off it
             const dropWarnAt = floor.dropWarnAt[i];
             if (dropWarnAt !== -1 && tick >= dropWarnAt) {
@@ -898,7 +919,8 @@ export class FloorView {
         t: number,
         glow: number | undefined,
     ): void {
-        if (glow === undefined || t <= 0) {
+        // Over the ground, it would be under it (FloorDef.onGround)
+        if (glow === undefined || t <= 0 || this.onGround) {
             return;
         }
         const options = this.options;
@@ -1201,7 +1223,12 @@ export class FloorView {
             options.stretchZ = stretchZ;
         }
         const decal = under ? DECAL_LIFT : 0;
-        actors.draw(model, anim, 0, x, height - decal, y, turn + yaw, this.options);
+        const lid = this.tile.lid;
+        if (lid) {
+            actors.draw(lid, lid.anims[0], 0, x, height, y, turn + yaw, this.options);
+        } else {
+            actors.draw(model, anim, 0, x, height - decal, y, turn + yaw, this.options);
+        }
         if (edged) {
             this.drawThickness(actors, x, height, y, turn + yaw);
         }

@@ -54,7 +54,12 @@ export function getWeaponStatLines(
         if (stat.label === damage && bonus > 0) {
             lines.push(getBonusLine(def, level, bonus, qualities));
         }
-        return { label: stat.label, value: stat.value, breakdown: { title: stat.label, lines } };
+        return {
+            label: stat.label,
+            value: stat.value,
+            english: `${stat.english} ${stat.value}`,
+            breakdown: { title: stat.label, lines },
+        };
     });
 }
 
@@ -151,6 +156,7 @@ export function getLifestealStat(def: WeaponDef): SlotStatView | undefined {
     return {
         label,
         value,
+        english: `${STAT_INFO.healChance.label} ${value}`,
         breakdown: {
             title: label,
             total: value,
@@ -229,7 +235,13 @@ export function getStatBreakdown(
             text: formatStatValue(key, source.value),
             color: colour(source.quality ?? source.rarity),
         };
-        const name = tl(source.name);
+        // Names the sim writes in English, for what isn't an item, passive or adventurer
+        const name =
+            source.kind === "shop"
+                ? t("pause.breakdown.shop")
+                : source.kind === "level"
+                  ? t("pause.breakdown.hero_level")
+                  : tl(source.name);
         const same = lines.find((line) => line.label === name && source.kind === "passive");
         if (same) {
             // A passive with a pick for each level is a list: a row for each

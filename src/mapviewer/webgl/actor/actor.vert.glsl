@@ -10,6 +10,10 @@
 #define FOG_CORNER_ROUNDING 8.0
 
 #define ACTOR_DATA_WIDTH 512
+#define TEXELS_PER_INSTANCE 5
+
+// ActorBakeFrames.ts's POSITIONS_WIDTH
+#define POSITIONS_WIDTH 2048
 
 precision highp float;
 
@@ -22,14 +26,19 @@ uniform highp isampler2D u_textureMaterials;
 // First instance of this draw call in the actor data texture
 uniform int u_instanceOffset;
 
-// 4 texels per instance:
+// 5 texels per instance:
 //  0: world x (tiles), world y (tiles, up is negative), world z (tiles), yaw (0-2047)
 //  1: scale, flash (0-1, or -1-0 to glow in the tint's colour), tint (0xRRGGBB, 0xFFFFFF = none),
 //     alpha
 //  2: edge light (0-1), how far in it reaches (0-1 of the way to the middle), its colour
 //     (0xRRGGBB), and how much it's drawn at full brightness whatever the light (0-1, lights.glsl)
 //  3: stretch along x and z, tip about x and z (0-2047), before the yaw
+//  4: where the frame's positions start in u_positions, -1 for a frame baked whole
 uniform highp sampler2D u_actorData;
+
+// The page's frames that share a mesh: each vertex's position, in model units as decodeVertex
+// gives them, a frame's after another's (ActorBakeFrames.ts)
+uniform highp isampler2D u_positions;
 
 layout(location = 0) in uvec3 a_vertex;
 
@@ -63,6 +72,14 @@ vec4 fetchActorData(int index) {
     return texelFetch(u_actorData, ivec2(index % ACTOR_DATA_WIDTH, index / ACTOR_DATA_WIDTH), 0);
 }
 
+// A shared mesh's vertex has its index in the model where a position would be: the low 15 bits
+// in x and the rest in z (ActorBakeFrames.ts's indexModel)
+vec3 fetchPosition(int start, uvec3 packedVertex) {
+    int index = int(((packedVertex.x >> 17u) & 0x7FFFu) | (((packedVertex.z >> 17u) & 0x7FFFu) << 15u));
+    int texel = start + index;
+    return vec3(texelFetch(u_positions, ivec2(texel % POSITIONS_WIDTH, texel / POSITIONS_WIDTH), 0).xyz);
+}
+
 mat4 rotationY( in float angle ) {
     return mat4(cos(angle),		0,		sin(angle),	0,
                          0,		1.0,			 0,	0,
@@ -71,7 +88,18 @@ mat4 rotationY( in float angle ) {
 }
 
 void main() {
+    // Without multi draw, a run of instances of one frame is one instanced draw
+    int dataIndex = (DRAW_ID + gl_InstanceID + u_instanceOffset) * TEXELS_PER_INSTANCE;
+    vec4 data0 = fetchActorData(dataIndex);
+    vec4 data1 = fetchActorData(dataIndex + 1);
+    vec4 data2 = fetchActorData(dataIndex + 2);
+    vec4 data3 = fetchActorData(dataIndex + 3);
+    int positionStart = int(fetchActorData(dataIndex + 4).x);
+
     Vertex vertex = decodeVertex(a_vertex.x, a_vertex.y, a_vertex.z, u_brightness);
+    if (positionStart >= 0) {
+        vertex.pos = fetchPosition(positionStart, a_vertex);
+    }
 
     Material material = getMaterial(vertex.textureId);
     vec2 textureAnimation = vec2(material.animU, material.animV);
@@ -83,13 +111,6 @@ void main() {
     }
     v_texId = vertex.textureId;
     v_alphaCutOff = material.alphaCutOff;
-
-    // Without multi draw, a run of instances of one frame is one instanced draw
-    int dataIndex = (DRAW_ID + gl_InstanceID + u_instanceOffset) * 4;
-    vec4 data0 = fetchActorData(dataIndex);
-    vec4 data1 = fetchActorData(dataIndex + 1);
-    vec4 data2 = fetchActorData(dataIndex + 2);
-    vec4 data3 = fetchActorData(dataIndex + 3);
 
     float scale = data1.x;
     float flash = data1.y;

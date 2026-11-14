@@ -18,6 +18,17 @@ window.wallpaperPropertyListener = {
     },
 };
 
+// The game has no use for the browser's right click menu, but a text box's is for pasting (a room
+// code, a cloud save's sync code), on a phone's long press too
+const TEXT_BOXES = 'textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])';
+document.addEventListener("contextmenu", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && (target.isContentEditable || target.closest(TEXT_BOXES))) {
+        return;
+    }
+    event.preventDefault();
+});
+
 // Dev only: drive frames with timers instead of requestAnimationFrame, so the
 // game keeps running in a browser pane that isn't being painted (automated
 // testing).

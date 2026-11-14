@@ -18,6 +18,9 @@ export type DisplaySettings = {
     // The damage panel under the HUD's DPS is open (Tab, or the DPS, opens
     // and shuts it)
     damagePanel: boolean;
+    // Worn gear in its own panel under the damage panel, in two columns that can be hidden (and
+    // on a phone too), rather than a row under the weapons and passives
+    gearPanel: boolean;
     // Caskets are high alched as they're opened, with no casket screen
     autoAlch: boolean;
     // Equip only unambiguous casket upgrades, never replacing a set piece
@@ -71,6 +74,7 @@ export function getDefaultDisplaySettings(): DisplaySettings {
         pauseOnBlur: true,
         questTracker: true,
         damagePanel: false,
+        gearPanel: false,
         autoAlch: false,
         autoEquip: false,
         movePrediction: true,
@@ -106,6 +110,9 @@ export function loadDisplaySettings(): DisplaySettings {
             }
             if (typeof data.damagePanel === "boolean") {
                 settings.damagePanel = data.damagePanel;
+            }
+            if (typeof data.gearPanel === "boolean") {
+                settings.gearPanel = data.gearPanel;
             }
             if (typeof data.autoAlch === "boolean") {
                 settings.autoAlch = data.autoAlch;

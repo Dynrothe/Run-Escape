@@ -13,22 +13,14 @@ import {
     ManifestChunk,
     changelogSection,
     chunkName,
+    isShipped,
+    listFiles,
 } from "./gameFiles";
 import { MANIFEST_NAME, chunkAssetName, gameZipName, liteZipName } from "./gameUpdate";
 import { LAUNCHER_VERSION } from "./version";
 
 const DIST = "dist";
 const OUT = "release";
-
-// Source maps are for debugging a hosted build, and they're as big as the game's code
-const isShipped = (file: string) => !file.endsWith(".map") && path.basename(file) !== ".htaccess";
-
-function listFiles(dir: string): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-        const file = path.join(dir, entry.name);
-        return entry.isDirectory() ? listFiles(file) : [file];
-    });
-}
 
 const CHUNK_DIR = path.join(DIST, "caches", "chunks");
 
@@ -70,10 +62,9 @@ const sha256 = (data: Buffer) => createHash("sha256").update(data).digest("hex")
 
 async function writeZip(files: string[], name: string): Promise<Buffer> {
     const zip = new JSZip();
-    for (const file of files) {
-        // Zip entries always use forward slashes, and this runs on Windows
-        const entry = path.relative(DIST, file).split(path.sep).join("/");
-        zip.file(entry, readFileSync(file));
+    // Zip entries always use forward slashes, as listFiles gives them
+    for (const entry of files) {
+        zip.file(entry, readFileSync(path.join(DIST, entry)));
     }
     const zipBytes = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
     writeFileSync(path.join(OUT, name), zipBytes);
@@ -88,7 +79,7 @@ async function main(): Promise<void> {
 
     const files = listFiles(DIST).filter(isShipped);
     const zipBytes = await writeZip(files, gameZipName(version));
-    const isChunkFile = (file: string) => path.dirname(file) === CHUNK_DIR;
+    const isChunkFile = (file: string) => path.posix.dirname(file) === "caches/chunks";
     const liteBytes = await writeZip(
         files.filter((file) => !isChunkFile(file)),
         liteZipName(version),

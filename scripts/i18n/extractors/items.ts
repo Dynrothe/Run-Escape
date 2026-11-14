@@ -2,11 +2,12 @@ import { CHARACTERS } from "../../../src/game/content/characters";
 import { PASSIVE_EXAMINE, WEAPON_EXAMINE } from "../../../src/game/content/examine";
 import { CASKETS, CASKET_TIERS, GEAR, GEAR_SLOTS, UTILITY } from "../../../src/game/content/items";
 import { PASSIVES } from "../../../src/game/content/passives";
-import { POWER_UPS, THRALLS } from "../../../src/game/content/powerups";
+import { POWER_UPS, THRALLS, getPolymorphLooks } from "../../../src/game/content/powerups";
 import { RARITIES, RARITY_ORDER } from "../../../src/game/content/rarity";
 import { SETS } from "../../../src/game/content/sets";
 import { SHOP_UPGRADES } from "../../../src/game/content/shop";
 import { TROPHIES } from "../../../src/game/content/trophies";
+import { BODY_COLOURS, BODY_PARTS, COSMETICS } from "../../../src/game/content/wardrobe";
 import { WEAPONS } from "../../../src/game/content/weapons";
 
 export default function extract(): Record<string, string> {
@@ -33,7 +34,9 @@ export default function extract(): Record<string, string> {
     for (const item of GEAR) strings[`gear.${item.id}.name`] = item.name;
     for (const item of UTILITY) {
         strings[`util.${item.id}.name`] = item.name;
-        strings[`util.${item.id}.desc`] = item.description;
+        if (item.description !== undefined) {
+            strings[`util.${item.id}.desc`] = item.description;
+        }
     }
     for (const slot of GEAR_SLOTS) strings[`slot.${slot.id}.name`] = slot.name;
     for (const tier of CASKET_TIERS) strings[`casket.${tier}.name`] = CASKETS[tier].name;
@@ -61,8 +64,17 @@ export default function extract(): Record<string, string> {
     for (const powerUp of POWER_UPS) {
         strings[`powerup.${powerUp.id}.name`] = powerUp.name;
         strings[`powerup.${powerUp.id}.desc`] = powerUp.description;
-        if (powerUp.effect.kind === "laps") {
+        if (powerUp.effect.kind === "laps" || powerUp.effect.kind === "polymorph") {
             strings[`powerup.${powerUp.id}.shout`] = powerUp.effect.shout;
+        }
+        if (powerUp.effect.kind === "polymorph") {
+            // Each animal's own line, if it has one (sheep by variant)
+            for (const { look, variant, def } of getPolymorphLooks(powerUp.effect)) {
+                if (def.shout) {
+                    const name = look === "sheep" ? `sheep_${variant}` : look;
+                    strings[`powerup.${powerUp.id}.${name}_shout`] = def.shout;
+                }
+            }
         }
     }
     for (const thrall of THRALLS) strings[`thrall.${thrall.id}.name`] = thrall.name;
@@ -73,6 +85,13 @@ export default function extract(): Record<string, string> {
     for (const trophy of TROPHIES) {
         strings[`trophy.${trophy.id}.name`] = trophy.name;
         strings[`trophy.${trophy.id}.how`] = trophy.how;
+    }
+    for (const part of BODY_PARTS) strings[`wardrobe.part.${part.id}.name`] = part.name;
+    for (const colour of BODY_COLOURS) {
+        strings[`wardrobe.colour.${colour.id}.name`] = colour.name;
+    }
+    for (const cosmetic of COSMETICS) {
+        strings[`cosmetic.${cosmetic.objId}.name`] = cosmetic.name;
     }
 
     return strings;

@@ -3,6 +3,10 @@
 // light's colour on top. The light is a texture over the ground round the view (u_lightMap, two
 // texels a tile, GameWebGLRenderer's light map), which every light's been added into on the CPU,
 // so a pixel costs one texture read however many lights there are.
+//
+// A pocket of the dark on a lit map (an invading Leviathan's, act-2-fallen-empire.md 8.6): with
+// u_ambient.w over 0, that's the dark's ambient, and the light map's alpha is how far into the dark
+// each texel is. Out of it the map's drawn as if it had no lights at all; in it, as the Scar.
 
 uniform sampler2D u_lightMap;
 
@@ -15,7 +19,13 @@ uniform sampler2D u_lightMap;
 // A colour (rgb) at pos (world tiles x, z), lit. unlit (0 to 1): how much of it's drawn at full
 // brightness anyway (a warning, a spell, a hit's flash).
 vec3 applyLight(vec3 color, vec2 pos, float unlit) {
-    vec3 added = texture(u_lightMap, (pos - u_lightMapArea.xy) * u_lightMapArea.z).rgb * LIGHT_MAP_MAX;
-    vec3 light = max(min(u_ambient.rgb + added, vec3(LIGHT_MAP_MAX)), vec3(unlit));
+    vec4 texel = texture(u_lightMap, (pos - u_lightMapArea.xy) * u_lightMapArea.z);
+    vec3 added = texel.rgb * LIGHT_MAP_MAX;
+    vec3 ambient = u_ambient.rgb;
+    if (u_ambient.w > 0.0) {
+        ambient = mix(ambient, vec3(u_ambient.w), texel.a);
+        added *= texel.a;
+    }
+    vec3 light = max(min(ambient + added, vec3(LIGHT_MAP_MAX)), vec3(unlit));
     return color * light + added * LIGHT_HAZE;
 }

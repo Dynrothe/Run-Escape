@@ -68,6 +68,22 @@ if (!cloudSaveUrl.isEmpty()) {
         throw new GradleException('cloudSaveUrl must be an https origin, with no path, credentials, query or fragment.')
     }
 }
+// The website whose build the app keeps to (SiteUpdater.java), as the Windows app's GAME_SITE_URL.
+// Without it, the app plays its own game and takes GitHub's releases.
+def gameSiteUrl = providers.gradleProperty('gameSiteUrl').getOrElse('').trim()
+if (!gameSiteUrl.isEmpty()) {
+    URI site
+    try {
+        site = new URI(gameSiteUrl)
+    } catch (Exception exception) {
+        throw new GradleException('gameSiteUrl must be an https URL.', exception)
+    }
+    if (site.scheme != 'https' || !site.host || site.userInfo != null
+            || site.rawQuery != null || site.rawFragment != null
+            || (site.port != -1 && (site.port < 1 || site.port > 65535))) {
+        throw new GradleException('gameSiteUrl must be an https URL with no credentials, query or fragment.')
+    }
+}
 
 def signingKeys = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD',
                    'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
@@ -92,6 +108,7 @@ android {
         buildConfigField 'String', 'COOP_URL', groovy.json.JsonOutput.toJson(coopUrl)
         buildConfigField 'String', 'RUN_ANALYTICS_URL', groovy.json.JsonOutput.toJson(runAnalyticsUrl)
         buildConfigField 'String', 'CLOUD_SAVE_URL', groovy.json.JsonOutput.toJson(cloudSaveUrl)
+        buildConfigField 'String', 'GAME_SITE_URL', groovy.json.JsonOutput.toJson(gameSiteUrl)
     }
 
     buildFeatures {

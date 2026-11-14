@@ -83,6 +83,8 @@ const DECISIONS: ReadonlySet<CoopAction["kind"]> = new Set([
     "choose",
     "reroll",
     "skip",
+    "keep",
+    "takeKept",
     "banish",
     "banishChest",
     "chest",

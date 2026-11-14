@@ -1042,3 +1042,23 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* The client's grey stone slot (its sprite, once loaded) behind each worn piece and empty slot, as
+   on the equipment screen: the sprite's 5 pixel edge stays, the middle stretches. A piece's rarity
+   stays as the thin line inside it. */
+.ui-loadout-stone .ui-loadout-gear-cell,
+.ui-loadout-stone .ui-loadout-gear-cell-empty {
+    background: none;
+    border: 5px solid transparent;
+    border-image: var(--ui-stone) 5 fill / 5px;
+    image-rendering: pixelated;
+}
+
+.ui-loadout-stone .ui-loadout-gear-cell-empty {
+    box-shadow: none;
+}
+
+.ui-loadout-d3 .ui-loadout-stone .ui-loadout-gear-cell-name,
+.ui-loadout-stone.ui-loadout-gear-grid .ui-loadout-gear-cell-name {
+    font-size: 11px;
+}

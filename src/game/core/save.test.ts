@@ -1,10 +1,11 @@
 import { afterAll, beforeAll } from "vitest";
 
+import { FALLEN_EMPIRE } from "../content/acts";
 import { ARMOURY_COSTS } from "../content/armoury";
-import { CHARACTERS } from "../content/characters";
+import { CHARACTERS, getCharacter } from "../content/characters";
 import { getEnemy } from "../content/enemies";
 import { CASKET_GEAR } from "../content/items";
-import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, MAP_BY_ID, getMap } from "../content/maps";
+import { CAMPAIGN_MAPS, FUN_MAPS, MAPS, MAP_BY_ID, getMap, isCharacterOut } from "../content/maps";
 import { QUESTS, QUEST_BY_ID, describeQuest } from "../content/quests";
 import { SHOP_UPGRADES } from "../content/shop";
 import { TROPHY_BY_ID } from "../content/trophies";
@@ -1196,6 +1197,43 @@ describe("evolutions made", () => {
 });
 
 describe("quests", () => {
+    test("Chompy Slayer awards its pet at 10,000 kills without paying twice", () => {
+        const save = createSave();
+        const quest = QUEST_BY_ID.get("thanksgiving_chompy_hunt")!;
+        recordRun(save, run("thanksgiving", { enemyKills: { chompy_bird: 9999 } }));
+        expect(save.trophies).not.toContain("chompy_chick");
+        expect(save.questsDone).not.toContain(quest.id);
+        expect(recordRun(save, run("thanksgiving", { enemyKills: { chompy_bird: 1 } }))).toContain(
+            quest,
+        );
+        expect(save.trophies).toContain("chompy_chick");
+        expect(save.coins).toBe(4000);
+        recordRun(save, run("thanksgiving", { enemyKills: { chompy_bird: 1 } }));
+        expect(save.trophies.filter((id) => id === "chompy_chick")).toHaveLength(1);
+        expect(save.coins).toBe(4000);
+    });
+
+    test("existing quest completions, pets and trophies survive loading", () => {
+        const migrated = migrateSave({
+            ...createSave(),
+            questsDone: ["thanksgiving_chompy_hunt"],
+            trophies: ["turkey_hat"],
+            pet: "chompy_chick",
+            coins: 123,
+        });
+        expect(migrated.trophies).toEqual(expect.arrayContaining(["turkey_hat", "chompy_chick"]));
+        expect(migrated.pet).toBe("chompy_chick");
+        expect(migrated.coins).toBe(123);
+        expect(migrateSave(migrated)).toEqual(migrated);
+        const oldPet = migrateSave({
+            ...createSave(),
+            trophies: ["chompy_chick"],
+            pet: "chompy_chick",
+        });
+        expect(oldPet.pet).toBe("chompy_chick");
+        expect(oldPet.trophies).toContain("chompy_chick");
+    });
+
     test("count kills over runs, and pay out once when finished", () => {
         const save = createSave();
         const quest = QUEST_BY_ID.get("goblin_diplomacy")!;
@@ -1481,6 +1519,91 @@ describe("the save in the browser", () => {
         expect(stored.get(KEY)).toBe("{");
         store.deleteUnreadable(key);
         expect(store.getUnreadable()).toEqual([]);
+    });
+});
+
+describe("Act II", () => {
+    // The act as it is with released set (ActDef.released), put back after
+    function asReleased(released: boolean, check: () => void): void {
+        const was = FALLEN_EMPIRE.released;
+        FALLEN_EMPIRE.released = released;
+        try {
+            check();
+        } finally {
+            FALLEN_EMPIRE.released = was;
+        }
+    }
+
+    test("opens once the Inferno's beaten, and not before, whatever else is", () => {
+        asReleased(true, () => {
+            const save = createSave();
+            for (const map of CAMPAIGN_MAPS.filter((m) => m.id !== "inferno")) {
+                save.mapVictories[map.id] = 1;
+            }
+            expect(isMapUnlocked(save, "stranglewood")).toBe(false);
+            save.mapVictories.inferno = 1;
+            expect(isMapUnlocked(save, "stranglewood")).toBe(true);
+        });
+        // Not in the campaign's chain: the maps after the Inferno open as they did
+        expect(CAMPAIGN_MAPS.map((m) => m.id)).not.toContain("stranglewood");
+    });
+
+    test("stays shut until it's out, whatever's beaten, and the Forester with it", () => {
+        asReleased(false, () => {
+            const save = createSave();
+            save.mapVictories.inferno = 1;
+            save.mapVictories.stranglewood = 1;
+            expect(isMapUnlocked(save, "stranglewood")).toBe(false);
+            expect(isCharacterOut(getCharacter("forester"))).toBe(false);
+            // Everyone else is out as ever
+            expect(isCharacterOut(getCharacter("barbarian"))).toBe(true);
+            expect(isCharacterOut(getCharacter("warrior"))).toBe(true);
+        });
+        asReleased(true, () => {
+            expect(isCharacterOut(getCharacter("forester"))).toBe(true);
+        });
+    });
+
+    test("a win's best is kept with its step, until it's beaten at a harder one", () => {
+        const save = createSave();
+        const win = (seconds: number, actStep: number) =>
+            recordRun(save, run("stranglewood", { victory: true, seconds, actStep }));
+        win(940, 0);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 940, step: 0 });
+        win(920, 0);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 920, step: 0 });
+        // Slower, but harder: that's the record now
+        win(960, 2);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 960, step: 2 });
+        // Quicker but easier doesn't take it back
+        win(900, 1);
+        expect(save.actBest?.stranglewood).toEqual({ seconds: 960, step: 2 });
+        // A loss is no record
+        recordRun(save, run("stranglewood", { seconds: 100, actStep: 3 }));
+        expect(save.actBest?.stranglewood.step).toBe(2);
+        // Off an act's maps, none are kept
+        recordRun(save, run("inferno", { victory: true, seconds: 900 }));
+        expect(save.actBest?.inferno).toBeUndefined();
+        // And it survives a reload
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).actBest).toEqual(save.actBest);
+    });
+
+    test("an endless record on an act's map keeps its step", () => {
+        const save = createSave();
+        recordRun(
+            save,
+            run("stranglewood", { endless: true, round: 2, seconds: 1200, actStep: 1 }),
+        );
+        expect(save.endlessBest.stranglewood).toEqual({ round: 2, seconds: 1200, step: 1 });
+        expect(migrateSave(JSON.parse(JSON.stringify(save))).endlessBest.stranglewood.step).toBe(1);
+    });
+
+    test("beating the Stranglewood brings the Forester", () => {
+        const save = createSave();
+        save.mapVictories.inferno = 1;
+        expect(save.unlockedCharacters).not.toContain("forester");
+        recordRun(save, run("stranglewood", { victory: true, seconds: 930 }));
+        expect(save.unlockedCharacters).toContain("forester");
     });
 });
 

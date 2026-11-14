@@ -14,7 +14,7 @@
     font-family: "OSRS Small", sans-serif;
     font-size: 13px;
     line-height: 1.1;
-    color: #b8aa8a;
+    color: var(--ui-text-dim);
     text-shadow: 1px 1px 0 #000;
     white-space: nowrap;
 }

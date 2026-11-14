@@ -162,6 +162,8 @@ export function GameApp(): JSX.Element {
             {
                 stress: parseInt(params.get("stress") ?? "0") || 0,
                 autostart: params.get("autostart") ?? undefined,
+                invade: import.meta.env.DEV ? (params.get("invade") ?? undefined) : undefined,
+                director: (import.meta.env.DEV && params.get("director")) || undefined,
                 raidTest:
                     import.meta.env.DEV && params.has("raidtest")
                         ? params.get("raidtest") === "short"
@@ -239,7 +241,13 @@ export function GameApp(): JSX.Element {
             {loaded && <RendererCanvas renderer={loaded.renderer} />}
             <canvas className="game-overlay" ref={overlayRef} />
             {errorMessage ? (
-                <div className="game-status content-text">{errorMessage}</div>
+                <div className="game-status game-status-lost content-text">
+                    <p>{t("canvas.start_failed")}</p>
+                    <p>{errorMessage}</p>
+                    <button className="ui-button" onClick={() => window.location.reload()}>
+                        {t("save.reload")}
+                    </button>
+                </div>
             ) : graphicsLost ? (
                 <div className="game-status game-status-lost content-text">
                     <p>

@@ -1,4 +1,11 @@
-import { BossAttackDef, BossDef, CombatStyle, EnemyDef, EnemyShotDef } from "./types";
+import {
+    BossAttackDef,
+    BossDef,
+    BulletPatternDef,
+    CombatStyle,
+    EnemyDef,
+    EnemyShotDef,
+} from "./types";
 
 // The Theatre of Blood raid's bosses (raids.ts), fought in their own rooms, each as a bullet hell
 // built round what its real fight is known for: the Maiden's blood closing in, the Bloat's flies,
@@ -38,6 +45,22 @@ const SPLAT_FIT = 0.8;
 // Seconds a ring closing in round you (the Maiden's blood, the Bloat's flies, Verzik's blasts and
 // green balls) stands where it formed first: finding the way out as it came in was too quick
 const RING_HOLD = 1;
+// Seconds after a ring's closed in before the next forms, its own next volley or the boss's next
+// ring (Sim.startPattern): back to back, enraged, the next had formed as the last came in
+export const RING_REST = 0.5;
+
+// A ring closing in round you: it holds, closes its distance at its speed, and the next comes once
+// it's in and RING_REST has gone. Its channel is how long the boss stands for it, as it did when
+// the rings came quicker, its other attacks coming between them after that.
+function closingRing(
+    ring: Omit<BulletPatternDef, "shape" | "hold" | "interval"> & {
+        distance: number;
+        channel: number;
+    },
+): BulletPatternDef {
+    const closes = RING_HOLD + ring.distance / ring.speed;
+    return { ...ring, shape: "closing", hold: RING_HOLD, interval: closes + RING_REST };
+}
 
 // Standing on a boss was safe from most of what it did. Each boss has an attack for whoever's up
 // close (its slam, stomp, bite or claws), used only within CLOSE_REACH tiles and picked about half
@@ -133,19 +156,17 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         range: 30,
         weight: 3,
         message: "The Maiden's blood closes in! Find the way out!",
-        pattern: {
-            shape: "closing",
-            hold: RING_HOLD,
+        pattern: closingRing({
             count: 20,
             volleys: 1,
-            interval: 1,
+            channel: 1,
             speed: 3.5,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Blood flood",
@@ -158,19 +179,17 @@ const MAIDEN_ATTACKS: BossAttackDef[] = [
         range: 30,
         weight: 4,
         enraged: true,
-        pattern: {
-            shape: "closing",
-            hold: RING_HOLD,
+        pattern: closingRing({
             count: 22,
             volleys: 3,
-            interval: 1.1,
+            channel: 3.3,
             speed: 4,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
 ];
 
@@ -240,19 +259,17 @@ const BLOAT_ATTACKS: BossAttackDef[] = [
         cooldown: 6,
         range: 40,
         weight: 4,
-        pattern: {
-            shape: "closing",
-            hold: RING_HOLD,
+        pattern: closingRing({
             count: 18,
             volleys: 3,
-            interval: 0.9,
+            channel: 2.7,
             speed: 4.5,
             range: 20,
             radius: 0.4,
             gap: 3,
             distance: 6,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Rain of flesh",
@@ -568,19 +585,17 @@ const VERZIK_ONE_ATTACKS: BossAttackDef[] = [
         cooldown: 6,
         range: 40,
         weight: 3,
-        pattern: {
-            shape: "closing",
-            hold: RING_HOLD,
+        pattern: closingRing({
             count: 16,
             volleys: 2,
-            interval: 1.2,
+            channel: 2.4,
             speed: 4,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Power blast ring",
@@ -723,19 +738,17 @@ const VERZIK_THREE_ATTACKS: BossAttackDef[] = [
         cooldown: 5,
         range: 40,
         weight: 4,
-        pattern: {
-            shape: "closing",
-            hold: RING_HOLD,
+        pattern: closingRing({
             count: 14,
             volleys: 1,
-            interval: 1,
+            channel: 1,
             speed: 4,
             range: 20,
             radius: 0.45,
             gap: 3,
             distance: 7,
             bright: BRIGHT,
-        },
+        }),
     },
     {
         name: "Power ring",

@@ -5,7 +5,7 @@ import { UiSnapshot } from "../client/GameStore";
 import { getItemView } from "../client/ItemViews";
 import { getUpgradeLine, getUpgradedGear } from "../content/armoury";
 import { CASKET_GEAR, GEAR_SLOTS, GEAR_SLOT_BY_ID, getGear } from "../content/items";
-import { RARITIES } from "../content/rarity";
+import { RARITIES, RARITY_ORDER, rarityName } from "../content/rarity";
 import { describeSetProgress, getItemSet } from "../content/sets";
 import { compareStats, formatStats } from "../content/stats";
 import { describeUnlockTask, isAvailable } from "../content/unlocks";
@@ -15,7 +15,9 @@ import "./ArmouryScreen.css";
 import { Coins } from "./Coins";
 import { DescriptionButton, ItemDescription } from "./DescriptionButton";
 import { ItemIcon } from "./ItemIcon";
+import { LoadoutCatalogue } from "./LoadoutCatalogue";
 import { StatLine } from "./StatLine";
+import { useMenuKeys } from "./menuKeys";
 
 // The Armoury: every piece of gear caskets give, slot by slot, as the
 // upgrades have made it (faded until it's been found). Beside them, the piece
@@ -23,47 +25,96 @@ import { StatLine } from "./StatLine";
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
+type Tab = "gear" | "weapons" | "passives";
+
+// Each tab's intro, and what a "?" in a tile's corner means there
+const TAB_TEXT: Record<Tab, { intro: string; missing: string }> = {
+    gear: { intro: "armoury.intro", missing: "armoury.legend.not_found" },
+    weapons: { intro: "armoury.catalogue.weapons_intro", missing: "armoury.legend.locked" },
+    passives: { intro: "armoury.catalogue.passives_intro", missing: "armoury.legend.locked" },
+};
+
 export function ArmouryScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
+    const [tab, setTab] = useState<Tab>("gear");
     const [selected, setSelected] = useState(
         () => CASKET_GEAR.find((g) => save.foundGear.includes(g.id))?.id ?? CASKET_GEAR[0].id,
     );
+    useMenuKeys({ onBack: () => client.showScreen("title") });
     return (
         <div className="ui-fill ui-center">
             <div className="ui-panel rs-border rs-background ui-armoury">
                 <h2>{t("armoury.title")}</h2>
-                <p className="ui-subtle">{t("armoury.intro")}</p>
-                <div className="ui-armoury-body">
-                    <div className="ui-armoury-slots">
-                        {GEAR_SLOTS.map((slot) => (
-                            <div key={slot.id} className="ui-armoury-slot">
-                                <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
-                                <div className="ui-armoury-pieces">
-                                    {CASKET_GEAR.filter((g) => g.slot === slot.id).map((g) => (
-                                        <ArmouryTile
-                                            key={g.id}
-                                            save={save}
-                                            itemId={g.id}
-                                            selected={g.id === selected}
-                                            onSelect={() => setSelected(g.id)}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <ArmouryDetails save={save} itemId={selected} client={client} />
+                <div className="ui-armoury-tabs" aria-label={t("armoury.title")}>
+                    {(["gear", "weapons", "passives"] as const).map((id) => (
+                        <button
+                            key={id}
+                            className={
+                                "ui-armoury-tab" + (tab === id ? " ui-armoury-tab-selected" : "")
+                            }
+                            aria-pressed={tab === id}
+                            onClick={() => setTab(id)}
+                        >
+                            {t(`armoury.tab.${id}`)}
+                        </button>
+                    ))}
                 </div>
+                <p className="ui-subtle">{t(TAB_TEXT[tab].intro)}</p>
+                {/* What the tiles' borders mean, on every tab */}
+                <div className="ui-armoury-legend">
+                    {RARITY_ORDER.map((rarity) => (
+                        <span key={rarity} className="ui-armoury-legend-item">
+                            <span
+                                className="ui-armoury-legend-swatch"
+                                style={{ borderColor: RARITIES[rarity].color }}
+                            />
+                            {rarityName(rarity)}
+                        </span>
+                    ))}
+                    <span className="ui-armoury-legend-item">
+                        <span className="ui-armoury-legend-swatch ui-armoury-legend-missing">
+                            ?
+                        </span>
+                        {t(TAB_TEXT[tab].missing)}
+                    </span>
+                </div>
+                {tab === "gear" ? (
+                    <div className="ui-armoury-body">
+                        <div className="ui-armoury-slots">
+                            {GEAR_SLOTS.map((slot) => (
+                                <div key={slot.id} className="ui-armoury-slot">
+                                    <div className="ui-armoury-slot-name">{tl(slot.name)}</div>
+                                    <div className="ui-armoury-pieces">
+                                        {CASKET_GEAR.filter((g) => g.slot === slot.id).map((g) => (
+                                            <ArmouryTile
+                                                key={g.id}
+                                                save={save}
+                                                itemId={g.id}
+                                                selected={g.id === selected}
+                                                onSelect={() => setSelected(g.id)}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <ArmouryDetails save={save} itemId={selected} client={client} />
+                    </div>
+                ) : (
+                    <LoadoutCatalogue kind={tab} save={save} />
+                )}
                 <div className="ui-row">
                     <button className="ui-button" onClick={() => client.showScreen("title")}>
                         {t("canvas.back")}
                     </button>
-                    <span className="ui-armoury-count">
-                        {t("armoury.found", {
-                            n: fmtNum(save.foundGear.length),
-                            total: fmtNum(CASKET_GEAR.length),
-                        })}
-                    </span>
+                    {tab === "gear" && (
+                        <span className="ui-armoury-count">
+                            {t("armoury.found", {
+                                n: fmtNum(save.foundGear.length),
+                                total: fmtNum(CASKET_GEAR.length),
+                            })}
+                        </span>
+                    )}
                     <Coins amount={save.coins} />
                 </div>
             </div>
@@ -210,14 +261,23 @@ function ArmouryDetails({
                         {t("armoury.to_unlock", { task: describeUnlockTask(step.locked) })}
                     </div>
                 ) : (
-                    <button
-                        className="ui-button ui-button-go ui-armoury-buy"
-                        data-silent
-                        disabled={save.coins < step.cost}
-                        onClick={() => client.upgradeGear(itemId)}
-                    >
-                        {t("armoury.upgrade")} <Coins amount={step.cost} />
-                    </button>
+                    <>
+                        <button
+                            className="ui-button ui-button-go ui-armoury-buy"
+                            data-silent
+                            disabled={save.coins < step.cost}
+                            onClick={() => client.upgradeGear(itemId)}
+                        >
+                            {t("armoury.upgrade")} <Coins amount={step.cost} />
+                        </button>
+                        {save.coins < step.cost && (
+                            <div className="ui-card-short">
+                                {t("ui.common.short_by", {
+                                    n: fmtNum(step.cost - save.coins),
+                                })}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         );
@@ -239,9 +299,9 @@ function ArmouryDetails({
                 </div>
             </div>
             <ul className="ui-armoury-stats">
-                {formatStats(piece.stats).map((text) => (
-                    <li key={text}>
-                        <StatLine text={text} />
+                {formatStats(piece.stats).map((line) => (
+                    <li key={line.text}>
+                        <StatLine text={line.text} english={line.english} />
                     </li>
                 ))}
                 {set && (

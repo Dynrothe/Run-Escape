@@ -1,8 +1,9 @@
-import { JSX, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CSSProperties, JSX, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type {
     BreakdownLine,
     BreakdownView,
+    BuffView,
     FormView,
     GearSlotView,
     HudView,
@@ -18,6 +19,7 @@ import { BreakdownTip } from "./BreakdownTip";
 import { ItemIcon } from "./ItemIcon";
 import "./PauseLoadout.css";
 import { StatLine } from "./StatLine";
+import { useStoneSlot } from "./useStoneSlot";
 
 // The groups the stats are listed in, in order
 const STAT_GROUP_NAMES: [StatRowView["group"], string][] = [
@@ -253,18 +255,21 @@ function Level({
 function StatCell({
     label,
     value,
+    english,
     breakdown,
     kinds,
 }: {
     label: string;
     value: string;
+    // The line in English, for its icon in any language
+    english?: string;
     breakdown?: BreakdownView;
     // A weapon's damage line: its kinds of damage, the first as the line's icon (Attack, Ranged
     // or Magic) and poison or burning after its name
     kinds?: DamageKind[];
 }): JSX.Element {
     const kindIcon = kinds && DAMAGE_KIND_ICONS[kinds[0]];
-    const icon = kindIcon ?? statIconFor(`${label} ${value}`);
+    const icon = kindIcon ?? statIconFor(`${label} ${value}`, english);
     return (
         <BreakdownTip breakdown={breakdown} className="ui-loadout-cell">
             {icon ? (
@@ -300,17 +305,18 @@ function StatCell({
 
 // A line like "+5% damage" as a cell: its number at the right, with what it's of at the left. The
 // breakdown's total says which part is the number.
-function splitCell(text: string, breakdown?: BreakdownView): SlotStatView {
+function splitCell(text: string, breakdown?: BreakdownView, english?: string): SlotStatView {
     const total = breakdown?.lines[0]?.total;
     if (total && text.startsWith(total)) {
         const label = text.slice(total.length).trim();
         return {
             label: label.charAt(0).toUpperCase() + label.slice(1),
             value: total,
+            english,
             breakdown,
         };
     }
-    return { label: text, value: "", breakdown };
+    return { label: text, value: "", english, breakdown };
 }
 
 // ---- Evolutions: a square with what it makes, and how much of it there is, and a recipe on it ----
@@ -467,9 +473,16 @@ function SlotCard({
     endless: boolean;
 }): JSX.Element {
     const stats: SlotStatView[] =
-        slot.statLines ?? (slot.stats ?? []).map((text) => ({ label: text, value: "" }));
+        slot.statLines ??
+        (slot.stats ?? []).map((line) => ({
+            label: line.text,
+            value: "",
+            english: line.english,
+        }));
     // A weapon's damage bonus is called that, not "Damage" over the damage it's a bonus to
-    const split = slot.detail ? splitCell(slot.detail, slot.detailBreakdown) : undefined;
+    const split = slot.detail
+        ? splitCell(slot.detail.text, slot.detailBreakdown, slot.detail.english)
+        : undefined;
     const detail =
         split && weapon && slot.detailBreakdown
             ? { ...split, label: slot.detailBreakdown.title }
@@ -523,7 +536,11 @@ function SlotCard({
                     <span className="ui-loadout-name" style={{ color: slot.rarityColor }}>
                         {tl(slot.name)}
                     </span>
-                    <Level level={slot.level} maxLevel={slot.maxLevel} finished={finished} />
+                    {slot.blessing ? (
+                        <span className="ui-loadout-level">×{slot.level}</span>
+                    ) : (
+                        <Level level={slot.level} maxLevel={slot.maxLevel} finished={finished} />
+                    )}
                 </span>
                 <span className={"ui-loadout-grid" + (weapon ? "" : " ui-loadout-grid-one")}>
                     {stats.map((stat, i) => (
@@ -607,7 +624,7 @@ function gearTooltip(slot: GearSlotView): BreakdownView {
     }
     const lines: BreakdownLine[] = [];
     item.lines.forEach((line, i) => {
-        const cell = splitCell(line, item.lineBreakdowns?.[i]);
+        const cell = splitCell(line.text, item.lineBreakdowns?.[i]);
         const first = cell.breakdown?.lines[0];
         lines.push({
             label: cell.label,
@@ -627,8 +644,12 @@ function gearTooltip(slot: GearSlotView): BreakdownView {
 // The worn equipment follows the canonical OSRS silhouette. Run Escape has no weapon or ammo gear,
 // so those two canonical positions stay open while every supported slot keeps its familiar place.
 function GearGrid({ gear }: { gear: GearSlotView[] }): JSX.Element {
+    const stone = useStoneSlot();
     return (
-        <div className="ui-loadout-gear-grid">
+        <div
+            className={"ui-loadout-gear-grid" + (stone ? " ui-loadout-stone" : "")}
+            style={stone ? ({ "--ui-stone": stone } as CSSProperties) : undefined}
+        >
             {gear.map((slot) => (
                 <BreakdownTip
                     key={slot.slot}
@@ -665,14 +686,56 @@ function GearGrid({ gear }: { gear: GearSlotView[] }): JSX.Element {
 // The pause menu's Loadout: the run's weapons and passives (with the recipe of what each evolves
 // into), followed by canonical worn equipment and the hero's stats. Wide layouts use the spare room
 // below the cards for stats; narrow layouts keep equipment before stats in one column.
-export function PauseLoadout({ hud }: { hud: HudView }): JSX.Element {
+// What's on the hero now: potions and power-ups, and a boss attack's drain, each with what it does
+// and how long it has left
+function EffectsList({ effects }: { effects: BuffView[] }): JSX.Element {
+    if (effects.length === 0) {
+        return <div className="ui-subtle">{t("pause.effects.none")}</div>;
+    }
+    return (
+        <div className="ui-pause-list">
+            {effects.map((effect) => (
+                <div key={effect.id} className="ui-pause-item">
+                    <ItemIcon objId={effect.objId} size={24} />
+                    <span className="ui-pause-name">
+                        {tl(effect.name)}
+                        <span className="ui-pause-detail">{effect.description}</span>
+                        {effect.secondsLeft !== undefined && (
+                            <span className="ui-pause-detail">
+                                {t("pause.effects.left", { seconds: effect.secondsLeft })}
+                            </span>
+                        )}
+                    </span>
+                    <span
+                        className={
+                            "ui-pause-level " +
+                            (effect.harmful ? "ui-pause-effect-debuff" : "ui-pause-effect-buff")
+                        }
+                    >
+                        {effect.harmful ? t("pause.effects.debuff") : t("pause.effects.buff")}
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+export function PauseLoadout({
+    hud,
+    effects = [],
+}: {
+    hud: HudView;
+    effects?: BuffView[];
+}): JSX.Element {
+    // A map with blessings has those in place of passives, with no slots to fill
+    const passives = hud.blessings ?? hud.passives;
     const freeWeapons = Math.max(0, hud.maxWeapons - hud.weapons.length);
-    const freePassives = Math.max(0, hud.maxPassives - hud.passives.length);
+    const freePassives = hud.blessings ? 0 : Math.max(0, hud.maxPassives - hud.passives.length);
     const worn = hud.gear.filter((slot) => slot.item).length;
     // An endless run keeps levelling past the last level, so nothing's ever done with there
     const endless = hud.round !== undefined;
     const [root, { density }] = useFit(
-        `${hud.weapons.length}:${hud.passives.length}:${worn}:${hud.maxWeapons}:${hud.maxPassives}`,
+        `${hud.weapons.length}:${passives.length}:${worn}:${hud.maxWeapons}:${hud.maxPassives}:${effects.length}`,
     );
     return (
         <div ref={root} className={`ui-loadout ui-loadout-d${density}`}>
@@ -706,11 +769,11 @@ export function PauseLoadout({ hud }: { hud: HudView }): JSX.Element {
                 <section>
                     <Heading
                         name={t("pause.heading.passives")}
-                        count={hud.passives.length}
-                        max={hud.maxPassives}
+                        count={passives.length}
+                        max={hud.blessings ? undefined : hud.maxPassives}
                     />
                     <div className="ui-loadout-cards ui-loadout-passives">
-                        {hud.passives.map((slot) => (
+                        {passives.map((slot) => (
                             <SlotCard
                                 key={slot.id}
                                 slot={slot}
@@ -738,6 +801,10 @@ export function PauseLoadout({ hud }: { hud: HudView }): JSX.Element {
                 <section className="ui-loadout-stats-panel">
                     <Heading name={t("pause.heading.your_stats")} />
                     <StatsPanel rows={hud.statRows} />
+                </section>
+                <section className="ui-loadout-effects">
+                    <Heading name={t("pause.heading.effects")} />
+                    <EffectsList effects={effects} />
                 </section>
             </div>
         </div>

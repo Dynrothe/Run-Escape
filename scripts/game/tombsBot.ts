@@ -13,9 +13,10 @@ import {
     WARDENS,
     ZEBAK,
 } from "../../src/game/content/tombs";
-import { getWeaponStyle } from "../../src/game/content/weapons";
+import { getWeapon, getWeaponStyle } from "../../src/game/content/weapons";
 import { ChestAction, shouldWear } from "../../src/game/core/Loot";
 import { PLAYER_SPEED, type Sim, wardenFrontRow } from "../../src/game/core/Sim";
+import { type UpgradeChoice } from "../../src/game/core/Upgrades";
 import { isCircleFree } from "../../src/game/core/world/Collision";
 import { FlowField, canStep } from "../../src/game/core/world/FlowField";
 import {
@@ -208,6 +209,16 @@ export function chestAction(sim: Sim): ChestAction {
         return sim.canStash(item.id) ? "take" : "use";
     }
     return shouldWear(sim.gear, sim.gearUpgrades, item, chest.upgrades) ? "take" : "alch";
+}
+
+// For both bots' level ups: a keris pick's place in its list (the plain one 0, Amascut's last), so
+// the bot sets the best jewel it has, as a player would. 0 for anything else, so the Ancient spell
+// and hilt picks go as they always have.
+export function kerisPickRank(choice: UpgradeChoice): number {
+    if (choice.kind !== "hilt" || getWeapon(choice.into).family !== "keris") {
+        return 0;
+    }
+    return getWeapon(choice.weaponId).hilts?.into.findIndex((i) => i.weaponId === choice.into) ?? 0;
 }
 
 // Eats when hurt, throws chinchompas into crowds, drinks antidotes when
@@ -2763,7 +2774,9 @@ export class TombsLog {
         for (const player of board.party) {
             console.log(
                 `  ${player.name || "bot"}: ${player.points} points, ${player.deaths} deaths, ` +
-                    `${Math.round(player.chance * 100)}% purple` +
+                    (player.chance === undefined
+                        ? "no purple left"
+                        : `${Math.round(player.chance * 100)}% purple`) +
                     (sim.heroes[0].raidChest
                         ? `, chest: ${sim.heroes[0].raidChest.found.join(" ") || "nothing"}`
                         : ""),

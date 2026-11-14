@@ -85,6 +85,12 @@ export const WEAPON_EXAMINE: Record<string, string> = {
         "A bow of crystal and elven craft. Its arrows fly on through the enemies they hit.",
     toxic_blowpipe:
         "A blowpipe loaded with venom. Its darts poison, and it seeks what isn't poisoned yet.",
+    rubber_chicken:
+        "A rubber chicken. It whacks all round you, and every hit can heal you a little.",
+    saradomin_sword:
+        "A blade blessed by Saradomin. Its heavy sweeps knock back and stagger what they hit.",
+    soulreaper_axe:
+        "An axe that feeds on souls. Each one it takes hits harder, until it Harvests them.",
     dragon_hunter_crossbow:
         "A crossbow made to slay dragons. Heavy bolts that pass through, and hit bosses again.",
     armadyl_crossbow:

@@ -5,8 +5,10 @@ import {
     CasketTier,
     EnemyDef,
     ImpactDef,
+    LairDef,
     LightLook,
     PlayerEffectDef,
+    PolymorphKind,
     RandomEventDef,
     Stats,
     ThrallDef,
@@ -66,6 +68,8 @@ export type BossWindup = {
     // Where it's cast from, where that isn't where the boss is as it begins (toMiddle's leap):
     // a gaze's shadows are from here from the start (BossAttackDef.cover)
     at?: { x: number; y: number };
+    // What the boss has taken while winding it up, towards breaking it (BossAttackDef.breakable)
+    taken?: number;
 };
 
 // Across the arena, from where a surge starts to where it stops; what's within
@@ -133,12 +137,18 @@ export type BossState = {
     stolenCoins: number;
     // Times it has got back up
     rises: number;
+    // Its siphon's souls that have reached it, of the lot that's out (BossDef.siphon)
+    siphonLost?: number;
     // Below half its hitpoints: faster, and with its enraged attacks
     enraged: boolean;
     // Enraged by its partner's death (BossDef enrage.partner): its interval's times this instead
     furyTempo?: number;
     // How many of BossDef.summonsAt have been called in
     summonsDone: number;
+    // Its time between attacks times this, its lair's boss empowered (LairDef.empowered)
+    tempo?: number;
+    // Its root heart's been planted (BossAttackDef.rule heart): one a boss
+    ruleHeart?: boolean;
     phase?: BossPhase;
     surge?: BossSurge;
     walkers?: BossWalkers;
@@ -152,6 +162,14 @@ export type BossState = {
     leap?: { toX: number; toY: number; switchTick: number; endTick: number };
     // It stands still until this tick, as its volleys go out
     channelEnd: number;
+    // Where it first stood, which it keeps near (BossDef.home)
+    home?: { x: number; y: number };
+    // BossDef.critical: the tick it's next due (unset until its hitpoints first come down to it),
+    // and the phase that was in, so the next phase brings it on at once
+    criticalAt?: number;
+    criticalPhase?: number;
+    // Its rings that hold (BulletPatternDef.hold) are in by this tick, and no new one starts sooner
+    ringsUntil?: number;
     // BossDef.naps: down until this tick (-1 when it's up), and when it next goes down
     napEnd?: number;
     nextNap?: number;
@@ -162,9 +180,13 @@ export type BossState = {
     nextStare?: number;
     // Where it'll stare once it turns at nextStare, picked and said a moment before
     stareNext?: number;
-    // BossDef.stomp: hits since the player stepped under it, and the next one
+    // BossDef.stomp: hits since the player stepped under it, the next one and when it was set (to
+    // draw its ring filling), when the last stepped out, and whether its message has been said
     stomps?: number;
     nextStomp?: number;
+    stompFrom?: number;
+    stompLeft?: number;
+    stompSaid?: boolean;
     // How many times each row attack's been used (BulletPatternDef.rows), by name
     rowSets?: Record<string, number>;
     // The rhythms going (BossAttackDef.cycle)
@@ -219,6 +241,59 @@ export type BossIntro = {
     endTick: number;
     // Up once it's risen
     boss?: Enemy;
+};
+
+// Pillars up out of the floor between a boss and a hero's gaze (BossDef.gazeWard): its tiles (world
+// tiles, x then y), risen from startTick and sinking at endTick, when they're open again
+export type WardPillars = {
+    enemyUid: number;
+    tiles: number[];
+    locId: number;
+    startTick: number;
+    endTick: number;
+    // Ticks they take to come up (and to sink), and whether they've sunk (the ground's open)
+    riseTicks: number;
+    sunk: boolean;
+};
+
+// One of a map's lairs (MapDef.lairs): asleep until a player steps into it, then its fight, with
+// every way out sealed, then beaten (and the map free to walk round again)
+export type Lair = {
+    // Its def, and where it is in MapDef.lairs
+    def: LairDef;
+    index: number;
+    // waking: its opening cinematic (LairDef.opening) from wakeTick, until introTick
+    state: "asleep" | "waking" | "fighting" | "beaten";
+    // Sealed off from the start until the lairs it requires are beaten (LairDef.requires)
+    locked: boolean;
+    // Its boss fights empowered, another lair having been beaten first (LairDef.empowered)
+    empowered: boolean;
+    // Its pillars (LairDef.pillars), by index
+    pillars: LairPillar[];
+    wakeTick: number;
+    introTick: number;
+    // Up once it's risen (BossIntro.boss)
+    boss?: Enemy;
+    // The tiles sealed while it's fought or locked (world tiles, x then y), from sealTick, and
+    // lifted at liftTick (-1 until then)
+    sealed: number[];
+    sealTick: number;
+    liftTick: number;
+    // A locked one's unsealing (LairDef.requires): from unsealTick (-1 until what it requires is
+    // beaten), its seal lifting at unsealLiftTick, and the party held until unsealEndTick
+    unsealTick: number;
+    unsealLiftTick: number;
+    unsealEndTick: number;
+};
+
+// A lair's pillar (LairDef.pillars): its south-west tile, its tiles (x then y), solid while it
+// stands, and the tick it last crumbled or came back up
+export type LairPillar = {
+    x: number;
+    y: number;
+    tiles: number[];
+    standing: boolean;
+    changeTick: number;
 };
 
 // Off to the edge of the map, as a boss rises (BossDef.intro): it can't be
@@ -350,6 +425,19 @@ export type EnemyAnim = "walk" | "idle" | "attack" | "death" | "jump";
 
 // Going over a ditch: from one side to the other, starting at tick start
 export type EnemyJump = { fromX: number; fromY: number; toX: number; toY: number; start: number };
+// Turned into an animal by a polymorph power-up (powerUpId's) till endTick, which of them by look
+// and variant (getPolymorphLook), harmless: a sheep (or the penguin) wanders dirX, dirY till
+// turnTick, when it picks another way, and the rare one walks away from the player. Whether it's
+// one at the moment is Sim.polymorphOf's to say.
+export type EnemyPolymorph = {
+    powerUpId: string;
+    look: PolymorphKind;
+    variant: number;
+    endTick: number;
+    dirX: number;
+    dirY: number;
+    turnTick: number;
+};
 export type EnemyFlung = {
     fromX: number;
     fromY: number;
@@ -383,6 +471,10 @@ export type Enemy = {
     // Any boss; the final one ends the run when it dies
     boss: boolean;
     finalBoss: boolean;
+    // An Awakened invader's pocket (content/invasions.ts), which it keeps to; and a final boss
+    // awakened by an Awakener's orb (SimOptions.awakened), drawn with a violet glow
+    pocket?: { x: number; y: number; radius: number };
+    awakened?: boolean;
     // Bosses that fight with attacks of their own
     bossState?: BossState;
     // What its hits are multiplied by beyond its def's: a boss's attacks, an
@@ -396,11 +488,20 @@ export type Enemy = {
     attackCooldown: number;
     // Ticks left frozen (Ice spells)
     frozen: number;
+    // Chilled, at half pace, until this tick (the Snow ranger's Shatter)
+    chilled?: number;
+    // Slowed, at slowPace, until this tick (Baron's gas: PetDef.power gas)
+    slowed?: number;
+    slowPace?: number;
+    // Ticks left staggered by a heavy blow (WeaponDef.heavy): standing, and not striking
+    staggered?: number;
     // Under LightingDef.litTargetsOnly, whether it stood in a sim light as this tick's lights were
     // made, or as it came (Sim.isEnemyLit)
     lit?: boolean;
     // Jumping a ditch, and nothing else until it lands
     jump?: EnemyJump;
+    // A sheep or a penguin in disguise for a while (a polymorph power-up)
+    polymorph?: EnemyPolymorph;
     // Takes this much more damage from everything (0.25 = +25%) until
     // drainEnd (the Bandos godsword's Warstrike)
     drain: number;
@@ -471,6 +572,8 @@ export type Enemy = {
     bonesOnly: boolean;
     // Hatches at this tick if it's still alive (EnemyDef.hatches); 0 for never
     hatchTick: number;
+    // Bursts at this tick (EnemyDef.bursts), put back a tick for each it's held; 0 for never
+    burstTick: number;
     // Thrown out by a boss (BossAttackDef.summon.thrown): in the air from one
     // spot to the other between these ticks, and nothing to the fight until
     // it lands
@@ -553,6 +656,8 @@ export type Projectile = {
     orbit?: Orbit;
     // Splits at its first hit (WeaponDef.split); gone once it has
     split?: { count: number; damage: number; pierce: number };
+    // Fired as its weapon's special (WeaponDef.siphon): what it deals heals the player
+    siphon?: boolean;
     // Ticks left
     life: number;
     radius: number;
@@ -653,10 +758,14 @@ export type Pickup = {
     pileUid: number;
     // Caskets only
     tier?: CasketTier;
+    // Dug up a tier better (the Treasure hunter's trait, CharacterTraitDef dig)
+    dug?: boolean;
     // Power-ups only: which one
     powerUp?: string;
     // A casket that's really a boss (EnemyDef.disguise)
     disguise?: DisguisedBoss;
+    // Power-ups only: how many times as long as usual it waits to be picked up (Globetrotter)
+    lasts?: number;
 };
 
 // Co-op: a boss's copies (content/coop.ts bossCopies), with one boss's
@@ -690,6 +799,9 @@ export type BossTether = {
 export type GroundPool = {
     uid: number;
     enemyId: string;
+    // What it is, and when it next lights another beside it (pool.spreads, -1 for never)
+    def: NonNullable<BossAttackDef["pool"]>;
+    nextSpread: number;
     x: number;
     y: number;
     radius: number;
@@ -880,6 +992,8 @@ export type DamageSource =
     | `powerUp:${string}`
     // A fight's button (MapDef.fight.ability), and its arena's attacks that turned on the boss
     | `ability:${string}`
+    // A fighting pet's (PetDef.power)
+    | `pet:${string}`
     | "court"
     | "recoil"
     | "other";
@@ -900,6 +1014,8 @@ export type WeaponState = {
     cooldown: number;
     // Extra damage from rare upgrade rolls (0.15 = +15%)
     bonus: number;
+    // Healing from rarity-scaled upgrades, on top of WeaponDef.bloodHeal's base
+    healGain?: { chance: number; hp: number };
     // Attacks made, for special attacks
     uses: number;
 };
@@ -950,11 +1066,15 @@ export type Debuff = {
     id: string;
     // Doses of a debuff that stacks; its stats are all of them added up
     stacks?: number;
+    // Damage a dose every second (a burn)
+    burn?: number;
     name: string;
     iconObjId: number;
     stats: Partial<Stats>;
     startTick: number;
     endTick: number;
+    // A dim (PlayerEffectDef dim): tiles off the player's light, or no more than to tiles
+    light?: { off: number; to?: number };
 };
 
 // Where some of a stat comes from, for the pause menu's tooltip on it: the adventurer, the shop,
@@ -1007,12 +1127,28 @@ type SimEventBody =
     // A projectile hit something and has a sound for it
     | { type: "impact"; sound: number; x: number; y: number }
     // sound: the boss attack's hit sound, instead of the enemy's attack sound
-    | { type: "playerHit"; amount: number; enemyId: string; elite: boolean; sound?: number }
+    // missed: Trickster's (content/relics.ts), a hit that didn't land
+    | {
+          type: "playerHit";
+          amount: number;
+          enemyId: string;
+          elite: boolean;
+          sound?: number;
+          missed?: boolean;
+      }
     | { type: "playerPoisoned"; amount: number }
     // A boss attack was used (a swing landed, or projectiles were fired)
     | { type: "bossAttack"; enemyId: string; sound: number; x: number; y: number }
     // A boss's swing landed, hitting around (x, y)
-    | { type: "bossSwing"; x: number; y: number; radius: number }
+    | {
+          type: "bossSwing";
+          x: number;
+          y: number;
+          radius: number;
+          dirX?: number;
+          dirY?: number;
+          cone?: number;
+      }
     // Something of a fight's landed hard at (x, y): the camera shakes (0 to 1) and the screen
     // can flash (ImpactDef)
     | { type: "bossImpact"; x: number; y: number; shake: number; flash?: string }
@@ -1040,6 +1176,9 @@ type SimEventBody =
     // A boss's big entrance has begun (the screen's going dark), and it's risen
     | { type: "bossIntro"; enemyId: string; sound: number }
     | { type: "bossRising"; enemyId: string; sound: number; x: number; y: number }
+    // A map's lair (MapDef.lair): its fight's begun, the floor sealed (woken), or it's beaten and
+    // the seal's lifted
+    | { type: "lair"; woken: boolean; sound: number; x: number; y: number }
     // A boss fought in phases has moved on; message: what to do now
     | {
           type: "bossStage";
@@ -1053,12 +1192,20 @@ type SimEventBody =
     // A statue the fight draws (BossAttackDef.statues) starts this animation:
     // the one of locId whose south-west tile is x, y
     | { type: "statueSeq"; locId: number; x: number; y: number; seq: number }
+    // A hero's fighting pet leaps onto an enemy there (PetDef.power), for the follower to show
+    | { type: "petLeap"; owner: number; x: number; y: number }
+    // A hero's pet spat its gas round x, y (PetDef.power gas)
+    | { type: "petGas"; owner: number; x: number; y: number }
+    // A hero's Lil'viathan blew its bubble round them, or it popped (PetDef.power bubble)
+    | { type: "petBubble"; owner: number; popped: boolean }
     // Its totems' blast, from each totem to the boss
     | { type: "totemBlast"; sound: number; x: number; y: number; toX: number; toY: number }
     // Sleepwalkers' blast, which can't be dodged; absorbed: how many fed it
     | { type: "bossAbsorbBlast"; x: number; y: number; absorbed: number }
     // The player's controls were shuffled, or came back
     | { type: "playerCursed"; cursed: boolean }
+    // The Soulreaper axe's Harvest, a spin all round them (WeaponDef.souls)
+    | { type: "harvest"; x: number; y: number }
     | {
           type: "slash";
           x: number;
@@ -1071,9 +1218,24 @@ type SimEventBody =
           arc: number;
           weaponId: string;
       }
+    // A tree felled along a strip (CharacterTraitDef timber): from x, y the way dir goes, length
+    // tiles, drawn as locId falling over
+    | {
+          type: "treeFall";
+          x: number;
+          y: number;
+          dirX: number;
+          dirY: number;
+          length: number;
+          locId: number;
+          sound?: number;
+      }
     | { type: "aura"; x: number; y: number; radius: number }
     | { type: "pickup"; kind: PickupKind; value: number }
     | { type: "levelUp"; level: number }
+    // A level up's blessing on a map with them (MapDef.blessings): which, and how many of it the
+    // hero has now
+    | { type: "blessing"; blessingId: string; count: number }
     // byEnemy: killed by another faction's enemy, not the player
     | {
           type: "kill";
@@ -1111,6 +1273,10 @@ type SimEventBody =
       }
     // A boss said something over its head
     | { type: "bossShout"; enemyUid: number; text: string }
+    // Any enemy said something over its head, with a sound (a polymorphed sheep's "Baa!")
+    | { type: "enemyShout"; enemyUid: number; text: string; sound: number; x: number; y: number }
+    // A polymorphed penguin was killed, and its escapees run off from where it fell
+    | { type: "polymorphEscape"; powerUpId: string; x: number; y: number }
     // Said over the player's head (Durial321's lines in Falador)
     | { type: "playerShout"; text: string }
     // A boss got back up when it should have died
@@ -1132,6 +1298,14 @@ type SimEventBody =
     // or was brought back by the teammate at index by
     | { type: "heroDown" }
     | { type: "heroLeft" }
+    // The party's turned to the other world (RealmRule): 1 the realm, 0 the city; lapse, thrown
+    // back out of sanity
+    | { type: "worldTurned"; layer: 0 | 1; lapse: boolean }
+    // A lost soul caught, and how many of this lot are left (siphon: one of a boss's siphon's,
+    // BossDef.siphon, with the rest of its lot left in either world)
+    | { type: "soulCaught"; left: number; siphon?: boolean }
+    // Frozen solid under the cold (ColdRuleDef), the hero by index
+    | { type: "frozenSolid"; hero: number }
     | { type: "heroRevived"; by: number }
     // Co-op: a hero found or bought an extra revive
     | { type: "extraRevive" };

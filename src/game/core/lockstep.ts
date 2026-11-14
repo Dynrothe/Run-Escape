@@ -12,6 +12,9 @@ export type CoopAction =
     | { kind: "choose"; index: number }
     | { kind: "reroll" }
     | { kind: "skip" }
+    // Reloaded (content/relics.ts): the level up's offer kept for later, or a kept one taken
+    | { kind: "keep" }
+    | { kind: "takeKept" }
     // Banishing a level up's reward (by its place), or the open casket's item
     | { kind: "banish"; index: number }
     | { kind: "banishChest" }
@@ -20,8 +23,9 @@ export type CoopAction =
     // A random event's offer: take one of its options, or walk away
     | { kind: "event"; index: number }
     | { kind: "leaveEvent" }
-    // The fight's button (MapDef.fight.ability)
-    | { kind: "ability" };
+    // The fight's button (MapDef.fight.ability), or a hero's own by its place
+    // (CharacterDef.abilities)
+    | { kind: "ability"; index?: number };
 
 // Something that happens to a hero just before frame `frame` is stepped:
 // what they're pressing now (as whole numbers, -127 to 127), what they did,
@@ -61,10 +65,16 @@ export function cleanAction(value: unknown): CoopAction | undefined {
             return isIndex && index < MAX_INDEX ? { kind, index } : undefined;
         case "reroll":
         case "skip":
+        case "keep":
+        case "takeKept":
         case "banishChest":
         case "leaveEvent":
-        case "ability":
             return { kind };
+        case "ability":
+            if (index === undefined) {
+                return { kind };
+            }
+            return isIndex && index < MAX_INDEX ? { kind, index } : undefined;
         case "chest":
             return CHEST_ACTIONS.includes(action as ChestAction)
                 ? { kind, action: action as ChestAction }
@@ -177,6 +187,10 @@ export function applyAction(sim: Sim, action: CoopAction): boolean {
             return sim.reroll();
         case "skip":
             return sim.skip();
+        case "keep":
+            return sim.keepOffer();
+        case "takeKept":
+            return sim.takeKept();
         case "banish":
             return sim.banishChoice(action.index);
         case "banishChest":
@@ -198,7 +212,7 @@ export function applyAction(sim: Sim, action: CoopAction): boolean {
             sim.leaveEvent();
             return true;
         case "ability":
-            return sim.useAbility();
+            return sim.useAbility(action.index ?? 0);
     }
 }
 
@@ -215,6 +229,14 @@ export function syncHash(sim: Sim): number {
         sim.rng.position,
         sim.eventRng.position,
     ];
+    // What the map's rule has laid (roots), on a map with one
+    if (sim.rule) {
+        values.push(sim.rule.hash());
+    }
+    // A boss's debris (BossAttackDef.debris), while there is any
+    if (sim.debris.length > 0) {
+        values.push(sim.debris.length, sim.debris[0].x, sim.debris[0].y);
+    }
     for (const hero of sim.heroes) {
         values.push(
             hero.player.x,

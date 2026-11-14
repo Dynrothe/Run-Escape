@@ -11,6 +11,7 @@ import {
     loadExportReminderDismissed,
     shouldRemindToExport,
 } from "./exportReminder";
+import { useDialog } from "./useDialog";
 
 // What the panel says about why nothing's saved, and the way out it offers
 // (besides playing on without saving)
@@ -100,11 +101,12 @@ export function SaveBlockPanel({
     client: GameClient;
 }): JSX.Element {
     const { title, body, actions } = describeBlock(block, client);
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     // ui-fill for the UI's font, as it's not on a screen
     return (
         <div className="ui-fill ui-modal ui-save-block">
-            <div className="ui-panel rs-border rs-background ui-notice">
-                <h2>{title}</h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-notice">
+                <h2 id={titleId}>{title}</h2>
                 <div className="ui-notice-body">{body}</div>
                 <div className="ui-notice-close">
                     {actions}
@@ -126,10 +128,11 @@ export function UnreadableSavePanel({
     keptAs: string;
     client: GameClient;
 }): JSX.Element {
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-notice">
-                <h2>{t("save.unreadable_title")}</h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-notice">
+                <h2 id={titleId}>{t("save.unreadable_title")}</h2>
                 <div className="ui-notice-body">
                     <p>{t("save.unreadable_body_1")}</p>
                     <p>{t("save.unreadable_body_2")}</p>

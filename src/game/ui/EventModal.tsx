@@ -5,6 +5,7 @@ import { Coins } from "./Coins";
 import { ItemIcon } from "./ItemIcon";
 import { KeyHint } from "./PadHint";
 import { StatLine } from "./StatLine";
+import { useDialog } from "./useDialog";
 
 type Props = { event: EventView; coins: number; client: GameClient };
 
@@ -12,10 +13,11 @@ type Props = { event: EventView; coins: number; client: GameClient };
 // power-ups, or the Quiz Master's question. A raid's supply chest too, for raid points.
 export function EventModal({ event, coins, client }: Props): JSX.Element {
     const forSale = event.options.some((option) => option.price !== undefined);
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-levelup">
-                <h2>{tl(event.name)}</h2>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-levelup">
+                <h2 id={titleId}>{tl(event.name)}</h2>
                 <p className="ui-subtle ui-event-speech">{tl(event.speech)}</p>
                 <div className="ui-choices">
                     {event.options.map((option, i) => (

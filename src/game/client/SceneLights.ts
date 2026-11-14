@@ -3,7 +3,10 @@ import { WARDENS } from "../content/tombs";
 import { FloorEffect, LightLook, LightingDef } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
 import { EFFECT_BURN, EFFECT_ICE } from "../core/floorLayout";
+import { gazeOccluders } from "../core/gazeSight";
+import { POCKET_DARK } from "../core/rules/invasion";
 import type { CinematicLight } from "./CinematicView";
+import { GazeShade } from "./GazeLight";
 import { LightBudget, lightKey } from "./LightBudget";
 import { getPlayerPose } from "./PlayerPose";
 import type { PlayerPose } from "./PlayerPose";
@@ -13,6 +16,9 @@ import type { PlayerPose } from "./PlayerPose";
 // the map's, enemies') are what weapons aim by; the rest are only drawn and never touch the sim:
 // glowing scenery, spells and effects (SPOT_LIGHTS), a floor's tiles (FLOOR_LIGHTS), bosses'
 // windups and marks, and a boss's exposed core. Flicker and pulse are drawn only, too.
+
+// Tiles at a dark pocket's edge over which it fades into the day
+const POCKET_EDGE = 2.5;
 
 // What kind of thing a light's from, for its key (lightKey)
 const KIND_PLAYER = 1;
@@ -46,18 +52,45 @@ export const GLOW_LOC_STRIDE = 3;
 export type LightTarget = {
     setAmbient(level: number, color: number): void;
     beginLights(x: number, y: number): void;
-    addLight(x: number, z: number, radius: number, r: number, g: number, b: number): void;
+    // A pocket of the dark (an invading Leviathan's): its ambient (0 none), and where it is, once
+    // the lights have begun
+    setDarkPocket(level: number): void;
+    darken(x: number, y: number, radius: number, edge: number, amount: number): void;
+    addLight(
+        x: number,
+        z: number,
+        radius: number,
+        r: number,
+        g: number,
+        b: number,
+        shade?: (x: number, z: number) => number,
+    ): void;
     endLights(): void;
 };
+
+// A hero's gaze (HeroAbilityDef kind "gaze", the Owl's gaze): a blue-white light out to its
+// length, with everything in its way casting a shadow (GazeShade), brought up as it winds up and
+// let down over GAZE_FADE seconds after it strikes; the rest of the map's dimmed by up to
+// GAZE_DIM meanwhile, so what's lit and what isn't reads at a glance
+const GAZE_COLOR = [0.75, 0.88, 1.1];
+const GAZE_DIM = 0.45;
+const GAZE_FADE = 0.5;
 
 export class SceneLights {
     private readonly color = new Float32Array(3);
     private seconds = 0;
+    private readonly gazeShade = new GazeShade();
+    // The last gaze, kept a moment past its strike as its light fades: whose, how far it reached,
+    // its strength then, and when it struck (this.seconds)
+    private gaze?: { hero: number; length: number; strength: number; struck?: number };
+    // Ms the last frame's gaze shadows took (for frameProbe-style checks)
+    gazeMs = 0;
 
     constructor(private readonly budget: LightBudget) {}
 
     reset(): void {
         this.budget.reset();
+        this.gaze = undefined;
     }
 
     // This frame's ambient and lights, into target. px, py: the shown player as drawn (the
@@ -79,7 +112,11 @@ export class SceneLights {
         this.seconds += deltaSeconds;
         const budget = this.budget;
         const tick = sim.tick + alpha;
-        target.setAmbient(sim.ambientAt(tick), lighting.ambientColor ?? 0xffffff);
+        const gaze = this.updateGaze(sim, tick);
+        target.setAmbient(
+            sim.ambientAt(tick) * (1 - GAZE_DIM * (gaze?.strength ?? 0)),
+            lighting.ambientColor ?? 0xffffff,
+        );
         budget.begin();
 
         for (const light of sim.lights) {
@@ -173,10 +210,19 @@ export class SceneLights {
                 });
             }
             const exposed = enemy.def.boss?.look?.exposedLight;
+            const dark = enemy.def.boss?.look?.darkGlow;
+            const phases = enemy.def.light?.phases;
+            const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
+            const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
             if (exposed && sim.isExposed(enemy)) {
-                const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
-                const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
                 this.offer(lightKey(KIND_EXPOSED, enemy.uid), x, y, exposed.radius, exposed);
+            } else if (
+                dark &&
+                phases &&
+                !phases.includes((enemy.bossState?.phase?.index ?? 0) + 1)
+            ) {
+                // Its own light's out: faintly seen all the same (BossLookDef.darkGlow)
+                this.offer(lightKey(KIND_EXPOSED, enemy.uid), x, y, dark.radius, dark);
             }
         }
         // The Wardens: the obelisk flickering open, pyramids about to hit, the enrage's
@@ -239,10 +285,64 @@ export class SceneLights {
         });
 
         target.beginLights(px, py);
+        const pocket = sim.darkPocket;
+        const dark = pocket ? sim.darkPocketAt(tick) : 0;
+        target.setDarkPocket(dark > 0 ? POCKET_DARK.ambient : 0);
+        if (pocket && dark > 0) {
+            target.darken(pocket.x, pocket.y, pocket.radius, POCKET_EDGE, dark);
+        }
         budget.end(px, py, deltaSeconds, (x, y, radius, r, g, b) => {
             target.addLight(x, y, radius, r, g, b);
         });
+        if (gaze && gaze.strength > 0) {
+            const started = performance.now();
+            const at = getPlayerPose(sim, gaze.hero, alpha, localPose);
+            const occluders = gazeOccluders(sim.grid, at.x, at.y, gaze.length + 1);
+            const shade = this.gazeShade;
+            shade.set(occluders, at.x, at.y, gaze.length);
+            const s = gaze.strength;
+            target.addLight(
+                at.x,
+                at.y,
+                gaze.length,
+                GAZE_COLOR[0] * s,
+                GAZE_COLOR[1] * s,
+                GAZE_COLOR[2] * s,
+                (x, y) => shade.at(x, y),
+            );
+            this.gazeMs = performance.now() - started;
+        }
         target.endLights();
+    }
+
+    // The gaze to light now, if any: the one winding up (strongest as it strikes), or the last
+    // fading out
+    private updateGaze(
+        sim: Sim,
+        tick: number,
+    ): { hero: number; length: number; strength: number } | undefined {
+        const winding = sim.getKitGazes()[0];
+        if (winding) {
+            const t =
+                (tick - winding.startTick) / Math.max(1, winding.landTick - winding.startTick);
+            this.gaze = {
+                hero: winding.hero,
+                length: winding.length,
+                strength: 0.4 + 0.6 * Math.min(1, Math.max(0, t)),
+            };
+            return this.gaze;
+        }
+        const last = this.gaze;
+        if (!last) {
+            return undefined;
+        }
+        last.struck ??= this.seconds;
+        const fade = 1 - (this.seconds - last.struck) / GAZE_FADE;
+        if (fade <= 0) {
+            this.gaze = undefined;
+            return undefined;
+        }
+        return { ...last, strength: last.strength * fade };
     }
 
     // One light, its flicker and pulse on its strength

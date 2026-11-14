@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { releaseFocus } from "./menuKeys";
 
 // Banishes a level up's reward or a casket's item (Firemaking): it's never
 // offered again this run, and something else takes its place
@@ -21,7 +22,7 @@ export function BanishButton({
                 e.stopPropagation();
                 onBanish();
                 // Give the number keys back
-                e.currentTarget.blur();
+                releaseFocus(e);
             }}
         >
             {label ?? t("canvas.banish")}

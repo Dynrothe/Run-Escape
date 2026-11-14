@@ -567,6 +567,15 @@ export class ArenaGrid {
         return (this.getTileFlags(tileX, tileY) & REGION_TILE_INSIDE) !== 0;
     }
 
+    // Whether something that burns stands on a tile (MapDef.burns, RegionData.burnTiles)
+    burnsAt(tileX: number, tileY: number): boolean {
+        const tiles = this.data.burnTiles;
+        if (!tiles || !this.contains(tileX, tileY)) {
+            return false;
+        }
+        return tiles[tileX - this.baseX + (tileY - this.baseY) * this.sizeX] === 1;
+    }
+
     // Ground height at a world position in scene units (128 per tile, negative
     // is up). On bridges this is the bridge deck, not the river bed.
     getHeight(x: number, y: number): number {

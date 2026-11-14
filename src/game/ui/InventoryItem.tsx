@@ -30,7 +30,7 @@ export function InventoryItem({
             aria-label={slot ? tl(slot.item.name) : t("ui.hud.empty_item_slot", { n: index + 1 })}
             onUse={onUse}
             touch={touch}
-            description={slot && <ItemDescription item={slot.item} />}
+            description={slot && <ItemDescription item={slot.item} rarity />}
         >
             {!touch && (
                 <KeyHint

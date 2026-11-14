@@ -64,14 +64,12 @@ test("pause is a labelled modal, isolates the run and starts on its selected tab
     expect(screen.getByRole("tab", { name: "Loadout" })).toHaveFocus();
 
     const overlay = dialog.parentElement!;
+    // The toasts stay out of it, so they're still announced
     const background = [...overlay.parentElement!.children].filter(
-        (element) => element !== overlay,
+        (element) => element !== overlay && !element.matches(".ui-toasts"),
     );
     expect(background.length).toBeGreaterThan(0);
     expect(background.every((element) => element.hasAttribute("inert"))).toBe(true);
-    expect(background.every((element) => element.getAttribute("aria-hidden") === "true")).toBe(
-        true,
-    );
     expect(view.container.querySelector(".ui-run")).not.toBeNull();
 });
 

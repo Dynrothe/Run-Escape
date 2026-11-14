@@ -1,20 +1,26 @@
 import type { GameClient } from "../../client/GameClient";
 import type { UiSnapshot } from "../../client/GameStore";
 import { formatTime } from "../../client/GameView";
+import { invaderName } from "../../content/invasions";
 import { INVOCATION_BY_ID, RAID_BAND_SPRITES, getRaidBand } from "../../content/invocations";
 import { getMap, mapName } from "../../content/maps";
 import { TROPHY_BY_ID, trophyName } from "../../content/trophies";
 import type { MapDef } from "../../content/types";
+import { parseWeekKey } from "../../content/vault";
 import type { RaidChest, TombsSummary } from "../../core/Sim";
 import { fmtNum, list, t, tl, tp } from "../../i18n";
 import { Coins } from "../Coins";
 import { ItemIcon } from "../ItemIcon";
+import { KeyHint } from "../PadHint";
 import { formatCompact } from "../formatCompact";
 
 export type ScreenProps = { ui: UiSnapshot; client: GameClient };
 
 // Co-op's results name everyone else
 export const MAX_LISTED_TEAMMATES = 3;
+
+// How long the results ignore Escape and Enter after they come up
+export const RESULT_KEY_GUARD_MS = 600;
 
 // "Coif, Rune boots and Seers ring", or the first few "and 5 more"
 export function listNames(names: string[], most = 3): string {
@@ -73,10 +79,16 @@ export function RaidChestView({ chest }: { chest: RaidChest }): JSX.Element {
                 {purple ? t("ui.raid.chest.purple") : t("ui.raid.chest.regular")}
             </div>
             <div className="ui-subtle">
+                {/* No purple left to find: no chance to show (a roll of its own can still give
+                    something, the Tombs' jewels or expert's looks) */}
                 {t(
                     chest.level !== undefined
-                        ? "ui.raid.chest.points_level"
-                        : "ui.raid.chest.points",
+                        ? chest.purpleLeft
+                            ? "ui.raid.chest.points_level"
+                            : "ui.raid.chest.points_level_none"
+                        : chest.purpleLeft
+                          ? "ui.raid.chest.points"
+                          : "ui.raid.chest.points_none",
                     {
                         points: fmtNum(chest.points),
                         level: chest.level ?? 0,
@@ -169,7 +181,12 @@ export function TombsBoardView({ tombs }: { tombs: TombsSummary }): JSX.Element 
                                 <td>{player.name || "You"}</td>
                                 <td>{player.points.toLocaleString("en-GB")}</td>
                                 <td>{player.deaths}</td>
-                                <td>{Math.round(player.chance * 100)}%</td>
+                                {/* None with no purple left to find, as their chest's line */}
+                                <td>
+                                    {player.chance === undefined
+                                        ? "–"
+                                        : `${Math.round(player.chance * 100)}%`}
+                                </td>
                             </tr>
                         ))}
                         {tombs.party.length > 1 && (
@@ -243,9 +260,43 @@ export function ResultNotices({ ui }: { ui: UiSnapshot }): JSX.Element {
             )}
             {result?.tombs && <TombsBoardView tombs={result.tombs} />}
             {result?.raidChest && <RaidChestView chest={result.raidChest} />}
+            {result?.hard && result.victory && result.relics && (
+                <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
+            )}
             {result?.firstHardWin && (
                 <p className="ui-unlocked">
                     {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}
+                </p>
+            )}
+            {/* Act II's extras (act-2-fallen-empire.md 8.6): an invader felled, an orb spent
+                or won, the Vault's week */}
+            {result?.invasion?.killed && (
+                <p className="ui-unlocked">
+                    {t("ui.result.invader_killed", { name: invaderName(result.invasion.id) })}
+                </p>
+            )}
+            {result?.invasion?.came && !result.invasion.killed && (
+                <p className="ui-subtle">
+                    {t("ui.result.invader_lived", { name: invaderName(result.invasion.id) })}
+                </p>
+            )}
+            {result?.awakened?.seen && (
+                <p className={result.victory ? "ui-unlocked" : "ui-subtle"}>
+                    {result.victory
+                        ? t("ui.result.awakened_won", {
+                              coins: fmtNum(result.awakened.casketCoins ?? 0),
+                          })
+                        : t("ui.result.awakened_spent")}
+                </p>
+            )}
+            {result?.orbWon && <p className="ui-unlocked">{t("ui.result.orb_won")}</p>}
+            {result?.vault && (
+                <p className={result.vault.best ? "ui-unlocked" : "ui-subtle"}>
+                    {result.vault.best
+                        ? t("ui.result.vault_best", {
+                              week: parseWeekKey(result.vault.key)?.week ?? 0,
+                          })
+                        : t("ui.result.vault_not_best")}
                 </p>
             )}
             {result?.unlockedMap && (
@@ -287,20 +338,25 @@ export function ResultNotices({ ui }: { ui: UiSnapshot }): JSX.Element {
     );
 }
 
-// Retry (a boss fight on your own) and back to the title or the party
+// Play again or retry on your own, and back to the title or the party
 export function ResultButtons({ ui, client }: ScreenProps): JSX.Element {
+    const result = ui.result;
+    // The map just played: a win can have moved the pick on to the one it opened
+    const played = getMap(result?.mapId ?? ui.mapId);
+    const canRetry = !result?.coop;
     return (
         <div className="ui-row">
-            {/* A boss fight on your own: straight into it again */}
-            {!ui.coop.room && getMap(ui.mapId).fight && (
+            {/* On your own: straight into the same map again */}
+            {canRetry && (
                 <button className="ui-button ui-button-go" onClick={() => client.retry()}>
-                    {nextFightLabel(getMap(ui.mapId), ui.overlay === "victory", ui.result?.stage)}
+                    <KeyHint keyLabel="Enter" className="ui-choice-key ui-word-key" />{" "}
+                    {played.fight
+                        ? nextFightLabel(played, ui.overlay === "victory", result?.stage)
+                        : t("ui.result.play_again")}
                 </button>
             )}
             <button
-                className={
-                    !ui.coop.room && getMap(ui.mapId).fight ? "ui-button" : "ui-button ui-button-go"
-                }
+                className={canRetry ? "ui-button" : "ui-button ui-button-go"}
                 onClick={() => client.leaveRun()}
             >
                 {ui.coop.room ? t("ui.result.back_party") : t("ui.result.back_title")}

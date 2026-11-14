@@ -26,7 +26,6 @@ function slot(
         level,
         maxLevel,
         iconObjId: 1,
-        detail: "",
         rarityColor: "#fff",
         ...extra,
     };

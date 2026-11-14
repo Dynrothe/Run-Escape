@@ -6,6 +6,7 @@ import type {
     FloorTileType,
     FloorWhereDef,
 } from "../content/types";
+import { hashChance } from "./Rng";
 
 // How a floor (FloorDef) is laid out: which tiles of its box are floor, and each one's skin, type,
 // turn and slab, from its shape, ascii map and tiles rules. Worked out once, the same every time
@@ -121,12 +122,7 @@ export function inShape(
 
 // A number from 0 to 1 for a tile, the same for the same floor, rule and tile
 function chance(seed: number, rule: number, i: number, salt: number): number {
-    let h = Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b);
-    h = Math.imul(h ^ (rule + 1) ^ (h >>> 13), 0xc2b2ae35);
-    h = Math.imul(h ^ (i + 1) ^ (h >>> 16), 0x27d4eb2f);
-    h = Math.imul(h ^ (salt + 7) ^ (h >>> 15), 0x165667b1);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
+    return hashChance(seed, rule, i, salt);
 }
 
 // The ascii map's character at a floor tile, or "" off it

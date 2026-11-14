@@ -35,9 +35,29 @@ export const CLOUD_SAVE_SPRITES = {
 // The client's grey stone slot (the equipment screen's): the squares on the pause menu's quest
 // cards. Also kept in the slim cache by scripts/cache/slim-cache.ts.
 export const STONE_SLOT_SPRITE = 170;
+// The sound's orb (ui/SoundOrb.tsx): the client's orb frame and an orb's fill, as by its minimap,
+// with the Music tab's harp in the circle, and cloud save's "no" sign over it while it's off
+export const SOUND_ORB_SPRITES = {
+    frame: 1071,
+    fill: 1063,
+    music: 910,
+    off: CLOUD_SAVE_SPRITES.problem,
+} as const;
+
+// The client's square checkbox (ui/RsCheckbox.tsx): empty and ticked, and each lit up under the
+// mouse
+export const CHECKBOX_SPRITES = {
+    off: 1215,
+    on: 1217,
+    offHover: 1218,
+    onHover: 1220,
+} as const;
 
 export const COLLECTION_LOG_OBJ = 22711;
 
 // The client's own back-arrow button, on a bought skill to refund a rank. Also kept in the slim
 // cache by scripts/cache/slim-cache.ts.
 export const REFUND_SPRITE = 1021;
+
+// The Wardrobe's tile: a red partyhat, from its store (so the slim cache has its icon)
+export const WARDROBE_ICON_OBJ = 1038;

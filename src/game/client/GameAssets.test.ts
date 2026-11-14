@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { BakeRequest } from "../../mapviewer/webgl/actor/ActorBakeTypes";
 import {
@@ -10,16 +10,19 @@ import { CHARACTERS } from "../content/characters";
 import { REVIVE_SEQ } from "../content/coop";
 import { CURSED_SANDS_ENEMIES, CURSED_SANDS_MAP_ID } from "../content/cursedSands";
 import { ENEMIES, getEnemy } from "../content/enemies";
-import { GEAR_SLOTS } from "../content/items";
+import { GEAR_SLOTS, getItem } from "../content/items";
 import { getMapEnemies } from "../content/mapEnemies";
 import { ALL_MAPS, getMap } from "../content/maps";
+import { SAME_NPC_LOOK } from "../content/npcLooks";
 import { PASSIVES } from "../content/passives";
 import { POWER_UPS, THRALLS, getPowerUp } from "../content/powerups";
 import { RANDOM_EVENTS, VISITOR_SPOTANIM } from "../content/randomEvents";
 import { SOUNDS } from "../content/sounds";
 import { STAT_ICON_SPRITE_IDS } from "../content/statIcons";
+import { SOUND_ORB_SPRITES } from "../content/titleIcons";
 import { TOMBS_ENEMIES, TOMBS_SPIRIT } from "../content/tombs";
 import { emptyStats } from "../content/types";
+import { COSMETICS } from "../content/wardrobe";
 import { WEAPONS, getWeapon } from "../content/weapons";
 import { Sim } from "../core/Sim";
 import { makeGrid } from "../core/world/testGrid";
@@ -37,6 +40,7 @@ import {
     getLookKey,
     getOfferedAttackSeqs,
     getPlayerAttackSeqs,
+    getPoolKey,
     getPowerUpLookRequests,
     getPrayerHeadicon,
     getRunAppearance,
@@ -109,14 +113,17 @@ describe("enemy bakes", () => {
     });
 
     test("every spot animation a boss attack shows is in the base bake", () => {
-        const keys = GameAssets.getBaseRequests().map((r) => r.key);
+        const requests = GameAssets.getBaseRequests();
+        const keys = requests.map((r) => r.key);
         for (const enemy of ENEMIES) {
             for (const attack of enemy.boss?.attacks ?? []) {
                 for (const id of attack.impactSpotAnims ?? []) {
                     expect(keys).toContain("spot:" + id);
                 }
+                // and its pool, on its own animation (a fire flickers)
                 if (attack.pool) {
-                    expect(keys).toContain("loc:" + attack.pool.locId);
+                    const pool = requests.find((r) => r.key === getPoolKey(attack.pool!.locId));
+                    expect(pool).toMatchObject({ kind: "loc", animated: true });
                 }
             }
             for (const id of enemy.disguise?.warning?.spotAnims ?? []) {
@@ -132,8 +139,12 @@ describe("enemy bakes", () => {
 });
 
 // A request without its key and animations
+// What a request bakes, an NPC by its look (content/npcLooks.ts)
 function getBody(request: BakeRequest): Partial<BakeRequest> {
     const { key: _key, ...body } = request;
+    if (body.kind === "npc") {
+        body.npcId = SAME_NPC_LOOK[body.npcId] ?? body.npcId;
+    }
     return "seqIds" in body ? { ...body, seqIds: body.seqIds.slice(0, 1) } : body;
 }
 
@@ -151,6 +162,16 @@ describe("merged enemy bakes", () => {
                 expect(keys.has(key) || keys.has(merged.aliases.get(key)!)).toBe(true);
             }
         }
+    });
+
+    test("bakes the item model used by a boss projectile", () => {
+        const requests = GameAssets.getEnemyRequests(getMapEnemies(getMap("thanksgiving")));
+        expect(requests).toContainEqual({
+            kind: "obj",
+            key: "obj:23818",
+            objId: 23818,
+            count: 1,
+        });
     });
 
     test("merge only requests that bake the same model, with all their animations", () => {
@@ -188,6 +209,24 @@ describe("merged enemy bakes", () => {
         }
     });
 
+    test("bake a boss's forms that look the same once, though they're NPCs of their own", () => {
+        const { requests, aliases } = GameAssets.mergeRequests(
+            GameAssets.getEnemyRequests(getMapEnemies(getMap("tombs_of_amascut"))),
+        );
+        for (const [form, as] of [
+            ["elidinis_warden_ranged", "elidinis_warden_magic"],
+            ["tumeken_warden_ranged", "tumeken_warden_magic"],
+            ["akkha_ranged", "akkha"],
+            ["akkha_magic", "akkha"],
+            ["akkha_enraged", "akkha"],
+            ["kephri_final", "kephri"],
+        ]) {
+            expect(getEnemy(form).npcId).not.toBe(getEnemy(as).npcId);
+            expect(aliases.get("npc:" + form)).toBe("npc:" + as);
+            expect(requests.some((r) => r.key === "npc:" + form)).toBe(false);
+        }
+    });
+
     test("never have one key for two different models", () => {
         const lots = [GameAssets.getBaseRequests(), ...maps.map((m) => m.requests)];
         for (const requests of lots) {
@@ -214,6 +253,89 @@ describe("bake tasks", () => {
                 expect(task).toHaveLength(1);
             }
         }
+    });
+});
+
+describe("a run's enemies, baked and freed", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    // Workers that bake when the test says, and what goes on and comes off the GPU
+    function makeAssets() {
+        vi.spyOn(console, "log").mockImplementation(() => {});
+        const waiting: (() => void)[] = [];
+        const baked: string[] = [];
+        const workerPool = {
+            queueLoad: (_loader: unknown, input: { requests: BakeRequest[] }) =>
+                new Promise((resolve) => {
+                    waiting.push(() => {
+                        baked.push(...input.requests.map((r) => r.key));
+                        resolve({
+                            vertices: new Uint8Array(0),
+                            indices: new Uint16Array(0),
+                            segmentStarts: new Int32Array(0),
+                            positions: new Int16Array(0),
+                            sets: input.requests.map((r) => ({ key: r.key })),
+                            loadedTextures: new Map(),
+                        });
+                    });
+                }),
+        };
+        const onGpu = new Set<string>();
+        const pages = new Map<object, string[]>();
+        const actors = {
+            addBake: (bake: { sets: { key: string }[] }) => {
+                const page = {};
+                const keys = bake.sets.map((set) => set.key);
+                pages.set(page, keys);
+                keys.forEach((key) => onGpu.add(key));
+                return new Map(keys.map((key) => [key, { page }]));
+            },
+            removePage: (page: object) => pages.get(page)?.forEach((key) => onGpu.delete(key)),
+        };
+        const renderer = { loadedTextureIds: new Set(), updateTextureArray: () => {} };
+        const assets = new GameAssets(workerPool as never, renderer as never, actors as never);
+        // Lets every bake asked for so far land
+        const land = async () => {
+            waiting.splice(0).forEach((done) => done());
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+        return { assets, baked, onGpu, land };
+    }
+
+    const [goblin, rat, cow] = ["goblin", "giant_rat", "cow"].map(getEnemy);
+
+    test("a new lot frees what's no longer wanted, and keeps what still is", async () => {
+        const { assets, baked, onGpu, land } = makeAssets();
+        const first = assets.loadEnemies([goblin, rat]);
+        await land();
+        await first;
+        expect(assets.hasEnemies([goblin, rat])).toBe(true);
+        const second = assets.loadEnemies([rat, cow]);
+        await land();
+        await second;
+        expect(assets.hasEnemies([rat, cow])).toBe(true);
+        expect(assets.hasEnemies([goblin])).toBe(false);
+        expect([...onGpu].sort()).toEqual(["npc:cow", "npc:giant_rat"]);
+        // The rat stayed as it was
+        expect(baked.sort()).toEqual(["npc:cow", "npc:giant_rat", "npc:goblin"]);
+    });
+
+    test("one on its way isn't baked again, and one that lands unwanted never goes on", async () => {
+        const { assets, baked, onGpu, land } = makeAssets();
+        const first = assets.loadEnemies([goblin]);
+        // Asked for again before it's in: the same bake
+        const again = assets.loadEnemies([goblin, rat]);
+        assets.requestEnemy(goblin);
+        // And dropped before either lands
+        const none = assets.loadEnemies([]);
+        await land();
+        await Promise.all([first, again, none]);
+        expect(baked.sort()).toEqual(["npc:giant_rat", "npc:goblin"]);
+        expect(onGpu.size).toBe(0);
+        expect(assets.hasEnemies([goblin])).toBe(false);
+        expect(assets.hasEnemies([rat])).toBe(false);
     });
 });
 
@@ -287,6 +409,41 @@ describe("player bakes", () => {
             const sim = createRun(1, character.id);
             expect(getRunAttackSeqs(sim)).toEqual(getCharacterAttackSeqs(character.id));
         }
+    });
+
+    test("Avian Assaulter keeps the chicken outfit over gear and passives in co-op", () => {
+        const sim = createRun(2, "avian_assaulter");
+        sim.as(1, () => {
+            sim.gear = {
+                head: "berserker_helm",
+                body: "rune_platebody",
+                legs: "rune_platelegs",
+                feet: "rune_boots",
+            };
+            sim.passives.push({ id: "obsidian_armour", level: 1, value: 1 });
+        });
+        const appearance = getRunAppearance(sim, 1);
+        expect(appearance.equipment[EquipSlot.HEAD]).toBe(11021);
+        expect(appearance.equipment[EquipSlot.TORSO]).toBe(11020);
+        expect(appearance.equipment[EquipSlot.LEGS]).toBe(11022);
+        expect(appearance.equipment[EquipSlot.FEET]).toBe(11019);
+        expect(appearance.equipment[EquipSlot.WEAPON]).toBe(4566);
+        expect(sim.as(1, () => sim.gear.head)).toBe("berserker_helm");
+    });
+
+    test("wear the Wardrobe's outfit under gear, or over it when it's kept on", () => {
+        const sim = createRun(1, "warrior");
+        const hat = COSMETICS.find((c) => c.slot === EquipSlot.HEAD)!;
+        const look = { outfit: { [EquipSlot.HEAD]: hat.objId, [EquipSlot.LEGS]: -1 } };
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        sim.gear = { head: "berserker_helm" };
+        const helm = getItem("berserker_helm").objId;
+        expect(getRunAppearance(sim, 0, look).equipment[EquipSlot.HEAD]).toBe(helm);
+        const kept = getRunAppearance(sim, 0, { ...look, overGear: true });
+        expect(kept.equipment[EquipSlot.HEAD]).toBe(hat.objId);
+        expect(kept.equipment[EquipSlot.LEGS]).toBe(-1);
+        // The weapon stays the sim's
+        expect(kept.equipment[EquipSlot.WEAPON]).toBe(sim.getHeldObjId());
     });
 
     test("bake the swings a level-up offers ahead, and not ones held", () => {
@@ -370,6 +527,7 @@ describe("power-ups in the cache", () => {
             [EquipSlot.SHIELD]: 1171,
             [EquipSlot.HEAD]: 1153,
         });
+
         const [request] = getPowerUpLookRequests(appearance);
         const { look } = getPowerUp("sled");
         expect(request).toMatchObject({
@@ -383,6 +541,20 @@ describe("power-ups in the cache", () => {
         expect(worn[EquipSlot.HEAD]).toBe(1153);
         // The player's own look is left as it was
         expect(appearance.equipment[EquipSlot.WEAPON]).toBe(1277);
+    });
+
+    test("adventurers' overhead effects are baked and kept in the slim cache", () => {
+        const avian = CHARACTERS.find((character) => character.id === "avian_assaulter")!;
+        expect(avian.overheadSpotAnim).toBe(254);
+        expect(CHARACTERS.filter((character) => character.overheadSpotAnim !== undefined)).toEqual([
+            avian,
+        ]);
+        expect(getSpotAnimIds()).toContain(avian.overheadSpotAnim);
+        expect(GameAssets.getBaseRequests()).toContainEqual({
+            kind: "spotanim",
+            key: "spot:254",
+            spotAnimId: 254,
+        });
     });
 
     test("what their effects draw is baked, so the slim cache gets it", () => {
@@ -432,7 +604,13 @@ describe("power-ups in the cache", () => {
         const keys = new Set(GameAssets.getBaseRequests().map((r) => r.key));
         for (const weapon of WEAPONS) {
             for (const level of weapon.levels) {
-                const ids = [level.castSpotAnim, level.projectileSpotAnim, level.impactSpotAnim];
+                const ids = [
+                    level.castSpotAnim,
+                    level.projectileSpotAnim,
+                    level.impactSpotAnim,
+                    // and a heavy blow's on what it hits (the Saradomin sword's)
+                    weapon.heavy?.hit?.spotAnim,
+                ];
                 for (const id of ids) {
                     if (id !== undefined) {
                         expect(keys, weapon.id).toContain("spot:" + id);
@@ -512,6 +690,12 @@ describe("sprites", () => {
     test("the slim cache keeps every stat icon's sprite", () => {
         const ids = getGameSpriteIds();
         expect(ids).toEqual(expect.arrayContaining(STAT_ICON_SPRITE_IDS));
+    });
+
+    test("the slim cache keeps the sound's orb", () => {
+        expect(getGameSpriteIds()).toEqual(
+            expect.arrayContaining(Object.values(SOUND_ORB_SPRITES)),
+        );
     });
 
     test("the slim cache keeps every passive's icon", () => {

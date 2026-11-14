@@ -925,6 +925,11 @@ describe("co-op lockstep", () => {
         expect(isGameStart({ ...good, heroes: [{ ...good.heroes[0], name: 5 }] }, 4)).toBe(false);
         // Two heroes with one id would be one player twice over
         expect(isGameStart({ ...good, heroes: [good.heroes[0], good.heroes[0]] }, 4)).toBe(false);
+        // An act's map's step, the host's: a whole number, if it's there at all
+        expect(isGameStart({ ...good, actStep: 2 }, 4)).toBe(true);
+        expect(isGameStart({ ...good, actStep: -1 }, 4)).toBe(false);
+        expect(isGameStart({ ...good, actStep: 1.5 }, 4)).toBe(false);
+        expect(isGameStart({ ...good, actStep: "3" }, 4)).toBe(false);
         // The Tombs' invocations, the host's: ids, which the Sim cleans
         expect(isGameStart({ ...good, invocations: ["insanity", "walk_for_it"] }, 4)).toBe(true);
         expect(isGameStart({ ...good, invocations: "insanity" }, 4)).toBe(false);

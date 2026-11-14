@@ -144,6 +144,7 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         this.beginLights(0, 0);
         this.endLights();
         this.setAmbient(1, 0xffffff);
+        this.setDarkPocket(0);
         if (on === this.wantsLights) {
             return;
         }
@@ -214,14 +215,32 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
         this.ambient[2] = ((color & 0xff) / 255) * level;
     }
 
+    // A pocket of the dark this frame (an invading Leviathan's): how dark it is in it (0 none), and
+    // where, in world tiles (LightMap.darken)
+    setDarkPocket(level: number): void {
+        this.ambient[3] = level;
+    }
+
+    darken(x: number, y: number, radius: number, edge: number, amount: number): void {
+        this.lightMapData.darken(x, y, radius, edge, amount);
+    }
+
     // This frame's lights, round (x, y) in world tiles (LightMap): each at world tiles, radius in
     // tiles, and colour times strength (0 to 1 a channel at strength 1), then sent to the GPU
     beginLights(x: number, y: number): void {
         this.lightMapData.begin(x, y);
     }
 
-    addLight(x: number, z: number, radius: number, r: number, g: number, b: number): void {
-        this.lightMapData.add(x, z, radius, r, g, b);
+    addLight(
+        x: number,
+        z: number,
+        radius: number,
+        r: number,
+        g: number,
+        b: number,
+        shade?: (x: number, z: number) => number,
+    ): void {
+        this.lightMapData.add(x, z, radius, r, g, b, shade);
     }
 
     endLights(): void {
@@ -338,6 +357,7 @@ export class GameWebGLRenderer extends WebGLMapViewerRenderer {
             return;
         }
         actors.renderOutlines();
+        actors.renderGlows();
         actors.renderEarly();
         actors.renderSilhouettes();
         actors.renderOpaque();

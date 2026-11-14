@@ -13,8 +13,9 @@ body {
     padding: 0;
     height: 100vh;
 
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-        "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell",
+        "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
@@ -27,6 +28,16 @@ body {
     -ms-user-select: none; /* Internet Explorer/Edge */
     user-select: none; /* Non-prefixed version, currently
                                   supported by Chrome, Edge, Opera and Firefox */
+}
+
+/* A touch screen's browser bars come and go, and 100vh is the height without them, which put the
+   bottom of every screen under an iPad's edge. Here rather than in Mobile.css, as this file comes
+   after it. */
+@media (pointer: coarse) {
+    html,
+    body {
+        height: 100dvh;
+    }
 }
 
 #root,

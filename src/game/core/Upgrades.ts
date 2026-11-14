@@ -1,3 +1,4 @@
+import { getBlessing } from "../content/blessings";
 import { OVERLEVEL_DAMAGE, upgradedName } from "../content/endless";
 import { EVOLUTIONS, getEvolutionsWith } from "../content/evolutions";
 import {
@@ -12,7 +13,7 @@ import {
     passiveName,
 } from "../content/passives";
 import { RARITIES, Rarity, atLeast, rollRarity } from "../content/rarity";
-import { CombatStyle, PassiveDef, WeaponDef } from "../content/types";
+import { BlessingsDef, CombatStyle, PassiveDef, WeaponDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import {
     WeaponStatLine,
@@ -65,7 +66,9 @@ export type UpgradeChoice =
           currentValue: number;
       }
     | { kind: "coins"; amount: number }
-    | { kind: "food"; amount: number };
+    | { kind: "food"; amount: number }
+    // One of the map's blessings (MapDef.blessings), had count times once it's taken
+    | { kind: "blessing"; blessingId: string; count: number };
 
 export type ChoiceDescription = {
     title: string;
@@ -162,6 +165,7 @@ export function overlevelBonus(bonus: number, quality: Rarity): number {
 function bonusStat(value: number, before: number): WeaponStatLine {
     return {
         label: t("ui.levelup.damage_bonus"),
+        english: "Damage bonus",
         value: formatWeaponBonus(value),
         from: formatWeaponBonus(before),
         better: value >= before,
@@ -173,6 +177,7 @@ function bonusStat(value: number, before: number): WeaponStatLine {
 function passiveStat(passive: PassiveDef, value: number, before?: number): WeaponStatLine {
     return {
         label: passiveEffect(passive)[0].toUpperCase() + passiveEffect(passive).slice(1),
+        english: passive.effect,
         value: formatPassiveNumber(passive, value),
         ...(before !== undefined && {
             from: formatPassiveNumber(passive, before),
@@ -188,7 +193,8 @@ function withoutSharedOpening(text: string, other: string): string {
     return end > 0 && other.startsWith(text.slice(0, end + 2)) ? text.slice(end + 2) : text;
 }
 
-export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
+// blessings: the map's (MapDef.blessings), for a blessing's card
+export function describeChoice(choice: UpgradeChoice, blessings?: BlessingsDef): ChoiceDescription {
     switch (choice.kind) {
         case "newWeapon": {
             const weapon = getWeapon(choice.weaponId);
@@ -253,14 +259,18 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
         case "hilt": {
             // The hilted weapon's description, without the sweep it shares
             // with the blade: "Every third swing is The Judgement..."
-            // (no stats: the hilts all share the blade's)
+            // (no stats: the hilts all share the blade's). Keeping what it is (the plain keris)
+            // shows the whole of it.
             const into = getWeapon(choice.into);
             return {
                 title: weaponName(into),
-                text: withoutSharedOpening(
-                    weaponDescription(into),
-                    weaponDescription(getWeapon(choice.weaponId)),
-                ),
+                text:
+                    choice.into === choice.weaponId
+                        ? weaponDescription(into)
+                        : withoutSharedOpening(
+                              weaponDescription(into),
+                              weaponDescription(getWeapon(choice.weaponId)),
+                          ),
                 iconObjId: choice.hiltObjId,
             };
         }
@@ -305,6 +315,17 @@ export function describeChoice(choice: UpgradeChoice): ChoiceDescription {
                 text: t("ui.levelup.heals", { n: choice.amount }),
                 iconObjId: 385,
             };
+        case "blessing": {
+            if (!blessings) {
+                throw new Error("A blessing on a map without them: " + choice.blessingId);
+            }
+            const blessing = getBlessing(blessings, choice.blessingId);
+            return {
+                title: blessing.name,
+                text: blessing.description,
+                iconObjId: blessing.iconObjId,
+            };
+        }
     }
 }
 
@@ -315,12 +336,20 @@ const PASSIVE_LEVEL_WEIGHT = 6;
 const NEW_WEAPON_WEIGHT = 1;
 const NEW_PASSIVE_WEIGHT = 0.5;
 
-// Rolls the options offered on a level up: VS rules, roughly. An evolution is
-// always offered when it's ready, and luck can add a fourth option and makes
-// rarer rolls likelier. Class weapons are only offered to their own style.
-// Weapons, passives and evolutions still locked behind a map task are left
-// out; with no unlocked set everything is in. In endless runs weapons and
-// most passives level on past their last level, so there's always something.
+// Whether a weapon can be offered new: unlocked, or one whose pick keeps it as one of its
+// choices (Ice Burst, the plain keris) with any of the picks unlocked. A jewel found before the
+// Kalphite Queen's kill still comes as the plain keris that takes it.
+function isOfferable(weapon: WeaponDef, unlocked: ReadonlySet<string> | undefined): boolean {
+    if (isAvailable(weapon, unlocked)) {
+        return true;
+    }
+    const into = weapon.hilts?.into ?? [];
+    return (
+        into.some(({ weaponId }) => weaponId === weapon.id) &&
+        into.some(({ weaponId }) => isAvailable(getWeapon(weaponId), unlocked))
+    );
+}
+
 // The hilts to pick from when a weapon has just reached its hilt level (the
 // godsword's blade), none otherwise
 export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>): UpgradeChoice[] {
@@ -328,7 +357,14 @@ export function hiltChoices(weapon: WeaponState, unlocked?: ReadonlySet<string>)
     if (!hilts || weapon.level !== hilts.level) {
         return [];
     }
-    const into = hilts.into.filter(({ weaponId }) => isAvailable(getWeapon(weaponId), unlocked));
+    // Keeping what it is stays a pick even while it's locked, for a weapon level ups offer (see
+    // isOfferable): the plain keris, taking a jewel found before the Queen's kill. Not for a burst
+    // an adventurer starts with: the Menaphite's Smoke Burst has no pick till the Desert's beaten.
+    const into = hilts.into.filter(
+        ({ weaponId }) =>
+            (weaponId === weapon.def.id && !weapon.def.pickOnly) ||
+            isAvailable(getWeapon(weaponId), unlocked),
+    );
     // Nothing else to pick from yet (Ice Burst before the Desert's beaten)
     if (into.length < 2) {
         return [];
@@ -369,6 +405,12 @@ export function fitsWithPouch(
     return weapons.length + 1 <= maxWeapons - 1 + (magic ? 1 : 0);
 }
 
+// Rolls the options offered on a level up: VS rules, roughly. An evolution is
+// always offered when it's ready, and luck can add a fourth option and makes
+// rarer rolls likelier. Class weapons are only offered to their own style.
+// Weapons, passives and evolutions still locked behind a map task are left
+// out; with no unlocked set everything is in. In endless runs weapons and
+// most passives level on past their last level, so there's always something.
 export function rollChoices(
     rng: Rng,
     weapons: readonly WeaponState[],
@@ -390,7 +432,7 @@ export function rollChoices(
     // (evolutions are never offered, so they don't count)
     const familySizes = new Map<string, number>();
     for (const weapon of WEAPONS) {
-        if (weapon.family && !weapon.evolved && !weapon.pickOnly && isAvailable(weapon, unlocked)) {
+        if (weapon.family && !weapon.evolved && !weapon.pickOnly && isOfferable(weapon, unlocked)) {
             familySizes.set(weapon.family, (familySizes.get(weapon.family) ?? 0) + 1);
         }
     }
@@ -428,7 +470,7 @@ export function rollChoices(
                 weapon.pickOnly ||
                 ownedWeapons.has(weapon.id) ||
                 banished?.has(weapon.id) ||
-                !isAvailable(weapon, unlocked)
+                !isOfferable(weapon, unlocked)
             ) {
                 continue;
             }

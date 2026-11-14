@@ -41,6 +41,10 @@ export const QUEST_ICON_OBJ_IDS: Record<string, number> = {
     ratcatchers: 1985, // Cheese
     demon_slayer: 8279, // Silverlight
     pirates_treasure: 8950, // Pirate hat
+    thanksgiving_professor_oddenstein: 7477, // Evil chicken's egg
+    thanksgiving_evil_chickens: 20439, // Evil chicken head
+    thanksgiving_freaky_forester: 28616, // Pheasant cape
+    thanksgiving_chompy_hunt: 2978, // Chompy bird hat
 };
 
 // The Slayer skill's icon (a skull), a kill quest's mark of the creatures it's after.

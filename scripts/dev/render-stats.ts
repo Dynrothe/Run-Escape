@@ -682,7 +682,13 @@ async function reportMap(mapId: string, state: ReturnType<typeof createWorkerSta
 
 async function reportBake(state: ReturnType<typeof createWorkerState>): Promise<void> {
     const loader = new ActorBakeLoader();
-    const rows: { key: string; bytes: number; indexBytes: number; kind: string }[] = [];
+    const rows: {
+        key: string;
+        bytes: number;
+        indexBytes: number;
+        positionBytes: number;
+        kind: string;
+    }[] = [];
     // Each enemy model once, as the game bakes them (merged), and the player
     // with one weapon's swing (a run bakes the hero's weapons')
     const enemies = GameAssets.mergeRequests(GameAssets.getEnemyRequests(ENEMIES));
@@ -698,17 +704,23 @@ async function reportBake(state: ReturnType<typeof createWorkerState>): Promise<
         });
         clearWorkerStateCaches(state);
         const indexBytes = result.data.indices.byteLength;
+        const positionBytes = result.data.positions.byteLength;
         rows.push({
             key: request.key,
             kind: request.kind,
-            bytes: result.data.vertices.byteLength + indexBytes,
+            bytes: result.data.vertices.byteLength + indexBytes + positionBytes,
             indexBytes,
+            positionBytes,
         });
     }
     rows.sort((a, b) => b.bytes - a.bytes);
     const total = rows.reduce((n, r) => n + r.bytes, 0);
     const indexBytes = rows.reduce((n, r) => n + r.indexBytes, 0);
-    console.log(`\nevery bake: ${rows.length} requests, ${mb(total)} (indices ${mb(indexBytes)})`);
+    const positionBytes = rows.reduce((n, r) => n + r.positionBytes, 0);
+    console.log(
+        `\nevery bake: ${rows.length} requests, ${mb(total)} (indices ${mb(indexBytes)},` +
+            ` positions ${mb(positionBytes)})`,
+    );
     const kinds = new Map<string, number>();
     for (const row of rows) {
         kinds.set(row.kind, (kinds.get(row.kind) ?? 0) + row.bytes);

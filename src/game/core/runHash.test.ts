@@ -1,3 +1,4 @@
+import { HARD_PRESET } from "../content/invocations";
 import { emptyStats } from "../content/types";
 import { HeroOptions, Sim, SimOptions, TICKS_PER_SECOND } from "./Sim";
 import { fm, usePortableMath } from "./fmath";
@@ -115,7 +116,7 @@ describe("seeded runs", () => {
     afterEach(() => usePortableMath(false));
 
     test("a wizard in Lumbridge, their spells chasing targets", () => {
-        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0x822696f2);
+        expect(run({ party: [hero("wizard")], mapId: "lumbridge" }, 240)).toBe(0x8d27c304);
     }, 60000);
 
     test("a ranger in the Inferno on hard mode", () => {
@@ -124,10 +125,18 @@ describe("seeded runs", () => {
         );
     }, 60000);
 
+    // Hard mode is a preset of invocations there (content/invocations.ts, HARD_PRESET): the
+    // preset on its own is the same run, tick for tick
+    test("the same, as hard mode's invocations", () => {
+        expect(
+            run({ party: [hero("ranger")], mapId: "inferno", invocations: [...HARD_PRESET] }, 120),
+        ).toBe(0xd61a2ada);
+    }, 60000);
+
     test("a party of four in the God Wars, armies fighting each other", () => {
         usePortableMath(true);
         const party = ["warrior", "wizard", "ranger", "pyromancer"].map(hero);
         // Every weapon can come up, so a new one (the Nightmare staff) changes it
-        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x54b90ad3);
+        expect(run({ party, mapId: "god_wars" }, 120)).toBe(0x5d5cb1d6);
     }, 60000);
 });

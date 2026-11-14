@@ -1,0 +1,300 @@
+/* The Wardrobe: its panel on the left, the adventurer in the courtyard to its right, with who's
+   wearing it and which way they face under them */
+
+.ui-wardrobe-screen {
+    display: flex;
+    align-items: center;
+    padding-left: 2vw;
+}
+
+/* Only the lists scroll: the tabs and the way out stay in view */
+.ui-wardrobe {
+    width: min(560px, calc(56vw / var(--ui-scale)));
+    height: calc(92vh / var(--ui-scale));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-wardrobe > h2,
+.ui-wardrobe > .ui-armoury-tabs,
+.ui-wardrobe > .ui-row,
+.ui-wardrobe-note {
+    flex-shrink: 0;
+}
+
+.ui-wardrobe-note {
+    margin: 0 0 6px;
+    color: var(--ui-yellow);
+    text-align: center;
+}
+
+.ui-wardrobe-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-wardrobe-body > .ui-wardrobe-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.ui-wardrobe-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-wardrobe-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ui-wardrobe-label {
+    flex-shrink: 0;
+    min-width: 64px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 15px;
+    color: var(--ui-white);
+}
+
+.ui-wardrobe-choices {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.ui-wardrobe-stepper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-wardrobe-stepper-value {
+    min-width: 110px;
+    text-align: center;
+    color: var(--ui-yellow);
+}
+
+.ui-button.ui-wardrobe-arrow {
+    min-width: 32px;
+    padding: 0 8px;
+    font-size: 20px;
+    line-height: 1.2;
+}
+
+.ui-wardrobe-colour-row {
+    align-items: flex-start;
+}
+
+.ui-wardrobe-colour-row > .ui-wardrobe-label {
+    padding-top: 2px;
+}
+
+.ui-wardrobe-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.ui-wardrobe-swatch {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    cursor: pointer;
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.ui-wardrobe-swatch-picked {
+    outline: 2px solid var(--ui-yellow);
+    outline-offset: 1px;
+}
+
+/* The outfit: a row a slot, opening on what can be worn there */
+.ui-wardrobe-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-wardrobe-slot-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    background: rgba(40, 33, 24, 0.45);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-wardrobe-slot-head[aria-expanded="true"] {
+    border-color: var(--ui-orange);
+}
+
+.ui-wardrobe-worn {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ui-yellow);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ui-wardrobe-count {
+    flex-shrink: 0;
+    color: var(--ui-text-dim);
+    font-size: 14px;
+}
+
+.ui-wardrobe-tiles,
+.ui-wardrobe-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.ui-wardrobe-tiles {
+    padding: 0 0 6px 4px;
+}
+
+.ui-card.ui-wardrobe-tile {
+    position: relative;
+    justify-content: center;
+    width: 42px;
+    height: 40px;
+    padding: 0;
+}
+
+.ui-wardrobe-tile.ui-card-selected {
+    background: var(--ui-card-hover);
+}
+
+.ui-wardrobe-tile-text {
+    font-size: 13px;
+    line-height: 1;
+}
+
+/* In the store, what's already the player's has a tick in its corner */
+.ui-wardrobe-grid .ui-wardrobe-tile-owned::after {
+    content: "✓";
+    position: absolute;
+    right: 2px;
+    bottom: 0;
+    font-size: 13px;
+    color: var(--ui-green-text);
+}
+
+.ui-row.ui-wardrobe-body-buttons {
+    justify-content: flex-start;
+}
+
+/* The courtyard can be dragged to turn the adventurer round (useDragToTurn) */
+.ui-wardrobe-turnable canvas {
+    cursor: grab;
+}
+
+.ui-wardrobe-turning,
+.ui-wardrobe-turning canvas {
+    cursor: grabbing;
+}
+
+/* The store: filters, then the page of pieces beside the one picked */
+.ui-wardrobe-store {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ui-wardrobe-filters {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ui-armoury-tab.ui-wardrobe-slot-tab {
+    display: inline-flex;
+    padding: 1px 4px;
+}
+
+.ui-wardrobe-search {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 3px 6px;
+    font: inherit;
+    color: var(--ui-text);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+    pointer-events: auto;
+}
+
+.ui-wardrobe-store-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 170px;
+    align-items: start;
+    gap: 8px;
+}
+
+.ui-wardrobe-grid-wrap {
+    max-height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ui-wardrobe-pages {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ui-wardrobe-pages > .ui-subtle {
+    margin: 0 0 0 auto;
+}
+
+.ui-wardrobe-details {
+    max-height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.ui-wardrobe-details .ui-subtle {
+    margin: 0;
+    text-align: left;
+    font-size: 14px;
+}
+
+/* Under the adventurer, in the courtyard to the panel's right */
+.ui-wardrobe-preview {
+    position: absolute;
+    left: calc(2vw + min(560px, calc(56vw / var(--ui-scale))) * var(--ui-scale));
+    right: 0;
+    bottom: 4vh;
+    width: max-content;
+    margin: 0 auto;
+    padding: 6px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}

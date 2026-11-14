@@ -2,12 +2,22 @@ import { useCallback, useEffect, useState } from "react";
 
 import { formatTime } from "../../client/GameView";
 import { getMap } from "../../content/maps";
+import { RELIC_BY_ID, relicName } from "../../content/relics";
 import { RESULT_TAB_SPRITES } from "../../content/titleIcons";
-import { t, tl } from "../../i18n";
+import { list, t, tl } from "../../i18n";
 import { Coins } from "../Coins";
 import { CombatBreakdown } from "../CombatBreakdown";
 import { TabBar } from "../TabBar";
-import { Big, ResultButtons, ResultNotices, ScreenProps, stageVictoryText } from "./shared";
+import { useMenuKeys } from "../menuKeys";
+import { useDialog } from "../useDialog";
+import {
+    Big,
+    RESULT_KEY_GUARD_MS,
+    ResultButtons,
+    ResultNotices,
+    ScreenProps,
+    stageVictoryText,
+} from "./shared";
 
 type ResultTab = "summary" | "combat";
 
@@ -54,10 +64,17 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [changePlayer, multiplayer]);
+    useMenuKeys({
+        onBack: () => client.leaveRun(),
+        onConfirm: () => (result?.coop ? client.leaveRun() : client.retry()),
+        // Esc is the pause key: a run can end just as it's pressed
+        guardMs: RESULT_KEY_GUARD_MS,
+    });
+    const { titleId, dialogProps } = useDialog<HTMLDivElement>();
     return (
         <div className="ui-modal">
-            <div className="ui-panel rs-border rs-background ui-result">
-                <h2 className={victory ? "ui-victory" : "ui-defeat"}>
+            <div {...dialogProps} className="ui-panel rs-border rs-background ui-result">
+                <h2 id={titleId} className={victory ? "ui-victory" : "ui-defeat"}>
                     {victory && result
                         ? tl(stageVictoryText(getMap(result.mapId), result.stage))
                         : (result?.endedEarly ?? t("ui.result.dead"))}
@@ -214,6 +231,32 @@ export function ClassicResults({ ui, client }: ScreenProps): JSX.Element {
                                                             {result.expert
                                                                 ? t("ui.expert.name")
                                                                 : t("ui.hard.name")}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {result.points !== undefined && (
+                                                    <tr>
+                                                        <td>{t("ui.result.stat.invocations")}</td>
+                                                        <td>
+                                                            {t("ui.invocations.points", {
+                                                                points: result.points,
+                                                            })}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {result.relics && (
+                                                    <tr>
+                                                        <td>{t("ui.result.stat.relics")}</td>
+                                                        <td>
+                                                            {list(
+                                                                result.relics.flatMap((id) => {
+                                                                    const relic =
+                                                                        RELIC_BY_ID.get(id);
+                                                                    return relic
+                                                                        ? [relicName(relic)]
+                                                                        : [];
+                                                                }),
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 )}

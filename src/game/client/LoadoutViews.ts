@@ -28,6 +28,7 @@ const STAT_GROUPS: {
             "levelMight",
             "auraArea",
             "speed",
+            "meleeSpeed",
             "duration",
             "meleeKnockback",
             "thorns",

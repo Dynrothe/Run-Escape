@@ -20,6 +20,8 @@ export type RegionDataInput = {
     // Loc ids to find on the plane, wherever they are (a lit map's glowing scenery,
     // MapDef.lighting.locs): RegionData.glowLocs
     glowLocs?: number[];
+    // Loc ids whose tiles burn whoever's on them (MapDef.burns): RegionData.burnTiles
+    burnLocs?: number[];
 };
 
 export type RegionData = {
@@ -48,6 +50,9 @@ export type RegionData = {
     // Where the locs asked for (RegionDataInput.glowLocs) are: id, then the middle of their tiles
     // (x, y in world tiles), each. Unset when none were asked for.
     glowLocs?: Float32Array;
+    // 1 on each tile one of the locs asked for (RegionDataInput.burnLocs) stands on, on the plane,
+    // x + y * sizeX. Unset when none were asked for.
+    burnTiles?: Uint8Array;
 };
 
 export const COLLISION_LOC_STRIDE = 8;
