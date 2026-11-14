@@ -1528,8 +1528,14 @@ involved.
 - **The screen** (`ui/CardsScreen.tsx`): its classes are `ui-cards-*` and `ui-tcg-*` (`ui-card` is
   the level up's), with the preview's `ui-pack-preview*`, `ui-pack-rates*` and `ui-info*`. The album
   has no side panel: a found card pressed opens big in a window of its own (`CardWindow`), with the
-  versions owned. A face-down card is a picture (`ui/cards/card-back-*.webp`, the large one where
-  it's shown big), kept to its shape. A pack opens on a playmat that fills the screen
+  versions owned. A card's face is the card generator's printed frame (`ui/cards/card-front-*.webp`,
+  made from `src/media/run-escape-card-front-frame.png`, see `scripts/cards/`), with the name,
+  picture, type line, text and footer laid over it where the generator prints them, in
+  percentages of its plate, in the generator's font (RuneScape Plain 12) and rarity inks
+  (`CARD_INKS`). The name is a sheen of its rarity's ink, so rarity shows at a glance as well as in
+  its word. The picture is the item drawn from its model at the card's size (`ItemIcon`'s `large`).
+  A face-down card is a picture (`ui/cards/card-back-*.webp`, the large one where it's shown big),
+  kept to its shape. A pack opens on a playmat that fills the screen
   (`PackWindow`): its cards in a deck, each press dealing the top one face up into the row with a
   turn (none with `prefers-reduced-motion`); the row is scaled to the mat's own room (`matLayout`,
   measured, as the UI can be drawn bigger than the window), not below a size its words can be read
@@ -1549,9 +1555,10 @@ involved.
 - **Foils** (`CARD_FOIL_CHANCE`, a pack's own `PackDef.foil`): each card from a pack can roll a foil
   after its card and version, on the same numbers. A foil's a copy of its version, so it counts for
   Cards only as any copy does, and `SaveData.cardFoils` keeps how many of those copies are foils, by
-  the same keys (`getFoilCopies`, `getCardFoils`). They're only for show: a holographic shimmer behind
-  the item, its picture's own background (`ui-tcg-art-holo`), drifting where the card's big, on the mat or under a pointer,
-  with twinkling sparkles where it's big or turned over on the mat but never in the album's grid,
+  the same keys (`getFoilCopies`, `getCardFoils`). They're only for show: the card generator's gold
+  reflection, a band swept back and forth behind the item as the window's own background
+  (`ui-tcg-art-holo`), with the name in the foil's gold, both moving where the card's big, on the
+  mat or under a pointer, with twinkling sparkles where it's big or turned over on the mat but never in the album's grid,
   and neither moving with `prefers-reduced-motion`; screen readers hear "Foil". The album has a Foils
   tab and shows a card at its best foil when one's owned; a foil dealt from a pack flashes once and
   chimes. The Collection log's Cards tab counts them.

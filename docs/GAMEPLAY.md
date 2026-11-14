@@ -99,7 +99,7 @@ version and how to run it.
   unlocked, and the strongest things are rarer pulls. A pack's Preview lists its cards on a tab for
   each rarity, each with its chance per pack for your save, or Locked with the map to unlock it in;
   its info icon shows the chance of each item rarity and each quality, with notes on how they're
-  worked out. Any card can come as a foil, a holographic copy that's only for show, with a Foils tab
+  worked out. Any card can come as a foil, a copy with a gold reflection that's only for show, with a Foils tab
   in the album. Packs open on a playmat, a card at a time, and every save gets one free, holding
   your starting adventurer's card. In the album, pressing a found card opens it big in a window,
   with the versions you own.

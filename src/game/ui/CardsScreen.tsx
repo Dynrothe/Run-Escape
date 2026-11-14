@@ -45,6 +45,8 @@ import { PackPreview } from "./PackPreview";
 import { Platinum } from "./Platinum";
 import cardBackLarge from "./cards/card-back-large.webp";
 import cardBackSmall from "./cards/card-back-small.webp";
+import cardFrontLarge from "./cards/card-front-large.webp";
+import cardFrontSmall from "./cards/card-front-small.webp";
 import { useMenuKeys } from "./menuKeys";
 import { useDialog } from "./useDialog";
 
@@ -430,17 +432,41 @@ const SPARKLES: { x: number; y: number; delay: number; size: number }[] = [
     { x: 44, y: 38, delay: 3.1, size: 6 },
 ];
 
+// The rarity's word on a card, in the card generator's inks (scripts/cards), softer than the
+// game's own rarity colours so they sit on the printed plate
+const CARD_INKS: Record<Rarity, string> = {
+    common: "#ece6da",
+    uncommon: "#8cc878",
+    rare: "#eb9b63",
+    veryRare: "#ed8580",
+};
+
 function rarityStyle(rarity: Rarity): CSSProperties {
-    return { "--card-rarity": RARITIES[rarity].color } as CSSProperties;
+    return { "--card-rarity": CARD_INKS[rarity] } as CSSProperties;
 }
 
-// A card's face, as a trading card: its rarity's colour in the frame (and its name in words on the
-// type line, so it's never told by colour alone), the name in a title bar, the item's own icon at
-// a whole multiple of its size in a window over a backdrop for its kind, the type line, a short
-// line of what it is, and its number in the set. A foil copy has a holographic shimmer over its
-// picture, drifting only where `moving` asks (the big card and a pack's mat) or under a pointer,
-// with sparkles where it's moving, neither with prefers-reduced-motion; "Foil" is said to a
-// screen reader, not written on it.
+// A card's name, with what's in brackets at its end ("Sanguinesti staff (uncharged)") on a smaller
+// line of its own
+function CardName({ name }: { name: string }): JSX.Element {
+    const at = name.lastIndexOf(" (");
+    if (at <= 0 || !name.endsWith(")")) {
+        return <span className="ui-tcg-name">{name}</span>;
+    }
+    return (
+        <>
+            <span className="ui-tcg-name">{name.slice(0, at)}</span>
+            <span className="ui-tcg-name-sub">{name.slice(at + 1)}</span>
+        </>
+    );
+}
+
+// A card's face, as a trading card: an ornate frame whose studs take its rarity's colour (and its
+// rarity in words on the type line, so it's never told by colour alone), the name, the item drawn
+// from its model in a stone window, the type line, a short line of what it is, and its number in
+// the set. A foil copy has a band of light sweeping across its picture behind the item, moving
+// only where `moving` asks (the big card and a pack's mat) or under a pointer, with sparkles where
+// it's moving, neither with prefers-reduced-motion; "Foil" is said to a screen reader, not written
+// on it.
 export function CardFace({
     card,
     rarity,
@@ -470,10 +496,13 @@ export function CardFace({
                 (foil ? " ui-tcg-foil" : "") +
                 (moving ? " ui-tcg-moving" : "")
             }
-            style={rarityStyle(rarity)}
+            style={{
+                ...rarityStyle(rarity),
+                backgroundImage: `url(${size === "big" ? cardFrontLarge : cardFrontSmall})`,
+            }}
         >
             <span className="ui-tcg-title">
-                <span className="ui-tcg-name">{card.name()}</span>
+                <CardName name={card.name()} />
                 {copies > 1 && <span className="ui-tcg-copies">x{fmtNum(copies)}</span>}
             </span>
             {/* A foil's shimmer is its picture's background, behind the item */}
@@ -483,7 +512,9 @@ export function CardFace({
                 <ItemIcon
                     objId={card.objId}
                     spriteId={card.spriteId}
-                    size={size === "big" ? 96 : 64}
+                    // As large as the card generator draws it: the inventory pose filling the
+                    // window (its empty margins fall outside the window's edges)
+                    size={size === "big" ? 124 : 68}
                     // Drawn from its model at this size, smooth, not the small icon blown up
                     large
                 />

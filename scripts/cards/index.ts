@@ -20,8 +20,8 @@ const height = 1466;
 const canvas = { width, height, channels: 4 as const };
 const well = { left: 126, top: 323, width: 824, height: 544 };
 const inks: Record<Rarity, string> = {
-    common: "#8CC878",
-    uncommon: "#EAC874",
+    common: "#ECE6DA",
+    uncommon: "#8CC878",
     rare: "#EB9B63",
     veryRare: "#ED8580",
 };
