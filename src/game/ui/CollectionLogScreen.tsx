@@ -1,7 +1,7 @@
-import { CSSProperties, useMemo, useState } from "react";
+import { CSSProperties, MutableRefObject, memo, useEffect, useMemo, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
-import { UiSnapshot } from "../client/GameStore";
+import { CARDS } from "../content/cards";
 import {
     LOG_TABS,
     LogEntry,
@@ -9,17 +9,21 @@ import {
     LogTab,
     getLogEntries,
     getLogTotal,
+    getRunLogEntries,
 } from "../content/collectionLog";
 import { EvolutionDef } from "../content/evolutions";
 import { passiveName } from "../content/passives";
-import { RARITIES } from "../content/rarity";
+import { RARITIES, rarityName } from "../content/rarity";
 import { CLOSE_SPRITES } from "../content/titleIcons";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { weaponDescription, weaponName } from "../content/weapons";
+import { countCardsOwned } from "../core/cards";
+import { SaveData } from "../core/save";
 import { fmtNum, t, useLang } from "../i18n";
 import "./CollectionLogScreen.css";
 import { ItemIcon } from "./ItemIcon";
 import { releaseFocus, useMenuKeys } from "./menuKeys";
+import { useDialog } from "./useDialog";
 import { useSpriteFrame } from "./useSpriteFrame";
 
 // The Collection log, laid out as OSRS's client lays it: its total in the title, tabs along the
@@ -27,8 +31,47 @@ import { useSpriteFrame } from "./useSpriteFrame";
 // dimmed till they're obtained. What's pointed at is described under the items, as the log's
 // items say where they're from. On a narrow screen the entries are a dropdown above the items.
 // What's listed comes from content/collectionLog.ts.
+//
+// inRun: open over the pause menu (GameClient.openRunLog), as a window over it, with what the run
+// has found and not saved yet marked New. Its Escape and P are the client's (closeRunLog), as
+// they're the pause keys there. place keeps where it was left, for when a co-op run's level up
+// or casket takes it away a moment and it opens again.
 
-type Props = { ui: UiSnapshot; client: GameClient };
+// Where the log's open: its tab, the entry open on each tab, and the item pointed at
+export type LogPlace = {
+    tab: LogTab;
+    entryIds: Partial<Record<LogTab, string>>;
+    itemIndex: number;
+};
+
+type Props = {
+    save: SaveData;
+    client: GameClient;
+    inRun?: boolean;
+    place?: MutableRefObject<LogPlace | undefined>;
+};
+
+// The log's entries: during a run, with the run's finds (GameClient.getRunLogSaves)
+function buildEntries(save: SaveData, client: GameClient, inRun: boolean): LogEntry[] {
+    if (!inRun) {
+        return getLogEntries(save);
+    }
+    const { saved, withRun } = client.getRunLogSaves();
+    return withRun ? getRunLogEntries(saved, withRun) : getLogEntries(saved);
+}
+
+// Whether the run under way has found any of an entry's items
+function hasNew(entry: LogEntry): boolean {
+    return entry.items.some((item) => item.thisRun);
+}
+
+// An item's state, in words: found in the run under way, obtained, or not
+function itemState(item: LogItem): string {
+    if (item.thisRun) {
+        return t("collection.item_this_run");
+    }
+    return t(item.found ? "collection.item_found" : "collection.item_missing");
+}
 
 const SORTED_TABS: LogTab[] = ["bosses", "raids", "minigames"];
 
@@ -40,6 +83,16 @@ function entryCount(entry: LogEntry): number {
 function countClass(found: number, total: number): string {
     if (found === 0) return "ui-log-none";
     return found === total ? "ui-log-all" : "ui-log-some";
+}
+
+// An entry in the dropdown: its count, and New if the run's found any of it
+function entryOption(entry: LogEntry): string {
+    const text = t("collection.entry_option", {
+        name: entry.name,
+        n: fmtNum(entryCount(entry)),
+        total: fmtNum(entry.items.length),
+    });
+    return hasNew(entry) ? t("collection.entry_new", { name: text }) : text;
 }
 
 // A sentence with an element in it, where its {placeholder} is, so a language can move it
@@ -57,19 +110,27 @@ function withPart(text: string, placeholder: string, part: JSX.Element): JSX.Ele
     );
 }
 
-export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
+// Memo: over a co-op run, the pause menu under it draws again as the run goes on, and the log
+// needn't with it
+export const CollectionLogScreen = memo(function CollectionLogScreen({
+    save,
+    client,
+    inRun = false,
+    place,
+}: Props): JSX.Element {
     const lang = useLang();
     // Built once for the save and language, not on each item the mouse crosses
     const { entries, tabs, total } = useMemo(() => {
-        const built = getLogEntries(ui.save);
+        const built = buildEntries(save, client, inRun);
         return {
             entries: built,
             tabs: LOG_TABS.filter((tab) => built.some((entry) => entry.tab === tab)),
             total: getLogTotal(built),
         };
         // lang: the names and sentences are built in it
-    }, [ui.save, lang]);
-    const [tab, setTab] = useState<LogTab>(tabs[0]);
+    }, [save, lang, client, inRun]);
+    const kept = place?.current;
+    const [tab, setTab] = useState<LogTab>(kept && tabs.includes(kept.tab) ? kept.tab : tabs[0]);
     const inTab = useMemo(() => {
         const list = entries.filter((entry) => entry.tab === tab);
         // The places in order by their name, in the player's language, as OSRS lists its bosses
@@ -77,12 +138,20 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
             ? list.sort((a, b) => a.name.localeCompare(b.name, lang))
             : list;
     }, [entries, tab, lang]);
-    const [entryIds, setEntryIds] = useState<Partial<Record<LogTab, string>>>({});
+    const [entryIds, setEntryIds] = useState<Partial<Record<LogTab, string>>>(kept?.entryIds ?? {});
     const entry = inTab.find((e) => e.id === entryIds[tab]) ?? inTab[0];
-    const [itemIndex, setItemIndex] = useState(0);
+    const [itemIndex, setItemIndex] = useState(kept?.itemIndex ?? 0);
     const item: LogItem | undefined = entry.items[itemIndex] ?? entry.items[0];
-    const close = () => client.showScreen("title");
-    useMenuKeys({ onBack: close });
+    useEffect(() => {
+        if (place) {
+            place.current = { tab, entryIds, itemIndex };
+        }
+    }, [place, tab, entryIds, itemIndex]);
+    const close = inRun ? () => client.closeRunLog() : () => client.showScreen("title");
+    useMenuKeys({ onBack: inRun ? undefined : close });
+    // Over a run, a window like the pause menu under it: the focus in it, what's behind out of
+    // reach (its ref is only given to the panel then)
+    const { dialogProps } = useDialog<HTMLDivElement>();
 
     const openTab = (next: LogTab) => {
         setTab(next);
@@ -95,8 +164,13 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
     const found = entryCount(entry);
 
     return (
-        <div className="ui-fill ui-center">
+        <div className={inRun ? "ui-fill ui-center ui-modal" : "ui-fill ui-center"}>
             <div
+                {...(inRun && {
+                    ref: dialogProps.ref,
+                    tabIndex: dialogProps.tabIndex,
+                    "aria-modal": true,
+                })}
                 className="ui-panel rs-border rs-background ui-log"
                 role="dialog"
                 aria-labelledby="ui-log-title"
@@ -104,14 +178,24 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                 {/* The X comes after the tabs, drawn on the title's row, so a pad's first
                     highlight and the first Tab are the open tab, not the way out */}
                 <div className="ui-log-top">
+                    {/* The log's total on the left, its items only; the cards' own on the right,
+                        each card once, any version; stacked where they won't fit on one line */}
                     <div className="ui-log-head">
-                        <h2 id="ui-log-title" className="ui-log-title">
-                            {t("collection.title_count", {
-                                title: t("collection.title"),
-                                n: fmtNum(total.found),
-                                total: fmtNum(total.total),
-                            })}
-                        </h2>
+                        <div className="ui-log-counts">
+                            <h2 id="ui-log-title" className="ui-log-title">
+                                {t("collection.title_count", {
+                                    title: t("collection.title"),
+                                    n: fmtNum(total.found),
+                                    total: fmtNum(total.total),
+                                })}
+                            </h2>
+                            <span className="ui-log-title ui-log-cards-count">
+                                {t("collection.cards_count", {
+                                    n: fmtNum(countCardsOwned(save)),
+                                    total: fmtNum(CARDS.length),
+                                })}
+                            </span>
+                        </div>
                     </div>
                     <div className="ui-log-tabs" role="group" aria-label={t("collection.tabs")}>
                         {tabs.map((id) => (
@@ -138,6 +222,7 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                     >
                         {inTab.map((e) => {
                             const complete = entryCount(e) === e.items.length;
+                            const fresh = hasNew(e);
                             return (
                                 <button
                                     key={e.id}
@@ -148,13 +233,20 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                                     }
                                     aria-label={
                                         complete
-                                            ? t("collection.entry_complete", { name: e.name })
+                                            ? t("collection.entry_complete", {
+                                                  name: fresh
+                                                      ? t("collection.entry_new", { name: e.name })
+                                                      : e.name,
+                                              })
                                             : undefined
                                     }
                                     aria-pressed={e === entry}
                                     onClick={() => openEntry(e.id)}
                                 >
                                     <span className="ui-log-entry-name">{e.name}</span>
+                                    {fresh && (
+                                        <span className="ui-log-new">{t("collection.new")}</span>
+                                    )}
                                     {complete && (
                                         <span className="ui-log-check" aria-hidden="true" />
                                     )}
@@ -170,11 +262,7 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                     >
                         {inTab.map((e) => (
                             <option key={e.id} value={e.id}>
-                                {t("collection.entry_option", {
-                                    name: e.name,
-                                    n: fmtNum(entryCount(e)),
-                                    total: fmtNum(e.items.length),
-                                })}
+                                {entryOption(e)}
                             </option>
                         ))}
                     </select>
@@ -192,6 +280,9 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                             </div>
                             {entry.tally && (
                                 <div>{t(entry.tally.key, { n: fmtNum(entry.tally.n) })}</div>
+                            )}
+                            {entry.tally2 && (
+                                <div>{t(entry.tally2.key, { n: fmtNum(entry.tally2.n) })}</div>
                             )}
                             {entry.id === "evolutions" && (
                                 <div className="ui-log-how">{t("collection.evolution_intro")}</div>
@@ -218,7 +309,7 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
             </div>
         </div>
     );
-}
+});
 
 // The client's own X, lit under the mouse; a plain X till its sprites are drawn
 function CloseButton({ onClose }: { onClose: () => void }): JSX.Element {
@@ -252,15 +343,25 @@ function ItemSlot({
     // What an evolution makes is hidden till it's been made: its slot shows the weapon that
     // evolves, faded, with a ? on it
     const hidden = item.evolution !== undefined && !item.found;
-    const state = t(item.found ? "collection.item_found" : "collection.item_missing");
+    // A card's says its version in words (the Cards tab)
+    const state = item.version ? rarityName(item.version) : itemState(item);
     return (
         <button
             className={
                 "ui-log-item" +
                 (item.found ? " ui-log-item-found" : "") +
+                (item.version ? " ui-log-item-card" : "") +
                 (selected ? " ui-log-selected" : "")
             }
-            aria-label={t("collection.item_label", { name: hidden ? "???" : item.name, state })}
+            style={
+                item.version
+                    ? ({ "--card-rarity": RARITIES[item.version].color } as CSSProperties)
+                    : undefined
+            }
+            aria-label={
+                t("collection.item_label", { name: hidden ? "???" : item.name, state }) +
+                (item.cardsOnly ? `, ${t("collection.cards_only_first")}` : "")
+            }
             aria-describedby="ui-log-detail"
             onMouseEnter={onShow}
             onFocus={onShow}
@@ -272,11 +373,17 @@ function ItemSlot({
                     ?
                 </span>
             )}
+            {item.thisRun && (
+                <span className="ui-log-new ui-log-item-new" aria-hidden="true">
+                    {t("collection.new")}
+                </span>
+            )}
             {item.count !== undefined && item.count > 1 && (
                 <span className="ui-log-qty" aria-hidden="true">
                     {fmtNum(item.count)}
                 </span>
             )}
+            {item.cardsOnly && <span className="ui-log-cards-badge" aria-hidden="true" />}
         </button>
     );
 }
@@ -284,9 +391,11 @@ function ItemSlot({
 // The item pointed at: its name, whether it's obtained, and where it's from
 function ItemDetail({ item }: { item: LogItem }): JSX.Element {
     if (item.evolution) {
-        return <EvolutionDetail evolution={item.evolution} made={item.found} />;
+        return (
+            <EvolutionDetail evolution={item.evolution} made={item.found} thisRun={item.thisRun} />
+        );
     }
-    const state = t(item.found ? "collection.item_found" : "collection.item_missing");
+    const state = itemState(item);
     return (
         <div id="ui-log-detail" className="ui-log-detail">
             <div className="ui-log-state">
@@ -299,6 +408,11 @@ function ItemDetail({ item }: { item: LogItem }): JSX.Element {
                 )}
             </div>
             <div className="ui-log-how">{item.how}</div>
+            {item.cardsOnly && (
+                <div className="ui-log-how ui-log-cards-only">
+                    {t("collection.cards_only_first")}
+                </div>
+            )}
         </div>
     );
 }
@@ -307,9 +421,11 @@ function ItemDetail({ item }: { item: LogItem }): JSX.Element {
 function EvolutionDetail({
     evolution,
     made,
+    thisRun,
 }: {
     evolution: EvolutionDef;
     made: boolean;
+    thisRun?: boolean;
 }): JSX.Element {
     const { into, passive } = evolution;
     return (
@@ -327,6 +443,7 @@ function EvolutionDetail({
             </div>
             {made ? (
                 <>
+                    {thisRun && <div className="ui-log-state">{t("collection.made_this_run")}</div>}
                     <div className="ui-log-how">{weaponDescription(into)}</div>
                     <div className="ui-log-how">
                         {weaponStats(into, into.levels[0]).map(formatWeaponStat).join(", ")}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createSave } from "../core/save";
+import { tp } from "../i18n";
 import { isMapOut } from "./acts";
 import {
     LOG_TABS,
@@ -8,9 +9,11 @@ import {
     getLogEntries,
     getLogTotal,
     getRewards,
+    getRunLogEntries,
     getTrophyMap,
 } from "./collectionLog";
 import { EVOLUTIONS } from "./evolutions";
+import { INVADERS } from "./invaders";
 import { CASKET_GEAR } from "./items";
 import { MAP_BY_ID, getMap } from "./maps";
 import { TROPHIES } from "./trophies";
@@ -185,7 +188,10 @@ describe("the Collection log's tabs, as OSRS's client has them", () => {
         const theatre = entries.find((e) => e.id === "theatre_of_blood")!;
         expect(theatre.items.find((item) => item.id === "lil_zik")!.found).toBe(true);
         expect(theatre.tally).toEqual({ key: "collection.wins", n: 3 });
-        const keys = entries.flatMap((entry) => entry.items.map((item) => item.key));
+        // (but the Cards tab's raid finds, which are cards of its other sets as well)
+        const keys = entries
+            .filter((entry) => entry.id !== "cards_raids")
+            .flatMap((entry) => entry.items.map((item) => item.key));
         expect(new Set(keys).size).toBe(keys.length);
     });
 
@@ -202,6 +208,57 @@ describe("the Collection log's tabs, as OSRS's client has them", () => {
             expect(ids()).not.toContain(evolution.into.id);
         } finally {
             hiddenMaps.clear();
+        }
+    });
+});
+
+describe("the log during a run", () => {
+    it("marks only what the run's found, keeping the save's counts and tallies", () => {
+        const save = createSave();
+        const trophy = TROPHIES.find((def) => REWARD_MAPS.includes(getTrophyMap(def)))!;
+        const had = TROPHIES.find(
+            (def) => def !== trophy && REWARD_MAPS.includes(getTrophyMap(def)),
+        )!;
+        save.trophies.push(had.id);
+        const mapId = getTrophyMap(trophy);
+        save.mapVictories[mapId] = 2;
+        const withRun = structuredClone(save);
+        withRun.trophies.push(trophy.id);
+        withRun.mapVictories[mapId] = 3;
+        const entries = getRunLogEntries(save, withRun);
+        const items = entries.flatMap((entry) => entry.items);
+        expect(items.filter((item) => item.thisRun).map((item) => item.id)).toEqual([trophy.id]);
+        expect(items.find((item) => item.id === had.id)).toMatchObject({ found: true });
+        expect(items.find((item) => item.id === had.id)?.thisRun).toBeUndefined();
+        expect(entries.find((entry) => entry.id === mapId)?.tally?.n).toBe(2);
+        expect(getLogTotal(entries).found).toBe(2);
+        // An invader killed for the first time this run is found, as the run leaves it: its
+        // count and its line agree. One killed before keeps the save's. (None while their act
+        // isn't out.)
+        const invader = INVADERS.find((def) => REWARD_MAPS.includes(def.mapId));
+        if (invader) {
+            const invaderItem = (before: number, after: number) => {
+                const was = structuredClone(save);
+                was.invasions = before > 0 ? { [invader.id]: before } : undefined;
+                const killed = structuredClone(save);
+                killed.invasions = { [invader.id]: after };
+                return getRunLogEntries(was, killed)
+                    .flatMap((entry) => entry.items)
+                    .find((it) => it.id === invader.id);
+            };
+            expect(invaderItem(0, 1)).toMatchObject({
+                found: true,
+                thisRun: true,
+                count: 1,
+                how: tp("log.invasion_kills", 1),
+            });
+            const again = invaderItem(2, 3);
+            expect(again).toMatchObject({
+                found: true,
+                count: 2,
+                how: tp("log.invasion_kills", 2),
+            });
+            expect(again?.thisRun).toBeUndefined();
         }
     });
 });

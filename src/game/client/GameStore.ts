@@ -30,6 +30,8 @@ export type Screen =
     | "wardrobe"
     | "quests"
     | "collectionLog"
+    // Cards: the album and its packs (content/cards.ts)
+    | "cards"
     // Co-op: finding or making a room, and the room before a run
     | "coop"
     // The Forgotten Four: its order before the start, and its camp between fights
@@ -494,6 +496,8 @@ export type UiSnapshot = {
     expert: boolean;
     hud?: HudView;
     overlay: RunOverlay;
+    // The Collection log, open over the pause menu (or co-op's menu, with the run going on)
+    runLog?: boolean;
     // Co-op: the room and its menus, everyone else in the run, and who the
     // run's waiting on to choose (when it isn't you)
     coop: CoopView;
@@ -539,6 +543,8 @@ export type UiSnapshot = {
         vault?: { key: string; best: boolean };
         // An Awakener's orb won (an Awakened fight), or spent on this run's final boss
         orbWon?: boolean;
+        // Played Card collection only (core/cardRuns.ts): it counts as any other run
+        cardsOnly?: boolean;
         // Played in a room to its end, so the party goes back together: no Play again, even once
         // the room closes on the results
         coop?: boolean;
@@ -550,6 +556,10 @@ export type UiSnapshot = {
     // An act's ending being told (its id, content/acts.ts), over whatever screen's up: as the last
     // of its Awakened fights falls, or played again from its card
     actEnding?: string;
+    // The Card shop to open on this pack (content/cards.ts), from Card collection only's needs, and
+    // the screen it was opened from, which its Back goes back to
+    cardShopPack?: string;
+    cardShopFrom?: Screen;
     // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
     toastLog: string[];
     debug: boolean;

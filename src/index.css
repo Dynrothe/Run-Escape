@@ -6,6 +6,11 @@
     font-family: "OSRS Small";
     src: url(./media/RuneScape-Plain-11.ttf);
 }
+/* The cards' text (the card generator's face) */
+@font-face {
+    font-family: "OSRS Plain";
+    src: url(./media/RuneScape-Plain-12.ttf);
+}
 
 html,
 body {

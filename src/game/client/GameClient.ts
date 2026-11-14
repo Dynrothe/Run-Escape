@@ -7,6 +7,7 @@ import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { getBlessing } from "../content/blessings";
+import type { PackDef } from "../content/cards";
 import { CHARACTERS, CHARACTER_BY_ID, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -40,6 +41,7 @@ import {
     takesInvocations,
     takesRelics,
 } from "../content/maps";
+import { Hsl } from "../content/maxCape";
 import { getPassive, passiveValueText } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
@@ -75,7 +77,26 @@ import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponS
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
+import {
+    CardCaps,
+    UpgradeChoice,
+    canEvolve,
+    cardsAllowEvolution,
+    describeChoice,
+    getEvolutionHint,
+} from "../core/Upgrades";
+import {
+    decodeCardCaps,
+    encodeCardCaps,
+    getCardCaps,
+    getCardLock,
+    getCardRunShortfall,
+    getRunPet,
+    getStarterCards,
+    hasPetCard,
+    isCardRunBlocked,
+} from "../core/cardRuns";
+import { PackCard, buyCardPack, openCardPack } from "../core/cards";
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
 import {
@@ -202,7 +223,7 @@ import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
 import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecorder";
-import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
+import { CoopLobby, makeLoadout, roomPlaysCardsOnly } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
@@ -236,6 +257,13 @@ const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
 
 // The title screen is in the first map (Lumbridge castle's courtyard)
 const TITLE_MAP = MAPS[0];
+// The courtyard's bushes, left out of the title screen (not a run there), as they hid the pet:
+// the world tile each stands on and its loc id (SdMapLoaderInput.hiddenLocs)
+// prettier-ignore
+const TITLE_HIDDEN_LOCS: readonly number[] = [
+    3218, 3217, 1124, 3218, 3220, 1124, 3219, 3217, 1124, 3219, 3220, 1124,
+    3220, 3217, 10586, 3220, 3220, 44782, 3223, 3217, 10778, 3223, 3220, 29715,
+];
 
 // Recordings of the OSRS music tracks maps play (MapDef.music), from the OSRS
 // Wiki, in src/media/music: a track's file is its name in lower case with
@@ -278,9 +306,8 @@ function settleYaw(yaw: number, target: number, settle: number): number {
     return wrapYaw(target + (Math.abs(settled) < 1 ? 0 : settled));
 }
 
-// The pet taken along stands beside the character on the menus: tiles to their side and behind
-const PREVIEW_PET_SIDE = 1.1;
-const PREVIEW_PET_BACK = 0.4;
+// The pet taken along stands beside the character on the menus, this many tiles to their side
+const PREVIEW_PET_SIDE = 0.7;
 const RUN_PITCH = -400;
 // Tiles past a dev map's arena the world's drawn: a map square of scenery, less a fade
 const OPEN_WORLD_MARGIN = 56;
@@ -410,7 +437,12 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
 // How far a weapon has got towards its evolution, for the HUD and pause menu
 function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
     const evolution = weapon.def.evolution;
-    if (!evolution || !isAvailable(getWeapon(evolution.into), sim.unlockedItems)) {
+    if (
+        !evolution ||
+        !isAvailable(getWeapon(evolution.into), sim.unlockedItems) ||
+        // A Card collection only run without the cards it takes: it won't come
+        !cardsAllowEvolution(sim.cardCaps, weapon.def.id, evolution.requiresPassive, evolution.into)
+    ) {
         return undefined;
     }
     const owned = new Set(sim.passives.map((p) => p.id));
@@ -418,7 +450,7 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
         passive: getPassive(evolution.requiresPassive).name,
         maxed: weapon.level >= weapon.def.levels.length,
         hasPassive: owned.has(evolution.requiresPassive),
-        ready: canEvolve(weapon, owned, sim.unlockedItems),
+        ready: canEvolve(weapon, owned, sim.unlockedItems, sim.cardCaps),
     };
 }
 
@@ -486,7 +518,14 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
                     ? { name: blessed ?? "Blessing", color: BLESSING_COLOR }
                     : rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
-            evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
+            evolves: getEvolutionHint(
+                choice,
+                sim.weapons,
+                sim.passives,
+                style,
+                sim.unlockedItems,
+                sim.cardCaps,
+            ),
             banishable: sim.canBanishChoice(index),
             banished: sim.isBanishedChoice(index),
             bossPenalty: getBossPenalty(sim, choice),
@@ -494,16 +533,37 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
     });
 }
 
+// The party's loadouts as a run takes them: a Cards only room's (the host's tab on, and their
+// cards sent) keeps each player's cards, any other drops them all, the host's too, so no one plays
+// Cards only on their own
+export function partyLoadouts(
+    heroes: readonly { id: string; loadout?: Loadout }[],
+    hostId: string,
+): (Loadout | undefined)[] {
+    const host = heroes.find((hero) => hero.id === hostId);
+    const cardsOnly =
+        host?.loadout?.cardsOnly === true && typeof host.loadout.cardCaps === "string";
+    return heroes.map(({ loadout }) =>
+        cardsOnly || loadout?.cardCaps === undefined
+            ? loadout
+            : { ...loadout, cardCaps: undefined },
+    );
+}
+
 // What a co-op player brings, as far as any game could have it (another
 // player's game could send anything)
 export function cleanLoadout(loadout: Loadout | undefined): {
     unlockedItems: Set<string>;
+    cardCaps?: CardCaps;
     trophiesFound: Set<string>;
     armoury: Record<string, number>;
     pet?: string;
     relics?: string[];
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
+    const caps = loadout?.cardCaps !== undefined ? decodeCardCaps(loadout.cardCaps) : undefined;
+    const pet =
+        typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) ? loadout.pet : undefined;
     const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
     const armoury: Record<string, number> = {};
     for (const [id, times] of Object.entries(loadout?.armoury ?? {})) {
@@ -515,10 +575,12 @@ export function cleanLoadout(loadout: Loadout | undefined): {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
         trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
-        // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
-        ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
         // Their relics, each player's own (the Sim keeps them off maps that take none)
         ...(Array.isArray(loadout?.relics) && { relics: cleanRelics(loadout.relics) }),
+        // Card collection only, their own cards (core/cardRuns.ts)
+        ...(caps && { cardCaps: caps }),
+        // Their pet: in a Card collection only run, only one whose card they've sent
+        ...(pet && (!caps || caps.has(`trophy:${pet}`)) && { pet }),
     };
 }
 
@@ -950,6 +1012,15 @@ export class GameClient implements GameFrameHandler {
             this.toCoopRun((run) => run.resumed());
         };
         this.coop.onMapChanged = () => this.coop.setMe({ loadout: this.getLoadout() });
+        // A guest's cards go by the host's tab (roomPlaysCardsOnly)
+        this.coop.onRoomCardsOnlyChanged = () => {
+            // Ready no longer, without the cards a Cards only room now takes
+            const me = this.coop.room?.members.find((m) => m.id === this.coop.id);
+            if (this.coopCardBlock() !== undefined && me?.ready) {
+                this.coop.setReady(false);
+            }
+            this.refreshCoopLoadout();
+        };
         // Co-op's offered only where there's a relay to play it through
         this.coop.checkAvailable();
         document.addEventListener("visibilitychange", this.onVisibilityChange);
@@ -1004,8 +1075,11 @@ export class GameClient implements GameFrameHandler {
     showScreen(screen: Screen): void {
         const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
-        // Done shopping: a save point for cloud save
-        if ((was === "shop" || was === "armoury" || was === "wardrobe") && screen !== was) {
+        // Done shopping (packs too): a save point for cloud save
+        if (
+            (was === "shop" || was === "armoury" || was === "wardrobe" || was === "cards") &&
+            screen !== was
+        ) {
             this.cloud?.savePoint();
         }
         // Out of the Wardrobe, what was tried on comes off
@@ -1080,6 +1154,16 @@ export class GameClient implements GameFrameHandler {
         this.refreshMenuLook();
     }
 
+    // The customisable max cape's colours on the look worn now, kept or only shown. The picker
+    // gives the colours alone: the click that closes it can have changed the outfit already.
+    setCapeColours(colours: Hsl[] | undefined): void {
+        this.setLook({ ...this.save.look, capeColours: colours });
+    }
+
+    previewCapeColours(colours: Hsl[] | undefined): void {
+        this.previewLook({ ...this.save.look, capeColours: colours });
+    }
+
     // The body alone on the menus, with nothing worn over it, or dressed again
     showBareBody(bare: boolean): void {
         if (this.bareMenuLook !== bare) {
@@ -1127,6 +1211,109 @@ export class GameClient implements GameFrameHandler {
         this.sounds.buy();
         this.persist();
         return true;
+    }
+
+    // Buys a pack in the Card shop with platinum tokens and opens it straight away (core/cards.ts): its
+    // cards, or undefined if it can't be bought
+    buyCardPack(pack: PackDef): PackCard[] | undefined {
+        const cards = buyCardPack(this.save, pack, Math.random);
+        if (!cards) {
+            this.sounds.denied();
+            return undefined;
+        }
+        this.sounds.cardPack();
+        this.persist();
+        this.refreshCoopLoadout();
+        return cards;
+    }
+
+    // In a co-op room, this player's loadout sent again: their cards changed (a pack bought from
+    // the lobby's needs), or the room's Cards only did
+    private refreshCoopLoadout(): void {
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
+    }
+
+    // The Cards screen's shop, on a pack (what Card collection only's needs point at)
+    openCardShop(packId?: string): void {
+        this.store.set({
+            cardShopPack: packId ?? "",
+            cardShopFrom: this.store.getSnapshot().screen,
+        });
+        this.showScreen("cards");
+    }
+
+    // The Cards screen has shown the pack it was opened on: the next time, it opens as usual
+    cardShopShown(): void {
+        this.store.set({ cardShopPack: undefined, cardShopFrom: undefined });
+    }
+
+    // The adventurer panel's tab: Cards only, or the usual (kept in the save)
+    setCardsOnly(on: boolean): void {
+        if ((this.save.cardsOnly === true) === on) {
+            return;
+        }
+        this.save.cardsOnly = on || undefined;
+        this.persist();
+        // A co-op player's loadout carries it
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
+    }
+
+    // Whether the co-op room is on the weekly Vault's map for it, which never plays Cards only
+    isVaultRoom(): boolean {
+        const key = this.store.getSnapshot().vaultRoom;
+        const room = this.coop.room;
+        return key !== undefined && room !== undefined && getVault(key)?.mapId === room.mapId;
+    }
+
+    // Whether this player's runs are Cards only: their own tab's choice, or in a co-op room the
+    // host's, for everyone (roomPlaysCardsOnly)
+    playsCardsOnlyHere(): boolean {
+        const room = this.coop.room;
+        return room && !this.coop.isHost ? roomPlaysCardsOnly(room) : this.save.cardsOnly === true;
+    }
+
+    // The save as the Cards only tab that applies here sees it (playsCardsOnlyHere): a guest's
+    // own tab doesn't count in a room
+    cardsSave(): SaveData {
+        const on = this.playsCardsOnlyHere();
+        return on === (this.save.cardsOnly === true)
+            ? this.save
+            : { ...this.save, cardsOnly: on || undefined };
+    }
+
+    cardRunCaps(characterId: string): Map<string, Rarity> | undefined {
+        if (!this.playsCardsOnlyHere()) {
+            return undefined;
+        }
+        const caps = getCardCaps(this.save);
+        return getCardRunShortfall(this.save, characterId, caps) ? undefined : caps;
+    }
+
+    // Opens one of the save's card packs (core/cards.ts): its cards, or undefined with none held
+    openCardPack(): PackCard[] | undefined {
+        const cards = openCardPack(
+            this.save,
+            Math.random,
+            undefined,
+            getStarterCards(getStartingCharacter(this.save)),
+        );
+        if (!cards) {
+            this.sounds.denied();
+            return undefined;
+        }
+        this.sounds.cardPack();
+        this.persist();
+        this.refreshCoopLoadout();
+        return cards;
+    }
+
+    // A card of an opened pack turned over, with a chime besides for a foil
+    revealCard(rarity: Rarity, foil = false): void {
+        this.sounds.cardReveal(rarity, foil);
     }
 
     // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps (and an
@@ -1279,6 +1466,17 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ actEnding: act?.id });
     }
 
+    // The pet a Card collection only run takes along: one whose card is owned, or none
+    selectCardsOnlyPet(petId: string | undefined): void {
+        if (petId !== undefined && !hasPetCard(this.save, petId)) {
+            this.sounds.denied();
+            return;
+        }
+        this.save.cardsOnlyPet = petId;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
     // The pet to take along (one of the trophies found), or none
     selectPet(petId: string | undefined): void {
         if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
@@ -1303,8 +1501,10 @@ export class GameClient implements GameFrameHandler {
                 this.sounds.denied();
                 return;
             }
-            // Another map: the room's next run isn't the Vault's any more
+            // Another map: the room's next run isn't the Vault's any more (and Cards only can be
+            // the room's again)
             this.store.set({ vaultRoom: undefined });
+            this.refreshCoopLoadout();
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -1463,7 +1663,25 @@ export class GameClient implements GameFrameHandler {
     }
 
     setCoopReady(ready: boolean): void {
+        // A Cards only room, without the cards it takes for their adventurer: they can't ready
+        if (ready && this.coopCardBlock() !== undefined) {
+            this.sounds.denied();
+            return;
+        }
         this.coop.setReady(ready);
+    }
+
+    // In a room that plays Cards only, the adventurer this player can't play it as (their starter
+    // cards or a level up's missing, isCardRunBlocked), or undefined if they can
+    coopCardBlock(): string | undefined {
+        const room = this.coop.room;
+        if (!room || this.isVaultRoom()) {
+            return undefined;
+        }
+        const map = getMap(room.mapId);
+        const characterId =
+            getMapCharacter(map) ?? map.fun?.character ?? this.store.getSnapshot().characterId;
+        return isCardRunBlocked(this.cardsSave(), characterId, map) ? characterId : undefined;
     }
 
     setRoomOpen(open: boolean): void {
@@ -1501,13 +1719,17 @@ export class GameClient implements GameFrameHandler {
         const room = this.coop.room;
         const characterId =
             (room && getMap(room.mapId).fun?.character) ?? this.store.getSnapshot().characterId;
+        // The adventurer the run's played as, for Card collection only's check
+        const runCharacter = (room && getMapCharacter(getMap(room.mapId))) ?? characterId;
+        const cardCaps = this.loadoutCardCaps(room && getMap(room.mapId), runCharacter);
         return makeLoadout(
             getMetaStats(this.save, getCharacter(characterId).style),
             [...this.save.unlockedItems],
             {
                 ...this.save.armoury,
             },
-            this.save.pet,
+            // Card collection only's own pet, with its card (getRunPet)
+            getRunPet(this.save, cardCaps !== undefined),
             // A Tombs room's lobby shows the host's raid level, and a run's its invocation points
             room && getMap(room.mapId).tombs
                 ? [...(this.save.invocations ?? [])]
@@ -1517,7 +1739,21 @@ export class GameClient implements GameFrameHandler {
             getRaidChestTrophiesFound(this.save.trophies),
             this.save.look,
             room ? this.runRelics(getMap(room.mapId)) : undefined,
+            cardCaps,
+            // The host's tab sets the room's (roomPlaysCardsOnly), never the Vault's room's
+            this.coop.isHost && this.save.cardsOnly === true && !this.isVaultRoom(),
         );
+    }
+
+    // Card collection only's caps for a co-op loadout: none on a map whose level ups are blessings,
+    // nor in the Vault's room (the same run for everyone), so its pet's the usual one too
+    private loadoutCardCaps(map: MapDef | undefined, characterId: string): string | undefined {
+        // Not for an adventurer it can't start as (their starter cards missing): they play as usual
+        const caps =
+            map?.blessings || this.isVaultRoom() || getCardLock(this.save, characterId)
+                ? undefined
+                : this.cardRunCaps(characterId);
+        return caps && encodeCardCaps(caps);
     }
 
     // The host's Start: everyone's ready, so off to the room's map. The relay
@@ -1530,6 +1766,17 @@ export class GameClient implements GameFrameHandler {
         }
         // Everyone's ready, the host too (on their own, that's a party of one)
         if (room.members.some((m) => !m.ready) || room.members.length > MAX_PARTY) {
+            this.sounds.denied();
+            return;
+        }
+        // A Cards only room: everyone's cards sent (a guest without them can't ready); never the
+        // Vault's, which is the same run for everyone
+        if (
+            !this.isVaultRoom() &&
+            roomPlaysCardsOnly(room) &&
+            !getMap(room.mapId).blessings &&
+            room.members.some((m) => typeof m.loadout?.cardCaps !== "string")
+        ) {
             this.sounds.denied();
             return;
         }
@@ -2106,6 +2353,18 @@ export class GameClient implements GameFrameHandler {
             : plain && snapshot.hard && isHardUnlocked(this.save, mapId);
         const expert = plain && snapshot.expert && isExpertUnlocked(this.save, mapId);
         const characterId = vault?.characterId ?? getMapCharacter(map) ?? snapshot.characterId;
+        // Card collection only, when it's on and the collection can play it (never the Vault's,
+        // which is the same run for everyone)
+        const cardCaps =
+            vault || gauntlet || map.blessings ? undefined : this.cardRunCaps(characterId);
+        // Picked on the Cards only tab, it's Cards only or nothing: not without the adventurer's
+        // starter cards or enough cards to fill a level up (isCardRunBlocked)
+        if (plain && isCardRunBlocked(this.save, characterId, map)) {
+            this.sounds.denied();
+            return;
+        }
+        // Its own pet in a Card collection only run (getRunPet): never the other in its place
+        const pet = getRunPet(this.save, cardCaps !== undefined);
         const remixes = vault
             ? vault.remixes
             : gauntlet
@@ -2124,13 +2383,7 @@ export class GameClient implements GameFrameHandler {
                 : undefined;
         const awakened = plain && !endless && snapshot.awaken && canAwaken(this.save, mapId);
         if (
-            !(await this.travelTo(
-                mapId,
-                "characters",
-                [this.save.pet],
-                remixes,
-                invasionContent(invasion),
-            ))
+            !(await this.travelTo(mapId, "characters", [pet], remixes, invasionContent(invasion)))
         ) {
             return;
         }
@@ -2146,8 +2399,9 @@ export class GameClient implements GameFrameHandler {
             spawnX: spawn.x,
             spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
+            ...(cardCaps && { cardCaps }),
             trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
-            pet: this.save.pet,
+            pet,
             endless,
             hard,
             expert,
@@ -2177,7 +2431,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet], [this.save.look], cinematic);
+        this.enterRun(sim, [pet], [this.save.look], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -2252,13 +2506,18 @@ export class GameClient implements GameFrameHandler {
         // Every copy has to work out the same numbers, to the bit
         usePortableMath(true);
         const map = getMap(game.mapId);
-        const party: HeroOptions[] = game.heroes.map((hero) => ({
+        // Cards only for everyone or no one: as the host plays (partyLoadouts)
+        const loadouts = partyLoadouts(game.heroes, room.hostId);
+        const party: HeroOptions[] = game.heroes.map((hero, i) => ({
             name: hero.name,
             characterId: hero.characterId,
             metaStats: loadoutStats(hero.loadout),
-            ...cleanLoadout(hero.loadout),
-            // The weekly Vault is played without relics, as on your own (startVault)
-            ...(game.vault !== undefined && { relics: [] }),
+            ...cleanLoadout(loadouts[i]),
+            // The weekly Vault is played without relics or Card collection only, as on your own
+            // (startVault, startRun)
+            ...(game.vault !== undefined && { relics: [], cardCaps: undefined }),
+            // Nor is a map whose level ups are blessings (MapDef.blessings), which cards don't touch
+            ...(map.blessings && { cardCaps: undefined }),
         }));
         const sim = new Sim({
             grid: this.grid,
@@ -2342,7 +2601,7 @@ export class GameClient implements GameFrameHandler {
         } else {
             this.audio.stopMusic();
         }
-        this.paused = false;
+        this.leavePauseMenu();
         this.runRecorded = false;
         this.reportRun = this.options.stress
             ? undefined
@@ -2687,6 +2946,15 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
+    // Out of the pause menu, and so out of the Collection log over it: the next pause opens on
+    // the menu
+    private leavePauseMenu(): void {
+        this.paused = false;
+        if (this.store.getSnapshot().runLog) {
+            this.store.set({ runLog: false });
+        }
+    }
+
     // The page lost its graphics (GameApp): a solo run stops where it stands, and
     // nothing happens to it while its player can't see it. Says what was going on.
     onGraphicsLost(): "none" | "solo" | "coop" {
@@ -2713,9 +2981,64 @@ export class GameClient implements GameFrameHandler {
     }
 
     resume(): void {
-        this.paused = false;
+        this.leavePauseMenu();
         this.accumulator = 0;
         this.syncOverlay();
+    }
+
+    // The Collection log over the pause menu. Only the UI's: a solo run stays paused under it,
+    // and a co-op run goes on as it does under co-op's menu, with nothing sent.
+    openRunLog(): void {
+        if (this.sim && this.store.getSnapshot().overlay === "paused") {
+            this.store.set({ runLog: true });
+        }
+    }
+
+    // Back to the pause menu
+    closeRunLog(): void {
+        this.store.set({ runLog: false });
+    }
+
+    // The save, and the save as this run would leave it if it ended now, for the log's "Found
+    // this run": bankRun on a copy, as finishRun would bank it, so nothing's saved and the run's
+    // untouched. Nothing of the run's once it's banked, or in a fight of the Forgotten Four's
+    // (which records the gauntlet, not the run).
+    getRunLogSaves(): { saved: SaveData; withRun?: SaveData } {
+        const saved = this.save;
+        const sim = this.sim;
+        if (!sim || this.runRecorded) {
+            return { saved };
+        }
+        const result = sim.getResult();
+        if (this.isGauntletFight(result)) {
+            return { saved };
+        }
+        const withRun = structuredClone(saved);
+        this.bankRun(withRun, result);
+        return { saved, withRun };
+    }
+
+    // A fight of the Forgotten Four's, recorded as the gauntlet's (finishGauntletFight)
+    private isGauntletFight(result: RunResult): boolean {
+        return this.gauntletRun !== undefined && result.gauntlet !== undefined;
+    }
+
+    // Banks a run's result on a save, with its Vault week and whether it was Cards only, and pays
+    // out the quests it finished. Not a result with a number that isn't: a co-op run's numbers can
+    // come from another player's modified game, and a NaN in a solo one's would come back from the
+    // save as 0 coins.
+    private bankRun(save: SaveData, result: RunResult): ReturnType<typeof recordRun> {
+        if (hasBadNumber(result)) {
+            return [];
+        }
+        const vaultKey = this.runVault;
+        const sim = this.sim;
+        return recordRun(save, {
+            ...result,
+            ...(vaultKey && { vault: vaultKey }),
+            // This player's own: each co-op player records their run on their own save
+            ...(sim?.heroes[sim.focus].cardCaps && { cardsOnly: true }),
+        });
     }
 
     // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
@@ -2723,7 +3046,7 @@ export class GameClient implements GameFrameHandler {
     quitRun(): void {
         const sim = this.sim;
         if (sim && !this.coopRun) {
-            this.paused = false;
+            this.leavePauseMenu();
             sim.giveUp();
             // Before the overlay, or it would play as a death
             this.finishRun(t("ui.result.gave_up"), "abandoned");
@@ -2774,7 +3097,7 @@ export class GameClient implements GameFrameHandler {
         this.sim = undefined;
         this.endCinematic();
         this.reportRun = undefined;
-        this.paused = false;
+        this.leavePauseMenu();
         this.audio.stopMusic();
         this.grid = this.grids.get(TITLE_MAP.id)!;
         this.renderer.setPlane(this.grid.plane);
@@ -2848,6 +3171,8 @@ export class GameClient implements GameFrameHandler {
             this.coop.setMap(vault.mapId, false, false);
         }
         this.store.set({ vaultRoom: vault.key, screen: "coop" });
+        // The Vault's never Cards only: the host's loadout says so (roomPlaysCardsOnly)
+        this.refreshCoopLoadout();
     }
 
     openGauntlet(): void {
@@ -3062,7 +3387,7 @@ export class GameClient implements GameFrameHandler {
         void this.reportRun?.(early);
         this.reportRun = undefined;
         const result = sim.getResult();
-        if (this.gauntletRun && result.gauntlet) {
+        if (this.isGauntletFight(result)) {
             this.finishGauntletFight(result);
             return;
         }
@@ -3094,14 +3419,11 @@ export class GameClient implements GameFrameHandler {
         const newTrophies = isDevMap(sim.map.id)
             ? []
             : result.trophies.filter((id) => !this.save.trophies.includes(id));
-        // A co-op run's numbers can come from another player's modified game,
-        // and a NaN in a solo one's would come back from the save as 0 coins
+        // Before the run's banked
         const vaultKey = this.runVault;
         const vaultBest =
             vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
-        const quests = hasBadNumber(result)
-            ? []
-            : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
+        const quests = this.bankRun(this.save, result);
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
@@ -3134,6 +3456,7 @@ export class GameClient implements GameFrameHandler {
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
                 ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
                 orbWon: result.victory && GAUNTLET_FIGHTS.includes(result.mapId),
+                ...(sim.heroes[sim.focus].cardCaps && { cardsOnly: true }),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),
@@ -3215,7 +3538,7 @@ export class GameClient implements GameFrameHandler {
         }
     }
 
-    private onKeyPress = (code: string): void => {
+    private onKeyPress(code: string): void {
         if (code === "F3") {
             this.store.set({ debug: !this.store.getSnapshot().debug });
             return;
@@ -3236,15 +3559,12 @@ export class GameClient implements GameFrameHandler {
         if (!sim) {
             return;
         }
-        const overlay = this.store.getSnapshot().overlay;
+        const { overlay, runLog } = this.store.getSnapshot();
+        // The run goes on behind co-op's menu, in reach, but not behind the Collection log over
+        // it, which hides it (the hero stands still too: updateCoop)
+        const coopMenu = overlay === "paused" && this.coopRun !== undefined && !runLog;
         if (code === "Escape" || code === "KeyP") {
-            if (overlay === "paused") {
-                this.resume();
-            } else if (overlay === "none") {
-                this.pause();
-            } else if (overlay === "event" && code === "Escape") {
-                this.leaveEvent();
-            }
+            this.pressPauseKey(code);
         } else if (overlay === "event" && code.startsWith("Digit")) {
             this.chooseEvent(parseInt(code.slice(5)) - 1);
         } else if (overlay === "levelUp" && code.startsWith("Digit")) {
@@ -3252,13 +3572,9 @@ export class GameClient implements GameFrameHandler {
             if (index >= 0 && index < sim.choices.length) {
                 this.choose(index);
             }
-        } else if (overlay === "paused" && this.coopRun && code.startsWith("Digit")) {
-            // The run goes on behind co-op's menu
+        } else if (coopMenu && code.startsWith("Digit")) {
             this.useItem(parseInt(code.slice(5)) - 1);
-        } else if (
-            (overlay === "none" || (overlay === "paused" && this.coopRun)) &&
-            code === "Space"
-        ) {
+        } else if ((overlay === "none" || coopMenu) && code === "Space") {
             this.useAbility();
         } else if (overlay === "levelUp" && code === "KeyR") {
             this.reroll();
@@ -3272,7 +3588,29 @@ export class GameClient implements GameFrameHandler {
             // is done)
             this.useItem(parseInt(code.slice(5)) - 1);
         }
-    };
+    }
+
+    // Escape and P in a run (a pad's back sends Escape, and its Start P when the top window has no
+    // main button), for the top window: a window over the run and its menu first, then the
+    // menu's resume, the run's pause, and Escape leaves an event
+    private pressPauseKey(code: string): void {
+        const { overlay, runLog, saveBlock, saveBlockClosed } = this.store.getSnapshot();
+        if (saveBlock && !saveBlockClosed) {
+            // The panel saying nothing's being saved comes first, as it does for useMenuKeys: the
+            // run behind it stays as it is till the player picks what to do
+            return;
+        }
+        if (overlay === "paused" && runLog) {
+            // The Collection log over the menu, back to the menu
+            this.closeRunLog();
+        } else if (overlay === "paused") {
+            this.resume();
+        } else if (overlay === "none") {
+            this.pause();
+        } else if (overlay === "event" && code === "Escape") {
+            this.leaveEvent();
+        }
+    }
 
     // ---- Frame ----
 
@@ -3292,6 +3630,7 @@ export class GameClient implements GameFrameHandler {
         this.showInstruction(performance.now());
 
         setPlayArea(this.renderer, this.grid, this.sim?.map.scaperune === true);
+        this.renderer.setHiddenLocs(this.sim ? undefined : TITLE_HIDDEN_LOCS);
 
         const sim = this.sim;
         if (!sim) {
@@ -3757,7 +4096,7 @@ export class GameClient implements GameFrameHandler {
         );
         this.cinematic = this.director.player;
         this.view.cinematic = this.cinematic;
-        this.paused = false;
+        this.leavePauseMenu();
         this.pinCinematic(sim, this.director.def);
         const version = this.director.shotsVersion;
         this.directorPins = { pinned: version, seen: version, changed: 0 };
@@ -4052,9 +4391,12 @@ export class GameClient implements GameFrameHandler {
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
-        // and through the opening cinematic
+        // and through the opening cinematic, and while the Collection log over the menu hides the
+        // run (whose keys are out of reach then too: onKeyPress)
+        const { overlay, runLog } = this.store.getSnapshot();
         const deciding =
-            (this.store.getSnapshot().overlay !== "none" && !this.paused) ||
+            (overlay !== "none" && !this.paused) ||
+            (overlay === "paused" && runLog === true) ||
             this.cinematic !== undefined;
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);
@@ -4948,7 +5290,7 @@ export class GameClient implements GameFrameHandler {
         if (pet && petModel) {
             const anim = petModel.getAnim(pet.idleSeq);
             const x = TITLE_MAP.spawn.x + PREVIEW_PET_SIDE;
-            const y = TITLE_MAP.spawn.y - PREVIEW_PET_BACK;
+            const y = TITLE_MAP.spawn.y;
             actors.draw(
                 petModel,
                 anim,

@@ -3,6 +3,36 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## 0.33.0 - 2026-11-15
+
+### Added
+
+- The Collection log in a run, by Okaeri: open it from the pause menu to see what you have, with
+  anything this run has found and not saved yet marked New. Closing it goes back to the menu. In
+  co-op it opens from the party's menu, and the run goes on while your hero stands still.
+- A Customisable max cape in the Wardrobe's store, for 25,000 coins: pick the colour of each of
+  its parts in the Outfit tab, or start from any other max cape's colours. Saved outfits keep
+  them.
+- With a controller, left and right move a highlighted slider.
+- Cards, by Okaeri, with trippy22's card frame: a collectible card for every weapon, passive,
+  casket gear and Collection log trophy, each in versions from its own rarity up to Very rare, and
+  rare foil copies, with a Cards tab in the Collection log. Runs earn platinum tokens (fewer in
+  endless runs), which buy packs in the Card shop (the first one's free); packs hold only what
+  you've unlocked, and each pack's Preview shows your chance of every card in it. Packs open on a
+  playmat, a card at a time. The Cards only tab makes runs offer only what you have cards of, no
+  rarer than your best version, with a pet whose card you have (in co-op, the host's choice for the
+  whole room); the Collection log marks trophies first found in such a run, and the map list marks
+  maps won in one.
+
+### Fixed
+
+- On the title screen, your pet stands closer beside your adventurer, and the courtyard's bushes
+  are gone, so they no longer hide it. A run in Lumbridge keeps them.
+- The skin you pick in the Wardrobe now shows on the Dragon plateskirt (cr)'s legs, the Group
+  ironman bracers' hands, the Zombie helmet's face and the few other pieces that kept the
+  default skin.
+- Escape and P no longer pause or resume a run behind the panel saying the game isn't saving.
+
 ## 0.32.2 - 2026-11-14
 
 ### Changed

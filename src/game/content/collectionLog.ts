@@ -1,13 +1,15 @@
+import { getBestVersion, getOwnedVersions } from "../core/cards";
 import { SaveData } from "../core/save";
-import { list, t, tp, tr } from "../i18n";
+import { fmtNum, list, t, tp, tr } from "../i18n";
 import { isMapOut } from "./acts";
+import { CARDS, CARD_KINDS, CardDef, PACK_BY_ID, packCards } from "./cards";
 import { EVOLUTIONS, EvolutionDef } from "./evolutions";
 import { INVADERS } from "./invaders";
 import { invaderName } from "./invasions";
 import { CASKETS, CASKET_GEAR, CASKET_TIERS, itemName } from "./items";
 import { FIGHT_MAPS, MAP_BY_ID, RAID_MAPS, getMap, mapName } from "./maps";
-import { Rarity } from "./rarity";
-import { TROPHIES, TrophyDef, trophyName } from "./trophies";
+import { Rarity, rarityName } from "./rarity";
+import { TROPHIES, TROPHY_BY_ID, TrophyDef, trophyName } from "./trophies";
 import { GearDef, UnlockTask } from "./types";
 import { describeUnlockTask } from "./unlocks";
 import { WEAPONS, weaponName } from "./weapons";
@@ -102,9 +104,9 @@ export function getRewards(save: SaveData, mapId: string): RewardEntry[] {
 
 // The log as OSRS's client lays it out: tabs along the top, each a list of entries, each entry a
 // page of items. Nothing here is saved: it's all read from what the save already keeps.
-export type LogTab = "bosses" | "raids" | "clues" | "minigames" | "other";
+export type LogTab = "bosses" | "raids" | "clues" | "minigames" | "other" | "cards";
 
-export const LOG_TABS: LogTab[] = ["bosses", "raids", "clues", "minigames", "other"];
+export const LOG_TABS: LogTab[] = ["bosses", "raids", "clues", "minigames", "other", "cards"];
 
 export type LogItem = {
     // Unique in the whole log (a casket's Justiciar faceguard isn't the Theatre's trophy)
@@ -119,6 +121,13 @@ export type LogItem = {
     count?: number;
     // An evolution's: what it makes stays hidden until it's been made
     evolution?: EvolutionDef;
+    // Found in the run under way, not saved yet (getRunLogEntries)
+    thisRun?: boolean;
+    // A card's (the Cards tab): its rarest version owned, shown on its slot and said in words
+    version?: Rarity;
+    // A trophy first found in a Card collection only run (SaveData.cardsOnlyFinds): a badge on
+    // its slot, and a line in its description
+    cardsOnly?: boolean;
 };
 
 export type LogEntry = {
@@ -129,6 +138,8 @@ export type LogEntry = {
     items: LogItem[];
     // The count shown under the title, OSRS's kill count line
     tally?: { key: string; n: number };
+    // A second count under it (the Cards tab's foils)
+    tally2?: { key: string; n: number };
 };
 
 // A map's tab: a raid's under Raids (RAID_MAPS: the Tombs have no MapDef.raid), a seasonal
@@ -178,6 +189,9 @@ export function getLogEntries(save: SaveData): LogEntry[] {
             count: INVADERS.some((invader) => invader.id === reward.id)
                 ? (save.invasions?.[reward.id] ?? 0)
                 : undefined,
+            ...(reward.found &&
+                TROPHY_BY_ID.has(reward.id) &&
+                save.cardsOnlyFinds?.includes(reward.id) && { cardsOnly: true }),
         })),
         tally: { key: "collection.wins", n: save.mapVictories[mapId] ?? 0 },
     }));
@@ -214,13 +228,89 @@ export function getLogEntries(save: SaveData): LogEntry[] {
             evolution,
         })),
     };
-    const entries = [...maps, ...clues, evolutions];
+    const entries = [...maps, ...clues, evolutions, ...getCardEntries(save)];
     return LOG_TABS.flatMap((tab) => entries.filter((entry) => entry.tab === tab));
+}
+
+// The log during a run: built from runSave, the save as the run would leave it
+// (GameClient.getRunLogSaves). What only that has found is marked thisRun and shown as the run
+// leaves it (an invader's first kill counted, and said). Everything else stays as it's saved,
+// its counts and the entries' tallies too, as a run's wins, caskets and kills aren't counted
+// till it ends.
+export function getRunLogEntries(save: SaveData, runSave: SaveData): LogEntry[] {
+    const saved = getLogEntries(save);
+    const savedEntries = new Map(saved.map((entry) => [entry.id, entry]));
+    const savedItems = new Map(saved.flatMap((entry) => entry.items).map((i) => [i.key, i]));
+    return getLogEntries(runSave).map((entry) => ({
+        ...entry,
+        tally: savedEntries.get(entry.id)?.tally ?? entry.tally,
+        items: entry.items.map((item) => {
+            const before = savedItems.get(item.key);
+            if (!before) return item;
+            return item.found && !before.found ? { ...item, thisRun: true } : before;
+        }),
+    }));
+}
+
+// The Cards tab (content/cards.ts): a set for each kind of card, then the raids' finds (the
+// Raider's pack's), each card at its rarest version owned. Its keys are the cards' own; the log's
+// title total leaves the tab out (getLogTotal), as its entries count themselves.
+export function getCardEntries(save: SaveData): LogEntry[] {
+    const item = (card: CardDef): LogItem => {
+        const best = getBestVersion(save, card);
+        return {
+            key: `card:${card.id}`,
+            id: card.id,
+            name: card.name(),
+            objId: card.objId,
+            how: best
+                ? t("collection.cards.owned", {
+                      rarity: rarityName(best),
+                      list: list(
+                          getOwnedVersions(save, card).map(({ rarity, copies }) =>
+                              t("cards.version_copies", {
+                                  rarity: rarityName(rarity),
+                                  n: fmtNum(copies),
+                              }),
+                          ),
+                      ),
+                  })
+                : t("cards.not_found"),
+            found: best !== undefined,
+            ...(best && { version: best }),
+        };
+    };
+    const tally = { key: "collection.cards.packs_opened", n: save.cardPacksOpened ?? 0 };
+    // The foil copies owned, every card's (SaveData.cardFoils)
+    const tally2 = {
+        key: "collection.cards.foils",
+        n: Object.values(save.cardFoils ?? {}).reduce((sum, n) => sum + n, 0),
+    };
+    return [
+        ...CARD_KINDS.map((kind) => ({
+            id: `cards_${kind}`,
+            tab: "cards" as const,
+            name: t(`cards.kind.${kind}`),
+            items: CARDS.filter((card) => card.kind === kind).map(item),
+            tally,
+            tally2,
+        })),
+        {
+            id: "cards_raids",
+            tab: "cards" as const,
+            name: t("collection.cards.raids"),
+            items: packCards(PACK_BY_ID.get("raids")!).map(item),
+            tally,
+            tally2,
+        },
+    ];
 }
 
 // The log's whole count, obtained over total. Each item's listed once (its key), though two finds
 // can share a name: the Theatre's Justiciar faceguard trophy and the casket's are found apart.
+// Cards (the Cards tab) are kept apart, each of its entries with its own count: the total is the
+// game's own finds.
 export function getLogTotal(entries: LogEntry[]): { found: number; total: number } {
-    const items = entries.flatMap((entry) => entry.items);
+    const items = entries.filter((entry) => entry.tab !== "cards").flatMap((entry) => entry.items);
     return { found: items.filter((item) => item.found).length, total: items.length };
 }

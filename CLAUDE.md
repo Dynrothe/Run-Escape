@@ -95,8 +95,13 @@ go stale. Add anything that cost you time to work out.
 | Pets: which trophies follow you, and how               | `src/game/content/pets.ts`, `client/PetFollowers.ts`                   |
 | The Wardrobe: body, outfit, its store of pieces        | `content/wardrobe.ts`, `ui/WardrobeScreen.tsx`, `docs/DEVELOPMENT.md`  |
 | The store's pieces and kits, from the cache            | `scripts/cache/cosmetics.ts` (writes `content/cosmeticItems.ts`)       |
+| The Customisable max cape: its parts and presets       | `content/maxCape.ts`, `PlayerAppearance.recolors`, `recolorAtOnce`     |
 | Collection log drops, sources and map rewards          | `src/game/content/trophies.ts`, `src/game/core/Sim.ts`                 |
 | The Collection log's tabs, entries and its screen      | `content/collectionLog.ts`, `ui/CollectionLogScreen.tsx`               |
+| Cards: the album, the Card shop, foils, platinum       | `content/cards.ts`, `core/cards.ts`, `ui/CardsScreen.tsx`, `Sim.ts`    |
+| A pack's Preview: its tabs, odds and info popover      | `ui/PackPreview.tsx`, `core/cardOdds.ts`                               |
+| Cards only: its runs, tab, pets and what it needs      | `core/cardRuns.ts`, `ui/CardNeeds.tsx`, `GameUi.tsx` (CardsOnlyTabs)   |
+| The card generator: PNG cards drawn from the cache     | `scripts/cards/` (its README), `renderItemModel` in `ItemIconLoader`   |
 | A cape's emblem and other decals behind their cloth    | `src/rs/model/player/liftDecals.ts`, `docs/DEVELOPMENT.md`             |
 | A player in layers: a cape over armour poking through  | `actor/actor.vert.glsl` (`seenFromBehind`), `docs/DEVELOPMENT.md`      |
 | Wooden bases under Karamja's blocking jungle plants    | `src/mapviewer/webgl/loc/PlantBarriers.ts`                             |
@@ -105,6 +110,7 @@ go stale. Add anything that cost you time to work out.
 | The title's reminder to export the save                | `src/game/ui/exportReminder.ts`, `docs/DEVELOPMENT.md` Saves           |
 | Cloud save in the game: syncing, the choice, Settings  | `client/CloudSave.ts`, `ui/CloudSave.tsx`, `docs/DEVELOPMENT.md` Saves |
 | Run flow, camera, input, the HUD's data                | `src/game/client/GameClient.ts`                                        |
+| Scenery left out of the title screen (its bushes)      | `GameClient.ts` (`TITLE_HIDDEN_LOCS`), `SdMapLoaderInput.hiddenLocs`   |
 | The damage panel: each weapon's DPS during a run       | `src/game/client/DamageMeter.ts`                                       |
 | 3D actors, swooshes, hitsplats                         | `src/game/client/GameView.ts`                                          |
 | Actors' frames, baked as positions on a shared mesh    | `actor/ActorBakeFrames.ts`, `actor.vert.glsl`, `check-actor-frames.ts` |
