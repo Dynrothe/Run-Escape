@@ -221,7 +221,7 @@ export function getLogEntries(save: SaveData): LogEntry[] {
 }
 
 // The log during a run: built from runSave, the save as the run would leave it
-// (GameClient.getRunLogSave), with what only that has found marked thisRun. The counts and tallies
+// (GameClient.getRunLogSaves), with what only that has found marked thisRun. The counts and tallies
 // stay the save's, as a run's kills and caskets aren't counted till it ends.
 export function getRunLogEntries(save: SaveData, runSave: SaveData): LogEntry[] {
     const saved = getLogEntries(save);

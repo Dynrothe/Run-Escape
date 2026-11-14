@@ -2719,7 +2719,9 @@ export class GameClient implements GameFrameHandler {
     resume(): void {
         this.paused = false;
         this.accumulator = 0;
-        this.store.set({ runLog: false });
+        if (this.store.getSnapshot().runLog) {
+            this.store.set({ runLog: false });
+        }
         this.syncOverlay();
     }
 
@@ -2738,11 +2740,11 @@ export class GameClient implements GameFrameHandler {
 
     // The save, and the save as this run would leave it if it ended now, for the log's "Found
     // this run": what finishRun would record, on a copy, so nothing's saved and the run's
-    // untouched. Both copies, from the same moment. No run's finds once the run's recorded, for
+    // untouched. Both from the same moment (saved is only read). No run's finds once the run's recorded, for
     // the Forgotten Four's fights (they record the gauntlet, not the run), or for a result with a
     // number that isn't, which finishRun wouldn't record either.
     getRunLogSaves(): { saved: SaveData; withRun?: SaveData } {
-        const saved = structuredClone(this.save);
+        const saved = this.save;
         const sim = this.sim;
         if (!sim || this.runRecorded || this.gauntletRun) {
             return { saved };
@@ -4099,9 +4101,11 @@ export class GameClient implements GameFrameHandler {
         const move = this.input.getMoveVector(this.move);
         // Standing still while choosing (the menu doesn't stop the run, so
         // moving goes on behind it)
-        // and through the opening cinematic
+        // and through the opening cinematic. Not while the Collection log covers the run either.
+        const { overlay, runLog } = this.store.getSnapshot();
         const deciding =
-            (this.store.getSnapshot().overlay !== "none" && !this.paused) ||
+            (overlay !== "none" && !this.paused) ||
+            (overlay === "paused" && runLog === true) ||
             this.cinematic !== undefined;
         run.setMove(deciding ? 0 : move.x, deciding ? 0 : move.y);
         this.accumulator += Math.min(deltaTimeMs, TICK_MS * MAX_TICKS_PER_FRAME);

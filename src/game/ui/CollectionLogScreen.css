@@ -301,6 +301,7 @@
     position: absolute;
     left: 2px;
     bottom: 0;
+    z-index: 1;
     pointer-events: none;
 }
 

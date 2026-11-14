@@ -9,7 +9,7 @@ the version in the corner).
 
 - The Collection log in a run, by Okaeri: open it from the pause menu to see what you have, with
   anything this run has found and not saved yet marked New. Closing it goes back to the menu. In
-  co-op it opens from the party's menu and the run goes on meanwhile.
+  co-op it opens from the party's menu, and the run goes on while your hero stands still.
 
 ## 0.32.2 - 2026-11-14
 

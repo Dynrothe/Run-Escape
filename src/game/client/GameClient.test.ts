@@ -1208,6 +1208,23 @@ describe("a co-op run that breaks", () => {
         return { client, store, coop, finishRun, flush, stepFrame, update };
     }
 
+    it("walks on under co-op's menu, but stands still under the Collection log over it", () => {
+        const setMove = vi.fn();
+        const { client, store, update } = coopClient({ setMove });
+        Object.assign(client, {
+            input: {
+                getMoveVector: (into: { x: number; y: number }) => Object.assign(into, { x: 1 }),
+            },
+        });
+        client.pause();
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(1, 0);
+        client.openRunLog();
+        expect(store.getSnapshot().runLog).toBe(true);
+        update();
+        expect(setMove).toHaveBeenLastCalledWith(0, 0);
+    });
+
     it("sends the host's frames even when something after a step throws", () => {
         const { client, flush, stepFrame, update } = coopClient({});
         Object.assign(client, {
@@ -2697,7 +2714,7 @@ describe("the Collection log over the pause menu", () => {
         }
         press("Escape");
         expect(snapshot().overlay).toBe("none");
-        // A run that left the menu with the log open (a co-op run's level up, its end) pauses
+        // A run that left the menu with the log open (a co-op run's end, or leaving it) pauses
         // to the menu next time
         press("KeyP");
         client.openRunLog();

@@ -57,6 +57,18 @@ function countClass(found: number, total: number): string {
     return found === total ? "ui-log-all" : "ui-log-some";
 }
 
+// An entry in the dropdown: its count, and New if the run's found any of it
+function entryOption(entry: LogEntry): string {
+    const text = t("collection.entry_option", {
+        name: entry.name,
+        n: fmtNum(entryCount(entry)),
+        total: fmtNum(entry.items.length),
+    });
+    return entry.items.some((item) => item.thisRun)
+        ? t("collection.entry_new", { name: text })
+        : text;
+}
+
 // A sentence with an element in it, where its {placeholder} is, so a language can move it
 function withPart(text: string, placeholder: string, part: JSX.Element): JSX.Element {
     const at = text.indexOf(`{${placeholder}}`);
@@ -172,7 +184,11 @@ export function CollectionLogScreen({ ui, client, inRun = false }: Props): JSX.E
                                     }
                                     aria-label={
                                         complete
-                                            ? t("collection.entry_complete", { name: e.name })
+                                            ? t("collection.entry_complete", {
+                                                  name: fresh
+                                                      ? t("collection.entry_new", { name: e.name })
+                                                      : e.name,
+                                              })
                                             : undefined
                                     }
                                     aria-pressed={e === entry}
@@ -197,11 +213,7 @@ export function CollectionLogScreen({ ui, client, inRun = false }: Props): JSX.E
                     >
                         {inTab.map((e) => (
                             <option key={e.id} value={e.id}>
-                                {t("collection.entry_option", {
-                                    name: e.name,
-                                    n: fmtNum(entryCount(e)),
-                                    total: fmtNum(e.items.length),
-                                })}
+                                {entryOption(e)}
                             </option>
                         ))}
                     </select>

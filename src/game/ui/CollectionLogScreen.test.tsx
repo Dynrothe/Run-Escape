@@ -27,19 +27,27 @@ afterEach(() => {
 });
 
 // The log open on a new save, each item's icon its object id
-function openLog(): { showScreen: ReturnType<typeof vi.fn>; log: HTMLElement } {
+function openLog(): {
+    showScreen: ReturnType<typeof vi.fn>;
+    getRunLogSaves: ReturnType<typeof vi.fn>;
+    log: HTMLElement;
+} {
     vi.spyOn(iconCache, "get").mockImplementation((objId: number) => `obj:${objId}`);
     vi.spyOn(iconCache, "request").mockImplementation(() => {});
     vi.spyOn(iconCache, "requestFrame").mockImplementation(() => {});
     const store = new GameStore(createSave());
     store.set({ screen: "collectionLog" });
     const showScreen = vi.fn();
+    // A run's finds, which the title's log never asks for
+    const withRun = createSave();
+    withRun.trophies.push(...TROPHIES.map((trophy) => trophy.id));
+    const getRunLogSaves = vi.fn(() => ({ saved: createSave(), withRun }));
     const client = new Proxy(
-        { showScreen },
+        { showScreen, getRunLogSaves },
         { get: (target, key) => target[key as keyof typeof target] ?? vi.fn() },
     );
     render(<GameUi store={store} client={client as unknown as GameClient} />);
-    return { showScreen, log: screen.getByRole("dialog") };
+    return { showScreen, getRunLogSaves, log: screen.getByRole("dialog") };
 }
 
 function pageTitle(log: HTMLElement): string | null {
@@ -225,7 +233,8 @@ describe("the Collection log during a run", () => {
     });
 
     test("marks nothing on the title's log", () => {
-        const { log } = openLog();
+        const { getRunLogSaves, log } = openLog();
+        expect(getRunLogSaves).not.toHaveBeenCalled();
         expect(within(log).queryByText("New")).toBeNull();
     });
 });
