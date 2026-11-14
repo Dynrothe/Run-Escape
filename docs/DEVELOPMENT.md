@@ -2768,6 +2768,17 @@ Everything touch only hangs off `pointer: coarse`, so a mouse and keyboard never
   into the item buttons' column there, where the Tombs' fight button sits. Its lines let taps
   through to the button, but the DPS doesn't, so with a fight button over the items it keeps left
   of that column (`.ui-damage-beside-ability`). Anything new to tap in that column needs the same.
+- A phone's run setup is laid out in React as well as CSS, as CSS alone left it five scrolling
+  boxes a row or two tall: `usePhoneLayout` (`ui/usePhoneLayout.ts`, the same query as
+  `Mobile.css`'s) makes `CharacterScreen` render `PhoneSetup` instead. It's a screen of what's
+  picked (the map's card, the switches, the adventurer under the hero) with each list over the
+  whole screen: `AdventurerPanel` and `MapPanel` with `onDone`, which adds Done, the first go
+  button so a controller's Start presses it. A phone has width and not height, so the pickers
+  put details beside the list, never under it. The co-op room (`CoopLobby`) does the same with
+  its own pieces: the party on the left, the map's card and your adventurer's on the right. Only
+  the host's map card opens a list, with the host's switches beside it, as only the host picks;
+  a guest's is only to see. The pane's 667x375 and 740x360 show it; past 768 wide the pane
+  doesn't emulate touch.
 - A tablet is `pointer: coarse` too, but taller than 520px, so it gets the desktop's layout with
   the touch controls over it. The HUD lets pointers through to the stick, so whatever a finger
   has to reach there takes them back (`pointer-events: auto`) in `Mobile.css`'s plain
