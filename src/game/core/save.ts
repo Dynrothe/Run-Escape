@@ -62,6 +62,7 @@ import {
     ownsCosmetic,
 } from "../content/wardrobe";
 import { WEAPONS } from "../content/weapons";
+import { migrateCards } from "./cards";
 
 // Progress kept between runs: banked coins, permanent upgrades, unlocks and
 // records. Versioned so older saves can be upgraded when the format changes.
@@ -190,6 +191,13 @@ export type SaveData = {
     // When the player last exported it (Date.now()), so an exported file says
     // when it was made, and the title screen can remind them to keep a copy
     lastExported?: number;
+    // Cards (core/cards.ts): card id -> copies owned, the packs held unopened (STARTER_PACKS while
+    // unset) and how many have been opened
+    cards?: Record<string, number>;
+    cardPacks?: number;
+    cardPacksOpened?: number;
+    // Card collection only runs picked (core/cardRuns.ts): played whenever the collection can
+    cardsOnly?: boolean;
 };
 
 // What a record was set with: its run's invocation points and the relics on (content/relics.ts),
@@ -575,6 +583,7 @@ export function migrateSave(raw: unknown): SaveData {
     if (outfits.length > 0) {
         save.outfits = outfits;
     }
+    Object.assign(save, migrateCards(data));
     return save;
 }
 

@@ -332,4 +332,14 @@ export class GameSounds {
     denied(): void {
         this.audio.play(SOUNDS.denied, { volume: 0.5 });
     }
+
+    // Cards (ui/CardsScreen.tsx): a pack torn open, as a casket opens, and a card turned over, with
+    // a casket's sound for its rarity
+    cardPack(): void {
+        this.audio.play(SOUNDS.casket, { volume: 1, minGap: 0 });
+    }
+
+    cardReveal(rarity: Rarity): void {
+        this.audio.play(REVEAL_SOUNDS[rarity], { volume: 0.9, minGap: 0 });
+    }
 }

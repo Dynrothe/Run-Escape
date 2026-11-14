@@ -92,6 +92,7 @@ import {
 import { SHOP_UPGRADES, shopUpgradeDescription, shopUpgradeName } from "../content/shop";
 import { StatText, formatStats } from "../content/stats";
 import {
+    CARDS_ICON_OBJ,
     COLLECTION_LOG_OBJ,
     REFUND_SPRITE,
     TITLE_TAB_SPRITES,
@@ -105,6 +106,7 @@ import { isVaultOpen, parseWeekKey } from "../content/vault";
 import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
+import { getCardRunShortfall } from "../core/cardRuns";
 import {
     NewerSaveError,
     RecordSetup,
@@ -128,6 +130,7 @@ import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton, KitButtons } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
+import { CardsScreen } from "./CardsScreen";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
 import { CloudChoicePanel, CloudSaveButton, CloudSavePanel, CloudSaveSettings } from "./CloudSave";
@@ -244,6 +247,9 @@ export function GameUi({ store, client }: Props): JSX.Element {
             break;
         case "collectionLog":
             screen = <CollectionLogScreen ui={ui} client={client} />;
+            break;
+        case "cards":
+            screen = <CardsScreen ui={ui} client={client} />;
             break;
         case "coop":
             screen = <CoopScreen ui={ui} client={client} />;
@@ -1021,6 +1027,11 @@ function TitleScreen({ ui, client }: ScreenProps): JSX.Element {
                             objId={COLLECTION_LOG_OBJ}
                             onClick={() => client.showScreen("collectionLog")}
                         />
+                        <TitleTile
+                            name={t("ui.title.cards")}
+                            objId={CARDS_ICON_OBJ}
+                            onClick={() => client.showScreen("cards")}
+                        />
                     </div>
                     <div className="ui-title-stats">
                         <Coins amount={save.coins} />
@@ -1184,6 +1195,8 @@ function CharacterScreen({ ui, client }: ScreenProps): JSX.Element {
                         {runBoard && <RunInvocationsButton ui={ui} onOpen={() => setBoard(true)} />}
                     </>
                 )}
+                {/* A map whose level ups are blessings: cards don't touch them */}
+                {!map.blessings && <CardsOnlySwitch ui={ui} client={client} />}
                 <button
                     className="ui-button ui-button-go ui-select-go"
                     onClick={() => client.startRun()}
@@ -1263,6 +1276,50 @@ function EndlessSwitch({ ui, client }: ScreenProps): JSX.Element {
                 />
             ) : (
                 <span className="ui-endless-hint">{t("ui.endless.beat_map")}</span>
+            )}
+        </div>
+    );
+}
+
+// Card collection only (core/cardRuns.ts): level ups offer only what the player has cards of, no
+// rarer than their rarest version. Off, saying what's missing, while the collection can't fill a
+// level up for this adventurer: a run never starts on it with nothing to offer.
+function CardsOnlySwitch({ ui, client }: ScreenProps): JSX.Element {
+    const characterId = getMapCharacter(getMap(ui.mapId)) ?? ui.characterId;
+    const short = getCardRunShortfall(ui.save, characterId);
+    const missing = short && [
+        ...(short.startingWeapon
+            ? [t("ui.cards_only.need_start", { name: weaponName(getWeapon(short.startingWeapon)) })]
+            : []),
+        ...(short.weapons > 0 ? [tp("ui.cards_only.need_weapons", short.weapons)] : []),
+        ...(short.passives > 0 ? [tp("ui.cards_only.need_passives", short.passives)] : []),
+    ];
+    return (
+        <div
+            className={"ui-endless" + (short ? " ui-endless-locked" : "")}
+            title={
+                missing
+                    ? t("ui.cards_only.locked", { list: listNames(missing) })
+                    : t("ui.cards_only.tooltip")
+            }
+        >
+            <span className="ui-endless-name">{t("ui.cards_only.name")}</span>
+            {short ? (
+                <span
+                    className="ui-endless-hint"
+                    aria-label={t("ui.cards_only.locked", { list: listNames(missing!) })}
+                >
+                    {tp(
+                        "ui.cards_only.short",
+                        (short.startingWeapon ? 1 : 0) + short.weapons + short.passives,
+                    )}
+                </span>
+            ) : (
+                <Toggle
+                    on={ui.save.cardsOnly === true}
+                    label={t("ui.cards_only.name")}
+                    onToggle={() => client.toggleCardsOnly()}
+                />
             )}
         </div>
     );
@@ -4790,6 +4847,7 @@ export function ResultModal({ ui, client }: ScreenProps): JSX.Element {
                 {result?.hard && result.victory && result.relics && (
                     <p className="ui-subtle">{t("ui.result.relics_no_hard")}</p>
                 )}
+                {result?.cardsOnly && <p className="ui-subtle">{t("ui.result.cards_only")}</p>}
                 {result?.firstHardWin && (
                     <p className="ui-unlocked">
                         {t("ui.result.first_hard_win", { map: mapName(getMap(result.mapId)) })}

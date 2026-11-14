@@ -1425,6 +1425,49 @@ adventurer can have:
   cache's variant marked as a follower, with its own idle and walk animations. The pet can be
   taken out once its trophy is found.
 
+### Cards
+
+The title's Cards tile: an album and the Card shop. Cards do nothing in a run except in Card
+collection only runs. Packs are bought with the coins runs pay out, as the Armoury and the
+Wardrobe spend them, and no real money is ever involved.
+
+- **Cards are made from content** (`ALL_CARDS` in `content/cards.ts`): one for each weapon,
+  passive and trophy, its picture that thing's item icon. Their ids (`weapon:<id>` and so on) are
+  kept in the save, so the ids they're made from must never be renamed, as they already mustn't
+  be. A card from a map that isn't out (`isCardOut`) is left out of packs and the album, but a
+  save keeps it.
+- **Versions** (`cardVersions`): a card comes in each rarity from its own up to Very rare. A
+  weapon's and a passive's own rarity is the game's (`WeaponDef.rarity`, `PassiveDef.rarity`); a
+  trophy's goes by how hard it is to find (`trophyRarity`). `SaveData.cards` keeps the copies of
+  each version: a card's own version under its id, the rarer ones as `<id>@<rarity>`
+  (`versionKey`, `parseVersionKey`). The rarity is always written on the card, not only shown by
+  its frame's colour.
+- **Packs** (`PACKS`, `core/cards.ts`): each has a pool (`holds`), a price and odds by version.
+  A card rolls a version by the odds, then a card of the pool that comes in it; in a pack with
+  odds for three rarities or more, the last card never rolls the commonest (`lastCardRarities`),
+  which the shop says. A bought pack opens at once. `SaveData.cardPacks` holds only
+  the free starter pack (a basic one), and counts as `STARTER_PACKS` while unset, so every save
+  gets it once. Opening takes the client's `Math.random`: it isn't part of a run.
+- **Card collection only** (`core/cardRuns.ts`, `SaveData.cardsOnly`, the run screen's Cards
+  only switch): level ups offer only weapons and passives with a card, no rarer than the rarest
+  version owned (`Upgrades.CardCaps`, `capQuality`); an evolution only with its card; and a pick
+  into another weapon (a godsword's hilt) only with its card, while that leaves two picks (a
+  blade can't be held without a hilt). An item still has to be in the game as usual (`isAvailable`). The
+  caps go into the run's setup (`SimOptions.cardCaps`, `HeroOptions.cardCaps`), so the run plays
+  the same on every copy and from the same seed. In co-op each player's own come in their
+  loadout (`Loadout.cardCaps`, checked by `cleanCardCaps`), as their unlocked items do: it's each
+  player's own choice, for their own level ups. The switch is off, saying what's missing, while
+  the collection can't fill a level up (`getCardRunShortfall`); a run never starts on it then. The
+  Vault never plays it, nor does a map whose level ups are blessings (no switch there). Such a
+  run counts as any other, and its results say it was one. The switch is on the run screen only,
+  so co-op players set it before joining a room.
+- **The screen** (`ui/CardsScreen.tsx`): its classes are `ui-cards-*` and `ui-tcg-*`, since
+  `ui-card` is the level up's. A found card shows big beside the album (in a window of its own on
+  a phone). Rare and Very rare versions have a foil sheen, which passes a few times only on the
+  big card and in a pack's window, and never with `prefers-reduced-motion`.
+- **Loading** (`migrateCards`, from `migrateSave`): only versions of cards that exist, whole
+  counts capped at `MAX_CARD_COPIES` and `MAX_CARD_PACKS`.
+
 ### Thanksgiving's Avian Assaulter
 
 The Avian Assaulter is Thanksgiving Harvest's `seasonalCharacter` and `only` there, so everyone

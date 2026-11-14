@@ -1074,6 +1074,7 @@ export function makeLoadout(
     trophies?: string[],
     look?: WardrobeLook,
     relics?: string[],
+    cardCaps?: string[],
 ): Loadout {
     // Only what's been bought, so it stays small
     const bought = Object.fromEntries(Object.entries(metaStats).filter(([, value]) => value !== 0));
@@ -1086,5 +1087,6 @@ export function makeLoadout(
         ...(invocations && { invocations }),
         ...(trophies && trophies.length > 0 && { trophies }),
         ...(relics && relics.length > 0 && { relics }),
+        ...(cardCaps && { cardCaps }),
     };
 }

@@ -343,6 +343,8 @@
     .ui-armoury-slots,
     .ui-armoury-details,
     .ui-log-list,
+    .ui-cards-grid,
+    .ui-cards-shop,
     .ui-quest-list,
     .ui-settings-body,
     .ui-notice-body,
@@ -515,6 +517,7 @@
     .ui-armoury,
     .ui-quests,
     .ui-log,
+    .ui-cards,
     .ui-settings,
     .ui-changelog,
     .ui-notice,
@@ -796,7 +799,14 @@
     /* Quests and the collection log */
 
     .ui-quests > .ui-subtle,
-    .ui-log > .ui-subtle {
+    .ui-log > .ui-subtle,
+    .ui-cards > .ui-subtle,
+    .ui-cards-pack > .ui-subtle {
+        display: none;
+    }
+
+    /* No height for the card's big view beside the grid: the small cards say what they are */
+    .ui-cards-detail {
         display: none;
     }
 

@@ -3,6 +3,15 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Added
+
+- Cards, by Okaeri: a collectible card for every weapon, passive and Collection log trophy, each
+  in versions from its own rarity up to Very rare. Buy packs in the Card shop with coins (the
+  first one's free), and turn on Cards only for runs whose level ups offer only what you have
+  cards of, no rarer than your best version.
+
 ## 0.32.1 - 2026-11-14
 
 ### Fixed

@@ -279,6 +279,7 @@ import { MovementRules, movePlayer, walkToward, yawFromVector } from "./PlayerMo
 import { Rng, hashChance } from "./Rng";
 import { SpatialHash } from "./SpatialHash";
 import {
+    CardCaps,
     MAX_PASSIVES,
     MAX_WEAPONS,
     UpgradeChoice,
@@ -852,6 +853,9 @@ export type SimOptions = {
     // The weapons, passives and items brought in by map tasks; everything can
     // turn up when unset
     unlockedItems?: ReadonlySet<string>;
+    // A Card collection only run (core/cardRuns.ts): the hero's cards, which level ups keep to
+    // (Upgrades.CardCaps). Unset in any other run.
+    cardCaps?: CardCaps;
     // The raid chests' trophies already in their Collection log (isRaidChestTrophy): they're
     // unlocks, so a chest only gives ones they haven't got
     trophiesFound?: ReadonlySet<string>;
@@ -1073,6 +1077,8 @@ export type Hero = {
     // Armoury (see SimOptions)
     metaStats: Stats;
     unlockedItems: ReadonlySet<string> | undefined;
+    // A Card collection only run's cards, their own (SimOptions.cardCaps)
+    cardCaps: CardCaps | undefined;
     // The raid chests' trophies they'd found before the run, only those (SimOptions.trophiesFound)
     trophiesFound: ReadonlySet<string> | undefined;
     armoury: ArmouryUpgrades | undefined;
@@ -1274,6 +1280,8 @@ export type HeroOptions = {
     characterId: string;
     metaStats: Stats;
     unlockedItems?: ReadonlySet<string>;
+    // A Card collection only run's cards, each player's own (SimOptions.cardCaps)
+    cardCaps?: CardCaps;
     trophiesFound?: ReadonlySet<string>;
     armoury?: ArmouryUpgrades;
     // The pet taken along (SaveData.pet): only a fighting one (PetDef.power) does anything here
@@ -2088,6 +2096,10 @@ export class Sim {
     get unlockedItems(): ReadonlySet<string> | undefined {
         return this.hero.unlockedItems;
     }
+    // A Card collection only run's cards (SimOptions.cardCaps): undefined in any other run
+    get cardCaps(): CardCaps | undefined {
+        return this.hero.cardCaps;
+    }
     private get armoury(): ArmouryUpgrades | undefined {
         return this.hero.armoury;
     }
@@ -2432,6 +2444,7 @@ export class Sim {
                 characterId: options.characterId,
                 metaStats: options.metaStats,
                 unlockedItems: options.unlockedItems,
+                cardCaps: options.cardCaps,
                 trophiesFound: options.trophiesFound,
                 armoury: options.armoury,
                 pet: options.pet,
@@ -2530,6 +2543,7 @@ export class Sim {
             characterId: options.characterId,
             metaStats: options.metaStats,
             unlockedItems: options.unlockedItems,
+            cardCaps: options.cardCaps,
             trophiesFound: options.trophiesFound,
             armoury: options.armoury,
             ...fightingPet(options.pet),
@@ -3153,7 +3167,7 @@ export class Sim {
             choice?.kind === "weaponLevel"
                 ? this.weapons.find((w) => w.def.id === choice.weaponId)
                 : undefined;
-        const hilts = weapon ? hiltChoices(weapon, this.unlockedItems) : [];
+        const hilts = weapon ? hiltChoices(weapon, this.unlockedItems, this.hero.cardCaps) : [];
         if (hilts.length > 0) {
             this.choices = hilts;
             return;
@@ -3261,6 +3275,7 @@ export class Sim {
             this.maxWeapons,
             this.maxPassives,
             this.hero.banished,
+            this.hero.cardCaps,
         );
         // Filtered after the roll, so the run's RNG goes as it did
         return this.map.noLevelUpCoins ? choices.filter((c) => c.kind !== "coins") : choices;
@@ -24476,7 +24491,8 @@ export class Sim {
                         w.def.id === weapon.id ||
                         (weapon.family !== undefined && w.def.family === weapon.family),
                 ) &&
-                isAvailable(weapon, this.unlockedItems),
+                isAvailable(weapon, this.unlockedItems) &&
+                (!this.hero.cardCaps || this.hero.cardCaps.has(`weapon:${weapon.id}`)),
         );
         if (options.length > 0 && this.weapons.length < this.maxWeapons) {
             this.addWeapon(options[this.rng.int(options.length)].id);

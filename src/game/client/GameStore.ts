@@ -30,6 +30,8 @@ export type Screen =
     | "wardrobe"
     | "quests"
     | "collectionLog"
+    // Cards: the album and its packs (content/cards.ts)
+    | "cards"
     // Co-op: finding or making a room, and the room before a run
     | "coop"
     // The Forgotten Four: its order before the start, and its camp between fights
@@ -539,6 +541,8 @@ export type UiSnapshot = {
         vault?: { key: string; best: boolean };
         // An Awakener's orb won (an Awakened fight), or spent on this run's final boss
         orbWon?: boolean;
+        // Played Card collection only (core/cardRuns.ts): it counts as any other run
+        cardsOnly?: boolean;
         // Played in a room to its end, so the party goes back together: no Play again, even once
         // the room closes on the results
         coop?: boolean;

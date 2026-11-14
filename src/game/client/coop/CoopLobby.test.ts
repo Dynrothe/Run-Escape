@@ -1,10 +1,12 @@
 import { MAX_LOADOUT_BYTES } from "../../../../server/coop-relay.mjs";
 import { getUpgradeLine } from "../../content/armoury";
+import { CARDS } from "../../content/cards";
 import { INVOCATIONS } from "../../content/invocations";
 import { CASKET_GEAR } from "../../content/items";
 import { SHOP_UPGRADES } from "../../content/shop";
 import { TROPHIES, getRaidChestTrophiesFound } from "../../content/trophies";
 import { LOCKABLE_ITEMS } from "../../content/unlocks";
+import { encodeCardCaps } from "../../core/cardRuns";
 import { createSave } from "../../core/save";
 import { GameStore } from "../GameStore";
 import { CoopLobby, CoopView, makeLoadout, parseRoomCode } from "./CoopLobby";
@@ -71,8 +73,20 @@ describe("loadouts", () => {
             // A Tombs host with every invocation on
             INVOCATIONS.map((invocation) => invocation.id),
             getRaidChestTrophiesFound(TROPHIES.map((trophy) => trophy.id)),
+            undefined,
+            undefined,
+            // Card collection only, with the Very rare version of every weapon and passive
+            encodeCardCaps(
+                new Map(
+                    CARDS.filter((card) => card.kind !== "trophy").map((card) => [
+                        card.id,
+                        "veryRare" as const,
+                    ]),
+                ),
+            ),
         );
         expect(loadout.trophies?.length).toBeGreaterThan(0);
+        expect(loadout.cardCaps?.length).toBeGreaterThan(0);
         expect(JSON.stringify(loadout).length).toBeLessThan(MAX_LOADOUT_BYTES / 2);
     });
 

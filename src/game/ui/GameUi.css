@@ -371,7 +371,9 @@
 
 .ui-title-tiles {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* One row, however many tiles */
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 6px;
 }
 

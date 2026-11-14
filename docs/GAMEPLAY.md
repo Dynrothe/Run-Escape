@@ -86,6 +86,13 @@ version and how to run it.
   recipe, keeping what it makes as ??? until you've made it. It has a tab for each place with
   finds of its own (the Hallowed Night, the Theatre of Blood, the Tombs of Amascut, Justiciar
   Zachariah, Phosani's Nightmare): the weapons it brings in, then its trophies.
+- **Cards** (the title's Cards tile): a card for every weapon, passive and Collection log trophy,
+  each in versions from its own rarity up to Very rare. The Card shop sells packs of five for
+  coins: one of any card, one each of weapons, passives and trophies, one of the raids' finds,
+  and a dearer one with better odds of the rarer versions. Every save gets one pack free. **Cards
+  only** on the run screen makes level ups offer only what you have a card of, no rarer than your
+  best version of it; it's off until your collection has your starting weapon's card and enough
+  others to fill a level up.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.
