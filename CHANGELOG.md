@@ -3,7 +3,11 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
-## Unreleased
+## 0.32.1 - 2026-11-14
+
+### Changed
+
+- The Battle for Varrock's row on the map screen's Fun tab is now called Memories.
 
 ### Fixed
 
