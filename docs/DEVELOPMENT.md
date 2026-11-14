@@ -2234,7 +2234,9 @@ scripts/dev/render-stats.ts lumbridge    what a map costs to draw, without a bro
 ```
 
 Tests: `bun run test`. `.github/workflows/check.yml` runs them with the type check on every pull
-request (without the game's cache, so `generator.test.ts` skips its long map check there).
+request (without the game's cache). `generator.test.ts`'s long map checks are opt-in: `bun run
+test:maps` (`MAP_CHECKS=1`) runs them, for changes to ScapeRune or a map, and the release workflow
+runs them every time.
 
 The dev server's file watcher leaves out `.claude/`, where Claude Code keeps its worktrees. Each is
 a whole checkout, and watching them all held up the first load after every start by tens of

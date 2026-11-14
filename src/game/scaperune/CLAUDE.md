@@ -539,7 +539,8 @@ out in 190 pieces, the biggest 1,356 tiles; with doors and props off it's 4,116.
 a town that falls into pieces has nowhere for waves to come at you. In a recipe,
 `findPieces(getCollisionFlags(grid, locs), sizeX, sizeY, rect)` (`collision.ts`) gives the same list, biggest first, to throw on if the biggest is too small.
 
-Before you finish, run `bun run vitest run src/game/scaperune`. It runs `check-maps.ts` over every
+Before you finish, run `bun run test:maps` (`MAP_CHECKS=1 vitest run src/game/scaperune`; a plain
+`bun run test` leaves the map checks out). It runs `check-maps.ts` over every
 dev map, about 60 settings at their extremes, the presets and 12 random rolls. That takes a few
 minutes.
 
