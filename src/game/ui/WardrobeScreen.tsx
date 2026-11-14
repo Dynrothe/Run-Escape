@@ -501,15 +501,15 @@ function gradient(colours: Hsl[]): string {
 }
 
 // Colours picked on a slider but not kept yet: shown on the adventurer every PREVIEW_MS, and kept
-// (saved, and sent to co-op's room) once they've settled, or as the Wardrobe's left
+// (saved, and sent to co-op's room) once they've settled, or as the picker closes. Only the
+// colours go to the client, which puts them on the look worn by then.
 function useDraftColours(
-    look: WardrobeLook,
     client: GameClient,
 ): [Hsl[] | undefined, (colours: Hsl[] | undefined) => void] {
     const [draft, setDraft] = useState<Hsl[]>();
     const lastPreview = useRef(0);
-    const latest = useRef({ look, draft });
-    latest.current = { look, draft };
+    const latest = useRef(draft);
+    latest.current = draft;
     useEffect(() => {
         if (!draft) {
             return;
@@ -517,10 +517,10 @@ function useDraftColours(
         const wait = Math.max(0, lastPreview.current + PREVIEW_MS - performance.now());
         const preview = setTimeout(() => {
             lastPreview.current = performance.now();
-            client.previewLook({ ...latest.current.look, capeColours: draft });
+            client.previewCapeColours(draft);
         }, wait);
         const keep = setTimeout(() => {
-            client.setLook({ ...latest.current.look, capeColours: draft });
+            client.setCapeColours(draft);
             setDraft(undefined);
         }, KEEP_MS);
         return () => {
@@ -530,9 +530,8 @@ function useDraftColours(
     }, [client, draft]);
     useEffect(
         () => () => {
-            const { look, draft } = latest.current;
-            if (draft) {
-                client.setLook({ ...look, capeColours: draft });
+            if (latest.current) {
+                client.setCapeColours(latest.current);
             }
         },
         [client],
@@ -542,8 +541,14 @@ function useDraftColours(
 
 // The customisable max cape's colours, under the cape it's on: a part at a time, its hue,
 // saturation and lightness on sliders, or all of another max cape's colours in one go
-function CapeColours({ look, client }: { look: WardrobeLook; client: GameClient }): JSX.Element {
-    const [draft, setDraft] = useDraftColours(look, client);
+export function CapeColours({
+    look,
+    client,
+}: {
+    look: WardrobeLook;
+    client: GameClient;
+}): JSX.Element {
+    const [draft, setDraft] = useDraftColours(client);
     const [part, setPart] = useState(0);
     const colours = draft ?? look.capeColours ?? DEFAULT_CAPE_COLOURS;
     const { hue, saturation, lightness } = unpackHsl(colours[part]);
@@ -634,10 +639,7 @@ function CapeColours({ look, client }: { look: WardrobeLook; client: GameClient 
                                 aria-pressed={on}
                                 onClick={() => {
                                     setDraft(undefined);
-                                    client.setLook({
-                                        ...look,
-                                        capeColours: preset.colours.slice(),
-                                    });
+                                    client.setCapeColours(preset.colours.slice());
                                 }}
                             >
                                 <ItemIcon objId={preset.objId} size={30} />

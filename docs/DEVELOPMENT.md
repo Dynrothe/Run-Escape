@@ -1873,8 +1873,11 @@ the sim never sees it.
   once, so a colour painted can't be painted again by the next pair, and nudged off the body's
   recolour sources, which the merged model is recoloured by after), and they're in the
   appearance's key, so each set of colours is its own bake. The picker (`CapeColours` in
-  `ui/WardrobeScreen.tsx`) previews a slider at most every `PREVIEW_MS` and writes the look once
-  it's been still for `KEEP_MS`, since a drag would otherwise bake a model a frame. Icons take
+  `ui/WardrobeScreen.tsx`) previews a slider at most every `PREVIEW_MS` and keeps the colours once
+  it's been still for `KEEP_MS`, or as it closes, since a drag would otherwise bake a model a
+  frame. It gives the client the colours alone (`GameClient.setCapeColours`,
+  `previewCapeColours`), which go on the look worn by then: the click that closes the picker can
+  have changed the outfit, and a whole look from before it would put the cape back on. Icons take
   the same pairs (`ItemIcon`'s `recolors`, through `ItemIconLoader` to
   `ObjModelLoader.getModel`, which keeps no model it repainted). `scripts/cache/check-items.ts`
   checks the parts' colours are in the model and the presets are what the max capes recolour to.

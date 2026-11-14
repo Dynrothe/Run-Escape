@@ -40,6 +40,7 @@ import {
     takesInvocations,
     takesRelics,
 } from "../content/maps";
+import { Hsl } from "../content/maxCape";
 import { getPassive, passiveValueText } from "../content/passives";
 import { PET_BY_ID, isPetFound } from "../content/pets";
 import { getPowerUp } from "../content/powerups";
@@ -1084,6 +1085,16 @@ export class GameClient implements GameFrameHandler {
     previewLook(look: WardrobeLook | undefined): void {
         this.previewedLook = look && cleanLook(look);
         this.refreshMenuLook();
+    }
+
+    // The customisable max cape's colours on the look worn now, kept or only shown. The picker
+    // gives the colours alone: the click that closes it can have changed the outfit already.
+    setCapeColours(colours: Hsl[] | undefined): void {
+        this.setLook({ ...this.save.look, capeColours: colours });
+    }
+
+    previewCapeColours(colours: Hsl[] | undefined): void {
+        this.previewLook({ ...this.save.look, capeColours: colours });
     }
 
     // The body alone on the menus, with nothing worn over it, or dressed again
