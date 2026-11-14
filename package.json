@@ -40,6 +40,7 @@
         "start:singleplayer": "vite",
         "build": "vite build",
         "test": "vitest run",
+        "test:maps": "MAP_CHECKS=1 vitest run src/game/scaperune",
         "preview": "vite preview",
         "serve": "node server/serve.mjs",
         "serve:singleplayer": "node server/serve.mjs",
