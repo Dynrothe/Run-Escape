@@ -510,7 +510,7 @@ Built in #159 as build order step 9. Where it differs from the above, and why:
   one relights it while it's guttering too, so it can be tended. Two of the six stand in the Duke's square.
 - **Vents**: their jets are the cache's Steam Vent (15214) in the map; the Gas jet (49762) and the Gas (49761) are near
   invisible on snow. As a vent frosts over the Gas shows; its puff is the Duke's own gas (spot animation 2431) over the 3
-  by 3. The gas hurts 2% every 0.6 seconds (the table's "a tick" read as a game tick), and the cold rises 5 a second in it.
+  by 3, played once from its start and stretched over the puff (it's 1.2 seconds, the puff 1.5). The gas hurts 2% every 0.6 seconds (the table's "a tick" read as a game tick), and the cold rises 5 a second in it.
 - **Embers** are five small fires (5249) over their 3 by 3. They burn 2% every half second.
 - **How the cold shows**: a bar under hitpoints (frosting at 80), your character pale from 50 and the frozen blue from
   80, and the Ice Block (49144) round you while you're frozen. The breath puffs from 80 aren't in.

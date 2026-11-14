@@ -9,6 +9,14 @@
 
 #define FOG_CORNER_ROUNDING 8.0
 
+// A player's layers (ActorRenderer's LAYER_DEPTH): the highest priority they go by, so
+// MAX_LAYER * LAYER_DEPTH is the furthest a face is drawn nearer than where it is
+#define MAX_LAYER 7.0
+// Priorities 10 and 11 (arms, hands, what's held), which the client puts among the rest by depth.
+// Behind a player they're over the body and under a cape.
+#define LATE_PRIORITY 10.0
+#define LATE_LAYER 4.0
+
 #define ACTOR_DATA_WIDTH 512
 #define TEXELS_PER_INSTANCE 5
 
@@ -33,7 +41,8 @@ uniform int u_instanceOffset;
 //  2: edge light (0-1), how far in it reaches (0-1 of the way to the middle), its colour
 //     (0xRRGGBB), and how much it's drawn at full brightness whatever the light (0-1, lights.glsl)
 //  3: stretch along x and z, tip about x and z (0-2047), before the yaw
-//  4: where the frame's positions start in u_positions, -1 for a frame baked whole
+//  4: where the frame's positions start in u_positions, -1 for a frame baked whole, and how
+//     much nearer the camera each priority is drawn (tiles, 0 for none: a player's layers)
 uniform highp sampler2D u_actorData;
 
 // The page's frames that share a mesh: each vertex's position, in model units as decodeVertex
@@ -87,6 +96,28 @@ mat4 rotationY( in float angle ) {
                         0, 		0,				0,	1);
 }
 
+// A point of the model in the world, in tiles: scaled, stretched, tipped over about x, then z
+// (y is down), and turned
+vec3 modelToWorld(vec3 modelPos, vec4 data0, float scale, vec4 data3) {
+    vec3 pos = modelPos * scale * vec3(data3.x, 1.0, data3.y);
+    float pitch = data3.z * RS_TO_RADIANS;
+    float roll = data3.w * RS_TO_RADIANS;
+    pos = vec3(pos.x, pos.y * cos(pitch) - pos.z * sin(pitch), pos.y * sin(pitch) + pos.z * cos(pitch));
+    pos = vec3(pos.x * cos(roll) - pos.y * sin(roll), pos.x * sin(roll) + pos.y * cos(roll), pos.z);
+    vec4 localPos = vec4(pos, 1.0) * rotationY(data0.w * RS_TO_RADIANS);
+    return localPos.xyz / 128.0 + data0.xyz;
+}
+
+// How far round behind a player the camera is: 0 from the front or side, 1 from behind (their
+// back is +z), whatever the camera's pitch
+float seenFromBehind(vec4 data0, float scale, vec4 data3) {
+    vec3 origin = modelToWorld(vec3(0.0), data0, scale, data3);
+    // How much each way points at the camera
+    float back = (mat3(u_viewMatrix) * (modelToWorld(vec3(0.0, 0.0, 128.0), data0, scale, data3) - origin)).z;
+    float side = (mat3(u_viewMatrix) * (modelToWorld(vec3(128.0, 0.0, 0.0), data0, scale, data3) - origin)).z;
+    return smoothstep(0.0, 0.5, back / max(length(vec2(back, side)), 0.0001));
+}
+
 void main() {
     // Without multi draw, a run of instances of one frame is one instanced draw
     int dataIndex = (DRAW_ID + gl_InstanceID + u_instanceOffset) * TEXELS_PER_INSTANCE;
@@ -94,7 +125,9 @@ void main() {
     vec4 data1 = fetchActorData(dataIndex + 1);
     vec4 data2 = fetchActorData(dataIndex + 2);
     vec4 data3 = fetchActorData(dataIndex + 3);
-    int positionStart = int(fetchActorData(dataIndex + 4).x);
+    vec4 data4 = fetchActorData(dataIndex + 4);
+    int positionStart = int(data4.x);
+    float layerDepth = data4.y;
 
     Vertex vertex = decodeVertex(a_vertex.x, a_vertex.y, a_vertex.z, u_brightness);
     if (positionStart >= 0) {
@@ -134,14 +167,7 @@ void main() {
     v_edgePos = vertex.pos.xz / 64.0;
     v_edgeStretch = data3.xy;
 
-    vec3 pos = vertex.pos * scale * vec3(data3.x, 1.0, data3.y);
-    // Tipped over about x, then z (y is down)
-    float pitch = data3.z * RS_TO_RADIANS;
-    float roll = data3.w * RS_TO_RADIANS;
-    pos = vec3(pos.x, pos.y * cos(pitch) - pos.z * sin(pitch), pos.y * sin(pitch) + pos.z * cos(pitch));
-    pos = vec3(pos.x * cos(roll) - pos.y * sin(roll), pos.x * sin(roll) + pos.y * cos(roll), pos.z);
-    vec4 localPos = vec4(pos, 1.0) * rotationY(data0.w * RS_TO_RADIANS);
-    vec4 worldPos = vec4(localPos.xyz / 128.0 + data0.xyz, 1.0);
+    vec4 worldPos = vec4(modelToWorld(vertex.pos, data0, scale, data3), 1.0);
 
     float dist = -sdRoundedBox(
         vec2(worldPos.x - u_cameraPos.x, worldPos.z - u_cameraPos.y),
@@ -160,5 +186,19 @@ void main() {
 
     gl_Position = u_viewMatrix * worldPos;
     gl_Position.z += (float(vertex.priority) + 20.0) * 0.0007;
-    gl_Position = u_projectionMatrix * gl_Position;
+    vec4 viewPos = gl_Position;
+    gl_Position = u_projectionMatrix * viewPos;
+    // A player's worn items in layers, as the client paints them, seen from behind: a cape over
+    // the platebody poking through it. From the front, depth alone keeps the body over a cape's
+    // sides, which layers would bring out over it. Past MAX_LAYER they're a helm's trims, which
+    // liftDecals.ts brings out instead.
+    if (layerDepth > 0.0) {
+        float priority = float(vertex.priority) - 1.0;
+        float layer = priority >= LATE_PRIORITY ? LATE_LAYER : min(priority, MAX_LAYER);
+        float lift = layer * layerDepth * seenFromBehind(data0, scale, data3);
+        // Nearer in depth only: moved nearer, a vertex would move on screen too, and open cracks
+        // between faces of different layers
+        vec4 lifted = u_projectionMatrix * (viewPos + vec4(0.0, 0.0, lift, 0.0));
+        gl_Position.z = lifted.z / lifted.w * gl_Position.w;
+    }
 }

@@ -7,6 +7,7 @@ import { Model } from "../Model";
 import { ModelData } from "../ModelData";
 import { ModelLoader } from "../ModelLoader";
 import { SeqModelAnimator } from "../seq/SeqModelAnimator";
+import { liftDecals } from "./liftDecals";
 
 // Equipment slots, as the client numbers them
 export enum EquipSlot {
@@ -168,6 +169,8 @@ export class PlayerModelLoader {
             return undefined;
         }
         const model = parts.length === 1 ? parts[0] : ModelData.merge(parts, parts.length);
+        // An emblem drawn over its cloth by priority, as the client paints it
+        liftDecals(model);
         const offset = female ? objType.femaleOffset : objType.maleOffset;
         if (offset !== 0) {
             model.translate(0, offset, 0);
