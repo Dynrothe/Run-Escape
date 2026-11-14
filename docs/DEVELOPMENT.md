@@ -1856,6 +1856,14 @@ by pulling a higher priority a little towards the camera, which only matters whe
 was 3 bits until the Wardrobe, and 7 and up wrapped under the rest: a tiara or a helm's trim sank
 into the hair or the helm. Alpha has 7 bits to make room.
 
+That pull is too small for a decal that sits a unit or two behind its cloth, which painting by
+priority shows anyway: a skill cape's emblem, a chainbody's rings. So a worn item's model
+(`PlayerModelLoader.getWornModel`) goes through `liftDecals` as it loads. A face drawn over a
+lower-priority one but behind it, with no corner on a lower-priority face, comes out along its
+normal to a unit in front, up to 6 units. One hidden deeper (an eye set in a mask) keeps its
+corners still, as does any face the move would turn over, so the rest settles round them.
+NPCs' models don't go through it.
+
 Map squares keep only the world that can be seen. Past the play area the world fades into the sky
 over 6 tiles (`PLAY_AREA_FADE` in `fog.glsl`), and a ray from the camera only gets further from the
 play area once it's left it, so what's past the fade and further out than the camera can get is

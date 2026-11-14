@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Emblems and patterns on clothing show again where they were hidden in their cloth: the
+  skill capes' emblems on their backs, chainbodies' rings and more.
+
 ## 0.32.0 - 2026-11-14
 
 ### Added
