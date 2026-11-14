@@ -195,6 +195,9 @@ export type SaveData = {
     // Cards (core/cards.ts): card id -> copies owned, the packs held unopened (STARTER_PACKS while
     // unset) and how many have been opened
     cards?: Record<string, number>;
+    // Of those copies, how many are foils (content/cards.ts CARD_FOIL_CHANCE), by the same keys:
+    // only for show, never more than the version's copies
+    cardFoils?: Record<string, number>;
     cardPacks?: number;
     cardPacksOpened?: number;
     // Card collection only runs picked (core/cardRuns.ts): played whenever the collection can
@@ -205,6 +208,8 @@ export type SaveData = {
     // Trophies (pets too) first found in a Card collection only run: the Collection log marks
     // them. Only finds made since it came in; a later find of one already found changes nothing.
     cardsOnlyFinds?: string[];
+    // Maps won in a Card collection only run (only wins since it came in): the map list marks them
+    cardsOnlyWins?: string[];
     // The pet a Card collection only run takes along: one whose card is owned (core/cardRuns.ts,
     // getCardsOnlyPet), found or not. SaveData.pet stays the other runs' and needs the real find.
     cardsOnlyPet?: string;
@@ -605,6 +610,17 @@ export function migrateSave(raw: unknown): SaveData {
         const finds = [...new Set(data.cardsOnlyFinds.filter((id) => save.trophies.includes(id)))];
         if (finds.length > 0) {
             save.cardsOnlyFinds = finds;
+        }
+    }
+    // Card collection only's wins: maps there are, each once
+    if (Array.isArray(data.cardsOnlyWins)) {
+        const wins = [
+            ...new Set(
+                data.cardsOnlyWins.filter((id) => typeof id === "string" && MAP_BY_ID.has(id)),
+            ),
+        ];
+        if (wins.length > 0) {
+            save.cardsOnlyWins = wins;
         }
     }
     giveStarterCards(save, getStarterCards(getStartingCharacter(save)));
@@ -1041,6 +1057,10 @@ export function recordRun(save: SaveData, run: RunSummary): QuestDef[] {
         }
         save.victories++;
         save.mapVictories[run.mapId] = (save.mapVictories[run.mapId] ?? 0) + 1;
+        // Won in a Card collection only run (each co-op player's own run summary says)
+        if (run.cardsOnly && !save.cardsOnlyWins?.includes(run.mapId)) {
+            save.cardsOnlyWins = [...(save.cardsOnlyWins ?? []), run.mapId];
+        }
         // A win with relics on still counts, but sets only the map's ordinary records
         // (act-2-fallen-empire.md, 13.2): not hard mode's. A remixed win sets its remixes' instead.
         const remixed = isRemixed(run);

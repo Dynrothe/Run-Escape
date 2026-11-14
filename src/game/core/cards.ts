@@ -12,7 +12,7 @@ import {
     cardVersions,
     cardWeight,
     packCards,
-    packRarityShares,
+    packFoilChance,
     parseVersionKey,
     versionKey,
 } from "../content/cards";
@@ -94,11 +94,6 @@ export function packPool(save: SaveData, pack: PackDef): CardDef[] {
     return packCards(pack).filter((card) => cardUnlocked(save, card, unlocked));
 }
 
-// The shares of a player's pack that are each rarity of thing (packRarityShares), for the shop
-export function packPoolShares(save: SaveData, pack: PackDef): Record<Rarity, number> {
-    return packRarityShares(pack, packPool(save, pack));
-}
-
 // Why a pack can't be bought, or undefined if it can: only platinum tokens buy them, never coins,
 // and not one with nothing in it the player's unlocked ("locked")
 export function cantBuyCardPack(save: SaveData, pack: PackDef): "platinum" | "locked" | undefined {
@@ -121,6 +116,21 @@ export function getOwnedVersions(
     return cardVersions(card)
         .map((rarity) => ({ rarity, copies: getVersionCopies(save, card, rarity) }))
         .filter(({ copies }) => copies > 0);
+}
+
+// The foil copies of one version of a card
+export function getFoilCopies(save: SaveData, card: CardDef, rarity: Rarity): number {
+    return save.cardFoils?.[versionKey(card, rarity)] ?? 0;
+}
+
+// The foil copies of a card, every version together
+export function getCardFoils(save: SaveData, card: CardDef): number {
+    return cardVersions(card).reduce((sum, rarity) => sum + getFoilCopies(save, card, rarity), 0);
+}
+
+// The rarest version of a card that's a foil, or undefined with none
+export function getBestFoil(save: SaveData, card: CardDef): Rarity | undefined {
+    return [...cardVersions(card)].reverse().find((r) => getFoilCopies(save, card, r) > 0);
 }
 
 // The rarest version of a card owned, or undefined with none
@@ -169,7 +179,7 @@ function rollRarity(odds: Record<Rarity, number>, random: () => number, last: bo
 export function packRoller(
     pack: PackDef,
     pool: readonly CardDef[],
-): (random: () => number, size?: number) => { card: CardDef; rarity: Rarity }[] {
+): (random: () => number, size?: number) => { card: CardDef; rarity: Rarity; foil: boolean }[] {
     // Each card's weight added up, to search for a roll in
     const upTo: number[] = [];
     let total = 0;
@@ -192,18 +202,21 @@ export function packRoller(
         return pool[lo];
     };
     return (random, size = PACK_SIZE) => {
-        const cards: { card: CardDef; rarity: Rarity }[] = [];
+        const cards: { card: CardDef; rarity: Rarity; foil: boolean }[] = [];
+        const foilChance = packFoilChance(pack);
         for (let i = 0; i < size; i++) {
             const rolled = rollRarity(pack.odds, random, i === size - 1);
             const card = pick(random);
-            cards.push({ card, rarity: atLeast(rolled, card.rarity) });
+            // Then whether it's a foil, on the same numbers
+            const foil = random() < foilChance;
+            cards.push({ card, rarity: atLeast(rolled, card.rarity), foil });
         }
         return cards;
     };
 }
 
-// A card from a pack, at its version; new: that version wasn't owned before
-export type PackCard = { card: CardDef; rarity: Rarity; isNew: boolean };
+// A card from a pack, at its version; new: that version wasn't owned before; foil: a foil copy
+export type PackCard = { card: CardDef; rarity: Rarity; isNew: boolean; foil?: boolean };
 
 // A pack's PACK_SIZE cards, added to the save's copies. A version counts as new only the first
 // time it's in a pack, not again later in the same one.
@@ -216,13 +229,21 @@ function rollPack(
 ): PackCard[] {
     const cards: PackCard[] = [];
     const owned = { ...save.cards };
-    for (const { card, rarity } of packRoller(pack, pool)(random, size)) {
+    const foils = { ...save.cardFoils };
+    for (const { card, rarity, foil } of packRoller(pack, pool)(random, size)) {
         const key = versionKey(card, rarity);
         const copies = owned[key] ?? 0;
-        cards.push({ card, rarity, isNew: copies === 0 });
+        cards.push({ card, rarity, isNew: copies === 0, ...(foil && { foil }) });
         owned[key] = Math.min(copies + 1, MAX_CARD_COPIES);
+        // A foil's a copy of its version too, counted apart as well
+        if (foil) {
+            foils[key] = Math.min((foils[key] ?? 0) + 1, owned[key]);
+        }
     }
     save.cards = owned;
+    if (Object.keys(foils).length > 0) {
+        save.cardFoils = foils;
+    }
     save.cardPacksOpened = (save.cardPacksOpened ?? 0) + 1;
     return cards;
 }
@@ -277,7 +298,7 @@ export function giveStarterCards(save: SaveData, starter: readonly CardDef[]): v
     save.cardStarterGiven = true;
 }
 
-// Buys a pack in the Card shop with coins and opens it at once: undefined, and nothing spent, if
+// Buys a pack in the Card shop with platinum tokens and opens it at once: undefined, and nothing spent, if
 // it can't be bought
 export function buyCardPack(
     save: SaveData,
@@ -297,7 +318,13 @@ export function buyCardPack(
 // save can't break the album
 type CardFields = Pick<
     SaveData,
-    "cards" | "cardPacks" | "cardPacksOpened" | "cardsOnly" | "cardStarterGiven" | "platinum"
+    | "cards"
+    | "cardFoils"
+    | "cardPacks"
+    | "cardPacksOpened"
+    | "cardsOnly"
+    | "cardStarterGiven"
+    | "platinum"
 >;
 
 export function migrateCards(data: Partial<CardFields>): CardFields {
@@ -316,6 +343,19 @@ export function migrateCards(data: Partial<CardFields>): CardFields {
         }
         if (Object.keys(cards).length > 0) {
             out.cards = cards;
+        }
+    }
+    // Foils: of versions owned, never more than their copies
+    if (data.cardFoils && typeof data.cardFoils === "object" && !Array.isArray(data.cardFoils)) {
+        const foils: Record<string, number> = {};
+        for (const [id, count] of Object.entries(data.cardFoils)) {
+            const copies = Math.min(whole(count, MAX_CARD_COPIES) ?? 0, out.cards?.[id] ?? 0);
+            if (copies > 0) {
+                foils[id] = copies;
+            }
+        }
+        if (Object.keys(foils).length > 0) {
+            out.cardFoils = foils;
         }
     }
     const packs = whole(data.cardPacks, MAX_CARD_PACKS);

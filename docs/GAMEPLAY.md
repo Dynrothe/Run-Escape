@@ -91,19 +91,29 @@ version and how to run it.
   evolutions, each shown as the weapon that evolves until it's been made.
 - **Cards** (the title's Cards tile): a card for every weapon, passive, reward casket gear and
   Collection log trophy, each in versions from its own rarity up to Very rare. Runs earn platinum
-  tokens beside their coins (less in endless runs, as coins are), and the Card shop sells packs of
-  five for platinum tokens (never coins): one of any weapon, passive or trophy card, one each of
-  weapons, passives, casket gear and trophies, one of the raids' finds, and a dearer one with better
-  odds of the rarer versions. Packs only hold cards of what you've unlocked, and the strongest
-  things are rarer pulls; each pack's Preview shows its cards' chances for your save, and where to
-  unlock the rest. Every save gets one pack free. The Collection log has a Cards tab too.
-  **Cards only**, a tab on the run screen's adventurers, makes level ups offer only what you have a
+  tokens beside their coins, scaled as coins are (less in endless runs), and the Card shop sells
+  packs for platinum tokens (never coins): one of any weapon, passive or trophy card, one each of
+  weapons, passives, casket gear and trophies, one of the raids' finds, and a dearer one likelier to
+  be rare. Each offer says what it holds, what its last card is at least (where that's better than
+  its commonest) and how many of its cards you've collected. Packs only hold cards of what you've
+  unlocked, and the strongest things are rarer pulls. A pack's Preview lists its cards on a tab for
+  each rarity, each with its chance per pack for your save, or Locked with the map to unlock it in;
+  its info icon shows the chance of each item rarity and each quality, with notes on how they're
+  worked out. Any card can come as a foil, a holographic copy that's only for show, with a Foils tab
+  in the album. Packs open on a playmat, a card at a time, and every save gets one free, holding
+  your starting adventurer's card. In the album, pressing a found card opens it big in a window,
+  with the versions you own.
+- **Cards only**, a tab on the run screen's adventurers, makes level ups offer only what you have a
   card of, no rarer than your best version of it, and reward caskets give only gear you have a card
-  of; a run from it can't start until your collection has enough cards to fill a level up, nor as
-  an adventurer whose starting weapon's card you haven't got (their portrait is dimmed with a
-  padlock, and can still be picked to read why). In co-op the host's tab sets it for the whole
-  room. The free pack holds your starting adventurer's. The Collection log's Cards tab counts its
-  own cards, apart from the log's total.
+  of; its pet row takes a pet whose card you have, found or not. A run from it can't start until
+  your collection has enough cards to fill a level up, nor as an adventurer whose starting weapon's
+  card you haven't got (their portrait is dimmed with a padlock). Either way, a card button beside
+  their favourite star shows what's still needed, with the Card shop's pack for it. In co-op the
+  host's tab sets it for the whole room; the weekly Vault and the Gauntlet are never Cards only. A
+  map won in a Cards only run gets a small card beside its beaten tick and says "Beaten in Cards
+  only" in its details, and a trophy first found in one gets a card badge in the Collection log. The
+  log's Cards tab shows each card at your best version, and its own count sits beside the log's
+  total, apart from it.
 - **Style prayers**: **Chivalry** makes slashes and sweeps hit harder and adds max hitpoints for
   fighting up close, **Rigour** makes arrows, bolts and thrown weapons hit harder, and
   **Augury** makes spells hit harder and their effects last longer.

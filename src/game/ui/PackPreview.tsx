@@ -9,7 +9,7 @@ import {
     useState,
 } from "react";
 
-import { CardDef, PackDef, packCards, packName } from "../content/cards";
+import { CardDef, PackDef, packCards, packFoilChance, packName } from "../content/cards";
 import { getMap, mapName } from "../content/maps";
 import { RARITIES, RARITY_ORDER, Rarity, rarityName } from "../content/rarity";
 import {
@@ -20,6 +20,7 @@ import {
     getCachedPackOdds,
     packOddsKey,
     simulatePackOdds,
+    versionChanceFor,
 } from "../core/cardOdds";
 import { packPool } from "../core/cards";
 import type { SaveData } from "../core/save";
@@ -137,7 +138,7 @@ export function PackPreview({
                 <div className="ui-pack-preview-head">
                     <h2 id={titleId}>{t("cards.preview.title", { name: packName(pack) })}</h2>
                     <InfoPopover open={info} onOpen={onInfo}>
-                        <PackRates odds={odds} />
+                        <PackRates odds={odds} pool={pool} pack={pack} />
                     </InfoPopover>
                     <button className="ui-button" onClick={onClose}>
                         {t("cards.preview.close")}
@@ -346,36 +347,75 @@ function PreviewTile({
     );
 }
 
-// A pack's rarity rates: per card, the chance of each item rarity and of each version, then the
-// chance a pack holds a Very rare item at all
-function PackRates({ odds }: { odds: PackOdds | undefined }): JSX.Element {
+// A pack's rarity rates, two tables: per card, the chance of each item rarity (the thing on it),
+// and of each quality (the card's version); then the chance a pack holds a Very rare item at all,
+// and footnotes: how the figures are got, and an example from this pack's own figures and pool
+function PackRates({
+    odds,
+    pool,
+    pack,
+}: {
+    odds: PackOdds | undefined;
+    pool: readonly CardDef[];
+    pack: PackDef;
+}): JSX.Element {
+    // Each card's chance of being a foil (packFoilChance)
+    const foil = packFoilChance(pack);
     const cell = (value: number | undefined) => (value === undefined ? "..." : formatChance(value));
+    const table = (title: string, chances: Record<Rarity, number> | undefined) => (
+        <table className="ui-pack-rates-table">
+            <caption>{title}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">{t("cards.preview.rarity")}</th>
+                    <th scope="col">{t("cards.preview.chance")}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {RARITY_ORDER.map((rarity: Rarity) => (
+                    <tr key={rarity}>
+                        <th scope="row" style={{ color: RARITIES[rarity].color }}>
+                            {rarityName(rarity)}
+                        </th>
+                        <td>{cell(chances?.[rarity])}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+    // The example: the commonest item rarity this pack gives, its likeliest card, and the rarest
+    // quality
+    const itemRarity = odds && RARITY_ORDER.find((rarity) => odds.items[rarity] > 0);
+    const quality = odds && [...RARITY_ORDER].reverse().find((rarity) => odds.versions[rarity] > 0);
+    const example =
+        odds && itemRarity
+            ? pool
+                  .filter((card) => card.rarity === itemRarity)
+                  .sort((a, b) => (odds.perCard.get(b.id) ?? 0) - (odds.perCard.get(a.id) ?? 0))[0]
+            : undefined;
     return (
         <div className="ui-pack-rates">
-            <table>
-                <caption>{t("cards.preview.rates_caption")}</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">{t("cards.preview.rarity")}</th>
-                        <th scope="col">{t("cards.preview.item")}</th>
-                        <th scope="col">{t("cards.preview.version")}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {RARITY_ORDER.map((rarity: Rarity) => (
-                        <tr key={rarity}>
-                            <th scope="row" style={{ color: RARITIES[rarity].color }}>
-                                {rarityName(rarity)}
-                            </th>
-                            <td>{cell(odds?.items[rarity])}</td>
-                            <td>{cell(odds?.versions[rarity])}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            <div className="ui-pack-rates-tables">
+                {table(t("cards.preview.item_chance"), odds?.items)}
+                {table(t("cards.preview.quality_chance"), odds?.versions)}
+            </div>
             <p>{t("cards.preview.very_rare_pack", { chance: cell(odds?.veryRarePack) })}</p>
-            <p className="ui-subtle">{t("cards.preview.from", { n: fmtNum(PREVIEW_PACKS) })}</p>
-            <p className="ui-subtle">{t("cards.preview.rates_note")}</p>
+            <p>{t("cards.preview.foil_chance", { chance: formatChance(foil) })}</p>
+            <p className="ui-pack-rates-note">
+                {t("cards.preview.note_simulated", { n: fmtNum(PREVIEW_PACKS) })}
+            </p>
+            {odds && itemRarity && quality && example && (
+                <p className="ui-pack-rates-note">
+                    {t("cards.preview.note_example", {
+                        item: formatChance(odds.items[itemRarity]),
+                        rarity: rarityName(itemRarity),
+                        name: example.name(),
+                        // That card's own chance of the version, not every card's share of it
+                        quality: formatChance(versionChanceFor(pack, itemRarity, quality)),
+                        version: rarityName(quality),
+                    })}
+                </p>
+            )}
         </div>
     );
 }

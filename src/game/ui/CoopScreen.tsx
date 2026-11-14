@@ -413,7 +413,10 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
     // Only the host picks the map: a guest's list closes if they stop being it
     const picking = phone && (picker !== "map" || isHost) ? picker : undefined;
     const closePicker = () => setPicker(undefined);
-    useMenuKeys(picking && !board ? { onBack: closePicker, onConfirm: closePicker } : {});
+    // (not while what Cards only needs is open over it: its Escape shuts only that)
+    useMenuKeys(
+        picking && !board && !needsFor ? { onBack: closePicker, onConfirm: closePicker } : {},
+    );
     const party = (
         <>
             <h2 className="ui-select-heading">
@@ -772,6 +775,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     fixed={getMapCharacter(map)}
                     cardsOnly={cardsOnly}
                     tabLocked={!isHost}
+                    map={map}
                     onCardNeeds={setNeedsFor}
                 />
                 <div className="ui-panel rs-border rs-background ui-select-panel ui-select-maps ui-coop-party">
@@ -798,6 +802,7 @@ function CoopLobby({ ui, client, room }: Props & { room: RoomView }): JSX.Elemen
                     fixed={getMapCharacter(map)}
                     cardsOnly={cardsOnly}
                     tabLocked={!isHost}
+                    map={map}
                     onCardNeeds={setNeedsFor}
                     onDone={closePicker}
                 />

@@ -68,8 +68,11 @@ test("keeps a card not found face down, and shows a found one with its versions 
     expect(screen.getAllByRole("button", { name: /not found yet$/ })).toHaveLength(
         CARDS.length - 1,
     );
-    fireEvent.click(screen.getByRole("button", { name: scimitar.name() }));
-    expect(screen.getByText("Yours: Common x3 and Rare x1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${scimitar.name()}, `) }));
+    expect(screen.getByRole("dialog", { name: scimitar.name() })).toHaveTextContent(
+        "Yours: Common x3 and Rare x1",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.getByText("Collected 1 / " + CARDS.length)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /free pack/ })).not.toBeInTheDocument();
 });
@@ -136,12 +139,8 @@ test("sells each pack for platinum tokens, and says why one can't be bought", ()
             `You need ${(raids.price - basic.price - 10).toLocaleString("en")} more platinum tokens.`,
         ),
     ).toBeInTheDocument();
-    // First how likely its cards are by their own rarity, then each one's version
-    expect(within(offer).getByText("Its cards, by their own rarity:")).toBeInTheDocument();
-    // Of what a new save's unlocked of it
-    const shares = packRarityShares(raids, packPool(createSave(), raids));
-    expect(within(offer).getByText(`Rare ${Math.round(shares.rare * 100)}%`)).toBeInTheDocument();
-    expect(within(offer).getByText("Rare 75%")).toBeInTheDocument();
+    // No odds on the offer: they're in its preview
+    expect(within(offer).queryByText(/%/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: `Buy the ${packName(basic)}` }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     vi.useFakeTimers();
@@ -201,12 +200,24 @@ function previewPack(showScreen: () => void): void {
     fireEvent.click(icon);
     expect(icon).toHaveAttribute("aria-expanded", "true");
     const info = screen.getByRole("dialog", { name: "About these odds" });
-    expect(within(info).getByRole("columnheader", { name: "Item" })).toBeInTheDocument();
-    expect(within(info).getByRole("columnheader", { name: "Version" })).toBeInTheDocument();
-    expect(within(info).getByRole("rowheader", { name: "Very rare" })).toBeInTheDocument();
+    // Two tables, the item's rarity and the card's quality, each a row for every rarity
+    const items = within(info).getByRole("table", { name: "Item chance*" });
+    const quality = within(info).getByRole("table", { name: "Quality chance**" });
+    for (const table of [items, quality]) {
+        expect(within(table).getByRole("columnheader", { name: "Chance" })).toBeInTheDocument();
+        expect(within(table).getByRole("rowheader", { name: "Very rare" })).toBeInTheDocument();
+    }
     expect(within(info).getByText(/^Packs with at least one Very rare item: /)).toBeInTheDocument();
     expect(
-        within(info).getByText("From 100,000 simulated packs, for your save."),
+        within(info).getByText(
+            "* Based on 100,000 simulated packs for your save. Locked cards don't count.",
+        ),
+    ).toBeInTheDocument();
+    // The example from this pack's own figures: its likeliest Common item
+    expect(
+        within(info).getByText(
+            /^\*\* For example: a [\d.]+% chance a card is a Common item, such as .+, and a [\d.]+% chance such a card comes in Very rare quality\.$/,
+        ),
     ).toBeInTheDocument();
     // The icon again shuts it, and so does Escape, before the preview
     fireEvent.click(icon);
@@ -239,23 +250,17 @@ test("shuts the pack's window on Escape before leaving the screen", () => {
     expect(showScreen).toHaveBeenCalledWith("title");
 });
 
-test("shows a found card big in a window where there's no room beside the grid", () => {
-    vi.stubGlobal(
-        "matchMedia",
-        vi.fn(() => ({ matches: true })),
+test("shows a found card big in a window when it's pressed, at any size, and no card beside the grid", () => {
+    render(<Harness start={{ ...createSave(), cards: { [scimitar.id]: 1 } }} />);
+    // No big card beside the album: the grid has the width
+    expect(document.querySelector(".ui-cards-detail")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${scimitar.name()}, `) }));
+    expect(screen.getByRole("dialog", { name: scimitar.name() })).toHaveTextContent(
+        "Yours: Common x1",
     );
-    try {
-        render(<Harness start={{ ...createSave(), cards: { [scimitar.id]: 1 } }} />);
-        fireEvent.click(screen.getByRole("button", { name: scimitar.name() }));
-        expect(screen.getByRole("dialog", { name: scimitar.name() })).toHaveTextContent(
-            "Yours: Common x1",
-        );
-        fireEvent.click(screen.getByRole("button", { name: "Close" }));
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-        // A card not found yet has nothing to show
-        fireEvent.click(screen.getAllByRole("button", { name: /not found yet$/ })[0]);
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    } finally {
-        vi.unstubAllGlobals();
-    }
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // A card not found yet has nothing to show
+    fireEvent.click(screen.getAllByRole("button", { name: /not found yet$/ })[0]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

@@ -205,6 +205,9 @@ export function CollectionLogScreen({ ui, client }: Props): JSX.Element {
                             {entry.tally && (
                                 <div>{t(entry.tally.key, { n: fmtNum(entry.tally.n) })}</div>
                             )}
+                            {entry.tally2 && (
+                                <div>{t(entry.tally2.key, { n: fmtNum(entry.tally2.n) })}</div>
+                            )}
                             {entry.id === "evolutions" && (
                                 <div className="ui-log-how">{t("collection.evolution_intro")}</div>
                             )}

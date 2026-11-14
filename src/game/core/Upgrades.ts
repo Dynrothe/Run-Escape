@@ -145,7 +145,10 @@ export function getEvolutionHint(
         if (
             !evolution ||
             !isAvailable(evolution.into, unlocked) ||
-            !hasCard(cards, "weapon", evolution.into.id)
+            !hasCard(cards, "weapon", evolution.into.id) ||
+            // Nor without its passive's card, unless it's held (the passive's never offered)
+            (!passives.some((p) => p.id === evolution.passive.id) &&
+                !hasCard(cards, "passive", evolution.passive.id))
         ) {
             return undefined;
         }

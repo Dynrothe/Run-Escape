@@ -20,16 +20,18 @@ import {
     packCards,
     packDescription,
     packName,
-    packRarityShares,
 } from "../content/cards";
 import { RARITIES, RARITY_ORDER, Rarity, rarityName } from "../content/rarity";
 import {
     PackCard,
     cantBuyCardPack,
     countCardsOwned,
+    getBestFoil,
     getBestVersion,
     getCardCopies,
+    getCardFoils,
     getCardPacks,
+    getFoilCopies,
     getOwnedVersions,
     getPlatinum,
     lastCardRarities,
@@ -41,16 +43,19 @@ import "./CardsScreen.css";
 import { ItemIcon } from "./ItemIcon";
 import { PackPreview } from "./PackPreview";
 import { Platinum } from "./Platinum";
+import cardBackLarge from "./cards/card-back-large.webp";
+import cardBackSmall from "./cards/card-back-small.webp";
 import { useMenuKeys } from "./menuKeys";
 import { useDialog } from "./useDialog";
 
-// Cards (content/cards.ts): the album of every card, each face down till it's been found, with the
-// one picked shown big beside it; and the Card shop, its packs bought with coins and opened at
-// once in a window over the screen. The free starter pack opens from either.
+// Cards (content/cards.ts): the album of every card, each face down till it's been found, a found
+// one opening big in a window when pressed; and the Card shop, its packs bought with platinum
+// tokens and opened at once on a playmat over the screen. The free starter pack opens from either.
 
 type Props = { ui: UiSnapshot; client: GameClient };
 
-type Tab = "all" | CardKind;
+// The album's tabs: all, a kind, or the cards with a foil owned
+type Tab = "all" | CardKind | "foil";
 
 export function CardsScreen({ ui, client }: Props): JSX.Element {
     const save = ui.save;
@@ -68,32 +73,35 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
         // Once, as the screen opens
     }, []);
     const [tab, setTab] = useState<Tab>("all");
-    const cards = tab === "all" ? CARDS : CARDS.filter((card) => card.kind === tab);
-    const [shownId, setShownId] = useState<string | undefined>(undefined);
-    const shown = cards.find((card) => card.id === shownId) ?? cards[0];
+    const cards =
+        tab === "all"
+            ? CARDS
+            : tab === "foil"
+              ? CARDS.filter((card) => getCardFoils(save, card) > 0)
+              : CARDS.filter((card) => card.kind === tab);
     // The pack just opened, and which it was
     const [opened, setOpened] = useState<{ pack: PackDef; cards: PackCard[] } | undefined>();
     // A pack's preview, from the shop (ui/PackPreview.tsx)
     const [previewing, setPreviewing] = useState<PackDef | undefined>();
     // Its info popover
     const [previewInfo, setPreviewInfo] = useState(false);
-    // A found card shown big in a window of its own, where there's no room for it beside the grid
-    const [viewing, setViewing] = useState<{ card: CardDef; rarity?: Rarity } | undefined>(
-        undefined,
-    );
+    // A found card shown big in a window of its own, pressed in the album or dealt from a pack
+    const [viewing, setViewing] = useState<
+        { card: CardDef; rarity?: Rarity; foil?: boolean } | undefined
+    >(undefined);
     const packs = getCardPacks(save);
     const backRef = useRef<HTMLButtonElement>(null);
     // A pack's window gives the focus back to the button that opened it, which can be gone or
-    // disabled by then (no coins or packs left): then it goes to Back, so a controller keeps its
+    // disabled by then (no tokens or packs left): then it goes to Back, so a controller keeps its
     // highlight
     useEffect(() => {
         if (!opened && document.activeElement === document.body) {
             backRef.current?.focus({ preventScroll: true });
         }
     }, [opened]);
+    // A found card pressed (a click, a tap, Enter or a controller's A): big, in its window
     const pick = (card: CardDef) => {
-        setShownId(card.id);
-        if (getCardCopies(save, card.id) > 0 && window.matchMedia?.(NARROW).matches) {
+        if (getCardCopies(save, card.id) > 0) {
             setViewing({ card });
         }
     };
@@ -144,6 +152,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                         className={
                             "ui-cards-tab" + (view === "album" ? " ui-cards-tab-selected" : "")
                         }
+                        aria-pressed={view === "album"}
                         onClick={() => setView("album")}
                     >
                         {t("cards.album")}
@@ -152,53 +161,75 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                         className={
                             "ui-cards-tab" + (view === "shop" ? " ui-cards-tab-selected" : "")
                         }
+                        aria-pressed={view === "shop"}
                         onClick={() => setView("shop")}
                     >
                         {t("cards.shop")}
                     </button>
                     {view === "album" && <span className="ui-cards-tabs-gap" />}
                     {view === "album" &&
-                        (["all", ...CARD_KINDS] as Tab[]).map((kind) => (
+                        (["all", ...CARD_KINDS, "foil"] as Tab[]).map((kind) => (
                             <button
                                 key={kind}
                                 className={
                                     "ui-cards-tab" + (tab === kind ? " ui-cards-tab-selected" : "")
                                 }
+                                aria-pressed={tab === kind}
                                 onClick={() => setTab(kind)}
                             >
-                                {kind === "all" ? t("cards.kind.all") : cardKindName(kind)}
+                                {kind === "all"
+                                    ? t("cards.kind.all")
+                                    : kind === "foil"
+                                      ? t("cards.kind.foil")
+                                      : cardKindName(kind)}
                             </button>
                         ))}
                 </div>
                 {view === "album" ? (
                     <div className="ui-cards-body">
                         <div className="ui-cards-grid">
+                            {cards.length === 0 && (
+                                <p className="ui-subtle ui-cards-empty">{t("cards.no_foils")}</p>
+                            )}
                             {cards.map((card) => {
                                 const copies = getCardCopies(save, card.id);
                                 return (
                                     <button
                                         key={card.id}
-                                        className={
-                                            "ui-cards-slot" +
-                                            (card === shown ? " ui-cards-slot-selected" : "")
-                                        }
+                                        className="ui-cards-slot"
+                                        // Its name, best version and a foil's said in words; a
+                                        // card not found has nothing to open
                                         aria-label={
                                             copies > 0
-                                                ? card.name()
+                                                ? t("cards.slot_label", {
+                                                      name: card.name(),
+                                                      rarity: cardRarityName(
+                                                          getBestFoil(save, card) ??
+                                                              getBestVersion(save, card)!,
+                                                      ),
+                                                  }) +
+                                                  (getCardFoils(save, card) > 0
+                                                      ? `, ${t("cards.foil")}`
+                                                      : "")
                                                 : t("cards.not_found_label", {
                                                       number: cardNumber(card),
                                                   })
                                         }
-                                        onFocus={() => setShownId(card.id)}
+                                        aria-disabled={copies === 0 || undefined}
                                         onClick={() => pick(card)}
                                     >
                                         {copies > 0 ? (
                                             <CardFace
                                                 card={card}
-                                                rarity={getBestVersion(save, card)!}
+                                                // A foil owned shows as that foil, its best
+                                                rarity={
+                                                    getBestFoil(save, card) ??
+                                                    getBestVersion(save, card)!
+                                                }
                                                 size="small"
                                                 copies={copies}
                                                 versions={getOwnedVersions(save, card).length}
+                                                foil={getCardFoils(save, card) > 0}
                                             />
                                         ) : (
                                             <CardBack size="small" card={card} />
@@ -207,7 +238,6 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                                 );
                             })}
                         </div>
-                        {shown && <CardDetail save={save} card={shown} />}
                     </div>
                 ) : (
                     <CardShop
@@ -256,7 +286,9 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                     client={client}
                     again={again(opened.pack)}
                     viewing={viewing !== undefined}
-                    onView={(dealt) => setViewing({ card: dealt.card, rarity: dealt.rarity })}
+                    onView={(dealt) =>
+                        setViewing({ card: dealt.card, rarity: dealt.rarity, foil: dealt.foil })
+                    }
                     onClose={() => setOpened(undefined)}
                 />
             )}
@@ -266,6 +298,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
                     save={save}
                     card={viewing.card}
                     rarity={viewing.rarity}
+                    foil={viewing.foil}
                     onClose={() => setViewing(undefined)}
                 />
             )}
@@ -273,27 +306,7 @@ export function CardsScreen({ ui, client }: Props): JSX.Element {
     );
 }
 
-// A line of odds by rarity, each in its colour, those above none only. A share under 1% says
-// "under 1%" rather than rounding to none.
-function OddsLine({ title, odds }: { title: string; odds: Record<Rarity, number> }): JSX.Element {
-    return (
-        <div className="ui-cards-offer-odds">
-            <span>{title}</span>
-            {RARITY_ORDER.filter((r) => odds[r] > 0).map((rarity) => (
-                <span key={rarity} style={{ color: RARITIES[rarity].color }}>
-                    {odds[rarity] < 0.01
-                        ? t("cards.odds_under", { rarity: rarityName(rarity) })
-                        : t("cards.odds", {
-                              rarity: rarityName(rarity),
-                              n: fmtNum(Math.round(odds[rarity] * 100)),
-                          })}
-                </span>
-            ))}
-        </div>
-    );
-}
-
-// The Card shop: each pack's front, what it holds, its odds in words, how much of it is collected,
+// The Card shop: each pack's front, what it holds (its odds are in its preview), how much of it is collected,
 // its price and Buy (disabled, saying why, when it can't be bought)
 function CardShop({
     save,
@@ -333,13 +346,6 @@ function CardShop({
                         <div className="ui-cards-offer-text">
                             <div className="ui-cards-offer-name">{packName(pack)}</div>
                             <div className="ui-cards-offer-desc">{packDescription(pack)}</div>
-                            {pool.length > 0 && (
-                                <OddsLine
-                                    title={t("cards.odds_items")}
-                                    odds={packRarityShares(pack, pool)}
-                                />
-                            )}
-                            <OddsLine title={t("cards.odds_title")} odds={pack.odds} />
                             {lastCardRarities(pack.odds).length <
                                 RARITY_ORDER.filter((r) => pack.odds[r] > 0).length && (
                                 <div className="ui-cards-offer-desc">
@@ -411,10 +417,18 @@ export function PackFront({ pack }: { pack: PackDef }): JSX.Element {
     );
 }
 
-// Where the card's big view beside the grid is left out (CardsScreen.css, Mobile.css)
-const NARROW = "(pointer: coarse), (max-width: 760px)";
-
 type Size = "small" | "big";
+
+// A foil's sparkles over its picture: where each is (in percent of the picture), when it twinkles
+// and how big it is, so they come and go out of step
+const SPARKLES: { x: number; y: number; delay: number; size: number }[] = [
+    { x: 14, y: 22, delay: 0, size: 9 },
+    { x: 78, y: 16, delay: 0.7, size: 7 },
+    { x: 62, y: 70, delay: 1.3, size: 10 },
+    { x: 26, y: 76, delay: 1.9, size: 6 },
+    { x: 88, y: 52, delay: 2.4, size: 8 },
+    { x: 44, y: 38, delay: 3.1, size: 6 },
+];
 
 function rarityStyle(rarity: Rarity): CSSProperties {
     return { "--card-rarity": RARITIES[rarity].color } as CSSProperties;
@@ -423,8 +437,9 @@ function rarityStyle(rarity: Rarity): CSSProperties {
 // A card's face, as a trading card: its rarity's colour in the frame (and its name in words on the
 // type line, so it's never told by colour alone), the name in a title bar, the item's own icon at
 // a whole multiple of its size in a window over a backdrop for its kind, the type line, a short
-// line of what it is, and its number in the set. Rare and Very rare are foil: a sheen that moves
-// only where `moving` asks (the big card and a pack's window), not across the whole album.
+// line of what it is, and its number in the set. A foil copy has a holographic shimmer over its
+// picture, drifting only where `moving` asks (the big card and a pack's mat) or under a pointer,
+// with sparkles where it's moving, neither with prefers-reduced-motion; "Foil" is written on it.
 export function CardFace({
     card,
     rarity,
@@ -433,6 +448,7 @@ export function CardFace({
     versions = 1,
     isNew = false,
     moving = false,
+    foil = false,
 }: {
     card: CardDef;
     // The version shown (cardVersions)
@@ -443,8 +459,9 @@ export function CardFace({
     versions?: number;
     isNew?: boolean;
     moving?: boolean;
+    // A foil copy (SaveData.cardFoils): a holographic face, and "Foil" written on it
+    foil?: boolean;
 }): JSX.Element {
-    const foil = rarity === "rare" || rarity === "veryRare";
     return (
         <span
             className={
@@ -465,6 +482,27 @@ export function CardFace({
                     // Whole multiples of the icon's 32 pixels, so its pixels stay even
                     size={size === "big" ? 96 : 64}
                 />
+                {/* A foil's shimmer, over its picture only, and sparkles where it's shown
+                    moving (big, or turned over on the mat), never in the album's grid */}
+                {foil && <span className="ui-tcg-holo" aria-hidden="true" />}
+                {foil && moving && (
+                    <span className="ui-tcg-sparkles" aria-hidden="true">
+                        {SPARKLES.map((at, i) => (
+                            <span
+                                key={i}
+                                className="ui-tcg-sparkle"
+                                style={
+                                    {
+                                        left: `${at.x}%`,
+                                        top: `${at.y}%`,
+                                        "--sparkle-delay": `${at.delay}s`,
+                                        "--sparkle-size": `${at.size}px`,
+                                    } as CSSProperties
+                                }
+                            />
+                        ))}
+                    </span>
+                )}
                 {isNew && <span className="ui-tcg-new">{t("cards.new")}</span>}
             </span>
             <span className="ui-tcg-typeline">
@@ -480,21 +518,31 @@ export function CardFace({
                 </span>
                 <span>{cardNumber(card)}</span>
             </span>
-            {foil && <span className="ui-tcg-sheen" aria-hidden="true" />}
+            {foil && <span className="ui-tcg-foil-mark">{t("cards.foil")}</span>}
         </span>
     );
 }
 
 // A card face down: the deck's own back, the same for every card. In the album, a card not found
 // yet shows its back with its number, so what's missing can be told apart.
-export function CardBack({ size, card }: { size: Size; card?: CardDef }): JSX.Element {
+export function CardBack({
+    size,
+    card,
+    large = false,
+}: {
+    size: Size;
+    card?: CardDef;
+    // The bigger picture, where the back's shown large (the playmat's deck, scaled up)
+    large?: boolean;
+}): JSX.Element {
     return (
-        <span className={`ui-tcg ui-tcg-${size} ui-tcg-back` + (card ? " ui-tcg-missing" : "")}>
-            <span className="ui-tcg-back-panel">
-                <span className="ui-tcg-back-medal" aria-hidden="true">
-                    RE
-                </span>
-            </span>
+        <span className={`ui-tcg-${size} ui-tcg-back` + (card ? " ui-tcg-missing" : "")}>
+            <img
+                className="ui-tcg-back-art"
+                src={large || size === "big" ? cardBackLarge : cardBackSmall}
+                alt=""
+                draggable={false}
+            />
             {card && <span className="ui-tcg-back-number">{cardNumber(card)}</span>}
         </span>
     );
@@ -508,12 +556,28 @@ function Versions({ save, card }: { save: SaveData; card: CardDef }): JSX.Elemen
             <div>
                 {t("cards.versions_owned", {
                     list: list(
-                        owned.map(({ rarity, copies }) =>
-                            t("cards.version_copies", {
-                                rarity: cardRarityName(rarity),
-                                n: fmtNum(copies),
-                            }),
-                        ),
+                        owned.flatMap(({ rarity, copies }) => {
+                            // Its foils apart: "Rare x1, Foil Rare x1"
+                            const foils = getFoilCopies(save, card, rarity);
+                            return [
+                                ...(copies > foils
+                                    ? [
+                                          t("cards.version_copies", {
+                                              rarity: cardRarityName(rarity),
+                                              n: fmtNum(copies - foils),
+                                          }),
+                                      ]
+                                    : []),
+                                ...(foils > 0
+                                    ? [
+                                          t("cards.foil_copies", {
+                                              rarity: cardRarityName(rarity),
+                                              n: fmtNum(foils),
+                                          }),
+                                      ]
+                                    : []),
+                            ];
+                        }),
                     ),
                 })}
             </div>
@@ -526,38 +590,20 @@ function Versions({ save, card }: { save: SaveData; card: CardDef }): JSX.Elemen
     );
 }
 
-// The card picked in the album, big, at its rarest version owned, with the versions owned; one
-// not found yet stays face down
-function CardDetail({ save, card }: { save: SaveData; card: CardDef }): JSX.Element {
-    const best = getBestVersion(save, card);
-    return (
-        <div className="ui-cards-detail">
-            {best ? (
-                <>
-                    <CardFace card={card} rarity={best} size="big" moving />
-                    <Versions save={save} card={card} />
-                </>
-            ) : (
-                <>
-                    <CardBack size="big" card={card} />
-                    <div className="ui-cards-detail-text">{t("cards.not_found")}</div>
-                </>
-            )}
-        </div>
-    );
-}
-
-// A found card, big, in a window over the album: on a phone, where it can't go beside the grid
+// A found card, big, in a window over the album or the pack's mat
 function CardWindow({
     save,
     card,
     rarity,
+    foil,
     onClose,
 }: {
     save: SaveData;
     card: CardDef;
-    // The version to show (a card just dealt's), else the rarest owned
+    // The version to show (a card just dealt's, and whether it's a foil), else the rarest owned (a
+    // foil's, if one is)
     rarity?: Rarity;
+    foil?: boolean;
     onClose: () => void;
 }): JSX.Element {
     const { dialogProps } = useDialog<HTMLDivElement>();
@@ -572,8 +618,9 @@ function CardWindow({
             >
                 <CardFace
                     card={card}
-                    rarity={rarity ?? getBestVersion(save, card)!}
+                    rarity={rarity ?? getBestFoil(save, card) ?? getBestVersion(save, card)!}
                     size="big"
+                    foil={rarity ? foil : getCardFoils(save, card) > 0}
                     moving
                 />
                 <Versions save={save} card={card} />
@@ -680,7 +727,7 @@ function PackWindow({
     const { scale, overlap } = layout;
     const deal = () => {
         if (dealt < cards.length) {
-            client.revealCard(cards[dealt].rarity);
+            client.revealCard(cards[dealt].rarity, cards[dealt].foil);
             setDealt(dealt + 1);
         }
     };
@@ -734,7 +781,7 @@ function PackWindow({
                                         className="ui-tcg-deck-card"
                                         style={{ "--deck-i": i } as CSSProperties}
                                     >
-                                        <CardBack size="small" />
+                                        <CardBack size="small" large />
                                     </span>
                                 ))}
                             </button>
@@ -750,14 +797,20 @@ function PackWindow({
                                         onClick={() => onView(dealtCard)}
                                     >
                                         <span className="ui-tcg-deal-back" aria-hidden="true">
-                                            <CardBack size="small" />
+                                            <CardBack size="small" large />
                                         </span>
-                                        <span className="ui-tcg-deal-face">
+                                        <span
+                                            className={
+                                                "ui-tcg-deal-face" +
+                                                (dealtCard.foil ? " ui-tcg-deal-foil" : "")
+                                            }
+                                        >
                                             <CardFace
                                                 card={dealtCard.card}
                                                 rarity={dealtCard.rarity}
                                                 size="small"
                                                 isNew={dealtCard.isNew}
+                                                foil={dealtCard.foil}
                                                 moving
                                             />
                                         </span>

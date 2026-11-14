@@ -339,7 +339,11 @@ export class GameSounds {
         this.audio.play(SOUNDS.casket, { volume: 1, minGap: 0 });
     }
 
-    cardReveal(rarity: Rarity): void {
+    cardReveal(rarity: Rarity, foil = false): void {
         this.audio.play(REVEAL_SOUNDS[rarity], { volume: 0.9, minGap: 0 });
+        // A foil: the level up's chime besides (the quiz's correct one, SOUNDS.levelUp)
+        if (foil) {
+            this.audio.play(SOUNDS.levelUp, { volume: 0.8, minGap: 0 });
+        }
     }
 }

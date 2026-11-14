@@ -50,7 +50,6 @@ import {
     isActEnded,
     isActOut,
 } from "../content/acts";
-import type { CardDef } from "../content/cards";
 import { characterDescription, characterName, getCharacter } from "../content/characters";
 import { AWAKENERS_ORB_OBJ } from "../content/gauntlet";
 import { invaderName } from "../content/invasions";
@@ -109,7 +108,6 @@ import { WeaponStatLine, formatWeaponStat } from "../content/weaponStats";
 import { WEAPONS, getWeapon, weaponName } from "../content/weapons";
 import type { RaidChest, ScabarasPuzzle, TombsSummary } from "../core/Sim";
 import {
-    getCardLock,
     getCardRunNeeds,
     getCardsOnlyPet,
     hasPetCard,
@@ -140,7 +138,7 @@ import { MapGeneratorButton } from "../scaperune/MapGeneratorScreen";
 import { AbilityButton, KitButtons } from "./AbilityButton";
 import { ArmouryScreen } from "./ArmouryScreen";
 import { BanishButton } from "./BanishButton";
-import { CardNeedsWindow, cardNeedsLabel } from "./CardNeeds";
+import { CardNeedsWindow } from "./CardNeeds";
 import { CardsScreen } from "./CardsScreen";
 import { ChangelogPanel } from "./ChangelogPanel";
 import { ChestModal } from "./ChestModal";
@@ -1773,6 +1771,7 @@ export function AdventurerPanel({
     onCardNeeds,
     cardsOnly,
     tabLocked,
+    map: roomMap,
     onDone,
 }: ScreenProps & {
     fixed?: string;
@@ -1782,8 +1781,11 @@ export function AdventurerPanel({
     // the save's own tab; a guest's tabs show it but can't change it (tabLocked)
     cardsOnly?: boolean;
     tabLocked?: boolean;
+    // The map the run's on: a co-op room's, not the player's own last pick
+    map?: MapDef;
     onDone?: () => void;
 }): JSX.Element {
+    const map = roomMap ?? getMap(ui.mapId);
     const unlocked = ui.save.unlockedCharacters;
     const [peek, setPeek] = useState<string>();
     const roster = getRoster();
@@ -1800,13 +1802,18 @@ export function AdventurerPanel({
     // Cards only on: the adventurers it can't start as (isCardLocked), worked out once for the
     // save, not on every peek. Only those they have: one they haven't is locked anyway.
     const cardLocked = useMemo(() => {
-        const map = getMap(ui.mapId);
         return new Set(
             roster
                 .filter((c) => unlocked.includes(c.id) && isCardLocked(save, c.id, map))
                 .map((c) => c.id),
         );
-    }, [save, ui.mapId, roster, unlocked]);
+    }, [save, map, roster, unlocked]);
+    // Whether a run from the Cards only tab can't start as the one shown (isCardRunBlocked): their
+    // details then have What's needed
+    const cardShort = useMemo(
+        () => unlocked.includes(shown) && isCardRunBlocked(save, shown, map),
+        [save, shown, map, unlocked],
+    );
     const heading = (
         <h2 className="ui-select-heading">
             {t("ui.character.heading")}
@@ -1831,13 +1838,7 @@ export function AdventurerPanel({
             }}
         >
             <PickerHeading heading={heading} onDone={onDone} />
-            <CardsOnlyTabs
-                ui={ui}
-                client={client}
-                save={save}
-                locked={tabLocked}
-                onCardNeeds={onCardNeeds}
-            />
+            <CardsOnlyTabs ui={ui} client={client} save={save} locked={tabLocked} />
             {fixed && (
                 <div className="ui-select-fixed-note">
                     <ItemIcon objId={getStartingWeaponIcon(getCharacter(fixed))} size={28} />
@@ -1927,7 +1928,7 @@ export function AdventurerPanel({
                     );
                 })}
             </div>
-            <PetRow ui={ui} client={client} />
+            <PetRow ui={ui} client={client} save={save} map={map} />
             {ACT_MAPS.some((m) => isMapUnlocked(ui.save, m.id)) && (
                 <RelicRow ui={ui} client={client} />
             )}
@@ -1936,8 +1937,7 @@ export function AdventurerPanel({
                 save={ui.save}
                 character={getCharacter(shown)}
                 onFavourite={fixed ? undefined : () => client.toggleFavouriteCharacter(shown)}
-                onCardNeeds={onCardNeeds && (() => onCardNeeds(shown))}
-                cardLock={cardLocked.has(shown) ? getCardLock(ui.save, shown) : undefined}
+                onCardNeeds={cardShort ? onCardNeeds && (() => onCardNeeds(shown)) : undefined}
             />
         </div>
     );
@@ -1967,13 +1967,20 @@ export function PickerHeading({
 
 // The pet to take along, from those found: none until one's been found. Most are looks only; a
 // fighting one (PetDef.power) says what it does
-function PetRow({ ui, client }: ScreenProps): JSX.Element | null {
+function PetRow({
+    ui,
+    client,
+    save,
+    map,
+}: ScreenProps & {
+    // The save as the Cards only that applies sees it (a co-op room's), and the run's map
+    save: SaveData;
+    map: MapDef;
+}): JSX.Element | null {
     // A Card collection only run: its own pick, of the pets whose card is owned
-    // (SaveData.cardsOnlyPet). Only when the run will be one (playsCardsOnly), as it takes that pet.
-    const map = getMap(ui.mapId);
-    const cardsOnly =
-        ui.screen !== "coop" &&
-        playsCardsOnly(ui.save, getMapCharacter(map) ?? ui.characterId, map);
+    // (SaveData.cardsOnlyPet). Only when the run will be one (playsCardsOnly), as it takes that
+    // pet: in co-op, the room's (the loadout's pet goes by the same, GameClient.getLoadout).
+    const cardsOnly = playsCardsOnly(save, getMapCharacter(map) ?? ui.characterId, map);
     const found = cardsOnly
         ? PETS.filter((pet) => hasPetCard(ui.save, pet.id) || isPetFound(ui.save.trophies, pet.id))
         : getFoundPets(ui.save.trophies);
@@ -2077,14 +2084,12 @@ function AdventurerDetails({
     save,
     character,
     onFavourite,
-    cardLock,
     onCardNeeds,
 }: {
     save: SaveData;
     character: CharacterDef;
     onFavourite?: () => void;
-    // Card collection only is on and can be played, but not as them: the cards they still need
-    cardLock?: CardDef[];
+    // Cards only, short of what they take: the card button to what's needed
     onCardNeeds?: () => void;
 }): JSX.Element {
     const unlocked = save.unlockedCharacters.includes(character.id);
@@ -2098,25 +2103,42 @@ function AdventurerDetails({
                     <div className="ui-card-title">{characterName(character)}</div>
                     <div className="ui-card-style">{STYLE_NAMES[character.style]}</div>
                 </div>
-                {onFavourite && unlocked && (
-                    // The label says whether it's on, so no aria-pressed as well
-                    <button
-                        className={
-                            "ui-button ui-button-small ui-favourite" +
-                            (favourite ? " ui-favourite-on" : "")
-                        }
-                        title={
-                            favourite
-                                ? t("ui.character.favourite_remove")
-                                : t("ui.character.favourite_add")
-                        }
-                        onClick={onFavourite}
-                    >
-                        {favourite
-                            ? t("ui.character.favourite_on")
-                            : t("ui.character.favourite_off")}
-                    </button>
-                )}
+                <div className="ui-select-details-actions">
+                    {/* Cards only, short of what this adventurer takes: the Cards tile's icon */}
+                    {onCardNeeds && (
+                        <button
+                            className="ui-button ui-icon-button"
+                            aria-label={t("cards.needs.open_label")}
+                            title={t("cards.needs.open")}
+                            onClick={onCardNeeds}
+                        >
+                            <ItemIcon objId={CARDS_ICON_OBJ} size={28} />
+                        </button>
+                    )}
+                    {onFavourite && unlocked && (
+                        // A star, filled when it's the favourite: its label says which, so no
+                        // aria-pressed as well
+                        <button
+                            className={
+                                "ui-button ui-icon-button ui-favourite" +
+                                (favourite ? " ui-favourite-on" : "")
+                            }
+                            aria-label={
+                                favourite
+                                    ? t("ui.character.favourite_on")
+                                    : t("ui.character.favourite_off")
+                            }
+                            title={
+                                favourite
+                                    ? t("ui.character.favourite_on")
+                                    : t("ui.character.favourite_off")
+                            }
+                            onClick={onFavourite}
+                        >
+                            <FavouriteStar filled={favourite} />
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="ui-card-text">
                 <RichText text={characterDescription(character)} />
@@ -2145,54 +2167,56 @@ function AdventurerDetails({
                     {describeUnlockTask(character.unlock)} {t("ui.common.to_unlock")}
                 </div>
             )}
-            {cardLock && (
-                <div className="ui-card-cost">
-                    {t("ui.cards_only.character_locked", {
-                        list: list(cardLock.map((card) => card.name())),
-                    })}{" "}
-                    {onCardNeeds && (
-                        <button
-                            className="ui-button ui-button-small ui-cards-need-button"
-                            onClick={onCardNeeds}
-                        >
-                            {t("cards.needs.open")}
-                        </button>
-                    )}
-                </div>
-            )}
         </div>
     );
 }
 
+// A map won in a Card collection only run (SaveData.cardsOnlyWins): a little drawn card, the size
+// of the beaten tick beside it, saying so to a screen reader and on hover
+function CardsOnlyMark(): JSX.Element {
+    return (
+        <span
+            className="ui-cards-only-mark"
+            role="img"
+            aria-label={t("ui.map.beaten_cards_only_label")}
+            title={t("ui.map.beaten_cards_only")}
+        />
+    );
+}
+
+// The favourite's star, drawn: gold on a dark edge, filled when it's the favourite and only
+// outlined when not, so its shape says it as well as its colour
+function FavouriteStar({ filled }: { filled: boolean }): JSX.Element {
+    const star = "M12 2.6l2.8 6 6.5.8-4.8 4.5 1.3 6.5L12 17.2l-5.8 3.2 1.3-6.5-4.8-4.5 6.5-.8z";
+    return (
+        <svg className="ui-favourite-star" viewBox="0 0 24 24" aria-hidden="true">
+            <path d={star} fill="none" stroke="#000" strokeWidth="4" strokeLinejoin="round" />
+            <path
+                d={star}
+                fill={filled ? "#ffc030" : "#2a2218"}
+                stroke="#ffc030"
+                strokeWidth="2"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
+
 // The adventurer panel's tabs (core/cardRuns.ts): the usual adventurers, or Cards only, where a
-// run's level ups, caskets and pet keep to the player's cards. On Cards only, a line says what the
-// collection's still short of, a button opening the window of what's needed (CardNeedsWindow);
-// the button, its words and the window go by one reckoning (getCardRunNeeds), as the run does.
+// run's level ups, caskets and pet keep to the player's cards. What an adventurer's short of opens
+// from their details (AdventurerDetails' What's needed).
 function CardsOnlyTabs({
     ui,
     client,
     save,
     locked,
-    onCardNeeds,
 }: ScreenProps & {
     // The save as the tab that applies sees it (a co-op room's, AdventurerPanel)
     save: SaveData;
     // A co-op guest's: the host picks for the room
     locked?: boolean;
-    onCardNeeds?: (characterId: string) => void;
 }): JSX.Element {
     const on = save.cardsOnly === true;
-    const map = getMap(ui.mapId);
-    const characterId = getMapCharacter(map) ?? ui.characterId;
-    // What's short, while a run from the tab can't start (isCardRunBlocked): worked out once for
-    // the save and adventurer, not on every render
-    const label = useMemo(
-        () =>
-            isCardRunBlocked(save, characterId, map)
-                ? cardNeedsLabel(getCardRunNeeds(save, characterId))
-                : undefined,
-        [save, characterId, map],
-    );
     // A co-op guest's tabs show the room's choice: pressing them changes nothing
     const pick = (cardsOnly: boolean) => {
         if (!locked) {
@@ -2220,17 +2244,9 @@ function CardsOnlyTabs({
                     {t("ui.cards_only.name")}
                 </button>
             </div>
-            {on &&
-                (label ? (
-                    <button
-                        className="ui-button ui-button-small ui-cards-need-button"
-                        onClick={() => onCardNeeds?.(characterId)}
-                    >
-                        {label}
-                    </button>
-                ) : (
-                    <span className="ui-cards-only-note">{t("ui.cards_only.on_note")}</span>
-                ))}
+            {on && !locked && (
+                <span className="ui-cards-only-note">{t("ui.cards_only.on_note")}</span>
+            )}
             {locked && <span className="ui-cards-only-note">{t("ui.cards_only.host_picks")}</span>}
         </div>
     );
@@ -2378,6 +2394,8 @@ function MapPanel({ ui, client, onDone }: ScreenProps & { onDone?: () => void })
                         <ItemIcon objId={AWAKENERS_ORB_OBJ} size={14} />
                     </span>
                 )}
+                {/* Won in a Card collection only run: a little card beside the tick */}
+                {save.cardsOnlyWins?.includes(map.id) && <CardsOnlyMark />}
                 {(save.hardVictories[map.id] ?? 0) > 0 ? (
                     <span
                         className="ui-beaten ui-beaten-hard"
@@ -2576,6 +2594,7 @@ function ActPage({
                                     : t("ui.act.coming_soon", { boss: actSlotBoss(act, slot) })}
                             </span>
                         </span>
+                        {save.cardsOnlyWins?.includes(slot.mapId ?? "") && <CardsOnlyMark />}
                         {(save.hardVictories[slot.mapId ?? ""] ?? 0) > 0 ? (
                             <span
                                 className="ui-beaten ui-beaten-hard"
@@ -3012,6 +3031,9 @@ function MapDetails({
                     <div className={status.locked ? "ui-card-cost" : "ui-card-style"}>
                         {status.text}
                     </div>
+                    {save.cardsOnlyWins?.includes(map.id) && (
+                        <div className="ui-card-style">{t("ui.map.beaten_cards_only")}</div>
+                    )}
                     {map.stages && unlocked && onPick && reached > 1 && (
                         <div className="ui-row ui-fight-parts">
                             {map.stages.slice(0, reached).map((part, i) => (

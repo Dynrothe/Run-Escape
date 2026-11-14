@@ -1190,6 +1190,23 @@
     filter: drop-shadow(1px 1px 0 #000);
 }
 
+/* Won in a Card collection only run: a little card, gold on dark like the deck's back, as tall as
+   the tick beside it */
+.ui-cards-only-mark {
+    flex-shrink: 0;
+    width: 8px;
+    height: 11px;
+    margin-left: 4px;
+    box-sizing: border-box;
+    background: #2a1f14;
+    border: 1px solid #c8a24a;
+    border-radius: 1px;
+    box-shadow:
+        0 0 0 1px #000,
+        inset 0 0 0 1px #2a1f14,
+        inset 0 0 0 2px #c8a24a;
+}
+
 /* Two ticks and gold once it's been beaten on hard, so it isn't only the colour */
 .ui-beaten-hard {
     position: relative;
@@ -3342,14 +3359,36 @@
 }
 
 /* The favourite adventurer, which the game starts on: at the end of the details' head */
-.ui-favourite {
+/* The details' buttons, on the right of their head: What's needed (Cards only) and Make
+   favourite, wrapping under each other where the panel's narrow */
+.ui-select-details-actions {
     margin-left: auto;
     align-self: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
 }
 
 .ui-favourite-on {
-    color: var(--ui-yellow);
     box-shadow: inset 0 0 0 1px var(--ui-yellow);
+}
+
+/* A small square button holding an icon (the details' star and card), its words in its label
+   and tooltip */
+.ui-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    min-height: 0;
+    padding: 0;
+}
+
+.ui-favourite-star {
+    width: 22px;
+    height: 22px;
 }
 
 /* The Tombs of Amascut's invocation board (and the button to it, in the setup bar), laid out as

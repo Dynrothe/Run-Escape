@@ -384,10 +384,10 @@
         min-width: 44px;
     }
 
-    /* No taller than the icon beside it, so the details don't jump between
-       adventurers with the button and those without */
-    .ui-favourite {
-        min-height: 36px;
+    /* The details' star and card, square and big enough for a finger */
+    .ui-icon-button {
+        width: 44px;
+        height: 44px;
     }
 
     .ui-volume {
@@ -439,8 +439,8 @@
 /* The Collection log's tabs, entries, items and X, the Cards screen's tabs and what Cards only
    needs, big enough for a finger (a pack preview's buttons too) */
 @media (pointer: coarse) {
-    .ui-cards-need-button,
     .ui-card-needs-head .ui-button,
+    .ui-coop-cards-blocked .ui-button,
     .ui-cards-tab,
     .ui-log-tab,
     .ui-log-entry,
@@ -1060,11 +1060,6 @@
 
     .ui-quests > .ui-subtle,
     .ui-cards > .ui-subtle {
-        display: none;
-    }
-
-    /* No height for the card's big view beside the grid: the small cards say what they are */
-    .ui-cards-detail {
         display: none;
     }
 

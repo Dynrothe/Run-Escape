@@ -432,8 +432,13 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
     if (
         !evolution ||
         !isAvailable(getWeapon(evolution.into), sim.unlockedItems) ||
-        // A Card collection only run without the evolution's card: it won't come
-        (sim.cardCaps && !sim.cardCaps.has(`weapon:${evolution.into}`))
+        // A Card collection only run without the evolution's card, or its passive's while it
+        // isn't held: it won't come
+        (sim.cardCaps &&
+            (!sim.cardCaps.has(`weapon:${evolution.into}`) ||
+                !sim.cardCaps.has(`weapon:${weapon.def.id}`) ||
+                (!sim.passives.some((p) => p.id === evolution.requiresPassive) &&
+                    !sim.cardCaps.has(`passive:${evolution.requiresPassive}`))))
     ) {
         return undefined;
     }
@@ -1067,8 +1072,11 @@ export class GameClient implements GameFrameHandler {
     showScreen(screen: Screen): void {
         const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
-        // Done shopping: a save point for cloud save
-        if ((was === "shop" || was === "armoury" || was === "wardrobe") && screen !== was) {
+        // Done shopping (packs too): a save point for cloud save
+        if (
+            (was === "shop" || was === "armoury" || was === "wardrobe" || was === "cards") &&
+            screen !== was
+        ) {
             this.cloud?.savePoint();
         }
         // Out of the Wardrobe, what was tried on comes off
@@ -1192,7 +1200,7 @@ export class GameClient implements GameFrameHandler {
         return true;
     }
 
-    // Buys a pack in the Card shop with coins and opens it straight away (core/cards.ts): its
+    // Buys a pack in the Card shop with platinum tokens and opens it straight away (core/cards.ts): its
     // cards, or undefined if it can't be bought
     buyCardPack(pack: PackDef): PackCard[] | undefined {
         const cards = buyCardPack(this.save, pack, Math.random);
@@ -1290,9 +1298,9 @@ export class GameClient implements GameFrameHandler {
         return cards;
     }
 
-    // A card of an opened pack turned over
-    revealCard(rarity: Rarity): void {
-        this.sounds.cardReveal(rarity);
+    // A card of an opened pack turned over, with a chime besides for a foil
+    revealCard(rarity: Rarity, foil = false): void {
+        this.sounds.cardReveal(rarity, foil);
     }
 
     // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps (and an
@@ -1480,8 +1488,10 @@ export class GameClient implements GameFrameHandler {
                 this.sounds.denied();
                 return;
             }
-            // Another map: the room's next run isn't the Vault's any more
+            // Another map: the room's next run isn't the Vault's any more (and Cards only can be
+            // the room's again)
             this.store.set({ vaultRoom: undefined });
+            this.refreshCoopLoadout();
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -1717,16 +1727,17 @@ export class GameClient implements GameFrameHandler {
             this.save.look,
             room ? this.runRelics(getMap(room.mapId)) : undefined,
             cardCaps,
-            // The host's tab sets the room's (roomPlaysCardsOnly)
-            this.coop.isHost && this.save.cardsOnly === true,
+            // The host's tab sets the room's (roomPlaysCardsOnly), never the Vault's room's
+            this.coop.isHost && this.save.cardsOnly === true && !this.isVaultRoom(),
         );
     }
 
-    // Card collection only's caps for a co-op loadout: none on a map whose level ups are blessings
+    // Card collection only's caps for a co-op loadout: none on a map whose level ups are blessings,
+    // nor in the Vault's room (the same run for everyone), so its pet's the usual one too
     private loadoutCardCaps(map: MapDef | undefined, characterId: string): string | undefined {
         // Not for an adventurer it can't start as (their starter cards missing): they play as usual
         const caps =
-            map?.blessings || getCardLock(this.save, characterId)
+            map?.blessings || this.isVaultRoom() || getCardLock(this.save, characterId)
                 ? undefined
                 : this.cardRunCaps(characterId);
         return caps && encodeCardCaps(caps);
@@ -2331,7 +2342,8 @@ export class GameClient implements GameFrameHandler {
         const characterId = vault?.characterId ?? getMapCharacter(map) ?? snapshot.characterId;
         // Card collection only, when it's on and the collection can play it (never the Vault's,
         // which is the same run for everyone)
-        const cardCaps = vault || map.blessings ? undefined : this.cardRunCaps(characterId);
+        const cardCaps =
+            vault || gauntlet || map.blessings ? undefined : this.cardRunCaps(characterId);
         // Picked on the Cards only tab, it's Cards only or nothing: not without the adventurer's
         // starter cards or enough cards to fill a level up (isCardRunBlocked)
         if (plain && isCardRunBlocked(this.save, characterId, map)) {
@@ -3082,6 +3094,8 @@ export class GameClient implements GameFrameHandler {
             this.coop.setMap(vault.mapId, false, false);
         }
         this.store.set({ vaultRoom: vault.key, screen: "coop" });
+        // The Vault's never Cards only: the host's loadout says so (roomPlaysCardsOnly)
+        this.refreshCoopLoadout();
     }
 
     openGauntlet(): void {
@@ -3339,7 +3353,7 @@ export class GameClient implements GameFrameHandler {
                   ...result,
                   ...(vaultKey && { vault: vaultKey }),
                   // This player's own: each co-op player records their run on their own save
-                  ...(sim.cardCaps && { cardsOnly: true }),
+                  ...(sim.heroes[sim.focus].cardCaps && { cardsOnly: true }),
               });
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
@@ -3373,7 +3387,7 @@ export class GameClient implements GameFrameHandler {
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
                 ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
                 orbWon: result.victory && GAUNTLET_FIGHTS.includes(result.mapId),
-                ...(sim.cardCaps && { cardsOnly: true }),
+                ...(sim.heroes[sim.focus].cardCaps && { cardsOnly: true }),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),

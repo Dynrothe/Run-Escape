@@ -13,9 +13,10 @@ import type { GearDef, PassiveDef, WeaponDef } from "./types";
 import { WEAPONS, getWeapon, weaponDescription, weaponName } from "./weapons";
 
 // Cards: a card for each weapon, passive, reward casket gear and Collection log trophy the game
-// already has, with that thing's cache item as its picture. Packs are bought with the platinum tokens
-// runs earn and opened on the Cards screen (core/cards.ts, ui/CardsScreen.tsx). They only touch a run that's Card collection
-// only (core/cardRuns.ts). No real money is ever involved: platinum tokens are only earned by playing.
+// already has, with that thing's cache item as its picture. Packs are bought with the platinum
+// tokens runs earn and opened on the Cards screen (core/cards.ts, ui/CardsScreen.tsx). They only
+// touch a run that's Card collection only (core/cardRuns.ts). No real money is ever involved:
+// platinum tokens are only earned by playing.
 
 export type CardKind = "weapon" | "passive" | "gear" | "trophy";
 
@@ -39,9 +40,10 @@ export type CardDef = {
 export const PACK_SIZE = 5;
 
 // Platinum tokens: what packs are bought with, apart from the coins (SaveData.platinum). A run
-// earns them from its own play (Sim.platinum, RunResult.platinum), each scaled as the run's
-// coins are (Sim.coinScale: less in endless runs, ENDLESS_COINS and less again in their later
-// rounds, and more on hard mode and with invocations), so an endless run left to play itself can't pile them up.
+// earns them from its own play (Sim.platinum, RunResult.platinum), each scaled as the run's coins
+// are (Sim.coinScale: less in endless runs, ENDLESS_COINS and less again in their later rounds, and
+// more on hard mode and with invocations), so an endless run left to play itself can't pile them
+// up.
 export const PLATINUM_PER_KILL = 0.01;
 export const PLATINUM_PER_BOSS = 5;
 export const PLATINUM_WIN = 25;
@@ -205,7 +207,7 @@ export function cardRarityName(rarity: Rarity): string {
 // version's rarity by its odds and then a card of the pool that comes in that version; its last
 // card, in a pack with odds for three rarities or more, rolls only those above the lowest, so the
 // pack has something better than its commonest (core/cards.ts, lastCardRarities). Prices are in
-// the coins runs pay out, spent as the Armoury and the Wardrobe spend them.
+// platinum tokens, which runs earn beside their coins.
 export type PackDef = {
     id: string;
     name: string;
@@ -219,7 +221,18 @@ export type PackDef = {
     holds: (card: CardDef) => boolean;
     // How much likelier its Rare and Very rare cards are than in a basic pack (the Champion's)
     rarer?: number;
+    // The chance each of its cards is a foil (CARD_FOIL_CHANCE unless set)
+    foil?: number;
 };
+
+// The chance a card from a pack is a foil: a copy of its version with a holographic face, kept
+// apart (SaveData.cardFoils), only for show. Any card, any version; a pack can set its own
+// (PackDef.foil).
+export const CARD_FOIL_CHANCE = 1 / 50;
+
+export function packFoilChance(pack: PackDef): number {
+    return pack.foil ?? CARD_FOIL_CHANCE;
+}
 
 // The packs' knobs, in one place. A pack only ever holds cards of what the player has unlocked
 // (core/cards.ts, isCardUnlocked), so the best things are rare first by being far into the game.
@@ -395,6 +408,8 @@ export const PACKS: PackDef[] = [
         // More Rare and Very rare than a basic pack, in its things and in its versions
         odds: { common: 0.25, uncommon: 0.35, rare: 0.32, veryRare: 0.08 },
         rarer: 1.6,
+        // Twice a basic pack's foils
+        foil: 1 / 25,
         // Every card but gear, which only the Treasure trail pack holds
         holds: (card) => card.kind !== "gear",
     },

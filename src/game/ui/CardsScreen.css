@@ -1,5 +1,5 @@
-/* Cards: the album's grid of cards with the one picked big beside it, and a pack's window. A card
-   is the client's dark inset panel, framed in its rarity's colour (--card-rarity), with the item's
+/* Cards: the album's grid of cards, a found one big in a window, and a pack's playmat. A card is
+   the client's dark inset panel, framed in its rarity's colour (--card-rarity), with the item's
    own icon scaled up in whole pixels. */
 
 .ui-cards {
@@ -45,10 +45,6 @@
     border: 1px solid transparent;
     display: flex;
     justify-content: center;
-}
-
-.ui-cards-slot-selected {
-    border-color: var(--ui-orange);
 }
 
 /* A card: a dark frame with its rarity's colour round the edge, then a title bar, the art's window,
@@ -169,6 +165,10 @@
     background: radial-gradient(circle at 50% 45%, #4f6276, #283442 70%, #1b232c);
 }
 
+.ui-tcg-art-gear {
+    background: radial-gradient(circle at 50% 45%, #4f6a52, #28362a 70%, #1b241c);
+}
+
 .ui-tcg-art-trophy {
     background: radial-gradient(circle at 50% 45%, #7a6430, #3d3118 70%, #2a2111);
 }
@@ -235,87 +235,192 @@
         inset 0 0 0 2px var(--card-rarity);
 }
 
-/* Foil (Rare and Very rare): a pale band across the card, still, or drifting across now and
-   then where the card's on show. It moves by transform only, so it never redraws the card. */
-.ui-tcg-sheen {
+/* A foil copy: a holographic shimmer over its picture only (the frame, title and text stay plain),
+   a rainbow in a soft light blend, drifting slowly where the card's shown big, on the mat or under
+   a pointer, and still with prefers-reduced-motion; "Foil" is written on it too, so it isn't only
+   the colour */
+.ui-tcg-holo {
     position: absolute;
-    inset: -20% -60%;
+    inset: 0;
     pointer-events: none;
+    background:
+        linear-gradient(
+            115deg,
+            rgba(255, 70, 70, 0.32),
+            rgba(255, 200, 60, 0.32) 16%,
+            rgba(90, 255, 120, 0.32) 33%,
+            rgba(60, 200, 255, 0.32) 50%,
+            rgba(150, 90, 255, 0.32) 66%,
+            rgba(255, 80, 200, 0.32) 83%,
+            rgba(255, 70, 70, 0.32)
+        ),
+        repeating-linear-gradient(65deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 7px);
+    /* Wide enough that a still card shows the whole spectrum, not one colour of it */
+    background-size:
+        160% 160%,
+        auto;
+    background-position:
+        0% 50%,
+        0 0;
+    mix-blend-mode: color-dodge;
+    opacity: 0.85;
+}
+
+.ui-tcg-moving .ui-tcg-holo,
+.ui-cards-slot:hover .ui-tcg-holo,
+.ui-cards-slot:focus-visible .ui-tcg-holo {
+    /* A few slow drifts, then still: never an animation that runs for good */
+    animation: ui-tcg-holo 9s linear 3;
+}
+
+@keyframes ui-tcg-holo {
+    0% {
+        background-position:
+            0% 50%,
+            0 0;
+    }
+    50% {
+        background-position:
+            100% 50%,
+            40px 0;
+    }
+    100% {
+        background-position:
+            0% 50%,
+            0 0;
+    }
+}
+
+/* Sparkles over a foil's picture where it's shown moving: four-pointed stars, white with a dark
+   edge so they read on light art and dark alike, each twinkling in turn */
+.ui-tcg-sparkles {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.ui-tcg-sparkle {
+    position: absolute;
+    width: var(--sparkle-size, 8px);
+    height: var(--sparkle-size, 8px);
+    margin: calc(var(--sparkle-size, 8px) / -2) 0 0 calc(var(--sparkle-size, 8px) / -2);
+    background: #fff;
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+    filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 2px rgba(255, 240, 180, 0.9));
+    opacity: 0;
+    transform: scale(0.3);
+    /* A few rounds of twinkling as the card's shown, then gone: never for good */
+    animation: ui-tcg-sparkle 3.6s ease-in-out var(--sparkle-delay, 0s) 4;
+}
+
+.ui-tcg-big .ui-tcg-sparkle {
+    width: calc(var(--sparkle-size, 8px) * 1.6);
+    height: calc(var(--sparkle-size, 8px) * 1.6);
+}
+
+@keyframes ui-tcg-sparkle {
+    0%,
+    70%,
+    100% {
+        opacity: 0;
+        transform: scale(0.3) rotate(0deg);
+    }
+    80% {
+        opacity: 1;
+        transform: scale(1) rotate(25deg);
+    }
+    90% {
+        opacity: 0.6;
+        transform: scale(0.7) rotate(45deg);
+    }
+}
+
+/* "Foil", written in the card's top right corner on a little ribbon */
+.ui-tcg-foil-mark {
+    position: absolute;
+    top: 30px;
+    right: -2px;
+    padding: 1px 6px 1px 8px;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 11px;
+    color: #1a1208;
+    background: linear-gradient(90deg, #ffd1f0, #c8f0ff 50%, #fff0a8);
+    clip-path: polygon(6px 0, 100% 0, 100% 100%, 6px 100%, 0 50%);
+    box-shadow: 0 1px 0 #000;
+}
+
+.ui-tcg-big .ui-tcg-foil-mark {
+    top: 44px;
+    font-size: 13px;
+}
+
+/* A foil as it's turned over on the mat: a flash of light across it, once */
+.ui-tcg-deal-foil::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 6px;
     background: linear-gradient(
         110deg,
-        transparent 40%,
-        rgba(255, 246, 214, 0.1) 46%,
-        rgba(255, 255, 255, 0.22) 50%,
-        rgba(255, 246, 214, 0.1) 54%,
-        transparent 60%
+        transparent 30%,
+        rgba(255, 255, 255, 0.75) 50%,
+        transparent 70%
     );
-    transform: translateX(-18%);
+    background-size: 250% 100%;
+    animation: ui-tcg-foil-flash 1.1s ease-out 0.5s 1 both;
 }
 
-.ui-tcg-moving .ui-tcg-sheen {
-    /* A few passes as the card's shown, then still: never an animation that runs for good */
-    animation: ui-tcg-sheen 5s ease-in-out 3;
-}
-
-@keyframes ui-tcg-sheen {
+@keyframes ui-tcg-foil-flash {
     0% {
-        transform: translateX(-45%);
+        background-position: 120% 0;
+        opacity: 1;
     }
-    45%,
     100% {
-        transform: translateX(45%);
+        background-position: -40% 0;
+        opacity: 0;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .ui-tcg-moving .ui-tcg-sheen {
+    .ui-tcg-moving .ui-tcg-holo,
+    .ui-cards-slot:hover .ui-tcg-holo,
+    .ui-cards-slot:focus-visible .ui-tcg-holo {
         animation: none;
+    }
+
+    .ui-tcg-deal-foil::after {
+        animation: none;
+        opacity: 0;
+    }
+
+    /* No sparkles at all: the still shimmer says it's a foil */
+    .ui-tcg-sparkles {
+        display: none;
     }
 }
 
-/* Face down: the deck's back, dark leather in a gold lattice, a double gold rule, and the game's
-   initials on a medal */
+/* Face down: the deck's back, a picture of its own (ui/cards/card-back-*.webp), its cut corners
+   clear, kept to its shape in the card's room rather than stretched */
 .ui-tcg-back {
-    padding: 6px;
-    background: #2a1f14;
-    border-color: #8a6a2a;
-}
-
-.ui-tcg-back-panel {
-    flex: 1;
+    position: relative;
+    box-sizing: border-box;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    border: 1px solid #c8a24a;
-    box-shadow:
-        inset 0 0 0 3px #2a1f14,
-        inset 0 0 0 4px #8a6a2a;
-    background:
-        repeating-linear-gradient(45deg, rgba(200, 162, 74, 0.16) 0 1px, transparent 1px 10px),
-        repeating-linear-gradient(-45deg, rgba(200, 162, 74, 0.16) 0 1px, transparent 1px 10px),
-        radial-gradient(circle at 50% 50%, #4a3520, #2a1f14 75%);
+    gap: 4px;
 }
 
-.ui-tcg-back-medal {
-    width: 46%;
-    aspect-ratio: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: "OSRS Bold", sans-serif;
-    font-size: 20px;
-    color: var(--ui-orange);
-    text-shadow: 1px 1px 0 #000;
-    background: radial-gradient(circle at 40% 35%, #5a4426, #2a1f14);
-    border: 2px solid #c8a24a;
-    border-radius: 50%;
-    box-shadow:
-        0 0 0 2px #000,
-        inset 0 0 0 2px #000;
-}
-
-.ui-tcg-big .ui-tcg-back-medal {
-    font-size: 32px;
+.ui-tcg-back-art {
+    display: block;
+    width: 100%;
+    min-height: 0;
+    flex: 0 1 auto;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+    user-select: none;
 }
 
 /* In the album, a card not found yet: its back, darker, with its number */
@@ -324,22 +429,12 @@
 }
 
 .ui-tcg-back-number {
-    margin-top: 4px;
     text-align: center;
     font-size: 11px;
     color: #c8b48a;
 }
 
-.ui-cards-detail {
-    flex-shrink: 0;
-    width: 248px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    overflow-y: auto;
-}
-
+/* A big card's versions, in words, under it */
 .ui-cards-detail-text {
     font-size: 14px;
     text-align: center;
@@ -352,12 +447,6 @@
     gap: 6px;
     max-height: calc(92vh / var(--ui-scale));
     overflow-y: auto;
-}
-
-@media (max-width: 760px) {
-    .ui-cards-detail {
-        display: none;
-    }
 }
 
 /* Between the Album and Card shop switch and the album's own tabs */
@@ -404,13 +493,6 @@
 .ui-cards-offer-desc,
 .ui-cards-offer-owned {
     color: var(--ui-text-dim);
-}
-
-.ui-cards-offer-odds {
-    display: flex;
-    flex-wrap: wrap;
-    column-gap: 8px;
-    text-shadow: 1px 1px 0 #000;
 }
 
 /* The price, Preview and Buy: they wrap rather than run out of a narrow offer */
@@ -585,14 +667,6 @@
 
 .ui-card-needs-head .ui-button {
     min-height: 32px;
-}
-
-/* "Need ...", a button that opens what's needed: its words wrap rather than push the bar out */
-.ui-cards-need-button {
-    min-height: 32px;
-    max-width: 220px;
-    white-space: normal;
-    line-height: 1.1;
 }
 
 /* The pack Card collection only's needs pointed at */
@@ -839,7 +913,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    width: min(920px, 96vw);
+    width: min(920px, calc(96vw / var(--ui-scale)));
     max-height: 92%;
     padding: 12px;
 }
@@ -926,25 +1000,47 @@
     overflow-y: auto;
 }
 
-.ui-pack-rates table {
+/* Its two tables side by side across the popover, stacked where it's too narrow, with thin
+   lines between the cells as OSRS's tables have */
+.ui-pack-rates-tables {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ui-pack-rates-table {
+    flex: 1 1 140px;
     border-collapse: collapse;
-    margin: 4px 0;
 }
 
-.ui-pack-rates caption {
+.ui-pack-rates-table caption {
     text-align: left;
-    padding-bottom: 4px;
+    padding-bottom: 3px;
+    color: var(--ui-orange);
 }
 
-.ui-pack-rates th,
-.ui-pack-rates td {
-    padding: 4px 12px 4px 0;
+.ui-pack-rates-table th,
+.ui-pack-rates-table td {
+    padding: 3px 8px;
+    border: 1px solid #5b4f3b;
     text-align: left;
     text-shadow: 1px 1px 0 #000;
 }
 
+.ui-pack-rates-table thead th {
+    background: rgba(0, 0, 0, 0.3);
+}
+
 .ui-pack-rates p {
-    margin: 4px 0;
+    margin: 6px 0 0;
+    text-align: left;
+}
+
+/* Footnotes: the pixel font has no italics, so slanted, dimmer and smaller */
+.ui-pack-rates .ui-pack-rates-note {
+    font-size: 12px;
+    font-style: italic;
+    color: var(--ui-text-dim);
 }
 
 /* A co-op guest's tab the host has the room off: it looks as it is, not pressable */
@@ -996,8 +1092,7 @@
 .ui-info-bubble {
     position: absolute;
     z-index: 5;
-    width: max-content;
-    max-width: min(340px, calc(100vw - 16px));
+    width: min(360px, calc(100vw - 16px));
     padding: 8px 10px;
     background: #2b251c;
     border: 1px solid #000;
@@ -1026,4 +1121,11 @@
     top: auto;
     bottom: -7px;
     transform: rotate(225deg);
+}
+
+/* The Foils tab with no foils yet: a line saying how they come */
+.ui-cards-empty {
+    grid-column: 1 / -1;
+    margin: 8px 0;
+    text-align: center;
 }

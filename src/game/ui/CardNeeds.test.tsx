@@ -7,7 +7,7 @@ import { CARDS } from "../content/cards";
 import { getCharacter } from "../content/characters";
 import { getCardRunNeeds, getCardRunShortfall } from "../core/cardRuns";
 import { SaveData, createSave } from "../core/save";
-import { CardNeedsWindow, cardNeedsLabel } from "./CardNeeds";
+import { CardNeedsWindow } from "./CardNeeds";
 import { CollectionLogScreen } from "./CollectionLogScreen";
 
 afterEach(cleanup);
@@ -28,17 +28,16 @@ function nomadSave(): SaveData {
     return { ...save, cards, cardsOnly: true };
 }
 
-test("the button, the window and the run's check agree on what's needed, naming its kind", () => {
+test("the window and the run's check agree on what's needed", () => {
     const save = nomadSave();
     const needs = getCardRunNeeds(save, "nomad");
     expect(needs.starter.every((s) => s.owned)).toBe(true);
     expect(needs.weapons.missing).toBe(0);
     expect(needs.passives.missing).toBe(1);
     expect(getCardRunShortfall(save, "nomad")).toEqual({ weapons: 0, passives: 1 });
-    expect(cardNeedsLabel(needs)).toBe("Need 1 more passive card");
-    // Nothing short: no button's words at all
+    // One more passive card: nothing short
     const full = { ...save, cards: { ...save.cards, [needs.passives.cards.at(-1)!.card.id]: 1 } };
-    expect(cardNeedsLabel(getCardRunNeeds(full, "nomad"))).toBeUndefined();
+    expect(getCardRunShortfall(full, "nomad")).toBeUndefined();
 });
 
 test("the window shows only what's still needed, with the Card shop on its pack", () => {

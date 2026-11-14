@@ -509,6 +509,9 @@ test("the favourite button is the shown adventurer's, and stays as focus moves t
     fireEvent.focus(ranger);
     expect(shown()).toBe("Ranger");
     const favourite = screen.getByRole("button", { name: "Make favourite" });
+    // A star: only outlined, and its tooltip says what it does
+    expect(favourite).toHaveAttribute("title", "Make favourite");
+    expect(favourite.querySelector("svg.ui-favourite-star")).not.toBeNull();
     // Going on to their button keeps them, and the button with them
     fireEvent.focusOut(ranger, { relatedTarget: favourite });
     expect(shown()).toBe("Ranger");
@@ -543,7 +546,11 @@ test("Cards only marks the adventurers it can't start as, still pickable", () =>
     expect(warrior).toBeEnabled();
     // The wizard starts with the fire spells, whose card's owned
     expect(screen.getByRole("button", { name: "Wizard" })).not.toHaveClass("ui-tile-cards-locked");
-    expect(screen.getByText("Locked for Cards only: needs the Scimitar card.")).toBeInTheDocument();
+    // What's missing is in the needs window, from the card button: no line in the details
+    expect(screen.queryByText(/Locked for Cards only/)).toBeNull();
+    expect(
+        screen.getByRole("button", { name: "What's needed for Cards only" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Enter Lumbridge/ })).toBeDisabled();
     cleanup();
     // Off, nothing's marked
@@ -580,6 +587,24 @@ test("the pet row picks Cards only's pet from pets with their card, when the run
     expect(screen.queryByRole("button", { name: /Little Nightmare/ })).toBeNull();
 });
 
+test("a map won in a Cards only run has a card beside its tick, and its details say so", () => {
+    expect.hasAssertions();
+    renderMaps("lumbridge", {
+        ...createSave(),
+        mapVictories: { lumbridge: 2, barrows: 1 },
+        cardsOnlyWins: ["lumbridge"],
+    });
+    const lumbridge = screen.getByRole("button", { name: /^Lumbridge.*beaten in Cards only/ });
+    expect(within(lumbridge).getByRole("img", { name: "beaten in Cards only" })).toHaveAttribute(
+        "title",
+        "Beaten in Cards only",
+    );
+    // Won normally only: the tick, no card
+    const barrows = screen.getByRole("button", { name: /^Barrows/ });
+    expect(within(barrows).queryByRole("img", { name: "beaten in Cards only" })).toBeNull();
+    expect(screen.getByText("Beaten in Cards only")).toBeInTheDocument();
+});
+
 test("the adventurer panel's tabs pick Cards only or the usual, saying which is on", () => {
     expect.hasAssertions();
     const actions = renderMaps("lumbridge");
@@ -602,6 +627,7 @@ test("the adventurer panel's tabs pick Cards only or the usual, saying which is 
         "passive:amulet_of_glory": 1,
     };
     renderMaps("lumbridge", { ...createSave(), cardsOnly: true, cards: full });
+    expect(screen.queryByRole("button", { name: "What's needed for Cards only" })).toBeNull();
     expect(screen.getByRole("button", { name: "Cards only" })).toHaveAttribute(
         "aria-pressed",
         "true",
@@ -614,12 +640,18 @@ test("the adventurer panel's tabs pick Cards only or the usual, saying which is 
     expect(screen.getByRole("button", { name: /Enter Lumbridge/ })).toBeDisabled();
 });
 
-test("Cards only's button says what's short and opens the window of what's needed", () => {
+test("an adventurer short of cards for Cards only has What's needed beside Make favourite", () => {
     expect.hasAssertions();
     renderMaps("lumbridge", { ...createSave(), cardsOnly: true, cards: { "weapon:scimitar": 1 } });
-    const button = screen.getByRole("button", {
-        name: "Need 2 more weapon cards and 3 more passive cards",
-    });
+    // Not on the tabs' row: in the details' head, with Make favourite
+    const tabs = screen.getByRole("group", { name: "Adventurers or Cards only" });
+    expect(tabs.parentElement!.querySelector(".ui-button")).toBeNull();
+    const button = screen.getByRole("button", { name: "What's needed for Cards only" });
+    expect(button).toHaveAttribute("title", "What's needed");
+    expect(button.closest(".ui-select-details-actions")).not.toBeNull();
+    expect(
+        button.closest(".ui-select-details-actions")!.querySelector(".ui-favourite"),
+    ).not.toBeNull();
     fireEvent.click(button);
     expect(screen.getByRole("dialog", { name: "Cards only: what you need" })).toBeInTheDocument();
     fireEvent.keyDown(window, { code: "Escape", key: "Escape" });

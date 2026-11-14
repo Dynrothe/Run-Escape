@@ -17,6 +17,7 @@ import {
     cardVersions,
     cardWeight,
     packCards,
+    packFoilChance,
     packRarityShares,
 } from "../content/cards";
 import { RARITY_ORDER, atLeast } from "../content/rarity";
@@ -27,6 +28,7 @@ import {
     countCardsOwned,
     getBestVersion,
     getCardCopies,
+    getCardFoils,
     getCardPacks,
     getOwnedVersions,
     isCardUnlocked,
@@ -318,16 +320,45 @@ describe("the starter cards", () => {
 });
 
 describe("versions owned", () => {
+    it("keeps a foil as a copy of its version, counted apart, and cleans foils on loading", () => {
+        const scimitar = card("weapon:scimitar");
+        const save = { ...createSave(), platinum: BASIC_PACK.price };
+        // The lowest roll every time: every card a foil
+        const cards = buyCardPack(save, BASIC_PACK, () => 0, [scimitar])!;
+        expect(cards.every((c) => c.foil)).toBe(true);
+        const copies = getCardCopies(save, scimitar.id);
+        expect(copies).toBe(PACK_SIZE);
+        expect(getCardFoils(save, scimitar)).toBe(PACK_SIZE);
+        // A crafted save can't hold more foils than copies, nor foils of no card
+        const loaded = migrateCards({
+            cards: { [scimitar.id]: 2 },
+            cardFoils: { [scimitar.id]: 9, "weapon:nothing": 1 },
+        });
+        expect(loaded.cardFoils).toEqual({ [scimitar.id]: 2 });
+        // Rarely, in a basic pack, and twice as often in the Champion's
+        expect(packFoilChance(BASIC_PACK)).toBeLessThan(0.05);
+        expect(packFoilChance(PACK_BY_ID.get("champion")!)).toBeCloseTo(
+            packFoilChance(BASIC_PACK) * 2,
+        );
+    });
+
     it("adds a pack's cards as versions, new only the first time each is seen", () => {
         const scimitar = card("weapon:scimitar");
         const pool = [scimitar];
         const save = { ...createSave(), cards: { "weapon:scimitar": 2 } };
-        // Its own version, then Very rare twice
+        // Its own version, then Very rare twice: each card a rarity, a pick and a foil roll (none)
         expect(scimitar.rarity).toBe("common");
         const own = 0;
+        const plain = 0.999;
         const cards = openCardPack(
             save,
-            sequence(own, 0, 0.999, 0, 0.999, 0, own, 0, 0.999),
+            sequence(
+                ...[own, 0, plain],
+                ...[0.999, 0, plain],
+                ...[0.999, 0, plain],
+                ...[own, 0, plain],
+                ...[0.999, 0, plain],
+            ),
             pool,
         )!;
         expect(cards.map((c) => [c.rarity, c.isNew])).toEqual([

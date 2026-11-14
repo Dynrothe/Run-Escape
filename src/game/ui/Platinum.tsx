@@ -6,7 +6,7 @@ import { ItemIcon } from "./ItemIcon";
 // token's own icon and the amount, its name said for screen readers
 export function Platinum({ amount }: { amount: number }): JSX.Element {
     return (
-        <span className="ui-coins" aria-label={tp("cards.platinum_amount", amount)}>
+        <span className="ui-coins" role="img" aria-label={tp("cards.platinum_amount", amount)}>
             <ItemIcon objId={PLATINUM_TOKEN_OBJ} size={22} />
             {fmtNum(amount)}
         </span>

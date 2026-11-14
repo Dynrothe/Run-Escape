@@ -1470,22 +1470,18 @@ involved.
   has unlocked, by the game's own rules, worked out from the save as it's opened: a weapon, passive
   or gear once its map task's done (`isAvailable` on `SaveData.unlockedItems`: the Keris partisan
   after the Kalphite Queen, the Sun one only with its jewel), an evolution once what it evolves from
-  is, a trophy once its map's open (`isMapUnlocked`). A pack with none can't be bought
-  (`cantBuyCardPack`'s `"locked"`), and the shop counts what's collected of the unlocked ones and of
-  all.
+  and the passive it takes are, a trophy once its map's open (`isMapUnlocked`). A pack with none
+  can't be bought (`cantBuyCardPack`'s `"locked"`). Each shop offer shows its description, its last
+  card's line where it has one (`lastCardRarities`) and what's collected of the unlocked cards and
+  of all, with no odds lines: those are in its Preview.
 - **Picking a card** (`packRoller`): by its weight, `CARD_ITEM_WEIGHTS` for its item's rarity times
   `CARD_TIER_FACTORS` for its tier (`cardTier`: gear by how far up its Armoury line it is,
   `getArmouryDepth`; weapons 3 for an evolution or a raid's or boss fight's, 2 for a boss kill's, 1
   for another map's, 0 from the start; passives 1 if a map brings them in; `CARD_TOP_ITEMS` always
   3), times a pack's `rarer` for Rare and Very rare. Then its version's rolled by the pack's odds,
   no commoner than the card's own rarity; in a pack with odds for three rarities or more, the last
-  card never rolls the commonest (`lastCardRarities`), which the shop says. All these knobs are in
-  `content/cards.ts`. A bought pack opens at once. `SaveData.cardPacks` holds only the free starter
-  pack (a basic one), and counts as `STARTER_PACKS` while unset, so every save gets it once. It
-  holds the starting adventurer's starter cards (`getStarterCards`: their starting weapon's, as
-  adventurers start with no passives or gear) and random cards to `PACK_SIZE`; a save that opened it
-  before then gets the missing ones once on loading (`giveStarterCards`,
-  `SaveData.cardStarterGiven`). Opening takes the client's `Math.random`: it isn't part of a run.
+  card never rolls the commonest (`lastCardRarities`), which the shop says. Then whether it's a foil
+  (see Foils). All these knobs are in `content/cards.ts`. A bought pack opens at once.
 - **Card collection only** (`core/cardRuns.ts`, `SaveData.cardsOnly`, the adventurer panel's Cards
   only tab): level ups offer only weapons and passives with a card, no rarer than the rarest version
   owned (`Upgrades.CardCaps`, `capQuality`); an evolution only with three cards, the weapon's, the
@@ -1498,7 +1494,8 @@ involved.
   same on every copy and from the same seed.
 - **In co-op** the whole room is Cards only or none of it is: the host's tab decides
   (`Loadout.cardsOnly`, `roomPlaysCardsOnly`), and a guest's tabs show it without changing it
-  (`GameClient.playsCardsOnlyHere`, `cardsSave`); never in the weekly Vault's room. Each player's
+  (`GameClient.playsCardsOnlyHere`, `cardsSave`); never in the weekly Vault's room (`isVaultRoom`),
+  whose loadouts carry no caps. Each player's
   own caps come in their loadout (`Loadout.cardCaps`), as their unlocked items do: a character for
   each card in `ALL_CARDS`' order (`encodeCardCaps`), which every copy shares as a room runs the
   host's build, read back by `decodeCardCaps`, for their own level ups and caskets. Each loadout is
@@ -1516,34 +1513,49 @@ involved.
   only if the player's caps (which carry pets' cards) have its card (`cleanLoadout`).
 - **The tab** (the adventurer panel's Adventurers and Cards only, `CardsOnlyTabs`): picked on Cards
   only, a run is Cards only or doesn't start (`isCardRunBlocked`): not without the adventurer's
-  starter cards (`getCardLock`, `isCardLocked`: their portrait is dimmed with a drawn padlock, still
-  pickable, and their details name the cards) or while the collection can't fill a level up
-  (`getCardRunShortfall`), and the tab's button says what's short. The Vault never plays it, nor
-  does a map whose level ups are blessings. Such a run counts as any other, and its results say it
-  was one.
-- **The screen** (`ui/CardsScreen.tsx`): its classes are `ui-cards-*` and `ui-tcg-*`, since
-  `ui-card` is the level up's. A found card shows big beside the album (in a window of its own on a
-  phone). A pack opens on a playmat that fills the screen (`PackWindow`): its cards in a deck, each
-  press dealing the top one face up into the row with a turn (none with `prefers-reduced-motion`);
-  the row is scaled to the mat's own room (`matLayout`, measured, as the UI can be drawn bigger than
-  the window), not below a size its words can be read at where the height allows, and overlaps the
-  cards where it's still too wide. A dealt card pressed shows big. Rare and Very rare versions have
-  a foil sheen, which passes a few times only on the big card and in a pack's window, and never with
-  `prefers-reduced-motion`.
+  starter cards (`getCardLock`, `isCardLocked`: their portrait is dimmed with a drawn padlock, its
+  label telling a screen reader it's locked for Cards only, and still pickable) or while the
+  collection can't fill a level up (`getCardRunShortfall`). Short either way, their details' head
+  has a small card button (the Cards tile's icon) beside the favourite's drawn star
+  (`FavouriteStar`), opening what's needed. The Vault and the Gauntlet never play it, nor does a map
+  whose level ups are blessings. Such a run counts as any other, and its results say it was one. A
+  map won in one is kept in `SaveData.cardsOnlyWins` (`recordRun`, from `RunSummary.cardsOnly`, each
+  co-op player's own): the map lists draw a little card beside its beaten tick (`CardsOnlyMark`),
+  and its details say "Beaten in Cards only".
+- **The screen** (`ui/CardsScreen.tsx`): its classes are `ui-cards-*` and `ui-tcg-*` (`ui-card` is
+  the level up's), with the preview's `ui-pack-preview*`, `ui-pack-rates*` and `ui-info*`. The album
+  has no side panel: a found card pressed opens big in a window of its own (`CardWindow`), with the
+  versions owned. A face-down card is a picture (`ui/cards/card-back-*.webp`, the large one where
+  it's shown big), kept to its shape. A pack opens on a playmat that fills the screen
+  (`PackWindow`): its cards in a deck, each press dealing the top one face up into the row with a
+  turn (none with `prefers-reduced-motion`); the row is scaled to the mat's own room (`matLayout`,
+  measured, as the UI can be drawn bigger than the window), not below a size its words can be read
+  at where the height allows, and overlaps the cards where it's still too wide. A dealt card pressed
+  shows big in the same window.
 - **A pack's preview** (`ui/PackPreview.tsx`, `core/cardOdds.ts`): the shop's Preview lists every
   card a pack can hold on tabs by rarity (and All, each with its count, the last one kept per pack
-  for the session), each card with its chance to be in one pack for this save, or Locked with the
-  map that unlocks it (`cardUnlockMap`). The info icon opens a small popover (`InfoPopover`: on a
-  press, or hover and focus with a mouse; shut by a press outside, the icon or Escape, which
-  `CardsScreen` handles first) with the rarity rates: each card's item rarity and version, packs
-  with a Very rare item, and how they're got. The figures are `PREVIEW_PACKS` packs rolled as a
-  bought one is (`simulatePackOdds`), a chunk at a time so a phone doesn't stall, on a generator
-  seeded by the pack and pool, and kept till the pool changes; a test holds them to
-  `exactPackOdds`.
-- **What Cards only needs** (`ui/CardNeeds.tsx`): the run screen's button and the window it opens
-  both go by `getCardRunNeeds`, as the run's check does (`getCardRunShortfall`), so they agree; the
-  window lists only what's still missing, with the Card shop on its pack
-  (`GameClient.openCardShop`).
+  for the session), each card with its chance to be in one pack for this save, or Locked with
+  "Unlock in" and the map that unlocks it (`cardUnlockMap`). The info icon opens a small popover
+  (`InfoPopover`: on a press, or hover and focus with a mouse; shut by a press outside, the icon or
+  Escape, which `CardsScreen` handles first) with two tables, Item chance (the rarity of each card's
+  item) and Quality chance (its version), then the share of packs with a Very rare item, each card's
+  foil chance and two footnotes: how the figures are got (locked cards don't count) and an example
+  from the pack's own figures (`versionChanceFor`). The figures are `PREVIEW_PACKS` packs rolled as
+  a bought one is (`simulatePackOdds`), a chunk at a time so a phone doesn't stall, on a generator
+  seeded by the pack and pool, and kept till the pool changes; a test holds them to `exactPackOdds`.
+- **Foils** (`CARD_FOIL_CHANCE`, a pack's own `PackDef.foil`): each card from a pack can roll a foil
+  after its card and version, on the same numbers. A foil's a copy of its version, so it counts for
+  Cards only as any copy does, and `SaveData.cardFoils` keeps how many of those copies are foils, by
+  the same keys (`getFoilCopies`, `getCardFoils`). They're only for show: a holographic shimmer over
+  the picture only (`ui-tcg-holo`), drifting where the card's big, on the mat or under a pointer,
+  with twinkling sparkles where it's big or turned over on the mat but never in the album's grid,
+  and neither moving with `prefers-reduced-motion`; "Foil" is written on it. The album has a Foils
+  tab and shows a card at its best foil when one's owned; a foil dealt from a pack flashes once and
+  chimes. The Collection log's Cards tab counts them.
+- **What Cards only needs** (`ui/CardNeeds.tsx`): the window the details' card button opens (and the
+  co-op lobby's What's needed, beside why a player can't ready) goes by `getCardRunNeeds`, as the
+  run's check does (`getCardRunShortfall`), so they agree; it lists only what's still missing, with
+  the Card shop on its pack (`GameClient.openCardShop`).
 - **The Collection log's Cards tab** (`getCardEntries` in `content/collectionLog.ts`): a set for
   each kind of card, then the raids' finds, each card at its rarest version owned, its slot ringed
   in that version's colour and the version said in words. Its entries count themselves: the log's

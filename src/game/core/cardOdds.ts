@@ -138,6 +138,23 @@ export function exactPackOdds(pack: PackDef, pool: readonly CardDef[]): PackOdds
     };
 }
 
+// The chance a card of this rarity from a pack comes in that version, over a pack's cards (its
+// last one rolls only lastCardRarities): for the preview's example of one card
+export function versionChanceFor(pack: PackDef, cardRarity: Rarity, version: Rarity): number {
+    let chance = 0;
+    for (let i = 0; i < PACK_SIZE; i++) {
+        const rolls = i === PACK_SIZE - 1 ? lastCardRarities(pack.odds) : RARITY_ORDER;
+        const rolled = rolls.filter((r) => pack.odds[r] > 0);
+        const sum = rolled.reduce((s, r) => s + pack.odds[r], 0);
+        for (const r of rolled) {
+            if (atLeast(r, cardRarity) === version) {
+                chance += pack.odds[r] / sum / PACK_SIZE;
+            }
+        }
+    }
+    return chance;
+}
+
 // A player's pack odds, simulated once for their pool and kept till it changes
 const cache = new Map<string, PackOdds>();
 

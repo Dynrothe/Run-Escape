@@ -193,3 +193,46 @@ describe("trophies first found in a Card collection only run", () => {
         expect(crafted.cardsOnlyFinds).toEqual(["jar_of_dreams"]);
     });
 });
+
+describe("maps won in a Card collection only run", () => {
+    const win = (mapId: string, cardsOnly?: boolean): RunSummary => ({
+        mapId,
+        victory: true,
+        seconds: 900,
+        level: 40,
+        kills: 5000,
+        coins: 0,
+        bossesKilled: [],
+        ...(cardsOnly && { cardsOnly }),
+    });
+
+    it("are recorded from a Cards only win, never a normal one or a loss", () => {
+        const save = createSave();
+        recordRun(save, win("lumbridge"));
+        expect(save.cardsOnlyWins).toBeUndefined();
+        recordRun(save, win("lumbridge", true));
+        recordRun(save, win("lumbridge", true));
+        recordRun(save, { ...win("barrows", true), victory: false });
+        expect(save.cardsOnlyWins).toEqual(["lumbridge"]);
+    });
+
+    it("are each co-op player's own: their own run's summary says whether it was Cards only", () => {
+        const host = createSave();
+        const guest = createSave();
+        recordRun(host, win("lumbridge", true));
+        recordRun(guest, win("lumbridge"));
+        expect(host.cardsOnlyWins).toEqual(["lumbridge"]);
+        expect(guest.cardsOnlyWins).toBeUndefined();
+    });
+
+    it("keep through an export and an import, only maps there are, each once", () => {
+        const save = createSave();
+        recordRun(save, win("lumbridge", true));
+        expect(importSave(exportSave(save, "1.0.0"), "1.0.0").cardsOnlyWins).toEqual(["lumbridge"]);
+        const crafted = migrateSave({
+            ...JSON.parse(JSON.stringify(save)),
+            cardsOnlyWins: ["lumbridge", "lumbridge", "no_such_map", 7],
+        });
+        expect(crafted.cardsOnlyWins).toEqual(["lumbridge"]);
+    });
+});

@@ -136,6 +136,8 @@ export type LogEntry = {
     items: LogItem[];
     // The count shown under the title, OSRS's kill count line
     tally?: { key: string; n: number };
+    // A second count under it (the Cards tab's foils)
+    tally2?: { key: string; n: number };
 };
 
 // A map's tab: a raid's under Raids (RAID_MAPS: the Tombs have no MapDef.raid), a seasonal
@@ -228,9 +230,9 @@ export function getLogEntries(save: SaveData): LogEntry[] {
     return LOG_TABS.flatMap((tab) => entries.filter((entry) => entry.tab === tab));
 }
 
-// The Cards tab (content/cards.ts): a set for each kind of card, then the raids' finds (the Raider's
-// pack's), each card at its rarest version owned. Its keys are the cards' own; the log's title
-// total leaves the tab out (getLogTotal), as its entries count themselves.
+// The Cards tab (content/cards.ts): a set for each kind of card, then the raids' finds (the
+// Raider's pack's), each card at its rarest version owned. Its keys are the cards' own; the log's
+// title total leaves the tab out (getLogTotal), as its entries count themselves.
 export function getCardEntries(save: SaveData): LogEntry[] {
     const item = (card: CardDef): LogItem => {
         const best = getBestVersion(save, card);
@@ -257,6 +259,11 @@ export function getCardEntries(save: SaveData): LogEntry[] {
         };
     };
     const tally = { key: "collection.cards.packs_opened", n: save.cardPacksOpened ?? 0 };
+    // The foil copies owned, every card's (SaveData.cardFoils)
+    const tally2 = {
+        key: "collection.cards.foils",
+        n: Object.values(save.cardFoils ?? {}).reduce((sum, n) => sum + n, 0),
+    };
     return [
         ...CARD_KINDS.map((kind) => ({
             id: `cards_${kind}`,
@@ -264,6 +271,7 @@ export function getCardEntries(save: SaveData): LogEntry[] {
             name: t(`cards.kind.${kind}`),
             items: CARDS.filter((card) => card.kind === kind).map(item),
             tally,
+            tally2,
         })),
         {
             id: "cards_raids",
@@ -271,6 +279,7 @@ export function getCardEntries(save: SaveData): LogEntry[] {
             name: t("collection.cards.raids"),
             items: packCards(PACK_BY_ID.get("raids")!).map(item),
             tally,
+            tally2,
         },
     ];
 }

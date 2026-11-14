@@ -13,22 +13,6 @@ import { useDialog } from "./useDialog";
 // missing. The adventurer's starter cards, if any are; then each kind short of a level up's, how
 // many more, and the cards that would count, each with the Card shop on the pack that holds them.
 
-// What the run screen's button says, from the same needs as the window: the kinds still short
-export function cardNeedsLabel(needs: ReturnType<typeof getCardRunNeeds>): string | undefined {
-    const parts = [
-        ...needs.starter
-            .filter((s) => !s.owned)
-            .map((s) => t("ui.cards_only.need_card", { name: s.card.name() })),
-        ...(needs.weapons.missing > 0
-            ? [tp("ui.cards_only.need_weapons", needs.weapons.missing)]
-            : []),
-        ...(needs.passives.missing > 0
-            ? [tp("ui.cards_only.need_passives", needs.passives.missing)]
-            : []),
-    ];
-    return parts.length > 0 ? t("ui.cards_only.need", { list: list(parts) }) : undefined;
-}
-
 type Props = {
     save: SaveData;
     characterId: string;
