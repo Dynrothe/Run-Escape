@@ -240,7 +240,7 @@ version and how to run it.
   teams, who fight each other too, and a Flag carrier who runs from you; Pest Control is the Void
   Knight's island and its pests, and its bosses are the four portals, which open together behind
   shields that drop one by one.
-- **The Battle for Varrock** (on the Fun tab, its own row: a map to explore): Varrock as it is in
+- **The Battle for Varrock** (on the Fun tab, its own row, Memories: a map to explore): Varrock as it is in
   OSRS, every house, shop, street, church and the palace where they stand, burnt to ruins. Walls
   charred, some fallen, some broken down (the Wilderness's ruined walls) and some still burning;
   roofs, doors and upstairs gone; breaches in the city wall, broken like Falador's crumbling
