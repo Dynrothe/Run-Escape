@@ -18,6 +18,18 @@ export const PAUSE_TAB_SPRITES = {
     settings: TITLE_TAB_SPRITES.settings,
 } as const;
 
+// The pause menu's settings, by section: the client's own Settings interface's icons (its sound
+// waves, monitor, keyboard's Shift key and joystick), the emote tab's dancer for a run's and the
+// clan chat's for co-op. Also kept in the slim cache by scripts/cache/slim-cache.ts.
+export const SETTINGS_SECTION_SPRITES = {
+    sound: 2244,
+    display: 1084,
+    run: 909,
+    coop: PAUSE_TAB_SPRITES.party,
+    keyboard: 1165,
+    controller: 1088,
+} as const;
+
 // The results' tabs: the skills tab's icon for the summary, the combat tab's for the fighting
 export const RESULT_TAB_SPRITES = {
     summary: TITLE_TAB_SPRITES.skills,

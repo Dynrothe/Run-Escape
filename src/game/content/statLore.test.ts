@@ -16,11 +16,11 @@ test("every stat says what it means, and where more of it comes from if anything
 
 test("how far past the base a stat is, in a multiple of it and a word", () => {
     expect(statAbout("might", 0).power).toContain("Right at the base");
-    expect(statAbout("might", 0.5).power).toBe("1.5× the base: properly above base.");
-    expect(statAbout("might", 2).power).toContain("absurdly strong");
-    expect(statAbout("might", -0.2).power).toContain("weaker than the base");
+    expect(statAbout("might", 0.5).power).toBe("1.5× the base.");
+    expect(statAbout("might", 2).power).toBe("3× the base.");
+    expect(statAbout("might", -0.2).power).toBe("0.8× the base.");
     // Hitpoints go by the hitpoints themselves, a chance or a count by what it is
-    expect(statAbout("maxHp", 0.24, 31 / 25).power).toBe("1.24× the base: a pinch of spice.");
+    expect(statAbout("maxHp", 0.24, 31 / 25).power).toBe("1.24× the base.");
     expect(statAbout("armor", 3).power).toBe("A fresh hero has none. You have 3.");
     expect(statAbout("healChance", 0.1).power).toBeUndefined();
 });
@@ -31,9 +31,7 @@ test("a weapon's stat says what it is, and how it's grown from its level 1 size"
     for (const key of Object.keys(WEAPON_STAT_MESSAGES).filter((k) => !sentences.test(k))) {
         expect(weaponStatAbout(key)?.what, key).toBeTruthy();
     }
-    expect(weaponStatAbout("weaponstat.damage", 10, 16)?.power).toBe(
-        "1.6× its level 1 size: properly above base.",
-    );
+    expect(weaponStatAbout("weaponstat.damage", 10, 16)?.power).toBe("1.6× its level 1 size.");
     expect(weaponStatAbout("weaponstat.damage", 10, 10)?.power).toBe("Still at its level 1 size.");
     expect(weaponStatAbout("weaponstat.nope")).toBeUndefined();
 });

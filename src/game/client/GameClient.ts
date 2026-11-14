@@ -60,6 +60,7 @@ import {
     BlessingsDef,
     CinematicDef,
     CombatStyle,
+    GearSlot,
     MapDef,
     Stats,
     emptyStats,
@@ -206,7 +207,13 @@ import {
     getUsedRevive,
 } from "./ItemViews";
 import { LightBudget, MAX_SHOWN_LIGHTS } from "./LightBudget";
-import { getLevellingForm, getStatRows, getWeaponForm } from "./LoadoutViews";
+import {
+    getEvolutionView,
+    getLevellingForm,
+    getRevivesView,
+    getStatRows,
+    getWeaponForm,
+} from "./LoadoutViews";
 import { Minimap } from "./Minimap";
 import { Overlay, ScreenPoint } from "./Overlay";
 import { getPlayerPose } from "./PlayerPose";
@@ -232,6 +239,8 @@ const MAX_TICKS_PER_FRAME = 10;
 // all in the next one, so one slow frame doesn't make the next slow too. Every
 // tick still runs: it's at most MAX_TICKS_PER_FRAME behind, as before.
 const SOLO_TICKS_PER_FRAME = 4;
+// A debug run's time skip: ticks stepped on top of the usual ones, each frame
+const DEBUG_SKIP_TICKS_PER_FRAME = 150;
 // A co-op guest that's fallen well behind the host catches up this fast
 const MAX_CATCH_UP_TICKS = 120;
 // A frame spends this long at most on catching up, so a slow phone stays
@@ -246,6 +255,31 @@ const HUD_INTERVAL_MS = 100;
 const BOSS_BAR_SWITCH = 2;
 // The damage meter's number holds this long, so it can be read
 const DPS_HOLD_TICKS = TICKS_PER_SECOND / 2;
+
+// Who says an event's toast in the pause menu's chat: what kind of thing it is (a teammate's own
+// are their name instead). Any other message is the game's.
+const EVENT_TOAST_SOURCES: Partial<Record<SimEvent["type"], string>> = {
+    casketDropped: "loot",
+    alch: "loot",
+    equip: "loot",
+    bossSpawned: "boss",
+    bossRose: "boss",
+    bossEnraged: "boss",
+    bossStage: "boss",
+    coinsStolen: "thief",
+    coinsReturned: "thief",
+    revive: "revive",
+    heroDown: "revive",
+    heroRevived: "revive",
+    extraRevive: "revive",
+    roundStarted: "endless",
+    worldTurned: "realm",
+    frozenSolid: "cold",
+    soulCaught: "souls",
+    powerUp: "powerup",
+    visitor: "visitor",
+    notice: "notice",
+};
 
 // The title screen is in the first map (Lumbridge castle's courtyard)
 const TITLE_MAP = MAPS[0];
@@ -426,28 +460,6 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
     });
 }
 
-// How far a weapon has got towards its evolution, for the HUD and pause menu
-function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
-    const evolution = weapon.def.evolution;
-    if (!evolution || !isAvailable(getWeapon(evolution.into), sim.unlockedItems)) {
-        return undefined;
-    }
-    const owned = new Set(sim.passives.map((p) => p.id));
-    const passive = getPassive(evolution.requiresPassive);
-    const into = getWeapon(evolution.into);
-    const top = into.levels[into.levels.length - 1];
-    return {
-        passive: passive.name,
-        passiveIconObjId: passive.iconObjId,
-        passiveIconSpriteId: passive.iconSpriteId,
-        into: top.name ?? into.name,
-        intoIconObjId: top.objId ?? into.iconObjId,
-        maxed: weapon.level >= weapon.def.levels.length,
-        hasPassive: owned.has(evolution.requiresPassive),
-        ready: canEvolve(weapon, owned, sim.unlockedItems),
-    };
-}
-
 // A raid whose bosses all pray against a weapon's style (the Theatre's, against ranged and
 // magic): what its card says it loses against them
 function getBossPenalty(sim: Sim, choice: UpgradeChoice): string | undefined {
@@ -576,11 +588,28 @@ const ENDED_EARLY: Partial<Record<GoneReason, string>> = {
     hostLeft: "The host left, so the run's over.",
 };
 
+// What the debug panel shows of a run
+export type DebugView = {
+    god: boolean;
+    skipping: boolean;
+    mapId: string;
+    level: number;
+    seconds: number;
+    state: string;
+    weapons: { index: number; name: string; level: number; maxLevel: number }[];
+    passives: { id: string; name: string; level: number; maxLevel: number }[];
+    gear: { slot: GearSlot; name: string }[];
+    inventory: { name: string; count: number }[];
+};
+
 export type GameClientOptions = {
     // Extra goblins at the start of a run, for performance testing
     stress: number;
     // Start a run with this character straight away (testing)
     autostart?: string;
+    // ?debug on the dev server: solo runs with the cheat panel (DebugPanel). They unlock every
+    // map and mode, and save and report nothing.
+    debug?: boolean;
     // ?raidtest on the dev server: solo runs with a raid's rooms two minutes apart and every
     // level up at its max (SimTesting); "short" for the rooms alone
     raidTest?: "max" | "short";
@@ -759,6 +788,9 @@ export class GameClient implements GameFrameHandler {
     private decisionKey = "";
 
     private accumulator = 0;
+    // Debug runs: god mode (kept from run to run) and the ticks of a time skip still to step
+    debugGod = true;
+    private debugSkipTicks = 0;
     private lastHudUpdate = 0;
     // Co-op: the living boss on the boss bar (getCoopBarBoss)
     private coopBarBoss: Enemy | undefined;
@@ -918,6 +950,8 @@ export class GameClient implements GameFrameHandler {
         readonly options: GameClientOptions,
     ) {
         this.save = store.getSnapshot().save;
+        // The pause menu's chat stamps each message with the run's clock
+        store.toastSeconds = () => (this.sim && !this.sim.runOver ? this.sim.seconds : undefined);
         setGauntletLooks(hasGauntletLooks(this.save));
         this.grid = titleGrid;
         this.grids.set(TITLE_MAP.id, titleGrid);
@@ -2122,7 +2156,8 @@ export class GameClient implements GameFrameHandler {
         if (vault) {
             mapId = vault.mapId;
         }
-        if (!isMapUnlocked(this.save, mapId)) {
+        const debug = this.options.debug === true;
+        if (!debug && !isMapUnlocked(this.save, mapId)) {
             return;
         }
         const map = getMap(mapId);
@@ -2132,11 +2167,12 @@ export class GameClient implements GameFrameHandler {
         // adventurer (Durial321 in Falador)
         const endless =
             plain &&
-            (map.fun !== undefined || (snapshot.endless && isEndlessUnlocked(this.save, mapId)));
+            (map.fun !== undefined ||
+                (snapshot.endless && (debug || isEndlessUnlocked(this.save, mapId))));
         const hard = gauntlet
             ? gauntlet.hard
-            : plain && snapshot.hard && isHardUnlocked(this.save, mapId);
-        const expert = plain && snapshot.expert && isExpertUnlocked(this.save, mapId);
+            : plain && snapshot.hard && (debug || isHardUnlocked(this.save, mapId));
+        const expert = plain && snapshot.expert && (debug || isExpertUnlocked(this.save, mapId));
         const characterId = vault?.characterId ?? getMapCharacter(map) ?? snapshot.characterId;
         const remixes = vault
             ? vault.remixes
@@ -2209,6 +2245,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
+        sim.devGod = debug && this.debugGod;
         this.enterRun(sim, [this.save.pet], [this.save.look], cinematic);
     }
 
@@ -2376,14 +2413,15 @@ export class GameClient implements GameFrameHandler {
         }
         this.paused = false;
         this.runRecorded = false;
-        this.reportRun = this.options.stress
-            ? undefined
-            : startRunAnalytics(
-                  sim,
-                  this.coopRun && { isHost: this.coopRun.isHost, relay: this.coop.relayKind },
-                  RUN_ANALYTICS_URL,
-                  () => this.display.runStats,
-              );
+        this.reportRun =
+            this.options.stress || this.options.debug
+                ? undefined
+                : startRunAnalytics(
+                      sim,
+                      this.coopRun && { isHost: this.coopRun.isHost, relay: this.coop.relayKind },
+                      RUN_ANALYTICS_URL,
+                      () => this.display.runStats,
+                  );
         this.tasksAnnounced.clear();
         this.accumulator = 0;
         this.shownDps = 0;
@@ -2793,6 +2831,87 @@ export class GameClient implements GameFrameHandler {
         void this.startRun(mapId, onward, undefined, vault, true);
     }
 
+    // ---- Debug runs (?debug) ----
+
+    get isDebug(): boolean {
+        return this.options.debug === true && !this.coopRun;
+    }
+
+    // What the debug panel shows of the run, or nothing outside one
+    getDebugView(): DebugView | undefined {
+        const sim = this.sim;
+        if (!this.isDebug || !sim) {
+            return undefined;
+        }
+        return {
+            god: sim.devGod,
+            skipping: this.debugSkipTicks > 0,
+            mapId: sim.map.id,
+            level: sim.level,
+            seconds: Math.floor(sim.seconds),
+            state: sim.state,
+            weapons: sim.weapons.map((w, index) => ({
+                index,
+                name: w.def.name,
+                level: w.level,
+                maxLevel: w.def.levels.length,
+            })),
+            passives: sim.passives.map((p) => ({
+                id: p.id,
+                name: getPassive(p.id).name,
+                level: p.level,
+                maxLevel: getPassive(p.id).maxLevel,
+            })),
+            gear: Object.entries(sim.gear).map(([slot, id]) => ({
+                slot: slot as GearSlot,
+                name: getItem(id).name,
+            })),
+            inventory: sim.inventory.flatMap((slot) =>
+                slot ? [{ name: getItem(slot.itemId).name, count: slot.count }] : [],
+            ),
+        };
+    }
+
+    // Runs a cheat on the sim, then shows what it did
+    debugDo(cheat: (sim: Sim) => void): void {
+        const sim = this.sim;
+        if (!this.isDebug || !sim || sim.runOver) {
+            return;
+        }
+        cheat(sim);
+        this.handleEvents(sim, sim.takeEvents());
+        this.syncOverlay();
+        this.updateHud(true);
+    }
+
+    setDebugGod(on: boolean): void {
+        this.debugGod = on;
+        if (this.sim && this.isDebug) {
+            this.sim.devGod = on;
+        }
+    }
+
+    // Skips ahead by stepping the sim, a few ticks a frame. It stops at a level up or casket.
+    debugSkip(seconds: number): void {
+        if (this.isDebug && this.sim?.state === "playing") {
+            this.debugSkipTicks += Math.round(seconds * TICKS_PER_SECOND);
+        }
+    }
+
+    // A fresh run, on this map and adventurer if given, with the modes the store has set
+    async debugRestart(mapId?: string, characterId?: string): Promise<void> {
+        if (!this.isDebug || !this.sim) {
+            return;
+        }
+        const map = mapId ?? this.sim.map.id;
+        if (characterId) {
+            this.store.set({ characterId });
+        }
+        this.debugSkipTicks = 0;
+        this.leaveRun(false);
+        await this.startRun(map);
+    }
+
     leaveRun(show = true): void {
         const wasCoop = this.coopRun !== undefined;
         if (wasCoop && show && this.coop.isHost) {
@@ -3131,9 +3250,10 @@ export class GameClient implements GameFrameHandler {
         const vaultKey = this.runVault;
         const vaultBest =
             vaultKey !== undefined && isBetterVault(result, this.save.vault?.[vaultKey]);
-        const quests = hasBadNumber(result)
-            ? []
-            : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
+        const quests =
+            hasBadNumber(result) || this.options.debug
+                ? []
+                : recordRun(this.save, { ...result, ...(vaultKey && { vault: vaultKey }) });
         // The last of an act's Awakened fights: its ending's told, once (SaveData.actEndings)
         const actEnding = result.victory ? takeActEnding(this.save) : undefined;
         this.persist();
@@ -3362,6 +3482,20 @@ export class GameClient implements GameFrameHandler {
                 // Stood still while the cinematic plays
                 const held = this.cinematic !== undefined;
                 sim.step(held ? 0 : move.x, held ? 0 : move.y);
+                this.handleEvents(sim, sim.takeEvents());
+            }
+            // A debug time skip carries on while the run does
+            for (
+                let skipped = 0;
+                this.debugSkipTicks > 0 && skipped < DEBUG_SKIP_TICKS_PER_FRAME;
+                skipped++
+            ) {
+                if (sim.state !== "playing" || sim.runOver) {
+                    this.debugSkipTicks = 0;
+                    break;
+                }
+                this.debugSkipTicks--;
+                sim.step(0, 0);
                 this.handleEvents(sim, sim.takeEvents());
             }
             if (sim.state !== "playing" && !wasOver) {
@@ -4313,9 +4447,13 @@ export class GameClient implements GameFrameHandler {
             }
             // Co-op: a teammate's own events, said with their name if at all
             if (event.hero !== undefined && event.hero !== sim.focus) {
+                this.store.toastSource = `player:${sim.heroes[event.hero].name}`;
                 this.teammateToast(sim, sim.heroes[event.hero].name, event);
+                this.store.toastSource = undefined;
                 continue;
             }
+            // Who says what the event toasts, for the pause menu's chat
+            this.store.toastSource = EVENT_TOAST_SOURCES[event.type];
             switch (event.type) {
                 case "casketDropped":
                     this.store.toast(
@@ -4485,6 +4623,7 @@ export class GameClient implements GameFrameHandler {
                     }
                     break;
             }
+            this.store.toastSource = undefined;
         }
     }
 
@@ -4871,9 +5010,12 @@ export class GameClient implements GameFrameHandler {
         if (force || sharedNumbers !== shownNumbers) {
             this.store.setNumbers(sharedNumbers);
         }
+        // What gives each stat, for the tooltips on the stats and on a weapon's damage
+        const statSources = sim.getStatSources();
         const hud: HudView = {
             mapId: sim.map.id,
             round: sim.endless ? sim.round : undefined,
+            revives: getRevivesView(sim),
             level: sim.level,
             maxWeapons: sim.maxWeapons,
             maxPassives: sim.maxPassives,
@@ -4904,6 +5046,8 @@ export class GameClient implements GameFrameHandler {
                             w.level,
                             w.bonus,
                             sim.upgradeQualities.weapons[w.def.id] ?? [],
+                            sim.weaponDamageFactors(w),
+                            statSources,
                         ),
                         ...[getLifestealStat(w.def)].filter((stat) => stat !== undefined),
                     ],
@@ -4949,7 +5093,7 @@ export class GameClient implements GameFrameHandler {
             }),
             blessings: sim.map.blessings && getBlessingViews(sim.map.blessings, sim.blessings),
             stats: formatStats(sim.stats),
-            statRows: getStatRows(sim.stats, sim.player.maxHp, sim.getStatSources()),
+            statRows: getStatRows(sim.stats, sim.player.maxHp, statSources),
             gear: getGearViews(sim),
             inventory: getInventoryViews(sim),
             rerolls: sim.rerollsLeft,

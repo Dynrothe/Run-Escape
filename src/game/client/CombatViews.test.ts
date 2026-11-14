@@ -103,3 +103,20 @@ describe("damage by type and kills by monster", () => {
         expect(hits.every((hit) => hit.enemyId === "goblin" && hit.amount > 0)).toBe(true);
     });
 });
+
+describe("the Combat tab's weapon tooltips", () => {
+    test("a weapon's row says what it is and where it stands; other sources have none", () => {
+        const sim = createSim();
+        for (let i = 0; i < 20 * TICKS_PER_SECOND && sim.state === "playing"; i++) {
+            sim.player.hp = sim.player.maxHp;
+            sim.step();
+        }
+        const view = getCombatView(sim);
+        const weapon = view.sources.find((row) => row.about);
+        expect(weapon?.about?.examine).toBeTruthy();
+        expect(weapon?.about?.form).toBeDefined();
+        expect(weapon?.about?.level).toBe(sim.weapons[0].level);
+        // The results' rows go without
+        expect(getPlayerResultViews(sim)[0].damage.every((row) => !row.about)).toBe(true);
+    });
+});

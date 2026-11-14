@@ -6319,3 +6319,23 @@ describe("the power-up rate", () => {
         expect(ratio).toBeLessThan((1 + rate) * 1.1);
     });
 });
+
+describe("damage blocked", () => {
+    test("counts what armour stopped of each hit, and nothing on a hit that went through", () => {
+        const sim = createSim();
+        sim.stats.armor = 3;
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](10, "goblin", false);
+        // 10 would have been 10; armour took 3 of it
+        expect(sim.getRunStats().damageBlocked).toBe(3);
+        expect(sim.getRunStats().damageTaken).toBe(7);
+        // Armour bigger than the hit still lets 1 through: it stopped the rest
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](2, "goblin", false);
+        expect(sim.getRunStats().damageBlocked).toBe(3 + 1);
+        // A hit that ignores armour has nothing stopped
+        sim.player.invulnerable = 0;
+        sim["damagePlayer"](5, "goblin", false, undefined, true);
+        expect(sim.getRunStats().damageBlocked).toBe(4);
+    });
+});

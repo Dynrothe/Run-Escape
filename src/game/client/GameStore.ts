@@ -111,7 +111,14 @@ export type ItemView = {
 // label: what this part is of ("Level 3", "Base"): a line with parts that have one is a list, a row
 // each, down the tooltip
 export type BreakdownPart = { text: string; color?: string; label?: string };
-export type BreakdownLine = { label?: string; parts: BreakdownPart[]; total?: string };
+// What gives a bonus, as a small icon after its line's name (the name is its tooltip)
+export type BreakdownIcon = { name: string; objId?: number; spriteId?: number };
+export type BreakdownLine = {
+    label?: string;
+    parts: BreakdownPart[];
+    total?: string;
+    icons?: BreakdownIcon[];
+};
 // about: what the number means, how it's worked out and how far past its base it is
 export type BreakdownView = {
     title: string;
@@ -223,6 +230,8 @@ export type EventView = {
 export type HudView = {
     // The run's map
     mapId: string;
+    // The hero's revives left and given
+    revives?: RevivesView;
     // An endless run's round
     round?: number;
     level: number;
@@ -375,6 +384,15 @@ export type DamageView = {
     damage: number;
     kills: number;
     perSecond?: number;
+    // A weapon's, for its tooltip on the pause menu's Combat tab (the results don't have it)
+    about?: {
+        examine: string;
+        form?: FormView;
+        evolved?: boolean;
+        level?: number;
+        maxLevel?: number;
+        evolution?: SlotView["evolution"];
+    };
 };
 
 // The run's damage by its kind (melee, poison, recoil...), most first, none that did nothing
@@ -385,11 +403,18 @@ export type KillView = { enemyId: string; kills: number; boss: boolean };
 
 // The pause menu's Combat tab, and the results' (PlayerResultView has the same): the hero's
 // damage by kind and by source, kills by enemy, and the totals
+// The hero's chances to be brought back: left is the ring's revives and, in co-op, what teammates
+// can still do (none left is the last stand); given is the teammates they've revived
+export type RevivesView = { left: number; given: number; coop: boolean };
+
 export type CombatView = {
     damageDealt: number;
     damageTaken: number;
+    // What armour and a pet's bubble stopped
+    damageBlocked: number;
     healed: number;
     highestHit: number;
+    revives: RevivesView;
     kinds: DamageKindView[];
     sources: DamageView[];
     kills: KillView[];
@@ -659,14 +684,18 @@ export type UiSnapshot = {
     // of its Awakened fights falls, or played again from its card
     actEnding?: string;
     // What the toasts said this run, newest first, for the pause menu: they're gone in seconds
-    toastLog: string[];
+    toastLog: ToastLogEntry[];
     debug: boolean;
     audio: AudioSettings;
     display: DisplaySettings;
 };
 
 // How many of the run's messages the pause menu keeps
-const TOAST_LOG_SIZE = 8;
+const TOAST_LOG_SIZE = 40;
+
+// A message the pause menu's chat keeps: when in the run (seconds on its clock; none outside a
+// run) and who said it (a teammate, or what kind of thing it is: a boss, a power-up, the game)
+export type ToastLogEntry = { text: string; seconds?: number; source?: string };
 
 // The UI's view of the game: an immutable snapshot replaced on every change,
 // read by React through useSyncExternalStore.
@@ -674,6 +703,10 @@ export class GameStore {
     private snapshot: UiSnapshot;
     private readonly listeners = new Set<() => void>();
     private nextToastId = 1;
+    // Who the toasts made now are from, and the run's clock for stamping them (set by the client
+    // while it handles the sim's events)
+    toastSource: string | undefined;
+    toastSeconds: (() => number | undefined) | undefined;
 
     constructor(save: SaveData) {
         this.snapshot = {
@@ -737,7 +770,7 @@ export class GameStore {
     }
 
     // Its id, to find it again or take it down early (a boss's instruction: GameClient)
-    toast(text: string, ms = 3500): number {
+    toast(text: string, ms = 3500, source: string | undefined = this.toastSource): number {
         const now = performance.now();
         // The same message twice at once (three Jads turning up together)
         // shows once
@@ -747,7 +780,13 @@ export class GameStore {
         const log = this.snapshot.toastLog;
         this.set({
             toasts: toasts.slice(-4),
-            toastLog: log[0] === text ? log : [text, ...log].slice(0, TOAST_LOG_SIZE),
+            toastLog:
+                log[0]?.text === text
+                    ? log
+                    : [{ text, seconds: this.toastSeconds?.(), source }, ...log].slice(
+                          0,
+                          TOAST_LOG_SIZE,
+                      ),
         });
         return id;
     }

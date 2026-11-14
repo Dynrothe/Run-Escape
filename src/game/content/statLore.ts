@@ -169,23 +169,6 @@ const BONUS_LORE: Lore = {
     calc: "Added on top of its damage. Some is carried over from what it evolved from.",
 };
 
-// How far past its base a number is, in words ("verdict" is what the size of it says)
-const VERDICTS: [number, string, string][] = [
-    [0, "lore.verdict.none", "no better than a fresh start"],
-    [0.25, "lore.verdict.small", "a pinch of spice"],
-    [0.75, "lore.verdict.good", "properly above base"],
-    [1.5, "lore.verdict.strong", "seriously strong"],
-    [Infinity, "lore.verdict.huge", "absurdly strong"],
-];
-
-function verdict(over: number): string {
-    if (over < 0) {
-        return tr("lore.verdict.weak", "weaker than the base (ouch)");
-    }
-    const [, key, english] = VERDICTS.find(([most]) => over <= most) ?? VERDICTS[0];
-    return tr(key, english);
-}
-
 function times(ratio: number): string {
     return String(Number(ratio.toFixed(2)));
 }
@@ -244,9 +227,8 @@ export function statAbout(key: StatKey, value?: number, hpRatio?: number): About
         about.power =
             Math.abs(ratio - 1) < 0.005
                 ? tr("lore.power.base", "Right at the base: nothing's adding to it yet.")
-                : tr("lore.power", "{ratio}× the base: {verdict}.", {
+                : tr("lore.power", "{ratio}× the base.", {
                       ratio: times(ratio),
-                      verdict: verdict(ratio - 1),
                   });
     } else if (!percent && value > 0) {
         about.power = tr("lore.power.flat", "A fresh hero has none. You have {value}.", {
@@ -270,9 +252,8 @@ export function weaponStatAbout(key: string, base?: number, now?: number): About
         about.power =
             Math.abs(now / base - 1) < 0.005
                 ? tr("lore.power.level_one", "Still at its level 1 size.")
-                : tr("lore.power.level", "{ratio}× its level 1 size: {verdict}.", {
+                : tr("lore.power.level", "{ratio}× its level 1 size.", {
                       ratio: times(now / base),
-                      verdict: verdict(now / base - 1),
                   });
     }
     return about;
@@ -315,8 +296,6 @@ export const LORE_MESSAGES: Record<string, string> = {
             ];
         }),
     ),
-    ...Object.fromEntries(VERDICTS.map(([, key, english]) => [key, english])),
-    "lore.verdict.weak": "weaker than the base (ouch)",
     "lore.calc.percent": CALC.percent,
     "lore.calc.flat": CALC.flat,
     "lore.bonus.what": BONUS_LORE.what,
@@ -328,9 +307,9 @@ export const LORE_MESSAGES: Record<string, string> = {
     "lore.from.gear": "worn gear",
     "lore.from.potions": "potions",
     "lore.from.shop": "the skill shop",
-    "lore.power": "{ratio}× the base: {verdict}.",
+    "lore.power": "{ratio}× the base.",
     "lore.power.base": "Right at the base: nothing's adding to it yet.",
     "lore.power.flat": "A fresh hero has none. You have {value}.",
-    "lore.power.level": "{ratio}× its level 1 size: {verdict}.",
+    "lore.power.level": "{ratio}× its level 1 size.",
     "lore.power.level_one": "Still at its level 1 size.",
 };

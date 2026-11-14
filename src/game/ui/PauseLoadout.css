@@ -29,22 +29,18 @@
     border-left: 1px solid var(--ui-divider);
 }
 
-/* What's on the right, each in a panel of its own, so it reads apart from the cards */
-.ui-loadout-column-side > section,
-.ui-loadout-stats-panel {
-    padding: 6px 8px 8px;
-    background: rgba(0, 0, 0, 0.18);
-    border: 1px solid rgba(107, 94, 74, 0.4);
-}
-
-/* A section's name at the left, how many slots of it are used at the right, over a rule */
+/* The rule for every section of the pause menu's pages (the Loadout's and the Combat tab's): its
+   name at the left and, at the right, how many of it there are, on one strip with a dark ground
+   and an orange tab. A section is the strip and what's under it, with no box of its own. */
 .ui-loadout-heading {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     margin: 0 0 6px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid var(--ui-divider);
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(107, 94, 74, 0.5);
+    border-left: 3px solid var(--ui-orange);
     font-family: "OSRS Bold", sans-serif;
     font-weight: normal;
     font-size: 17px;
@@ -854,6 +850,14 @@
     grid-area: ring;
 }
 
+.ui-loadout-gear-weapon {
+    grid-area: weapon;
+}
+
+.ui-loadout-gear-ammo {
+    grid-area: ammo;
+}
+
 .ui-loadout-gear-cell {
     display: flex;
     flex-direction: column;
@@ -943,11 +947,6 @@
     gap: 5px;
 }
 
-.ui-loadout-d3 .ui-loadout-column-side > section,
-.ui-loadout-d3 .ui-loadout-stats-panel {
-    padding: 4px 6px 5px;
-}
-
 .ui-loadout-d3 .ui-loadout-stat {
     padding: 0 6px;
 }
@@ -958,10 +957,10 @@
     width: min(100%, 205px);
 }
 
-/* On a wide pause panel the right column runs the whole height beside the cards: the worn equipment,
+/* On a pause panel wider than a phone's the right column runs the whole height beside the cards: the worn equipment,
    and under it what the hero has on them, which fills the room the equipment leaves. The stats use
    the room below the weapons and passives, in three columns to keep the page above the fold. */
-@media (min-width: 900px) {
+@media (min-width: 761px) {
     .ui-loadout {
         display: grid;
         grid-template-areas:
@@ -989,9 +988,15 @@
 
     .ui-loadout-stats-panel .ui-loadout-stats {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         align-items: start;
         gap: 12px;
+    }
+}
+
+@media (min-width: 900px) {
+    .ui-loadout-stats-panel .ui-loadout-stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
@@ -1100,4 +1105,63 @@
 
 .ui-loadout-need-met {
     box-shadow: inset 0 0 0 1px #00c800;
+}
+
+/* The equipment squares Run Escape never fills (weapon and ammo): grey and dim, as if barred */
+.ui-loadout-gear-cell-locked {
+    border-color: #1d1913;
+    background: rgba(28, 23, 16, 0.55);
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.7);
+    cursor: not-allowed;
+}
+
+.ui-loadout-gear-cell-locked .ui-icon {
+    opacity: 0.3;
+    filter: grayscale(1) brightness(0.7);
+}
+
+.ui-loadout-gear-cell-locked .ui-loadout-gear-cell-name {
+    color: #6d6450;
+}
+
+.ui-loadout-stone .ui-loadout-gear-cell-locked {
+    box-shadow: none;
+    filter: grayscale(1) brightness(0.55);
+}
+
+/* The hero's revives: a row each, the last stand in red with its skull */
+.ui-loadout-revives-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ui-loadout-revive-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.ui-loadout-revive-name {
+    color: var(--ui-orange);
+}
+
+.ui-loadout-revive-value {
+    color: var(--ui-white);
+}
+
+.ui-loadout-revives-last .ui-loadout-revive-name {
+    color: #ff4c4c;
+    font-family: "OSRS Bold", sans-serif;
+}
+
+.ui-loadout-revives-last {
+    padding: 3px 6px;
+    background: rgba(120, 20, 20, 0.28);
+    border: 1px solid #8a2323;
+}
+
+.ui-loadout-revive-row .ui-icon {
+    image-rendering: pixelated;
 }

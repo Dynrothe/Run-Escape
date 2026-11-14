@@ -31,7 +31,7 @@ import {
     RAID_BAND_SPRITES,
     RUN_INVOCATIONS,
 } from "../content/invocations";
-import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, getItem } from "../content/items";
+import { CASKETS, GEAR_SLOTS, GEAR_SLOT_BY_ID, LOCKED_GEAR_SLOTS, getItem } from "../content/items";
 import { getHeroNpcSeqs } from "../content/justiciarKit";
 import { ALL_MAPS, MAPS, getMapCinematics } from "../content/maps";
 import { SAME_NPC_LOOK } from "../content/npcLooks";
@@ -49,6 +49,7 @@ import {
     CLOUD_SAVE_SPRITES,
     PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
+    SETTINGS_SECTION_SPRITES,
     SOUND_ORB_SPRITES,
     STONE_SLOT_SPRITE,
     TITLE_TAB_SPRITES,
@@ -202,8 +203,8 @@ export const GAME_VIEW_SPRITES: readonly number[] = [
     HINT_ARROW_SPRITE,
 ];
 
-// Every interface sprite the game shows: the game view's, the title screen's tabs and cloud
-// save's button, the sound's orb, the checkboxes, empty equipment slots, the skills' refund
+// Every interface sprite the game shows: the game view's, the title screen's tabs, the pause
+// menu's settings sections and cloud save's button, the sound's orb, the checkboxes, empty equipment slots, the skills' refund
 // button, co-op's flags and the overhead prayers (every frame comes with the first) and the
 // passives with a sprite for an icon. The slim cache keeps these and no others, so a sprite the
 // game shows has to be in here.
@@ -213,12 +214,14 @@ export function getGameSpriteIds(): number[] {
         PRAYER_HEADICON_SPRITE,
         ...Object.values(TITLE_TAB_SPRITES),
         ...Object.values(PAUSE_TAB_SPRITES),
+        ...Object.values(SETTINGS_SECTION_SPRITES),
         ...DAMAGE_KIND_SPRITE_IDS,
         SLAYER_SPRITE_ID,
         ...Object.values(CLOUD_SAVE_SPRITES),
         ...Object.values(SOUND_ORB_SPRITES),
         ...Object.values(CHECKBOX_SPRITES),
         ...GEAR_SLOTS.map((slot) => slot.iconSpriteId),
+        ...LOCKED_GEAR_SLOTS.map((slot) => slot.iconSpriteId),
         REFUND_SPRITE,
         STONE_SLOT_SPRITE,
         FLAG_SPRITE,

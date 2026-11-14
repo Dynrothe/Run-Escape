@@ -30,6 +30,7 @@ import {
     InventorySlotView,
     QuestTrackView,
     SlotView,
+    ToastLogEntry,
     UiSnapshot,
 } from "../client/GameStore";
 import { formatTime } from "../client/GameView";
@@ -96,6 +97,7 @@ import {
     COLLECTION_LOG_OBJ,
     PAUSE_TAB_SPRITES,
     REFUND_SPRITE,
+    SETTINGS_SECTION_SPRITES,
     TITLE_TAB_SPRITES,
     WARDROBE_ICON_OBJ,
 } from "../content/titleIcons";
@@ -138,6 +140,7 @@ import { CollectionLogScreen } from "./CollectionLogScreen";
 import { CombatReport } from "./CombatBreakdown";
 import { messageOptions, useConfirm } from "./ConfirmDialog";
 import { CoopScreen, PartyFrames, ReviveNote, WaitingNote } from "./CoopScreen";
+import { DebugPanel } from "./DebugPanel";
 import { DescriptionButton, ItemDescription, ItemLines } from "./DescriptionButton";
 import { DirectorPanel } from "./DirectorPanel";
 import { EventModal } from "./EventModal";
@@ -156,6 +159,7 @@ import { LanguageNotice } from "./LanguageNotice";
 import { LanguageSetting } from "./LanguageSetting";
 import { NoticePanel } from "./NoticePanel";
 import { KeyHint, KeyboardControls, PadControls, PadIcon, usePadKind } from "./PadHint";
+import { PauseChat } from "./PauseChat";
 import { PauseLoadout, SlotIcon } from "./PauseLoadout";
 import { PauseQuests } from "./PauseQuests";
 import { QuestScreen } from "./QuestScreen";
@@ -176,6 +180,7 @@ import { releaseFocus, useMenuKeys } from "./menuKeys";
 import { Notice, loadNotice, markNoticeSeen, shouldShowNotice } from "./notice";
 import { ClassicResults } from "./results/ClassicResults";
 import { useDialog } from "./useDialog";
+import { VOLUME_KEY_STEPS, formatVolume, volumeFromDrag, volumeFromKey } from "./volume";
 
 type Props = {
     store: GameStore;
@@ -347,7 +352,9 @@ function SoundSettings({
         <>
             <Setting
                 name={t("settings.sound.name")}
-                text={isCoarsePointer ? undefined : t("settings.sound.hint")}
+                text={t(
+                    isCoarsePointer ? "settings.sound.desc.touch" : "settings.sound.desc.mouse",
+                )}
             >
                 <Toggle
                     on={!muted}
@@ -357,6 +364,9 @@ function SoundSettings({
             </Setting>
             <VolumeSetting
                 name={t("settings.volume.name")}
+                text={t(
+                    isCoarsePointer ? "settings.volume.desc.touch" : "settings.volume.desc.mouse",
+                )}
                 value={volume}
                 muted={muted}
                 onChange={(value) => client.setVolume(value)}
@@ -364,6 +374,7 @@ function SoundSettings({
             {music && (
                 <VolumeSetting
                     name={t("settings.music.name")}
+                    text={t("settings.music.desc")}
                     value={ui.audio.music}
                     muted={muted}
                     onChange={(value) => client.setMusicVolume(value)}
@@ -373,31 +384,106 @@ function SoundSettings({
     );
 }
 
+// A volume's slider. Arrows move it a percent and Page Up and Down ten; Shift makes a drag or an
+// arrow a tenth as much, for a level in between. The browser's own range input underneath keeps
+// it a control to the game's keys (they leave inputs alone) and to a controller's highlight.
 function VolumeSetting({
     name,
+    text,
     value,
     muted,
     onChange,
 }: {
     name: string;
+    text?: string;
     value: number;
     muted: boolean;
     onChange: (value: number) => void;
 }): JSX.Element {
+    // While Shift's held on a drag: the slider's position and the volume when it took over. Its
+    // position is NaN until the pointer's been somewhere on it, so the thumb doesn't jump.
+    const fine = useRef<{ position: number; value: number } | undefined>(undefined);
+    const dragging = useRef(false);
+    // Where the pointer last was along it, this drag
+    const at = useRef(NaN);
+    const latest = useRef(value);
+    latest.current = value;
+    const setShift = (held: boolean) => {
+        if (held !== (fine.current !== undefined)) {
+            fine.current = held ? { position: at.current, value: latest.current } : undefined;
+        }
+    };
+    const endDrag = () => {
+        dragging.current = false;
+        fine.current = undefined;
+        at.current = NaN;
+    };
+    // Shift pressed or let go with the pointer still
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Shift" && dragging.current) {
+                setShift(e.type === "keydown");
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        window.addEventListener("keyup", onKey);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("keyup", onKey);
+        };
+    }, []);
+    const percent = Math.round(value * 1000) / 10;
     return (
-        <Setting name={name}>
+        <Setting name={name} text={text}>
             <input
-                className={"ui-volume" + (muted ? " ui-volume-muted" : "")}
+                className={"ui-slider" + (muted ? " ui-slider-muted" : "")}
+                style={{ "--ui-slider-fill": `${percent}%` } as CSSProperties}
                 type="range"
                 min={0}
                 max={100}
-                value={Math.round(value * 100)}
-                onChange={(e) => onChange(parseInt(e.target.value) / 100)}
-                // Give the keys back to the game once it's set
-                onPointerUp={(e) => e.currentTarget.blur()}
+                step={0.1}
+                value={percent}
                 aria-label={name}
+                aria-valuetext={formatVolume(value)}
+                onPointerDown={(e) => {
+                    dragging.current = true;
+                    fine.current = undefined;
+                    at.current = NaN;
+                    setShift(e.shiftKey);
+                }}
+                onPointerMove={(e) => {
+                    if (dragging.current) {
+                        setShift(e.shiftKey);
+                    }
+                }}
+                onChange={(e) => {
+                    // Where the pointer is along it, not where the thumb's drawn
+                    const position = e.target.valueAsNumber;
+                    at.current = position;
+                    if (fine.current && Number.isNaN(fine.current.position)) {
+                        fine.current = { position, value: latest.current };
+                    }
+                    const next = volumeFromDrag(position, fine.current);
+                    if (next !== latest.current) {
+                        onChange(next);
+                    }
+                }}
+                onKeyDown={(e) => {
+                    const step = VOLUME_KEY_STEPS[e.key];
+                    if (step === undefined) {
+                        return;
+                    }
+                    e.preventDefault();
+                    onChange(volumeFromKey(value, step, e.shiftKey));
+                }}
+                // Give the keys back to the game once it's set
+                onPointerUp={(e) => {
+                    endDrag();
+                    e.currentTarget.blur();
+                }}
+                onPointerCancel={endDrag}
             />
-            <span className="ui-volume-value">{Math.round(value * 100)}%</span>
+            <span className="ui-volume-value">{formatVolume(value)}</span>
         </Setting>
     );
 }
@@ -439,16 +525,16 @@ function PuzzleHelperSetting({ ui, client }: ScreenProps): JSX.Element {
     const unlocked = ui.save.scabarasBeaten === true;
     return (
         <Setting
-            name="Puzzle helper"
-            text={
+            name={t("settings.puzzle_helper.name")}
+            text={t(
                 unlocked
-                    ? "In the Tombs of Amascut's Scabaras room, marks what to step on, as the ToA plugin does"
-                    : "In the Tombs of Amascut's Scabaras room, marks what to step on: at Entry for now, at any raid level once you've beaten the room"
-            }
+                    ? "settings.puzzle_helper.desc.unlocked"
+                    : "settings.puzzle_helper.desc.locked",
+            )}
         >
             <Toggle
                 on={ui.display.puzzleHelper}
-                label="Puzzle helper"
+                label={t("settings.puzzle_helper.name")}
                 onToggle={() => client.togglePuzzleHelper()}
             />
         </Setting>
@@ -2751,6 +2837,7 @@ function RunScreen({ ui, client }: ScreenProps): JSX.Element {
     return (
         <div className="ui-fill ui-run">
             <ChoiceCountdown client={client} />
+            {client.isDebug && <DebugPanel client={client} />}
             {ui.party.length > 0 && <PartyFrames party={ui.party} />}
             {ui.waitingOn.length > 0 && (ui.overlay === "none" || ui.overlay === "paused") && (
                 <WaitingNote names={ui.waitingOn} />
@@ -4396,7 +4483,7 @@ function PauseCombat({
 }: {
     client: GameClient;
     live: boolean;
-    log: string[];
+    log: ToastLogEntry[];
 }): JSX.Element {
     const [view, setView] = useState(() => client.getCombatView());
     useEffect(() => {
@@ -4418,14 +4505,12 @@ function PauseCombat({
                 totals={view}
             />
             {log.length > 0 && (
-                <>
-                    <h3 className="ui-pause-heading">{t("pause.heading.recent")}</h3>
-                    <ul className="ui-pause-recent">
-                        {log.map((text, i) => (
-                            <li key={i}>{text}</li>
-                        ))}
-                    </ul>
-                </>
+                <section className="ui-cr-recent">
+                    <h3 className="ui-loadout-heading">
+                        <span>{t("pause.heading.recent")}</span>
+                    </h3>
+                    <PauseChat log={log} />
+                </section>
             )}
         </>
     );
@@ -4458,41 +4543,92 @@ function PauseParty({
     );
 }
 
-// The settings in two columns while there's room, and a controller's buttons under them
+// A section of the pause menu's settings: its heading, with the client's own icon for it, over a
+// card for each setting
+function SettingsSection({
+    spriteId,
+    title,
+    children,
+}: {
+    spriteId: number;
+    title: string;
+    children: ReactNode;
+}): JSX.Element {
+    return (
+        <section className="ui-ps-section">
+            <h3 className="ui-ps-heading">
+                <ItemIcon objId={-1} spriteId={spriteId} size={22} />
+                <span>{title}</span>
+            </h3>
+            <div className="ui-ps-cards">{children}</div>
+        </section>
+    );
+}
+
+// The pause menu's settings, in the Loadout's and Quests' style: sections under a heading each,
+// a card for each setting, its edge green while it's on and red while off (as a quest's). Two
+// columns while there's room: the sound and the screen on the left, the run, co-op and the keys
+// (or a controller's buttons) on the right.
 function PauseSettings({ ui, client }: ScreenProps): JSX.Element {
     const padKind = usePadKind();
     return (
-        <>
-            <div className="ui-pause-settings">
-                <LanguageSetting />
-                <SoundSettings
-                    ui={ui}
-                    client={client}
-                    music={getMap(ui.mapId).music !== undefined}
-                />
-                <PickupTimerSetting ui={ui} client={client} />
-                <GearPanelSetting ui={ui} client={client} />
-                <PuzzleHelperSetting ui={ui} client={client} />
-                <AutoPauseSetting ui={ui} client={client} />
-                <AutoAlchSetting ui={ui} client={client} />
-                <AutoEquipSetting ui={ui} client={client} />
-                <MovePredictionSetting ui={ui} client={client} />
-                <FrameRateSetting ui={ui} client={client} />
+        <div className="ui-ps">
+            <div className="ui-ps-column">
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.sound}
+                    title={t("settings.section.sound")}
+                >
+                    <SoundSettings
+                        ui={ui}
+                        client={client}
+                        music={getMap(ui.mapId).music !== undefined}
+                    />
+                </SettingsSection>
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.display}
+                    title={t("settings.group.display")}
+                >
+                    <LanguageSetting />
+                    <GearPanelSetting ui={ui} client={client} />
+                    <PickupTimerSetting ui={ui} client={client} />
+                    <FrameRateSetting ui={ui} client={client} />
+                </SettingsSection>
             </div>
-            {padKind ? (
-                <>
-                    <h3 className="ui-pause-heading">{t("pause.heading.controller")}</h3>
-                    <PadControls />
-                </>
-            ) : (
-                !isCoarsePointer && (
-                    <>
-                        <h3 className="ui-pause-heading">{t("pause.heading.keyboard")}</h3>
-                        <KeyboardControls />
-                    </>
-                )
-            )}
-        </>
+            <div className="ui-ps-column">
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.run}
+                    title={t("settings.group.run")}
+                >
+                    <AutoPauseSetting ui={ui} client={client} />
+                    <AutoAlchSetting ui={ui} client={client} />
+                    <AutoEquipSetting ui={ui} client={client} />
+                    <PuzzleHelperSetting ui={ui} client={client} />
+                </SettingsSection>
+                <SettingsSection
+                    spriteId={SETTINGS_SECTION_SPRITES.coop}
+                    title={t("settings.group.coop")}
+                >
+                    <MovePredictionSetting ui={ui} client={client} />
+                </SettingsSection>
+                {padKind ? (
+                    <SettingsSection
+                        spriteId={SETTINGS_SECTION_SPRITES.controller}
+                        title={t("pause.heading.controller")}
+                    >
+                        <PadControls />
+                    </SettingsSection>
+                ) : (
+                    !isCoarsePointer && (
+                        <SettingsSection
+                            spriteId={SETTINGS_SECTION_SPRITES.keyboard}
+                            title={t("pause.heading.keyboard")}
+                        >
+                            <KeyboardControls />
+                        </SettingsSection>
+                    )
+                )}
+            </div>
+        </div>
     );
 }
 

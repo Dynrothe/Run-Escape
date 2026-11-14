@@ -12,11 +12,12 @@ import {
     PLAYER_BASE_HP,
     TICKS_PER_SECOND,
 } from "../core/Sim";
+import type { Sim } from "../core/Sim";
 import { getOverlevelDamage } from "../core/Upgrades";
 import type { StatSource } from "../core/entities";
 import { fmtNum, t, tl } from "../i18n";
 import { formatCompact } from "../ui/formatCompact";
-import type { BreakdownLine, BreakdownView, SlotStatView } from "./GameStore";
+import type { BreakdownIcon, BreakdownLine, BreakdownView, SlotStatView } from "./GameStore";
 
 // What the pause menu's tooltips show of where a number comes from: its starting size and what
 // each upgrade added to it, each number in the colour of the rarity it was taken at
@@ -36,6 +37,10 @@ export function getWeaponStatLines(
     level: number,
     bonus: number,
     qualities: readonly (Rarity | undefined)[],
+    // What multiplies its damage into a real hit (Sim.weaponDamageFactors), and what gives each of
+    // those (Sim.getStatSources), for the damage's tooltip
+    factors?: WeaponDamageFactors,
+    sources?: Partial<Record<StatKey, readonly StatSource[]>>,
 ): SlotStatView[] {
     const damage = t("weaponstat.damage");
     return weaponStatSteps(def, level).map((stat) => {
@@ -55,6 +60,14 @@ export function getWeaponStatLines(
         if (stat.label === damage && bonus > 0) {
             lines.push(getBonusLine(def, level, bonus, qualities));
         }
+        if (stat.label === damage && factors) {
+            lines.push(
+                ...getRealDamageLines(stat.now, factors, sources, {
+                    name: tl(def.name),
+                    objId: def.iconObjId,
+                }),
+            );
+        }
         return {
             label: stat.label,
             value: stat.value,
@@ -66,6 +79,111 @@ export function getWeaponStatLines(
             },
         };
     });
+}
+
+export type WeaponDamageFactors = ReturnType<Sim["weaponDamageFactors"]>;
+
+const STYLE_MIGHT = { melee: "meleeMight", ranged: "rangedMight", magic: "magicMight" } as const;
+
+// What the damage comes to once everything is on it: the weapon's damage at its level (and its
+// bonus, shown above) times each thing that multiplies it, one line each with only its total (what
+// gives it is on that stat's own tooltip), then what a hit really does (a hit rolls 85% to 115% of
+// it) and, if anything adds to it, what it does to a boss
+// Each line wears the icons of what gives it (a passive, a worn piece, a potion, the shop...): the
+// stat's sources, once each, from Sim.getStatSources
+export function getRealDamageLines(
+    base: number,
+    factors: WeaponDamageFactors,
+    sources: Partial<Record<StatKey, readonly StatSource[]>> = {},
+    // The weapon itself, which gives what a boss takes on top of it (WeaponDef.bossDamage)
+    weapon?: BreakdownIcon,
+): BreakdownLine[] {
+    const lines: BreakdownLine[] = [];
+    let real = base * (1 + factors.bonus);
+    const add = (label: string, scale: number, text: string, icons: BreakdownIcon[]) => {
+        real *= scale;
+        lines.push({ label, parts: [{ text }], ...(icons.length > 0 && { icons }) });
+    };
+    const key = STYLE_MIGHT[factors.style];
+    if (factors.styleMight) {
+        add(
+            capitalise(statLabel(key)),
+            1 + factors.styleMight,
+            formatStatValue(key, factors.styleMight),
+            iconsOf(sources[key]),
+        );
+    }
+    if (factors.sets !== 1) {
+        add(
+            t("pause.real.sets"),
+            factors.sets,
+            `+${percent(factors.sets - 1)}`,
+            uniqueIcons(
+                factors.setSources.map((set) => ({ name: tl(set.name), objId: set.iconObjId })),
+            ),
+        );
+    }
+    if (factors.might) {
+        add(
+            capitalise(statLabel("might")),
+            1 + factors.might,
+            formatStatValue("might", factors.might),
+            iconsOf(sources.might),
+        );
+    }
+    if (Math.abs(factors.balance - 1) > 0.004) {
+        add(
+            t("pause.real.balance"),
+            factors.balance,
+            `×${fmtNum(Number(factors.balance.toFixed(2)))}`,
+            [],
+        );
+    }
+    const range = (value: number) =>
+        t("pause.real.range", { low: Math.round(value * 0.85), high: Math.round(value * 1.15) });
+    lines.push({
+        label: t("pause.real.hit"),
+        parts: [{ text: range(real) }],
+        total: String(Math.round(real)),
+    });
+    const boss = (1 + factors.bossMight) * (1 + factors.bossBonus);
+    if (boss !== 1) {
+        const icons = uniqueIcons([
+            ...iconsOf(factors.bossMight ? sources.bossMight : undefined),
+            ...(factors.bossBonus && weapon ? [weapon] : []),
+        ]);
+        lines.push({
+            label: t("pause.real.boss"),
+            parts: [{ text: range(real * boss) }],
+            total: String(Math.round(real * boss)),
+            ...(icons.length > 0 && { icons }),
+        });
+    }
+    return lines;
+}
+
+// A bonus's sources as icons, once each (a passive with a pick for each level is one icon), the
+// ones that have one
+function iconsOf(sources: readonly StatSource[] | undefined): BreakdownIcon[] {
+    return uniqueIcons(
+        (sources ?? []).flatMap((source) =>
+            source.iconObjId !== undefined || source.iconSpriteId !== undefined
+                ? [
+                      {
+                          name:
+                              source.kind === "shop" ? t("pause.breakdown.shop") : tl(source.name),
+                          objId: source.iconObjId,
+                          spriteId: source.iconSpriteId,
+                      },
+                  ]
+                : [],
+        ),
+    );
+}
+
+function uniqueIcons(icons: BreakdownIcon[]): BreakdownIcon[] {
+    const seen = new Set<string>();
+    return icons.filter((icon) => !seen.has(icon.name) && !!seen.add(icon.name));
 }
 
 // A weapon's damage bonus as written ("+57%"). An endless run's compounds into billions, which

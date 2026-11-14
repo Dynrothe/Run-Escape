@@ -24,6 +24,14 @@
     --ui-quest-red-text: #ff3010;
     /* The buttons' green is too dark on the stone */
     --ui-green-text: #5fe05f;
+    /* Something's state on a card: the pause menu's quests (not started, under way, done) and the
+       settings' toggles (off, on). The text's are 4.5:1 on a card; the edges', on the card's side,
+       only decorate. */
+    --ui-state-red: #ff8585;
+    --ui-state-red-edge: #ff4040;
+    --ui-state-yellow: #ffd700;
+    --ui-state-green: #00ff00;
+    --ui-state-green-edge: #00c800;
     /* A whole outline, for text over the world, which can be any colour */
     --ui-outline:
         1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 1px 0 #000,
@@ -534,13 +542,14 @@
     user-select: all;
 }
 
+/* Off in the quests' red, on in their green */
 .ui-toggle {
     min-width: 52px;
-    color: var(--ui-red-text);
+    color: var(--ui-state-red);
 }
 
 .ui-toggle-on {
-    color: var(--ui-green);
+    color: var(--ui-state-green);
 }
 
 /* The frame rate's choices: the one picked lit up */
@@ -565,8 +574,82 @@
 }
 
 .ui-volume-value {
-    width: 36px;
+    width: 48px;
     text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A volume's slider: a sunk dark groove filled orange up to the level (--ui-slider-fill), and a
+   raised stone thumb, as the client's own sliders */
+.ui-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 150px;
+    height: 24px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.ui-slider::-webkit-slider-runnable-track {
+    height: 8px;
+    background: linear-gradient(
+        90deg,
+        var(--ui-orange) 0 var(--ui-slider-fill, 0%),
+        rgba(0, 0, 0, 0.55) var(--ui-slider-fill, 0%) 100%
+    );
+    border: 1px solid #000;
+    box-shadow: 0 1px 0 rgba(107, 94, 74, 0.6);
+}
+
+.ui-slider::-moz-range-track {
+    height: 8px;
+    background: linear-gradient(
+        90deg,
+        var(--ui-orange) 0 var(--ui-slider-fill, 0%),
+        rgba(0, 0, 0, 0.55) var(--ui-slider-fill, 0%) 100%
+    );
+    border: 1px solid #000;
+    box-shadow: 0 1px 0 rgba(107, 94, 74, 0.6);
+}
+
+.ui-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 20px;
+    margin-top: -7px;
+    background: #5c5246;
+    border: 1px solid #000;
+    box-shadow:
+        inset 1px 1px 0 #8a7c66,
+        inset -1px -1px 0 #2a241c;
+}
+
+.ui-slider::-moz-range-thumb {
+    width: 10px;
+    height: 20px;
+    box-sizing: border-box;
+    border-radius: 0;
+    background: #5c5246;
+    border: 1px solid #000;
+    box-shadow:
+        inset 1px 1px 0 #8a7c66,
+        inset -1px -1px 0 #2a241c;
+}
+
+.ui-slider:hover::-webkit-slider-thumb,
+.ui-slider:focus-visible::-webkit-slider-thumb {
+    background: #6f6352;
+}
+
+.ui-slider:hover::-moz-range-thumb,
+.ui-slider:focus-visible::-moz-range-thumb {
+    background: #6f6352;
+}
+
+.ui-slider-muted {
+    opacity: 0.5;
 }
 
 /* In the title screen's corner, out of the way */
@@ -3045,12 +3128,101 @@
     }
 }
 
-/* Settings two to a row while there's room for both */
-.ui-pause-settings {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
-    column-gap: 32px;
-    align-items: start;
+/* The pause menu's settings, in the Loadout's and Quests' style: two columns of sections while
+   there's room, one on a narrow window */
+.ui-ps {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.ui-ps-column {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+@media (max-width: 760px) {
+    .ui-ps {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .ui-ps-column {
+        width: 100%;
+    }
+}
+
+/* A section's heading, as the Loadout's, with the client's icon for it */
+.ui-ps-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(107, 94, 74, 0.5);
+    border-left: 3px solid var(--ui-orange);
+    font-family: "OSRS Bold", sans-serif;
+    font-weight: normal;
+    font-size: 17px;
+    color: var(--ui-orange);
+}
+
+.ui-ps-heading .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-ps-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+/* A setting's card, as a quest's: its edge red while it's off and green while it's on (a setting
+   that's neither keeps the card's own) */
+.ui-ps .ui-setting {
+    padding: 6px 10px 6px 9px;
+    background: var(--ui-card);
+    border: 1px solid #000;
+    border-left: 3px solid var(--ui-edge-light);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-ps .ui-setting:has(.ui-toggle) {
+    border-left-color: var(--ui-state-red-edge);
+}
+
+.ui-ps .ui-setting:has(.ui-toggle-on) {
+    border-left-color: var(--ui-state-green-edge);
+    background: linear-gradient(90deg, rgba(0, 120, 0, 0.14), rgba(0, 0, 0, 0)), var(--ui-card);
+}
+
+.ui-ps .ui-setting-name {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 16px;
+    color: var(--ui-white);
+}
+
+.ui-ps .ui-setting-text {
+    margin-top: 1px;
+    line-height: 1.15;
+}
+
+/* The keys (or a controller's buttons) in a card of their own */
+.ui-ps .ui-pad-controls {
+    padding: 6px 10px 6px 9px;
+    background: var(--ui-card);
+    border: 1px solid #000;
+    border-left: 3px solid var(--ui-edge-light);
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-ps .ui-pad-control + .ui-pad-control {
+    padding-top: 4px;
+    border-top: 1px solid var(--ui-divider);
 }
 
 /* A short list (the party) not stretched across the whole panel */

@@ -1,13 +1,15 @@
+import { weaponExamine } from "../content/examine";
 import { getPassive, passiveName } from "../content/passives";
 import { STAT_INFO, formatStatValue, statLabel } from "../content/stats";
 import { StatKey, Stats } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { getWeapon, weaponName } from "../content/weapons";
+import type { Sim } from "../core/Sim";
 import { canEvolve } from "../core/Upgrades";
 import type { StatSource, WeaponState } from "../core/entities";
 import { t, tl } from "../i18n";
 import { getStatBreakdown } from "./BreakdownViews";
-import type { FormView, StatRowView } from "./GameStore";
+import type { DamageView, FormView, RevivesView, SlotView, StatRowView } from "./GameStore";
 
 // The pause menu's Loadout lists a hero's stats in three groups. Each stat is in one, and the
 // first few of each are always shown (even at zero, so a player can see what they've none of);
@@ -45,6 +47,18 @@ const STAT_GROUPS: {
         sometimes: ["powerUpRate", "reroll", "banish", "weaponSlots", "passiveSlots"],
     },
 ];
+
+// The hero's revives: what's left (the ring's and, in co-op, what teammates can still do) and the
+// teammates they've revived. None left is the last stand.
+export function getRevivesView(sim: Sim): RevivesView {
+    const hero = sim.heroes[sim.focus];
+    const coop = sim.heroes.length > 1;
+    return {
+        left: Math.max(0, hero.revivesLeft) + (coop ? sim.revivesLeftFor(hero) : 0),
+        given: hero.revivesGiven,
+        coop,
+    };
+}
 
 function capitalise(text: string): string {
     return text.charAt(0).toUpperCase() + text.slice(1);
@@ -126,4 +140,61 @@ export function getLevellingForm(level: number, maxLevel: number, endless: boole
     return level >= maxLevel
         ? { kind: "best", text: t(endless ? "pause.form.best_endless" : "pause.form.best") }
         : { kind: "levelling", text: t("pause.form.levelling", { level, max: maxLevel }) };
+}
+
+// How far a weapon has got towards its evolution, for the HUD, the pause menu's Loadout and the
+// Combat tab's tooltips. Nothing when it has none, or the player doesn't know it yet.
+export function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
+    const evolution = weapon.def.evolution;
+    if (!evolution || !isAvailable(getWeapon(evolution.into), sim.unlockedItems)) {
+        return undefined;
+    }
+    const owned = new Set(sim.passives.map((p) => p.id));
+    const passive = getPassive(evolution.requiresPassive);
+    const into = getWeapon(evolution.into);
+    const top = into.levels[into.levels.length - 1];
+    return {
+        passive: passive.name,
+        passiveIconObjId: passive.iconObjId,
+        passiveIconSpriteId: passive.iconSpriteId,
+        into: top.name ?? into.name,
+        intoIconObjId: top.objId ?? into.iconObjId,
+        maxed: weapon.level >= weapon.def.levels.length,
+        hasPassive: owned.has(evolution.requiresPassive),
+        ready: canEvolve(weapon, owned, sim.unlockedItems),
+    };
+}
+
+// What the mouse over a weapon's row on the Combat tab says, as its square on the Loadout does: what
+// it is and how it fights, where it stands, and the recipe of what it evolves into (when the player
+// knows it). A weapon the hero no longer has (evolved away) says what it became.
+export function getWeaponAbout(sim: Sim, weaponId: string): DamageView["about"] {
+    const def = getWeapon(weaponId);
+    const owned = sim.weapons.find((w) => w.def.id === weaponId);
+    if (!owned) {
+        const became = sim.weapons.find((w) => w.def.id === def.evolution?.into);
+        return {
+            examine: weaponExamine(def),
+            ...(def.evolved && { evolved: true }),
+            ...(became && {
+                form: {
+                    kind: "best",
+                    text: t("pause.form.evolved_into", { into: tl(weaponName(became.def)) }),
+                },
+            }),
+        };
+    }
+    return {
+        examine: weaponExamine(def),
+        ...(def.evolved && { evolved: true }),
+        form: getWeaponForm(
+            owned,
+            new Set(sim.passives.map((p) => p.id)),
+            sim.unlockedItems,
+            sim.endless,
+        ),
+        level: owned.level,
+        maxLevel: def.levels.length,
+        evolution: getEvolutionView(sim, owned),
+    };
 }

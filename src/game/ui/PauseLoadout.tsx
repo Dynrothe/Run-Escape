@@ -4,15 +4,18 @@ import type {
     BreakdownLine,
     BreakdownView,
     BuffView,
+    DamageView,
     FormView,
     GearSlotView,
     HudView,
+    RevivesView,
     SlotStatView,
     SlotView,
     StatRowView,
 } from "../client/GameStore";
 import { DAMAGE_KIND_ICONS, DamageKind, damageKindName } from "../content/damageKinds";
-import { GEAR_SLOT_BY_ID } from "../content/items";
+import { GEAR_SLOT_BY_ID, LOCKED_GEAR_SLOTS } from "../content/items";
+import { SLAYER_SPRITE_ID } from "../content/questIcons";
 import { statIconFor } from "../content/statIcons";
 import { t, tl } from "../i18n";
 import { BreakdownTip } from "./BreakdownTip";
@@ -439,6 +442,31 @@ function EvolutionBadge({
     );
 }
 
+// What a weapon's evolution takes: itself at its last level, and the passive that evolves it
+function weaponIngredients(
+    evolution: NonNullable<SlotView["evolution"]>,
+    weapon: { iconObjId: number; name: string; level: number; maxLevel: number },
+): Ingredient[] {
+    return [
+        {
+            objId: weapon.iconObjId,
+            name: tl(weapon.name),
+            value: t("pause.level", {
+                level: Math.min(weapon.level, weapon.maxLevel),
+                max: weapon.maxLevel,
+            }),
+            met: evolution.maxed,
+        },
+        {
+            objId: evolution.passiveIconObjId,
+            spriteId: evolution.passiveIconSpriteId,
+            name: tl(evolution.passive),
+            value: t(evolution.hasPassive ? "pause.recipe.owned" : "pause.recipe.not_owned"),
+            met: evolution.hasPassive,
+        },
+    ];
+}
+
 // A weapon's evolution: itself at its last level, and the passive that evolves it
 function WeaponRecipe({ slot }: { slot: SlotView }): JSX.Element | null {
     const evolution = slot.evolution;
@@ -450,27 +478,50 @@ function WeaponRecipe({ slot }: { slot: SlotView }): JSX.Element | null {
             ready={evolution.ready}
             into={evolution.into}
             intoIconObjId={evolution.intoIconObjId}
-            ingredients={[
-                {
-                    objId: slot.iconObjId,
-                    name: tl(slot.name),
-                    value: t("pause.level", {
-                        level: Math.min(slot.level, slot.maxLevel),
-                        max: slot.maxLevel,
-                    }),
-                    met: evolution.maxed,
-                },
-                {
-                    objId: evolution.passiveIconObjId,
-                    spriteId: evolution.passiveIconSpriteId,
-                    name: tl(evolution.passive),
-                    value: t(
-                        evolution.hasPassive ? "pause.recipe.owned" : "pause.recipe.not_owned",
-                    ),
-                    met: evolution.hasPassive,
-                },
-            ]}
+            ingredients={weaponIngredients(evolution, slot)}
         />
+    );
+}
+
+// The tooltip on a weapon's row on the Combat tab: what its square on the Loadout says (what it is,
+// how it fights, where it stands) and, when the player knows what it evolves into, its recipe
+export function WeaponAboutTip({
+    name,
+    color,
+    iconObjId,
+    about,
+}: {
+    name: string;
+    color?: string;
+    iconObjId?: number;
+    about: NonNullable<DamageView["about"]>;
+}): JSX.Element {
+    const evolution = about.evolution;
+    return (
+        <div className="ui-weapon-about">
+            <ExamineTip
+                info={{
+                    name: tl(name),
+                    color: color ?? "var(--ui-orange)",
+                    examine: about.examine,
+                    form: about.form,
+                    evolved: about.evolved,
+                }}
+            />
+            {evolution && about.level !== undefined && about.maxLevel !== undefined && (
+                <RecipePanel
+                    into={evolution.into}
+                    intoIconObjId={evolution.intoIconObjId}
+                    ready={evolution.ready}
+                    ingredients={weaponIngredients(evolution, {
+                        iconObjId: iconObjId ?? -1,
+                        name,
+                        level: about.level,
+                        maxLevel: about.maxLevel,
+                    })}
+                />
+            )}
+        </div>
     );
 }
 
@@ -694,6 +745,55 @@ function GearGrid({ gear }: { gear: GearSlotView[] }): JSX.Element {
                     </span>
                 </BreakdownTip>
             ))}
+            {/* The two squares Run Escape never fills, drawn locked */}
+            {LOCKED_GEAR_SLOTS.map((slot) => (
+                <BreakdownTip
+                    key={slot.id}
+                    breakdown={{
+                        title: t(`pause.gear.${slot.id}`),
+                        lines: [{ parts: [{ text: t("pause.gear.locked") }] }],
+                        about: { what: t(`pause.gear.${slot.id}_hint`) },
+                    }}
+                    className={`ui-loadout-gear-anchor ui-loadout-gear-${slot.id}`}
+                >
+                    <span className="ui-loadout-gear-cell ui-loadout-gear-cell-locked">
+                        <ItemIcon spriteId={slot.iconSpriteId} size={32} />
+                        <span className="ui-loadout-gear-cell-name">
+                            {t(`pause.gear.${slot.id}`)}
+                        </span>
+                    </span>
+                </BreakdownTip>
+            ))}
+        </div>
+    );
+}
+
+// The hero's chances to come back: the revives they have left (the ring's and, in co-op, what
+// teammates can still do), in red with a skull once there are none (the last stand), and in co-op
+// the teammates they've revived
+function RevivesPanel({ revives }: { revives: RevivesView }): JSX.Element {
+    const last = revives.left <= 0;
+    return (
+        <div className={"ui-loadout-revives-body" + (last ? " ui-loadout-revives-last" : "")}>
+            <div className="ui-loadout-revive-row">
+                {last ? (
+                    <ItemIcon objId={-1} spriteId={SLAYER_SPRITE_ID} size={24} />
+                ) : (
+                    <ItemIcon objId={2570} size={24} />
+                )}
+                <span className="ui-loadout-revive-name">
+                    {last ? t("pause.revives.last_stand") : t("pause.revives.left")}
+                </span>
+                {!last && <span className="ui-loadout-revive-value">{revives.left}</span>}
+            </div>
+            {last && <div className="ui-subtle">{t("pause.revives.last_stand_hint")}</div>}
+            {revives.coop && (
+                <div className="ui-loadout-revive-row">
+                    <span className="ui-stat-spacer" style={{ width: 24, height: 1 }} aria-hidden />
+                    <span className="ui-loadout-revive-name">{t("pause.revives.given")}</span>
+                    <span className="ui-loadout-revive-value">{revives.given}</span>
+                </div>
+            )}
         </div>
     );
 }
@@ -822,6 +922,12 @@ export function PauseLoadout({
                     <Heading name={t("pause.heading.effects")} />
                     <EffectsList effects={effects} />
                 </section>
+                {hud.revives && (
+                    <section className="ui-loadout-revives">
+                        <Heading name={t("pause.heading.revives")} />
+                        <RevivesPanel revives={hud.revives} />
+                    </section>
+                )}
             </div>
         </div>
     );

@@ -1087,6 +1087,10 @@ export type StatSource = {
     quality?: Rarity;
     // A worn piece's own rarity, for its colour
     rarity?: Rarity;
+    // Its icon, for the tooltips that say what gives a bonus: an item's, or an interface sprite's
+    // (a prayer's)
+    iconObjId?: number;
+    iconSpriteId?: number;
 };
 
 export type PassiveState = {

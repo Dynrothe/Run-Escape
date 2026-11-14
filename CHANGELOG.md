@@ -19,6 +19,29 @@ the version in the corner).
 - The pause menu's Loadout lists your active effects under your worn equipment, and its Combat tab
   ends with the run's recent messages.
 - The pause menu opens on the tab you left it on, and each tab keeps how far you'd scrolled it.
+- The pause menu's Settings look like its other tabs: sections for Sound, Display, the run, Co-op
+  and the keys, each with the game's own settings icon, and a card for each setting, edged green
+  while it's on and red while it's off. Off and On are in the quests' red and green.
+- Settings explain themselves better, the language shows its flag, and holding Shift on the volume
+  (dragging it or with the arrow keys) sets it a tenth of a percent at a time.
+- The pause menu's sections all start with the same strip (name at the left, count at the right), on
+  the Loadout and on the Combat tab.
+- The Loadout's worn equipment shows the Weapon and Ammo squares, locked.
+- The Loadout and the Combat tab show your revives: how many you have left, the teammates you've
+  revived in co-op, and a red skull for the last stand once there are none.
+- The Combat tab has an icon on each total and a new one, the damage armour and a pet's bubble
+  blocked.
+- On the Combat tab the best weapons wear a gold, silver or bronze medal with lights over it (the
+  top two, only the best with four weapons, or three past four), and the worst has a cabbage-green
+  edge, falling lights and a plank in place of its number. The star and the plank each have a word
+  to say when you point at them, and each total at the top says what it counts. The totals stay
+  in one row, on a phone too.
+- The tooltip on a weapon's Damage in the Loadout now shows what a hit really does: its damage
+  and bonus, then each thing on top of it (its style's damage, set bonuses, your damage and, in
+  co-op or hard mode, the run's balance) as one line with its total and the icons of what gives it
+  (a passive, a worn piece, a potion, the shop), and the range of a hit, and against a boss if
+  anything adds to that.
+- The pause menu's recent messages are a chat: the run's clock, who said it and what they said.
 - The tooltip on a number in the Loadout (a weapon's stat, a passive, a worn piece, one of your
   stats) now also says what it means, how it's worked out, where more of it comes from and how far
   past its base you are.
@@ -26,6 +49,8 @@ the version in the corner).
   while it's missing and green once you have it.
 - The pause menu's Combat tab is a fight report: your totals as tiles, the damage mix as one bar by
   type, a ranking of what dealt it (the best one crowned) and a bestiary of what you've killed.
+- On the Combat tab the mouse over a weapon says what it is, how it fights and what it evolves into
+  (once you know how), as on the Loadout, and the last stand says it means no revives left.
 - The pause menu's Quests are cards like the Loadout's: each quest has an icon from the OSRS quest
   it's named for, a bar of how far it's got, and the Slayer skull on a kill quest (the creatures
   it's after are in its tooltip). The icon and the reward sit in the client's grey stone slots, as

@@ -110,6 +110,7 @@ go stale. Add anything that cost you time to work out.
 | The game on a phone's home screen (PWA)                | `docs/DEVELOPMENT.md`, Touch screens                                   |
 | React screens and the HUD                              | `src/game/ui/GameUi.tsx`                                               |
 | The pause menu's tabs, and the results' (`TabBar`)     | `ui/GameUi.tsx` (`PauseModal`), `ui/TabBar.tsx`                        |
+| The pause menu's settings: sections, cards, volume     | `GameUi.tsx` (`PauseSettings`), `ui/volume.ts`                         |
 | Results screens (the classic one)                      | `src/game/ui/results/`, `docs/DEVELOPMENT.md`                          |
 | Damage by type and kills by monster (Combat tabs)      | `content/damageKinds.ts`, `ui/CombatBreakdown.tsx`                     |
 | Hover and hold descriptions: HUD, bag, Armoury         | `src/game/ui/DescriptionButton.tsx`                                    |

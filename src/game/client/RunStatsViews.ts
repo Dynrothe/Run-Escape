@@ -16,6 +16,7 @@ import {
     KillView,
     PlayerResultView,
 } from "./GameStore";
+import { getRevivesView, getWeaponAbout } from "./LoadoutViews";
 
 // One colour for each place in the party, the same on every client (and in every chart)
 export const PLAYER_COLORS = ["#4fc3f7", "#ff8a65", "#aed581", "#ba68c8"];
@@ -58,14 +59,19 @@ export function getPlayerResultViews(sim: Sim): PlayerResultView[] {
 }
 
 // The stats screen's rows: what dealt the run's damage, most first, by the
-// names and icons the player knows them by (a weapon by its tier at the end)
-export function getDamageViews(sim: Sim, stats: RunStats): DamageView[] {
-    return stats.sources.map(({ source, damage, kills, seconds }) => ({
-        ...describeSource(sim, source),
-        damage,
-        kills,
-        ...(seconds !== undefined && seconds > 0 && { perSecond: damage / seconds }),
-    }));
+// names and icons the player knows them by (a weapon by its tier at the end). about: each weapon's
+// tooltip too, for the pause menu's Combat tab.
+export function getDamageViews(sim: Sim, stats: RunStats, about = false): DamageView[] {
+    return stats.sources.map(({ source, damage, kills, seconds }) => {
+        const [kind, id] = source.split(":");
+        return {
+            ...describeSource(sim, source),
+            damage,
+            kills,
+            ...(seconds !== undefined && seconds > 0 && { perSecond: damage / seconds }),
+            ...(about && kind === "weapon" && { about: getWeaponAbout(sim, id) }),
+        };
+    });
 }
 
 // The run's damage by its kind, most first, leaving out kinds that did nothing
@@ -93,10 +99,12 @@ export function getCombatView(sim: Sim): CombatView {
     return {
         damageDealt: stats.sources.reduce((total, source) => total + source.damage, 0),
         damageTaken: stats.damageTaken,
+        damageBlocked: stats.damageBlocked,
         healed: stats.healed,
         highestHit: stats.highestHit,
+        revives: getRevivesView(sim),
         kinds: getDamageKindViews(stats),
-        sources: getDamageViews(sim, stats),
+        sources: getDamageViews(sim, stats, true),
         kills: getKillViews(stats),
     };
 }

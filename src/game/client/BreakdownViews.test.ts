@@ -13,6 +13,7 @@ import {
     getLifestealStat,
     getOrbitObjIds,
     getPassiveBreakdown,
+    getRealDamageLines,
     getStatBreakdown,
     getWeaponStatLines,
 } from "./BreakdownViews";
@@ -245,4 +246,88 @@ test("a weapon's stat lines keep their English, so their icons show in any langu
     const damage = lines.find((line) => line.label === "Damage")!;
     expect(damage.english).toBe(`Damage ${damage.value}`);
     expect(lines.every((line) => line.english?.endsWith(line.value))).toBe(true);
+});
+
+test("a weapon's real damage: each thing on top of its damage as one line with its total, then the hit", () => {
+    const lines = getRealDamageLines(10, {
+        balance: 1,
+        bonus: 0.12,
+        style: "magic",
+        styleMight: 0.34,
+        sets: 1,
+        setSources: [],
+        might: 0.1,
+        bossMight: 0.2,
+        bossBonus: 0,
+    });
+    expect(lines.map((line) => [line.label, line.parts[0].text, line.total])).toEqual([
+        ["Magic damage", "+34%", undefined],
+        ["Damage", "+10%", undefined],
+        // 10 x 1.12 x 1.34 x 1.1, and a hit rolls 85% to 115% of it
+        ["Each hit", "14–19", "17"],
+        ["Against bosses", "17–23", "20"],
+    ]);
+});
+
+test("a weapon with nothing on top of its damage says only what a hit does", () => {
+    const lines = getRealDamageLines(10, {
+        balance: 1,
+        bonus: 0,
+        style: "melee",
+        styleMight: 0,
+        sets: 1,
+        setSources: [],
+        might: 0,
+        bossMight: 0,
+        bossBonus: 0,
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0].total).toBe("10");
+});
+
+test("the sim hands over what multiplies a weapon, and a hit is what the factors say", () => {
+    const sim = createSim();
+    sim.apply({ kind: "newWeapon", weaponId: WEAPON_ID, quality: "common" });
+    const weapon = sim.weapons.find((w) => w.def.id === WEAPON_ID)!;
+    sim.stats.might = 0.25;
+    const factors = sim.weaponDamageFactors(weapon);
+    expect(factors.might).toBe(0.25);
+    expect(factors.bonus).toBe(weapon.bonus);
+    expect(factors.sets).toBe(1);
+});
+
+test("each bonus on a weapon's damage wears the icons of what gives it, once each", () => {
+    const lines = getRealDamageLines(
+        10,
+        {
+            balance: 1,
+            bonus: 0,
+            style: "magic",
+            styleMight: 0.34,
+            sets: 1.1,
+            setSources: [{ name: "Ahrim's", iconObjId: 4708 }],
+            might: 0.1,
+            bossMight: 0.2,
+            bossBonus: 0.1,
+        },
+        {
+            magicMight: [
+                { kind: "passive", name: "Augury", value: 0.2, iconSpriteId: 99 },
+                { kind: "passive", name: "Augury", value: 0.14, iconSpriteId: 99 },
+                { kind: "buff", name: "Magic potion", value: 0.1, iconObjId: 3040 },
+                { kind: "adventurer", name: "Wizard", value: 0.05 },
+            ],
+            might: [{ kind: "shop", name: "Shop upgrades", value: 0.1, iconObjId: 995 }],
+            bossMight: [{ kind: "gear", name: "Slayer helmet", value: 0.2, iconObjId: 11864 }],
+        },
+        { name: "Fire Strike", objId: 1 },
+    );
+    const icons = (label: string) =>
+        lines.find((line) => line.label === label)?.icons?.map((icon) => icon.name);
+    // A passive with a pick for each level is one icon, and a source with no icon has none
+    expect(icons("Magic damage")).toEqual(["Augury", "Magic potion"]);
+    expect(icons("Set bonus")).toEqual(["Ahrim's"]);
+    expect(icons("Damage")).toEqual(["Shop upgrades"]);
+    expect(icons("Against bosses")).toEqual(["Slayer helmet", "Fire Strike"]);
+    expect(icons("Each hit")).toBeUndefined();
 });

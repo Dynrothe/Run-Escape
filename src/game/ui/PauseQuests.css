@@ -8,9 +8,9 @@
 }
 
 .ui-pq-card {
-    /* Text needs 4.5:1 against the brown card; keep the stronger red on the decorative edge. */
-    --tone: #ff8585;
-    --edge-tone: #ff4040;
+    /* The settings' toggles share these (GameUi.css) */
+    --tone: var(--ui-state-red);
+    --edge-tone: var(--ui-state-red-edge);
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) auto auto;
     align-items: center;
@@ -23,13 +23,13 @@
 }
 
 .ui-pq-started {
-    --tone: #ffd700;
-    --edge-tone: #ffd700;
+    --tone: var(--ui-state-yellow);
+    --edge-tone: var(--ui-state-yellow);
 }
 
 .ui-pq-done {
-    --tone: #00ff00;
-    --edge-tone: #00c800;
+    --tone: var(--ui-state-green);
+    --edge-tone: var(--ui-state-green-edge);
     background: linear-gradient(90deg, rgba(0, 120, 0, 0.18), rgba(0, 0, 0, 0)), var(--ui-card);
 }
 

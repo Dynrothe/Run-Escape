@@ -142,3 +142,25 @@
 .ui-breakdown-about-power {
     color: var(--ui-yellow);
 }
+
+/* The icons of what gives a bonus, after its line's name */
+.ui-breakdown-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    align-self: center;
+}
+
+.ui-breakdown-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 18px;
+    background: rgba(28, 23, 16, 0.9);
+    border: 1px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
+}
+
+.ui-breakdown-icon .ui-icon {
+    image-rendering: pixelated;
+}

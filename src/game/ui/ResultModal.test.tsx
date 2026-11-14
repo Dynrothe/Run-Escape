@@ -76,6 +76,7 @@ function createUi(solo = false, hard = false, expert = false): UiSnapshot {
                 damageByKind: {},
                 killsByEnemy: {},
                 damageTaken: 11,
+                damageBlocked: 0,
                 healed: 21,
                 highestHit: 31,
                 rerollsUsed: 1,

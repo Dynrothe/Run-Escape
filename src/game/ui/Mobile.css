@@ -389,7 +389,8 @@
         min-height: 36px;
     }
 
-    .ui-volume {
+    .ui-volume,
+    .ui-slider {
         height: 32px;
     }
 

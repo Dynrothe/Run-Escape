@@ -33,9 +33,16 @@ export const DAMAGE_KIND_ICONS: Record<DamageKind, StatIconRef | undefined> = {
     other: undefined,
 };
 
-export const DAMAGE_KIND_OBJ_IDS: number[] = Object.values(DAMAGE_KIND_ICONS).flatMap((icon) =>
-    icon?.objId !== undefined ? [icon.objId] : [],
-);
+// The plank on the Combat tab's worst weapon, the ranking's cabbage-patch joke (item icons the slim
+// cache keeps with the kinds')
+export const RANK_PLANK_OBJ = 960;
+
+export const DAMAGE_KIND_OBJ_IDS: number[] = [
+    ...Object.values(DAMAGE_KIND_ICONS).flatMap((icon) =>
+        icon?.objId !== undefined ? [icon.objId] : [],
+    ),
+    RANK_PLANK_OBJ,
+];
 
 export const DAMAGE_KIND_SPRITE_IDS: number[] = Object.values(DAMAGE_KIND_ICONS).flatMap((icon) =>
     icon?.spriteId !== undefined ? [icon.spriteId] : [],

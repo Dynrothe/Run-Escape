@@ -1,8 +1,22 @@
 import { ReactNode, useEffect, useId, useRef, useState } from "react";
 
-import type { BreakdownLine, BreakdownView } from "../client/GameStore";
+import type { BreakdownIcon, BreakdownLine, BreakdownView } from "../client/GameStore";
 import "./BreakdownTip.css";
 import { DescriptionTip } from "./DescriptionButton";
+import { ItemIcon } from "./ItemIcon";
+
+// What gives a bonus, a small icon each after the line's name (its own name is its title)
+function SourceIcons({ icons }: { icons: BreakdownIcon[] }): JSX.Element {
+    return (
+        <span className="ui-breakdown-icons">
+            {icons.map((icon) => (
+                <span key={icon.name} className="ui-breakdown-icon" title={icon.name}>
+                    <ItemIcon objId={icon.objId ?? -1} spriteId={icon.spriteId} size={16} />
+                </span>
+            ))}
+        </span>
+    );
+}
 
 // One line of a breakdown. A line with a single plain part is written across ("Chance 20% on each
 // hit"). One with several (an endless run has a pick for every level up, so hundreds), or whose
@@ -20,6 +34,7 @@ function BreakdownLineView({
         return (
             <div className="ui-breakdown-line">
                 {line.label && <span className="ui-breakdown-label">{line.label}</span>}
+                {line.icons && <SourceIcons icons={line.icons} />}
                 <span className="ui-breakdown-parts">
                     {line.parts.map((part, i) => (
                         <span key={i} style={part.color ? { color: part.color } : undefined}>

@@ -897,7 +897,15 @@ page's, not saved). The window is a dialog (`useDialog`, modal
 except in co-op, whose run goes on behind it), and Give up asks first (`useConfirm`). The Loadout
 lists the hero's active effects (`HudView`'s `buffs`) and, on a map with blessings, those in place
 of passives (`×level`); the Combat tab ends with the run's recent messages (`UiSnapshot.toastLog`);
-the settings page has the Gear panel setting and the keyboard's controls. A weapon's stat cells
+the settings page (`PauseSettings` in `GameUi.tsx`, styled as `.ui-ps`) is in sections, each under
+a `.ui-ps-heading` with the client's Settings icon for it (`SETTINGS_SECTION_SPRITES`, in
+`getGameSpriteIds` for the slim cache), and every setting is a card whose edge follows its toggle
+(`--ui-state-*`, the quests' red and green: use those for an on, off or under-way colour). A new
+setting goes in the section it belongs to; one with a toggle gets its edge by itself (`:has`). The
+title's Settings panel shares the same setting components without the cards. A volume's slider
+(`VolumeSetting`, its sums in `ui/volume.ts`) moves in whole percents and, with Shift held, a tenth
+of the pointer's way, to a tenth of a percent (GameAudio takes any level from 0 to 1). A language's
+flag is its `LANGS` entry's `country`, from co-op's `FLAG_FRAMES`. A weapon's stat cells
 keep their English (`SlotStatView.english`) so their icons show in any language. The panel has one fixed height for every tab
 (`.ui-pause`), and the open page scrolls inside it. The Quests tab (`ui/PauseQuests.tsx`) is a card
 a quest: its icon is an item from `content/questIcons.ts` (a new quest needs an entry, a test
@@ -921,6 +929,23 @@ number means, how it's worked out, where more comes from (read off `PASSIVES`, `
 `STAT_LORE` there (a test checks), and a new weapon stat label one in `WEAPON_LORE`; both land in
 `locales/en/gen.json` through the extractor, in English only. A weapon that can evolve shows the
 passive it still needs beside its square (`EvolutionBadge`).
+
+Every section of the pause menu's pages starts with the same strip, `.ui-loadout-heading` (a name and,
+at the right, a count): use it for any new section, and don't box the section. The Loadout draws
+the equipment screen's Weapon and Ammo squares locked (`LOCKED_GEAR_SLOTS`), and the hero's revives
+(`HudView.revives`, `getRevivesView`: the ring's and, in co-op, what teammates can still do, with
+the teammates they've revived; none left is the red last stand). The Combat tab's tiles carry what armour
+and Lil'viathan's bubble blocked (`Hero.damageBlocked`, only written, never read by play) and the
+revives (the last stand says it means no revives left); its weapon ranking gives the top two a medal (`rankMedalCount`: only the best with four, the top three past four) and the worst a
+plank in place of its number, the star and the plank with a joke each in their tooltip (`combat.rank.*`, one picked when the tab opens), and each tile a tooltip of what it counts (`combat.tip.*`) (`CombatReport`), and each weapon's row has the tooltip its Loadout square has, with its
+evolution's recipe when the player knows it (`DamageView.about`, from `getWeaponAbout` in
+`LoadoutViews.ts`, filled only for the pause menu: the results' rows go without). A weapon's Damage tooltip ends with its real hit (`getRealDamageLines`, from `Sim.weaponDamageFactors`,
+which reads the same factors `getEffectiveLevel` and `damageEnemy` multiply by: keep them together),
+and each line wears the icons of what gives it (`BreakdownLine.icons`, from `StatSource.iconObjId` and
+`iconSpriteId`, which `Sim.getStatSources` fills in: a source with no icon shows none).
+Recent messages are `PauseChat`: `GameStore.toast` keeps each with the
+run's clock and who said it (`toastSource`, set per sim event in `GameClient.handleEvents` from
+`EVENT_TOAST_SOURCES`, and `player:<name>` for a teammate's).
 
 Every number on the Loadout can have a tooltip that says how it got its size (`BreakdownTip`,
 `ui/BreakdownTip.tsx`, on the mouse over, a focus or a tap), made of a `BreakdownView` (`GameStore.ts`):

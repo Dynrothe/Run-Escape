@@ -7,7 +7,7 @@ import {
 } from "../content/TurkeyDay";
 import { getStepCoins, getStepDifficulty } from "../content/acts";
 import { ArmouryUpgrades, getUpgradeLine, getUpgradedGear } from "../content/armoury";
-import { WeaponDamageBalance } from "../content/balance";
+import { WEAPON_DAMAGE_BALANCE, WeaponDamageBalance } from "../content/balance";
 import { BLESSED_FAN_ANGLE, blessAbility, getBlessing } from "../content/blessings";
 import { getCharacter } from "../content/characters";
 import {
@@ -258,7 +258,7 @@ import {
 import type { CharacterTraitDef, ColdRuleDef } from "../content/types";
 import { isAvailable } from "../content/unlocks";
 import { RUN_LENGTH } from "../content/waves";
-import { getWeaponDamageMultiplier } from "../content/weaponBalance";
+import { getWeaponDamageMultiplier, weaponDamageProfileScale } from "../content/weaponBalance";
 import { WEAPONS, getProjectileObjId, getWeapon, getWeaponStyle } from "../content/weapons";
 import { ArenaFloor } from "./ArenaFloor";
 import { BulletPool, BulletTarget } from "./BulletPool";
@@ -1016,6 +1016,8 @@ export type RunStats = {
     damageByKind: Partial<Record<DamageKind, number>>;
     killsByEnemy: Record<string, number>;
     damageTaken: number;
+    // What armour and a pet's bubble stopped, for the pause menu's Combat tab
+    damageBlocked: number;
     healed: number;
     highestHit: number;
     rerollsUsed: number;
@@ -1149,6 +1151,8 @@ export type Hero = {
     killsByEnemy: Record<string, number>;
     casketsOpened: number;
     damageTaken: number;
+    // Damage armour and a pet's bubble stopped: only written, never read by play
+    damageBlocked: number;
     // The last few hits taken, oldest first (RECENT_HITS_KEPT)
     recentHitsTaken: RecentHit[];
     // Of that, what each of a boss's attacks did, by name: for tuning a fight
@@ -2627,6 +2631,7 @@ export class Sim {
             recentHitsTaken: [],
             casketsOpened: 0,
             damageTaken: 0,
+            damageBlocked: 0,
             damageByAttack: {},
             raidPoints: 0,
             raidDamageAtStart: 0,
@@ -3079,6 +3084,7 @@ export class Sim {
             damageByKind: { ...this.hero.damageByKind },
             killsByEnemy: { ...this.hero.killsByEnemy },
             damageTaken: this.damageTaken,
+            damageBlocked: this.hero.damageBlocked,
             healed: this.healed,
             highestHit: this.highestHit,
             rerollsUsed: Math.max(0, this.hero.rerollsAtStart - this.rerollsLeft),
@@ -3177,7 +3183,8 @@ export class Sim {
         };
         const character = getCharacter(this.characterId);
         add(character.bonus, { kind: "adventurer", name: character.name });
-        add(this.metaStats, { kind: "shop", name: "Shop upgrades" });
+        // The shop's upgrades have no icon of their own, so they wear the coins that pay for them
+        add(this.metaStats, { kind: "shop", name: "Shop upgrades", iconObjId: 995 });
         for (const passive of this.passives) {
             const def = getPassive(passive.id);
             const picks = this.upgradeQualities.passives[passive.id] ?? [];
@@ -3195,6 +3202,8 @@ export class Sim {
                         name: def.name,
                         value: entry.value,
                         quality: entry.quality,
+                        iconObjId: def.iconObjId,
+                        iconSpriteId: def.iconSpriteId,
                     });
                 }
             }
@@ -3205,19 +3214,22 @@ export class Sim {
                 kind: "gear",
                 name: item.name,
                 rarity: item.rarity,
+                iconObjId: item.objId,
             });
         }
         for (const set of getActiveSets(this.gear)) {
-            add(set.stats ?? {}, { kind: "set", name: set.name });
-        }
-        for (const buff of this.buffs) {
-            add(buff.stats, {
-                kind: "buff",
-                name: buff.look?.name ?? getItem(buff.itemId).name,
+            add(set.stats ?? {}, {
+                kind: "set",
+                name: set.name,
+                iconObjId: this.setPieceObjId(set.id),
             });
         }
+        for (const buff of this.buffs) {
+            const look = buff.look ?? getItem(buff.itemId);
+            add(buff.stats, { kind: "buff", name: look.name, iconObjId: look.objId });
+        }
         for (const debuff of this.debuffs) {
-            add(debuff.stats, { kind: "debuff", name: debuff.name });
+            add(debuff.stats, { kind: "debuff", name: debuff.name, iconObjId: debuff.iconObjId });
         }
         const levelMight = this.stats.levelMight;
         if (levelMight) {
@@ -3638,6 +3650,116 @@ export class Sim {
         this.player.poisonDamage = 0;
         this.debuffs = [];
         this.drowsyEndTick = 0;
+    }
+
+    // ---- Debug runs (GameClient's `?debug`) ----
+    // Cheats for trying things out. Solo only: a normal or co-op run never calls them.
+
+    debugAddWeapon(weaponId: string): void {
+        const def = getWeapon(weaponId);
+        const owned = this.weapons.findIndex((w) => w.def.id === weaponId);
+        if (owned !== -1) {
+            this.debugWeaponLevel(owned, 1);
+            return;
+        }
+        this.weapons.push({ def, level: 1, cooldown: TICKS_PER_SECOND, bonus: 0, uses: 0 });
+        this.weaponSince[weaponId] ??= this.tick;
+        this.appearanceVersion++;
+    }
+
+    debugRemoveWeapon(index: number): void {
+        if (this.weapons.splice(index, 1).length > 0) {
+            this.appearanceVersion++;
+        }
+    }
+
+    debugWeaponLevel(index: number, delta: number): void {
+        const weapon = this.weapons[index];
+        if (weapon) {
+            weapon.level = Math.max(1, Math.min(weapon.def.levels.length, weapon.level + delta));
+            this.appearanceVersion++;
+        }
+    }
+
+    debugAddPassive(passiveId: string): void {
+        const def = getPassive(passiveId);
+        const owned = this.passives.find((p) => p.id === passiveId);
+        if (!owned) {
+            this.passives.push({ id: passiveId, level: 1, value: getPassiveGain(def, "common") });
+        } else if (owned.level < def.maxLevel) {
+            owned.level++;
+            owned.value += getPassiveGain(def, "common");
+        }
+        this.updateStats();
+        this.appearanceVersion++;
+    }
+
+    debugRemovePassive(passiveId: string): void {
+        this.passives = this.passives.filter((p) => p.id !== passiveId);
+        this.updateStats();
+        this.appearanceVersion++;
+    }
+
+    // Wears a piece without alching the one it replaces
+    debugEquip(itemId: string): void {
+        const item = getGear(itemId);
+        this.gear[item.slot] = item.id;
+        this.gearUpgrades[item.slot] = 0;
+        this.updateStats();
+        this.appearanceVersion++;
+    }
+
+    debugUnequip(slot: GearSlot): void {
+        delete this.gear[slot];
+        delete this.gearUpgrades[slot];
+        this.updateStats();
+        this.appearanceVersion++;
+    }
+
+    debugGiveItem(itemId: string): void {
+        this.stash(itemId);
+    }
+
+    debugClearInventory(): void {
+        this.inventory.fill(null);
+    }
+
+    debugMaxEverything(): void {
+        this.maxEverything();
+    }
+
+    debugHeal(): void {
+        this.player.hp = this.player.maxHp;
+    }
+
+    debugGiveCoins(amount: number): void {
+        this.gainCoins(amount);
+    }
+
+    // Up gives the level ups' rewards to choose. Down gives nothing back: it only sets the
+    // level and its xp.
+    debugChangeLevel(delta: number): void {
+        if (this.state !== "playing" || this.runOver) {
+            return;
+        }
+        if (delta > 0) {
+            this.xp = Math.max(this.xp, this.xpForLevel(this.level + delta));
+            this.checkLevelUp();
+        } else if (delta < 0) {
+            this.level = Math.max(1, this.level + delta);
+            this.xp = this.xpForLevel(this.level);
+            this.updateStats();
+        }
+    }
+
+    // Every enemy on screen but the bosses
+    debugKillEnemies(): void {
+        const player = this.player;
+        for (const enemy of [...this.enemies]) {
+            if (!enemy.dead && !enemy.boss) {
+                this.damageEnemy(enemy, enemy.maxHp * 10, 0, player.x, player.y);
+            }
+        }
     }
 
     heal(amount: number): void {
@@ -5755,9 +5877,14 @@ export class Sim {
         if (this.stepBetween(amount)) {
             return 0;
         }
+        // What it would have done without armour, for what armour stopped
+        const unarmoured = Math.round(damage * opened);
+        this.hero.damageBlocked += Math.max(0, unarmoured - amount);
         // Lil'viathan's bubble takes an enemy's hit, up to its share of their hitpoints, and pops
         if (this.hero.petBubble && ENEMY_BY_ID.has(enemyId)) {
+            const hit = amount;
             amount = this.popBubble(amount);
+            this.hero.damageBlocked += Math.max(0, hit - Math.max(0, amount));
             if (amount <= 0) {
                 if (grace) {
                     player.invulnerable = Math.max(player.invulnerable, HIT_INVULNERABLE_TICKS);
@@ -20989,6 +21116,54 @@ export class Sim {
             return level;
         }
         return { ...level, damage: level.damage * damage, area: level.area * area };
+    }
+
+    // A worn piece of a set, for its icon
+    private setPieceObjId(setId: string): number | undefined {
+        return Object.values(this.gear)
+            .map((itemId) => getGear(itemId))
+            .find((item) => item.set === setId)?.objId;
+    }
+
+    // What multiplies a weapon's level damage into what one of its hits does, for the pause menu's
+    // tooltip on its Damage: the run's balance beyond the global tuning the stat already shows, its
+    // damage bonus, its style's bonus, the worn sets', the hero's damage bonus, and what a boss
+    // takes on top. Read only, in no hash: the same factors getEffectiveLevel and damageEnemy use.
+    weaponDamageFactors(weapon: WeaponState): {
+        balance: number;
+        bonus: number;
+        style: CombatStyle;
+        styleMight: number;
+        sets: number;
+        // The worn sets that give it, with a piece's icon each
+        setSources: { name: string; iconObjId?: number }[];
+        might: number;
+        bossMight: number;
+        bossBonus: number;
+    } {
+        const def = weapon.def;
+        const style = getWeaponStyle(def);
+        const global = weaponDamageProfileScale(WEAPON_DAMAGE_BALANCE.global, def);
+        const total = this.weaponDamageMultipliers[`weapon:${def.id}`] ?? 1;
+        return {
+            balance: global > 0 ? total / global : 1,
+            bonus: weapon.bonus,
+            style,
+            styleMight: this.styleMight(style),
+            sets: this.setBoosts(def).damage,
+            setSources: this.activeSets
+                .map((setId) => getSet(setId))
+                .filter(
+                    (set) =>
+                        set.weapons?.damage &&
+                        (set.weapons.kinds?.includes(def.kind) ||
+                            set.weapons.ids?.includes(def.id)),
+                )
+                .map((set) => ({ name: set.name, iconObjId: this.setPieceObjId(set.id) })),
+            might: this.stats.might,
+            bossMight: this.stats.bossMight,
+            bossBonus: def.bossDamage ?? 0,
+        };
     }
 
     // A weapon's own speed bonus, on top of the player's cooldown bonus: the worn sets'

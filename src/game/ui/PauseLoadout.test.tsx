@@ -174,12 +174,38 @@ test("the active effects sit in the equipment's column, under it, and the stats 
 test("worn equipment uses the canonical OSRS slot map", () => {
     const view = render(<PauseLoadout hud={{ ...hud([]), gear: emptyGear }} />);
     const equipment = view.container.querySelector(".ui-loadout-equipment")!;
-    expect(equipment.querySelectorAll(".ui-loadout-gear-anchor")).toHaveLength(9);
+    // The nine slots a run fills, and the weapon and ammo squares it never does, drawn locked
+    expect(equipment.querySelectorAll(".ui-loadout-gear-anchor")).toHaveLength(11);
+    expect(equipment.querySelectorAll(".ui-loadout-gear-cell-locked")).toHaveLength(2);
     for (const slot of emptyGear) {
         const anchor = equipment.querySelector(`.ui-loadout-gear-${slot.slot}`)!;
         expect(anchor.textContent).toContain(slot.name);
         expect(anchor.querySelector(".ui-icon")).not.toBeNull();
     }
+    for (const name of ["Weapon", "Ammo"]) {
+        const locked = equipment.querySelector(`.ui-loadout-gear-${name.toLowerCase()}`)!;
+        expect(locked.textContent).toContain(name);
+        expect(locked.querySelector(".ui-loadout-gear-cell-locked")).not.toBeNull();
+    }
+});
+
+test("the revives: how many are left, and a red last stand with a skull once there are none", () => {
+    const view = render(
+        <PauseLoadout hud={{ ...hud([]), revives: { left: 2, given: 3, coop: true } }} />,
+    );
+    const panel = view.container.querySelector(".ui-loadout-revives")!;
+    expect(panel.textContent).toContain("Revives left");
+    expect(panel.querySelector(".ui-loadout-revive-value")?.textContent).toBe("2");
+    expect(panel.textContent).toContain("Teammates revived");
+    expect(panel.querySelector(".ui-loadout-revives-last")).toBeNull();
+    cleanup();
+    const last = render(
+        <PauseLoadout hud={{ ...hud([]), revives: { left: 0, given: 0, coop: false } }} />,
+    );
+    expect(last.container.querySelector(".ui-loadout-revives-last")?.textContent).toContain(
+        "Last stand",
+    );
+    expect(last.container.textContent).not.toContain("Teammates revived");
 });
 
 const missing = {
@@ -568,7 +594,7 @@ test("a tooltip can say what the number means, how it's worked out and how stron
                         what: "How hard each hit lands.",
                         calc: "Grows with levels.",
                         from: "More from: passives (Piety).",
-                        power: "1.6× its level 1 size: properly above base.",
+                        power: "1.6× its level 1 size.",
                     },
                 },
             },
@@ -581,6 +607,34 @@ test("a tooltip can say what the number means, how it's worked out and how stron
         "How hard each hit lands.",
         "Grows with levels.",
         "More from: passives (Piety).",
-        "1.6× its level 1 size: properly above base.",
+        "1.6× its level 1 size.",
     ]);
+});
+
+test("a line of a tooltip can wear the icons of what gives it, each named by its title", () => {
+    const weapon = slot("scimitar", 3, 8, {
+        statLines: [
+            {
+                label: "Damage",
+                value: "13",
+                breakdown: {
+                    title: "Damage",
+                    lines: [
+                        {
+                            label: "Magic damage",
+                            parts: [{ text: "+34%" }],
+                            icons: [
+                                { name: "Augury", spriteId: 99 },
+                                { name: "Magic potion", objId: 3040 },
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
+    });
+    const view = render(<PauseLoadout hud={hud([weapon])} />);
+    mouse(view.container.querySelector(".ui-loadout-cell")!, "pointerover");
+    const icons = [...screen.getByRole("tooltip").querySelectorAll(".ui-breakdown-icon")];
+    expect(icons.map((icon) => icon.getAttribute("title"))).toEqual(["Augury", "Magic potion"]);
 });

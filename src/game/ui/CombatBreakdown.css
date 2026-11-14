@@ -223,9 +223,11 @@
 
 /* The pause menu's fight report: totals as tiles, the damage mix as one bar, a ranking of what
    dealt it, and the bestiary beside them */
+/* The tiles in one row, however many there are, each as wide as the others */
 .ui-cr-tiles {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 8px;
     margin-bottom: 14px;
 }
@@ -256,6 +258,53 @@
 
 .ui-cr-tile-healed {
     --tone: #58b84a;
+}
+
+.ui-cr-tile-blocked {
+    --tone: #4f94e8;
+}
+
+.ui-cr-tile-revives {
+    --tone: #e8c34f;
+}
+
+/* The last stand: no revive left, in red */
+.ui-cr-tile-alert {
+    --tone: #ff3b3b;
+    background: rgba(120, 20, 20, 0.35);
+}
+
+.ui-cr-tile-alert .ui-cr-tile-value,
+.ui-cr-tile-alert .ui-cr-tile-name {
+    color: #ff5a5a;
+}
+
+/* "No revives left", under the last stand's name */
+.ui-cr-tile-alert .ui-cr-tile-sub {
+    color: #ffb0a0;
+}
+
+/* The icon beside the number */
+.ui-cr-tile-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ui-cr-tile-icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 24px;
+}
+
+.ui-cr-tile-icon .ui-icon {
+    image-rendering: pixelated;
+}
+
+.ui-cr-tile-sub {
+    color: var(--ui-yellow);
+    font-size: 13px;
 }
 
 .ui-cr-tile-value {
@@ -353,7 +402,7 @@
    rate. The best is crowned: a gold star, a bigger icon and a gold edge. */
 .ui-cr-rank > li {
     display: grid;
-    grid-template-columns: 18px 32px minmax(0, 1fr) auto;
+    grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
     padding: 3px 6px;
@@ -363,19 +412,33 @@
     box-shadow: inset 0 0 0 1px rgba(107, 94, 74, 0.6);
 }
 
-.ui-cr-rank > li.ui-cr-rank-top {
-    box-shadow:
-        inset 0 0 0 1px #b8951c,
-        0 0 6px rgba(255, 215, 0, 0.25);
+/* The row's contents after its place, which a weapon's tooltip is on. Its place (the star, a
+   number, the plank) is apart, with a tooltip of its own. */
+.ui-cr-rank-row {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+/* A weapon's tooltip: its examine, then its recipe under a rule */
+.ui-weapon-about {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 320px;
+}
+
+.ui-weapon-about .ui-recipe {
+    padding-top: 6px;
+    border-top: 1px solid var(--ui-divider);
 }
 
 .ui-cr-rank-no {
+    display: grid;
+    place-items: center;
     color: #8a7f65;
     text-align: center;
-}
-
-.ui-cr-rank-top .ui-cr-rank-no {
-    color: #ffd700;
 }
 
 .ui-cr-rank-icon {
@@ -508,6 +571,235 @@
 
 @media (max-width: 520px) {
     .ui-cr-tiles {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-flow: row;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* A phone held sideways: the row's kept, its tiles smaller */
+@media (pointer: coarse) and (max-height: 520px) {
+    .ui-cr-tiles {
+        gap: 4px;
+        margin-bottom: 8px;
+    }
+
+    .ui-cr-tile {
+        padding: 3px 2px 2px;
+    }
+
+    .ui-cr-tile-main {
+        gap: 3px;
+    }
+
+    .ui-cr-tile-icon {
+        width: 20px;
+        height: 20px;
+    }
+
+    .ui-cr-tile-icon .ui-icon {
+        width: 20px;
+        height: 20px;
+    }
+
+    .ui-cr-tile-value {
+        font-size: 17px;
+    }
+
+    .ui-cr-tile-name,
+    .ui-cr-tile-sub {
+        font-size: 11px;
+        line-height: 1.1;
+    }
+}
+
+/* The ranking's medals: the best weapons (two, or three once there are more than four) have an edge
+   and lights rising from it as a maxed weapon's do: gold for the first, silver for the second,
+   bronze for the third. The worst has a cabbage-green edge, lights falling from it, and a plank in
+   its corner. Rows are positioned for the lights, which are clipped to them. */
+.ui-cr-rank > li {
+    position: relative;
+    overflow: hidden;
+}
+
+.ui-cr-rank > li > :not(.ui-sparks) {
+    position: relative;
+    z-index: 1;
+}
+
+.ui-cr-rank-gold {
+    --spark: #ffe9a8;
+    --spark-glow: #ff9a1f;
+    --edge: #f5a030;
+}
+
+.ui-cr-rank-silver {
+    --spark: #f2f2f8;
+    --spark-glow: #9aa3b5;
+    --edge: #b9c0cc;
+}
+
+.ui-cr-rank-bronze {
+    --spark: #f0b27a;
+    --spark-glow: #b86a2a;
+    --edge: #cd7f32;
+}
+
+.ui-cr-rank-worst {
+    --spark: #b6f08a;
+    --spark-glow: #3f8f2f;
+    --edge: #4a9d3a;
+}
+
+.ui-cr-rank > li.ui-cr-rank-medal,
+.ui-cr-rank > li.ui-cr-rank-worst {
+    box-shadow:
+        inset 0 0 0 1px var(--edge),
+        0 0 5px color-mix(in srgb, var(--spark-glow) 45%, transparent);
+}
+
+.ui-cr-rank-gold .ui-cr-rank-no {
+    color: #ffd700;
+}
+
+.ui-cr-rank-silver .ui-cr-rank-no {
+    color: #d5dae4;
+}
+
+.ui-cr-rank-bronze .ui-cr-rank-no {
+    color: #e0955a;
+}
+
+.ui-cr-rank-worst .ui-cr-rank-bar > span {
+    background: linear-gradient(90deg, #2c6a22, #6cc04a);
+}
+
+/* The worst one's place: a plank, tilted */
+.ui-cr-rank-plank {
+    line-height: 0;
+    transform: rotate(-12deg);
+}
+
+.ui-cr-rank-plank .ui-icon {
+    image-rendering: pixelated;
+}
+
+/* The lights: nine specks that rise and fade, or for the worst one fall */
+.ui-sparks {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    background: radial-gradient(
+        circle at 50% 60%,
+        color-mix(in srgb, var(--spark-glow) 20%, transparent),
+        transparent 70%
+    );
+}
+
+.ui-sparks > i {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: var(--spark);
+    box-shadow:
+        0 0 3px 1px color-mix(in srgb, var(--spark-glow) 90%, transparent),
+        0 0 7px 2px color-mix(in srgb, var(--spark-glow) 45%, transparent);
+    opacity: 0;
+    animation: ui-spark-rise 2.6s ease-in-out infinite;
+}
+
+.ui-cr-rank-worst .ui-sparks > i {
+    animation-name: ui-spark-fall;
+}
+
+.ui-sparks > i:nth-child(1) {
+    left: 6%;
+    top: 60%;
+    animation-delay: 0s;
+}
+
+.ui-sparks > i:nth-child(2) {
+    left: 18%;
+    top: 30%;
+    animation-delay: 0.9s;
+}
+
+.ui-sparks > i:nth-child(3) {
+    left: 31%;
+    top: 70%;
+    animation-delay: 1.7s;
+}
+
+.ui-sparks > i:nth-child(4) {
+    left: 44%;
+    top: 25%;
+    animation-delay: 0.4s;
+}
+
+.ui-sparks > i:nth-child(5) {
+    left: 56%;
+    top: 62%;
+    animation-delay: 1.3s;
+}
+
+.ui-sparks > i:nth-child(6) {
+    left: 68%;
+    top: 35%;
+    animation-delay: 2.1s;
+}
+
+.ui-sparks > i:nth-child(7) {
+    left: 79%;
+    top: 68%;
+    animation-delay: 1.5s;
+}
+
+.ui-sparks > i:nth-child(8) {
+    left: 88%;
+    top: 28%;
+    animation-delay: 2.3s;
+}
+
+.ui-sparks > i:nth-child(9) {
+    left: 95%;
+    top: 58%;
+    animation-delay: 0.6s;
+}
+
+@keyframes ui-spark-rise {
+    0% {
+        opacity: 0;
+        transform: translateY(5px) scale(0.5);
+    }
+    35% {
+        opacity: 1;
+        transform: translateY(-2px) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-14px) scale(0.4);
+    }
+}
+
+@keyframes ui-spark-fall {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.5);
+    }
+    35% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(14px) scale(0.4);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-sparks > i {
+        animation: none;
+        opacity: 0.8;
     }
 }
