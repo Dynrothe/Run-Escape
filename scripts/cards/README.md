@@ -15,9 +15,9 @@ bun run cards --help
 
 The default output directory is `build/cards/`. Each invocation writes one front per card and a shared `back.png`. A front's filename includes the cache ID and any foil or New flags, for example `22481-foil-new.png`. Generating the same variant in that directory replaces it. Use `--out` for separate sets and `--back FILE` to supply another finished PNG back of the same dimensions.
 
-The generator reads the inventory model, pose and lighting from the cache. Weapon, passive, gear, utility and trophy definitions supply the game text. Some models serve multiple game entries. In that case the command prints the matching keys so you can select one. Other drawable cache items use their cache name and examine text when available. Use `--title`, `--type`, `--rarity`, `--description` and `--set-name` to set the printed copy. Long text wraps and shrinks inside its field. If it still cannot fit legibly the generator reports the field text.
+The generator reads the inventory model, pose and lighting from the cache. The game's own cards (`src/game/content/cards.ts`) supply the title, type, rarity and text, as the album shows them, and the game's other items (utility items, and gear outside the reward caskets) supply theirs. Some models serve multiple game entries. In that case the command prints the matching keys so you can select one. Other drawable cache items use their cache name and examine text when available. Use `--title`, `--type`, `--rarity`, `--description` and `--set-name` to set the printed copy. Long text wraps and shrinks inside its field. If it still cannot fit legibly the generator reports the field text.
 
-The three reference cards retain their collector numbers: Saradomin Strike (2415) is 16/267, Shortbow (841) is 21/267 and the uncharged Sanguinesti staff (22481) is 231/267. A single card without an assigned collector number prints its cache ID as “Item 4151”, for example. Supply `--number N/TOTAL` to print a collector number instead.
+A card the game has prints its number in the game's set, as its album shows it (`cardNumber`), so it moves when cards are added: Saradomin Strike (2415) is 16/267 when written, Shortbow (841) 21/267 and the uncharged Sanguinesti staff (22481) 231/267. A card that isn't out yet, or an item with no card, prints its cache ID as “Item 4151”, for example. Supply `--number N/TOTAL` to print a collector number instead.
 
 ## Generate a set
 
@@ -45,7 +45,7 @@ const { front, back, face } = await cards.render(
 );
 await writeFile("staff.png", front);
 await writeFile("back.png", back);
-console.log(face.footer); // 231/267
+console.log(face.footer); // its number in the game's set, 231/267 when written
 ```
 
 `CardSpec` accepts `itemId`, `key`, `title`, `type`, `rarity`, `description`, `setName`, `number`, `total`, `foil` and `isNew`. The rarity keys are `common`, `uncommon`, `rare` and `veryRare`. Both effects default to off. Foil is an iridescent highlight confined to the matte window beneath the item. Each PNG captures one reflection angle. Set `foilPosition` from 0 to 1 to move the highlight across successive renders. The New marker is a separate layer.

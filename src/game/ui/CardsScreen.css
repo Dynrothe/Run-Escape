@@ -46,12 +46,6 @@
     justify-content: center;
 }
 
-/* The card generator's text face (scripts/cards), the client's plain font at its 12 point size */
-@font-face {
-    font-family: "OSRS Plain";
-    src: url(../../media/RuneScape-Plain-12.ttf);
-}
-
 /* A card: the printed card frame (ui/cards/card-front-*.webp, from the card generator's
    src/media/run-escape-card-front-frame.png), with the name, the picture's window, the type line,
    the text and the set's footer laid over it where the generator prints them (scripts/cards), in
@@ -69,7 +63,8 @@
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
 }
 
-/* The plate's own shape: 1073 x 1466 */
+/* The plate's own shape: 1073 x 1466. The mat's slots, its dealt cards and its deck are a small
+   card's size (and matLayout's MAT_ROW_HEIGHT), so they change with it. */
 .ui-tcg-small {
     width: 128px;
     height: 175px;
@@ -110,36 +105,47 @@
     max-width: 100%;
     font-family: "OSRS Bold", sans-serif;
     color: var(--card-rarity);
-    background: linear-gradient(
-        100deg,
-        color-mix(in srgb, var(--card-rarity) 70%, #000) 0%,
-        var(--card-rarity) 30%,
-        color-mix(in srgb, var(--card-rarity) 45%, #fff) 50%,
-        var(--card-rarity) 70%,
-        color-mix(in srgb, var(--card-rarity) 70%, #000) 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    /* A text shadow (the panels give one) would paint over a fill drawn from the background */
+    /* The title's filter gives the shadow: a text shadow (the panels give one) would paint over a
+       fill drawn from the background */
     text-shadow: none;
     overflow-wrap: anywhere;
 }
 
-.ui-tcg-foil .ui-tcg-name,
-.ui-tcg-foil .ui-tcg-name-sub {
-    background-image: linear-gradient(
-        67deg,
-        #b8914f 0%,
-        #e1a84a 30%,
-        #ffd582 40%,
-        #fff0b1 50%,
-        #cfdbb1 60%,
-        #e1a84a 72%,
-        #b8914f 100%
-    );
-    background-size: 300% 100%;
-    background-position: 30% 0;
+/* The sheen needs color-mix(), newer than some browsers the game runs on (Chrome 111, Safari
+   16.2); without it the name is its plain ink. Only @supports can leave it out: a declaration with
+   a var() in it is kept until it's computed, so an older one before it wouldn't be a fallback, and
+   the name's fill would be left transparent over nothing. */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+    .ui-tcg-name,
+    .ui-tcg-name-sub {
+        background: linear-gradient(
+            100deg,
+            color-mix(in srgb, var(--card-rarity) 70%, #000) 0%,
+            var(--card-rarity) 30%,
+            color-mix(in srgb, var(--card-rarity) 45%, #fff) 50%,
+            var(--card-rarity) 70%,
+            color-mix(in srgb, var(--card-rarity) 70%, #000) 100%
+        );
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .ui-tcg-foil .ui-tcg-name,
+    .ui-tcg-foil .ui-tcg-name-sub {
+        background-image: linear-gradient(
+            67deg,
+            #b8914f 0%,
+            #e1a84a 30%,
+            #ffd582 40%,
+            #fff0b1 50%,
+            #cfdbb1 60%,
+            #e1a84a 72%,
+            #b8914f 100%
+        );
+        background-size: 300% 100%;
+        background-position: 30% 0;
+    }
 }
 
 .ui-tcg-moving.ui-tcg-foil .ui-tcg-name,
@@ -176,6 +182,23 @@
 .ui-tcg-big .ui-tcg-name-sub {
     font-size: 14px;
     line-height: 16px;
+}
+
+/* A name with its bracketed line under it has one line of its own, as the generator prints it:
+   a size smaller, so the longest ("Holy Scythe of Vitur") fits, and an ellipsis past that, never
+   a second line squeezed out of the band */
+.ui-tcg-name-main {
+    -webkit-line-clamp: 1;
+}
+
+.ui-tcg-small .ui-tcg-name-main {
+    font-size: 11px;
+    line-height: 12px;
+}
+
+.ui-tcg-big .ui-tcg-name-main {
+    font-size: 20px;
+    line-height: 22px;
 }
 
 /* How many copies, in the title band's top right, clear of the plate's corner */
@@ -823,7 +846,7 @@
     position: relative;
     flex-shrink: 0;
     width: 140px;
-    height: 224px;
+    height: 187px;
 }
 
 /* The deck: its cards stacked, each a little up and left of the one under it */
@@ -860,7 +883,7 @@
    the one before it a little (--mat-overlap), fanned */
 .ui-tcg-mat-slot {
     width: 128px;
-    height: 212px;
+    height: 175px;
     border: 1px dashed rgba(232, 220, 192, 0.18);
     border-radius: 6px;
     perspective: 900px;
@@ -876,7 +899,7 @@
     position: relative;
     display: block;
     width: 128px;
-    height: 212px;
+    height: 175px;
     padding: 0;
     font: inherit;
     color: inherit;

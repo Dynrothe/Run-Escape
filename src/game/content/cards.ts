@@ -203,6 +203,15 @@ export function cardRarityName(rarity: Rarity): string {
     return rarityName(rarity);
 }
 
+// A rarity's ink on a printed card, in the game (ui/CardsScreen.tsx) and the card generator
+// (scripts/cards) alike: softer than the game's own rarity colours, so they sit on the plate
+export const CARD_INKS: Record<Rarity, string> = {
+    common: "#ece6da",
+    uncommon: "#8cc878",
+    rare: "#eb9b63",
+    veryRare: "#ed8580",
+};
+
 // The Card shop's packs. Each holds PACK_SIZE cards of its own pool (`holds`), each card rolling a
 // version's rarity by its odds and then a card of the pool that comes in that version; its last
 // card, in a pack with odds for three rarities or more, rolls only those above the lowest, so the

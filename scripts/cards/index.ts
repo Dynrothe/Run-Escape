@@ -3,7 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp, { OverlayOptions } from "sharp";
 
-import { RARITIES, Rarity } from "../../src/game/content/rarity";
+import { CARD_INKS } from "../../src/game/content/cards";
+import { RARITIES } from "../../src/game/content/rarity";
 import { renderItemModel } from "../../src/mapviewer/worker/ItemIconLoader";
 import { CacheSystem } from "../../src/rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../../src/rs/cache/loader/CacheLoaderFactory";
@@ -19,12 +20,6 @@ const width = 1073;
 const height = 1466;
 const canvas = { width, height, channels: 4 as const };
 const well = { left: 126, top: 323, width: 824, height: 544 };
-const inks: Record<Rarity, string> = {
-    common: "#ECE6DA",
-    uncommon: "#8CC878",
-    rare: "#EB9B63",
-    veryRare: "#ED8580",
-};
 // Inside the brass bevel, in the front template's native coordinates.
 const windowPath = "M146 323 H928 L950 344 V848 L931 867 H145 L126 848 V343 Z";
 
@@ -104,7 +99,7 @@ async function lettering(face: CardFace): Promise<OverlayOptions[]> {
                 w: 371,
                 h: 90,
                 size: 66,
-                color: inks[face.rarity],
+                color: CARD_INKS[face.rarity],
                 align: "right",
             }),
         );
@@ -274,7 +269,18 @@ export async function createCardGenerator(options: { cacheDir?: string; backPath
         if (lastItem?.id === itemId) return lastItem.layer;
         const scale = 20,
             size = 48 * scale;
-        const pixels = renderItemModel(state, itemId, 1, size, size, size / 2, size / 2, scale);
+        // Smooth, without the client's outline and shadow, as the game's own cards draw it
+        const pixels = renderItemModel(
+            state,
+            itemId,
+            1,
+            size,
+            size,
+            size / 2,
+            size / 2,
+            scale,
+            false,
+        );
         const layer = itemLayer(pixels, size);
         lastItem = { id: itemId, layer };
         return layer;

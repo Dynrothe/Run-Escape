@@ -1,10 +1,15 @@
+import {
+    ALL_CARDS,
+    CARDS,
+    CardDef,
+    cardLine,
+    cardNumber,
+    cardTypeName,
+} from "../../src/game/content/cards";
 import { ITEMS } from "../../src/game/content/items";
-import { PASSIVES } from "../../src/game/content/passives";
 import { RARITIES, Rarity } from "../../src/game/content/rarity";
 import { STAT_INFO } from "../../src/game/content/stats";
-import { TROPHIES } from "../../src/game/content/trophies";
 import { StatKey } from "../../src/game/content/types";
-import { WEAPONS } from "../../src/game/content/weapons";
 
 export type CardSpec = {
     itemId: number;
@@ -33,33 +38,28 @@ export type CardFace = {
 type Entry = Pick<CardFace, "title" | "type" | "rarity" | "description"> & {
     key: string;
     itemId: number;
+    // The game's own card, whose number in the set it prints
+    card?: CardDef;
 };
 
-const entries: Entry[] = [];
-for (const weapon of WEAPONS) {
-    entries.push({
-        key: "weapon:" + weapon.id,
-        itemId: weapon.iconObjId,
-        type: "Weapon",
-        title: weapon.name,
-        rarity: weapon.rarity,
-        description:
-            weapon.id === "shortbow"
-                ? weapon.description.split(/(?<=\.)\s+/)[0]
-                : weapon.description,
-    });
-}
-for (const passive of PASSIVES) {
-    entries.push({
-        key: "passive:" + passive.id,
-        itemId: passive.iconObjId,
-        type: "Passive",
-        title: passive.name,
-        rarity: passive.rarity,
-        description: passive.description,
-    });
-}
+// The game's cards (content/cards.ts), as its album shows them: the same names, rarities, texts
+// and numbers, so a printed card matches the one in the game
+const entries: Entry[] = ALL_CARDS.map((card) => ({
+    key: card.id,
+    itemId: card.objId,
+    type: cardTypeName(card.kind),
+    title: card.name(),
+    rarity: card.rarity,
+    // The approved Shortbow example prints only its first sentence
+    description: card.id === "weapon:shortbow" ? cardLine(card) : card.text(),
+    card,
+}));
+
+// The game's other items, which have no card (utility items, and gear outside the reward caskets)
+const cardKeys = new Set(entries.map((entry) => entry.key));
 for (const item of ITEMS) {
+    const key = item.kind + ":" + item.id;
+    if (cardKeys.has(key)) continue;
     let description: string;
     if (item.kind === "gear") {
         description = Object.entries(item.stats)
@@ -74,7 +74,7 @@ for (const item of ITEMS) {
         description = item.description ?? "";
     }
     entries.push({
-        key: item.kind + ":" + item.id,
+        key,
         itemId: item.objId,
         type: item.kind === "gear" ? "Gear" : "Utility",
         title: item.name,
@@ -82,23 +82,6 @@ for (const item of ITEMS) {
         description,
     });
 }
-for (const trophy of TROPHIES) {
-    entries.push({
-        key: "trophy:" + trophy.id,
-        itemId: trophy.objId,
-        type: "Trophy",
-        title: trophy.name,
-        rarity: trophy.id === "sanguinesti_staff_uncharged" ? "rare" : undefined,
-        description: trophy.how,
-    });
-}
-
-// Collector numbers printed on the three supplied examples. Cache IDs are independent.
-const exampleNumbers = new Map([
-    ["weapon:saradomin_strike", 16],
-    ["weapon:shortbow", 21],
-    ["trophy:sanguinesti_staff_uncharged", 231],
-]);
 
 export function positiveInteger(value: unknown, field: string): asserts value is number {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
@@ -138,15 +121,20 @@ export function resolveFace(spec: CardSpec, item: { name: string; examine?: stri
     const entry = matches[0];
     if (spec.key !== undefined && !entry)
         throw new Error(`No entry ${spec.key} for item ${spec.itemId}`);
-    const known = entry && exampleNumbers.get(entry.key);
-    const number = spec.number ?? known;
+    // Its number in the game's set (a card that's out), unless the spec gives one
+    const number =
+        spec.number !== undefined
+            ? `${spec.number}/${spec.total}`
+            : entry?.card && CARDS.includes(entry.card)
+              ? cardNumber(entry.card)
+              : undefined;
     return {
         title: spec.title ?? entry?.title ?? item.name,
         type: spec.type ?? entry?.type ?? "Item",
         rarity: spec.rarity ?? entry?.rarity,
         description: spec.description ?? entry?.description ?? item.examine ?? "",
         setName: spec.setName ?? "Run Escape",
-        footer: number === undefined ? `Item ${spec.itemId}` : `${number}/${spec.total ?? 267}`,
+        footer: number ?? `Item ${spec.itemId}`,
         foil: spec.foil ?? false,
         isNew: spec.isNew ?? false,
     };

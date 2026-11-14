@@ -30,7 +30,7 @@ import { GAME_VERSION } from "./ui/changelog";
 
 WebFont.load({
     custom: {
-        families: ["OSRS Bold", "OSRS Small"],
+        families: ["OSRS Bold", "OSRS Small", "OSRS Plain"],
     },
 });
 

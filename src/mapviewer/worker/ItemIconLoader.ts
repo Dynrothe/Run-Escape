@@ -326,7 +326,8 @@ export function renderItemIcon(
     );
 }
 
-// Card art uses the same inventory pose and lighting on a larger, padded raster.
+// Card art uses the same inventory pose and lighting on a larger, padded raster. The client's
+// outline and shadow are always asked for, never assumed: they're for an icon at its own size.
 export function renderItemModel(
     state: ItemRenderState,
     objId: number,
@@ -336,7 +337,7 @@ export function renderItemModel(
     centerX: number,
     centerY: number,
     scale: number,
-    outline = true,
+    outline: boolean,
 ): Int32Array {
     const pixels = new Int32Array(width * height);
     const stackId = getStackObjId(state, objId, count);

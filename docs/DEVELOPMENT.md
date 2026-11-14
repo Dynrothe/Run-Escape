@@ -1541,16 +1541,24 @@ involved.
   versions owned. A card's face is the card generator's printed frame (`ui/cards/card-front-*.webp`,
   made from `src/media/run-escape-card-front-frame.png`, see `scripts/cards/`), with the name,
   picture, type line, text and footer laid over it where the generator prints them, in
-  percentages of its plate, in the generator's font (RuneScape Plain 12) and rarity inks
-  (`CARD_INKS`). The name is a sheen of its rarity's ink, so rarity shows at a glance as well as in
-  its word. The picture is the item drawn from its model at the card's size (`ItemIcon`'s `large`).
-  A face-down card is a picture (`ui/cards/card-back-*.webp`, the large one where it's shown big),
-  kept to its shape. A pack opens on a playmat that fills the screen
-  (`PackWindow`): its cards in a deck, each press dealing the top one face up into the row with a
-  turn (none with `prefers-reduced-motion`); the row is scaled to the mat's own room (`matLayout`,
-  measured, as the UI can be drawn bigger than the window), not below a size its words can be read
-  at where the height allows, and overlaps the cards where it's still too wide. A dealt card pressed
-  shows big in the same window.
+  percentages of its plate, in the generator's font (RuneScape Plain 12, `OSRS Plain` in
+  `src/index.css`, loaded with the game's other fonts) and rarity inks (`CARD_INKS` in
+  `content/cards.ts`, which the generator prints with too). The name is a sheen of its rarity's
+  ink, so rarity shows at a glance as well as in its word; the sheen needs `color-mix()`, so it's
+  under `@supports`, and a browser without it draws the plain ink (a fallback declaration before
+  it wouldn't do: one with a `var()` is only found wanting once it's computed, leaving the name's
+  fill transparent). A name ending in brackets ("Sanguinesti staff (uncharged)") puts them on a
+  smaller line under it, the rest on one line a size smaller (`ui-tcg-name-main`). The picture is
+  the item drawn from its model at the card's size (`ItemIcon`'s `large`). A face-down card is a
+  picture (`ui/cards/card-back-*.webp`, the large one where it's shown big), kept to its shape. A
+  pack opens on a playmat that fills the screen (`PackWindow`): its cards in a deck, each press
+  dealing the top one face up into the row with a turn (none with `prefers-reduced-motion`); the
+  row is scaled to the mat's own room (`matLayout`, measured, as the UI can be drawn bigger than
+  the window), not below a size its words can be read at where the height allows, and overlaps the
+  cards where it's still too wide. The mat's slots, dealt cards and deck are a small card's size,
+  as `MAT_ROW_HEIGHT` is, so they change with `.ui-tcg-small`; its faces and backs use the large
+  pictures (`large` on `CardFace` and `CardBack`), as the mat draws them up to 2.4 times their
+  size. A dealt card pressed shows big in the same window.
 - **A pack's preview** (`ui/PackPreview.tsx`, `core/cardOdds.ts`): the shop's Preview lists every
   card a pack can hold on tabs by rarity (and All, each with its count, the last one kept per pack
   for the session), each card with its chance to be in one pack for this save, or Locked with

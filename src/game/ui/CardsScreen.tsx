@@ -5,6 +5,7 @@ import { UiSnapshot } from "../client/GameStore";
 import {
     BASIC_PACK,
     CARDS,
+    CARD_INKS,
     CARD_KINDS,
     CardDef,
     CardKind,
@@ -432,21 +433,13 @@ const SPARKLES: { x: number; y: number; delay: number; size: number }[] = [
     { x: 44, y: 38, delay: 3.1, size: 6 },
 ];
 
-// The rarity's word on a card, in the card generator's inks (scripts/cards), softer than the
-// game's own rarity colours so they sit on the printed plate
-const CARD_INKS: Record<Rarity, string> = {
-    common: "#ece6da",
-    uncommon: "#8cc878",
-    rare: "#eb9b63",
-    veryRare: "#ed8580",
-};
-
+// The rarity's name and word on a card, in the printed card's inks
 function rarityStyle(rarity: Rarity): CSSProperties {
     return { "--card-rarity": CARD_INKS[rarity] } as CSSProperties;
 }
 
 // A card's name, with what's in brackets at its end ("Sanguinesti staff (uncharged)") on a smaller
-// line of its own
+// line of its own, the rest of the name on one line above it
 function CardName({ name }: { name: string }): JSX.Element {
     const at = name.lastIndexOf(" (");
     if (at <= 0 || !name.endsWith(")")) {
@@ -454,16 +447,16 @@ function CardName({ name }: { name: string }): JSX.Element {
     }
     return (
         <>
-            <span className="ui-tcg-name">{name.slice(0, at)}</span>
+            <span className="ui-tcg-name ui-tcg-name-main">{name.slice(0, at)}</span>
             <span className="ui-tcg-name-sub">{name.slice(at + 1)}</span>
         </>
     );
 }
 
-// A card's face, as a trading card: an ornate frame whose studs take its rarity's colour (and its
-// rarity in words on the type line, so it's never told by colour alone), the name, the item drawn
-// from its model in a stone window, the type line, a short line of what it is, and its number in
-// the set. A foil copy has a band of light sweeping across its picture behind the item, moving
+// A card's face, as a trading card: the printed frame, the name in its rarity's ink (and its
+// rarity in words on the type line, so it's never told by colour alone), the item drawn from its
+// model in a stone window, the type line, a short line of what it is, and its number in the set.
+// A foil copy has a band of light sweeping across its picture behind the item, moving
 // only where `moving` asks (the big card and a pack's mat) or under a pointer, with sparkles where
 // it's moving, neither with prefers-reduced-motion; "Foil" is said to a screen reader, not written
 // on it.
@@ -476,6 +469,7 @@ export function CardFace({
     isNew = false,
     moving = false,
     foil = false,
+    large = false,
 }: {
     card: CardDef;
     // The version shown (cardVersions)
@@ -488,6 +482,8 @@ export function CardFace({
     moving?: boolean;
     // A foil copy (SaveData.cardFoils): a holographic face, and "Foil" said to a screen reader
     foil?: boolean;
+    // The bigger frame, where a small card's shown large (the playmat, scaled up), as CardBack's
+    large?: boolean;
 }): JSX.Element {
     return (
         <span
@@ -498,7 +494,7 @@ export function CardFace({
             }
             style={{
                 ...rarityStyle(rarity),
-                backgroundImage: `url(${size === "big" ? cardFrontLarge : cardFrontSmall})`,
+                backgroundImage: `url(${large || size === "big" ? cardFrontLarge : cardFrontSmall})`,
             }}
         >
             <span className="ui-tcg-title">
@@ -672,11 +668,12 @@ function CardWindow({
 const DEAL_ALL_MS = 220;
 
 // The mat's row as small cards lay it out (CardsScreen.css): the deck (140 wide) and five slots
-// (130 with their borders, 12 apart), 224 high, and what the mat keeps round it (its padding, the
-// name above, the buttons below), all in the UI's own pixels
+// (130 with their borders, 12 apart), 187 high (a small card's 175 and the deck's stagger), and
+// what the mat keeps round it (its padding, the name above, the buttons below), all in the UI's
+// own pixels
 const MAT_DECK_WIDTH = 140 + 12;
 const MAT_ROW_WIDTH = 5 * 130 + 4 * 12;
-const MAT_ROW_HEIGHT = 224;
+const MAT_ROW_HEIGHT = 187;
 const MAT_EDGE = 28;
 const MAT_TOP = 64;
 const MAT_BOTTOM = 72;
@@ -848,6 +845,7 @@ function PackWindow({
                                                 isNew={dealtCard.isNew}
                                                 foil={dealtCard.foil}
                                                 moving
+                                                large
                                             />
                                         </span>
                                     </button>
