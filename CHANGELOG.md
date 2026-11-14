@@ -3,6 +3,13 @@
 What's changed in Run Escape, newest first. The game shows this on its title screen too (click
 the version in the corner).
 
+## Unreleased
+
+### Fixed
+
+- Tentacles in the Shadow Realm and root hearts in the Stranglewood no longer come up half inside
+  a wall.
+
 ## 0.32.0 - 2026-11-14
 
 ### Added

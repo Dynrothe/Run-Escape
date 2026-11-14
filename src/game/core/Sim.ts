@@ -15034,9 +15034,13 @@ export class Sim {
             }
             return out;
         },
-        spawnRuleEnemy: (enemyId, x, y, elite) =>
-            sim.spawnEnemy(getEnemy(enemyId), elite ? "elite" : "normal", sim.walkableSpot(x, y))
-                ?.uid,
+        // Where it fits, by its own size: a tentacle or a root heart is wider than a player, and
+        // risen half in a wall it never comes out (it doesn't move)
+        spawnRuleEnemy: (enemyId, x, y, elite) => {
+            const def = getEnemy(enemyId);
+            const at = sim.walkableSpot(x, y, Math.max(def.radius, PLAYER_RADIUS));
+            return sim.spawnEnemy(def, elite ? "elite" : "normal", at)?.uid;
+        },
         isEnemyAlive: (uid) => sim.enemies.some((enemy) => enemy.uid === uid && !enemy.dead),
         upHeroes: () => {
             const out: number[] = [];
@@ -23571,9 +23575,10 @@ export class Sim {
 
     // Where to put something that needs walking over: what dropped it can be
     // somewhere the player can't get to (a portal stands on solid tiles, ghosts
-    // go through walls), and its drop can land past a wall
-    private walkableSpot(x: number, y: number): Vec2 {
-        return findFreeSpot(this.grid, x, y, PLAYER_RADIUS, (tileX, tileY) =>
+    // go through walls), and its drop can land past a wall. radius: how wide it is
+    // (a player's, unless it's bigger)
+    private walkableSpot(x: number, y: number, radius = PLAYER_RADIUS): Vec2 {
+        return findFreeSpot(this.grid, x, y, radius, (tileX, tileY) =>
             this.isWalkableTile(tileX, tileY),
         );
     }
