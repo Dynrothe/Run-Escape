@@ -1902,6 +1902,12 @@ so it isn't touched. If the camera's
 pitch or zoom changes, `CAMERA_REACH` has to follow it, or the hole where something was left out
 can show.
 
+Scenery can be left out by where it stands and its loc id (`SdMapLoaderInput.hiddenLocs`, set with
+`setHiddenLocs`). The title screen leaves out the bushes round the character in Lumbridge castle's
+courtyard (`TITLE_HIDDEN_LOCS` in `GameClient`), which hid the pet, and a run there has them back.
+Only the squares a change touches load again (`MapManager.reloadMap`), and each is drawn as it was
+until its new one's in, so nothing blinks out between the title and a run. Collision isn't touched.
+
 The game has no hover menus, multisampling or FXAA, so its frames are drawn straight to the canvas
 (`drawsToCanvas`), with no framebuffer of their own and no screen quad to copy them across. The
 canvas has `alpha: false`: the page behind it is black, so there's nothing to blend it with. The

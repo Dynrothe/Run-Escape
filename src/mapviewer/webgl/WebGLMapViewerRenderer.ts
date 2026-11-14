@@ -19,6 +19,7 @@ import {
 import { OsrsMenuEntry } from "../../components/rs/menu/OsrsMenu";
 import { createTextureArray } from "../../picogl/PicoTexture";
 import { MenuTargetType } from "../../rs/MenuEntry";
+import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Scene } from "../../rs/scene/Scene";
 import {
     isCoarsePointer,
@@ -111,6 +112,29 @@ function isSameArea(a: ArrayLike<number> | undefined, b: ArrayLike<number> | und
     return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
 }
 
+function isSameList(a: ArrayLike<number> | undefined, b: ArrayLike<number> | undefined): boolean {
+    if (!a || !b) {
+        return a === b;
+    }
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The square (MapManager's id) the hidden loc at i is in (SdMapLoaderInput.hiddenLocs)
+function getHiddenLocSquare(hiddenLocs: ArrayLike<number>, i: number): number {
+    return getMapSquareId(
+        Math.floor(hiddenLocs[i] / Scene.MAP_SQUARE_SIZE),
+        Math.floor(hiddenLocs[i + 1] / Scene.MAP_SQUARE_SIZE),
+    );
+}
+
 function optimizeAssumingFlatsHaveSameFirstAndLastData(gl: WebGL2RenderingContext) {
     const epv = gl.getExtension("WEBGL_provoking_vertex");
     if (epv) {
@@ -197,6 +221,8 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
     // World tiles (x0, y0, x1, y1) of the world that map squares keep, see
     // SdMapLoaderInput.keepArea. Unset keeps it all.
     keepArea?: vec4;
+    // Scenery the squares leave out, see SdMapLoaderInput.hiddenLocs
+    hiddenLocs?: readonly number[];
 
     brightness: number = 1.0;
     colorBanding: number = 255;
@@ -765,6 +791,41 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
         return vec4.fromValues(keep[0] + shift, keep[1], keep[2] + shift, keep[3]);
     }
 
+    // The hidden locs in a square (SdMapLoaderInput.hiddenLocs), or undefined for none
+    private getSquareHiddenLocs(mapX: number, mapY: number): number[] | undefined {
+        const hidden = this.hiddenLocs;
+        if (!hidden) {
+            return undefined;
+        }
+        const square: number[] = [];
+        for (let i = 0; i < hidden.length; i += 3) {
+            if (getHiddenLocSquare(hidden, i) === getMapSquareId(mapX, mapY)) {
+                square.push(hidden[i], hidden[i + 1], hidden[i + 2]);
+            }
+        }
+        return square.length > 0 ? square : undefined;
+    }
+
+    // Scenery to leave out (SdMapLoaderInput.hiddenLocs), or none. Each square it changes in is
+    // loaded again, and drawn as it was until it's in (MapManager.reloadMap). Cheap to call
+    // every frame with the same array.
+    setHiddenLocs(locs: readonly number[] | undefined): void {
+        const last = this.hiddenLocs;
+        if (last === locs) {
+            return;
+        }
+        this.hiddenLocs = locs;
+        const squares = new Set<number>();
+        for (const list of [last, locs]) {
+            for (let i = 0; list && i < list.length; i += 3) {
+                squares.add(getHiddenLocSquare(list, i));
+            }
+        }
+        for (const mapId of squares) {
+            this.mapManager.reloadMap(mapId >> 8, mapId & 0xff);
+        }
+    }
+
     // A twin of a set of squares, drawn in their place while shown (MapManager.twin)
     setTwin(twin: MapManager<WebGLMapSquare>["twin"]): void {
         this.mapManager.setTwin(twin);
@@ -793,6 +854,7 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             cullCellSize: this.cullCellSize,
             skipMinimap: this.skipMinimap,
             keepArea: keepArea && Array.from(keepArea),
+            hiddenLocs: this.getSquareHiddenLocs(mapX, mapY),
             loadedTextureIds: this.loadedTextureIds,
         });
 
@@ -864,7 +926,8 @@ export class WebGLMapViewerRenderer extends MapViewerRenderer<WebGLMapSquare> {
             mapData.loadNpcs === this.loadNpcs &&
             mapData.smoothTerrain === this.smoothTerrain &&
             mapData.cullCellSize === this.cullCellSize &&
-            isSameArea(mapData.keepArea, this.getSquareKeepArea(mapData.mapX, mapData.mapY))
+            isSameArea(mapData.keepArea, this.getSquareKeepArea(mapData.mapX, mapData.mapY)) &&
+            isSameList(mapData.hiddenLocs, this.getSquareHiddenLocs(mapData.mapX, mapData.mapY))
         );
     }
 

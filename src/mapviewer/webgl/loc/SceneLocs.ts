@@ -17,6 +17,29 @@ export type SceneLocs = {
     locEntities: SceneLocEntity[];
 };
 
+// Whether a loc's left out of the square: its id, and the scene tile it starts on
+export type LocLeftOut = (id: number, tileX: number, tileY: number) => boolean;
+
+// SdMapLoaderInput.hiddenLocs (world tiles and ids) as a test of a loc on a scene whose tiles
+// start at baseX, baseY in the world, or undefined if there are none. A key's tile is 7 bits a
+// side (a scene's under 128 across), over the id's 21 (LocOverrides' ids are under 2^21).
+export function getLocLeftOut(
+    hiddenLocs: readonly number[] | undefined,
+    baseX: number,
+    baseY: number,
+): LocLeftOut | undefined {
+    if (!hiddenLocs?.length) {
+        return undefined;
+    }
+    const key = (tileX: number, tileY: number, id: number) =>
+        ((tileX << 7) | tileY) * 0x200000 + id;
+    const keys = new Set<number>();
+    for (let i = 0; i < hiddenLocs.length; i += 3) {
+        keys.add(key(hiddenLocs[i] - baseX, hiddenLocs[i + 1] - baseY, hiddenLocs[i + 2]));
+    }
+    return (id, tileX, tileY) => keys.has(key(tileX, tileY, id));
+}
+
 export function isLowDetail(
     scene: Scene,
     level: number,
@@ -137,6 +160,7 @@ export function getSceneLocs(
     borderSize: number,
     minLevel: number,
     maxLevel: number,
+    leftOut?: LocLeftOut,
 ): SceneLocs {
     const locs: SceneModel[] = [];
     const locEntities: SceneLocEntity[] = [];
@@ -159,7 +183,9 @@ export function getSceneLocs(
                     continue;
                 }
 
-                const isHidden = (loc: SceneLoc) => tile.minLevel > maxLevel && isRoofLoc(loc);
+                const isHidden = (loc: SceneLoc) =>
+                    (tile.minLevel > maxLevel && isRoofLoc(loc)) ||
+                    leftOut?.(getIdFromTag(loc.tag), tileX, tileY) === true;
 
                 if (tile.floorDecoration && !isHidden(tile.floorDecoration)) {
                     if (tile.floorDecoration.entity instanceof Model) {
