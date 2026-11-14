@@ -266,6 +266,18 @@
     opacity: 0.85;
 }
 
+/* The item sits above a foil's shimmer, so the rainbow is its background, not over it; the
+   sparkles and the "New" mark stay on top */
+.ui-tcg-art > .ui-icon {
+    position: relative;
+    z-index: 1;
+}
+
+.ui-tcg-sparkles,
+.ui-tcg-new {
+    z-index: 2;
+}
+
 .ui-tcg-moving .ui-tcg-holo,
 .ui-cards-slot:hover .ui-tcg-holo,
 .ui-cards-slot:focus-visible .ui-tcg-holo {
