@@ -7,6 +7,7 @@ import { CollisionFlag } from "../../rs/pathfinder/flag/CollisionFlag";
 import { isCoarsePointer } from "../../util/DeviceUtil";
 import { ACT_BY_ID, getAct, getActStep, isActEnded } from "../content/acts";
 import { getBlessing } from "../content/blessings";
+import type { PackDef } from "../content/cards";
 import { CHARACTERS, CHARACTER_BY_ID, getCharacter } from "../content/characters";
 import { MAX_PARTY, REVIVE_IMMUNITY_SECONDS, REVIVE_SECONDS } from "../content/coop";
 import { upgradedName } from "../content/endless";
@@ -76,7 +77,26 @@ import { weaponBonusText, weaponStatText, weaponStats } from "../content/weaponS
 import { getWeapon, getWeaponStyle } from "../content/weapons";
 import { ChestAction, shouldAutoEquip } from "../core/Loot";
 import { Hero, HeroOptions, RunResult, Sim, TICKS_PER_SECOND } from "../core/Sim";
-import { UpgradeChoice, canEvolve, describeChoice, getEvolutionHint } from "../core/Upgrades";
+import {
+    CardCaps,
+    UpgradeChoice,
+    canEvolve,
+    cardsAllowEvolution,
+    describeChoice,
+    getEvolutionHint,
+} from "../core/Upgrades";
+import {
+    decodeCardCaps,
+    encodeCardCaps,
+    getCardCaps,
+    getCardLock,
+    getCardRunShortfall,
+    getRunPet,
+    getStarterCards,
+    hasPetCard,
+    isCardRunBlocked,
+} from "../core/cardRuns";
+import { PackCard, buyCardPack, openCardPack } from "../core/cards";
 import { Enemy, SimEvent, WeaponState } from "../core/entities";
 import { usePortableMath } from "../core/fmath";
 import {
@@ -203,7 +223,7 @@ import { getBossKillViews, getPlayerResultViews } from "./RunStatsViews";
 import { SaveLock } from "./SaveLock";
 import { SceneLights } from "./SceneLights";
 import { TrailerOptions, TrailerRecorder, getTrailerSpec } from "./TrailerRecorder";
-import { CoopLobby, makeLoadout } from "./coop/CoopLobby";
+import { CoopLobby, makeLoadout, roomPlaysCardsOnly } from "./coop/CoopLobby";
 import { CoopRun, GUEST_BUFFER_FRAMES } from "./coop/CoopRun";
 import { CoopTicker } from "./coop/CoopTicker";
 import { GameStart, GoneReason, Loadout, RoomView, Unlocks, isGameStart } from "./coop/protocol";
@@ -417,7 +437,12 @@ function getQuestTrackViews(save: SaveData, sim: Sim): QuestTrackView[] {
 // How far a weapon has got towards its evolution, for the HUD and pause menu
 function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] {
     const evolution = weapon.def.evolution;
-    if (!evolution || !isAvailable(getWeapon(evolution.into), sim.unlockedItems)) {
+    if (
+        !evolution ||
+        !isAvailable(getWeapon(evolution.into), sim.unlockedItems) ||
+        // A Card collection only run without the cards it takes: it won't come
+        !cardsAllowEvolution(sim.cardCaps, weapon.def.id, evolution.requiresPassive, evolution.into)
+    ) {
         return undefined;
     }
     const owned = new Set(sim.passives.map((p) => p.id));
@@ -425,7 +450,7 @@ function getEvolutionView(sim: Sim, weapon: WeaponState): SlotView["evolution"] 
         passive: getPassive(evolution.requiresPassive).name,
         maxed: weapon.level >= weapon.def.levels.length,
         hasPassive: owned.has(evolution.requiresPassive),
-        ready: canEvolve(weapon, owned, sim.unlockedItems),
+        ready: canEvolve(weapon, owned, sim.unlockedItems, sim.cardCaps),
     };
 }
 
@@ -493,7 +518,14 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
                     ? { name: blessed ?? "Blessing", color: BLESSING_COLOR }
                     : rarity && quality && { name: rarityName(quality), color: rarity.color },
             stats,
-            evolves: getEvolutionHint(choice, sim.weapons, sim.passives, style, sim.unlockedItems),
+            evolves: getEvolutionHint(
+                choice,
+                sim.weapons,
+                sim.passives,
+                style,
+                sim.unlockedItems,
+                sim.cardCaps,
+            ),
             banishable: sim.canBanishChoice(index),
             banished: sim.isBanishedChoice(index),
             bossPenalty: getBossPenalty(sim, choice),
@@ -501,16 +533,37 @@ function getChoiceViews(sim: Sim): ChoiceView[] {
     });
 }
 
+// The party's loadouts as a run takes them: a Cards only room's (the host's tab on, and their
+// cards sent) keeps each player's cards, any other drops them all, the host's too, so no one plays
+// Cards only on their own
+export function partyLoadouts(
+    heroes: readonly { id: string; loadout?: Loadout }[],
+    hostId: string,
+): (Loadout | undefined)[] {
+    const host = heroes.find((hero) => hero.id === hostId);
+    const cardsOnly =
+        host?.loadout?.cardsOnly === true && typeof host.loadout.cardCaps === "string";
+    return heroes.map(({ loadout }) =>
+        cardsOnly || loadout?.cardCaps === undefined
+            ? loadout
+            : { ...loadout, cardCaps: undefined },
+    );
+}
+
 // What a co-op player brings, as far as any game could have it (another
 // player's game could send anything)
 export function cleanLoadout(loadout: Loadout | undefined): {
     unlockedItems: Set<string>;
+    cardCaps?: CardCaps;
     trophiesFound: Set<string>;
     armoury: Record<string, number>;
     pet?: string;
     relics?: string[];
 } {
     const items = Array.isArray(loadout?.unlockedItems) ? loadout.unlockedItems : [];
+    const caps = loadout?.cardCaps !== undefined ? decodeCardCaps(loadout.cardCaps) : undefined;
+    const pet =
+        typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) ? loadout.pet : undefined;
     const trophies = Array.isArray(loadout?.trophies) ? loadout.trophies : [];
     const armoury: Record<string, number> = {};
     for (const [id, times] of Object.entries(loadout?.armoury ?? {})) {
@@ -522,10 +575,12 @@ export function cleanLoadout(loadout: Loadout | undefined): {
         unlockedItems: new Set(items.filter((id) => typeof id === "string").slice(0, 5000)),
         trophiesFound: new Set(getRaidChestTrophiesFound(trophies.slice(0, 100))),
         armoury,
-        // A pet the game has (a fighting one plays its part in the sim, PetDef.power)
-        ...(typeof loadout?.pet === "string" && PET_BY_ID.has(loadout.pet) && { pet: loadout.pet }),
         // Their relics, each player's own (the Sim keeps them off maps that take none)
         ...(Array.isArray(loadout?.relics) && { relics: cleanRelics(loadout.relics) }),
+        // Card collection only, their own cards (core/cardRuns.ts)
+        ...(caps && { cardCaps: caps }),
+        // Their pet: in a Card collection only run, only one whose card they've sent
+        ...(pet && (!caps || caps.has(`trophy:${pet}`)) && { pet }),
     };
 }
 
@@ -957,6 +1012,15 @@ export class GameClient implements GameFrameHandler {
             this.toCoopRun((run) => run.resumed());
         };
         this.coop.onMapChanged = () => this.coop.setMe({ loadout: this.getLoadout() });
+        // A guest's cards go by the host's tab (roomPlaysCardsOnly)
+        this.coop.onRoomCardsOnlyChanged = () => {
+            // Ready no longer, without the cards a Cards only room now takes
+            const me = this.coop.room?.members.find((m) => m.id === this.coop.id);
+            if (this.coopCardBlock() !== undefined && me?.ready) {
+                this.coop.setReady(false);
+            }
+            this.refreshCoopLoadout();
+        };
         // Co-op's offered only where there's a relay to play it through
         this.coop.checkAvailable();
         document.addEventListener("visibilitychange", this.onVisibilityChange);
@@ -1011,8 +1075,11 @@ export class GameClient implements GameFrameHandler {
     showScreen(screen: Screen): void {
         const was = this.store.getSnapshot().screen;
         this.store.set({ screen });
-        // Done shopping: a save point for cloud save
-        if ((was === "shop" || was === "armoury" || was === "wardrobe") && screen !== was) {
+        // Done shopping (packs too): a save point for cloud save
+        if (
+            (was === "shop" || was === "armoury" || was === "wardrobe" || was === "cards") &&
+            screen !== was
+        ) {
             this.cloud?.savePoint();
         }
         // Out of the Wardrobe, what was tried on comes off
@@ -1144,6 +1211,109 @@ export class GameClient implements GameFrameHandler {
         this.sounds.buy();
         this.persist();
         return true;
+    }
+
+    // Buys a pack in the Card shop with platinum tokens and opens it straight away (core/cards.ts): its
+    // cards, or undefined if it can't be bought
+    buyCardPack(pack: PackDef): PackCard[] | undefined {
+        const cards = buyCardPack(this.save, pack, Math.random);
+        if (!cards) {
+            this.sounds.denied();
+            return undefined;
+        }
+        this.sounds.cardPack();
+        this.persist();
+        this.refreshCoopLoadout();
+        return cards;
+    }
+
+    // In a co-op room, this player's loadout sent again: their cards changed (a pack bought from
+    // the lobby's needs), or the room's Cards only did
+    private refreshCoopLoadout(): void {
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
+    }
+
+    // The Cards screen's shop, on a pack (what Card collection only's needs point at)
+    openCardShop(packId?: string): void {
+        this.store.set({
+            cardShopPack: packId ?? "",
+            cardShopFrom: this.store.getSnapshot().screen,
+        });
+        this.showScreen("cards");
+    }
+
+    // The Cards screen has shown the pack it was opened on: the next time, it opens as usual
+    cardShopShown(): void {
+        this.store.set({ cardShopPack: undefined, cardShopFrom: undefined });
+    }
+
+    // The adventurer panel's tab: Cards only, or the usual (kept in the save)
+    setCardsOnly(on: boolean): void {
+        if ((this.save.cardsOnly === true) === on) {
+            return;
+        }
+        this.save.cardsOnly = on || undefined;
+        this.persist();
+        // A co-op player's loadout carries it
+        if (this.coop.room) {
+            this.coop.setMe({ loadout: this.getLoadout() });
+        }
+    }
+
+    // Whether the co-op room is on the weekly Vault's map for it, which never plays Cards only
+    isVaultRoom(): boolean {
+        const key = this.store.getSnapshot().vaultRoom;
+        const room = this.coop.room;
+        return key !== undefined && room !== undefined && getVault(key)?.mapId === room.mapId;
+    }
+
+    // Whether this player's runs are Cards only: their own tab's choice, or in a co-op room the
+    // host's, for everyone (roomPlaysCardsOnly)
+    playsCardsOnlyHere(): boolean {
+        const room = this.coop.room;
+        return room && !this.coop.isHost ? roomPlaysCardsOnly(room) : this.save.cardsOnly === true;
+    }
+
+    // The save as the Cards only tab that applies here sees it (playsCardsOnlyHere): a guest's
+    // own tab doesn't count in a room
+    cardsSave(): SaveData {
+        const on = this.playsCardsOnlyHere();
+        return on === (this.save.cardsOnly === true)
+            ? this.save
+            : { ...this.save, cardsOnly: on || undefined };
+    }
+
+    cardRunCaps(characterId: string): Map<string, Rarity> | undefined {
+        if (!this.playsCardsOnlyHere()) {
+            return undefined;
+        }
+        const caps = getCardCaps(this.save);
+        return getCardRunShortfall(this.save, characterId, caps) ? undefined : caps;
+    }
+
+    // Opens one of the save's card packs (core/cards.ts): its cards, or undefined with none held
+    openCardPack(): PackCard[] | undefined {
+        const cards = openCardPack(
+            this.save,
+            Math.random,
+            undefined,
+            getStarterCards(getStartingCharacter(this.save)),
+        );
+        if (!cards) {
+            this.sounds.denied();
+            return undefined;
+        }
+        this.sounds.cardPack();
+        this.persist();
+        this.refreshCoopLoadout();
+        return cards;
+    }
+
+    // A card of an opened pack turned over, with a chime besides for a foil
+    revealCard(rarity: Rarity, foil = false): void {
+        this.sounds.cardReveal(rarity, foil);
     }
 
     // The dev server with ?devtools on the address: god mode, the Tombs' skips and jumps (and an
@@ -1296,6 +1466,17 @@ export class GameClient implements GameFrameHandler {
         this.store.set({ actEnding: act?.id });
     }
 
+    // The pet a Card collection only run takes along: one whose card is owned, or none
+    selectCardsOnlyPet(petId: string | undefined): void {
+        if (petId !== undefined && !hasPetCard(this.save, petId)) {
+            this.sounds.denied();
+            return;
+        }
+        this.save.cardsOnlyPet = petId;
+        this.persist();
+        this.coop.setMe({ loadout: this.getLoadout() });
+    }
+
     // The pet to take along (one of the trophies found), or none
     selectPet(petId: string | undefined): void {
         if (petId !== undefined && !isPetFound(this.save.trophies, petId)) {
@@ -1320,8 +1501,10 @@ export class GameClient implements GameFrameHandler {
                 this.sounds.denied();
                 return;
             }
-            // Another map: the room's next run isn't the Vault's any more
+            // Another map: the room's next run isn't the Vault's any more (and Cards only can be
+            // the room's again)
             this.store.set({ vaultRoom: undefined });
+            this.refreshCoopLoadout();
             this.coop.setMap(
                 mapId,
                 room.endless && this.roomHas("endless", mapId),
@@ -1480,7 +1663,25 @@ export class GameClient implements GameFrameHandler {
     }
 
     setCoopReady(ready: boolean): void {
+        // A Cards only room, without the cards it takes for their adventurer: they can't ready
+        if (ready && this.coopCardBlock() !== undefined) {
+            this.sounds.denied();
+            return;
+        }
         this.coop.setReady(ready);
+    }
+
+    // In a room that plays Cards only, the adventurer this player can't play it as (their starter
+    // cards or a level up's missing, isCardRunBlocked), or undefined if they can
+    coopCardBlock(): string | undefined {
+        const room = this.coop.room;
+        if (!room || this.isVaultRoom()) {
+            return undefined;
+        }
+        const map = getMap(room.mapId);
+        const characterId =
+            getMapCharacter(map) ?? map.fun?.character ?? this.store.getSnapshot().characterId;
+        return isCardRunBlocked(this.cardsSave(), characterId, map) ? characterId : undefined;
     }
 
     setRoomOpen(open: boolean): void {
@@ -1518,13 +1719,17 @@ export class GameClient implements GameFrameHandler {
         const room = this.coop.room;
         const characterId =
             (room && getMap(room.mapId).fun?.character) ?? this.store.getSnapshot().characterId;
+        // The adventurer the run's played as, for Card collection only's check
+        const runCharacter = (room && getMapCharacter(getMap(room.mapId))) ?? characterId;
+        const cardCaps = this.loadoutCardCaps(room && getMap(room.mapId), runCharacter);
         return makeLoadout(
             getMetaStats(this.save, getCharacter(characterId).style),
             [...this.save.unlockedItems],
             {
                 ...this.save.armoury,
             },
-            this.save.pet,
+            // Card collection only's own pet, with its card (getRunPet)
+            getRunPet(this.save, cardCaps !== undefined),
             // A Tombs room's lobby shows the host's raid level, and a run's its invocation points
             room && getMap(room.mapId).tombs
                 ? [...(this.save.invocations ?? [])]
@@ -1534,7 +1739,21 @@ export class GameClient implements GameFrameHandler {
             getRaidChestTrophiesFound(this.save.trophies),
             this.save.look,
             room ? this.runRelics(getMap(room.mapId)) : undefined,
+            cardCaps,
+            // The host's tab sets the room's (roomPlaysCardsOnly), never the Vault's room's
+            this.coop.isHost && this.save.cardsOnly === true && !this.isVaultRoom(),
         );
+    }
+
+    // Card collection only's caps for a co-op loadout: none on a map whose level ups are blessings,
+    // nor in the Vault's room (the same run for everyone), so its pet's the usual one too
+    private loadoutCardCaps(map: MapDef | undefined, characterId: string): string | undefined {
+        // Not for an adventurer it can't start as (their starter cards missing): they play as usual
+        const caps =
+            map?.blessings || this.isVaultRoom() || getCardLock(this.save, characterId)
+                ? undefined
+                : this.cardRunCaps(characterId);
+        return caps && encodeCardCaps(caps);
     }
 
     // The host's Start: everyone's ready, so off to the room's map. The relay
@@ -1547,6 +1766,17 @@ export class GameClient implements GameFrameHandler {
         }
         // Everyone's ready, the host too (on their own, that's a party of one)
         if (room.members.some((m) => !m.ready) || room.members.length > MAX_PARTY) {
+            this.sounds.denied();
+            return;
+        }
+        // A Cards only room: everyone's cards sent (a guest without them can't ready); never the
+        // Vault's, which is the same run for everyone
+        if (
+            !this.isVaultRoom() &&
+            roomPlaysCardsOnly(room) &&
+            !getMap(room.mapId).blessings &&
+            room.members.some((m) => typeof m.loadout?.cardCaps !== "string")
+        ) {
             this.sounds.denied();
             return;
         }
@@ -2123,6 +2353,18 @@ export class GameClient implements GameFrameHandler {
             : plain && snapshot.hard && isHardUnlocked(this.save, mapId);
         const expert = plain && snapshot.expert && isExpertUnlocked(this.save, mapId);
         const characterId = vault?.characterId ?? getMapCharacter(map) ?? snapshot.characterId;
+        // Card collection only, when it's on and the collection can play it (never the Vault's,
+        // which is the same run for everyone)
+        const cardCaps =
+            vault || gauntlet || map.blessings ? undefined : this.cardRunCaps(characterId);
+        // Picked on the Cards only tab, it's Cards only or nothing: not without the adventurer's
+        // starter cards or enough cards to fill a level up (isCardRunBlocked)
+        if (plain && isCardRunBlocked(this.save, characterId, map)) {
+            this.sounds.denied();
+            return;
+        }
+        // Its own pet in a Card collection only run (getRunPet): never the other in its place
+        const pet = getRunPet(this.save, cardCaps !== undefined);
         const remixes = vault
             ? vault.remixes
             : gauntlet
@@ -2141,13 +2383,7 @@ export class GameClient implements GameFrameHandler {
                 : undefined;
         const awakened = plain && !endless && snapshot.awaken && canAwaken(this.save, mapId);
         if (
-            !(await this.travelTo(
-                mapId,
-                "characters",
-                [this.save.pet],
-                remixes,
-                invasionContent(invasion),
-            ))
+            !(await this.travelTo(mapId, "characters", [pet], remixes, invasionContent(invasion)))
         ) {
             return;
         }
@@ -2163,8 +2399,9 @@ export class GameClient implements GameFrameHandler {
             spawnX: spawn.x,
             spawnY: spawn.y,
             unlockedItems: new Set(this.save.unlockedItems),
+            ...(cardCaps && { cardCaps }),
             trophiesFound: new Set(getRaidChestTrophiesFound(this.save.trophies)),
-            pet: this.save.pet,
+            pet,
             endless,
             hard,
             expert,
@@ -2194,7 +2431,7 @@ export class GameClient implements GameFrameHandler {
         for (let i = 0; i < this.options.stress; i++) {
             sim.spawnEnemy(getEnemy("goblin"), "normal");
         }
-        this.enterRun(sim, [this.save.pet], [this.save.look], cinematic);
+        this.enterRun(sim, [pet], [this.save.look], cinematic);
     }
 
     // A message for the co-op run, kept while its copy is still being made
@@ -2269,13 +2506,18 @@ export class GameClient implements GameFrameHandler {
         // Every copy has to work out the same numbers, to the bit
         usePortableMath(true);
         const map = getMap(game.mapId);
-        const party: HeroOptions[] = game.heroes.map((hero) => ({
+        // Cards only for everyone or no one: as the host plays (partyLoadouts)
+        const loadouts = partyLoadouts(game.heroes, room.hostId);
+        const party: HeroOptions[] = game.heroes.map((hero, i) => ({
             name: hero.name,
             characterId: hero.characterId,
             metaStats: loadoutStats(hero.loadout),
-            ...cleanLoadout(hero.loadout),
-            // The weekly Vault is played without relics, as on your own (startVault)
-            ...(game.vault !== undefined && { relics: [] }),
+            ...cleanLoadout(loadouts[i]),
+            // The weekly Vault is played without relics or Card collection only, as on your own
+            // (startVault, startRun)
+            ...(game.vault !== undefined && { relics: [], cardCaps: undefined }),
+            // Nor is a map whose level ups are blessings (MapDef.blessings), which cards don't touch
+            ...(map.blessings && { cardCaps: undefined }),
         }));
         const sim = new Sim({
             grid: this.grid,
@@ -2781,15 +3023,22 @@ export class GameClient implements GameFrameHandler {
         return this.gauntletRun !== undefined && result.gauntlet !== undefined;
     }
 
-    // Banks a run's result on a save, with its Vault week, and pays out the quests it finished.
-    // Not a result with a number that isn't: a co-op run's numbers can come from another
-    // player's modified game, and a NaN in a solo one's would come back from the save as 0 coins.
+    // Banks a run's result on a save, with its Vault week and whether it was Cards only, and pays
+    // out the quests it finished. Not a result with a number that isn't: a co-op run's numbers can
+    // come from another player's modified game, and a NaN in a solo one's would come back from the
+    // save as 0 coins.
     private bankRun(save: SaveData, result: RunResult): ReturnType<typeof recordRun> {
         if (hasBadNumber(result)) {
             return [];
         }
         const vaultKey = this.runVault;
-        return recordRun(save, { ...result, ...(vaultKey && { vault: vaultKey }) });
+        const sim = this.sim;
+        return recordRun(save, {
+            ...result,
+            ...(vaultKey && { vault: vaultKey }),
+            // This player's own: each co-op player records their run on their own save
+            ...(sim?.heroes[sim.focus].cardCaps && { cardsOnly: true }),
+        });
     }
 
     // Ends the run where it stands (from the pause menu); coins found are kept, and shown on the
@@ -2922,6 +3171,8 @@ export class GameClient implements GameFrameHandler {
             this.coop.setMap(vault.mapId, false, false);
         }
         this.store.set({ vaultRoom: vault.key, screen: "coop" });
+        // The Vault's never Cards only: the host's loadout says so (roomPlaysCardsOnly)
+        this.refreshCoopLoadout();
     }
 
     openGauntlet(): void {
@@ -3205,6 +3456,7 @@ export class GameClient implements GameFrameHandler {
                 quests: quests.map((q) => ({ name: q.name, coins: q.coins })),
                 ...(vaultKey && { vault: { key: vaultKey, best: vaultBest } }),
                 orbWon: result.victory && GAUNTLET_FIGHTS.includes(result.mapId),
+                ...(sim.heroes[sim.focus].cardCaps && { cardsOnly: true }),
                 ...(sim.heroes.length > 1 && {
                     party: sim.heroes.filter((h) => h.index !== sim.focus).map((h) => h.name),
                 }),

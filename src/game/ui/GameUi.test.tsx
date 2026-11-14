@@ -275,8 +275,8 @@ test("unaffordable skills cannot purchase but can refund a bought rank", () => {
     expect(actions.refundUpgrade).toHaveBeenCalledExactlyOnceWith("strength", "melee");
 });
 
-function renderMaps(mapId = "lumbridge") {
-    const store = new GameStore(createSave());
+function renderMaps(mapId = "lumbridge", save = createSave()) {
+    const store = new GameStore(save);
     store.set({ screen: "characters", mapId });
     const actions = {
         selectMap: vi.fn((id: string) => store.set({ mapId: id })),
@@ -285,6 +285,9 @@ function renderMaps(mapId = "lumbridge") {
         showScreen: vi.fn(),
         toggleFavouriteCharacter: vi.fn(),
         playClick: vi.fn(),
+        selectPet: vi.fn(),
+        selectCardsOnlyPet: vi.fn(),
+        setCardsOnly: vi.fn(),
     };
     render(<GameUi store={store} client={actions as unknown as GameClient} />);
     return actions;
@@ -506,6 +509,9 @@ test("the favourite button is the shown adventurer's, and stays as focus moves t
     fireEvent.focus(ranger);
     expect(shown()).toBe("Ranger");
     const favourite = screen.getByRole("button", { name: "Make favourite" });
+    // A star: only outlined, and its tooltip says what it does
+    expect(favourite).toHaveAttribute("title", "Make favourite");
+    expect(favourite.querySelector("svg.ui-favourite-star")).not.toBeNull();
     // Going on to their button keeps them, and the button with them
     fireEvent.focusOut(ranger, { relatedTarget: favourite });
     expect(shown()).toBe("Ranger");
@@ -518,6 +524,138 @@ test("the favourite button is the shown adventurer's, and stays as focus moves t
     // None for one who isn't open yet
     fireEvent.focus(document.querySelector(".ui-select-adventurers .ui-card-locked")!);
     expect(screen.queryByRole("button", { name: "Make favourite" })).toBeNull();
+});
+
+test("Cards only marks the adventurers it can't start as, still pickable", () => {
+    expect.hasAssertions();
+    // Enough cards to fill a level up, but not the warrior's starting weapon's
+    const cards = {
+        "weapon:two_handed_sword": 1,
+        "weapon:throwing_knives": 1,
+        "weapon:fire_spells": 1,
+        "weapon:shortbow": 1,
+        "weapon:dark_bow": 1,
+        "passive:rapid_heal": 1,
+        "passive:graceful": 1,
+        "passive:amulet_of_glory": 1,
+    };
+    renderMaps("lumbridge", { ...createSave(), cardsOnly: true, cards });
+    const warrior = screen.getByRole("button", { name: "Warrior, locked for Cards only" });
+    expect(warrior).toHaveClass("ui-tile-cards-locked");
+    expect(warrior.querySelector(".ui-tile-lock")).not.toBeNull();
+    expect(warrior).toBeEnabled();
+    // The wizard starts with the fire spells, whose card's owned
+    expect(screen.getByRole("button", { name: "Wizard" })).not.toHaveClass("ui-tile-cards-locked");
+    // What's missing is in the needs window, from the card button: no line in the details
+    expect(screen.queryByText(/Locked for Cards only/)).toBeNull();
+    expect(
+        screen.getByRole("button", { name: "What's needed for Cards only" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Enter Lumbridge/ })).toBeDisabled();
+    cleanup();
+    // Off, nothing's marked
+    renderMaps("lumbridge", { ...createSave(), cards });
+    expect(screen.getByRole("button", { name: "Warrior" })).not.toHaveClass("ui-tile-cards-locked");
+    expect(document.querySelector(".ui-tile-lock")).toBeNull();
+});
+
+test("the pet row picks Cards only's pet from pets with their card, when the run is one", () => {
+    expect.hasAssertions();
+    const cards = {
+        "weapon:scimitar": 1,
+        "weapon:two_handed_sword": 1,
+        "weapon:throwing_knives": 1,
+        "weapon:shortbow": 1,
+        "passive:rapid_heal": 1,
+        "passive:graceful": 1,
+        "passive:amulet_of_glory": 1,
+        "trophy:little_nightmare": 1,
+    };
+    const save = { ...createSave(), trophies: ["butch"], pet: "butch", cards };
+    const actions = renderMaps("lumbridge", { ...save, cardsOnly: true });
+    expect(screen.getByText("Pet for Cards only:")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Little Nightmare, Card" }));
+    expect(actions.selectCardsOnlyPet).toHaveBeenCalledWith("little_nightmare");
+    const butch = screen.getByRole("button", { name: "Butch, needs its card for Cards only" });
+    expect(butch).toHaveAttribute("aria-disabled", "true");
+    expect(actions.selectPet).not.toHaveBeenCalled();
+    cleanup();
+    // A normal run: the found pets, as before, and no card pet
+    renderMaps("lumbridge", save);
+    expect(screen.getByText("Pet:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Butch" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Little Nightmare/ })).toBeNull();
+});
+
+test("a map won in a Cards only run has a card beside its tick, and its details say so", () => {
+    expect.hasAssertions();
+    renderMaps("lumbridge", {
+        ...createSave(),
+        mapVictories: { lumbridge: 2, barrows: 1 },
+        cardsOnlyWins: ["lumbridge"],
+    });
+    const lumbridge = screen.getByRole("button", { name: /^Lumbridge.*beaten in Cards only/ });
+    expect(within(lumbridge).getByRole("img", { name: "beaten in Cards only" })).toHaveAttribute(
+        "title",
+        "Beaten in Cards only",
+    );
+    // Won normally only: the tick, no card
+    const barrows = screen.getByRole("button", { name: /^Barrows/ });
+    expect(within(barrows).queryByRole("img", { name: "beaten in Cards only" })).toBeNull();
+    expect(screen.getByText("Beaten in Cards only")).toBeInTheDocument();
+});
+
+test("the adventurer panel's tabs pick Cards only or the usual, saying which is on", () => {
+    expect.hasAssertions();
+    const actions = renderMaps("lumbridge");
+    const normal = screen.getByRole("button", { name: "Adventurers" });
+    const cardsOnly = screen.getByRole("button", { name: "Cards only" });
+    expect(normal).toHaveAttribute("aria-pressed", "true");
+    expect(cardsOnly).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(cardsOnly);
+    expect(actions.setCardsOnly).toHaveBeenCalledWith(true);
+    cleanup();
+    // On it with every card a run needs: a line says runs from it are Cards only
+    const full = {
+        "weapon:scimitar": 1,
+        "weapon:two_handed_sword": 1,
+        "weapon:throwing_knives": 1,
+        "weapon:shortbow": 1,
+        "weapon:dark_bow": 1,
+        "passive:rapid_heal": 1,
+        "passive:graceful": 1,
+        "passive:amulet_of_glory": 1,
+    };
+    renderMaps("lumbridge", { ...createSave(), cardsOnly: true, cards: full });
+    expect(screen.queryByRole("button", { name: "What's needed for Cards only" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Cards only" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    expect(screen.getByText("Runs from this tab are Cards only.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Enter Lumbridge/ })).toBeEnabled();
+    cleanup();
+    // Short of cards: no run starts from it, never a normal one in its place
+    renderMaps("lumbridge", { ...createSave(), cardsOnly: true, cards: { "weapon:scimitar": 1 } });
+    expect(screen.getByRole("button", { name: /Enter Lumbridge/ })).toBeDisabled();
+});
+
+test("an adventurer short of cards for Cards only has What's needed beside Make favourite", () => {
+    expect.hasAssertions();
+    renderMaps("lumbridge", { ...createSave(), cardsOnly: true, cards: { "weapon:scimitar": 1 } });
+    // Not on the tabs' row: in the details' head, with Make favourite
+    const tabs = screen.getByRole("group", { name: "Adventurers or Cards only" });
+    expect(tabs.parentElement!.querySelector(".ui-button")).toBeNull();
+    const button = screen.getByRole("button", { name: "What's needed for Cards only" });
+    expect(button).toHaveAttribute("title", "What's needed");
+    expect(button.closest(".ui-select-details-actions")).not.toBeNull();
+    expect(
+        button.closest(".ui-select-details-actions")!.querySelector(".ui-favourite"),
+    ).not.toBeNull();
+    fireEvent.click(button);
+    expect(screen.getByRole("dialog", { name: "Cards only: what you need" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { code: "Escape", key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 test("a map's own adventurer has no favourite button", () => {

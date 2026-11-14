@@ -7,6 +7,7 @@ import {
     ItemIconInput,
     ItemIconLoader,
     ItemIconRequest,
+    MAX_ICON_SCALE,
 } from "../../mapviewer/worker/ItemIconLoader";
 import { RenderDataWorkerPool } from "../../mapviewer/worker/RenderDataWorkerPool";
 import {
@@ -45,12 +46,11 @@ export class IconCache {
         this.scheduleFlush();
     }
 
-    // Coins and other stackables have a model per stack size, and the customisable max cape an
-    // icon for each set of colours (recolors)
-    static key(objId: number, count: number, recolors?: readonly number[]): string {
-        return recolors && recolors.length > 0
-            ? `${objId}:${count}:${recolors.join(",")}`
-            : `${objId}:${count}`;
+    // Coins and other stackables have a model per stack size, the customisable max cape an
+    // icon for each set of colours (recolors), and a large drawing (scale) is its own
+    static key(objId: number, count: number, recolors?: readonly number[], scale = 1): string {
+        const repaint = recolors && recolors.length > 0 ? `:${recolors.join(",")}` : "";
+        return `${objId}:${count}${repaint}` + (scale === 1 ? "" : `@${scale}`);
     }
 
     static spriteKey(spriteId: number): string {
@@ -65,8 +65,8 @@ export class IconCache {
         return frame === undefined ? IconCache.spriteKey(id) : IconCache.frameKey(id, frame);
     }
 
-    get(objId: number, count: number, recolors?: readonly number[]): string | undefined {
-        return this.urls.get(IconCache.key(objId, count, recolors));
+    get(objId: number, count: number, recolors?: readonly number[], scale = 1): string | undefined {
+        return this.urls.get(IconCache.key(objId, count, recolors, scale));
     }
 
     // "" for a sprite the cache hasn't got
@@ -84,10 +84,11 @@ export class IconCache {
         count: number,
         callback: (url: string) => void,
         recolors?: readonly number[],
+        scale = 1,
     ): void {
-        if (this.wait(IconCache.key(objId, count, recolors), callback)) {
+        if (this.wait(IconCache.key(objId, count, recolors, scale), callback)) {
             const repaint = recolors && recolors.length > 0 ? { recolors: [...recolors] } : {};
-            this.queued.push({ objId, count, ...repaint });
+            this.queued.push({ objId, count, scale, ...repaint });
             this.scheduleFlush();
         }
     }
@@ -181,12 +182,12 @@ export class IconCache {
             // don't stay blank until something redraws them
             console.error("Loading icons failed", e);
             const again: (() => void)[] = [];
-            for (const { objId, count, recolors } of requests) {
-                const key = IconCache.key(objId, count, recolors);
+            for (const { objId, count, recolors, scale } of requests) {
+                const key = IconCache.key(objId, count, recolors, scale);
                 const callbacks = this.waiting.get(key) ?? [];
                 this.waiting.delete(key);
                 again.push(() =>
-                    callbacks.forEach((cb) => this.request(objId, count, cb, recolors)),
+                    callbacks.forEach((cb) => this.request(objId, count, cb, recolors, scale)),
                 );
             }
             for (const request of spriteRequests) {
@@ -203,9 +204,10 @@ export class IconCache {
         }
         this.failures = 0;
         for (const icon of icons) {
+            const scale = icon.scale ?? 1;
             this.resolve(
-                IconCache.key(icon.objId, icon.count, icon.recolors),
-                toDataUrl(icon.pixels),
+                IconCache.key(icon.objId, icon.count, icon.recolors, scale),
+                toDataUrl(icon.pixels, ICON_WIDTH * scale, ICON_HEIGHT * scale),
             );
         }
         // The worker answers in the order it was asked
@@ -295,10 +297,13 @@ type Props = (
     count?: number;
     // Colours repainted on the item, as pairs of from and to: the customisable max cape's
     recolors?: readonly number[];
+    // Drawn from the item's model at the size it's shown (a card's picture), smooth, rather than
+    // the client's small icon blown up. Not for a sprite or a loc, which stay as they are.
+    large?: boolean;
 };
 
 export function ItemIcon(props: Props): JSX.Element {
-    const { spriteId, size = 32, count = 1, recolors } = props;
+    const { spriteId, size = 32, count = 1, recolors, large = false } = props;
     // A loc's icon goes through as a negative item (ItemIconLoader.renderLocIcon)
     const objId = "locId" in props ? -props.locId : props.objId;
     const stack = objId === 995 ? coinStackCount(count) : 1;
@@ -306,10 +311,19 @@ export function ItemIcon(props: Props): JSX.Element {
         spriteId !== undefined && (objId === undefined || iconCache.getSprite(spriteId) !== "")
             ? spriteId
             : undefined;
+    // A large drawing's scale: enough for the screen's pixels at the size it's shown
+    const scale =
+        large && sprite === undefined && objId! >= 0
+            ? Math.max(1, Math.min(MAX_ICON_SCALE, Math.ceil((size * pixelRatio) / ICON_HEIGHT)))
+            : 1;
     const key =
-        sprite !== undefined ? IconCache.spriteKey(sprite) : IconCache.key(objId!, stack, recolors);
+        sprite !== undefined
+            ? IconCache.spriteKey(sprite)
+            : IconCache.key(objId!, stack, recolors, scale);
     const cached = (): string | undefined =>
-        sprite !== undefined ? iconCache.getSprite(sprite) : iconCache.get(objId!, stack, recolors);
+        sprite !== undefined
+            ? iconCache.getSprite(sprite)
+            : iconCache.get(objId!, stack, recolors, scale);
     const [loaded, setLoaded] = useState(() => ({ key, url: cached() }));
     // When the item changes (a reroll), never the last item's icon while the
     // new one is drawn
@@ -326,18 +340,18 @@ export function ItemIcon(props: Props): JSX.Element {
         if (sprite !== undefined) {
             iconCache.requestSprite(sprite, callback);
         } else {
-            iconCache.request(objId!, stack, callback, recolors);
+            iconCache.request(objId!, stack, callback, recolors, scale);
         }
         return () => {
             cancelled = true;
         };
         // (recolors goes by the key, which has them in it)
-    }, [key, objId, stack, sprite]);
+    }, [key, objId, stack, sprite, scale]);
     const width = Math.round((size * ICON_WIDTH) / ICON_HEIGHT);
     // Nearest neighbour keeps the client's crisp pixels when scaling up, but
     // scaling down that way drops whole rows and columns (and with them bits of
     // the outline), so icons shown smaller than they are get smoothed instead
-    const smooth = size * pixelRatio < ICON_HEIGHT;
+    const smooth = scale > 1 || size * pixelRatio < ICON_HEIGHT;
     return url ? (
         <img
             className={smooth ? "ui-icon ui-icon-smooth" : "ui-icon"}

@@ -1244,3 +1244,24 @@ describe("portable math", () => {
         expect(fm.pow(2, -2)).toBe(0.25);
     });
 });
+
+describe("platinum tokens in co-op", () => {
+    it("are earned by the party's run and given to each player's own result", () => {
+        const copies = [0, 1].map((focus) => createParty(["warrior", "wizard"], 3, focus));
+        for (const sim of copies) {
+            for (let i = 0; i < 150; i++) {
+                const goblin = sim.spawnEnemy(getEnemy("goblin"), "normal", {
+                    x: 1040.5,
+                    y: 1036.5,
+                });
+                if (goblin) {
+                    sim.damageEnemy(goblin, 1e9, 0, goblin.x, goblin.y);
+                }
+            }
+        }
+        const [a, b] = copies.map((sim) => sim.getResult().platinum!);
+        expect(a).toBeGreaterThan(0);
+        // Each player's copy works out the same, and each records it on their own save
+        expect(b).toBe(a);
+    });
+});

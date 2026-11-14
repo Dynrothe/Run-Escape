@@ -5,9 +5,11 @@ import { VARROCK_OPENING } from "../content/fun/varrockOpening";
 import { YAMA_WAKES } from "../content/fun/yamaWakes";
 import { MAX_INVOCATION_PRESETS } from "../content/invocations";
 import { getMap } from "../content/maps";
+import { Rarity } from "../content/rarity";
 import { TROPHIES } from "../content/trophies";
 import { emptyStats } from "../content/types";
 import { Sim, TICKS_PER_SECOND } from "../core/Sim";
+import { encodeCardCaps } from "../core/cardRuns";
 import { hasBadNumber, syncHash } from "../core/lockstep";
 import {
     LoadedSave,
@@ -37,6 +39,7 @@ import {
     getPhaseBarFraction,
     getShownHp,
     loadoutStats,
+    partyLoadouts,
 } from "./GameClient";
 import { padHints } from "./GamePad";
 import { GameStore } from "./GameStore";
@@ -2792,5 +2795,61 @@ describe("the Collection log over the pause menu", () => {
         sim.trophies.add(TROPHIES[0].id);
         Object.assign(sim, { coins: NaN });
         expect(client.getRunLogSaves().withRun?.trophies).toEqual([]);
+    });
+});
+
+describe("a co-op room's Cards only", () => {
+    const caps = encodeCardCaps(new Map<string, Rarity>([["weapon:scimitar", "common"]]));
+    const loadout = (cardCaps?: string) => ({
+        metaStats: {},
+        unlockedItems: [],
+        armoury: {},
+        ...(cardCaps !== undefined && { cardCaps }),
+    });
+    it("keeps everyone's cards when the host plays it", () => {
+        const heroes = [
+            { id: "host", loadout: { ...loadout(caps), cardsOnly: true as const } },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        expect(partyLoadouts(heroes, "host").map((l) => l?.cardCaps)).toEqual([caps, caps]);
+    });
+    it("drops a guest's cards when the host doesn't: no one plays it alone", () => {
+        const heroes = [
+            { id: "host", loadout: loadout() },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        const party = partyLoadouts(heroes, "host");
+        expect(party.map((l) => l?.cardCaps)).toEqual([undefined, undefined]);
+        expect(cleanLoadout(party[1]).cardCaps).toBeUndefined();
+    });
+    it("drops a new host's cards from before, when their own tab isn't on", () => {
+        // A guest who became host keeps the caps they sent as a guest, but the room's off
+        const heroes = [
+            { id: "newHost", loadout: loadout(caps) },
+            { id: "guest", loadout: loadout(caps) },
+        ];
+        expect(partyLoadouts(heroes, "newHost").map((l) => l?.cardCaps)).toEqual([
+            undefined,
+            undefined,
+        ]);
+    });
+});
+
+describe("a co-op player's Card collection only pet", () => {
+    const butch = "butch";
+    it("keeps a co-op player's pet to one whose card they've sent, in a Cards only run", () => {
+        const caps = new Map<string, Rarity>([["weapon:scimitar", "common"]]);
+        const withCard = new Map(caps).set(`trophy:${butch}`, "veryRare");
+        const loadout = (cardCaps?: string) => ({
+            metaStats: {},
+            unlockedItems: [],
+            armoury: {},
+            pet: butch,
+            ...(cardCaps !== undefined && { cardCaps }),
+        });
+        expect(cleanLoadout(loadout(encodeCardCaps(withCard))).pet).toBe(butch);
+        expect(cleanLoadout(loadout(encodeCardCaps(caps))).pet).toBeUndefined();
+        // Not playing Cards only: their found pet, as before
+        expect(cleanLoadout(loadout()).pet).toBe(butch);
     });
 });

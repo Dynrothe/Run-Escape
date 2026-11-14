@@ -188,7 +188,10 @@ describe("the Collection log's tabs, as OSRS's client has them", () => {
         const theatre = entries.find((e) => e.id === "theatre_of_blood")!;
         expect(theatre.items.find((item) => item.id === "lil_zik")!.found).toBe(true);
         expect(theatre.tally).toEqual({ key: "collection.wins", n: 3 });
-        const keys = entries.flatMap((entry) => entry.items.map((item) => item.key));
+        // (but the Cards tab's raid finds, which are cards of its other sets as well)
+        const keys = entries
+            .filter((entry) => entry.id !== "cards_raids")
+            .flatMap((entry) => entry.items.map((item) => item.key));
         expect(new Set(keys).size).toBe(keys.length);
     });
 

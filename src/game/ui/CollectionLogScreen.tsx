@@ -1,6 +1,7 @@
 import { CSSProperties, MutableRefObject, memo, useEffect, useMemo, useState } from "react";
 
 import { GameClient } from "../client/GameClient";
+import { CARDS } from "../content/cards";
 import {
     LOG_TABS,
     LogEntry,
@@ -12,10 +13,11 @@ import {
 } from "../content/collectionLog";
 import { EvolutionDef } from "../content/evolutions";
 import { passiveName } from "../content/passives";
-import { RARITIES } from "../content/rarity";
+import { RARITIES, rarityName } from "../content/rarity";
 import { CLOSE_SPRITES } from "../content/titleIcons";
 import { formatWeaponStat, weaponStats } from "../content/weaponStats";
 import { weaponDescription, weaponName } from "../content/weapons";
+import { countCardsOwned } from "../core/cards";
 import { SaveData } from "../core/save";
 import { fmtNum, t, useLang } from "../i18n";
 import "./CollectionLogScreen.css";
@@ -176,14 +178,24 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
                 {/* The X comes after the tabs, drawn on the title's row, so a pad's first
                     highlight and the first Tab are the open tab, not the way out */}
                 <div className="ui-log-top">
+                    {/* The log's total on the left, its items only; the cards' own on the right,
+                        each card once, any version; stacked where they won't fit on one line */}
                     <div className="ui-log-head">
-                        <h2 id="ui-log-title" className="ui-log-title">
-                            {t("collection.title_count", {
-                                title: t("collection.title"),
-                                n: fmtNum(total.found),
-                                total: fmtNum(total.total),
-                            })}
-                        </h2>
+                        <div className="ui-log-counts">
+                            <h2 id="ui-log-title" className="ui-log-title">
+                                {t("collection.title_count", {
+                                    title: t("collection.title"),
+                                    n: fmtNum(total.found),
+                                    total: fmtNum(total.total),
+                                })}
+                            </h2>
+                            <span className="ui-log-title ui-log-cards-count">
+                                {t("collection.cards_count", {
+                                    n: fmtNum(countCardsOwned(save)),
+                                    total: fmtNum(CARDS.length),
+                                })}
+                            </span>
+                        </div>
                     </div>
                     <div className="ui-log-tabs" role="group" aria-label={t("collection.tabs")}>
                         {tabs.map((id) => (
@@ -269,6 +281,9 @@ export const CollectionLogScreen = memo(function CollectionLogScreen({
                             {entry.tally && (
                                 <div>{t(entry.tally.key, { n: fmtNum(entry.tally.n) })}</div>
                             )}
+                            {entry.tally2 && (
+                                <div>{t(entry.tally2.key, { n: fmtNum(entry.tally2.n) })}</div>
+                            )}
                             {entry.id === "evolutions" && (
                                 <div className="ui-log-how">{t("collection.evolution_intro")}</div>
                             )}
@@ -328,15 +343,25 @@ function ItemSlot({
     // What an evolution makes is hidden till it's been made: its slot shows the weapon that
     // evolves, faded, with a ? on it
     const hidden = item.evolution !== undefined && !item.found;
-    const state = itemState(item);
+    // A card's says its version in words (the Cards tab)
+    const state = item.version ? rarityName(item.version) : itemState(item);
     return (
         <button
             className={
                 "ui-log-item" +
                 (item.found ? " ui-log-item-found" : "") +
+                (item.version ? " ui-log-item-card" : "") +
                 (selected ? " ui-log-selected" : "")
             }
-            aria-label={t("collection.item_label", { name: hidden ? "???" : item.name, state })}
+            style={
+                item.version
+                    ? ({ "--card-rarity": RARITIES[item.version].color } as CSSProperties)
+                    : undefined
+            }
+            aria-label={
+                t("collection.item_label", { name: hidden ? "???" : item.name, state }) +
+                (item.cardsOnly ? `, ${t("collection.cards_only_first")}` : "")
+            }
             aria-describedby="ui-log-detail"
             onMouseEnter={onShow}
             onFocus={onShow}
@@ -358,6 +383,7 @@ function ItemSlot({
                     {fmtNum(item.count)}
                 </span>
             )}
+            {item.cardsOnly && <span className="ui-log-cards-badge" aria-hidden="true" />}
         </button>
     );
 }
@@ -382,6 +408,11 @@ function ItemDetail({ item }: { item: LogItem }): JSX.Element {
                 )}
             </div>
             <div className="ui-log-how">{item.how}</div>
+            {item.cardsOnly && (
+                <div className="ui-log-how ui-log-cards-only">
+                    {t("collection.cards_only_first")}
+                </div>
+            )}
         </div>
     );
 }
