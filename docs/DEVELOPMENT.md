@@ -1833,7 +1833,14 @@ the sim never sees it.
 - **Body colours:** `PlayerModelLoader` recolours as the client does, from its tables (not the
   cache's). Hair and tops have a second colour too (`BODY_COLOR_SOURCE_2`, the newer hairstyles'
   and beards' streaks, made in pink), recoloured by every choice, the first included: without
-  it they come out pink.
+  it they come out pink. Skin is 4550, but a few worn models paint some of theirs a shade off,
+  mostly where the item's other body has 4550, so it stayed the default skin whatever was
+  picked (Dragon plateskirt (cr)'s legs on body type A). `STRAY_SKIN` lists them by model id, with
+  their shade, and they're made 4550 as they load. It goes by model, not shade: 4544 is the
+  Zombie helmet's face on body type B but the Camel mask's fur. A newer cache can bring more:
+  compare each item's two models for faces that are 4550 on one body and as many of another
+  colour on the other, and look for shades a step or two off 4550, then try the suspects on in
+  green skin. Some are meant: the Odd spectacles' false nose, and fur, biscuit and wood.
 - **Co-op:** a player's look goes in their `Loadout` as `look`, which the relays pass on whole,
   so it needed no relay change; `beginCoopRun` cleans each hero's.
 - **Slim cache:** `slim-plan.ts` bakes every piece and every kit on both bodies, a piece of each

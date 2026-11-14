@@ -92,6 +92,21 @@ const BODY_COLORS_2: number[][] = [
 // How many choices each body colour has
 export const BODY_COLOR_COUNTS: readonly number[] = BODY_COLORS.map((row) => row.length);
 
+// Skin as models paint it, for the skin choice to recolour (the last of BODY_COLOR_SOURCE)
+const SKIN = 4550;
+// Worn models that paint some skin a shade off 4550 by mistake (mostly where the item's other
+// body has 4550), so it stayed the default whatever skin was picked: model id -> that shade. It
+// goes by model, as a shade can be something else's own colour (4544 is the Camel mask's fur).
+const STRAY_SKIN = new Map<number, number>([
+    [47964, 4548], // Dragon plateskirt (cr)'s legs, body type A
+    [50061, 4548], // the Icy jumper's midriff, body type A
+    [46846, 4678], // the Christmas jumper's midriff, body type A
+    [42949, 4678], // the Group ironman bracers' hands, body type B
+    [44533, 4678], // the Mask of Rebirth's neck, body type A
+    [46504, 4678], // and body type B
+    [55498, 4544], // the Zombie helmet's face, body type B
+]);
+
 // The colour a body colour's choice paints (HSL, as the cache packs it), for a swatch
 export function getBodyColorHsl(part: number, choice: number): number {
     const choices = BODY_COLORS[part] ?? [];
@@ -162,6 +177,10 @@ export class PlayerModelLoader {
             }
             const part = this.modelLoader.getModel(id);
             if (part) {
+                const straySkin = STRAY_SKIN.get(id);
+                if (straySkin !== undefined) {
+                    part.recolor(straySkin, SKIN);
+                }
                 parts.push(part);
             }
         }
