@@ -9,6 +9,9 @@ the version in the corner).
 
 - On the title screen, your pet stands closer beside your adventurer, and the courtyard's bushes
   are gone, so they no longer hide it. A run in Lumbridge keeps them.
+- The skin you pick in the Wardrobe now shows on the Dragon plateskirt (cr)'s legs, the Group
+  ironman bracers' hands, the Zombie helmet's face and the few other pieces that kept the
+  default skin.
 
 ## 0.32.2 - 2026-11-14
 
